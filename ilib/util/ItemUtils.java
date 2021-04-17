@@ -1,0 +1,336 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+package ilib.util;
+
+import ilib.ImpLib;
+import ilib.api.Ownable;
+import ilib.api.energy.IMEnergy;
+import ilib.api.tile.ToolTarget;
+import ilib.collect.UUIDList;
+import ilib.tile.TileBase;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.JsonToNBT;
+import net.minecraft.nbt.NBTException;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.IBlockAccess;
+import net.minecraft.world.World;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.oredict.OreDictionary;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.List;
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/22 19:42
+ */
+public final class ItemUtils {
+
+    public static Item stringToItem(String data) {
+        Item item = null;
+        int index = data.indexOf(":");
+        if (index > 0) {
+            item = Registries.item().getValue(new ResourceLocation(data));
+        }
+        if (item == null) {
+            ImpLib.logger().fatal("Couldn't get item by name " + data);
+        }
+        return item;
+    }
+
+    /**
+     * String to itemstack like minecraft:stone@0*1{myNbt: 1b}
+     *
+     * @return block data
+     */
+    public static ItemStack string2Stack(String data) {
+        if (data == null || data.length() == 0)
+            return ItemStack.EMPTY;
+
+        int index = data.indexOf("@");
+        Item item;
+        if (index < 0) {
+            item = stringToItem(data);
+            return new ItemStack(item);
+        }
+        String itemMeta = data.substring(index + 1);
+        String itemName = data.substring(0, index);
+
+        item = stringToItem(itemName);
+        if (item == null)
+            return null;
+
+        index = itemMeta.indexOf("*");
+
+        if (index < 0)
+            return new ItemStack(item, 1, Integer.parseInt(itemMeta));
+
+        String itemCount = itemMeta.substring(index + 1);
+        int _itemMeta = Integer.parseInt(itemMeta.substring(0, index));
+
+        index = itemCount.indexOf("{");
+        if (index < 0)
+            return new ItemStack(item, Integer.parseInt(itemCount), _itemMeta);
+
+        String itemNBT = itemCount.substring(index);
+        itemCount = itemCount.substring(0, index);
+
+        ItemStack stack = new ItemStack(item, Integer.parseInt(itemCount), _itemMeta);
+        try {
+            NBTTagCompound tag = JsonToNBT.getTagFromJson(itemNBT.replace("&", "\u00a7"));
+            stack.setTagCompound(tag);
+        } catch (NBTException e) {
+            ImpLib.logger().warn("Couldn't get NBT by given tag: " + itemNBT);
+            e.printStackTrace();
+        }
+        return stack;
+    }
+
+    public static String itemToString(Item i) {
+        return i.getRegistryName().toString();
+    }
+
+    /**
+     * String to block like mi:test@0
+     *
+     * @return block data
+     */
+    @Nullable
+    public static BlockInfo stringToBlock(@Nonnull String data) {
+        String[] tmp0 = data.split("@");
+        String[] tmp = tmp0[0].split(":");
+        Block block = Registries.block().getValue(new ResourceLocation(tmp[0], tmp[1]));
+        if (block == null) {
+            ImpLib.logger().error("Couldn't get block by name " + data);
+            return null;
+        }
+        return new BlockInfo(block, Integer.parseInt(tmp0[1]));
+    }
+
+    public static String stack2String(ItemStack is) {
+        String nbtStr = "{}";
+        if (is.getTagCompound() != null) {
+            nbtStr = is.getTagCompound().toString();
+        }
+        return is.getItem().getRegistryName() + "@" + is.getItemDamage() + "*1" + nbtStr;
+    }
+
+    public static String stackUuid(ItemStack is) {
+        String nbtStr = "{}";
+        if (is.getTagCompound() != null) {
+            nbtStr = is.getTagCompound().toString();
+        }
+        return is.getItem().getRegistryName() + "@" + is.getItemDamage() + nbtStr;
+
+    }
+
+
+    public static void dropStacks(World world, List<ItemStack> stacks, BlockPos pos) {
+        stacks.forEach((ItemStack stack) -> dropStack(world, stack, pos));
+    }
+
+    public static void dropStack(World world, ItemStack stack, BlockPos pos) {
+        if (stack != null && !stack.isEmpty()) {
+            float rx = world.rand.nextFloat() * 0.8F;
+            float ry = world.rand.nextFloat() * 0.8F;
+            float rz = world.rand.nextFloat() * 0.8F;
+
+            EntityItem item = new EntityItem(world,
+                    pos.getX() + rx, pos.getY() + ry, pos.getZ() + rz,
+                    stack.copy());
+
+            float factor = 0.05F;
+
+            item.motionX = world.rand.nextGaussian() * factor;
+            item.motionY = world.rand.nextGaussian() * factor + 0.2F;
+            item.motionZ = world.rand.nextGaussian() * factor;
+            item.setDefaultPickupDelay();
+            world.spawnEntity(item);
+
+            stack.setCount(0);
+        } else {
+            ImpLib.logger().warn("Stack is null or empty!");
+        }
+    }
+
+    public static void dropStacksInInventory(@Nonnull IItemHandler itemHandler, World world, BlockPos pos) {
+        for (int slot = 0; slot < itemHandler.getSlots(); slot++) {
+            ItemStack stack = itemHandler.getStackInSlot(slot);
+            dropStack(world, stack, pos);
+        }
+    }
+
+    public static boolean dropWithOwner(World world, BlockPos pos) {
+        IBlockState state = world.getBlockState(pos);
+        ItemStack stack = state.getBlock().getItem(world, pos, state);
+        stack = setOwner(world, stack, pos);
+        if (stack == null) return false;
+        dropStack(world, stack, pos);
+        //world.removeTileEntity(pos); // Cancel drop logic
+        //world.setBlockToAir(pos);
+        return true;
+    }
+
+    public static ItemStack setOwner(IBlockAccess world, ItemStack stack, BlockPos pos) {
+        if ((world instanceof World) && ((World) world).isRemote) return null;
+        TileEntity tile = world.getTileEntity(pos);
+        if (tile == null) return null;
+
+        return setOwner(world, stack, pos, tile);
+    }
+
+    public static ItemStack setOwner(IBlockAccess world, ItemStack stack, BlockPos pos, TileEntity tile) {
+        if (!(tile instanceof Ownable)) return null;
+        Ownable t = (Ownable) tile;
+
+        if (t.getOwner() != null && !"UNKN".equals(t.getOwner())) {
+            NBTTagCompound _tag = new NBTTagCompound();
+            _tag.setInteger("Type", t.getOwnType());
+            _tag.setString("Name", t.getOwner());
+            _tag.setLong("UUIDH", t.getOwnerUUIDH());
+            _tag.setLong("UUIDL", t.getOwnerUUIDL());
+            ItemNBT.setCompound(stack, "Owner", _tag);
+
+            NBTTagList trusts = new NBTTagList();
+            UUIDList trustList = t.getTrustList();
+            for (int i = 0; i < trustList.size(); i++) {
+                NBTTagCompound compound = new NBTTagCompound();
+                compound.setLong("UUIDH", trustList.getUUIDH(i));
+                compound.setLong("UUIDL", trustList.getUUIDL(i));
+
+                trusts.appendTag(compound);
+            }
+            ItemNBT.setList(stack, "Trusts", trusts);
+        }
+
+
+        if ((tile instanceof IMEnergy) && ((IMEnergy) tile).maxME() > 0)
+            ItemNBT.setInt(stack, "MaxME", ((IMEnergy) tile).maxME());
+
+        //if(tile instanceof MetaTile){
+        //     tag.setInt("Type", ((MetaTile)tile).getMeta());
+        //}
+
+        return stack;
+    }
+
+    public static void breakBlockSavingNBT(World world, BlockPos pos, @Nonnull ToolTarget block) {
+        if (world.isRemote) return;
+        NBTTagCompound tag = block.storeDestroyData();
+        tag.removeTag("x");
+        tag.removeTag("y");
+        tag.removeTag("z");
+        IBlockState state = world.getBlockState(pos);
+        ItemStack stack = state.getBlock().getItem(world, pos, state);
+        ItemNBT.setRootTag(stack, tag);
+        if (block instanceof IMEnergy) {
+            ItemNBT.setInt(stack, "MaxME", ((IMEnergy) block).maxME());
+        }
+        dropStack(world, stack, pos);
+        world.removeTileEntity(pos); // Cancel drop logic
+        world.setBlockToAir(pos);
+    }
+
+    public static void breakBlock(World world, BlockPos pos) {
+        IBlockState state = world.getBlockState(pos);
+        ItemStack stack = state.getBlock().getItem(world, pos, state);
+        dropStack(world, stack, pos);
+        state.getBlock().breakBlock(world, pos, state);
+        world.removeTileEntity(pos); // Cancel drop logic
+        world.setBlockToAir(pos);
+    }
+
+    /**
+     * Call this after onBlockPlacedBy to write saved data to the stack if present
+     *
+     * @param world The world
+     * @param pos   The block position
+     * @param stack The stack that had the tag
+     */
+    public static void writeStackNBTToBlock(@Nonnull World world, @Nonnull BlockPos pos, @Nonnull ItemStack stack) {
+        //if
+        TileEntity tile = world.getTileEntity(pos);
+        if (tile != null) {
+            NBTTagCompound tag = ItemNBT.getRootTagNullable(stack);
+            if (tag == null)
+                return;
+            tag = tag.copy();
+            tag.setInteger("x", pos.getX()); // Add back MC tags
+            tag.setInteger("y", pos.getY());
+            tag.setInteger("z", pos.getZ());
+            tile.readFromNBT(tag);
+            if (tile instanceof TileBase) {
+                ((TileBase) tile).markForDataUpdate();
+            }
+        } else if (stack.hasTagCompound()) {
+            ImpLib.logger().warn("Try to write but there is not a tileentity[Data re-write failed]");
+        }
+    }
+
+    /**
+     * 找到首个矿物名
+     */
+    @Nullable
+    public static String firstOredictName(@Nullable ItemStack i) {
+        if (i == null) return null;
+        try {
+            return net.minecraftforge.oredict.OreDictionary.getOreName(OreDictionary.getOreIDs(i)[0]);
+        } catch (IndexOutOfBoundsException ignored) {
+        }
+        return null;
+    }
+
+    public static ItemStack[] string2Stacks(String string) {
+        int index = string.indexOf(":");
+        if (index > 0) {
+            String s = string.substring(index);
+            if (s.equals("ore")) {
+                List<ItemStack> list = OreDictionary.getOres(s.substring(index + 1), false);
+                if (list.isEmpty())
+                    throw new IllegalArgumentException("The ore specified " + s.substring(index + 1) + " does not have suitable item.");
+                return list.toArray(new ItemStack[list.size()]);
+            }
+        }
+        return new ItemStack[]{string2Stack(string)};
+    }
+
+    public static ItemStack getUsableDualHandItem(EntityPlayer player) {
+        return ItemStack.EMPTY;
+    }
+}
