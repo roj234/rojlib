@@ -1,0 +1,155 @@
+package roj.net.tcp.ssl;
+
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+
+/**
+ * This file is a part of MI <br>
+ * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ *
+ * @author solo6975
+ * @since 2021/2/5 0:26
+ */
+public final class SslEngineFactory {
+    static final String PROTOCOL = "TLS", KEY_FORMAT = "PKCS12", MANAGER_FORMAT = "SunX509";
+
+    public static String getKeyFormat() {
+        return KEY_FORMAT;
+    }
+
+    private static SSLContext getJavaSslServerContext(String pkPath, String caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
+        // 密钥管理器
+        KeyManagerFactory kmf = null;
+        if (serverSide) {
+            kmf = getKeyManagerFactory(pkPath, passwd);
+        }
+
+        // 信任库
+        TrustManagerFactory tf = null;
+        if (caPath != null) {
+            tf = getTrustManagerFactory(caPath, passwd);
+        } else if (!serverSide)
+            System.err.println("Client must verify server.");
+
+        SSLContext ctx = SSLContext.getInstance(PROTOCOL);
+
+        // 初始化此上下文
+        // 参数一：认证的密钥 参数二：对等信任认证 参数三：伪随机数生成器
+        // 单向认证，服务端不用验证客户端，所以第二个参数为null
+        ctx.init(kmf == null ? null : kmf.getKeyManagers(), tf == null ? null : tf.getTrustManagers(), null);
+
+        return ctx;
+    }
+
+    static TrustManagerFactory getTrustManagerFactory(String caPath, char[] passwd) throws GeneralSecurityException, IOException {
+        KeyStore tks = KeyStore.getInstance(KEY_FORMAT);
+        try (InputStream in = new FileInputStream(caPath)) {
+            tks.load(in, passwd);
+        }
+        TrustManagerFactory tf = TrustManagerFactory.getInstance(MANAGER_FORMAT);
+        tf.init(tks);
+        return tf;
+    }
+
+    static KeyManagerFactory getKeyManagerFactory(String pkPath, char[] passwd) throws IOException, GeneralSecurityException {
+        KeyStore ks = KeyStore.getInstance(KEY_FORMAT);
+        try (InputStream in = new FileInputStream(pkPath)) {
+            ks.load(in, passwd);
+        }
+
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(MANAGER_FORMAT);
+        kmf.init(ks, passwd);
+
+        return kmf;
+    }
+
+    public static EngineAllocator getJavaSslEngine(SslConfig cfg) throws IOException, GeneralSecurityException {
+        SSLContext context = getJavaSslServerContext(cfg.getPkPath(), cfg.isNeedClientAuth() ? cfg.getCaPath() : null, cfg.getPasswd(), cfg.isServerSide());
+
+        return new Alloc(context, cfg);
+    }
+
+    public static EngineAllocator getAnySslEngine(SslConfig config) throws IOException, GeneralSecurityException {
+        if(config.preferNetty()) {
+            try {
+                return Netty.getNettyOpenSslEngine(config, (ByteBufAllocator) config.getAllocator());
+            } catch (Error e) {
+                e.printStackTrace();
+            }
+        }
+        return getJavaSslEngine(config);
+    }
+
+    public static final class Netty {
+        public static EngineAllocator getNettyOpenSslEngine(SslConfig cfg, ByteBufAllocator alloc) throws IOException, GeneralSecurityException {
+            SslContext context = getNettyOpenSslServerContext(cfg.getPkPath(), cfg.isNeedClientAuth() ? cfg.getCaPath() : null, cfg.getPasswd(), cfg.isServerSide());
+
+            return new Alloc(context, alloc, cfg);
+        }
+
+        private static SslContext getNettyOpenSslServerContext(String pkPath, String caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
+            // 密钥管理器
+            KeyManagerFactory kmf = null;
+            if (serverSide) {
+                kmf = getKeyManagerFactory(pkPath, passwd);
+            }
+
+            // 信任库
+            TrustManagerFactory tf = null;
+            if (caPath != null) {
+                tf = getTrustManagerFactory(caPath, passwd);
+            } else if (!serverSide)
+                System.err.println("Client must verify server.");
+
+            SslContextBuilder builder = serverSide ? SslContextBuilder.forServer(kmf) : SslContextBuilder.forClient();
+
+            return builder.trustManager(tf).sslProvider(SslProvider.OPENSSL).build();
+        }
+
+        private static final class Alloc extends EngineAllocator {
+            private final SslContext context;
+            private final ByteBufAllocator alloc;
+
+            public Alloc(SslContext context, ByteBufAllocator alloc, SslConfig cfg) {
+                super(cfg);
+                this.context = context;
+                this.alloc = alloc;
+            }
+
+            @Override
+            public SSLEngine allocate() {
+                SSLEngine sslEngine = context.newEngine(alloc);
+                config(sslEngine, config);
+                return sslEngine;
+            }
+        }
+    }
+
+    private static final class Alloc extends EngineAllocator {
+        private final SSLContext context;
+
+        public Alloc(SSLContext context, SslConfig cfg) {
+            super(cfg);
+            this.context = context;
+        }
+
+        @Override
+        public SSLEngine allocate() {
+            SSLEngine engine = context.createSSLEngine();
+            config(engine, config);
+            return engine;
+        }
+    }
+}

@@ -1,0 +1,390 @@
+/**
+ * This file is a part of more items mod (MoreId)
+ * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
+ * <p>
+ * File version : 不知道...
+ * Author: R__
+ * Filename: mi.Main.java
+ * 基于Java SE Binary 8 构造
+ */
+package roj.asm;
+
+import roj.asm.constant.CstClass;
+import roj.asm.constant.CstUTF;
+import roj.asm.struct.*;
+import roj.asm.struct.attr.AttrCode;
+import roj.asm.struct.attr.AttrUnknown;
+import roj.asm.struct.attr.Attribute;
+import roj.asm.struct.simple.FieldSimple;
+import roj.asm.struct.simple.MethodSimple;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.FlagList;
+import roj.util.ByteList;
+import roj.util.ByteReader;
+import roj.util.Helpers;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class Parser {
+    public static final int SKIP_DEBUG = 0x01;
+
+    /**
+     * 解析一个格式良好的字节码
+     *
+     * @see #parse(ByteList, int)
+     */
+    public static Clazz parse(byte[] buf, int flags) {
+        return parse(new ByteList(buf), flags);
+    }
+
+    /**
+     * 解析一个格式良好的字节码
+     *
+     * @param buf   byte code
+     * @param flags 参数, WIP
+     * @see #parseConstants(byte[])
+     */
+    @SuppressWarnings("fallthrough")
+    public static Clazz parse(ByteList buf, int flags) {
+        if (buf == null) throw new NullPointerException("Bytecode is null!");
+
+        Clazz result = new Clazz();
+        ByteReader r = new ByteReader(buf);
+
+        if (r.readInt() != 0xcafebabe) {
+            throw new IllegalArgumentException("Illegal header");
+        }
+
+        result.version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
+        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+        try {
+            pool.read(r);
+            pool.valid();
+        } catch (Exception e) {
+            throw new RuntimeException("Corrupted constant pool: ", e);
+        }
+
+
+        /**
+         * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
+         * set, and the following rules apply to the rest of the ClassFile structure:
+         *
+         * major_version, minor_version: ≥ 53.0 (i.e., Java SE 9 and above)
+         *
+         * this_class: module-info
+         *
+         * super_class, interfaces_count, fields_count, methods_count: zero
+         */
+        result.accesses = AccessFlag.parse(r.readShort());
+        try {
+            result.name = pool.getName(r);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            result.name = "ERROR: Unknown cpi";
+        }
+        boolean module = result.accesses.contains(AccessFlag.MODULE);
+        if(module && result.accesses.flag != AccessFlag.MODULE)
+            throw new IllegalArgumentException("Module should only have 'module' flag");
+
+        result.parent = pool.getName(r);
+        if (result.parent == null && (!"java/lang/Object".equals(result.name) || module)) {
+            throw new IllegalArgumentException("No father found");
+        }
+
+        int len = r.readUnsignedShort();
+        List<String> interfaces = result.interfaces;
+        if(module && len != 0)
+            throw new IllegalArgumentException("Module should not have interfaces");
+        for (int i = 0; i < len; i++) {
+            interfaces.add(pool.getName(r));
+        }
+
+        len = r.readUnsignedShort();
+        List<Field> fields = result.fields;
+        if(module && len != 0)
+            throw new IllegalArgumentException("Module should not have fields");
+        for (int i = 0; i < len; i++) {
+            FlagList access = AccessFlag.parse(r.readShort());
+            CstUTF name = (CstUTF) pool.get(r);
+            CstUTF desc = (CstUTF) pool.get(r);
+
+            Field field = new Field(access, name.getString(), desc.getString());
+            field.initAttributes(pool, r);
+            fields.add(field);
+        }
+
+        len = r.readUnsignedShort();
+        if(module && len != 0)
+            throw new IllegalArgumentException("Module should not have methods");
+        List<Method> methods = result.methods;
+        for (int i = 0; i < len; i++) {
+            FlagList access = AccessFlag.parse(r.readShort());
+            CstUTF name = (CstUTF) pool.get(r);
+            CstUTF desc = (CstUTF) pool.get(r);
+
+            Method method = new Method(access, result, name.getString(), desc.getString());
+            method.initAttributes(pool, r);
+            methods.add(method);
+        }
+
+        result.initAttributes(pool, r);
+
+        return result;
+    }
+
+    /**
+     * "编译"IClass为字节码
+     *
+     * @param c The Clazz
+     * @return 一个格式良好的字节码缓冲区
+     * @throws RuntimeException 当出问题的时候...
+     */
+    public static byte[] toByteArray(Clazz c) {
+        return c.getBytes().getByteArray();
+    }
+
+    public static ByteList toByteArrayShared(Clazz data) {
+        return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal());
+    }
+
+    /**
+     * 解析一个格式良好的字节码
+     * 与{@link #parse(byte[], int)}不同的是, 这个速度更快
+     *
+     * @param buf byte code
+     */
+    public static ConstantData parseConstants(byte[] buf) {
+        return parseConstants(buf, false);
+    }
+
+    public static ConstantData parseConstants(ByteList buf) {
+        return parseConstants(buf, false);
+    }
+
+    /**
+     * 解析一个格式良好的字节码
+     * 与{@link #parse(byte[], int)}不同的是, 这个速度更快
+     *
+     * @param buf byte code
+     */
+    public static ConstantData parseConstants(byte[] buf, boolean enableByName) {
+        return parse1(new ByteReader(buf));
+    }
+
+    /**
+     * 解析一个格式良好的字节码
+     * 与{@link #parse(byte[], int)}不同的是, 这个速度更快
+     *
+     * @param buf byte code
+     */
+    public static ConstantData parseConstants(ByteList buf, boolean enableByName) {
+        return parse1(new ByteReader(buf));
+    }
+
+    @Nonnull
+    private static ConstantData parse1(ByteReader r) {
+        try {
+            if (r.readInt() != 0xcafebabe) {
+                throw new IllegalArgumentException("Illegal header");
+            }
+            int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
+
+            ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+            pool.read(r);
+            pool.valid();
+
+            ConstantData result = new ConstantData(version, pool, r.length(), r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+
+            int len = r.readUnsignedShort();
+
+            List<CstClass> itf = result.interfaces;
+            for (int i = 0; i < len; i++) {
+                itf.add((CstClass) pool.get(r));
+            }
+
+            len = r.readUnsignedShort();
+            List<FieldSimple> fields = result.fields;
+            for (int i = 0; i < len; i++) {
+                FieldSimple field = new FieldSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+
+                AttributeList attributes = field.attributes;
+                int attrLen = r.readUnsignedShort();
+                attributes.ensureCapacity(attrLen);
+
+                for (int j = 0; j < attrLen; j++) {
+                    String name0 = ((CstUTF) pool.get(r)).getString();
+
+                    Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+                    attributes.add(attr);
+                }
+                fields.add(field);
+            }
+
+            len = r.readUnsignedShort();
+            List<MethodSimple> methods = result.methods;
+            for (int i = 0; i < len; i++) {
+                MethodSimple method = new MethodSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+                method.cn(result.name, result.parent);
+
+                AttributeList attributes = method.attributes;
+                int attrLen = r.readUnsignedShort();
+                attributes.ensureCapacity(attrLen);
+
+                for (int j = 0; j < attrLen; j++) {
+                    String name0 = ((CstUTF) pool.get(r)).getString();
+
+                    Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+                    attributes.add(attr);
+                }
+                methods.add(method);
+            }
+
+            len = r.readUnsignedShort();
+            AttributeList attributes = result.attributes;
+            attributes.ensureCapacity(len);
+
+            for (int i = 0; i < len; i++) {
+                String name0 = ((CstUTF) pool.get(r)).getString();
+
+                Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+
+                attributes.add(attr);
+            }
+
+            return result;
+        } catch (Throwable e) {
+            e.printStackTrace();
+            throw e;
+        }
+    }
+
+    public static byte[] toByteArray(ConstantData c) {
+        return c.getBytes().getByteArray();
+    }
+
+    @Deprecated
+    public static byte[] toByteArray(ConstantData c, boolean cpAddOnWrite) {
+        return c.getBytes().getByteArray();
+    }
+
+    public static ByteList toByteArrayShared(ConstantData data) {
+        return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal());
+    }
+
+    public static AccessData parseAccess(byte[] buf) {
+        return parse2(buf.clone(), new ByteReader(buf));
+    }
+
+    public static AccessData parseAccessDirect(byte[] buf) {
+        return parse2(buf, new ByteReader(buf));
+    }
+
+    @Nonnull
+    private static AccessData parse2(byte[] buf, ByteReader r) {
+        if (r.readInt() != 0xcafebabe) {
+            throw new IllegalArgumentException("Illegal header");
+        }
+        r.index += 4; // ver
+
+        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+        pool.readNames(r);
+
+        int cfo = r.index; // acc
+
+        r.index += 2;
+
+        String self = pool.getName(r);
+        String parent = pool.getName(r);
+
+        int len = r.readUnsignedShort();  // itf
+        List<String> itf = new ArrayList<>(len);
+        for (int i = 0; i < len; i++) {
+            itf.add(pool.getName(r));
+        }
+
+        List<?>[] arr = new List<?>[2];
+        for (int k = 0; k < 2; k++) {
+            len = r.readUnsignedShort();
+            List<AccessData.D> components = new ArrayList<>(len);
+            for (int i = 0; i < len; i++) {
+                int offset = r.index;
+                r.index += 2; // acc
+
+                components.add(new AccessData.D(((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString(), offset));
+
+                int attrs = r.readUnsignedShort();
+                for (int j = 0; j < attrs; j++) {
+                    r.index += 2;
+                    int ol = r.readInt();
+                    r.index += ol;
+                }
+            }
+            arr[k] = components;
+        }
+
+        return new AccessData(buf, Helpers.cast(arr[0]), Helpers.cast(arr[1]), cfo, self, parent, itf);
+    }
+
+    public static List<String> simpleData(byte[] buf) {
+        if (buf == null)
+            return null;
+
+        ByteReader r = new ByteReader(buf);
+        if (r.readInt() != 0xcafebabe) {
+            throw new IllegalArgumentException("Illegal header");
+        }
+
+        r.index += 4; // ver
+
+        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+        pool.readNames(r);
+
+        int cfo = r.index; // acc
+
+        r.index += 2;
+
+        List<String> list = new ArrayList<>();
+
+        list.add(pool.getName(r));
+        list.add(pool.getName(r));
+
+        int len = r.readUnsignedShort();  // itf
+        for (int i = 0; i < len; i++) {
+            list.add(pool.getName(r));
+        }
+
+        return list;
+    }
+
+    /**
+     * Used to create AttrCode
+     *
+     * @param clazz  class
+     * @param method method
+     * @return code or null
+     */
+    @Nullable
+    public static AttrCode getOrCreateCode(@Nonnull ConstantData clazz, @Nonnull MethodSimple method) {
+        Attribute attribute = method.attrByName("Code");
+
+        if (attribute == null) {
+            if (!method.accesses.contains(AccessFlag.ABSTRACT)) {
+                throw new IllegalArgumentException("Non-abstract method " + clazz.name + '.' + method.name.getString() + ':' + method.type.getString() + " did not contains a Code attribute.");
+            }
+            return null;
+        }
+
+        AttrCode code;
+        if (!(attribute instanceof AttrCode)) {
+            int index = method.attributes.indexOf(attribute);
+            method.attributes.set(index, code = new AttrCode(method, attribute.getRawData(), clazz.constants));
+        } else {
+            code = (AttrCode) attribute;
+        }
+        return code;
+    }
+}
