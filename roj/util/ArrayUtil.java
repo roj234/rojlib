@@ -1,5 +1,6 @@
 package roj.util;
 
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -14,7 +15,7 @@ public final class ArrayUtil {
         return inverse(arr, 0, arr.length);
     }
 
-    private static <T> T[] inverse(T[] arr, int i, int length) {
+    public static <T> T[] inverse(T[] arr, int i, int length) {
         if (--length <= 0)
             return arr; // empty or one
         // i = 0, arr.length = 4, e = 2
@@ -29,6 +30,23 @@ public final class ArrayUtil {
 
     public static <T> T[] inverse(T[] arr, int size) {
         return inverse(arr, 0, size);
+    }
+
+    public static <T> List<T> inverse(List<T> arr) {
+        return inverse(arr, 0, arr.size());
+    }
+
+    public static <T> List<T> inverse(List<T> arr, int i, int length) {
+        if (--length <= 0)
+            return arr; // empty or one
+        // i = 0, arr.length = 4, e = 2
+        // swap 0 and 3 swap 1 and 2
+        for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
+            T a = arr.get(i);
+            arr.set(i, arr.get(length - i));
+            arr.set(length - i, a);
+        }
+        return arr;
     }
 
     public static void shuffle(Object[] arr, Random random) {

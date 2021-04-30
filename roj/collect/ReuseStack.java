@@ -14,10 +14,11 @@ import java.util.NoSuchElementException;
  * @since 2020/9/28 12:29
  */
 public class ReuseStack<K> implements Iterable<K> {
-    static final Entry<?> head = new Entry<>();
-    Entry<K> tail;
+    protected static final Entry<?> head = new Entry<>();
 
-    int size;
+    protected Entry<K> tail;
+
+    protected int size;
 
     public ReuseStack() {
         clear();
@@ -72,7 +73,7 @@ public class ReuseStack<K> implements Iterable<K> {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("Stack{");
+        StringBuilder sb = new StringBuilder("[");
         if (tail != head) {
             Entry<?> entry = tail;
             while (entry != head) {
@@ -81,7 +82,7 @@ public class ReuseStack<K> implements Iterable<K> {
             }
             sb.delete(sb.length() - 2, sb.length());
         }
-        return sb.append('}').toString();
+        return sb.append(']').toString();
     }
 
     /**
@@ -94,9 +95,9 @@ public class ReuseStack<K> implements Iterable<K> {
         return new EntryIterator<>(this);
     }
 
-    private static final class Entry<k> {
-        k value;
-        Entry<k> prev;
+    protected static final class Entry<k> {
+        public k value;
+        public Entry<k> prev;
 
         private Entry() {
         }

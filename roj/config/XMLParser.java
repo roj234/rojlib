@@ -24,7 +24,7 @@ import static roj.config.JSONParser.unexpected;
  * <BR>
  * 元数据（有关数据的数据）应当存储为属性，而数据本身应当存储为元素。
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: XMLParser.java
  */
 public class XMLParser {
@@ -49,15 +49,11 @@ public class XMLParser {
     }
 
     public static XMLHeader parse(XMLexer wr) throws ParseException {
-        try {
-            XMLHeader ce = xmlHeader(wr);
-            if (wr.hasNext()) {
-                throw wr.err("期待 /EOF");
-            }
-            return ce;
-        } catch (ParseException e) {
-            throw wr.getExceptionDetails(e);
+        XMLHeader ce = xmlHeader(wr);
+        if (wr.hasNext()) {
+            throw wr.err("期待 /EOF");
         }
+        return ce;
     }
 
     public static XMLHeader xmlHeader(XMLexer wr) throws ParseException {
@@ -65,7 +61,7 @@ public class XMLParser {
         if (w.type() == left_curly_bracket) {
             except(wr, ask, "?");
             w = wr.nextWord();
-            if (w.type() != WordPresets.VARIABLE || !w.val().equals("xml")) {
+            if (w.type() != WordPresets.LITERAL || !w.val().equals("xml")) {
                 unexpected(wr, w.val(), "xml");
             }
 
@@ -80,7 +76,7 @@ public class XMLParser {
                         except(wr, right_curly_bracket, ">");
                         break o;
                     case namespace:
-                    case WordPresets.VARIABLE: {
+                    case WordPresets.LITERAL: {
                         String aName = w.val();
                         except(wr, equ, "=");
                         attributes.put(aName, ConfEntry.of(wr.nextWord()));
@@ -126,7 +122,7 @@ public class XMLParser {
             String name;
             switch (w.type()) {
                 case namespace:
-                case WordPresets.VARIABLE:
+                case WordPresets.LITERAL:
                     name = w.val();
                     break;
                 default:
@@ -150,7 +146,7 @@ public class XMLParser {
                     case right_curly_bracket:
                         break o;
                     case namespace:
-                    case WordPresets.VARIABLE: {
+                    case WordPresets.LITERAL: {
                         String aName = w.val();
                         except(wr, equ, "=");
                         // todo 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
@@ -175,7 +171,7 @@ public class XMLParser {
                                 w = wr.nextWord();
 
                                 switch (w.type()) {
-                                    case WordPresets.VARIABLE:
+                                    case WordPresets.LITERAL:
                                     case namespace:
                                         if (!w.val().equals(name)) {
                                             throw wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
@@ -215,7 +211,7 @@ public class XMLParser {
                         except(wr, slash, "/");
                         w = wr.nextWord();
                         switch (w.type()) {
-                            case WordPresets.VARIABLE:
+                            case WordPresets.LITERAL:
                             case namespace:
                                 if (!w.val().equals(name)) {
                                     throw wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
@@ -258,13 +254,16 @@ public class XMLParser {
 
         @Override
         protected Word readAlphabet() {
+            CharSequence input = this.input;
+            int index = this.index;
+
             CharList temp = this.found;
             temp.clear();
 
             boolean ns = false;
 
-            while (hasNext()) {
-                char c = next();
+            while (index < input.length()) {
+                char c = input.charAt(index++);
                 if (c == ':') {
                     ns = true;
                     temp.append(c);
@@ -272,38 +271,42 @@ public class XMLParser {
                     if (!SPECIAL.contains(c) && !WHITESPACE.contains(c)) {
                         temp.append(c);
                     } else {
-                        retract();
+                        index--;
                         break;
                     }
                 }
             }
 
+            this.index = index;
+
             if (temp.length() == 0) {
                 return eof();
             }
 
-            return formClip(ns ? namespace : WordPresets.VARIABLE, temp.toString());
+            return formClip(ns ? namespace : WordPresets.LITERAL, temp.toString());
         }
 
         @Override
         @SuppressWarnings("fallthrough")
         public Word readWord() throws ParseException {
-            while (hasNext()) {
-                int c = next();
+            CharSequence input = this.input;
+            int index = this.index;
+
+            int rem;
+            while ((rem = input.length() - index) > 0) {
+                int c = input.charAt(index++);
                 switch (c) {
                     case '\'':
                     case '"':
+                        this.index = index;
                         return readConstString((char) c);
                     case '<':
-                        if (index + 3 < input.length() && offset(0) == '!' && offset(1) == '-' && offset(2) == '-') { // <!--
-                            next();
-                            next();
-                            next();
-                            while (hasNext()) {
-                                while (hasNext() && next() != '-') ; // -->
-                                if (offset(0) == '-' && offset(1) == '>') {
-                                    next();
-                                    next();
+                        if (rem > 4 && input.charAt(index) == '!' && input.charAt(index + 1) == '-' && input.charAt(index + 2) == '-') { // <!--
+                            index += 3;
+                            while (index < input.length()) {
+                                while (index < input.length() && input.charAt(index++) != '-') ; // -->
+                                if (input.charAt(index) == '-' && input.charAt(index + 1) == '>') {
+                                    index += 2;
                                     break;
                                 }
                             }
@@ -311,7 +314,7 @@ public class XMLParser {
                         }
                     default: {
                         if (!WHITESPACE.contains(c)) {
-                            retract();
+                            this.index = index - 1;
                             if (SPECIAL.contains(c)) {
                                 switch (c) { // todo +-
                                     case '+':
@@ -329,24 +332,28 @@ public class XMLParser {
                     }
                 }
             }
+            this.index = index;
             return eof();
         }
 
         public XText readString(int CDATA, String name) throws ParseException {
+            CharSequence input = this.input;
+            int index = this.index;
+
             CharList temp = found;
             temp.clear();
 
             switch (CDATA) {
                 case 0:
                     o:
-                    while (hasNext()) {
-                        char c = next();
+                    while (index < input.length()) {
+                        char c = input.charAt(index++);
                         switch (c) {
                             case '&':
                                 temp.append(decodeEntity());
                                 break;
                             case '<':
-                                retract();
+                                index--;
                                 break o;
                             default:
                                 temp.append(c);
@@ -356,12 +363,10 @@ public class XMLParser {
                     break;
                 case 1:
                     index += 9;
-                    lineOffset += 9;
-                    while (hasNext()) { //]]>
-                        char c = next();
-                        if (c == ']' && offset(0) == ']' && offset(1) == '>') {
-                            next();
-                            next();
+                    while (index < input.length()) { //]]>
+                        char c = input.charAt(index++);
+                        if (c == ']' && input.charAt(index) == ']' && input.charAt(index + 1) == '>') {
+                            index += 2;
                             break;
                         }
                         temp.append(c);
@@ -369,6 +374,7 @@ public class XMLParser {
                     break;
                 case 2:
                     int xc = 0;
+                    this.index = index;
                     o:
                     while (hasNext()) {
                         Word c = nextWord();
@@ -388,7 +394,7 @@ public class XMLParser {
                                         Word c2 = nextWord();
                                         if(c2.type() == slash) {
                                             c2 = nextWord();
-                                            if(c2.type() == WordPresets.VARIABLE) {
+                                            if(c2.type() == WordPresets.LITERAL) {
                                                 if(c2.val().equals(name)) {
                                                     break o;
                                                 }
@@ -407,6 +413,8 @@ public class XMLParser {
                     }
                     break;
             }
+
+            this.index = index;
 
             //if (temp.length() == 0 && CDATA != 2)
             //    throw err("未预料的 EOF");

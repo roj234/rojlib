@@ -1,11 +1,12 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
 import roj.kscript.type.KArray;
-import roj.kscript.type.KInteger;
+import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
+import roj.kscript.util.NotStatementException;
 
 import java.util.*;
 
@@ -43,7 +44,7 @@ public class ArrayDefine implements Expression {
         if (!(left instanceof ArrayDefine))
             return false;
         ArrayDefine define = (ArrayDefine) left;
-        return arrayEq(expr, define.expr) && define.array.equalsTo(array);
+        return arrayEq(expr, define.expr) && define.array.__int_equals__(array);
     }
 
     static boolean arrayEq(List<Expression> args, List<Expression> args1) {
@@ -68,21 +69,24 @@ public class ArrayDefine implements Expression {
     }
 
     @Override
-    public void write(ASTree tree) {
+    public void write(ASTree tree, boolean noRet) {
+        if(noRet)
+            throw new NotStatementException();
+
         tree.Load(array);
         for (int i = 0; i < expr.size(); i++) {
             Expression expr = this.expr.get(i);
             if (expr != null) {
-                expr.write(tree.Std(ASTCode.DUP));
+                expr.write(tree.Std(ASTCode.DUP), false);
                 tree
-                        .Load(KInteger.valueOf(i))
+                        .Load(KInt.valueOf(i))
                         .Std(ASTCode.PUT_OBJECT);
             }
         }
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
         final KArray v = (KArray) array.copy();
         if(!expr.isEmpty()) {
             for (int i = 0; i < expr.size(); i++) {

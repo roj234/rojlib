@@ -3,10 +3,10 @@ package roj.kscript.type;
 import javax.annotation.Nonnull;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: YAMLNumber.java
  */
 public final class KDouble extends KBase {
@@ -22,7 +22,7 @@ public final class KDouble extends KBase {
     }
 
     public static KType valueOf(double d) {
-        return (((int) d) == d) ? new KInteger((int) d) : new KDouble(d);
+        return (((int) d) == d) ? new KInt((int) d) : new KDouble(d);
     }
 
     public static KType valueOf(String d) {
@@ -35,17 +35,17 @@ public final class KDouble extends KBase {
     }
 
     @Override
-    public KInteger asKInteger() {
-        return isInteger() ? new KInteger((int) value) : super.asKInteger();
+    public KInt asKInt() {
+        return isInt() ? new KInt((int) value) : super.asKInt();
     }
 
     @Override
-    public boolean isInteger() {
+    public boolean isInt() {
         return ((int) value) == value;
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return value == value && value != 0;
     }
 
@@ -55,7 +55,7 @@ public final class KDouble extends KBase {
     }
 
     @Override
-    public int asInteger() {
+    public int asInt() {
         return (int) value;
     }
 
@@ -98,7 +98,7 @@ public final class KDouble extends KBase {
         switch (type) {
             case BOOL:
             case DOUBLE:
-            case NUMBER:
+            case INT:
             case STRING:
                 return true;
         }

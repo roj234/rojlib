@@ -1,5 +1,5 @@
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2018-20XX 版权没有，仿冒不究
  * <p>
  * File version : 76
@@ -25,7 +25,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         public K k;
         public V v;
 
-        protected Entry(K k, V v) {
+        public Entry(K k, V v) {
             this.k = k;
             this.v = v;
         }
@@ -164,15 +164,15 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         }
 
         Entry<K, V> entry = getOrCreateEntry(key);
-        V oldValue = entry.v;
-        V oldValue1 = oldValue;
-        if (oldValue == NOT_USING) {
-            oldValue = null;
+        V old = entry.v;
+        if (old == NOT_USING) {
             afterPut(entry);
             size++;
+            entry.v = e;
+            return null;
         }
-        afterChange(key, oldValue1, entry.v = e, entry);
-        return oldValue;
+        afterChange(key, old, entry.v = e, entry);
+        return old;
     }
 
     @Override
@@ -216,7 +216,8 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             }
         }
 
-        if (toRemove == null || toRemove.v == NOT_USING)
+        // todo update pending for all collections
+        if (toRemove == null)
             return null;
         if(v != NOT_USING && !Objects.equals(v, toRemove.v))
             return null;
@@ -266,7 +267,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         return entry != null;
     }
 
-    protected Entry<K, V> getEntry(K id) {
+    public Entry<K, V> getEntry(K id) {
         Entry<K, V> entry = getEntryFirst(id, false);
         while (entry != null) {
             if (Objects.equals(entry.k, id)) {
@@ -277,7 +278,6 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     protected Entry<K, V> getOrCreateEntry(K id) {
         Entry<K, V> entry = getEntryFirst(id, true);
         if (entry.v == NOT_USING)
@@ -289,12 +289,12 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
                 break;
             entry = entry.next;
         }
-        Entry<K, V> firstUnused = getCachedEntry(id, (V) NOT_USING);
+        Entry<K, V> firstUnused = getCachedEntry(id);
         entry.next = firstUnused;
         return firstUnused;
     }
 
-    int indexFor(K id) {
+    protected int indexFor(K id) {
         int v;
         return id == null ? 0 : ((v = id.hashCode()) ^ (v >>> 16)) & (length - 1);
     }
@@ -311,7 +311,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         if ((entry = (Entry<K, V>) entries[i]) == null) {
             if (!create)
                 return null;
-            entries[i] = entry = getCachedEntry(id, (V) NOT_USING);
+            entries[i] = entry = getCachedEntry(id);
         }
         return entry;
     }
@@ -319,18 +319,20 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
     protected Entry<K, V> notUsing = null;
     protected int removedLength = 0;
 
-    protected Entry<K, V> getCachedEntry(K id, V value) {
-        Entry<K, V> cached = this.notUsing;
-        if (cached != null) {
-            cached.k = id;
-            cached.v = value;
-            this.notUsing = cached.next;
-            cached.next = null;
-            removedLength--;
-            return cached;
-        }
+    @SuppressWarnings("unchecked")
+    protected Entry<K, V> getCachedEntry(K id) {
+        Entry<K, V> et = this.notUsing;
 
-        return createEntry(id, value);
+        if (et != null) {
+            et.k = id;
+            this.notUsing = et.next;
+            et.next = null;
+            removedLength--;
+        } else {
+            et = createEntry(id);
+        }
+        et.v = (V) NOT_USING;
+        return et;
     }
 
     protected void putRemovedEntry(Entry<K, V> entry) {
@@ -344,8 +346,8 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         notUsing = entry;
     }
 
-    protected Entry<K, V> createEntry(K id, V v) {
-        return new Entry<>(id, v);
+    protected Entry<K, V> createEntry(K id) {
+        return new Entry<>(id, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -365,33 +367,12 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         return sb.append('}').toString();
     }
 
-    public void slowClear() {
-        if (size == 0)
-            return;
-        size = 0;
-        if (entries != null) {
-            length = 16;
-            entries = null;
-        }
-        if(removedLength != 0) {
-            removedLength = 0;
-            notUsing = null;
-        }
-    }
-
     public void clear() {
         if (size == 0)
             return;
         size = 0;
         if (entries != null)
-            if (notUsing == null || removedLength < MAX_NOT_USING) {
-                for (int i = 0; i < length; i++) {
-                    if (entries[i] != null) {
-                        putRemovedEntry(Helpers.cast(entries[i]));
-                        entries[i] = null;
-                    }
-                }
-            } else Arrays.fill(entries, null);
+            Arrays.fill(entries, null);
     }
 
     static class KeyItr<K, V> extends MapItr<Entry<K, V>> implements Iterator<K> {
@@ -603,10 +584,11 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
 
     @Override
     public V putIfAbsent(K key, V v) {
-        int os = size;
         Entry<K, V> entry = getOrCreateEntry(key);
-        if(os != size) {
-            return entry.v = v;
+        if(entry.v == NOT_USING) {
+            size++;
+            entry.v = v;
+            return null;
         }
         return entry.v;
     }

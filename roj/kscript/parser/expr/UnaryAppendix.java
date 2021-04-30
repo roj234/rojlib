@@ -1,12 +1,12 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
 import roj.kscript.parser.Marks;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KDouble;
-import roj.kscript.type.KInteger;
+import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
 
 import javax.annotation.Nonnull;
@@ -32,21 +32,21 @@ public final class UnaryAppendix implements Expression {
             case Symbol.dec:
         }
         this.operator = operator;
-        this.left = (LoadExpression) left.requireWrite().compress();
+        this.left = (LoadExpression) left.requireWrite();
     }
 
     @Override
-    public void write(ASTree tree) {
+    public void write(ASTree tree, boolean noRet) {
         final boolean var = left instanceof Variable;
 
         final int count = operator == Symbol.inc ? 1 : -1;
 
         if (var) {
             String name = ((Variable) left).name;
-            tree.Section(Marks.START)
+            tree.Mark(Marks.START)
                     .Get(name)
-                    .Section(Marks.END)
-                    .Inc(name, count).Section(Marks.NEXT);
+                    .Mark(Marks.END)
+                    .Inc(name, count).Mark(Marks.NEXT);
             // get - inc - pop
             // => inc
         } else {
@@ -57,14 +57,14 @@ public final class UnaryAppendix implements Expression {
             tree.Std(ASTCode.DUP2)
                     .Std(ASTCode.GET_OBJECT)
 
-                    .Section(Marks.START)
+                    .Mark(Marks.START)
                     .Std(ASTCode.DUP)
-                    .Section(Marks.END)
+                    .Mark(Marks.END)
 
-                    .Load(KInteger.valueOf(count))
+                    .Load(KInt.valueOf(count))
                     .Std(operator == Symbol.inc ? ASTCode.ADD : ASTCode.SUB)
                     .Std(ASTCode.PUT_OBJECT)
-                    .Section(Marks.NEXT);
+                    .Mark(Marks.NEXT);
         }
     }
 
@@ -79,7 +79,7 @@ public final class UnaryAppendix implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
         int val = operator == Symbol.inc ? 1 : -1;
         KType base;
         KType copy;
@@ -94,8 +94,8 @@ public final class UnaryAppendix implements Expression {
 
         copy = base.copy();
 
-        if (base.isInteger()) {
-            KInteger i = base.asKInteger();
+        if (base.isInt()) {
+            KInt i = base.asKInt();
             i.value += val;
         } else {
             KDouble i = base.asKDouble();

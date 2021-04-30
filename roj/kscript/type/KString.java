@@ -7,10 +7,10 @@ import javax.annotation.Nonnull;
 import java.util.Objects;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: YAMLString.java
  */
 public final class KString extends KBase {
@@ -46,14 +46,14 @@ public final class KString extends KBase {
     }
 
     @Override
-    public int asInteger() {
+    public int asInt() {
         if (checkType() >= 0) {
             try {
                 return Integer.parseInt(value);
             } catch (NumberFormatException ignored) {
             }
         }
-        return super.asInteger();
+        return super.asInt();
     }
 
     @Override
@@ -62,7 +62,7 @@ public final class KString extends KBase {
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return !value.equalsIgnoreCase("false") && !value.isEmpty();
     }
 
@@ -90,7 +90,7 @@ public final class KString extends KBase {
     }
 
     @Override
-    public boolean isInteger() {
+    public boolean isInt() {
         return checkType() == 0;
     }
 
@@ -106,7 +106,7 @@ public final class KString extends KBase {
             case STRING:
                 return true;
             case DOUBLE:
-            case NUMBER:
+            case INT:
                 return checkType() >= 0;
         }
         return false;

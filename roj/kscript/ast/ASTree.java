@@ -3,21 +3,21 @@ package roj.kscript.ast;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Range;
 import roj.asm.struct.Clazz;
-import roj.collect.IntMap;
+import roj.collect.CrossFinder;
+import roj.collect.MyHashSet;
+import roj.collect.ToIntMap;
 import roj.config.word.LineHandler;
-import roj.kscript.KConstants;
-import roj.kscript.ast.node.*;
 import roj.kscript.func.KFuncAST;
 import roj.kscript.parser.Marks;
-import roj.kscript.type.Context;
-import roj.kscript.type.KObject;
 import roj.kscript.type.KType;
-import roj.math.MutableBoolean;
-import roj.math.MutableInt;
+import roj.kscript.util.ContextPrimer;
+import roj.kscript.util.LineInfo;
+import roj.kscript.util.SwitchMap;
+import roj.kscript.util.Variable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The ASTree (basically called the Abstract Syntax Tree, a kind of machine friendly 'code'), <br>
@@ -29,43 +29,38 @@ import java.util.Map;
 public final class ASTree implements LineHandler {
     private Node head, tail,
             mark_head, mark_tail;
-    private final String depth, file, self;
-    private String region;
+    private final String depth, file;
+    private String self;
 
-    private MutableInt index; // 作用域offset
-    private MutableBoolean changed;
-    private LineNumber ln;
+    private final ArrayList<LineInfo> lineIndexes = new ArrayList<>();
+
     private byte markFlag;
 
-    private List<LabelNode> labels = new ArrayList<>();
+    private ArrayList<LabelNode> labels = new ArrayList<>();
 
-
-    private ASTree(String depth, String file, String self) {
+    private ASTree(String depth, String file) {
         this.depth = depth;
         this.file = file;
-        this.self = self;
-        this.index = new MutableInt(1);
-        this.changed = new MutableBoolean(false);
     }
 
-    private ASTree(String depth, String file, String self, int magic) {
-        this.depth = depth;
-        this.file = file;
-        this.self = self;
+    public void funcName(String name) {
+        this.self = name;
     }
 
     public static ASTree builder(String file) {
-        return new ASTree("JsFile", file, "<root>");
+        ASTree tree = new ASTree("JsFile", file);
+        tree.self = "<root>";
+        return tree;
     }
 
-    public static ASTree builder(ASTree parent, String selfName) {
-        return new ASTree(parent.depth + '.' + parent.self, parent.file, selfName);
+    public static ASTree builder(ASTree parent) {
+        return new ASTree(parent.depth + '.' + parent.self, parent.file);
     }
 
     public static StringBuilder toString(Node begin, StringBuilder sb) {
         while (begin != null) {
             sb.append(begin).append(';').append('\n');
-            begin = begin.next();
+            begin = begin.next;
         }
         return sb;
     }
@@ -74,9 +69,8 @@ public final class ASTree implements LineHandler {
      * 作用域不变
      */
     public static ASTree copy(ASTree tree) {
-        ASTree tree1 = new ASTree(tree.depth, tree.file, tree.self, 0);
-        tree1.index = tree.index;
-        tree1.changed = tree.changed;
+        ASTree tree1 = new ASTree(tree.depth, tree.file);
+        tree1.self = tree.self;
         tree1.labels = tree.labels;
         return tree1;
     }
@@ -86,43 +80,106 @@ public final class ASTree implements LineHandler {
             tree.node0(head);
     }
 
-    public KFuncAST build(KObject proto, Context ctx) {
-        removeUselessCode();
-        KFuncAST ast = new KFuncAST(proto, ctx.init(), head, depth);
-        ast.setSource(file);
-        ast.setName(self);
-        return ast;
+    public KFuncAST build(ContextPrimer ctx) {
+        Frame frame = new Frame(lineIndexes, ctx);
+        _finalOp(frame, ctx.locals);
+        System.out.println("Closure for " + frame + " at " + depth + '.' + self + " is " + Arrays.toString(frame.parents));
+        return (KFuncAST) new KFuncAST(head, frame).set(file, self, depth);
     }
 
-    private void removeUselessCode() {
-        Node pr = null;
-        Node n = this.head;
+    /**
+     * 后处理
+     */
+    private void _finalOp(Frame frame, ArrayList<Variable> lets) {
+        Node cur = this.head;
 
-        while (n != null) {
-            if (n.getCode() == ASTCode.POP) {
-                if (pr.getCode() == ASTCode.INVOKE_FUNCTION) {
-                    pr.setCode(ASTCode.INVOKE_FUNC_NORET);
-                    pr.next(n.next());
-                }
+        MyHashSet<Frame> closures = new MyHashSet<>();
+        ToIntMap<Node> indexer = new ToIntMap<>();
+        int fr = 0;
+
+        // pass 1: optimize code
+        // pass 2: index nodes
+        while (cur != null) {
+            indexer.put(cur, fr++);
+            switch (cur.code) {
+                case SET_VARIABLE:
+                case LOAD_VARIABLE:
+                    closures.add(frame.findProvider(((VarNode)cur).name));
+                    break;
+                case GOTO:
+                case IF:
+                case SWITCH:
+                case TRY_ENTER: // only these node need to be compiled for better performance
+                    cur.compile();
+                    break;
             }
-            pr = n;
-            n = n.next();
+
+            cur = cur.next;
         }
-    }
 
-    public KFuncAST build(Context ctx) {
-        return build(KConstants.FUNCTION, ctx);
-    }
+        CrossFinder<CrossFinder.Wrap<Variable>> cf = new CrossFinder<>(lets.size() + 1);
+        for (Variable v : lets) {
+            if(v.start != null && v.end != null)
+                cf.add(new CrossFinder.Wrap<>(v, indexer.getInt(v.start), indexer.getInt(v.end)));
+            else
+                System.out.println("Variable " + v.name + " not used");
+        }
 
-    public int NextRegion() {
-        return NextRegion(null);
-    }
+        cur = this.head;
 
-    public int NextRegion(String name) {
-        changed.set(false);
-        node0(new RegionNode(index.getValue()));
-        this.region = name;
-        return index.getAndIncrement();
+        // pass 3: create actions on control flow nodes.
+        while (cur != null) {
+            switch (cur.code) {
+                case GOTO:
+                case IF:
+                case SWITCH:
+                    cur.genDiff(cf, indexer);
+                    break;
+            }
+
+            cur = cur.next;
+        }
+
+        // pass 4: generate shorten closure chains.
+        fr = 0;
+        int ct = 0;
+        Context self = frame;
+        while (self != null) {
+            if(self instanceof Frame)
+                fr++;
+            self = self.parent;
+            ct++;
+        }
+
+        if(closures.size() < fr) {
+            Context[] selfParent = new Context[ct];
+            ct = 0;
+            self = frame;
+            while (self != null) {
+                selfParent[ct++] = self;
+                self = self.parent;
+            }
+            List<Context> sorter = Arrays.asList(selfParent);
+
+            ct = selfParent.length - fr;
+            Context[] parents = new Context[closures.size() + ct];
+            for (fr = 0; fr < ct; fr++) {
+                parents[fr] = selfParent[fr];
+            }
+            for (Frame f1 : closures) {
+                parents[ct++] = f1;
+            }
+
+            Arrays.sort(parents, (o1, o2) -> {
+                int a = sorter.indexOf(o1),
+                        b = sorter.indexOf(o2);
+                if(a == -1 || b == -1)
+                    throw new IllegalArgumentException(String.valueOf(a == -1 ? o1 : o2));
+                return (a < b) ? -1 : ((a == b) ? 0 : 1);
+            });
+
+            frame.parents = parents;
+        }
     }
 
     public ASTree Std(ASTCode code) {
@@ -132,58 +189,63 @@ public final class ASTree implements LineHandler {
     /**
      * 结果成立往下执行，不成立去往ifFalse
      */
-    public ASTree If(LabelNode ifFalse, @MagicConstant(intValues = {IfNode.EQU, IfNode.FEQ, IfNode.GEQ, IfNode.GTR, IfNode.IS_TRUE, IfNode.LEQ, IfNode.LSS, IfNode.NEQ}) byte type) {
+    public ASTree If(LabelNode ifFalse, short type) {
         return Node(new IfNode(type, ifFalse));
+    }
+
+    /**
+     * 把if比较的结果放到栈上
+     */
+    public ASTree IfLoad(short type) {
+        return Node(new IfLoadNode(type));
     }
 
     public ASTree Goto(LabelNode target) {
         return Node(new GotoNode(target));
     }
 
-    public ASTree Invoke(@Range(from = 0, to = Integer.MAX_VALUE) int argc) {
-        return Node(new InvocationNode(true, argc));
+    public ASTree Invoke(@Range(from = 0, to = Integer.MAX_VALUE) int argc, boolean noRet) {
+        return Node(new InvokeNode(true, argc, noRet));
     }
 
-    public ASTree New(@Range(from = 0, to = Integer.MAX_VALUE) int argc) {
-        return Node(new InvocationNode(false, argc));
+    public ASTree New(@Range(from = 0, to = Integer.MAX_VALUE) int argc, boolean noRet) {
+        return Node(new InvokeNode(false, argc, noRet));
     }
 
     public ASTree Inc(String name, int count) {
         return Node(new IncrNode(name, count));
     }
 
-    public LabelNode Label(String name) {
+    public LabelNode Label() {
         LabelNode node = new LabelNode();
         node0(node);
         return node;
     }
 
-    public ASTree Switch(LabelNode def, Map<String, LabelNode> map) {
-        return Node(new StringSwitchNode(def, map));
-    }
-
-    public ASTree Switch(LabelNode def, IntMap<LabelNode> map) {
-        return Node(new IntSwitchNode(def, map));
+    public SwitchNode Switch(LabelNode def, SwitchMap map) {
+        final SwitchNode node = new SwitchNode(def, map);
+        node0(node);
+        return node;
     }
 
     public ASTree Load(KType constant) {
         return Node(new LoadDataNode(constant));
     }
 
-    public ASTree Get(String constant) {
-        return Node(new VarNode(constant, true));
+    public ASTree Get(String name) {
+        return Node(new VarNode(name, VarNode.GET));
     }
 
-    public void Set(String constant) {
-        node0(new VarNode(constant, false));
+    public void Set(String name) {
+        node0(new VarNode(name, VarNode.SET));
     }
 
-    public ASTree TryEnter(LabelNode handler, LabelNode fin, LabelNode end) {
-        return Node(new TryCatchNode(handler, fin, end));
+    public ASTree TryEnter(LabelNode _catch, LabelNode _finally, LabelNode _norm_exec_end) {
+        return Node(new TryNode(_catch, _finally, _norm_exec_end));
     }
 
-    public String lastRegionName() {
-        return region == null ? "" : region;
+    public ASTree TryEnd(LabelNode realEnd) {
+        return Node(new TryEndNode(realEnd));
     }
 
     @SuppressWarnings("fallthrough")
@@ -192,14 +254,14 @@ public final class ASTree implements LineHandler {
             case Marks.START: {
                 if (mark_head == null) mark_head = node;
                 if (mark_tail != null) {
-                    mark_tail.next(node);
+                    mark_tail.next = node;
                 }
                 mark_tail = node;
             }
             break;
             case Marks.NEXT: {
                 if (node.getCode() != ASTCode.POP) {
-                    tail.next(mark_head);
+                    tail.next = mark_head;
                 }
                 markFlag = Marks.END;
                 mark_head = mark_tail = null;
@@ -210,21 +272,16 @@ public final class ASTree implements LineHandler {
                     labels.add((LabelNode) node);
                     return;
                 } else if (!labels.isEmpty()) {
-                    for (LabelNode node1 : labels) {
-                        node1.next(node);
+                    for (int i = 0; i < labels.size(); i++) {
+                        LabelNode node1 = labels.get(i);
+                        node1.next = node;
                     }
                     labels.clear();
                 }
 
-                switch (node.getCode()) {
-                    case LOAD_VARIABLE:
-                    case SET_VARIABLE:
-                        changed.set(true);
-                }
-
                 if (head == null) head = node;
                 if (tail != null) {
-                    tail.next(node);
+                    tail.next = node;
                 }
                 tail = node;
             }
@@ -254,17 +311,23 @@ public final class ASTree implements LineHandler {
         return tail;
     }
 
-    @Override
-    public void handleLineNumber(int line) {
-        if (ln == null || (tail != ln && ln.line < line + 1)) {
-            node0(ln = new LineNumber());
-        }
-        if (ln != null) {
-            ln.line = line + 1;
-        }
+    public void last(Node last) {
+        last.getClass();
+        tail = last;
     }
 
-    public ASTree Section(@MagicConstant(valuesFromClass = Marks.class) byte mark) {
+    @Override
+    public void handleLineNumber(int line) {
+        LineInfo ln = lineIndexes.isEmpty() ? null : lineIndexes.get(lineIndexes.size() - 1);
+        if (ln == null || (tail != ln.node && ln.line < line + 1)) {
+            if(ln == null)
+                lineIndexes.add(ln = new LineInfo());
+            ln.node = tail;
+        }
+        ln.line = line + 1;
+    }
+
+    public ASTree Mark(@MagicConstant(valuesFromClass = Marks.class) byte mark) {
         markFlag = mark;
         return this;
     }

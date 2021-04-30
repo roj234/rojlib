@@ -5,10 +5,10 @@ import java.util.List;
 import java.util.ListIterator;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: TimedHashMap.java.java
  */
 public class TimedHashMap<K, V> extends MyHashMap<K, V> {
@@ -51,13 +51,12 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    protected Entry<K, V> createEntry(K id, V v) {
-        return new TimedEntry<>(id, v);
+    protected Entry<K, V> createEntry(K id) {
+        return new TimedEntry<>(id, null);
     }
 
     @Override
-    protected Entry<K, V> getEntry(K id) {
+    public Entry<K, V> getEntry(K id) {
         Entry<K, V> entry = super.getEntry(id);
         if (entry == null)
             return null;

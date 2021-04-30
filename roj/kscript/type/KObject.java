@@ -4,37 +4,41 @@ import roj.annotation.Internal;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.word.AbstLexer;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
+import roj.kscript.util.opm.KOEntry;
+import roj.kscript.util.opm.ObjectPropMap;
 
 import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: KObject.java
  */
-public class KObject extends KBase implements IGettable {
-    protected final Map<String, KType> map;
-    IGettable parent;
+public class KObject extends KBase implements IObject {
+    protected final MyHashMap<String, KType> map;
+    protected IObject parent;
 
-    public KObject(IGettable parent) {
-        this(parent, 2);
-    }
-
-    public KObject(IGettable parent, int capacity) {
-        this(Type.OBJECT, new MyHashMap<>(capacity), parent);
+    public KObject(IObject proto) {
+        super(Type.OBJECT);
+        this.map = new ObjectPropMap();
+        if(proto != null)
+            map.put("_proto_", proto);
     }
 
     @Internal
-    public KObject(Type type, Map<String, KType> map, IGettable parent) {
+    public KObject(Type type, MyHashMap<String, KType> map, IObject proto) {
         super(type);
         this.map = map;
-        this.parent = parent;
-        if (parent != null)
-            map.put("prototype", parent);
+        if(proto != null)
+            map.put("_proto_", proto);
+    }
+
+    public boolean delete(String id) {
+        return map.remove(id) != null;
     }
 
     public int size() {
@@ -48,38 +52,35 @@ public class KObject extends KBase implements IGettable {
 
     @Override
     public void put(@Nonnull String key, KType entry) {
-        createPrototyped(key, entry == null ? KUndefined.UNDEFINED : entry, false);
+        if("_proto_".equals(key)) {
+            parent = entry.canCastTo(Type.OBJECT) ? entry.asObject() : null;
+            return;
+        }
+        putItr(key, entry == null ? KUndefined.UNDEFINED : entry, false);
     }
 
-    protected KType getPrototyped(String keys, KType defaultValue) {
-        if (keys == null) {
-            return defaultValue;
-        }
-        KType base = map.get(keys);
-        if (base != null) {
-            return base;
-        } else {
-            return !(parent instanceof KObject) ? defaultValue : ((KObject) parent).getPrototyped(keys, defaultValue);
-        }
-    }
-
-    boolean createPrototyped(String keys, KType value, boolean f) {
-        if (map.containsKey(keys)) {
-            map.put(keys, value);
+    boolean putItr(String id, KType value, boolean f) {
+        KOEntry entry = (KOEntry) map.getEntry(id);
+        if (entry != null) {
+            if((entry.flags & 1) != 0)
+                throw new IllegalStateException("Write to constant");
+            entry.setValue(value);
             return true;
-        } else if (parent == null) {
-            if (!f) {
-                map.put(keys, value);
-                return true;
+        } else {
+            if(parent != null) {
+                if(parent instanceof KObject) {
+                    if(!((KObject) parent).putItr(id, value, false)) {
+                        map.put(id, value);
+                        // fallback if not found
+                    }
+                } else {
+                    if(parent.getOrNull(id) != null) {
+                        parent.put(id, value);
+                    }
+                }
             }
-            return false;
         }
-
-        boolean superGot = parent instanceof KObject && ((KObject) parent).createPrototyped(keys, value, true);
-        if (!superGot) {
-            map.put(keys, value);
-        }
-        return true;
+        return false;
     }
 
     @Nonnull
@@ -128,37 +129,39 @@ public class KObject extends KBase implements IGettable {
         }
     }
 
-    @Override
-    public boolean equalsTo(KType b) {
-        // todo 提高效率
-        Map<String, KType> types = map;
-        Map<String, KType> types1 = b.asObject().getInternalMap();
+    //@Override
+    public boolean __int_equals__(KType map) {
+        Map<String, KType> as = this.map;
+        Map<String, KType> bs = map.asKObject().getInternal();
 
-        if (types.size() != types1.size())
+        if (as.size() != bs.size())
             return false;
 
-        if (types.isEmpty())
+        if (as.isEmpty())
             return true;
 
-        Iterator<Map.Entry<String, KType>> itra;
-        Iterator<Map.Entry<String, KType>> itrb;
-        List<Map.Entry<String, KType>> tmp = new ArrayList<>(types.entrySet());
+        List<Map.Entry<String, KType>> tmp = new ArrayList<>(as.entrySet());
         tmp.sort((o1, o2) -> Integer.compare(o1.getKey().hashCode(), o2.getKey().hashCode()));
-        itra = tmp.iterator();
-        tmp = new ArrayList<>(types1.entrySet());
-        tmp.sort((o1, o2) -> Integer.compare(o1.getKey().hashCode(), o2.getKey().hashCode()));
-        itrb = tmp.iterator();
+        Iterator<Map.Entry<String, KType>> itra = tmp.iterator();
 
+        tmp.clear();
+        tmp.addAll(bs.entrySet());
+        tmp.sort((o1, o2) -> Integer.compare(o1.getKey().hashCode(), o2.getKey().hashCode()));
+        Iterator<Map.Entry<String, KType>> itrb = tmp.iterator();
 
         while (itra.hasNext()) {
-            final Map.Entry<String, KType> next = itra.next();
-            final Map.Entry<String, KType> next1 = itrb.next();
-            if (next == null) {
-                if (next1 != null)
-                    return false;
-            } else if (!next.getKey().equals(next1.getKey()) || !next1.getValue().equalsTo(next.getValue()))
+            Map.Entry<String, KType> ea = itra.next();
+            Map.Entry<String, KType> eb = itrb.next();
+            if(!ea.getKey().equals(eb.getKey()))
                 return false;
+
+            KType a = ea.getValue();
+            KType b = eb.getValue();
+            if(a != b) {
+                if (a == null || a.getType() != b.getType() || !a.equalsTo(b)) return false;
+            }
         }
+
         return true;
     }
 
@@ -185,11 +188,11 @@ public class KObject extends KBase implements IGettable {
 
     @Override
     public KType copy() {
-        return new KObject(Type.OBJECT, new MyHashMap<>(this.map), parent);
+        return new KObject(Type.OBJECT, new ObjectPropMap(this.map), parent);
     }
 
-    public IGettable deepCopy() {
-        KObject obj = new KObject(Type.OBJECT, new MyHashMap<>(this.map.size()), parent);
+    public IObject deepCopy() {
+        KObject obj = new KObject(Type.OBJECT, new ObjectPropMap(this.map.size()), parent);
         obj.merge(this, false, true);
         return obj;
     }
@@ -204,9 +207,7 @@ public class KObject extends KBase implements IGettable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        KObject mapping = (KObject) o;
-
-        return equalsTo(mapping);
+        return ((KObject) o).map == map;
     }
 
     @Override
@@ -215,15 +216,15 @@ public class KObject extends KBase implements IGettable {
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return true;
     }
 
     @Override
-    public boolean isInstanceOf(IGettable map) {
+    public boolean isInstanceOf(IObject map) {
         if (!(map instanceof KObject)) return false;
 
-        Set<IGettable> prototypes = new MyHashSet<>();
+        Set<IObject> prototypes = new MyHashSet<>();
         KObject parent = this;
         while (true) {
             prototypes.add(parent);
@@ -243,17 +244,22 @@ public class KObject extends KBase implements IGettable {
         return false;
     }
 
-    public Map<String, KType> getInternalMap() {
+    public MyHashMap<String, KType> getInternal() {
         return map;
     }
 
     @Override
-    public IGettable getPrototype() {
+    public IObject getProto() {
         return parent;
     }
 
     @Override
-    public KType getOr(String id, KType kb) {
-        return getPrototyped(id, kb);
+    public KType getOr(String id, KType def) {
+        KOEntry base = (KOEntry) map.getEntry(id);
+        if (base != null) {
+            return base.getValue();
+        } else {
+            return parent == null ? def : parent.getOr(id, def);
+        }
     }
 }

@@ -1,6 +1,6 @@
 package roj.kscript.util;
 
-import roj.kscript.ast.node.LabelNode;
+import roj.kscript.ast.LabelNode;
 
 /**
  * This file is a part of MI <br>
@@ -9,7 +9,7 @@ import roj.kscript.ast.node.LabelNode;
  * @author Roj233
  * @since 2020/10/17 1:41
  */
-public class LabelInfo {
+public final class LabelInfo {
     public final LabelNode head;
     public LabelNode onBreak, onContinue;
 

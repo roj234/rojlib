@@ -1,9 +1,10 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
 import roj.kscript.type.KType;
+import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -15,23 +16,28 @@ import java.util.Map;
  * @since 2020/10/13 22:17
  */
 public final class ArrayGet implements LoadExpression {
-    final Expression array, index;
+    Expression array, index;
 
     public ArrayGet(Expression array, Expression index) {
-        this.array = array.compress();
-        this.index = index.compress();
+        this.array = array;
+        this.index = index;
     }
 
     @Override
-    public void write(ASTree tree) {
-        this.array.write(tree);
-        this.index.write(tree);
+    public void write(ASTree tree, boolean noRet) {
+        if(noRet)
+            throw new NotStatementException();
+
+        this.array.write(tree, false);
+        this.index.write(tree, false);
         tree.Std(ASTCode.GET_OBJECT);
     }
 
     @Nonnull
     @Override
     public Expression compress() {
+        array = array.compress();
+        index = index.compress();
         return this;
     }
 
@@ -56,13 +62,13 @@ public final class ArrayGet implements LoadExpression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
-        return array.compute(parameters, thisContext).asArray().get(index.compute(parameters, thisContext).asInteger());
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+        return array.compute(parameters, thisContext).asArray().get(index.compute(parameters, thisContext).asInt());
     }
 
     @Override
     public void writeLoad(ASTree tree) {
-        this.array.write(tree);
-        this.index.write(tree);
+        this.array.write(tree, false);
+        this.index.write(tree, false);
     }
 }

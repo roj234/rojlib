@@ -40,7 +40,7 @@ public final class API {
     private static ExpressionParser[] parsers;
     private static KParser[] fileParsers;
 
-    public static ExpressionParser getParser(int depth) {
+    public static ExpressionParser cachedEP(int depth) {
         if (parsers == null) {
             parsers = PARSER_CACHE_MAX == 0 ? null : new ExpressionParser[PARSER_CACHE_MAX];
             for (int i = 0; i < PARSER_CACHE_MAX; i++) {
@@ -53,7 +53,7 @@ public final class API {
         return depth >= PARSER_CACHE_MAX ? new ExpressionParser(depth) : parsers[depth];
     }
 
-    public static KParser getFileParser(int depth, KParser parent) {
+    public static KParser cachedFP(int depth, KParser parent) {
         if (fileParsers == null) {
             fileParsers = PARSER_CACHE_MAX == 0 ? null : new KParser[PARSER_CACHE_MAX];
             for (int i = 0; i < PARSER_CACHE_MAX; i++) {

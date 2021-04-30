@@ -1,20 +1,32 @@
 package roj.kscript.type;
 
+import roj.kscript.api.IObject;
+import roj.kscript.util.opm.ObjectPropMap;
+
 import javax.annotation.Nonnull;
-import java.util.Collections;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
- * Filename: YAMLNull.java
+ * @author Roj234
+ * Filename: KNull.java
  */
 public final class KNull extends KObject {
     public static final KNull NULL = new KNull();
 
     private KNull() {
-        super(Type.NULL, Collections.emptyMap(), null);
+        super(Type.NULL, new ObjectPropMap() {
+            @Override
+            protected Entry<String, KType> getOrCreateEntry(String id) {
+                throw new NullPointerException("null cannot cast to object");
+            }
+
+            @Override
+            public Entry<String, KType> getEntry(String id) {
+                throw new NullPointerException("null cannot cast to object");
+            }
+        }, null);
     }
 
     @Override
@@ -32,16 +44,28 @@ public final class KNull extends KObject {
         return 0;
     }
 
-    public void put(@Nonnull String key, KType entry) {
-        throw new NullPointerException("null is not object");
-    }
-
-    protected KType getPrototyped(String keys, KType defaultValue) {
-        throw new NullPointerException("null is not object");
+    @Override
+    public boolean isInstanceOf(IObject map) {
+        return false;
     }
 
     @Override
-    public boolean asBoolean() {
+    public void put(@Nonnull String key, KType entry) {
+        throw new NullPointerException("null cannot cast to object");
+    }
+
+    @Override
+    public KType getOr(String id, KType def) {
+        throw new NullPointerException("null cannot cast to object");
+    }
+
+    @Override
+    public IObject getProto() {
+        throw new NullPointerException("null cannot cast to object");
+    }
+
+    @Override
+    public boolean asBool() {
         return false;
     }
 

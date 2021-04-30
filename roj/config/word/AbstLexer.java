@@ -5,7 +5,6 @@ import roj.collect.LongBitSet;
 import roj.config.ParseException;
 import roj.math.MathUtils;
 import roj.text.CharList;
-import roj.text.SimpleLineReader;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
@@ -22,7 +21,7 @@ public abstract class AbstLexer {
     public static final IBitSet
             NUMBER = LongBitSet.preFilled("0123456789"),
             WHITESPACE = LongBitSet.preFilled(" \r\n\t"),
-            SPECIAL = LongBitSet.preFilled('+', '-', '\\', '/', '*', '(', ')', '!', '~', '`', '@', '#', '$', '%', '^', '&', '_', '=', ',', '<', '>', '.', '?', '"', '\'', ':', ';', '|', '[', ']', '{', '}'),
+            SPECIAL = LongBitSet.preFilled("+-\\/*()!~`@#$%^&_=,<>.?\"':;|[]{}"),
             HEX = LongBitSet.preFilled("ABCDEFabcdef"),
             SPECIAL_CHARS = LongBitSet.preFilled(
                     32, 33,
@@ -35,8 +34,10 @@ public abstract class AbstLexer {
                     123, 124, 125, 126
     );
 
+    /**
+     * 暂存
+     */
     protected final CharList found = new CharList(32);
-    private LineHandler lh;
 
     //=========== Data
     public int index;
@@ -44,8 +45,7 @@ public abstract class AbstLexer {
     protected Snapshot last;
     protected CharSequence input;
 
-    //=========== Exception Helper
-    protected int line, lineOffset, prevLineEnd;
+    // region 初始化
 
     public AbstLexer() {}
 
@@ -61,12 +61,6 @@ public abstract class AbstLexer {
         this.input = new CharList(str);
     }
 
-    // section accessor / mutator
-
-    public final void setLineHandler(LineHandler lh) {
-        this.lh = lh;
-    }
-
     public AbstLexer init(byte[] bytes) {
         try {
             return init(ByteReader.readUTF(new ByteList(bytes)));
@@ -77,14 +71,15 @@ public abstract class AbstLexer {
 
     public AbstLexer init(CharSequence charList) {
         this.index = 0;
-        this.lineOffset = 0;
-        this.line = 0;
         this.input = charList;
         return this;
     }
 
-    // section util
+    // endregion
 
+    /**
+     * String 重转义
+     */
     public static String addSlashes(CharSequence key) {
         StringBuilder sb = key instanceof StringBuilder ? (StringBuilder) key : new StringBuilder(key);
         for (int i = 0; i < sb.length(); i++) {
@@ -119,25 +114,14 @@ public abstract class AbstLexer {
         return sb.toString();
     }
 
-    // section basic operation
+    // section 简单操作
 
     public final boolean hasNext() {
         return index < input.length();
     }
 
     public char next() {
-        char c = input.charAt(index++);
-        lineOffset++;
-        if (c == '\r' || c == '\n') {
-            if(c == '\r' && index < input.length() && input.charAt(index) == '\n')
-                index++;
-            line++;
-            prevLineEnd = lineOffset;
-            lineOffset = 0;
-            if (lh != null)
-                lh.handleLineNumber(line);
-        }
-        return c;
+        return input.charAt(index++);
     }
 
     public final char offset(int offset) {
@@ -149,65 +133,69 @@ public abstract class AbstLexer {
     }
 
     protected void retract(int i) {
-        this.lineOffset -= i;
-        this.index -= i;
-        if (this.index < 0) {
+        if (this.index < i) {
             throw new IllegalStateException("Unable to retract");
         }
-        if (this.lineOffset < 0) {
-            if (this.prevLineEnd == -1) {
-                throw new IllegalStateException("Unable to retract");
-            }
-            this.lineOffset = this.prevLineEnd + this.lineOffset;
-            this.prevLineEnd = -1;
-            this.line--;
-        }
+
+        this.index -= i;
     }
 
     protected final void retract() {
         retract(1);
     }
 
-    // section advanced operation
+    // endregion
+    // region Word
 
     public final Word nextWord() throws ParseException {
-        last = last == null ? snapshot() : snapshot(last);
+        if(last == null) {
+            last = snapshot();
+            last.hash = 0;
+        } else {
+            snapshot(last);
+        }
+
         return readWord();
     }
 
-    public static final class Snapshot {
-        public int index, line, lineOffset;
+    /**
+     * 终止
+     */
+    public void interrupt() {
+        index = input == null ? 0 : input.length();
+    }
 
-        public Snapshot(int index, int line, int lineOffset) {
+    public static final class Snapshot {
+        public int index;
+        private int hash;
+
+        public Snapshot(int index, CharSequence cvHash) {
             this.index = index;
-            this.line = line;
-            this.lineOffset = lineOffset;
+            this.hash = System.identityHashCode(cvHash);
         }
 
         @Override
         public String toString() {
-            return "Snapshot{" + "index=" + index + ", line=" + line + ", lineOffset=" + lineOffset + '}';
+            return "Snapshot: " + index + " for " + hash;
         }
     }
 
-    public final void restore(Snapshot snapshot) {
-        if (snapshot.index < 0) {
-            return;
+    public final void restore(Snapshot ss) {
+        if (ss.hash != 0 && ss.hash != System.identityHashCode(input)) {
+            throw new ClassCastException("Input was changed.");
         }
+        if(ss.index < 0)
+            throw new IllegalArgumentException("Invaild index " + ss.index);
 
-        this.index = snapshot.index;
-        this.line = snapshot.line;
-        this.lineOffset = snapshot.lineOffset;
+        this.index = ss.index;
     }
 
     public final Snapshot snapshot() {
-        return new Snapshot(index, line, lineOffset);
+        return new Snapshot(index, input);
     }
 
     public final Snapshot snapshot(Snapshot snapshot) {
         snapshot.index = index;
-        snapshot.line = line;
-        snapshot.lineOffset = lineOffset;
         return snapshot;
     }
 
@@ -222,19 +210,16 @@ public abstract class AbstLexer {
     @SuppressWarnings("fallthrough")
     public final CharList readSlashString(char end) throws ParseException {
         CharSequence input = this.input;
+        int index = this.index;
 
         CharList temp = this.found;
         temp.clear();
 
-        int index = this.index;
-
         boolean slash = false;
         boolean quoted = true;
 
-        int lineOffset = this.lineOffset;
-
-        outer:
-        for (; index < input.length(); lineOffset++) {
+        o:
+        while (index < input.length()) {
             char c = input.charAt(index++);
             if (slash) {
                 index = slashHandler(c, temp, index);
@@ -245,7 +230,7 @@ public abstract class AbstLexer {
                     case '"':
                         if(end == c) {
                             quoted = false;
-                            break outer;
+                            break o;
                         } else {
                             temp.append(c);
                         }
@@ -253,15 +238,6 @@ public abstract class AbstLexer {
                     case '\\':
                         slash = true;
                         break;
-                    case '\r':
-                        if(index < input.length() && input.charAt(index) == '\n') {
-                            index++;
-                            lineOffset++;
-                        }
-                    case '\n':
-                        line++;
-                        prevLineEnd = lineOffset;
-                        lineOffset = 0;
                     default:
                         temp.append(c);
                 }
@@ -269,10 +245,9 @@ public abstract class AbstLexer {
         }
 
         this.index = index;
-        this.lineOffset = lineOffset;
 
         if (slash) {
-            throw atCurrentChar("Unterminated T_SLASH (\\)");
+            throw err("Unterminated T_SLASH (\\)");
         }
         if (quoted) {
             throw err("Unterminated T_QUOTE (" + end + ")");
@@ -321,12 +296,12 @@ public abstract class AbstLexer {
                 temp.append((char) uIndex);
                 break;
             default:
-                throw new ParseException("Unexpected \\" + c, index - 1, line, lineOffset);
+                throw new ParseException(input, "Unexpected \\" + c, index - 1, null);
         }
         return index;
     }
 
-    // section lexer function
+    // region lexer function
 
     /**
      * 读词
@@ -334,21 +309,25 @@ public abstract class AbstLexer {
     public abstract Word readWord() throws ParseException;
 
     /**
-     * @return 标识符 or 变量
+     * @return 标识符 or 变量, 或者换句话说, literal
      */
     protected Word readAlphabet() throws ParseException {
+        CharSequence input = this.input;
+        int index = this.index;
+
         CharList temp = this.found;
         temp.clear();
 
-        while (hasNext()) {
-            int c = next();
+        while (index < input.length()) {
+            int c = input.charAt(index++);
             if (!SPECIAL.contains(c) && !WHITESPACE.contains(c)) {
                 temp.append((char) c);
             } else {
-                retract();
+                index--;
                 break;
             }
         }
+        this.index = index;
         if (temp.length() == 0) {
             return eof();
         }
@@ -356,8 +335,11 @@ public abstract class AbstLexer {
         return formAlphabetClip(temp);
     }
 
+    /**
+     * 生成字母(变量/literal)块
+     */
     protected Word formAlphabetClip(CharList temp) throws ParseException {
-        return formClip(WordPresets.VARIABLE, temp);
+        return formClip(WordPresets.LITERAL, temp);
     }
 
     /**
@@ -366,25 +348,21 @@ public abstract class AbstLexer {
     protected abstract Word readSpecial() throws ParseException;
 
     /**
-     * 识别数字
+     * @return [数字] 块
      */
     @SuppressWarnings("fallthrough")
     protected Word readDigit() throws ParseException {
+        CharSequence input = this.input;
+        int index = this.index;
+
         CharList temp = this.found;
         temp.clear();
 
         byte flag = 0;
-        //boolean neg = false;
 
         o:
-        while (hasNext()) {
-            char c = next();
-            //if(c == '-') {
-            //    if(!neg)
-            //        neg = true;
-            //    else
-            //        unexpected("-");
-            //}
+        while (index < input.length()) {
+            char c = input.charAt(index++);
             switch (c) {
                 case 'E':
                 case 'e':
@@ -393,6 +371,7 @@ public abstract class AbstLexer {
                             flag = (byte) (1 | 128);
                             temp.append(c);
                         } else {
+                            this.index = index;
                             unexpected(String.valueOf(c));
                         }
                     } else {
@@ -402,18 +381,16 @@ public abstract class AbstLexer {
                 case '_':
                     continue;
                 case '.':
-                    if (flag != 0)
-                        unexpected(".");
+                    if (flag != 0) unexpected(".");
                     flag = 1; // decimal
                 default:
                     if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX.contains(c))) {
                         temp.append(c);
                         if (flag == 0 && temp.length() == 2) { // 075463754
-                            if (temp.charAt(0) == '0' && temp.charAt(1) != '.')
-                                flag = 4;
+                            if (temp.charAt(0) == '0' && temp.charAt(1) != '.') flag = 4;
                         }
                     } else {
-                        retract();
+                        index--;
                         break o;
                     }
                     break;
@@ -423,6 +400,7 @@ public abstract class AbstLexer {
                         temp.delete(0);
                         flag = 2; // hex
                     } else {
+                        this.index = index;
                         unexpected(String.valueOf(c));
                     }
                     break;
@@ -439,12 +417,15 @@ public abstract class AbstLexer {
                                 break;
                             }
                         default:
+                            this.index = index;
                             unexpected(String.valueOf(c));
                             break;
 
                     }
             }
         }
+
+        this.index = index;
 
         if (temp.length() == 0) {
             return eof();
@@ -481,16 +462,33 @@ public abstract class AbstLexer {
     }
 
     /**
-     * 封装合成"词"
+     * 封装词 // 缓存
      *
      * @param id 词类型
      */
     protected Word formClip(short id, CharSequence string) {
-        return new Word(id, line, lineOffset, string.toString());
+        if(cached == null) {
+            return new Word().reset(id, index, string.toString());
+        }
+        Word w = cached.reset(id, index, string.toString());
+        cached = null;
+        return w;
     }
 
+    protected Word cached;
+
+    /**
+     * 回收利用
+     */
+    public void recycle(Word word) {
+        cached = word;
+    }
+
+    /**
+     * 文件结束
+     */
     protected final Word eof() {
-        return new Word(line, lineOffset);
+        return new Word(index);
     }
 
     @Override
@@ -502,26 +500,33 @@ public abstract class AbstLexer {
      * 忽略 // 或 /* ... *\/ 注释
      */
     protected final Word ignoreStdNote() throws ParseException {
-        if (hasNext()) {
-            int c = next();
+        CharSequence input = this.input;
+        int index = this.index;
+        if (index < input.length()) {
+            int c = input.charAt(index++);
             switch (c) {
                 case '/': {
-                    int li = line;
-                    while (hasNext()) {
-                        next();
-                        if(line != li)
-                            break;
+                    o:
+                    while (index < input.length()) {
+                        switch (input.charAt(index++)) {
+                            case '\r':
+                                if(index < input.length() && input.charAt(index) == '\n')
+                                    index++;
+                            case '\n':
+                                break o;
+                        }
                     }
                 }
                 break;
                 case '*': {
-                    while (hasNext()) {
-                        if (next() == '*') {
-                            if (!hasNext()) {
+                    while (index < input.length()) {
+                        if (input.charAt(index++) == '*') {
+                            if (index >= input.length()) {
+                                this.index = index;
                                 return eof();
                             }
 
-                            if (next() == '/') {
+                            if (input.charAt(index++) == '/') {
                                 break;
                             }
                         }
@@ -529,56 +534,36 @@ public abstract class AbstLexer {
                 }
                 break;
                 default:
-                    retract(2);
+                    this.index--;
                     return readSpecial();
             }
         }
+        this.index = index;
 
-        if (!hasNext()) {
+        if (index >= input.length()) {
             return eof();
         }
         return null;
     }
 
-    // section exception
-
-    public final ParseException getExceptionDetails(ParseException e) {
-        if (e.getCause() instanceof ParseException) return e;
-
-        String line;
-        if (this.input.length() != 0) {
-            SimpleLineReader slr = new SimpleLineReader(this.input);
-
-            try {
-                line = slr.get(e.getLine());
-            } catch (IndexOutOfBoundsException e2) { // how could it happen ?
-                //return new ParseException("Near offset " + e.getTextOff(), e);
-                e2.printStackTrace();
-                line = "错误：行号超限！ LST: " + slr.get(slr.size() - 1);
-            }
-        } else {
-            line = "";
-        }
-        return new ParseException(e.getTextOff(), e.getLine() + 1, e.getLineOffset(), line, e);
-    }
+    // endregion
+    // region exception
 
     protected final void unexpected(String val) throws ParseException {
         throw err("未预料的'" + val + "'");
     }
 
-    public final ParseException getDetails(String detail, Word word) {
-        return getExceptionDetails(new ParseException(detail + " 在 " + word.val(), -2, word.getLine(), word.getLineOffset()));
-    }
-
-    public final ParseException atCurrentChar(String reason) {
-        return getExceptionDetails(new ParseException(reason, this.index, this.line, this.lineOffset));
+    public final ParseException err(String reason, Word word) {
+        return new ParseException(input, reason + " 在 " + word.val(), word.getIndex(), null);
     }
 
     public final ParseException err(String reason) {
-        return err(reason, null);
+        return err(reason, (Throwable) null);
     }
 
     public final ParseException err(String reason, Throwable cause) {
-        return getExceptionDetails(new ParseException(reason, this.index - 1, this.line, this.lineOffset - 1, cause));
+        return new ParseException(input, reason, this.index, cause);
     }
+
+    // endregion
 }

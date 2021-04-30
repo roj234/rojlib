@@ -8,7 +8,8 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.kscript.api.API;
 import roj.kscript.ast.ASTree;
-import roj.kscript.ast.node.LabelNode;
+import roj.kscript.ast.LabelNode;
+import roj.kscript.func.KFunction;
 import roj.kscript.parser.expr.*;
 import roj.kscript.type.KNull;
 import roj.kscript.type.KType;
@@ -21,7 +22,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -31,45 +31,15 @@ import java.util.List;
  * @since 2020/10/13 22:14
  */
 public final class ExpressionParser {
-    private static final class PZEntry extends Int2IntMap.Entry {
-        PZEntry(int k, int v) {
-            super(k, v);
-        }
-
-        @Override
-        protected void setKey(int k) {
-            super.setKey(k);
-        }
-
-        PZEntry next(PZEntry newNext) {
-            PZEntry t = (PZEntry) next;
-            next = newNext;
-            return t;
-        }
-    }
-
-    private final Int2IntMap ordered = new Int2IntMap() {
-        @Override
-        protected Entry getCachedEntry(int id, int val) {
-            PZEntry cached = (PZEntry) this.notUsing;
-            if (cached != null) {
-                cached.setKey(id);
-                cached.v = val;
-                this.notUsing = cached.next(null);
-                return cached;
-            }
-
-            return new PZEntry(id, val);
-        }
-    };
+    private final Int2IntMap ordered = new Int2IntMap();
 
     private final ArrayList<Expression> words = new ArrayList<>();
-    private final ArrayList<PZEntry> sort = new ArrayList<>();
+    private final ArrayList<Int2IntMap.Entry> sort = new ArrayList<>();
 
     private final int depth;
 
     public static void main(String[] args) throws ParseException, IOException {
-        System.out.println("JvavScript(KScript) Interpreter 2.0.3 debug/demo\n");
+        System.out.println("Roj234's ECMAScript Interpreter 2.2.0-beta\n");
 
         JSLexer wr = new JSLexer();
         ExpressionParser epr = new ExpressionParser(0);
@@ -87,7 +57,7 @@ public final class ExpressionParser {
 
             System.out.print("AST = ");
             ASTree ast = ASTree.builder("");
-            expr.write(ast);
+            expr.write(ast, false);
             System.out.println(ast);
 
             return;
@@ -130,7 +100,7 @@ public final class ExpressionParser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    public Expression defineArray(PContext ctx, short flag) throws ParseException {
+    public Expression defineArray(ParseContext ctx, short flag) throws ParseException {
         JSLexer wr = ctx.getLexer();
         List<Expression> expr = new ArrayList<>();
 
@@ -154,7 +124,7 @@ public final class ExpressionParser {
                     break o;
                 case Symbol.comma:
                     if (hasMore) {
-                        unexpected(ctx, ",");
+                        err(ctx, ",");
                     }
                     hasMore = true;
                     continue;
@@ -170,7 +140,7 @@ public final class ExpressionParser {
                 expr.add(result);
             } else {
                 if (wr.nextWord().type() != Symbol.right_m_bracket) {
-                    unexpected(ctx, "compiler.empty_statement");
+                    err(ctx, "empty_statement");
                 }
                 break;
             }
@@ -183,14 +153,14 @@ public final class ExpressionParser {
      * 解析对象定义 <BR>
      * {xxx: yyy, zzz: uuu}
      */
-    public Expression defineObject(PContext ctx, short flag) throws ParseException {
+    public Expression defineObject(ParseContext ctx, short flag) throws ParseException {
         JSLexer wr = ctx.getLexer();
         MyHashMap<String, Expression> map = new MyHashMap<>();
 
         boolean hasMore = true;
         try {
             hasMore = wr.offset(1) != '}';
-        } catch (ArrayIndexOutOfBoundsException ignored) {
+        } catch (IndexOutOfBoundsException ignored) {
         }
 
         /*
@@ -207,21 +177,21 @@ public final class ExpressionParser {
                     break o;
                 case Symbol.comma:
                     if (hasMore) {
-                        unexpected(ctx, ",");
+                        err(ctx, ",");
                     }
                     hasMore = true;
                     continue;
 
                 case WordPresets.STRING:
-                case WordPresets.VARIABLE:
+                case WordPresets.LITERAL:
                     break;
                 default:
-                    unexpected(ctx, name.val(), "compiler.type.string");
+                    err(ctx, name.val(), "type.string");
             }
 
             final Word wd = wr.nextWord();
             if (wd.type() != Symbol.colon)
-                unexpected(ctx, wd.val(), ":");
+                err(ctx, wd.val(), ":");
 
             Expression result = read(ctx, (short) 64);
 
@@ -230,7 +200,7 @@ public final class ExpressionParser {
             if (result != null) {
                 map.put(name.val(), result);
             } else {
-                unexpected(ctx, "compiler.empty_statement");
+                err(ctx, "empty_statement");
             }
 
             if (end) {
@@ -242,8 +212,11 @@ public final class ExpressionParser {
         return new ObjectDefine(map.isEmpty() ? Collections.emptyMap() : map);
     }
 
+    /**
+     * @see #read(ParseContext, short, LabelNode)
+     */
     @Nullable
-    public Expression read(PContext ctx, short exprFlag) throws ParseException {
+    public Expression read(ParseContext ctx, short exprFlag) throws ParseException {
         return read(ctx, exprFlag, null);
     }
 
@@ -265,13 +238,13 @@ public final class ExpressionParser {
      */
     @SuppressWarnings("fallthrough")
     @Nullable
-    public Expression read(PContext ctx, short exprFlag, LabelNode ifFalse) throws ParseException {
+    public Expression read(ParseContext ctx, short exprFlag, LabelNode ifFalse) throws ParseException {
         JSLexer wr = ctx.getLexer();
 
         ArrayList<Expression> tmp = words;
         Int2IntMap tokens = ordered;
-        if(!tmp.isEmpty() || !tokens.isEmpty()) // 使用中
-            return API.getParser(depth + 1).read(ctx, exprFlag);
+        if(!tmp.isEmpty() || !ordered.isEmpty()) // 使用中
+            return API.cachedEP(depth + 1).read(ctx, exprFlag);
 
         Expression cur = null;
         UnaryPrefix pf = null;
@@ -283,6 +256,7 @@ public final class ExpressionParser {
          *    2   : 当前是对象类型 <BR>
          *    4   : 当前是基本类型 <BR>
          *    8   : new
+         *    16  : delete
          */
         byte opFlag = 0;
 
@@ -290,10 +264,21 @@ public final class ExpressionParser {
         while (true) {
             w = wr.nextWord();
             switch (w.type()) {
+                case Keyword.FUNCTION:
                 case Symbol.lambda:
-                    throw wr.err("Functional interface(lambda) is unsupported during this time.");
+                    if (cur != null || (opFlag != 0)) err(ctx, w.val(), "empty");
+                    KFunction fn = ctx.parseInnerFunc();
+                    if(fn == null)
+                        throw wr.err("expr.error_fn");
+                    cur = Constant.valueOf(fn);
+                    break o;
+                case Keyword.DELETE:
+                    if (cur != null || (opFlag != 0)) err(ctx, w.val(), "empty");
+                    opFlag |= 16;
+
+                    break;
                 case Keyword.NEW:
-                    if (cur != null || (opFlag != 0)) unexpected(ctx, w.val(), "compiler.empty");
+                    if (cur != null || (opFlag != 0)) err(ctx, w.val(), "empty");
                     /*if ((opFlag & 1) != 0)
                         unexpected(ctx, ".");
                     if ((opFlag & 4) != 0)
@@ -304,22 +289,23 @@ public final class ExpressionParser {
                     break;
                 // [ x ]
                 case Symbol.left_m_bracket: {// array start
-                    if ((opFlag & 1) != 0)
-                        unexpected(ctx, ".");
-                    if ((opFlag & 4) != 0)
-                        unexpected(ctx, "[");
+                    if ((opFlag & 5) != 0)
+                        err(ctx, "[");
 
                     if (cur == null) {
+                        if ((opFlag & 16) != 0)
+                            err(ctx, "[");
+
                         // define array
-                        cur = deeper().defineArray(ctx, exprFlag);
+                        cur = defineArray(ctx, exprFlag);
                         opFlag |= 2;
                     } else {
                         if ((opFlag & 2) == 0)
-                            unexpected(ctx, "[");
+                            err(ctx, "[");
                         // get array
-                        Expression index = deeper().read(ctx, (short) 8);
+                        Expression index = read(ctx, (short) 8);
                         if (index == null) {
-                            unexpected(ctx, "compiler.empty_statement.invalid_array_index");
+                            err(ctx, "empty_statement.invalid_array_index");
                         }
 
                         cur = new ArrayGet(cur, index);
@@ -327,14 +313,17 @@ public final class ExpressionParser {
                 }
                 break;
                 // a.b.c.d
-                case WordPresets.VARIABLE: {
+                case WordPresets.LITERAL: {
                     if (cur == null) {
-                        cur = new Variable(w.val(), ctx);
+                        cur = new Variable(w.val());
                     } else {
+                        // not first
+                        cur.mark_spec_op(ctx, 0);
+
                         if ((opFlag & 1) == 0)
-                            unexpected(ctx, w.val(), ".");
+                            err(ctx, w.val(), ".");
                         if ((opFlag & 4) != 0) {
-                            unexpected(ctx, w.val());
+                            err(ctx, w.val());
                         }
                         opFlag &= ~1;
                         cur = new Field(cur, w.val());
@@ -344,8 +333,11 @@ public final class ExpressionParser {
                 break;
                 // this
                 case Keyword.THIS: {
-                    if (cur == null) cur = new Std(1);
-                    else unexpected(ctx, "this", "compiler.empty");
+                    if (cur == null) {
+                        cur = new Std(1);
+                        opFlag |= 2;
+                    }
+                    else err(ctx, "this", "empty");
                 }
                 break;
                 // constant
@@ -353,7 +345,7 @@ public final class ExpressionParser {
                 //case Keyword.BINARY:    // 二进制
                 //case Keyword.OCTAL:     // 八进制
                 case WordPresets.INTEGER: { // 整数
-                    if (cur != null) unexpected(ctx, w.val(), "compiler.type.get_able");
+                    if (cur != null) err(ctx, w.val(), "type.get_able");
                     else {
                         cur = Constant.valueOf(w);
                         opFlag |= 4;
@@ -370,7 +362,7 @@ public final class ExpressionParser {
                 case Keyword.NAN:
                 case Keyword.INFINITY:
                 case Keyword.FALSE: {
-                    if (cur != null) unexpected(ctx, w.val(), "compiler.type.get_able");
+                    if (cur != null) err(ctx, w.val(), "type.get_able");
                     else {
                         cur = Constant.valueOf(w);
                         // string
@@ -388,19 +380,24 @@ public final class ExpressionParser {
                 break;
                 case Symbol.colon:
                     if ((exprFlag & 1536) == 0)
-                        unexpected(ctx, w.val());
+                        err(ctx, w.val());
                     if ((exprFlag & 1024) != 0)
                         wr.retractWord();
                     // ? :
                     break o;
                 // assign
                 case Symbol.assign:
-                    if (cur == null || (opFlag & 2) == 0)
-                        unexpected(ctx, w.val());
-                    Expression right = deeper().read(ctx, exprFlag);
+                    // has 2 and not has 16: opFlag & 18 != 2
+                    if (cur == null || (opFlag & 18) != 2)
+                        err(ctx, w.val());
+
+                    // Mark assign
+                    cur.mark_spec_op(ctx, 1);
+
+                    Expression right = read(ctx, exprFlag);
 
                     if (right == null) {
-                        unexpected(ctx, "compiler.empty_statement.invalid_right_value");
+                        throw wr.err("invalid_right_Value");
                     }
 
                     /*if(cur instanceof Variable)
@@ -420,12 +417,16 @@ public final class ExpressionParser {
                     // a &= 3;
                     // =>
                     // a = a & 3;
-                    if (cur == null || (opFlag & 2) == 0)
-                        unexpected(ctx, w.val());
+                    
+                    if (cur == null || (opFlag & 18) != 2)
+                        err(ctx, w.val());
 
-                    final Expression expr = deeper().read(ctx, exprFlag);
+                    // Mark assign-op
+                    cur.mark_spec_op(ctx, 2);
+
+                    final Expression expr = read(ctx, exprFlag);
                     if (expr == null) {
-                        unexpected(ctx, "compiler.empty_statement.invalid_right_value");
+                        throw wr.err("invalid_right_Value");
                     }
                     cur = new Assign(cur, new Binary(assign2op(w.type()), cur, expr, null));
                     break;
@@ -433,61 +434,62 @@ public final class ExpressionParser {
                     if ((opFlag & 1) == 0) {
                         opFlag |= 1;
                         opFlag &= ~2;
-                    } else unexpected(ctx, ".");
+                    } else err(ctx, ".");
                 }
                 break;
                 case Symbol.left_l_bracket: {
-                    if ((opFlag & 1) != 0)
-                        unexpected(ctx, ".");
-                    if (cur != null) // at beginning
-                        unexpected(ctx, "{");
-                    cur = deeper().defineObject(ctx, exprFlag);
+                    if (cur != null/* || (opFlag & 1) != 0*/) // at beginning
+                        err(ctx, "{");
+                    cur = defineObject(ctx, exprFlag);
                     opFlag |= 2;
                 }
                 break;
 
                 // ( x )
                 case Symbol.left_s_bracket: {
-                    if ((opFlag & 1) != 0)
-                        unexpected(ctx, ".");
-                    if (cur != null && (opFlag & 2) == 0)
-                        unexpected(ctx, "(");
+                    // 1, (2), 16
+                    if ((opFlag & 19) != 2)
+                        err(ctx, "(");
 
                     // bracket
                     if (cur == null) {
-                        cur = deeper().read(ctx, (short) 256);
+                        cur = read(ctx, (short) 256);
                         if(cur == null)
-                            throw wr.err("compiler.empty_bracket");
+                            throw wr.err("empty_bracket");
                     } else {
                         if ((opFlag & 2) == 0)
-                            unexpected(ctx, "(");
+                            err(ctx, "(");
                         // function call
-                        List<Expression> args = new LinkedList<>();
-                        ExpressionParser next = deeper();
+                        List<Expression> args = Helpers.cast(this.sort);
+                        args.clear();
 
                         while (true) {
-                            Expression result = next.read(ctx, (short) 16);
-                            if (result != null) {
-                                args.add(result);
+                            Expression e1 = read(ctx, (short) 16);
+                            if (e1 != null) {
+                                args.add(e1);
                             } else {
                                 w = wr.nextWord();
                                 if (w.type() != Symbol.right_s_bracket) {
-                                    unexpected(ctx, w.val(), ")");
+                                    err(ctx, w.val(), ")");
                                 }
                                 break;
                             }
                         }
 
-                        cur = new Method(cur, args, (opFlag & 8) != 0);
+                        cur = new Method(cur, args.isEmpty() ? Collections.emptyList() : new ArrayList<>(args), (opFlag & 8) != 0);
+                        args.clear();
+
                         opFlag &= ~8;
                     }
                 }
                 break;
                 default:
                     if (Keyword.isKeyword(w)) {
-                        unexpected(ctx, w.val(), "compiler.type.expr");
+                        err(ctx, w.val(), "type.expr");
                     }
-                    if (Symbol.isSymbol(w)) {
+                    // 'Clean' parameters pass to Delete expr
+                    // maybe && ?
+                    if ((opFlag & 16) == 0 & Symbol.isSymbol(w)) {
                         switch (Symbol.argumentCount(w.type())) {
                             case 1:
                                 switch (w.type()) {
@@ -495,7 +497,7 @@ public final class ExpressionParser {
                                     case Symbol.dec:
                                         if (cur != null) { // i++
                                             if ((opFlag & 2) == 0)
-                                                unexpected(ctx, w.val(), "compiler.type.object");
+                                                err(ctx, w.val(), "type.object");
                                             cur = new UnaryAppendix(w.type(), cur);
                                             continue o;
                                         } // ++i
@@ -503,12 +505,12 @@ public final class ExpressionParser {
 
                                 {
                                 UnaryPrefix ul = new UnaryPrefix(w.type());
-                                if(pf != null) {
-                                    pf.setRight(ul);
-                                } else {
-                                    pf = ul;
-                                }
-                                }
+                                    if(pf != null) {
+                                        pf.setRight(ul);
+                                    } else {
+                                        pf = ul;
+                                    }
+                                } // todo UnaryPrefix fix
 
                                 break;
                             case 2:
@@ -542,44 +544,44 @@ public final class ExpressionParser {
                                         }
                                         continue o;
                                         default:
-                                            unexpected(ctx, w.val(), "compiler.type.get_able");
+                                            err(ctx, w.val(), "type.get_able");
                                     }
                                 }
 
                                 tokens.put(tmp.size(), Symbol.priorityFor(w));
-                                tmp.add(new SymboL(w.type()));
+                                tmp.add(SymTmp.retain(w.type()));
                                 break;
                             case 3:
                                 // ? :
                                 if (cur == null) {
-                                    unexpected(ctx, w.val(), "compiler.type.get_able");
+                                    err(ctx, w.val(), "type.get_able");
                                 }
                                 ExpressionParser next = deeper();
                                 Expression mid = next.read(ctx, (short) 512);
                                 if (mid == null) {
-                                    unexpected(ctx, "compiler.empty_statement.illegal");
+                                    err(ctx, "empty_statement.illegal");
                                 }
                                 Expression r = next.read(ctx, exprFlag);
                                 if (r == null) {
-                                    unexpected(ctx, "compiler.empty_statement.illegal");
+                                    err(ctx, "empty_statement.illegal");
                                 }
-                                tmp.add(new TrueIf(cur, mid, r));
+                                tmp.add(new TripleIf(cur, mid, r));
                                 break;
                             case 0:
-                                unexpected(ctx, w.val());
+                                err(ctx, w.val());
                                 break;
                         }
                     } else {
-                        unexpected(ctx, w.val());
+                        err(ctx, w.val());
                     }
                     break;
                 case WordPresets.EOF:
-                    unexpected(ctx, "compiler.eof");
+                    err(ctx, "eof");
                     break o; // useless
 
                 case Symbol.right_m_bracket: {
                     if ((exprFlag & 136) == 0) { // 128 / 8
-                        unexpected(ctx, "]");
+                        err(ctx, "]");
                     } else {
                         if ((exprFlag & 128) != 0) // define array
                             wr.retractWord();
@@ -590,7 +592,7 @@ public final class ExpressionParser {
 
                 case Symbol.right_l_bracket: {
                     if ((exprFlag & 64) == 0)
-                        unexpected(ctx, "}");
+                        err(ctx, "}");
                     else {
                         wr.retractWord();
                         break o;
@@ -600,7 +602,7 @@ public final class ExpressionParser {
 
                 case Symbol.comma: {
                     if ((exprFlag & 472) == 0) // 8 / 16 / 64 / 128 / 256
-                        unexpected(ctx, ",");
+                        err(ctx, ",");
                     else {
                         if ((exprFlag & 8) != 0) // is /*function*/ / array
                             wr.retractWord();
@@ -610,7 +612,7 @@ public final class ExpressionParser {
                 break;
                 case Symbol.right_s_bracket: {
                     if ((exprFlag & 272) == 0) // 16 / 256
-                        unexpected(ctx, ")");
+                        err(ctx, ")");
                     else {
                         if ((exprFlag & 16) != 0) // is function
                             wr.retractWord();
@@ -631,14 +633,25 @@ public final class ExpressionParser {
                     throw wr.err(msg);
                 cur = pf;
             }
+
+            if((opFlag & 16) != 0) {
+                if(!tokens.isEmpty())
+                    throw new RuntimeException("Error: A coding error!!! delete param should be clean access of variables such as a.b, this.a or a[some ? 'a' : 'b']: " + tokens);
+                if(!(cur instanceof Field))
+                    throw new RuntimeException("Error: A coding error!!! non-deletable " + cur + " was assigned to DELETE expression");
+                if(!((Field)cur).setDeletion())
+                    throw wr.err("delete.unable_variable");
+            }
+
+
             tmp.add(cur/*.compress()*/);
         } else if (pf != null) {
-            throw wr.err("compiler.missing_operand");
+            throw wr.err("missing_operand");
         }
 
         if (w.type() == Symbol.semicolon) {
-            if ((opFlag & 8) != 0) unexpected(ctx, ";", "compiler.type.invoke");
-            if ((exprFlag /*& ~2048*/) != 0) unexpected(ctx, ";", description(exprFlag));
+            if ((opFlag & 8) != 0) err(ctx, ";", "type.invoke");
+            if ((exprFlag /*& ~2048*/) != 0) err(ctx, ";", description(exprFlag));
             wr.retractWord();
         }
 
@@ -646,7 +659,7 @@ public final class ExpressionParser {
 
         Expression result = null;
         if (!tokens.isEmpty()) {
-            List<PZEntry> sort = this.sort;
+            List<Int2IntMap.Entry> sort = this.sort;
 
             sort.addAll(Helpers.cast(tokens.entrySet()));
             sort.sort((a, b) -> Integer.compare(b.v, a.v));
@@ -655,7 +668,7 @@ public final class ExpressionParser {
                 if (i > 0) {
                     int lv = sort.get(i - 1).getKey();
                     for (int j = i; j < e; j++) {
-                        PZEntry pzEntry = sort.get(j);
+                        Int2IntMap.Entry pzEntry = sort.get(j);
                         if (pzEntry.getKey() > lv) {
                             pzEntry.setKey(pzEntry.getKey() - 2);
                         }
@@ -664,11 +677,11 @@ public final class ExpressionParser {
 
                 int v = sort.get(i).getKey();
 
-                Expression l = tmp.get(v - 1);
-                Expression op = tmp.remove(v);
-                Expression r = tmp.remove(v);
+                Expression l = tmp.get(v - 1),
+                        op = tmp.remove(v),
+                        r = tmp.remove(v);
 
-                result = new Binary(((SymboL) op).operator, l, r, i == e - 1 ? ifFalse : LabelNode.TRY_CATCH_ENDPOINT).compress();
+                result = new Binary(((SymTmp) op).operator, l, r, i == e - 1 ? ifFalse : LabelNode._INT_FLAG_).compress();
                 tmp.set(v - 1, result);
             }
 
@@ -685,11 +698,11 @@ public final class ExpressionParser {
 
     private static String description(short exprFlag) {
         if((exprFlag & 8) != 0)
-            return "compiler.delimiter.array_index  ']' ";
+            return "delimiter.array_index  ']' ";
         if((exprFlag & 16) != 0)
-            return "compiler.delimiter.func  ',' ";
+            return "delimiter.func  ',' ";
         if((exprFlag & 32) != 0)
-            return "compiler.delimiter.if  ')' ";
+            return "delimiter.if  ')' ";
         if((exprFlag & 64) != 0)
             return "}";
         if((exprFlag & 128) != 0)
@@ -697,9 +710,9 @@ public final class ExpressionParser {
         if((exprFlag & 256) != 0)
             return ")";
         if((exprFlag & 512) != 0)
-            return "compiler.delimiter.triple  ':' ";
+            return "delimiter.triple  ':' ";
         if((exprFlag & 1024) != 0)
-            return "compiler.delimiter.for  ';' ";
+            return "delimiter.for  ';' ";
         return null;
     }
 
@@ -739,11 +752,11 @@ public final class ExpressionParser {
         return this;//API.getParser(depth + 1);
     }
 
-    private static void unexpected(PContext context, String word, String expecting) throws ParseException {
-        throw context.getLexer().err("compiler.unexpected_expect:" + word + ':' + expecting);
+    private static void err(ParseContext context, String word, String expecting) throws ParseException {
+        throw context.getLexer().err("unexpected_expect:" + word + ':' + expecting);
     }
 
-    private static void unexpected(PContext context, String s) throws ParseException {
-        throw context.getLexer().err("compiler.unexpected:" + s);
+    private static void err(ParseContext context, String s) throws ParseException {
+        throw context.getLexer().err("unexpected:" + s);
     }
 }

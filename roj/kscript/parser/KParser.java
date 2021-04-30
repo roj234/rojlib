@@ -1,26 +1,24 @@
 package roj.kscript.parser;
 
-import roj.collect.IntMap;
+import roj.annotation.Internal;
 import roj.collect.MyHashMap;
 import roj.collect.ReuseStack;
 import roj.collect.ToIntMap;
 import roj.config.ParseException;
-import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
 import roj.kscript.api.API;
 import roj.kscript.api.ErrorHandler;
-import roj.kscript.ast.ASTCode;
-import roj.kscript.ast.ASTree;
-import roj.kscript.ast.node.LabelNode;
+import roj.kscript.ast.*;
 import roj.kscript.func.KFunction;
 import roj.kscript.parser.expr.Expression;
-import roj.kscript.type.ContextPrimer;
-import roj.kscript.type.KInteger;
 import roj.kscript.type.KType;
-import roj.kscript.type.Type;
+import roj.kscript.type.KUndefined;
+import roj.kscript.util.ContextPrimer;
 import roj.kscript.util.LabelInfo;
+import roj.kscript.util.SwitchMap;
+import roj.util.Helpers;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -35,68 +33,101 @@ import java.util.Map;
  * @author solo6975
  * @since 2020/10/3 19:20
  */
-public class KParser implements PContext {
+public class KParser implements ParseContext {
     /**
      * todo 其他的优化策略：常量（自定义来没有修改过的变量）传播， 删除未使用的变量, ASTree
      */
 
-    JSLexer wr = new JSLexer();
-    ASTree tree;
-    String file;
     /**
-     * 变量作用域
+     * 分词器
      */
-    ContextPrimer context;
+    JSLexer wr;
+    /**
+     * 语法树
+     */
+    ASTree tree;
+    /**
+     * 文件名
+     */
+    String file;
 
+    /**
+     * 作用域
+     */
+    ContextPrimer ctx;
+
+    /**
+     * 缓存索引
+     */
     private final int depth;
-    public ErrorHandler handler = (type, file, e) -> {
-        System.err.println(type + ": " + file + "   " + e.toString());
-        e.getCause().printStackTrace();
-    };
 
-    public KParser(ContextPrimer context) {
-        this.context = context;
-        this.depth = -1;
-        this.undefVars = new MyHashMap<>();
+    /**
+     * 错误处理器
+     */
+    private ErrorHandler handler;
+
+    public void setErrorHandler(ErrorHandler handler) {
+        if(handler == null)
+            throw new NullPointerException("handler");
+        this.handler = handler;
     }
 
+    public KParser(ContextPrimer ctx, ErrorHandler handler) {
+        this.ctx = ctx;
+        this.depth = -1;
+        this.handler = handler;
+        this.wr = new JSLexer();
+    }
+
+    public KParser(ContextPrimer ctx) {
+        this(ctx, (type, file, e) -> {
+            System.err.println(type + ": " + file + "   " + e.toString());
+            e.printStackTrace();
+        });
+    }
+
+    @Internal
     public KParser(int depth) {
         this.depth = depth;
     }
 
+    @Internal
     public KParser reset(KParser parent) {
         this.file = parent.file;
-        this.context = new ContextPrimer(parent.context);
+        this.ctx = parent.ctx.makeChild();
         this.wr = parent.wr;
 
         this.success = true;
-        this.undefVars = parent.undefVars;
+        //this.undefVars = parent.undefVars;
 
         this.arguments.clear();
         this.inBlock = false;
 
         this.namedLabels.clear();
-        this.lastLabel = null;
-        this.labelCount = 0;
+        this.labelTmp = null;
+        this.labelPath = 0;
         this.labels.clear();
+
+        this.handler = parent.handler;
 
         return this;
     }
 
+    /// region 解析
+
     public KFunction parse(File file) throws IOException, ParseException {
         wr.init(IOUtil.readFile(file));
         this.file = file.getName();
-        return parse();
+        return parse0();
     }
 
-    /// region 解析
-    public KFunction parse(String file, String text) throws ParseException {
+    public KFunction parse(String file, CharSequence text) throws ParseException {
         wr.init(text);
         this.file = file;
-        return parse();
+        return parse0();
     }
 
-    private KFunction parse() throws ParseException {
+    private KFunction parse0() throws ParseException {
         tree = ASTree.builder(file);
         wr.setLineHandler(tree);
 
@@ -110,48 +141,71 @@ public class KParser implements PContext {
             }
         }
 
-        _checkDel();
+        //_checkDel();
 
-        _checkUndefVar();
+        //_checkUndefVar();
 
         if (success) {
             //System.out.println("---编译成功---");
-            return tree.build(context);
+            return tree.build(ctx);
         } else {
-            throw new ParseException(new RuntimeException("Failed to parse file"));
+            throw wr.err("Failed to parse file");
         }
     }
 
-    private void _checkDel() throws ParseException {
-        if ("DEL".equals(tree.lastRegionName())) {
-            wr.retractWord();
-            _onWarning(wr.nextWord(), "compiler.useless_delete");
-        }
-    }
+    /*private void _checkDel() throws ParseException {
+        _onWarning(wr.nextWord(), "警告: var支持作用域.");
+    }*/
 
-    private KFunction parseInner(ASTree parent, String sub) throws ParseException {
-        tree = ASTree.builder(parent, sub);
+    @Override
+    public KFunction parseInnerFunc() throws ParseException {
+        KFunction fn = API.cachedFP(depth + 1, this).parseInner(tree);
+
         wr.setLineHandler(tree);
 
-        functionParser();
+        return fn;
+    }
 
-        _checkDel();
+    private KFunction parseInner(ASTree parent) throws ParseException {
+        tree = ASTree.builder(parent);
+        wr.setLineHandler(tree);
 
-        return success ? tree.build(this.context) : null;
+        tree.funcName(functionParser());
+
+        //_checkDel();
+
+        return success ? tree.build(ctx) : null;
     }
 
     //endregion
     //region 函数
 
-    private void functionParser() throws ParseException {
-        except(WordPresets.VARIABLE, "compiler.type.name");
-        except(Symbol.left_s_bracket);
+    private String functionParser() throws ParseException {
+        String name;
+        Word w = wr.nextWord();
+        switch(w.type()) {
+            case WordPresets.LITERAL:  // named
+                name = w.val();
+                break;
+            case Symbol.left_s_bracket: // anonymous
+                name = null;
+                break;
+            default:
+                _onError(w, "unexpected:" + w.val() + ":Name/'('");
+                wr.retractWord();
+                return "";
+        }
+        wr.recycle(w);
+
+        if(name != null)
+            except(Symbol.left_s_bracket);
         arguments();
         except(Symbol.right_s_bracket);
         except(Symbol.left_l_bracket);
         body();
-        //"DEL".equals(tree.lastRegionName())
         except(Symbol.right_l_bracket);
+
+        return name;
     }
 
     /**
@@ -159,6 +213,9 @@ public class KParser implements PContext {
      */
     ToIntMap<String> arguments = new ToIntMap<>();
 
+    /**
+     * Unreachable statement检测
+     */
     boolean inBlock;
 
     /// 参数
@@ -177,15 +234,15 @@ public class KParser implements PContext {
                 case Symbol.right_s_bracket:
                     wr.retractWord();
                     break o;
-                case WordPresets.VARIABLE:
+                case WordPresets.LITERAL:
                     if (flag == 1)
-                        _onError(word, "缺少逗号分隔");
+                        _onError(word, "missing:,");
                     arguments.put(word.val(), i++);
                     flag = 1;
                     break;
                 case Symbol.comma:
                     if (flag == 0) {
-                        _onError(word, "多余的逗号");
+                        _onError(word, "unexpected:,");
                     }
                     flag = 0;
                     break;
@@ -200,61 +257,53 @@ public class KParser implements PContext {
     private void body() throws ParseException {
         inBlock = true;
 
-        Word word;
+        ctx.enterRegion();
+
+        Word w;
         o:
         while (true) {
-            word = wr.nextWord();
-            switch (word.type()) {
+            w = wr.nextWord();
+            switch (w.type()) {
                 case WordPresets.EOF:
-                    _onError(word, "compiler.eof");
                 case Symbol.right_l_bracket:
                     wr.retractWord();
                     break o;
                 default:
-                    statement(word);
+                    wr.recycle(w);
+                    statement(w);
             }
         }
+
+        ctx.endRegion();
     }
 
     /**
      * 语句
      */
-    private void statement(Word word) {
-        if (lastLabel != null && labelCount-- == 0) {
-            lastLabel = null;
+    private void statement(Word w) {
+        if (labelTmp != null && labelPath-- == 0) {
+            labelTmp = null;
         }
-
-        switch (tree.lastRegionName()) {
-            case "DEL":
-                if (word.type() != Keyword.DELETE) {
-                    context.enterRegion(tree.NextRegion());
-                }
-                break;
-            case "ARG_LOAD":
-                switch (word.type()) {
-                    default:
-                        context.enterRegion(tree.NextRegion());
-                        break;
-                    case Keyword.VAR:
-                    case WordPresets.VARIABLE:
-                }
-                break;
-        }
-
 
         try {
-            switch (word.type()) {
+            switch (w.type()) {
+                case Keyword.CASE:
+                case Keyword.DEFAULT:
+                    //LabelInfo info = labels.isEmpty() ? null : labels.last();
+                    //if(info.i == LabelInfo.SWITCH) {
+                        wr.retractWord();
+                        return;
+                    //}
+                    //_onError(w, "not_statement");
+                    //break;
                 case Keyword.VAR:
-                    define(false);
-                    break;
-                case Keyword.FINAL:
-                    define(true);
+                case Keyword.CONST:
+                case Keyword.LET:
+                    define(w.type());
                     break;
                 case Keyword.CONTINUE:
-                    _break(false);
-                    break;
                 case Keyword.BREAK:
-                    _break(true);
+                    _break(w.type() == Keyword.BREAK);
                     break;
                 case Keyword.GOTO:
                     _goto();
@@ -265,16 +314,13 @@ public class KParser implements PContext {
                 case Keyword.RETURN:
                     _return();
                     break;
-                case Keyword.DELETE:
-                    _delete();
-                    break;
                 case Keyword.FOR:
                     _for();
                     break;
                 case Keyword.WHILE:
                     _while();
                     break;
-                case WordPresets.VARIABLE:
+                case WordPresets.LITERAL:
                     wr.retractWord();
                     assign();
                     break;
@@ -288,62 +334,46 @@ public class KParser implements PContext {
                     _do();
                     break;
                 case Keyword.FUNCTION:
-                case Keyword.EXPORT:
-                    _func(word.type() == Keyword.EXPORT);
+                    _func();
                     break;
                 case Keyword.TRY:
                     _try();
                     break;
                 case Symbol.semicolon:
-                    _onWarning(word, "compiler.empty_statement");
+                    _onWarning(w, "empty_statement");
                     break;
                 case Symbol.left_l_bracket:
-                    context.recordCreation();
                     body();
                     except(Symbol.right_l_bracket);
-                    context.restoreCreation(tree);
                     break;
                 default:
-                    boolean flag = Symbol.isSymbol(word);
+                    boolean flag = Symbol.isSymbol(w);
                     if(!flag) {
-                        switch(word.type()) {
+                        switch(w.type()) {
                             case Keyword.NEW:
                             case Keyword.NULL:
                             case Keyword.UNDEFINED:
                             case Keyword.THIS:
+                            case Keyword.DELETE:
                                 flag = true;
                         }
                     }
 
                     if (flag) {
                         wr.retractWord();
-                        Expression expr = API.getParser(0).read(this, (short) 0);
+                        Expression expr = API.cachedEP(0).read(this, (short) 0);
                         if (expr != null) {
-                            expr.write(tree);
-                            tree.Std(ASTCode.POP); // 清除返回值
+                            expr.write(tree, true);
+                            // tree.Std(ASTCode.POP); // 清除返回值
                             except(Symbol.semicolon);
                         }
                     } else {
-                        _onError(word, "compiler.not_statement");
+                        _onError(w, "not_statement");
                     }
                     break;
             }
         } catch (ParseException e) {
             _onError(e);
-        }
-    }
-
-    private void _delete() throws ParseException {
-        // delete xx;
-        Word w = wr.nextWord();
-        if (w.type() == WordPresets.VARIABLE) {// delete xxx;
-            if (!"DEL".equals(tree.lastRegionName())) {
-                context.enterRegion(tree.NextRegion("DEL"));
-            }
-            context.delete(w.val());
-            except(Symbol.semicolon);
-        } else {
-            _onError(w, "compiler.unexpected:" + w.val());
         }
     }
 
@@ -356,19 +386,20 @@ public class KParser implements PContext {
             tree.Std(ASTCode.RETURN_EMPTY);
         } else {
             wr.retractWord();
-            Expression expr = API.getParser(0).read(this, (short) 0);
+            Expression expr = API.cachedEP(0).read(this, (short) 0);
             if (expr == null) {
                 _onError(w, "What return it is??");
                 return;
             }
 
-            expr.write(tree);
+            expr.write(tree, false);
             tree.Std(ASTCode.RETURN);
 
             except(Symbol.semicolon);
         }
+
         if (inBlock) {
-            except(Symbol.right_l_bracket, "compiler.unreachable_statement");
+            except(Symbol.right_l_bracket, "unreachable_statement");
             wr.retractWord();
         }
     }
@@ -376,63 +407,48 @@ public class KParser implements PContext {
     /**
      * 内部函数
      */
-    private void _func(boolean export) throws ParseException {
+    private void _func() throws ParseException {
         String name;
         Word w = wr.nextWord();
-
-        if (export) {
-            _onWarning(w, "compiler.export");
-            if (w.type() != Keyword.FUNCTION) {
-                _onError(w, "compiler.unexpected:" + w.val() + ":function");
-                wr.retractWord();
-                return;
-            }
-            w = wr.nextWord();
-        }
-        if (w.type() != WordPresets.VARIABLE) {
-            if (w.type() != Symbol.left_s_bracket) {
-                _onError(w, "compiler.unexpected:" + w.val() + ":compiler.type.name");
-                wr.retractWord();
-                return;
-            } else {
-                name = "<anonymous>";
-            }
+        if (w.type() != WordPresets.LITERAL) {
+            // no anonymous not in expr
+            _onError(w, "unexpected:" + w.val() + ":type.name");
+            wr.retractWord();
+            return;
         } else {
             name = w.val();
         }
-
         wr.retractWord();
+        wr.recycle(w);
 
-        context.define(name);
-
-        KFunction func = API.getFileParser(depth + 1, this).parseInner(tree, name);
+        KFunction fn = API.cachedFP(depth + 1, this).parseInner(tree);
 
         wr.setLineHandler(tree);
 
-        if (func == null) {
+        if (fn == null) {
             success = false;
+            // 无效的函数
             return;
         }
 
-        context.define(name, func);
-
-        if (export) {
-            context.setFinalCopy(name);
-        }
+        // 定义函数, 整个地方都可以用
+        ctx.global(name, fn);
     }
 
     // endregion
     // region 条件
 
-    private final Map<String, LabelInfo> namedLabels = new MyHashMap<>();
+    private final ReuseStack<Map<String, LabelInfo>> namedLabelChunk = new ReuseStack<>();
+    private final MyHashMap<String, LabelInfo> namedLabels = new MyHashMap<>();
     private final ReuseStack<LabelInfo> labels = new ReuseStack<>();
 
-    private LabelInfo lastLabel;
-    private byte labelCount = 0;
+    // 支持在for while do switch上放的label
+    private LabelInfo labelTmp;
+    private byte labelPath = 0;
 
-    private void _label(String val) {
-        namedLabels.put(val, lastLabel = new LabelInfo(tree.Label(Integer.toString(labels.size()))));
-        labelCount = 1;
+    private void _namedLabel(String val) {
+        namedLabels.put(val, labelTmp = new LabelInfo(tree.Label()));
+        labelPath = 1;
     }
 
     private void _try() throws ParseException {
@@ -444,9 +460,7 @@ public class KParser implements PContext {
 
         tree.TryEnter(catchNode, finallyNode, end);
 
-        context.recordCreation();
         body();
-        context.restoreCreation(tree);
 
         except(Symbol.right_l_bracket);
 
@@ -461,26 +475,26 @@ public class KParser implements PContext {
             switch (w.type()) {
                 case Keyword.FINALLY:
                     if ((flag & 1) != 0)
-                        throw wr.err("compiler.duplicate.finally");
+                        throw wr.err("duplicate.finally");
                     tree.node0(finallyNode);
                     except(Symbol.left_l_bracket);
                     body();
                     except(Symbol.right_l_bracket);
                     // END ?
-                    tree.Goto(LabelNode.TRY_CATCH_ENDPOINT);
+                    tree.TryEnd(end);
                     flag |= 1;
                     break;
                 case Keyword.CATCH:
                     if ((flag & 2) != 0)
-                        throw wr.err("compiler.duplicate.catch");
+                        throw wr.err("duplicate.catch");
 
                     w = wr.nextWord();
                     boolean hasVar = false;
                     switch (w.type()) {
                         case Symbol.left_s_bracket: // (
                             w = wr.nextWord();
-                            if (w.type() != WordPresets.VARIABLE)
-                                throw wr.err("compiler.unexpected:" + w);
+                            if (w.type() != WordPresets.LITERAL)
+                                throw wr.err("unexpected:" + w);
                             except(Symbol.right_s_bracket);
                             except(Symbol.left_l_bracket);
 
@@ -489,7 +503,7 @@ public class KParser implements PContext {
                         case Symbol.left_l_bracket: // {
                             break;
                         default:
-                            _onError(w, "compiler.unexpected:" + w.val() + ':' + Symbol.byId(Symbol.left_s_bracket));
+                            _onError(w, "unexpected:" + w.val() + ':' + Symbol.byId(Symbol.left_s_bracket));
                             wr.retractWord();
                             return;
                     }
@@ -497,24 +511,18 @@ public class KParser implements PContext {
                     tree.node0(catchNode);
 
                     if (hasVar) {
-                        //context.beginRegion();
-                        context.enterRegion(tree.NextRegion("_CATCH"));
-                        context.define(w.val());
+                        // todo check
+                        ctx.define(w.val(), null, catchNode); // 定义 catch(e)
                         // end try | e = pop();
 
-                        tree/*.Node(catchNode)*//*.Std(ASTCode.TRY_EXIT)*/.Set(w.val());
+                        tree.Set(w.val());
                     }
 
                     body();
                     except(Symbol.right_l_bracket);
 
-                    if (hasVar) {
-                        context.enterRegion(tree.NextRegion("_CATCH"));
-                        //context.endRegion(tree);
-                    }
-
                     // END ?
-                    tree.Goto(LabelNode.TRY_CATCH_ENDPOINT);
+                    tree.TryEnd(end);
 
                     flag |= 2;
                     break;
@@ -526,7 +534,7 @@ public class KParser implements PContext {
 
         if (flag == 0) {
             // 孤立的try
-            _onError(w, "compiler.standalone.try");
+            _onError(w, "standalone.try");
             return;
         }
 
@@ -538,7 +546,7 @@ public class KParser implements PContext {
      */
     private void _goto() throws ParseException {
         Word w = wr.nextWord();
-        if (w.type() != WordPresets.VARIABLE) {
+        if (w.type() != WordPresets.LITERAL) {
             _uLabel(w);
             return;
         }
@@ -546,7 +554,7 @@ public class KParser implements PContext {
         if (info != null && info.head != null) {
             tree.Goto(info.head);
         } else {
-            _onError(w, "compiler.goto.unknown_label");
+            _onError(w, "goto.unknown_label");
         }
         except(Symbol.semicolon);
     }
@@ -557,22 +565,22 @@ public class KParser implements PContext {
     private void _break(boolean isBreak) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
-            case WordPresets.VARIABLE: {
+            case WordPresets.LITERAL: {
                 LabelInfo info = namedLabels.get(w.val());
                 if (info != null) {
                     __break(isBreak, w, info);
 
                     except(Symbol.semicolon);
                 } else {
-                    _onError(w, "compiler.goto.unknown_label");
+                    _onError(w, "goto.unknown_label");
                 }
             }
             break;
             case Symbol.semicolon:
                 if (labels.isEmpty()) {
-                    _onError(w, "compiler.break.not_in_label");
+                    _onError(w, "break.not_in_label");
                 } else {
-                    __break(isBreak, w, labels.last());
+                    __break(isBreak, w, null);
                 }
                 break;
             default:
@@ -582,27 +590,28 @@ public class KParser implements PContext {
     }
 
     private void __break(boolean isBreak, Word w, LabelInfo info) throws ParseException {
-        if (isBreak) {
-            if (info.onBreak == null) {
-                _uLabel(w);
-            } else {
-                tree.Goto(info.onBreak);
+        if(info == null) {
+            for (LabelInfo info1 : labels) {
+                if(isBreak ? info1.onBreak != null : info1.onContinue != null) {
+                    tree.Goto(isBreak ? info1.onBreak : info1.onContinue);
+                    return;
+                }
             }
         } else {
-            if (info.onContinue == null) {
-                _uLabel(w);
-            } else {
-                tree.Goto(info.onContinue);
+            if(isBreak ? info.onBreak != null : info.onContinue != null) {
+                tree.Goto(isBreak ? info.onBreak : info.onContinue);
+                return;
             }
         }
+        _uLabel(w);
+
         if (inBlock) {
-            except(Symbol.right_l_bracket, "compiler.unreachable_statement");
-            wr.retractWord();
+            except(Symbol.right_l_bracket, "unreachable_statement");
         }
     }
 
     private void _uLabel(Word w) throws ParseException {
-        _onError(w, "compiler.goto.illegal_label");
+        _onError(w, "goto.illegal_label");
         except(Symbol.semicolon);
     }
 
@@ -610,19 +619,18 @@ public class KParser implements PContext {
         Word w = wr.nextWord();
         wr.retractWord();
 
-        Expression expr = API.getParser(0).read(this, (short) 0);
+        Expression expr = API.cachedEP(0).read(this, (short) 0);
         if(expr == null/* || expr.type() != -1*/) {
-            _onError(w, "compiler.empty_statement");
+            _onError(w, "empty_statement");
             return;
         }
-        expr.write(tree);
+        expr.write(tree, false);
         tree.Std(ASTCode.THROW);
 
         except(Symbol.semicolon);
 
         if (inBlock) {
-            except(Symbol.right_l_bracket, "compiler.unreachable_statement");
-            wr.retractWord();
+            except(Symbol.right_l_bracket, "unreachable_statement");
         }
     }
 
@@ -662,17 +670,17 @@ public class KParser implements PContext {
         if (checkBracket)
             except(Symbol.left_s_bracket);
 
-        ExpressionParser parser = API.getParser(0);
+        ExpressionParser parser = API.cachedEP(0);
 
         LabelNode ifFalse = new LabelNode();
 
         Expression equ = parser.read(this, (short) (checkBracket ? 16 : 0), ifFalse);
         if (equ == null) {
-            _onError(wr.readWord(), "compiler.empty_if_statement");
+            _onError(wr.readWord(), "empty_if_statement");
             return null;
         }
 
-        equ.write(tree);
+        equ.write(tree, false);
 
         except(end);
 
@@ -719,11 +727,11 @@ public class KParser implements PContext {
     }
 
     /**
-     * for循环
+     * for循环 <BR>
+     *     重要通知：不要管作用域了，<BR>
+     *     重复一遍，不要管作用域了
      */
     private void _for() throws ParseException {
-        final ExpressionParser parser = API.getParser(0);
-
         LabelNode continueTo = new LabelNode();
         tree.node0(continueTo);
 
@@ -737,23 +745,26 @@ public class KParser implements PContext {
                 createdVar = false;
                 break;
             case Keyword.VAR:
-                context.recordCreation();
+            case Keyword.LET:
+            case Keyword.CONST:
+                ctx.enterRegion();
                 createdVar = true;
-                define(false);
+                define(w.type());
                 break;
             default:
-                _onError(w, "compiler.unexpected:" + w.val() + ":var or ;");
+                _onError(w, "unexpected:" + w.val() + ":var or ;");
                 return;
         }
 
         LabelNode breakTo = condition(false, Symbol.semicolon);
         if (breakTo == null) {
-            _onError(w, "compiler.not_condition");
+            _onError(w, "not_condition");
             return;
         }
 
         List<Expression> execLast = new ArrayList<>();
 
+        final ExpressionParser parser = API.cachedEP(0);
         do {
             Expression expr = parser.read(this, (short) (16 | 1024));
             if (expr == null)
@@ -767,16 +778,18 @@ public class KParser implements PContext {
 
         enterCycle(continueTo, breakTo);
 
-        block();
-
-        endCycle();
+        try {
+            block();
+        } finally {
+            endCycle();
+        }
 
         if (!execLast.isEmpty()) {
             LabelNode ol = new LabelNode(continueTo);
             tree.node0(continueTo);
             for (Expression expr : execLast) {
-                expr.write(tree);
-                tree.Std(ASTCode.POP); // 清除返回值
+                expr.write(tree, true);
+                // tree.Std(ASTCode.POP); // 清除返回值
             }
             tree.Goto(ol);
         } else {
@@ -786,25 +799,30 @@ public class KParser implements PContext {
         tree.node0(breakTo);
 
         if (createdVar) {
-            context.restoreCreation(tree);
+            ctx.endRegion();
         }
     }
 
+    @Deprecated
     private void endCycle() {
         labels.pop();
+        namedLabelChunk.pop();
     }
 
     private void enterCycle(LabelNode continueTo, LabelNode breakTo) {
         LabelInfo info;
-        if (lastLabel != null) {
-            info = lastLabel;
-            lastLabel.onBreak = breakTo;
-            lastLabel.onContinue = continueTo;
+        if (labelTmp != null) {
+            info = labelTmp;
+            labelTmp.onBreak = breakTo;
+            labelTmp.onContinue = continueTo;
+            labelTmp = null;
+            labelPath = 0;
         } else {
             info = new LabelInfo(null, breakTo, continueTo);
         }
 
         labels.push(info);
+        namedLabelChunk.push(new MyHashMap<>());
     }
 
     /**
@@ -818,9 +836,11 @@ public class KParser implements PContext {
 
         enterCycle(continueTo, breakTo);
 
-        block(); // do {}
-
-        endCycle();
+        try {
+            block(); // do {]
+        } finally {
+            endCycle();
+        }
 
         except(Keyword.WHILE, "while");
         LabelNode breakTo1 = condition(true, Symbol.right_s_bracket);
@@ -847,103 +867,229 @@ public class KParser implements PContext {
 
         enterCycle(continueTo, breakTo);
 
-        block();
-
-        endCycle();
+        try {
+            block();
+        } finally {
+            endCycle();
+        }
 
         tree.Goto(continueTo).node0(breakTo);
     }
 
     /**
-     * swich
-     * // todo
+     * switch
      */
     private void _switch() throws ParseException {
+        except(Symbol.left_s_bracket);
 
-        _onError(wr.readWord(), "暂未支持");
-        if (true)
-            return;
+        Expression expr = API.cachedEP(0).read(this, (short) 256);
+        if(expr == null)
+            throw wr.err("empty_switch");
 
-        Expression expr = API.getParser(0).read(this, (short) 256);
+        KType cstv = expr.isConstant() ? expr.asCst().val() : null;
 
-        expr.write(tree); // on stack now
+        expr.write(tree, false);
 
+        except(Symbol.right_s_bracket);
         except(Symbol.left_l_bracket);
 
-        switch (expr.type()) {
-            case 0:
-            case 1:
-                // int
-                switchInt(expr);
-                break;
-            case -1:
-            case 2:
-                // string
-                switchString(expr);
-                break;
-            case 3:
-                wr.retractWord();
-                _onError(wr.readWord(), "布尔值无法用做switch");
+        SwitchMap nodeMap = new SwitchMap();
+        LabelNode end = new LabelNode(), def = null;
+
+        // 这个可以删除，因为优化并没啥软用，不会有人switch常量的
+        Node last = tree.last();
+        SwitchNode sw = tree.Switch(end, nodeMap);
+
+        while (true) {
+            Word wd = wr.nextWord();
+            switch (wd.type()) {
+                case Keyword.CASE:
+
+                    expr = API.cachedEP(0).read(this, (short) 256);
+                    if(expr == null) {
+                        _onError(wd, "case.empty");
+                        return;
+                    }
+                    if(!(expr = expr.compress()).isConstant()) {
+                        _onError(wd, "case.not_constant");
+                    }
+                    except(Symbol.colon);
+
+                    final LabelNode label = tree.Label();
+                    if(nodeMap.put(expr.asCst().val(), label) != null) {
+                        _onError(wd, "case.duplicate");
+                    }
+
+                    if(cstv != null) {
+                        if(!expr.asCst().val().equalsTo(cstv)) {
+                            break;
+                        } else {
+                            nodeMap.put(null, label);
+                        }
+                    }
+
+                    switchBlock(end);
+                    tree.Goto(end);
+                    break;
+                case Keyword.DEFAULT:
+                    except(Symbol.colon);
+                    if(def != null) {
+                        _onError(wd, "duplicate_default");
+                        continue;
+                    }
+
+                    tree.node0(def = end);
+                    end = new LabelNode();
+
+                    switchBlock(end);
+                    tree.Goto(end);
+                    break;
+                default:
+                    _onError(wd, "unexpected:" + wd.val());
+            }
+            wr.recycle(wd);
+
+            if(cstv != null) {
+                Node label = nodeMap.get(null);
+                if(label != null) {
+                    if(def == null) {
+                        last.next = sw.next;
+                    } else {
+                        last.next = new GotoNode((LabelNode) label);
+                    }
+                    // found
+                } else  if(def != null) {
+                    // def
+                    last.next = new GotoNode(end);
+                } else {
+                    last.next = null;
+                    tree.last(last);
+                    // clear all nodes after this switch
+                    // because no code will be executed
+                    return;
+                }
+            }
+
+            tree.node0(end);
         }
     }
 
-    private void switchInt(Expression expr) throws ParseException {
-        IntMap<LabelNode> nodes = new IntMap<>();
-        body();
-
-        except(Symbol.right_l_bracket);
-
-    }
-
-    private void switchString(Expression expr) throws ParseException {
-        Map<String, LabelNode> nodes = new MyHashMap<>();
-        body();
-
-        except(Symbol.right_l_bracket);
+    private void switchBlock(LabelNode endPoint) throws ParseException {
+        enterCycle(null, endPoint);
+        try {
+            o:
+            while (true) {
+                Word word = wr.nextWord();
+                switch (word.type()) {
+                    case Keyword.CASE:
+                    case Keyword.DEFAULT:
+                        wr.retractWord();
+                    case WordPresets.EOF:
+                        break o;
+                }
+                if (word.type() == Symbol.left_l_bracket) {
+                    body();
+                    except(Symbol.right_l_bracket);
+                } else {
+                    inBlock = false;
+                    statement(word);
+                }
+            }
+        } finally {
+            endCycle();
+        }
     }
 
     // endregion
     // region 表达式和变量
 
     /**
-     * 定义变量(可选的赋值)
+     * 定义全局变量 var/const (可选的赋值)
      */
-    private void define(boolean isFinal) throws ParseException {
-        Word word = wr.nextWord();
-        if (word.type() != WordPresets.VARIABLE) {
-            _onError(word, "compiler.variable.not_name");
-            wr.retractWord();
-            return;
-        }
+    private void define(int type) throws ParseException {
+        Word w;
+        String name = null;
+        int first = 0;
 
-        if (context.exists(word.val()) || arguments.containsKey(word.val())) {
-            _onError(word, "compiler.variable.exists");
-        }
+        o:
+        while (wr.hasNext()) {
+            w = wr.nextWord();
+            switch(w.type()) {
+                case WordPresets.LITERAL:
+                    if(name != null) {
+                        _onError(w, "unexpected:" + w.val());
+                        return;
+                    }
 
-        context.define(word.val());
-        String name = word.val();
+                    name = w.val();
 
-        word = wr.nextWord();
-        if (word.type() == Symbol.assign) {
-            Expression expr = API.getParser(0).read(this, (short) 0);
-            if (expr == null) {
-                _onError(word, "compiler.not_statement");
-                return;
+                    if (ctx.exists(name) || arguments.containsKey(name)) {
+                        _onWarning(w, "variable.exists");
+                    }
+
+                    first = 1;
+
+                    if(type == Keyword.LET)
+                        ctx.define(name, KUndefined.UNDEFINED, tree.last());
+                    else
+                        ctx.global(name, KUndefined.UNDEFINED);
+
+                    break;
+                case Symbol.assign:
+                    if(name == null) {
+                        _onError(w, "unexpected:=");
+                        return;
+                    }
+
+                    Expression expr = API.cachedEP(0).read(this, (short) 0);
+                    if (expr == null) {
+                        _onError(w, "not_statement");
+                        return;
+                    }
+                    // todo check duplicate fix
+                    if (expr.type() != -1 && !ctx.exists(name)) {
+                        final KType val = expr.asCst().val();
+                        switch (type) {
+                            case Keyword.LET:
+                                ctx.define(name, val, tree.last());
+                                break;
+                            case Keyword.CONST:
+                                ctx.Const(name, val);
+                                break;
+                            case Keyword.VAR:
+                                ctx.global(name, val);
+                                break;
+                        }
+                    } else {
+                        if (type == Keyword.CONST) {
+                            _onError(w, "const_should_initialize");
+                            continue o;
+                        }
+                        expr.write(tree, false);
+                        tree.Set(name);
+                    }
+
+                    name = null;
+                    break;
+                case Symbol.comma:
+                    if (name != null && type == Keyword.CONST) {
+                        _onError(w, "const_should_initialize");
+                    }
+
+                    if(first++ == 1) {
+                        name = null;
+                        break;
+                    }
+                default:
+                    _onError(w, "unexpected:" + w.val() + ":;");
+                case Symbol.semicolon:
+                    if (name != null && type == Keyword.CONST) {
+                        _onError(w, "const_should_initialize");
+                    }
+                    break o;
             }
-            if (expr.type() != -1) {
-                context.define(name, expr.asCst().val());
-            } else {
-                expr.write(tree);
-                tree.Set(name);
-            }
-            word = wr.nextWord();
-        }
 
-        if (word.type() == Symbol.comma) {
-            define(isFinal);
-        } else if (word.type() != Symbol.semicolon) {
-            _onError(word, "compiler.unexpected:" + word.val() + ":;");
-            wr.retractWord();
+            wr.recycle(w);
         }
     }
 
@@ -951,54 +1097,49 @@ public class KParser implements PContext {
      * 标准单个表达式
      */
     private void assign() throws ParseException {
-        { // label
-            Lexer.Snapshot snapshot = wr.snapshot();
-            Word k = wr.readWord();
-            Word w = wr.readWord();
-            if (k.type() == WordPresets.VARIABLE && w.type() == Symbol.colon) {
-                _label(k.val());
+        // check label
+        Word k = wr.nextWord();
+        if (k.type() == WordPresets.LITERAL) {
+            if(wr.readWord().type() == Symbol.colon) {
+                _namedLabel(k.val());
                 return;
-            } else {
-                wr.restore(snapshot);
             }
         }
+        wr.retractWord();
 
-        Expression expr = API.getParser(0).read(this, (short) 0);
-        if (expr == null || expr.type() != -1) {
-            _onError(wr.nextWord(), "compiler.not_statement");
-            return;
+        Expression expr = API.cachedEP(0).read(this, (short) 0);
+        if (expr == null) {
+            _onError(k, "not_statement");
         } else {
-            expr.write(tree);
-            tree.Std(ASTCode.POP); // 清除返回值, 任何表达式都有且仅有一个返回值
+            expr.write(tree, true);
+            // tree.Std(ASTCode.POP); // 清除返回值, 任何表达式都有且仅有一个返回值
         }
 
         except(Symbol.semicolon);
     }
 
+    /**
+     * 使用（访问）变量
+     * @return 可能的现在常量值
+     */
     @Override
     public KType useVariable(String name) {
-        if (!context.exists(name)) {
-            if (arguments.containsKey(name)) {
-                if (!"ARG_LOAD".equals(tree.lastRegionName()))
-                    context.enterRegion(tree.NextRegion("ARG_LOAD"));
-                context.define(name);
-
-                tree.Load(KInteger.valueOf(arguments.getInt(name))).Std(ASTCode.LOAD_ARGUMENT).Set(name);
-            } else {
-                _currentUndefVar(wr, name);
-                // 函数lazy定义
+        if (!ctx.exists(name)) {
+            final int i = arguments.getOrDefault(name, -1);
+            if (i != -1) {
+                ctx.loadArg(i, name);
+            //} else {
+                // undefVars.put(name, wr.index);
             }
             return null;
         }
         // todo
-        return labels.isEmpty() ? context.getNullable(name) : null;
+        return null;//context.getNullable(name);
     }
 
     @Override
-    public void assignVariable(String name, Expression right) {
-        if ("ARG_LOAD".equals(tree.lastRegionName()) && arguments.containsKey(name) && right.isConstant())
-            context.enterRegion(tree.NextRegion());
-        this.context.put(name, right.isConstant() ? right.asCst().val() : null);
+    public void assignVariable(String name) {
+        if(ctx.isConst(name)) Helpers.throwAny(wr.err("write_to_const"));
     }
 
     @Override
@@ -1009,22 +1150,18 @@ public class KParser implements PContext {
     //endregion
     // region 输出错误
 
-    private boolean success = true;//语法解析结果
-    private Map<String, ParseException> undefVars;
-
-    private void _currentUndefVar(JSLexer wr, String name) {
-        undefVars.put(name, wr.err("compiler.undefined_variable:" + name));
-    }
+    private boolean success = true;     // 语法解析结果
+    /*private ToIntMap<String> undefVars; // 未定义变量
 
     private void _checkUndefVar() {
         for (String name : undefVars.keySet()) {
             KType type = context.getNullable(name);
             if (type == null || type.getType() != Type.FUNCTION) {
-                _onError(undefVars.get(name));
+                _onError(new Word().reset(0, undefVars.getInt(name), ""), "undefined_Variable");
             }
         }
         undefVars.clear();
-    }
+    }*/
 
     private void _onError(ParseException e) {
         success = false;
@@ -1033,11 +1170,11 @@ public class KParser implements PContext {
 
     private void _onError(Word word, String v) {
         success = false;
-        handler.handle("ERR", file, wr.getDetails(v, word));
+        handler.handle("ERR", file, wr.err(v, word));
     }
 
     private void _onWarning(Word word, String v) {
-        handler.handle("WARN", file, wr.getDetails(v, word));
+        handler.handle("WARN", file, wr.err(v, word));
     }
 
     private void except(short id) throws ParseException {
@@ -1047,9 +1184,10 @@ public class KParser implements PContext {
     private void except(short id, String s) throws ParseException {
         Word w = wr.nextWord();
         if (w.type() != id) {
-            _onError(w, "compiler.unexpected:" + w.val() + ':' + s);
+            _onError(w, "unexpected:" + w.val() + ':' + s);
             wr.retractWord();
         }
+        wr.recycle(w);
     }
 
     //endregion

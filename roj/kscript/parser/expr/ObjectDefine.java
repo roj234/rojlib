@@ -1,7 +1,7 @@
 package roj.kscript.parser.expr;
 
 import roj.kscript.KConstants;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
 import roj.kscript.type.KObject;
@@ -42,7 +42,7 @@ public final class ObjectDefine implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
         final KObject v = (KObject) object.copy();
         if(!expr.isEmpty()) {
             for (Map.Entry<String, Expression> entry : expr.entrySet()) {
@@ -53,12 +53,12 @@ public final class ObjectDefine implements Expression {
     }
 
     @Override
-    public void write(ASTree tree) {
+    public void write(ASTree tree, boolean noRet) {
         tree.Load(object);
         for (Map.Entry<String, Expression> entry : expr.entrySet()) {
             Expression expr = entry.getValue();
             if (expr != null) {
-                expr.write(tree.Std(ASTCode.DUP).Load(KString.valueOf(entry.getKey())));
+                expr.write(tree.Std(ASTCode.DUP).Load(KString.valueOf(entry.getKey())), false);
                 tree.Std(ASTCode.PUT_OBJECT);
             }
         }
@@ -82,7 +82,7 @@ public final class ObjectDefine implements Expression {
         if (!(left instanceof ObjectDefine))
             return false;
         ObjectDefine define = (ObjectDefine) left;
-        return mapEq(expr, define.expr) && define.object.equalsTo(object);
+        return mapEq(expr, define.expr) && define.object.__int_equals__(object);
     }
 
     private static boolean mapEq(Map<String, Expression> expr, Map<String, Expression> expr1) {

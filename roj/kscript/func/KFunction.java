@@ -1,46 +1,29 @@
 package roj.kscript.func;
 
-import roj.collect.MyHashMap;
-import roj.kscript.Arguments;
 import roj.kscript.KConstants;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IArguments;
+import roj.kscript.api.IObject;
 import roj.kscript.type.KInstance;
 import roj.kscript.type.KObject;
 import roj.kscript.type.KType;
 import roj.kscript.type.Type;
+import roj.kscript.util.opm.ObjectPropMap;
 
 import javax.annotation.Nonnull;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
- * Filename: null.java
+ * @author Roj234
  */
 public abstract class KFunction extends KObject {
-    protected String name, source;
-
-    /**
-     * Copy
-     *
-     * @param function brother
-     */
-    protected KFunction(KFunction function) {
-        super(Type.FUNCTION, function.getInternalMap(), function);
-        this.name = function.name;
-        this.source = function.source;
-    }
+    protected String name, source, clazz;
 
     public KFunction() {
-        this(KConstants.FUNCTION);
-    }
-
-    /**
-     * @param prototype 他爹
-     */
-    public KFunction(KObject prototype) {
-        super(Type.FUNCTION, new MyHashMap<>(2), prototype);
+        super(Type.FUNCTION, new ObjectPropMap(), KConstants.FUNCTION);
+        this.put("prototype", new KObject(KConstants.OBJECT));
+        this.chmod("prototype", false, true, null, null);
     }
 
     @Override
@@ -48,22 +31,35 @@ public abstract class KFunction extends KObject {
         return this;
     }
 
-    public abstract KType invoke(@Nonnull IGettable $this, Arguments param);
+    public abstract KType invoke(@Nonnull IObject $this, IArguments param);
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
+    /**
+     * 函数名称 <BR>
+     *     eg: func
+     */
     public String getName() {
         return name == null ? "<anonymous>" : name;
     }
 
-    public abstract String getClassName();
-
-    public void setSource(String source) {
-        this.source = source;
+    /**
+     * 函数全称 - name <BR>
+     *     eg: <global>.funcA.funcB.funcC.
+     */
+    public String getClassName() {
+        return clazz;
     }
 
+    public KFunction set(String source, String name, String clazz) {
+        this.source = source;
+        this.name = name;
+        this.clazz = clazz;
+        return this;
+    }
+
+    /**
+     * 文件名 <BR>
+     *     eg: test.js
+     */
     public String getSource() {
         return source == null ? getClass().getSimpleName() + ".java" : source;
     }
@@ -73,7 +69,7 @@ public abstract class KFunction extends KObject {
         return this;
     }
 
-    public KType createInstance(Arguments args) {
-        return new KInstance(this, getOr("prototype", KConstants.FUNCTION_PROTOTYPE).asObject());
+    public KType createInstance(IArguments args) {
+        return new KInstance(this, get("prototype").asKObject());
     }
 }

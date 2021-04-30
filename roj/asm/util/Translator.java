@@ -78,24 +78,29 @@ public class Translator {
         Lexer wr = (Lexer) new Lexer() {
             @Override
             public Word readWord() throws ParseException {
-                while (hasNext()) {
-                    int c = next();
+                int index = this.index;
+                final CharSequence input = this.input;
+
+                while (index < input.length()) {
+                    int c = input.charAt(index++);
                     switch (c) {
                         case '\'':
                         case '"':
+                            this.index = index;
                             return readConstString((char) c);
                         case '/':
+                            this.index = index;
                             Word word = ignoreStdNote();
                             if (word != null)
                                 return word;
                             break;
                         case '=':
                         case ':':
-                            retract();
+                            this.index = index - 1;
                             return readSpecial();
                         default: {
                             if (!WHITESPACE.contains(c)) {
-                                retract();
+                                this.index = index - 1;
                                 if (NUMBER.contains(c)) {
                                     return readDigit();
                                 } else {
@@ -105,6 +110,7 @@ public class Translator {
                         }
                     }
                 }
+                this.index = index;
                 return eof();
             }
 
@@ -113,18 +119,22 @@ public class Translator {
              * @return 标识符 or 变量
              */
             protected Word readAlphabet() throws ParseException {
+                int index = this.index;
+                final CharSequence input = this.input;
+
                 CharList temp = this.found;
                 temp.clear();
 
-                while (hasNext()) {
-                    int c = next();
+                while (index < input.length()) {
+                    int c = input.charAt(index++);
                     if (c != ':' && c != '=') {
                         temp.append((char) c);
                     } else {
-                        retract();
+                        index--;
                         break;
                     }
                 }
+                this.index = index;
                 if (temp.length() == 0) {
                     return eof();
                 }

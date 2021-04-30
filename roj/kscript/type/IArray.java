@@ -1,6 +1,6 @@
 package roj.kscript.type;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -14,7 +14,7 @@ import java.util.List;
  * @author Roj233
  * @since 2020/10/27 22:51
  */
-public interface IArray extends Iterable<KType>, KType, IGettable {
+public interface IArray extends Iterable<KType>, KType, IObject {
 
     int size();
 
@@ -35,7 +35,7 @@ public interface IArray extends Iterable<KType>, KType, IGettable {
 
     void addAll(IArray list);
 
-    default List<KType> getRawList() {
+    default List<KType> getInternal() {
         throw new UnsupportedOperationException();
     }
 

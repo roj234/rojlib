@@ -25,35 +25,40 @@ public final class HTTPHeaderLexer extends AbstLexer {
      * 读词
      */
     public String readHttpWord() {
+        CharSequence input = this.input;
+        int index = this.index;
+
         last = last == null ? snapshot() : snapshot(last);
 
         CharList temp = this.found;
         temp.clear();
 
-        while (hasNext()) {
-            int c = next();
+        int remain;
+        while ((remain = input.length() - index) > 0) {
+            int c = input.charAt(index++);
             switch (c) {
                 case '\r':
-                    if (remain() > 0 && offset(0) == '\n') {
-                        next();
-                        if (remain() > 2 && offset(0) == '\r' && offset(1) == '\n') {
-                            next();
-                            next();
+                    if (remain > 1 && input.charAt(index) == '\n') {
+                        index++;
+                        if (remain > 3 && input.charAt(index) == '\r' && input.charAt(index + 1) == '\n') {
+                            this.index = index + 2;
                             return SharedConfig._SHOULD_EOF;
                         }
                     } else {
+                        this.index = index;
                         return SharedConfig._ERROR;
                     }
                     break;
                 case ':':
-                    if (next() != ' ') {
+                    if (input.charAt(index++) != ' ') {
+                        this.index = index;
                         return SharedConfig._ERROR;
                     }
 
-                    while ((c = next()) != '\r' || offset(0) != '\n') {
+                    while ((c = input.charAt(index++)) != '\r' || input.charAt(index) != '\n') {
                         temp.append((char) c);
                     }
-                    retract();
+                    this.index = index - 1;
 
                     if (temp.length() == 0) {
                         return "";
@@ -63,18 +68,21 @@ public final class HTTPHeaderLexer extends AbstLexer {
 
                 default: {
                     if (!WHITESPACE.contains(c)) {
-                        retract();
+                        index--;
 
-                        while (hasNext()) {
-                            c = next();
+                        while (index < input.length()) {
+                            c = input.charAt(index++);
 
                             if (!WHITESPACE.contains(c) && c != ':') {
                                 temp.append((char) c);
                             } else {
-                                retract();
+                                index--;
                                 break;
                             }
                         }
+
+                        this.index = index;
+
                         if (temp.length() == 0) {
                             return null;
                         }
@@ -84,6 +92,7 @@ public final class HTTPHeaderLexer extends AbstLexer {
                 }
             }
         }
+        this.index = index;
         return SharedConfig._SHOULD_EOF;
     }
 
@@ -111,6 +120,7 @@ public final class HTTPHeaderLexer extends AbstLexer {
     public String content(String length, int max) throws ParseException {
         int index = this.index;
         final CharSequence input = this.input;
+
         final CharList temp = this.found;
         temp.clear();
 
@@ -161,14 +171,17 @@ public final class HTTPHeaderLexer extends AbstLexer {
     }
 
     public String readLine() {
+        int index = this.index;
+        final CharSequence input = this.input;
+
         final CharList temp = this.found;
         temp.clear();
 
         char c = 0;
-        while (hasNext() && (c = next()) != '\r' || offset(0) != '\n') {
+        while (index < input.length() && (c = input.charAt(index++)) != '\r' || input.charAt(index) != '\n') {
             temp.append(c);
         }
-        retract();
+        this.index = index - 1;
 
         if (temp.length() == 0) {
             return "";

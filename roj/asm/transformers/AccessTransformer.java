@@ -17,6 +17,8 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
+import roj.text.SimpleLineReader;
+import roj.text.TextUtil;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 import roj.util.log.ILogger;
@@ -25,9 +27,7 @@ import roj.util.log.LogManager;
 import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class AccessTransformer {
@@ -37,7 +37,7 @@ public class AccessTransformer {
 
     public static void readAndParseAt(@Nonnull File file) {
         try {
-            readAndParseAt(new String(IOUtil.readFully(new FileInputStream(file)), StandardCharsets.UTF_8));
+            readAndParseAt(IOUtil.readAsUTF(new FileInputStream(file)));
         } catch (IOException e) {
             throw new RuntimeException("Failed to parseMethod AT file: " + file.getName(), e);
         }
@@ -45,8 +45,8 @@ public class AccessTransformer {
 
     public static void readAndParseAt(@Nonnull Class<?> jarProvider, @Nonnull String fileName) {
         try {
-            readAndParseAt(new String(IOUtil.getBytes(jarProvider, fileName), StandardCharsets.UTF_8));
-        } catch (FileNotFoundException e) {
+            readAndParseAt(IOUtil.readAsUTF(jarProvider, fileName));
+        } catch (IOException e) {
             throw new RuntimeException("Failed to parseMethod AT file: " + fileName + " not found");
         }
     }
@@ -54,18 +54,19 @@ public class AccessTransformer {
     public static void readAndParseAt(@Nonnull String ATConfig) {
         if (ATConfig.length() < 1)
             throw new RuntimeException("AT的配置文件已损坏");
-        String[] options = ATConfig.replace('\r', '\n').replace('/', '.').split("\n");
-        String[] tmp;
+        SimpleLineReader options = new SimpleLineReader(ATConfig);
+        List<String> lst = new ArrayList<>(4);
         for (String conf : options) {
             if (conf.length() == 0) continue;
             if (conf.startsWith("public-f "))
                 conf = conf.substring(9);
-            tmp = conf.split(" ", 3); // 注释
-            if (tmp.length < 2) {
+            lst.clear();
+            TextUtil.splitStringF(lst, conf, ' ');
+            if (lst.size() < 2) {
                 System.err.println("Unknown entry " + conf);
                 continue;
             }
-            AccessTransformer.add(tmp[0], tmp[1]);
+            AccessTransformer.add(lst.get(0).replace('/', '.'), lst.get(1));
         }
     }
 

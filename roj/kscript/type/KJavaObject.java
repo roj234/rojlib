@@ -1,15 +1,15 @@
 package roj.kscript.type;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
 
 import javax.annotation.Nonnull;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: CObject.java
  */
 public final class KJavaObject<T> extends KBase {
@@ -61,7 +61,7 @@ public final class KJavaObject<T> extends KBase {
         switch (type) {
             case STRING:
                 return val instanceof CharSequence;
-            case NUMBER:
+            case INT:
             case DOUBLE:
                 return val instanceof Number;
             case BOOL:
@@ -71,7 +71,7 @@ public final class KJavaObject<T> extends KBase {
             case JAVA_OBJECT:
                 return true;
             case OBJECT:
-                return val instanceof IGettable;
+                return val instanceof IObject;
             case ARRAY:
                 return val instanceof IArray;
         }
@@ -84,12 +84,12 @@ public final class KJavaObject<T> extends KBase {
     }
 
     @Override
-    public boolean isInteger() {
+    public boolean isInt() {
         return !(val instanceof Double || val instanceof Float);
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return asJavaObject(Boolean.class).getOr(Boolean.FALSE);
     }
 
@@ -99,7 +99,7 @@ public final class KJavaObject<T> extends KBase {
     }
 
     @Override
-    public int asInteger() {
+    public int asInt() {
         return asJavaObject(Number.class).getOr(0).intValue();
     }
 
@@ -115,14 +115,14 @@ public final class KJavaObject<T> extends KBase {
     }
 
     @Override
-    public KInteger asKInteger() {
-        return KInteger.valueOf(asInteger());
+    public KInt asKInt() {
+        return KInt.valueOf(asInt());
     }
 
     @Nonnull
     @Override
-    public IGettable asObject() {
-        return asJavaObject(IGettable.class).getObject();
+    public IObject asObject() {
+        return asJavaObject(IObject.class).getObject();
     }
 
     @Nonnull

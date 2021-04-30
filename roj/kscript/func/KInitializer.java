@@ -1,14 +1,11 @@
 package roj.kscript.func;
 
-import roj.kscript.Arguments;
-import roj.kscript.api.ArgumentList;
-import roj.kscript.api.IGettable;
-import roj.kscript.type.KObject;
+import roj.kscript.api.IArguments;
+import roj.kscript.api.IObject;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
 
 import javax.annotation.Nonnull;
-import java.util.function.Function;
 
 /**
  * This file is a part of MI <br>
@@ -17,29 +14,15 @@ import java.util.function.Function;
  * @author Roj233
  * @since 2020/9/27 13:01
  */
-public class KInitializer extends KFunction {
-    final Function<ArgumentList, KType> caller;
-
-    public KInitializer(Function<ArgumentList, KType> caller) {
+public abstract class KInitializer extends KFunction {
+    public KInitializer() {
         super();
-        this.caller = caller;
-        this.name = "call";
-    }
-
-    public KInitializer(KObject prototype, Function<ArgumentList, KType> caller) {
-        super(prototype);
-        this.caller = caller;
-        this.name = "call";
+        clazz = getClass().getName();
     }
 
     @Override
-    public KType invoke(@Nonnull IGettable $this, Arguments param) {
+    public KType invoke(@Nonnull IObject $this, IArguments param) {
         return KUndefined.UNDEFINED;
-    }
-
-    @Override
-    public String getClassName() {
-        return caller.getClass().getName();
     }
 
     @Override
@@ -48,7 +31,5 @@ public class KInitializer extends KFunction {
     }
 
     @Override
-    public KType createInstance(Arguments args) {
-        return caller.apply(args);
-    }
+    public abstract KType createInstance(IArguments args);
 }

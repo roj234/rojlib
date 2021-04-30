@@ -7,7 +7,7 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KObject;
 import roj.kscript.type.Type;
@@ -33,17 +33,20 @@ public final class ReflectiveMethodGenerator {
 
     // todo
 
-    public static IGettable createRegisteredJavaFunction(Class<?> clazz) {
+    public static IObject createRegisteredJavaFunction(Class<?> clazz) {
         Clazz clz = new Clazz();
         clz.version = 52 << 16;
-        clz.name = "roj/kscript/func/gen/GeneratedAccessor$" + (i++);
-        clz.interfaces.add("roj/kscript/func/gen/GeneratedFunction");
+        clz.name = "roj/kscript/func/gen/GJavaFn$" + (i++);
+        clz.interfaces.add("roj/kscript/func/gen/KFuncJava");
         clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC, AccessFlag.PUBLIC);
 
-        roj.asm.struct.Method call = new roj.asm.struct.Method(0x0001, clz, "call", "(ILroj/kscript/data/KObject;Lroj/kscript/Arguments;)Lroj/kscript/data/KBase;");
+        roj.asm.struct.Method call = new roj.asm.struct.Method(AccessFlag.PUBLIC, clz, "invoke", "(Lroj/kscript/data/IObject;Lroj/kscript/Arguments;)Lroj/kscript/data/KType;");
         clz.methods.add(call);
 
-        AttrCode c = call.code = new AttrCode(call);
+        roj.asm.struct.Method copyAs = new roj.asm.struct.Method(0, clz, "copyAs", "(I)Lroj/kscript/func/gen/KFuncJava;");
+        clz.methods.add(copyAs);
+
+        AttrCode c = copyAs.code = new AttrCode(copyAs);
 
         Map<String, Method> map = new MyHashMap<>();
 
@@ -61,41 +64,38 @@ public final class ReflectiveMethodGenerator {
         }
 
         c.computeFrames = true;
-        //c.instructions.add()
 
         Set<Map.Entry<String, Object>> set = Helpers.cast(map.entrySet());
+        for (Map.Entry<String, Object> entry : set) {
+            addMethod((Method) entry.getValue(), copyAs.code);
+        }
+
+        KFuncJava fn = defineClazz(clz);
 
         int i = 0;
         for (Map.Entry<String, Object> entry : set) {
-            construct((Method) entry.getValue(), call.code);
-            entry.setValue(i++);
-        }
-
-        GeneratedFunction function = defineClazz(clz);
-
-        for (Map.Entry<String, Object> entry : set) {
-            entry.setValue(new KFuncGenerated(function, (Integer) entry.getValue()));
+            entry.setValue(fn.copyAs(i++));
         }
 
         return new KObject(Type.OBJECT, null, Helpers.cast(map));
     }
 
-    private static GeneratedFunction defineClazz(Clazz clz) {
-        String newClassName;
+    private static KFuncJava defineClazz(Clazz clz) {
+        String name;
         try {
-            ClassDefiner.INSTANCE.defineClass(newClassName = clz.name.replace('/', '.'), Parser.toByteArray(clz));
-            Class<?> cz = Class.forName(newClassName);
-            return (GeneratedFunction) SunReflection.createClass(cz);
+            ClassDefiner.INSTANCE.defineClass(name = clz.name.replace('/', '.'), Parser.toByteArray(clz));
+            Class<?> cz = Class.forName(name);
+            return (KFuncJava) SunReflection.createClass(cz);
         } catch (InstantiationException | InvocationTargetException | IllegalAccessException | ClassNotFoundException e) {
             throw new RuntimeException("RMG internal error", e);
         }
     }
 
-    private static void construct(Method value, AttrCode code) {
+    private static void addMethod(Method value, AttrCode code) {
 
     }
 
-    public static IGettable createReflectiveJavaFunction(Class<?> clazz) {
+    public static IObject createReflectiveJavaFunction(Class<?> clazz) {
         throw OperationDone.NEVER;
     }
 

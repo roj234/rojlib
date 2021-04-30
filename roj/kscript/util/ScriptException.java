@@ -10,6 +10,11 @@ package roj.kscript.util;
 public class ScriptException extends RuntimeException {
     public static final ScriptException TRY_EXIT = new ScriptException();
 
+    private ScriptException() {
+        super("", null, false, false);
+        this.traces = null;
+    }
+
     static final long serialVersionUID = 1L;
 
     private final StackTraceElement[] traces;
@@ -17,11 +22,6 @@ public class ScriptException extends RuntimeException {
     public ScriptException(String msg, StackTraceElement[] stackTrace, Throwable e) {
         super(msg, e);
         this.setStackTrace(traces = stackTrace);
-    }
-
-    private ScriptException() {
-        super("NMP", null, false, false);
-        this.traces = null;
     }
 
     @Override

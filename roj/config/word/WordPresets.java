@@ -8,8 +8,7 @@ package roj.config.word;
  * @since 2020/10/31 14:17
  */
 public final class WordPresets {
-    public static final short
-            VARIABLE = 1000,    // 变量名
+    public static final short LITERAL = 1000,    // 变量名
             CHARACTER = 1001,    // 字符
             STRING = 1002,    // 字符串
 

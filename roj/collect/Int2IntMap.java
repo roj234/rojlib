@@ -46,7 +46,7 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
             return v;
         }
 
-        protected void setKey(int k) {
+        public void setKey(int k) {
             this.k = k;
         }
 
@@ -141,6 +141,28 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
             return null;
         }
         Integer oldV = entry.v;
+        entry.v = e;
+        return oldV;
+    }
+
+    public int putInt(int key, int e) {
+        if (size > length * loadFactor) {
+            length <<= 1;
+            mask = length - 1;
+            resize();
+        }
+
+        int k2 = key - 1;
+
+        Entry entry = getOrCreateEntry(key, k2);
+        if (entry.k == k2) {
+            entry.k = key;
+            afterPut(entry);
+            size++;
+            entry.v = e;
+            return -1;
+        }
+        int oldV = entry.v;
         entry.v = e;
         return oldV;
     }

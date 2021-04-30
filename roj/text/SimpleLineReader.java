@@ -10,10 +10,10 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: SimpleLineReader.java
  */
 public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<String> {
@@ -56,21 +56,18 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
 
         for (int i = 0; i < keys.length(); i++) {
             char c1 = keys.charAt(i);
-            if (c1 == '\r') { // \r
-                if(i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
-                    i++;
-
-                if (chars.length() > 0 || !clean) {
-                    list.add(chars.toString());
-                    chars.clear();
-                }
-            } else if(c1 == '\n') { // \n
-                if (chars.length() > 0 || !clean) {
-                    list.add(chars.toString());
-                    chars.clear();
-                }
-            } else {
-                chars.append(c1);
+            switch (c1) {
+                case '\r':
+                    if (i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+                        i++;
+                case '\n':
+                    if (chars.length() > 0 || !clean) {
+                        list.add(chars.toString());
+                        chars.clear();
+                    }
+                    break;
+                default:
+                    chars.append(c1);
             }
         }
 

@@ -1,6 +1,6 @@
 package roj.kscript.type;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
 
 import javax.annotation.Nonnull;
@@ -19,16 +19,16 @@ public interface KType {
 
     Type getType();
 
-    default KInteger asKInteger() {
-        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.NUMBER);
+    default KInt asKInt() {
+        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.INT);
     }
 
     default KDouble asKDouble() {
         throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.DOUBLE);
     }
 
-    default int asInteger() {
-        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.NUMBER);
+    default int asInt() {
+        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.INT);
     }
 
     default double asDouble() {
@@ -41,7 +41,7 @@ public interface KType {
     }
 
     @Nonnull
-    default IGettable asObject() {
+    default IObject asObject() {
         throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.OBJECT);
     }
 
@@ -59,7 +59,7 @@ public interface KType {
         throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.FUNCTION);
     }
 
-    default boolean asBoolean() {
+    default boolean asBool() {
         throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.BOOL);
     }
 
@@ -74,10 +74,10 @@ public interface KType {
     boolean canCastTo(Type type);
 
     default boolean equalsTo(KType b) {
-        return b == this;
+        return equals(b);
     }
 
-    default boolean isInteger() {
+    default boolean isInt() {
         return false;
     }
 

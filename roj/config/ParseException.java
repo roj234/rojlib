@@ -1,6 +1,7 @@
 package roj.config;
 
 import roj.math.MathUtils;
+import roj.text.CharList;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -19,44 +20,27 @@ public final class ParseException extends Exception {
      * The zero-based character offset into the string being parsed at which
      * the error was found during parsing.
      */
-    private final int textOff, line, lineOffset;
+    private final int index;
+
+    private int line = -2, linePos;
+    private CharSequence lineContent;
 
     /**
      * Constructs a ParseException with the specified detail message and
      * offset.
      * A detail message is a String that describes this particular exception.
      *
-     * @param s       the detail message
-     * @param textOff the position where the error is found while parsing.
+     * @param reason       the detail message
+     * @param index the position where the error is found while parsing.
      */
-    public ParseException(String s, int textOff, int line, int lineOffset) {
-        super(s);
-        this.textOff = textOff;
-        this.line = line;
-        this.lineOffset = lineOffset;
+    public ParseException(CharSequence all, String reason, int index, Throwable cause) {
+        super(reason, cause, true, DEBUG);
+        this.index = index;
+        this.lineContent = all;
     }
 
-    public ParseException(String s, int textOff, int line, int lineOffset, Throwable cause) {
-        super(s, cause, true, DEBUG);
-        this.textOff = textOff;
-        this.line = line;
-        this.lineOffset = lineOffset;
-    }
-
-    public ParseException(Throwable e) {
-        super(null, e, true, false);
-        this.textOff = this.line = this.lineOffset = -2;
-    }
-
-    public ParseException(int textOff, int line, int lineOffset, String s, ParseException e) {
-        super(s, e, true, false);
-        this.textOff = textOff;
-        this.line = line;
-        this.lineOffset = lineOffset;
-    }
-
-    public int getTextOff() {
-        return textOff;
+    public int getIndex() {
+        return index;
     }
 
     public int getLine() {
@@ -64,40 +48,21 @@ public final class ParseException extends Exception {
     }
 
     public int getLineOffset() {
-        return lineOffset;
-    }
-
-    @Override
-    public void printStackTrace() {
-        //if ((getCause() instanceof ParseException)) {
-            Exception e = new Exception(toString());
-            e.setStackTrace(getStackTrace());
-            e.printStackTrace();
-        //} else {
-        //    super.printStackTrace();
-        //}
+        return linePos;
     }
 
     @Override
     public void printStackTrace(PrintStream s) {
-        //if ((getCause() instanceof ParseException)) {
-            Exception e = new Exception(toString());
-            e.setStackTrace(getStackTrace());
-            e.printStackTrace(s);
-        //} else {
-        //    super.printStackTrace(s);
-        //}
+        Exception e = new Exception(toString());
+        e.setStackTrace(getStackTrace());
+        e.printStackTrace(s);
     }
 
     @Override
     public void printStackTrace(PrintWriter s) {
-        //if ((getCause() instanceof ParseException)) {
-            Exception e = new Exception(toString());
-            e.setStackTrace(getStackTrace());
-            e.printStackTrace(s);
-        //} else {
-        //    super.printStackTrace(s);
-        //}
+        Exception e = new Exception(toString());
+        e.setStackTrace(getStackTrace());
+        e.printStackTrace(s);
     }
 
     @Override
@@ -105,29 +70,77 @@ public final class ParseException extends Exception {
         return !(getCause() instanceof ParseException) ? super.getMessage() : getCause().getMessage();
     }
 
-    @Override
-    public String getLocalizedMessage() {
-        return !(getCause() instanceof ParseException) ? super.getLocalizedMessage() : getCause().getLocalizedMessage();
+    public String getLineContent() {
+        return lineContent.toString();
     }
 
-    public String getLineContent() {
-        return getCause() != null ? super.getMessage() : null;
+    private void lineParser() {
+        if(this.line != -2) return;
+
+        CharList chars = new CharList(20);
+
+        CharSequence keys = this.lineContent;
+
+        int target = index;
+        if(target > keys.length() || target < 0) {
+            this.line = 0;
+            this.linePos = 8;
+            this.lineContent = "<ERROR: INVALID OFFSET>";
+            return;
+        }
+
+        int line = 1, linePos = 0;
+        int i = 0;
+
+        for (; i < target; i++) {
+            char c1 = keys.charAt(i);
+            switch (c1) {
+                case '\r':
+                    if(i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+                        i++;
+                case '\n':
+                    linePos = 0;
+                    line++;
+                    chars.clear();
+                    break;
+                default:
+                    linePos++;
+                    chars.append(c1);
+            }
+        }
+
+        o:
+        for (; i < keys.length(); i++) {
+            char c1 = keys.charAt(i);
+            switch (c1) {
+                case '\r':
+                case '\n':
+                    break o; // till this line end
+                default:
+                    chars.append(c1);
+            }
+        }
+
+        this.line = line;
+        this.linePos = linePos - 1;
+        this.lineContent = chars.toString();
     }
 
     @Override
     public String toString() {
-        if (!(getCause() instanceof ParseException)) {
-            String message = getMessage();
-            return message != null ? message : super.toString();
-        }
+        String msg = getMessage() == null ? (getCause() == null ? "无消息" : getCause().toString()) : getMessage();
+
+        lineParser();
 
         String line = getLineContent();
+
         StringBuilder k = new StringBuilder().append("解析错误:\r\n  Line ").append(this.line).append(": ");
+
         if (line.length() > 512) {
-            k.append("偏移量 ").append(lineOffset);
+            k.append("偏移量 ").append(this.linePos);
         } else {
             k.append(line).append("\r\n");
-            int off = lineOffset + 9 + MathUtils.digitCount(this.line);
+            int off = this.linePos + 9 + MathUtils.digitCount(this.line);
             for (int i = 0; i < off; i++) {
                 k.append('-');
             }
@@ -139,6 +152,6 @@ public final class ParseException extends Exception {
             k.append('^');
         }
 
-        return k.append("\r\n原因: ").append(getCause().getLocalizedMessage()).append("\r\n").toString();
+        return k.append("\r\n原因: ").append(msg).append("\r\n").toString();
     }
 }

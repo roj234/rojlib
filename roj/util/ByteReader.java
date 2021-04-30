@@ -458,7 +458,7 @@ public final class ByteReader implements DataInput {
         if(k > 65535)
             out.appendCodePoint(k);
         else
-            out.append(k);
+            out.append((char) k);
     }
 
     private CharList cc;

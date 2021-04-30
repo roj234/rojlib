@@ -1,13 +1,13 @@
 package roj.kscript.parser.expr;
 
 import roj.concurrent.OperationDone;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
 import roj.kscript.parser.Marks;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KDouble;
-import roj.kscript.type.KInteger;
+import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
 import roj.text.TextUtil;
 
@@ -52,38 +52,38 @@ public final class UnaryPrefix implements Expression {
     }
 
     @Override
-    public void write(ASTree tree) {
+    public void write(ASTree tree, boolean noRet) {
         switch (operator) {
             case Symbol.logic_not:
-                right.write(tree.Section(Marks.START));
+                right.write(tree.Mark(Marks.START), false);
                 tree.Std(ASTCode.NOT)
-                        .Section(Marks.NEXT);
+                        .Mark(Marks.NEXT);
                 break;
             case Symbol.rev:
-                tree.Section(Marks.START);
-                right.write(tree);
+                tree.Mark(Marks.START);
+                right.write(tree, false);
                 tree.Std(ASTCode.REVERSE)
-                        .Section(Marks.NEXT);
+                        .Mark(Marks.NEXT);
                 break;
             case Symbol.inc:
             case Symbol.dec:
                 if (right.getClass() == Variable.class) {
                     Variable v = (Variable) right;
                     right.write(tree.Inc(v.name, operator == Symbol.inc ? 1 : -1)
-                            .Section(Marks.START));
+                            .Mark(Marks.START), false);
                 } else {
                     Field field = (Field) right;
                     field.writeLoad(tree);
                     tree
                             .Std(ASTCode.DUP2_2)
                             .Std(ASTCode.GET_OBJECT)
-                            .Load(KInteger.valueOf(operator == Symbol.inc ? 1 : -1))
+                            .Load(KInt.valueOf(operator == Symbol.inc ? 1 : -1))
                             .Std(ASTCode.ADD)
-                            .Std(ASTCode.PUT_OBJECT).Section(Marks.START);
-                    field.write(tree);
+                            .Std(ASTCode.PUT_OBJECT).Mark(Marks.START);
+                    field.write(tree, false);
 
                 }
-                tree.Section(Marks.NEXT);
+                tree.Mark(Marks.NEXT);
                 break;
             case Symbol.sub:
             case Symbol.NEGATIVE:
@@ -91,7 +91,7 @@ public final class UnaryPrefix implements Expression {
                     Variable v = (Variable) right;
                     v.writeLoad(tree);
                     tree.Std(ASTCode.NEGATIVE).Set(v.name);
-                    right.write(tree.Section(Marks.START));
+                    right.write(tree.Mark(Marks.START), false);
                 } else {
                     Field field = (Field) right;
                     field.writeLoad(tree);
@@ -99,22 +99,22 @@ public final class UnaryPrefix implements Expression {
                             .Std(ASTCode.DUP2_2)
                             .Std(ASTCode.GET_OBJECT)
                             .Std(ASTCode.NEGATIVE)
-                            .Std(ASTCode.PUT_OBJECT).Section(Marks.START);
-                    field.write(tree);
+                            .Std(ASTCode.PUT_OBJECT).Mark(Marks.START);
+                    field.write(tree, false);
 
                 }
-                tree.Section(Marks.NEXT);
+                tree.Mark(Marks.NEXT);
                 break;
         }
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
         if(operator == Symbol.sub || operator == Symbol.NEGATIVE) {
             KType base = right.compute(parameters, thisContext);
 
-            if (base.isInteger()) {
-                KInteger i = base.asKInteger();
+            if (base.isInt()) {
+                KInt i = base.asKInt();
                 i.value = -i.value;
             } else {
                 KDouble i = base.asKDouble();
@@ -134,8 +134,8 @@ public final class UnaryPrefix implements Expression {
             base = field.parent.compute(parameters, thisContext).asObject().get(field.name);
         }
 
-        if (base.isInteger()) {
-            KInteger i = base.asKInteger();
+        if (base.isInt()) {
+            KInt i = base.asKInt();
             i.value += val;
         } else {
             KDouble i = base.asKDouble();
@@ -176,15 +176,15 @@ public final class UnaryPrefix implements Expression {
             case 0:
                 switch (operator) {
                     case Symbol.logic_not:
-                        return Constant.valueOf(!cst.asBoolean());
+                        return Constant.valueOf(!cst.asBool());
                     case Symbol.rev: {
-                        KInteger i = cst.val().asKInteger();
-                        i.setValue(~i.getValue());
+                        KInt i = cst.val().asKInt();
+                        i.value = ~i.value;
                         return right;
                     }
                     case Symbol.sub: {
-                        KInteger i = cst.val().asKInteger();
-                        i.setValue(-i.getValue());
+                        KInt i = cst.val().asKInt();
+                        i.value = -i.value;
                         return right;
                     }
                 }
@@ -193,19 +193,19 @@ public final class UnaryPrefix implements Expression {
             case 2:
                 switch (operator) {
                     case Symbol.logic_not:
-                        return Constant.valueOf(!cst.asBoolean());
+                        return Constant.valueOf(!cst.asBool());
                     case Symbol.rev:
-                        return Constant.valueOf(~cst.asInteger());
+                        return Constant.valueOf(~cst.asInt());
                     case Symbol.sub:
                         if (right.type() == 1) {
                             return Constant.valueOf(-cst.asDouble());
                         }
                         int isDouble = TextUtil.isNumber(cst.asString());
-                        return new Constant(isDouble == 1 ? KDouble.valueOf(-cst.asDouble()) : KInteger.valueOf(-cst.asInteger()));
+                        return new Constant(isDouble == 1 ? KDouble.valueOf(-cst.asDouble()) : KInt.valueOf(-cst.asInt()));
                 }
                 break;
             case 3:
-                boolean operand = cst.asBoolean();
+                boolean operand = cst.asBool();
                 switch (operator) {
                     case Symbol.logic_not:
                         return Constant.valueOf(!operand);

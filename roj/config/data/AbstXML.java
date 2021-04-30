@@ -24,7 +24,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         protected Word formAlphabetClip(CharList temp) {
             String s = temp.toString();
 
-            short id = WordPresets.VARIABLE;
+            short id = WordPresets.LITERAL;
             if ("child".equals(s)) {
                 id = 598;
             }

@@ -1,6 +1,6 @@
 package roj.kscript.util;
 
-import roj.kscript.ast.node.Node;
+import roj.kscript.ast.Node;
 import roj.kscript.type.KType;
 
 /**
@@ -11,19 +11,19 @@ import roj.kscript.type.KType;
  * @since 2020/8/10 17:53
  */
 public final class Variable {
-    public Variable(String name, KType defValue, Node start, Node end) {
+    public Variable(String name, KType def, Node start, Node end) {
         this.name = name;
-        this.defValue = defValue;
+        this.def = def;
         this.start = start;
         this.end = end;
     }
 
     public String name;
-    public KType defValue;
+    public KType def;
     public Node start, end;
 
     @Override
     public String toString() {
-        return "Var:" + name + "=" + defValue + ", s=" + start + ", e=" + end + '}';
+        return "Var:" + name + "=" + def + ", s=" + start + ", e=" + end + '}';
     }
 }

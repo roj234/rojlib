@@ -15,7 +15,7 @@ import roj.text.TextUtil;
  * 它是JavaScript的子集
  * 可以直接复制到JavaScript中
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: JSONParser.java
  */
 public final class JSONParser {
@@ -52,22 +52,23 @@ public final class JSONParser {
 
             @Override
             protected Word formClip(short id, CharSequence string) {
-                return new Word(id, line, lineOffset, set.intern(string.toString()));
+                if(cached == null) {
+                    return new Word().reset(id, index, set.intern(string.toString()));
+                }
+                Word w = cached.reset(id, index, set.intern(string.toString()));
+                cached = null;
+                return w;
             }
 
         }.init(string), 0);
     }
 
     public static ConfEntry parse(AbstLexer wr, int flag) throws ParseException {
-        try {
-            ConfEntry ce = jsonRead(wr, flag & 253, true);
-            if (wr.hasNext()) {
-                throw wr.err("期待 /EOF");
-            }
-            return ce;
-        } catch (ParseException e) {
-            throw wr.getExceptionDetails(e);
+        ConfEntry ce = jsonRead(wr, flag & 253, true);
+        if (wr.hasNext()) {
+            throw wr.err("期待 /EOF");
         }
+        return ce;
     }
 
     /**
@@ -142,12 +143,15 @@ public final class JSONParser {
 
                 case WordPresets.STRING:
                     break;
-                case WordPresets.VARIABLE:
+                case WordPresets.LITERAL:
                     if((flag & 128) != 0)
                         break;
                 default:
                     unexpected(wr, name.val(), "字符串");
             }
+
+            if((flag & 64) != 0 && map.containsKey(name.val()))
+                throw wr.err("重复的key: " + name.val());
 
             hasMore = false;
 
@@ -160,8 +164,6 @@ public final class JSONParser {
             boolean end = wr.nextWord().type() == right_l_bracket;
 
             if (result != null) {
-                if((flag & 64) != 0 && map.containsKey(name.val()))
-                    throw wr.err("重复的key: " + name.val());
                 map.put(name.val(), result);
             } else {
                 unexpected(wr, "empty_statement");
@@ -292,7 +294,7 @@ public final class JSONParser {
         protected Word formAlphabetClip(CharList temp) {
             String s = temp.toString();
 
-            short id = WordPresets.VARIABLE;
+            short id = WordPresets.LITERAL;
             switch (s) {
                 case "true":
                     id = TRUE;

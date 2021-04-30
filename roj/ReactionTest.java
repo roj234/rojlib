@@ -8,11 +8,10 @@ import roj.util.MyRandom;
 import java.util.*;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
- * Filename: null.java
+ * @author Roj234
  */
 public class ReactionTest {
     private abstract static class C implements Comparable<C> {

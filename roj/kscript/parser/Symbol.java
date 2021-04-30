@@ -1,5 +1,6 @@
 package roj.kscript.parser;
 
+import roj.collect.Int2IntMap;
 import roj.collect.TrieTree;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
@@ -18,7 +19,7 @@ public final class Symbol {
             "{", "}",
             "[", "]",
             "(", ")",
-            "=>", ".",
+            "=>", ".", // 如果你想让js像java...  ->
             "++", "--",
             "!", "&&", "||",
             "<", ">", ">=", "<=",
@@ -29,8 +30,7 @@ public final class Symbol {
             "?", ":", ",", ";",
             "=", "+=", "-=", "*=", "/=", "%=",
             "&=", "^=", "|=", "<<=", ">>=", ">>>=",
-            "@", // 按照设计，越靠后的二元运算符优先级越高 add, mul, pow ...
-            "$<", ">$",
+            "$<", ">$", // 预处理器 (such as minecraft:xxx)
             "-" // 这东西不存在于lexer中
     };
 
@@ -49,22 +49,55 @@ public final class Symbol {
             ask = 534, colon = 535, comma = 536, semicolon = 537,
             assign = 538, add_assign = 539, sub_assign = 540, mul_assign = 541, div_assign = 542, mod_assign = 543,
             and_assign = 544, xor_assign = 545, or_assign = 546, lsh_assign = 547, rsh_assign = 548, rsh_unsigned_assign = 549,
-            at = 550,
-            preprocess_s = 551, preprocess_e = 552;
+            preprocess_s = 550, preprocess_e = 551;
 
-    public static final short NEGATIVE = 553;
+    public static final short NEGATIVE = 552;
 
     private static final TrieTree<Short> indexOf = new TrieTree<>();
+    private static final Int2IntMap priorities = new Int2IntMap();
 
     private Symbol() {
     }
 
     static {
         int i = 500;
-        for (int j = 0; j < operators.length - 1; j++) {
-            String operator = operators[j];
+        final String[] operators1 = operators;
+        for (int j = 0; j < operators1.length - 1; j++) {
+            String operator = operators1[j];
             indexOf.put(operator, (short) ++i);
         }
+
+        final Int2IntMap p1 = priorities;
+
+        // 操作符优先级表
+
+        p1.putInt(logic_and, 101);
+        p1.putInt(logic_or, 101);
+
+        p1.putInt(and, 100);
+        p1.putInt(or,  100);
+        p1.putInt(xor, 100);
+
+        p1.putInt(lsh, 99);
+        p1.putInt(rsh, 99);
+        p1.putInt(rsh_unsigned, 99);
+
+        p1.putInt(pow, 98);
+
+        p1.putInt(mul, 97);
+        p1.putInt(divide, 97);
+        p1.putInt(mod, 97);
+
+        p1.putInt(add, 96);
+        p1.putInt(sub, 96);
+
+        p1.putInt(lss, 95);
+        p1.putInt(gtr, 95);
+        p1.putInt(geq, 95);
+        p1.putInt(leq, 95);
+        p1.putInt(feq, 95);
+        p1.putInt(equ, 95);
+        p1.putInt(neq, 95);
     }
 
     public static short indexOf(CharSequence s) {
@@ -76,7 +109,10 @@ public final class Symbol {
     }
 
     public static int priorityFor(Word word) {
-        return word.type() - 500;
+        int prio = priorities.get(word.type());
+        if(prio == -1)
+            throw new IllegalArgumentException(word.val() + " is not a binary operator");
+        return prio;
     }
 
     public static int argumentCount(short type) {

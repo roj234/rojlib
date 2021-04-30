@@ -2,7 +2,7 @@ package roj.kscript.parser.expr;
 
 import roj.kscript.Arguments;
 import roj.kscript.api.API;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.api.NativeMethod;
 import roj.kscript.ast.ASTree;
 import roj.kscript.func.KFunction;
@@ -21,13 +21,12 @@ import java.util.Map;
  * @since 2020/10/13 22:17
  */
 public final class Method implements Expression {
-    final Expression func;
+    Expression func;
     final List<Expression> args;
     final boolean isNew;
 
     public Method(Expression line, List<Expression> args, boolean isNew) {
-        this.func = line.compress();
-        args.replaceAll(Expression::compress);
+        this.func = line;
         this.args = args;
         this.isNew = isNew;
     }
@@ -43,20 +42,29 @@ public final class Method implements Expression {
     }
 
     @Override
-    public void write(ASTree tree) {
-        this.func.write(tree);
+    public void write(ASTree tree, boolean noRet) {
+        this.func.write(tree, false);
         for (Expression expr : args) {
-            expr.write(tree);
+            expr.write(tree, false);
         }
         if (isNew) {
-            tree.New(args.size());
-        } else
-            tree.Invoke(args.size());
+            tree.New(args.size(), noRet);
+        } else {
+            tree.Invoke(args.size(), noRet);
+        }
+
     }
 
     @Nonnull
     @Override
     public Expression compress() {
+        func = func.compress();
+
+        final List<Expression> args = this.args;
+        for (int i = 0; i < args.size(); i++) {
+            args.set(i, args.get(i).compress());
+        }
+
         if (!API.PRECOMPILE_NATIVE)
             return this;
 
@@ -103,7 +111,7 @@ public final class Method implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
         List<KType> exprs = new ArrayList<>(args.size());
         for (int i = 0; i < args.size(); i++) {
             exprs.add(args.get(i).compute(parameters, thisContext));

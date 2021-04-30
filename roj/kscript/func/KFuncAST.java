@@ -1,19 +1,19 @@
 package roj.kscript.func;
 
-import roj.kscript.Arguments;
-import roj.kscript.api.IGettable;
+import roj.collect.ReuseStack;
+import roj.kscript.api.IArguments;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
 import roj.kscript.ast.Frame;
-import roj.kscript.ast.api.TryCatchInfo;
-import roj.kscript.ast.node.Node;
-import roj.kscript.type.Context;
+import roj.kscript.ast.Node;
+import roj.kscript.ast.TryNode;
 import roj.kscript.type.KError;
-import roj.kscript.type.KObject;
 import roj.kscript.type.KType;
-import roj.kscript.util.ExceptionInfo;
+import roj.kscript.util.ExcpInfo;
 import roj.kscript.util.ScriptException;
 
 import javax.annotation.Nonnull;
+import java.util.ArrayList;
 
 /**
  * This file is a part of MI <br>
@@ -23,75 +23,64 @@ import javax.annotation.Nonnull;
  * @since 2020/9/27 12:28
  */
 public final class KFuncAST extends KFunction {
-    public KFuncAST(KFuncAST ast) {
-        this((KObject) ast.getPrototype(), ast.frame0.ctx.copy(), ast.begin, ast.clazz);
-    }
-
-    public KFuncAST(KObject parent, Context ctx, Node begin, String clazz) {
-        super(parent);
+    public KFuncAST(Node begin, Frame frame) {
         this.begin = begin;
-        this.clazz = clazz;
-        this.frame0 = new Frame(this, ctx);
+        this.frame0 = frame.init(this);
     }
 
-    private final String clazz;
-    private final Node begin;
-    private final Frame frame0;
+    public final Node begin;
+    public final Frame frame0;
 
     @Override
-    public KType invoke(@Nonnull IGettable $this, Arguments param) {
-        Frame frame;
-        if(frame0.getArgs() != null) {
-            frame = new Frame(this, frame0.ctx.copy());
+    public KType invoke(@Nonnull IObject $this, IArguments param) {
+        Frame f;
+        if(frame0.working()) {
+            f = frame0.duplicate();
         } else {
-            frame = this.frame0;
+            f = this.frame0;
         }
 
-        frame.reset($this, param);
+        f.reset($this, param);
 
-        Node next = begin;
+        Node p = begin;
 
-        TryCatchInfo info = null;
+        TryNode info = null;
         ScriptException se = null;
+        /**
+         * 0 : none, 1: caught, 2: finally_throw, 3: finally_eat
+         */
         int stg = 0;
 
+        ReuseStack<ExcpInfo> excs = f.exInfo;
         while (true) {
-            if (next == null) {
+            if (p == null) {
                 if (info != null) {
                     switch (stg) {
                         case 1: // caught
-                            next = info.getFin();
-                            if (next == null) {
-                                next = info.getEnd();
-                                if(frame.exceptionStack.isEmpty()) {
-                                    info = null; // out of block
-                                    se = null;
-                                    stg = 0;
-                                } else {
-                                    ExceptionInfo stack = frame.exceptionStack.pop();
-                                    info = stack.info;
-                                    se = stack.exception;
-                                    stg = stack.stage;
-                                }
+                            p = info.fin();
+                            if (p == null) {
+                                p = info.getEnd();
+
+                                /** if stack is empty, then return {@link ExcpInfo#NONE} **/
+                                ExcpInfo stack = excs.pop();
+                                info = stack.info;
+                                se = stack.e;
+                                stg = stack.stage;
                             } else {
                                 stg = 3;
                             }
                             break;
                         case 2: // finally - nocatch
-                            frame.cleanup();
+                            f.cleanup();
                             throw se;
                         case 3: // finally - caught
-                            next = info.getEnd(); // out of block
-                            if(frame.exceptionStack.isEmpty()) {
-                                info = null;
-                                se = null;
-                                stg = 0;
-                            } else {
-                                ExceptionInfo stack = frame.exceptionStack.pop();
-                                info = stack.info;
-                                se = stack.exception;
-                                stg = stack.stage;
-                            }
+                            p = info.getEnd(); // out of block
+
+                            /** if stack is empty, then return {@link ExcpInfo#NONE} **/
+                            ExcpInfo stack = excs.pop();
+                            info = stack.info;
+                            se = stack.e;
+                            stg = stack.stage;
                             break;
                     }
                 } else {
@@ -99,47 +88,58 @@ public final class KFuncAST extends KFunction {
                 }
             }
             try {
-                next = next.execute(frame);
+                p = p.execute(f);
             } catch (Throwable e) {
-                se = e instanceof ScriptException ? (ScriptException) e : new ScriptException("Node#" + nodeId(begin, next) + ": " + next, frame.trace(this), e);
+                if(e instanceof ScriptException) {
+                    se = (ScriptException) e;
+                } else {
+                    ArrayList<StackTraceElement> trace = new ArrayList<>();
+                    f.trace(begin, trace);
+                    se = new ScriptException("Node#" + nodeId(begin, p) + ": " + p, trace.toArray(new StackTraceElement[trace.size()]), e);
+                }
+
+                ReuseStack<TryNode> tc = f.tryCatch;
 
                 if (e == ScriptException.TRY_EXIT) {
-                    next = (info = frame.tryCatch.pop()).getFin();
+                    // try block run normal
+                    p = (info = tc.pop()).fin();
                     stg = 3;
-                    System.out.println("nz-try_exit " + frame.tryCatch);
-                    continue;
-                }
-
-                if (frame.tryCatch.isEmpty()) {
-                    frame.cleanup();
+                } else if (tc.isEmpty()) {
+                    // an uncaught exception
+                    f.cleanup();
                     throw se;
-                }
-                frame.stack.clear();
+                } else {
+                    // try block caught exception
+                    f.stackClear();
 
-                if(info != null) {
-                    frame.exceptionStack.push(new ExceptionInfo(stg, info, se));
-                }
-                info = frame.tryCatch.pop();
+                    if (info != null) {
+                        // save last exception
+                        excs.push(new ExcpInfo(stg, info, se));
+                    }
+                    // load current try block descriptor
+                    info = tc.pop();
 
-                Node node = info.getHandler();
-                if (node != null) { // catch
-                    next = node;
+                    // 'caught' node
+                    Node node = info.getHandler();
+                    if (node != null) {
+                        p = node;
 
-                    frame.stack.push(new KError(se));
+                        f.push(new KError(se));
 
-                    stg = 1;
-                    continue;
-                }
-
-                node = info.getFin();
-                if (node != null) { // finally
-                    next = node;
-                    stg = 2;
+                        stg = 1;
+                    } else {
+                        // 'finally' node
+                        node = info.fin();
+                        if (node != null) { // finally
+                            p = node;
+                            stg = 2;
+                        }
+                    }
                 }
             }
         }
 
-        return frame.returnVal();
+        return f.returnVal();
     }
 
     private static int nodeId(Node begin, Node target) {
@@ -149,17 +149,16 @@ public final class KFuncAST extends KFunction {
                 return i;
             }
             i++;
-        } while ((begin = begin.next()) != null);
+        } while ((begin = begin.next) != null);
         return -1;
-    }
-
-    @Override
-    public String getClassName() {
-        return clazz;
     }
 
     @Override
     public StringBuilder toString0(StringBuilder sb, int depth) {
         return ASTree.toString(begin, sb.append("function ").append(getName()).append("() {\n")).append('}');
+    }
+
+    public KFuncAST export(Frame frame) {
+        return (KFuncAST) new KFuncAST(begin, this.frame0.staticize(frame)).set(source, name, clazz);
     }
 }

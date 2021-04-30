@@ -1,93 +1,416 @@
 package roj.kscript.ast;
 
 import roj.collect.ReuseStack;
-import roj.kscript.Arguments;
-import roj.kscript.api.IGettable;
-import roj.kscript.ast.api.TryCatchInfo;
+import roj.kscript.api.IArguments;
+import roj.kscript.api.IObject;
 import roj.kscript.func.KFuncAST;
-import roj.kscript.func.KFunction;
-import roj.kscript.type.Context;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
-import roj.kscript.util.ExceptionInfo;
-import roj.kscript.util.Stack;
+import roj.kscript.util.ContextPrimer;
+import roj.kscript.util.ExcpInfo;
+import roj.kscript.util.GlobalVarMap;
+import roj.kscript.util.LineInfo;
+import roj.kscript.util.opm.KOEntry;
+
+import javax.annotation.Nonnull;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * This file is a part of MI <br>
  * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
  *
+ * 运行时栈帧 StackFrame <BR>
+ *     保存运行时所有数据 (理论上支持多线程了)
+ *
  * @author Roj233
  * @since 2020/9/27 12:41
  */
-public final class Frame {
-    public KType result;
+public final class Frame extends Context {
+    public Frame(ArrayList<LineInfo> lineIndexes, ContextPrimer ctx) {
+        super();
+        this.lineIndexes = lineIndexes;
+        lineIndexes.trimToSize();
 
-    public final ReuseStack<ExceptionInfo> exceptionStack = new ReuseStack<>();
-    public final ReuseStack<TryCatchInfo> tryCatch = new ReuseStack<>();
-    public final Context ctx;
-    public final KFuncAST self;
+        // todo check if Frame can be initialized before ASTree call
+        ctx.finish(this);
 
-    private IGettable $this;
-    private Arguments args;
-    private int line;
-
-    public final Stack stack = new Stack();
-
-    public Frame(KFuncAST ast, Context ctx) {
-        this.ctx = ctx;
-        this.self = ast;
+        this.usedArgs = ctx.usedArgs;
+        usedArgs.trimToSize();
+        GlobalVarMap globals = (GlobalVarMap) ctx.globals;
+        globals.applyDefaults();
+        this.vars = globals;
     }
 
-    public Frame reset(IGettable $this, Arguments list) {
-        this.ctx.enterRegion(0);
+    private Frame() {}
+
+    // region 函数执行周期
+    /**
+     * 运行前初始化
+     */
+    public void reset(IObject $this, IArguments args) {
         this.$this = $this;
-        this.args = list;
-        this.line = -1;
-        return this;
+        this.args = args;
+
+        // 初始化参数
+        final ArrayList<String> args1 = this.usedArgs;
+        for (int i = 0; i < args1.size(); i++) {
+            String k = args1.get(i);
+            if (k != null) {
+                vars.put(k, args.get(i));
+            }
+        }
+        // GVM已经reset
     }
 
-    public KType returnVal() {
-        KType result = this.result;
-        cleanup();
-        return result == null ? KUndefined.UNDEFINED : result;
-    }
-
+    /**
+     * 运行后还原状态
+     */
     public void cleanup() {
-        stack.clear();
+        tail = head;
+        stackSize = 0;
+
         tryCatch.clear();
-        exceptionStack.clear();
-        ctx.reset();
+        exInfo.clear();
+
+        ((GlobalVarMap)vars).reset();
+
         $this = null;
         args = null;
+
         result = null;
     }
 
-    public IGettable getThis() {
-        return $this;
+    /**
+     * 获取返回值
+     */
+    public KType returnVal() {
+        KType result = this.result;
+        cleanup();
+        if(result == null)
+            return KUndefined.UNDEFINED;
+        return result instanceof KFuncAST ? ((KFuncAST) result).export(this) : result;
     }
 
-    public Arguments getArgs() {
-        return args;
+    /**
+     * 暂存返回值，若函数运行到此结束，则{@link Node#execute(Frame)}会返回null
+     */
+    // rw
+    public KType result;
+
+    // endregion
+    // region 栈
+
+    static final V head = new V(null);
+    static {
+        head.prev = head;
     }
 
-    public StackTraceElement[] trace(KFunction func) {
-        final StackTraceElement self = new StackTraceElement(func.getClassName(), func.getName(), func.getSource(), func.getSource() == null ? -1 : line);
-        if (args == null)
-            return new StackTraceElement[] {
-                    self
-            };
+    // rw
+    V tail = head, tmp;
+    // rw
+    int stackSize, tmpC;
 
-        StackTraceElement[] arr = args.trace();
-        arr[0] = self;
-
-        return arr;
+    @Nonnull
+    public KType last() {
+        ce();
+        return tail.v;
     }
 
-    public void setLine(int line) {
-        this.line = line;
+    @Nonnull
+    public KType pop() {
+        ce();
+        KType v = tail.v;
+
+        final V t = this.tail;
+        tail = t.prev;
+
+        if (tmpC < 64) { // what is best?
+            V d = tmp;
+            if (d != null)
+                d.prev = t;
+            tmp = t;
+            t.prev = null;
+            t.v = null;
+            tmpC++;
+        }
+
+        stackSize--;
+        return v;
     }
 
-    public int getLine() {
-        return line;
+    private void ce() {
+        if (tail == head) throw new IllegalStateException("Stack underflow");
+    }
+
+    public void setLast(@Nonnull KType base) {
+        ce();
+        tail.v = base;
+    }
+
+    public void push(@Nonnull KType base) {
+        V entry;
+        if (tmp != null) {
+            tmpC--;
+            entry = tmp;
+            entry.v = base;
+            tmp = tmp.prev;
+        } else {
+            entry = new V(base);
+        }
+
+        entry.prev = tail;
+        tail = entry;
+
+        if (++stackSize > 2048)
+            throw new IllegalStateException("Stack overflow(2048): " + this);
+    }
+
+    public void stackClear() {
+        tail = head;
+        stackSize = 0;
+    }
+
+    @Nonnull
+    public KType last(int i) {
+        if (i >= stackSize)
+            throw new ArrayIndexOutOfBoundsException(i);
+
+        V entry = tail;
+        while (i-- > 0) {
+            entry = entry.prev;
+        }
+        return entry.v;
+    }
+
+    public Frame staticize(Frame theOne) {
+        Frame fr = duplicate();
+        Context pr = parent;
+        ArrayList<Context> chain = new ArrayList<>();
+        chain.add(null);
+
+        while (pr != null) {
+            pr = pr.parent;
+            chain.add(pr);
+            if(theOne == pr) { // theMostUpper
+                chain.set(0, new FrameStatic(pr.parent, pr));
+                for (int i = 1; i < chain.size(); i++) {
+                    chain.set(i, new FrameStatic(chain.get(i - 1), chain.get(i)));
+                }
+                fr.parent = chain.get(chain.size() - 1);
+                return fr;
+            }
+        }
+
+        throw new IllegalArgumentException("Frame parent not found " + theOne);
+    }
+
+    public boolean working() {
+        return args != null;
+    }
+
+    public void _parent(Context frame) {
+        if(this.parent != null)
+            throw new IllegalStateException();
+        this.parent = frame;
+    }
+
+    private static final class V {
+        KType v;
+        V prev;
+
+        V(KType val) {
+            this.v = val;
+        }
+    }
+
+    // endregion
+    // region 异常处理
+
+    public final ReuseStack<ExcpInfo> exInfo = new ReuseStack<ExcpInfo>() {
+        @Nonnull
+        @Override
+        public ExcpInfo pop() {
+            if(tail == head)
+                return ExcpInfo.NONE;
+
+            ExcpInfo v = tail.value;
+            tail = tail.prev;
+            size--;
+            return v;
+        }
+    }; // try-catch exception temp
+    public final ReuseStack<TryNode> tryCatch = new ReuseStack<>();        // try-catch section
+
+    public void trace(Node node, List<StackTraceElement> collector) {
+        int line = -1;
+        if(owner.getSource() != null && !lineIndexes.isEmpty()) {
+            Node st = owner.begin;
+
+            int lId = 0;
+            LineInfo info = lineIndexes.get(0);
+
+            while (st != null) {
+                if(st == info.node) {
+                    line = info.line;
+
+                    if(lId++ > lineIndexes.size()) {
+                        info = lineIndexes.get(lId);
+                    } else {
+                        int line1 = info.line;
+                        info = new LineInfo(); // node => null
+                        info.line = line1 + 1; // todo check
+                    }
+                }
+
+                if(st == node)
+                    break;
+
+                st = st.next;
+            }
+
+            if(st == null)
+                line = -1;
+        }
+
+        collector.add(new StackTraceElement(owner.getClassName(), owner.getName(), owner.getSource(), line));
+        args.trace(collector);
+    }
+
+    // endregion
+    // region 异常处理.行号计算
+
+    private ArrayList<LineInfo> lineIndexes;
+
+    // endregion
+    // region 内部变量
+
+    // owner
+    KFuncAST owner;
+
+    public Frame init(KFuncAST owner) {
+        this.owner = owner;
+        return this;
+    }
+
+    public KFuncAST owner() {
+        return owner;
+    }
+
+    // this
+    IObject $this;
+
+    // arguments
+    IArguments args;
+
+    // endregion
+    // region 变量作用域
+
+    // 使用的参数 (ordered)
+    ArrayList<String> usedArgs;
+
+    // 默认全局变量
+    // GlobalVarMap defGlobals;
+
+    public void applyDiff(VInfo diff) {
+        while (diff != null) {
+            // todo
+            vars.put(diff.id, diff.def); // null as remove => not create Entry
+            diff = diff.next;
+        }
+    }
+
+    Frame findProvider(String key) {
+        return vars.containsKey(key) ? this : (parent instanceof Frame) ? ((Frame) parent).findProvider(key) : null;
+    }
+
+    // 修改锁定后的上下文 (多层闭包节省时间)
+    Context[] parents;
+
+    /**
+     * 下级只能修改上级通过var导出的函数
+     */
+    KType getEx(String keys, KType def) {
+        if(parents == null) // 退化了, wwwww
+            return super.getEx(keys, def);
+
+        Context self = this;
+        int i = parents.length;
+        while (self != null) {
+            KType base = vars.get(keys);
+            if (base != null) {
+                return base;
+            }
+
+            if(i == 0)
+                break;
+            self = parents[--i];
+        }
+        return def;
+    }
+
+    /**
+     * 下级只能修改上级通过var导出的函数
+     */
+    @Override
+    void putEx(String id, KType val) {
+        if(parents == null) {
+            super.putEx(id, val);
+            return;
+        }
+
+        Context self = this;
+        int i = parents.length;
+        while (self != null) {
+            KOEntry entry = (KOEntry) self.vars.getEntry(id);
+            if (entry != null) {
+                if((entry.flags & 1) != 0)
+                    throw new IllegalStateException("Write to a constant");
+                entry.v = val;
+                return;
+            }
+
+            if(i == 0)
+                break;
+            self = parents[--i];
+        }
+
+        throw new IllegalArgumentException("Undefined " + id);
+    }
+
+    // endregion
+    /**
+     * 防止与{@link IObject#copy()}重名
+     */
+    public final Frame duplicate() {
+        Frame copy = new Frame();
+        copy.parent = parent;
+        copy.vars = new GlobalVarMap(vars);
+        copy.usedArgs = usedArgs;
+        copy.owner = owner;
+        copy.lineIndexes = lineIndexes;
+        return copy;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder().append("KStackFrame{");
+        if(result != null) {
+            sb.append("<returning>: ").append(result).append(", ");
+        }
+        sb.append("<stack>: [");
+        if (tail != head) {
+            V e = tail;
+            while (e != head) {
+                sb.append(e.v).append(", ");
+                e = e.prev;
+            }
+            sb.delete(sb.length() - 2, sb.length());
+        }
+        sb.append("], <try-catch>: ").append(exInfo);
+        if($this != null) {
+            sb.append(", this: ").append($this).append(", arguments: ").append(args);
+        }
+        return sb.append(", variables: ").append(vars).append('}').toString();
     }
 }

@@ -1,5 +1,5 @@
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2018-20XX 版权没有，仿冒不究
  * <p>
  * File version : 5
@@ -14,8 +14,8 @@ import java.util.NoSuchElementException;
 public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
     private boolean reversed;
 
-    protected Entry<K, V> createEntry(K id, V v) {
-        return new LinkedEntry<>(id, v);
+    protected Entry<K, V> createEntry(K id) {
+        return new LinkedEntry<>(id, null);
     }
 
     public static class LinkedEntry<K, V> extends MyHashMap.Entry<K, V> {

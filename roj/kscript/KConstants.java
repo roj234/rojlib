@@ -1,11 +1,13 @@
 package roj.kscript;
 
-import roj.kscript.func.KFuncLambda;
+import roj.kscript.api.IArguments;
+import roj.kscript.api.IObject;
+import roj.kscript.func.KFuncNative;
 import roj.kscript.func.KFunction;
-import roj.kscript.type.KArray;
-import roj.kscript.type.KObject;
-import roj.kscript.type.KString;
-import roj.kscript.type.KUndefined;
+import roj.kscript.type.*;
+import roj.kscript.util.opm.ObjectPropMap;
+
+import javax.annotation.Nonnull;
 
 /**
  * This file is a part of MI <br>
@@ -19,16 +21,33 @@ import roj.kscript.type.KUndefined;
 public final class KConstants {
     public static final KObject OBJECT = new KObject(null);
 
-    public static final KObject FUNCTION_PROTOTYPE = new KObject(null);
-    public static final KObject FUNCTION = new KObject(null);
+    public static final KObject FUNCTION = new KObject(OBJECT);
 
-    public static final KFunction ARRAY = new KFuncLambda(FUNCTION, ($this, param) -> new KArray(param.getOr(0, 0)));
+    public static final KFunction ARRAY = new KFuncNative() {
+        @Override
+        public KType invoke(@Nonnull IObject $this, IArguments param) {
+            return new KArray(param.getOr(0, 0));
+        }
+    };
 
-    public static final KFunction TYPEOF = new KFuncLambda(FUNCTION, ($this, param) -> KString.valueOf((param.getOr(0, KUndefined.UNDEFINED).getType().typeof())));
+    public static final KFunction TYPEOF = new KFuncNative() {
+        @Override
+        public KType invoke(@Nonnull IObject $this, IArguments param) {
+            return KString.valueOf(param.getOr(0, KUndefined.UNDEFINED).getType().typeof());
+        }
+    };
 
     static {
         //OBJECT.put("toString", new KMethodAST(AST.builder().op(LOAD_OBJECT, 0).op(INVOKE_SPECIAL_METHOD, "toString").returnStack().build()));
-        FUNCTION.put("prototype", FUNCTION_PROTOTYPE);
+        OBJECT.put("defineProperty", new KFuncNative() {
+            @Override
+            public KType invoke(@Nonnull IObject $this, IArguments param) {
+                if(param.size() < 2)
+                    throw new IllegalArgumentException("Need 2, get " + param.size());
+                ObjectPropMap.Object_defineProperty($this.asKObject(), param.get(0).asString(), param.get(1).asObject());
+                return KUndefined.UNDEFINED;
+            }
+        });
     }
 
 }

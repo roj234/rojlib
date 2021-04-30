@@ -3,10 +3,11 @@ package roj.kscript.parser.expr;
 import roj.concurrent.OperationDone;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
 import roj.kscript.parser.Keyword;
 import roj.kscript.type.*;
+import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -18,14 +19,14 @@ import java.util.Map;
  * @since 2020/10/13 22:17
  */
 public final class Constant implements Expression {
-    private final KType constant;
+    private final KType c;
 
     public Constant(KType number) {
-        this.constant = number;
+        this.c = number;
     }
 
     public static Constant valueOf(int word) {
-        return new Constant(KInteger.valueOf(word));
+        return new Constant(KInt.valueOf(word));
     }
 
     public static Constant valueOf(double word) {
@@ -37,7 +38,7 @@ public final class Constant implements Expression {
     }
 
     public static Constant valueOf(boolean word) {
-        return new Constant(KBoolean.valueOf(word));
+        return new Constant(KBool.valueOf(word));
     }
 
     public static Constant valueOf(KType word) {
@@ -57,10 +58,10 @@ public final class Constant implements Expression {
             case WordPresets.DECIMAL_F:
                 return valueOf(KDouble.valueOf(word.val()));
             case WordPresets.INTEGER:
-                return valueOf(KInteger.valueOf(word.val()));
+                return valueOf(KInt.valueOf(word.val()));
             case Keyword.TRUE:
             case Keyword.FALSE:
-                return valueOf(KBoolean.valueOf(word.val().equals("true")));
+                return valueOf(word.val().equals("true") ? KBool.TRUE : KBool.FALSE);
             case Keyword.NAN:
                 return valueOf(KDouble.valueOf(Double.NaN));
             case Keyword.INFINITY:
@@ -82,28 +83,31 @@ public final class Constant implements Expression {
         if (!(left instanceof Constant))
             return false;
         Constant cst = (Constant) left;
-        return cst.constant.getType() == constant.getType() && cst.constant.equalsTo(constant);
+        return cst.c.getType() == c.getType() && cst.c.equalsTo(c);
     }
 
-    public boolean asBoolean() {
-        return constant.asBoolean();
+    public boolean asBool() {
+        return c.asBool();
     }
 
-    public int asInteger() {
-        return constant.asInteger();
+    public int asInt() {
+        return c.asInt();
     }
 
     public double asDouble() {
-        return constant.asDouble();
+        return c.asDouble();
     }
 
     public String asString() {
-        return constant.asString();
+        return c.asString();
     }
 
     @Override
-    public void write(ASTree tree) {
-        tree.Load(constant);
+    public void write(ASTree tree, boolean noRet) {
+        if(noRet)
+            throw new NotStatementException();
+
+        tree.Load(c);
     }
 
     @Nonnull
@@ -113,18 +117,18 @@ public final class Constant implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IGettable thisContext) {
-        return constant;
+    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+        return c;
     }
 
     @Override
     public byte type() {
-        return typeOf(constant);
+        return typeOf(c);
     }
 
     public static byte typeOf(KType constant) {
         switch (constant.getType()) {
-            case NUMBER:
+            case INT:
                 return 0;
             case DOUBLE:
                 return 1;
@@ -141,11 +145,11 @@ public final class Constant implements Expression {
 
     @Override
     public String toString() {
-        return constant.toString();
+        return c.toString();
     }
 
     public KType val() {
-        return constant;
+        return c;
     }
 
 }

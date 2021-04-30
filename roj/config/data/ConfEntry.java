@@ -7,10 +7,10 @@ import roj.config.word.WordPresets;
 import javax.annotation.Nonnull;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: YAMLEntry.java
  */
 public abstract class ConfEntry {
@@ -29,7 +29,7 @@ public abstract class ConfEntry {
                 return CInteger.valueOf(word.val());
             case WordPresets.STRING:
                 return CString.valueOf(word.val());
-            case WordPresets.VARIABLE:
+            case WordPresets.LITERAL:
                 switch (word.val()) {
                     case "true":
                         return CBoolean.valueOf(true);

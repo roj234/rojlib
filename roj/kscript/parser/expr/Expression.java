@@ -1,8 +1,10 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
+import roj.kscript.parser.ParseContext;
 import roj.kscript.type.KType;
+import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -21,7 +23,7 @@ public interface Expression {
     /**
      * Append itself to an {@link ASTree}
      */
-    void write(ASTree tree);
+    void write(ASTree tree, boolean noRet) throws NotStatementException;
 
     /**
      * Compress constant expression
@@ -53,11 +55,17 @@ public interface Expression {
         throw new IllegalArgumentException("This (" + toString() + ") - " + getClass().getName() + " is not a constant.");
     }
 
-    default KType compute(Map<String, KType> parameters, IGettable thisContext) {
-        throw new UnsupportedOperationException();
+    default KType compute(Map<String, KType> parameters, IObject thisContext) {
+        throw new UnsupportedOperationException(getClass().getName());
     }
 
     default boolean isEqual(Expression left) {
         return left == this;
     }
+
+    /**
+     * 特殊操作处理
+     * @param op_type 0: var_read; 1: var_write; 2: var_read_op_write
+     */
+    default void mark_spec_op(ParseContext ctx, int op_type) {}
 }

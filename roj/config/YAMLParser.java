@@ -15,10 +15,10 @@ import java.io.IOException;
 import static roj.config.JSONParser.*;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: YAMLParser.java
  */
 public class YAMLParser {
@@ -56,8 +56,6 @@ public class YAMLParser {
                 throw wr.err("期待 /EOF");
             }
             return ce;
-        } catch (ParseException e) {
-            throw wr.getExceptionDetails(e);
         } catch (ClassCastException e) {
             throw new IllegalArgumentException("Invalid yaml format", e);
         }
@@ -203,25 +201,30 @@ public class YAMLParser {
          * @return 标识符 or 变量
          */
         protected Word readAlphabet() {
+            final CharSequence input = this.input;
+            int index = this.index;
+
             CharList temp = this.found;
             temp.clear();
 
-            while (hasNext()) {
-                int c = next();
+            while (index < input.length()) {
+                int c = input.charAt(index++);
                 if ((!SPECIAL.contains(c) || c == '-' || c == '_') && !WHITESPACE.contains(c)) {
                     temp.append((char) c);
                 } else {
-                    retract();
+                    index--;
                     break;
                 }
             }
+            this.index = index;
+
             if (temp.length() == 0) {
                 return eof();
             }
 
             String s = temp.toString();
 
-            short id = WordPresets.VARIABLE;
+            short id = WordPresets.LITERAL;
             switch (s) {
                 case "true":
                     id = TRUE;
@@ -236,6 +239,8 @@ public class YAMLParser {
 
             return formClip(id, s);
         }
+
+        protected int line;
 
         @Override
         protected Word readSpecial() throws ParseException {
@@ -273,15 +278,17 @@ public class YAMLParser {
 
         public char next() {
             final CharSequence in = this.input;
+            int index = this.index;
+
             char c = in.charAt(index++);
-            lineOffset++;
+
+            //lineOffset++;
             if (c == '\r' || c == '\n') {
                 final int len = in.length();
                 if(c == '\r' && index < len && in.charAt(index) == '\n')
                     index++;
                 line++;
-                prevLineEnd = lineOffset;
-                lineOffset = 0;
+                //lineOffset = 0;
 
                 int off = 0;
                 while (index < len) {
@@ -289,12 +296,12 @@ public class YAMLParser {
                     if(c != ' ') {
                         if(c != '#') {
                             if(c != '\r' && c != '\n') {
-                                lineOffset = off;
+                                //lineOffset = off;
                                 c = in.charAt(--index - 1);
                                 break;
                             } else {
                                 line++;
-                                prevLineEnd = off;
+                                //prevLineEnd = off;
                                 off = 0;
                             }
                         } else {
@@ -309,7 +316,7 @@ public class YAMLParser {
                                 index++;
                             }
                             line++;
-                            prevLineEnd = off;
+                            //prevLineEnd = off;
                             off = 0;
                         }
                     } else {
@@ -320,6 +327,7 @@ public class YAMLParser {
                 this.lastOff = this.off;
                 this.off = off;
             }
+            this.index = index;
             return c;
         }
 

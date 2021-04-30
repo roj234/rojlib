@@ -3,14 +3,14 @@ package roj.kscript.type;
 import roj.concurrent.OperationDone;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: Type.java
  */
 public enum Type {
-    ARRAY, OBJECT, STRING, NUMBER, NULL, BOOL, DOUBLE, FUNCTION, UNDEFINED, INSTANCE, ERROR, JAVA_OBJECT;
+    ARRAY, OBJECT, STRING, INT, NULL, BOOL, DOUBLE, FUNCTION, UNDEFINED, ERROR, JAVA_OBJECT;
 
     public String typeof() {
         switch (this) {
@@ -19,10 +19,10 @@ public enum Type {
             case BOOL:
                 return "boolean";
             case DOUBLE:
-            case NUMBER:
+            case INT:
                 return "number";
+            case JAVA_OBJECT:
             case OBJECT:
-            case INSTANCE:
             case ARRAY:
             case NULL:
             case ERROR:

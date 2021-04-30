@@ -1,5 +1,5 @@
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2018-20XX 版权没有，仿冒不究
  * <p>
  * File version : 不知道...

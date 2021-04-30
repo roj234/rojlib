@@ -13,82 +13,75 @@ import roj.text.CharList;
  * @since 2020/10/3 19:20
  */
 public class Word {
-    private final short type;
+    private short type;
+    private String val;
+    private int index;
 
-    private String word;
+    public Word() {}
 
-    private final int line, lineOffset;
-
-    public Word(int type, int line, int lineOffset, String word) {
+    /**
+     * 复用对象
+     */
+    public Word reset(int type, int index, String word) {
         this.type = (short) type;
-        this.line = line;
-        this.lineOffset = lineOffset;
-        this.word = word;
+        this.index = index;
+        this.val = word;
+        return this;
     }
 
-    public Word(int line, int lineOffset) {
+    public Word(int index) {
         this.type = WordPresets.EOF;
-        this.line = line;
-        this.lineOffset = lineOffset;
-        this.word = "/EOF";
+        this.index = index;
+        this.val = "/EOF";
     }
 
     @Override
     public String toString() {
-        return "Token{#" + type + "@'" + word + '\'' + '}';
+        return "Token{#" + type + "@'" + val + '\'' + '}';
     }
 
     public String val() {
-        return word;
+        return val;
     }
 
-    public int getLine() {
-        return line;
-    }
-
-    public int getLineOffset() {
-        return lineOffset;
+    public int getIndex() {
+        return index;
     }
 
     public Word number() {
         int v;
         switch (this.type) {
             case WordPresets.HEX:
-                v = MathUtils.parseInt(false, this.word, 16);
+                v = MathUtils.parseInt(false, this.val, 16);
                 //this.type = Keyword.INTEGER;
                 break;
             case WordPresets.BINARY:
-                v = MathUtils.parseInt(false, this.word, 2);
+                v = MathUtils.parseInt(false, this.val, 2);
                 //this.type = Keyword.INTEGER;
                 break;
             case WordPresets.OCTAL:
-                v = MathUtils.parseInt(false, this.word, 8);
+                v = MathUtils.parseInt(false, this.val, 8);
                 //this.type = Keyword.INTEGER;
                 break;
             case WordPresets.INTEGER:
-                v = MathUtils.parseInt(false, this.word, 10);
+                v = MathUtils.parseInt(false, this.val, 10);
                 break;
             default:
                 return this;
         }
-        this.word = Integer.toString(v);
+        this.type = WordPresets.INTEGER;
+        this.val = Integer.toString(v);
 
         return this;
     }
 
     public short type() {
-        switch (type) {
-            case WordPresets.OCTAL:
-            case WordPresets.BINARY:
-            case WordPresets.HEX:
-                return WordPresets.INTEGER;
-            default:
-                return type;
-        }
+        return type;
     }
 
+    @Deprecated
     public Word negative() {
-        word = new CharList(word.length() + 1).append('-').append(word).toString();
+        val = new CharList(val.length() + 1).append('-').append(val).toString();
         return this;
     }
 }

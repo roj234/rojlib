@@ -2,17 +2,19 @@ package roj.kscript.type;
 
 import roj.collect.SimpleList;
 import roj.kscript.KConstants;
-import roj.kscript.api.IGettable;
+import roj.kscript.api.IObject;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * This file is a part of more items mod (MI)
+ * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
- * Author: Asyncorized_MC
+ * @author Roj234
  * Filename: YAMLList.java
  */
 public final class KArray extends KBase implements IArray {
@@ -42,12 +44,12 @@ public final class KArray extends KBase implements IArray {
     }
 
     @Override
-    public boolean isInstanceOf(IGettable map) {
+    public boolean isInstanceOf(IObject map) {
         return map instanceof IArray;
     }
 
     @Override
-    public IGettable getPrototype() {
+    public IObject getProto() {
         return KConstants.ARRAY;
     }
 
@@ -64,11 +66,6 @@ public final class KArray extends KBase implements IArray {
     @Override
     public int size() {
         return list.size();
-    }
-
-    @Override
-    public Map<String, KType> getInternalMap() {
-        return null;
     }
 
     @Override
@@ -143,9 +140,7 @@ public final class KArray extends KBase implements IArray {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        KArray that = (KArray) o;
-
-        return Objects.equals(list, that.list);
+        return ((KArray) o).list == list;
     }
 
     @Override
@@ -155,11 +150,11 @@ public final class KArray extends KBase implements IArray {
 
     @Override
     public void addAll(IArray list) {
-        this.list.addAll(list.getRawList());
+        this.list.addAll(list.getInternal());
     }
 
     @Override
-    public List<KType> getRawList() {
+    public List<KType> getInternal() {
         return list;
     }
 
@@ -168,29 +163,21 @@ public final class KArray extends KBase implements IArray {
         list.clear();
     }
 
-    @Override
-    public boolean equalsTo(KType b) {
-        List<KType> types = list;
-        List<KType> types1 = b.asArray().getRawList();
+    //@Override
+    public boolean __int_equals__(KType arr) {
+        List<KType> as = list;
+        List<KType> bs = arr.asArray().getInternal();
 
-        if (types.size() != types1.size())
+        if (as.size() != bs.size())
             return false;
 
-        if (types.isEmpty())
-            return true;
-
-        Iterator<KType> itra = types.iterator();
-        Iterator<KType> itrb = types1.iterator();
-        while (itra.hasNext()) {
-            final KType next = itra.next();
-            final KType next1 = itrb.next();
-            if (next == null) {
-                if (next1 != null)
-                    return false;
-            } else if (next.getType() != next1.getType() || !next1.equalsTo(next))
-                return false;
+        for (int i = 0; i < as.size(); i++) {
+            KType a = as.get(i);
+            KType b = bs.get(i);
+            if(a != b) {
+                if (a == null || a.getType() != b.getType() || !a.equalsTo(b)) return false;
+            }
         }
         return true;
     }
-
 }
