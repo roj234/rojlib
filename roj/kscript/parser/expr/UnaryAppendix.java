@@ -1,9 +1,8 @@
 package roj.kscript.parser.expr;
 
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
-import roj.kscript.parser.Marks;
+import roj.kscript.ast.OpCode;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KDouble;
 import roj.kscript.type.KInt;
@@ -27,44 +26,44 @@ public final class UnaryAppendix implements Expression {
     public UnaryAppendix(short operator, Expression left) {
         switch (operator) {
             default:
-                throw new IllegalArgumentException("Unsupported operator " + operator);
+                throw new IllegalArgumentException("Unsupported op " + operator);
             case Symbol.inc:
             case Symbol.dec:
         }
         this.operator = operator;
-        this.left = (LoadExpression) left.requireWrite();
+        this.left = (LoadExpression) left;
     }
 
     @Override
     public void write(ASTree tree, boolean noRet) {
-        final boolean var = left instanceof Variable;
+        final int c = operator == Symbol.inc ? 1 : -1;
 
-        final int count = operator == Symbol.inc ? 1 : -1;
+        if (left instanceof Variable) {
+            Variable v = (Variable) this.left;
 
-        if (var) {
-            String name = ((Variable) left).name;
-            tree.Mark(Marks.START)
-                    .Get(name)
-                    .Mark(Marks.END)
-                    .Inc(name, count).Mark(Marks.NEXT);
-            // get - inc - pop
-            // => inc
+            String name = v.name;
+
+            if(noRet) {
+                tree.Inc(name, c);
+            } else {
+                tree.Get(name)
+                        .Inc(name, c);
+            }
+
+            v._after_write_op();
         } else {
             left.writeLoad(tree);
 
-            // get - dup - load - numeric - put - pop
-            // => get - load - numeric - put
-            tree.Std(ASTCode.DUP2)
-                    .Std(ASTCode.GET_OBJECT)
+            tree.Std(OpCode.DUP2)
+                    .Std(OpCode.GET_OBJ)
+                    .Load(KInt.valueOf(c))
+                    .Std(OpCode.ADD);
 
-                    .Mark(Marks.START)
-                    .Std(ASTCode.DUP)
-                    .Mark(Marks.END)
+            if(!noRet) {
+                tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+            }
 
-                    .Load(KInt.valueOf(count))
-                    .Std(operator == Symbol.inc ? ASTCode.ADD : ASTCode.SUB)
-                    .Std(ASTCode.PUT_OBJECT)
-                    .Mark(Marks.NEXT);
+            tree.Std(OpCode.PUT_OBJ);
         }
     }
 
@@ -79,17 +78,17 @@ public final class UnaryAppendix implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+    public KType compute(Map<String, KType> param, IObject $this) {
         int val = operator == Symbol.inc ? 1 : -1;
         KType base;
         KType copy;
 
         if(left instanceof Variable) {
             Variable v = (Variable) left;
-            base = left.compute(parameters, thisContext);
+            base = left.compute(param, $this);
         } else {
             Field field = (Field) left;
-            base = field.parent.compute(parameters, thisContext).asObject().get(field.name);
+            base = field.parent.compute(param, $this).asObject().get(field.name);
         }
 
         copy = base.copy();

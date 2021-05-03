@@ -10,6 +10,8 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.text.CharList;
 
+import java.util.Arrays;
+
 /**
  * This file is a part of MI <br>
  * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
@@ -39,21 +41,20 @@ public class JSLexer extends AbstLexer {
             }
         }
 
-        lineIndexes.add(Integer.MAX_VALUE);
         this.lineIndexes = lineIndexes.getRawArray();
-
+        this.lineLen = lineIndexes.size();
 
         super.init(keys);
         return this;
     }
 
-    int lastLine;
+    int lastLine, lineLen;
     int[] lineIndexes;
     LineHandler lh;
 
     public final void setLineHandler(LineHandler lh) {
         this.lh = lh;
-        lh.handleLineNumber(lastLine + 1);
+        lh.handleLineNumber(lastLine);
     }
 
     /// 读词
@@ -99,40 +100,13 @@ public class JSLexer extends AbstLexer {
         return eof();
     }
 
-    /* Like public version, but without range checks.
-    private static int binarySearch0(int[] a, int fromIndex, int toIndex,
-                                     int key) {
-        int low = fromIndex;
-        int high = toIndex - 1;
-
-        while (low <= high) {
-            int mid = (low + high) >>> 1;
-            int midVal = a[mid];
-
-            if (midVal < key)
-                low = mid + 1;
-            else if (midVal > key) {
-                high = mid - 1;
-                if(mid < toIndex && a[mid + 1] < key) { // my finder
-                    return mid + 1;
-                }
-            } else
-                return mid; // key found
-        }
-        return -(low + 1);  // key not found.
-    }*/
-
     private void applyLineHandler() {
         if(lh != null) {
-            int index = this.index;
-            int line = lastLine;
-            int prevIndex = lineIndexes[line];
-            while (index > prevIndex) {
-                prevIndex = lineIndexes[line++];
-            }
+            int index = Arrays.binarySearch(lineIndexes, 0, lineLen - 1, this.index);
+            int line = index >= 0 ? index : -index - 1;
 
             if(line != lastLine) {
-                lh.handleLineNumber((lastLine = line) + 1);
+                lh.handleLineNumber(lastLine = line);
             }
         }
     }

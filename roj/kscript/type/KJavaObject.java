@@ -52,11 +52,6 @@ public final class KJavaObject<T> extends KBase {
     }
 
     @Override
-    public KType copy() {
-        return this;
-    }
-
-    @Override
     public boolean canCastTo(Type type) {
         switch (type) {
             case STRING:

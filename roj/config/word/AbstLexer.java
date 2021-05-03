@@ -244,13 +244,14 @@ public abstract class AbstLexer {
             }
         }
 
+        int orig = this.index;
         this.index = index;
 
         if (slash) {
-            throw err("Unterminated T_SLASH (\\)");
+            throw err("未终止的 T_SLASH (\\)", orig);
         }
         if (quoted) {
-            throw err("Unterminated T_QUOTE (" + end + ")");
+            throw err("未终止的 T_QUOTE (" + end + ")", orig);
         }
 
         return temp;
@@ -551,6 +552,10 @@ public abstract class AbstLexer {
 
     protected final void unexpected(String val) throws ParseException {
         throw err("未预料的'" + val + "'");
+    }
+
+    public final ParseException err(String reason, int index) {
+        return new ParseException(input, reason, index, null);
     }
 
     public final ParseException err(String reason, Word word) {

@@ -1,14 +1,13 @@
 package roj.kscript.ast;
 
-import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Range;
 import roj.asm.struct.Clazz;
 import roj.collect.CrossFinder;
+import roj.collect.IntBiMap;
+import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.collect.ToIntMap;
 import roj.config.word.LineHandler;
 import roj.kscript.func.KFuncAST;
-import roj.kscript.parser.Marks;
 import roj.kscript.type.KType;
 import roj.kscript.util.ContextPrimer;
 import roj.kscript.util.LineInfo;
@@ -17,6 +16,7 @@ import roj.kscript.util.Variable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -27,14 +27,12 @@ import java.util.List;
  * @since 2020/9/28 12:44
  */
 public final class ASTree implements LineHandler {
-    private Node head, tail,
-            mark_head, mark_tail;
+    private Node head, tail;
     private final String depth, file;
     private String self;
 
     private final ArrayList<LineInfo> lineIndexes = new ArrayList<>();
-
-    private byte markFlag;
+    private LineInfo curLine;
 
     private ArrayList<LabelNode> labels = new ArrayList<>();
 
@@ -45,6 +43,10 @@ public final class ASTree implements LineHandler {
 
     public void funcName(String name) {
         this.self = name;
+    }
+
+    public String funcName() {
+        return depth + '.' + self;
     }
 
     public static ASTree builder(String file) {
@@ -81,9 +83,14 @@ public final class ASTree implements LineHandler {
     }
 
     public KFuncAST build(ContextPrimer ctx) {
-        Frame frame = new Frame(lineIndexes, ctx);
-        _finalOp(frame, ctx.locals);
-        System.out.println("Closure for " + frame + " at " + depth + '.' + self + " is " + Arrays.toString(frame.parents));
+        //System.out.println("Build " + depth + '.' + self/* + " ctx = " + ctx*/);
+        //System.out.println("LineIndexes " + lineIndexes);
+        Frame frame = new Frame(lineIndexes, ctx, fr -> {
+            ctx.finish(fr);
+            _finalOp(fr, ctx.locals);
+        });
+        //System.out.println("Closure chain is " + Arrays.toString(frame.parents));
+        //System.out.println("FuncAST: \r\n" + this);
         return (KFuncAST) new KFuncAST(head, frame).set(file, self, depth);
     }
 
@@ -94,51 +101,92 @@ public final class ASTree implements LineHandler {
         Node cur = this.head;
 
         MyHashSet<Frame> closures = new MyHashSet<>();
-        ToIntMap<Node> indexer = new ToIntMap<>();
         int fr = 0;
 
-        // pass 1: optimize code
-        // pass 2: index nodes
-        while (cur != null) {
-            indexer.put(cur, fr++);
-            switch (cur.code) {
-                case SET_VARIABLE:
-                case LOAD_VARIABLE:
-                    closures.add(frame.findProvider(((VarNode)cur).name));
-                    break;
-                case GOTO:
-                case IF:
-                case SWITCH:
-                case TRY_ENTER: // only these node need to be compiled for better performance
-                    cur.compile();
-                    break;
+        if(lets.size() > 0) {
+            IntBiMap<Node> indexer = new IntBiMap<>();
+
+            // pass 1: optimize code
+            // pass 2: index nodes
+            while (cur != null) {
+                indexer.put(fr++, cur);
+                switch (cur.code) {
+                    case PUT_VAR:
+                    case GET_VAR:
+                        closures.add(frame.findProvider(((VarNode)cur).name));
+                        break;
+                    case GOTO:
+                    case IF:
+                    case SWITCH:
+                    case TRY_ENTER: // only these node need to be compiled for better performance
+                        cur.compile();
+                        break;
+                }
+
+                cur = cur.next;
             }
 
-            cur = cur.next;
-        }
-
-        CrossFinder<CrossFinder.Wrap<Variable>> cf = new CrossFinder<>(lets.size() + 1);
-        for (Variable v : lets) {
-            if(v.start != null && v.end != null)
-                cf.add(new CrossFinder.Wrap<>(v, indexer.getInt(v.start), indexer.getInt(v.end)));
-            else
-                System.out.println("Variable " + v.name + " not used");
-        }
-
-        cur = this.head;
-
-        // pass 3: create actions on control flow nodes.
-        while (cur != null) {
-            switch (cur.code) {
-                case GOTO:
-                case IF:
-                case SWITCH:
-                    cur.genDiff(cf, indexer);
-                    break;
+            CrossFinder<CrossFinder.Wrap<Variable>> cf = new CrossFinder<>(lets.size() + 1);
+            for (Variable v : lets) {
+                // cf: start include and end exclude
+                if (v.end != null) {
+                    cf.add(new CrossFinder.Wrap<>(v, v.start == null ? 0 : indexer.getByValue(v.start), indexer.getByValue(v.end) + 1));
+                } else
+                    System.out.println("local " + v.name + " is not used.");
             }
 
-            cur = cur.next;
+            MyHashMap<Node, VInfo> mi = new MyHashMap<>(cf.arraySize());
+
+            List<CrossFinder.Wrap<Variable>> last = Collections.emptyList();
+            for (CrossFinder.Region region : cf) {
+                List<CrossFinder.Wrap<Variable>> curr = region._int_mod_value();
+
+                VInfo info = NodeUtil.calcDiff(last, curr);
+                if (info == null)
+                    System.out.println("Should not be null: " + curr);
+
+                mi.put(indexer.get(region.node().pos()), info);
+
+                last = curr;
+            }
+            frame.linearDiff = mi.isEmpty() ? Collections.emptyMap() : mi;
+
+            cur = this.head;
+
+            // pass 3: create actions on control flow nodes.
+            while (cur != null) {
+                switch (cur.code) {
+                    case GOTO:
+                    case IF:
+                    case SWITCH:
+                        cur.genDiff(cf, indexer);
+                        break;
+                }
+
+                cur = cur.next;
+            }
+        } else {
+            // pass 1: optimize code
+            while (cur != null) {
+                switch (cur.code) {
+                    case PUT_VAR:
+                    case GET_VAR:
+                        closures.add(frame.findProvider(((VarNode)cur).name));
+                        break;
+                    case GOTO:
+                    case IF:
+                    case SWITCH:
+                    case TRY_ENTER:
+                        cur.compile();
+                        break;
+                }
+
+                cur = cur.next;
+            }
+            frame.linearDiff = Collections.emptyMap();
         }
+
+        System.out.println("Closures for " + funcName() + closures);
 
         // pass 4: generate shorten closure chains.
         fr = 0;
@@ -182,7 +230,7 @@ public final class ASTree implements LineHandler {
         }
     }
 
-    public ASTree Std(ASTCode code) {
+    public ASTree Std(OpCode code) {
         return Node(new NPASTNode(code));
     }
 
@@ -250,43 +298,28 @@ public final class ASTree implements LineHandler {
 
     @SuppressWarnings("fallthrough")
     public void node0(Node node) {
-        switch (markFlag) {
-            case Marks.START: {
-                if (mark_head == null) mark_head = node;
-                if (mark_tail != null) {
-                    mark_tail.next = node;
-                }
-                mark_tail = node;
+        if (node instanceof LabelNode) {
+            labels.add((LabelNode) node);
+            return;
+        } else if (!labels.isEmpty()) {
+            for (int i = 0; i < labels.size(); i++) {
+                LabelNode node1 = labels.get(i);
+                node1.next = node;
             }
-            break;
-            case Marks.NEXT: {
-                if (node.getCode() != ASTCode.POP) {
-                    tail.next = mark_head;
-                }
-                markFlag = Marks.END;
-                mark_head = mark_tail = null;
-            }
-            break;
-            default: {
-                if (node instanceof LabelNode) {
-                    labels.add((LabelNode) node);
-                    return;
-                } else if (!labels.isEmpty()) {
-                    for (int i = 0; i < labels.size(); i++) {
-                        LabelNode node1 = labels.get(i);
-                        node1.next = node;
-                    }
-                    labels.clear();
-                }
-
-                if (head == null) head = node;
-                if (tail != null) {
-                    tail.next = node;
-                }
-                tail = node;
-            }
-            break;
+            labels.clear();
         }
+
+        if(curLine != null) {
+            curLine.node = node;
+            lineIndexes.add(curLine);
+            curLine = null;
+        }
+
+        if (head == null) head = node;
+        if (tail != null) {
+            tail.next = node;
+        }
+        tail = node;
     }
 
     public ASTree Node(Node node) {
@@ -318,17 +351,9 @@ public final class ASTree implements LineHandler {
 
     @Override
     public void handleLineNumber(int line) {
-        LineInfo ln = lineIndexes.isEmpty() ? null : lineIndexes.get(lineIndexes.size() - 1);
-        if (ln == null || (tail != ln.node && ln.line < line + 1)) {
-            if(ln == null)
-                lineIndexes.add(ln = new LineInfo());
-            ln.node = tail;
-        }
-        ln.line = line + 1;
-    }
-
-    public ASTree Mark(@MagicConstant(valuesFromClass = Marks.class) byte mark) {
-        markFlag = mark;
-        return this;
+        LineInfo ln = curLine;
+        if(ln == null)
+            ln = curLine = new LineInfo();
+        ln.line = line;
     }
 }

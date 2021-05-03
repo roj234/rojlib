@@ -1,8 +1,8 @@
 package roj.kscript.parser.expr;
 
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
+import roj.kscript.ast.OpCode;
 import roj.kscript.type.KType;
 import roj.kscript.util.NotStatementException;
 
@@ -30,7 +30,7 @@ public final class ArrayGet implements LoadExpression {
 
         this.array.write(tree, false);
         this.index.write(tree, false);
-        tree.Std(ASTCode.GET_OBJECT);
+        tree.Std(OpCode.GET_OBJ);
     }
 
     @Nonnull
@@ -62,13 +62,23 @@ public final class ArrayGet implements LoadExpression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
-        return array.compute(parameters, thisContext).asArray().get(index.compute(parameters, thisContext).asInt());
+    public KType compute(Map<String, KType> param, IObject $this) {
+        return array.compute(param, $this).asArray().get(index.compute(param, $this).asInt());
     }
 
     @Override
     public void writeLoad(ASTree tree) {
         this.array.write(tree, false);
         this.index.write(tree, false);
+    }
+
+    @Override
+    public void writeObj(ASTree tree) {
+        array.write(tree, false);
+    }
+
+    @Override
+    public void writeKey(ASTree tree) {
+        index.write(tree, false);
     }
 }

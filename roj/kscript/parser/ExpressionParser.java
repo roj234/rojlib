@@ -82,9 +82,6 @@ public final class ExpressionParser {
                     System.out.println("Expr: " + expr.toString());
                     System.out.println(expr.compute(env, KNull.NULL));
                 }
-            } catch (ParseException e) {
-                System.out.println(e.toString());
-                e.getCause().printStackTrace();
             } catch (Throwable e) {
                 e.printStackTrace();
             }
@@ -247,7 +244,8 @@ public final class ExpressionParser {
             return API.cachedEP(depth + 1).read(ctx, exprFlag);
 
         Expression cur = null;
-        UnaryPrefix pf = null;
+        // 这TM其实是个链表
+        UnaryPrefix pf = null, pfTop = null;
 
         Word w;
 
@@ -316,9 +314,9 @@ public final class ExpressionParser {
                 case WordPresets.LITERAL: {
                     if (cur == null) {
                         cur = new Variable(w.val());
+                        cur.mark_spec_op(ctx, 1);
                     } else {
                         // not first
-                        cur.mark_spec_op(ctx, 0);
 
                         if ((opFlag & 1) == 0)
                             err(ctx, w.val(), ".");
@@ -337,7 +335,15 @@ public final class ExpressionParser {
                         cur = new Std(1);
                         opFlag |= 2;
                     }
-                    else err(ctx, "this", "empty");
+                    else err(ctx, "this");
+                }
+                break;
+                case Keyword.ARGUMENTS: {
+                    if (cur == null) {
+                        cur = new Std(2);
+                        opFlag |= 2;
+                    }
+                    else err(ctx, "arguments");
                 }
                 break;
                 // constant
@@ -392,7 +398,7 @@ public final class ExpressionParser {
                         err(ctx, w.val());
 
                     // Mark assign
-                    cur.mark_spec_op(ctx, 1);
+                    cur.mark_spec_op(ctx, 2);
 
                     Expression right = read(ctx, exprFlag);
 
@@ -422,7 +428,7 @@ public final class ExpressionParser {
                         err(ctx, w.val());
 
                     // Mark assign-op
-                    cur.mark_spec_op(ctx, 2);
+                    cur.mark_spec_op(ctx, 3);
 
                     final Expression expr = read(ctx, exprFlag);
                     if (expr == null) {
@@ -448,7 +454,9 @@ public final class ExpressionParser {
                 // ( x )
                 case Symbol.left_s_bracket: {
                     // 1, (2), 16
-                    if ((opFlag & 19) != 2)
+                    //if ((opFlag & 19) != 2)
+                    //    err(ctx, "(");
+                    if ((opFlag & 17) != 0)
                         err(ctx, "(");
 
                     // bracket
@@ -484,63 +492,83 @@ public final class ExpressionParser {
                 }
                 break;
                 default:
-                    if (Keyword.isKeyword(w)) {
+                    if (Keyword.is(w)) {
                         err(ctx, w.val(), "type.expr");
                     }
                     // 'Clean' parameters pass to Delete expr
                     // maybe && ?
-                    if ((opFlag & 16) == 0 & Symbol.isSymbol(w)) {
-                        switch (Symbol.argumentCount(w.type())) {
+                    if ((opFlag & 16) == 0 & Symbol.is(w)) {
+                        switch (Symbol.argc(w.type())) {
                             case 1:
+                                // logic_not inc dec rev
+
+                                boolean iod;
                                 switch (w.type()) {
                                     case Symbol.inc:
                                     case Symbol.dec:
-                                        if (cur != null) { // i++
-                                            if ((opFlag & 2) == 0)
-                                                err(ctx, w.val(), "type.object");
-                                            cur = new UnaryAppendix(w.type(), cur);
-                                            continue o;
-                                        } // ++i
+                                        iod = true;
+                                        break;
+                                    default:
+                                        iod = false;
+                                        break;
                                 }
 
-                                {
-                                UnaryPrefix ul = new UnaryPrefix(w.type());
-                                    if(pf != null) {
-                                        pf.setRight(ul);
+                                if (cur != null) {
+                                    // i++
+                                    if(iod) {
+                                        if(!(cur instanceof Field) && !(cur instanceof ArrayGet)) {
+                                            throw wr.err("unary.expecting_variable");
+                                        }
+
+                                        cur = new UnaryAppendix(w.type(), cur);
+                                        continue o;
                                     } else {
-                                        pf = ul;
+                                        err(ctx, w.val());
                                     }
-                                } // todo UnaryPrefix fix
+                                }
+
+                                // ++i
+
+                                UnaryPrefix ul = new UnaryPrefix(w.type());
+                                if(pf != null) {
+                                    String code = pf.setRight(ul);
+                                    if(code != null)
+                                        throw wr.err(code);
+                                } else {
+                                    pfTop = ul;
+                                }
+                                pf = ul;
 
                                 break;
                             case 2:
                                 if (cur != null) { // has right value
-                                    if (pf != null) {
-                                        pf.setRight(cur);
-                                        String msg = pf.validate();
-                                        if (msg != null)
-                                            throw wr.err(msg);
-                                        cur = pf;
-                                        pf = null;
+                                    if (pfTop != null) {
+
+                                        String code = pf.setRight(cur);
+                                        if(code != null)
+                                            throw wr.err(code);
+
+                                        tmp.add(pfTop);
+                                        pf = pfTop = null;
+                                    } else {
+                                        tmp.add(cur);
                                     }
-                                    tmp.add(cur/*.compress()*/);
-                                    opFlag = 0;
                                     cur = null;
+                                    opFlag = 0;
                                 } else {
                                     switch (w.type()) {
-                                        case Symbol.add:
+                                        case Symbol.add: // 省略了 cast to number ... 后议
                                             continue o;
                                         case Symbol.sub: {
-                                            //if(pf.isNegative()) {
-                                            //    pf = null;
-                                            //} else {
-                                                UnaryPrefix ul = new UnaryPrefix(Symbol.sub);
-                                                if(pf != null) {
-                                                    pf.setRight(ul);
-                                                } else {
-                                                    pf = ul;
-                                                }
-                                            //}
+                                            UnaryPrefix ul1 = new UnaryPrefix(Symbol.sub);
+                                            if(pf != null) {
+                                                String code = pf.setRight(ul1);
+                                                if(code != null)
+                                                    throw wr.err(code);
+                                            } else {
+                                                pfTop = ul1;
+                                            }
+                                            pf = ul1;
                                         }
                                         continue o;
                                         default:
@@ -627,11 +655,11 @@ public final class ExpressionParser {
 
         if (cur != null) {
             if (pf != null) {
-                pf.setRight(cur);
-                String msg = pf.validate();
-                if (msg != null)
-                    throw wr.err(msg);
-                cur = pf;
+                String code = pf.setRight(cur);
+                if(code != null)
+                    throw wr.err(code);
+
+                cur = pfTop;
             }
 
             if((opFlag & 16) != 0) {
@@ -654,8 +682,6 @@ public final class ExpressionParser {
             if ((exprFlag /*& ~2048*/) != 0) err(ctx, ";", description(exprFlag));
             wr.retractWord();
         }
-
-        System.out.println(tmp);
 
         Expression result = null;
         if (!tokens.isEmpty()) {
@@ -692,6 +718,8 @@ public final class ExpressionParser {
         }
 
         tmp.clear();
+
+        // System.out.println(result);
 
         return result;
     }

@@ -1,8 +1,8 @@
 package roj.kscript.parser.expr;
 
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
+import roj.kscript.ast.OpCode;
 import roj.kscript.type.KArray;
 import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
@@ -77,22 +77,22 @@ public class ArrayDefine implements Expression {
         for (int i = 0; i < expr.size(); i++) {
             Expression expr = this.expr.get(i);
             if (expr != null) {
-                expr.write(tree.Std(ASTCode.DUP), false);
+                expr.write(tree.Std(OpCode.DUP), false);
                 tree
                         .Load(KInt.valueOf(i))
-                        .Std(ASTCode.PUT_OBJECT);
+                        .Std(OpCode.PUT_OBJ);
             }
         }
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+    public KType compute(Map<String, KType> param, IObject $this) {
         final KArray v = (KArray) array.copy();
         if(!expr.isEmpty()) {
             for (int i = 0; i < expr.size(); i++) {
                 Expression exp = expr.get(i);
                 if (exp != null) {
-                    v.set(i, exp.compute(parameters, thisContext));
+                    v.set(i, exp.compute(param, $this));
                 }
             }
         }

@@ -25,7 +25,7 @@ public final class Keyword {
             SWITCH = 15,
             DELETE = 16,
             TRUE = 17, FALSE = 18, NULL = 19, UNDEFINED = 20, TRY = 21, CATCH = 22, FINALLY = 23,
-            NAN = 24, INFINITY = 25, THROW = 26, DEFAULT = 27, LET = 28;
+            NAN = 24, INFINITY = 25, THROW = 26, DEFAULT = 27, LET = 28, ARGUMENTS = 29;
 
     private static final ToIntMap<String> indexOf = new ToIntMap<>(30, 1);
 
@@ -35,13 +35,13 @@ public final class Keyword {
     static {
         final List<String> keywords = TextUtil.splitStringF(new ArrayList<>(30), "for,while,do,continue,break,case,if,else,goto,function," +
                 "return,this,new,var,const,switch,delete,true,false,null,undefined,try,catch,finally," +
-                "NaN,Infinity,throw,default,let", ',');
+                "NaN,Infinity,throw,default,let,arguments", ',');
         for (int i = 0; i < keywords.size(); i++) {
             indexOf.put(keywords.get(i), i);
         }
     }
 
-    public static boolean isKeyword(Word word) {
+    public static boolean is(Word word) {
         return word.type() >= 0 && word.type() <= 500;
     }
 

@@ -10,5 +10,12 @@ import roj.kscript.ast.ASTree;
  * @since 2020/11/1 14:14
  */
 public interface LoadExpression extends Expression {
-    void writeLoad(ASTree tree);
+    default void writeLoad(ASTree tree) {
+        writeObj(tree);
+        writeKey(tree);
+    }
+
+    void writeObj(ASTree tree);
+
+    void writeKey(ASTree tree);
 }

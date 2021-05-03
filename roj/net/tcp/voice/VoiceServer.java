@@ -54,7 +54,7 @@ public final class VoiceServer extends TCPServer {
 
     public void addUser(String room, User add) {
         synchronized (chatrooms) {
-            Set<User> routers = chatrooms.computeIfAbsent(room, Helpers::newMyHashSet);
+            Set<User> routers = chatrooms.computeIfAbsent(room, Helpers.fnMyHashSet());
             routers.add(add);
             fastPath.put(add, routers);
         }

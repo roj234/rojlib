@@ -51,6 +51,11 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         public Entry<K, V> nextEntry() {
             return next;
         }
+
+        @Override
+        public String toString() {
+            return new StringBuilder().append(k).append('=').append(v).toString();
+        }
     }
 
     protected Entry<?, ?>[] entries;
@@ -216,7 +221,6 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             }
         }
 
-        // todo update pending for all collections
         if (toRemove == null)
             return null;
         if(v != NOT_USING && !Objects.equals(v, toRemove.v))

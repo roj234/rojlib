@@ -856,7 +856,7 @@ public final class FrameTraverser {
     }
 
     // 变量i是这个类型的吗? stopped: 需要使用LVT检测！
-    private   static   void isVarType(int id, byte type) {
+    private static void isVarType(int id, byte type) {
         /*switch (type) {
             case DOUBLE:
                 local.get(id).type == TOP;
@@ -872,6 +872,9 @@ public final class FrameTraverser {
         }*/
     }
 
+    /*
+     * At no point can long or double be operated (as a TOP or using int ops) on individually.
+     */
     private void checkOnStack(byte type) {
         Var v = stack.get(stack.size - 1);
         if(v.type != type) {

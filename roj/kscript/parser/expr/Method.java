@@ -111,10 +111,10 @@ public final class Method implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+    public KType compute(Map<String, KType> param, IObject $this) {
         List<KType> exprs = new ArrayList<>(args.size());
         for (int i = 0; i < args.size(); i++) {
-            exprs.add(args.get(i).compute(parameters, thisContext));
+            exprs.add(args.get(i).compute(param, $this));
         }
 
         KType nf = getNativeFunction(func, exprs);
@@ -122,8 +122,8 @@ public final class Method implements Expression {
             return nf;
 
         try {
-            KFunction func = this.func.compute(parameters, thisContext).asFunction();
-            return func.invoke(thisContext, new Arguments(exprs));
+            KFunction func = this.func.compute(param, $this).asFunction();
+            return func.invoke($this, new Arguments(exprs));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Not a simple expression");
         }

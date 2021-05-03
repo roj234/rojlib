@@ -2,10 +2,10 @@ package roj.kscript.parser.expr;
 
 import roj.concurrent.OperationDone;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
 import roj.kscript.ast.IfNode;
 import roj.kscript.ast.LabelNode;
+import roj.kscript.ast.OpCode;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.*;
 import roj.kscript.util.NotStatementException;
@@ -94,54 +94,62 @@ public final class Binary implements Expression {
                 break;
             }
             case Symbol.add:
-                tree.Std(ASTCode.ADD);
+                tree.Std(OpCode.ADD);
                 break;
             case Symbol.and:
-                tree.Std(ASTCode.AND);
+                tree.Std(OpCode.AND);
                 break;
             case Symbol.logic_and: {
-                LabelNode falseEnd = new LabelNode();
-                LabelNode end = new LabelNode();
-                right.write(tree.If(falseEnd, IfNode.IS_TRUE), false);
-                tree.If(falseEnd, IfNode.IS_TRUE).Load(KBool.TRUE).Goto(end).Node(falseEnd).Load(KBool.FALSE).node0(end);
+                LabelNode falseTarg = new LabelNode();
+                LabelNode fin = new LabelNode();
+                right.write(tree.If(falseTarg, IfNode.IS_TRUE), false);
+                tree.If(falseTarg, IfNode.IS_TRUE).Load(KBool.TRUE).Goto(fin).Node(falseTarg).Load(KBool.FALSE).node0(fin);
                 // if a && b
             }
             break;
             case Symbol.logic_or: {
-                LabelNode end = new LabelNode();
-                LabelNode end1 = new LabelNode();
-                right.write(tree.Std(ASTCode.DUP).If(end, IfNode.IS_TRUE).Goto(end1).Node(end).Std(ASTCode.POP), false); // on-stack: left, if left is true => end1, else => end
-                tree.node0(end1);
+                LabelNode falseTarg = new LabelNode();
+                LabelNode fin = new LabelNode();
+                right.write(tree
+                        .Std(OpCode.DUP)
+                        .If(falseTarg, IfNode.IS_TRUE)
+                        .Goto(fin)
+                        .Node(falseTarg)
+                        .Std(OpCode.POP), false);
+
+                // left, left
+
+                tree.node0(fin);
                 // if a || b
                 // = a ? a : b 而不是true/false ...
             }
             break;
             case Symbol.or:
-                tree.Std(ASTCode.OR);
+                tree.Std(OpCode.OR);
                 break;
             case Symbol.divide:
-                tree.Std(ASTCode.DIV);
+                tree.Std(OpCode.DIV);
                 break;
             case Symbol.lsh:
-                tree.Std(ASTCode.SHIFT_L);
+                tree.Std(OpCode.SHIFT_L);
                 break;
             case Symbol.mod:
-                tree.Std(ASTCode.MOD);
+                tree.Std(OpCode.MOD);
                 break;
             case Symbol.mul:
-                tree.Std(ASTCode.MUL);
+                tree.Std(OpCode.MUL);
                 break;
             case Symbol.rsh:
-                tree.Std(ASTCode.SHIFT_R);
+                tree.Std(OpCode.SHIFT_R);
                 break;
             case Symbol.rsh_unsigned:
-                tree.Std(ASTCode.U_SHIFT_R);
+                tree.Std(OpCode.U_SHIFT_R);
                 break;
             case Symbol.sub:
-                tree.Std(ASTCode.SUB);
+                tree.Std(OpCode.SUB);
                 break;
             case Symbol.xor:
-                tree.Std(ASTCode.XOR);
+                tree.Std(OpCode.XOR);
                 break;
         }
     }
@@ -194,7 +202,7 @@ public final class Binary implements Expression {
                 switch (l.type()) {
                     case 0:
                     case 1:
-                        return Constant.valueOf(d ?
+                        return r.type() == 2 ? Constant.valueOf(l.asString() + r.asString()) : Constant.valueOf(d ?
                                 KDouble.valueOf(l.asDouble() + r.asDouble()) :
                                 KInt.valueOf(l.asInt() + r.asInt()));
                     case 2:
@@ -238,9 +246,9 @@ public final class Binary implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
-        KType l = left.compute(parameters, thisContext);
-        KType r = right.compute(parameters, thisContext);
+    public KType compute(Map<String, KType> param, IObject $this) {
+        KType l = left.compute(param, $this);
+        KType r = right.compute(param, $this);
         boolean d = l.getType() == Type.DOUBLE || r.getType() == Type.DOUBLE;
 
         switch (operator) {

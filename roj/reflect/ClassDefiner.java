@@ -38,8 +38,7 @@ public class ClassDefiner extends ClassLoader {
         if (debug) {
             try (FileOutputStream fos = new FileOutputStream(new File(name + ".class"))) {
                 fos.write(bytes, off, len);
-            } catch (IOException ignored) {
-            }
+            } catch (IOException ignored) {}
         }
         try {
             // 使用同样的加载器加载，保证Access

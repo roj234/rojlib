@@ -19,8 +19,8 @@ import roj.asm.struct.anno.AnnValArray;
 import roj.asm.struct.attr.*;
 import roj.asm.struct.insn.FieldInsnNode;
 import roj.asm.struct.insn.InsnNode;
-import roj.asm.struct.insn.InvocationInsnNode;
-import roj.asm.struct.insn.InvokeDynamicInsnNode;
+import roj.asm.struct.insn.InvokeDynInsnNode;
+import roj.asm.struct.insn.InvokeInsnNode;
 import roj.asm.struct.simple.FieldSimple;
 import roj.asm.struct.simple.IConstantSerializable;
 import roj.asm.struct.simple.MethodSimple;
@@ -116,7 +116,7 @@ public class NiximTransformer {
                     if (debug)
                         logger.info("Replace old BTIndex " + info.nodes.get(0).bootstrapTableIndex + " to " + newId);
 
-                    for (InvokeDynamicInsnNode node : info.nodes) {
+                    for (InvokeDynInsnNode node : info.nodes) {
                         node.bootstrapTableIndex = newId;
                         if (debug)
                             logger.info("Affected node: " + node);
@@ -285,7 +285,7 @@ public class NiximTransformer {
             return o;
         for (InsnNode node : o.code.instructions) {
             if (node.getOpcode() == Opcodes.INVOKESPECIAL) {
-                InvocationInsnNode node1 = (InvocationInsnNode) node;
+                InvokeInsnNode node1 = (InvokeInsnNode) node;
                 if (node1.owner() == null)
                     node1.owner(superClz);
             }
@@ -315,7 +315,7 @@ public class NiximTransformer {
             insertList.remove(insertList.size() - 1);
             InsnNode invokeNode = insertList.get(insertList.size() - 2);
             if (invokeNode.getOpcode() == Opcodes.INVOKESTATIC) {
-                InvocationInsnNode node1 = (InvocationInsnNode) invokeNode;
+                InvokeInsnNode node1 = (InvokeInsnNode) invokeNode;
                 if (node1.name().equals("<RETURN>")) {
                     insertList.remove(insertList.size() - 1);
                     insertList.remove(insertList.size() - 1);
@@ -334,7 +334,7 @@ public class NiximTransformer {
         if (replacement.code != null) {
             for (InsnNode node : replacement.code.instructions) {
                 if (node.getOpcode() == Opcodes.INVOKEVIRTUAL) {
-                    InvocationInsnNode node1 = (InvocationInsnNode) node;
+                    InvokeInsnNode node1 = (InvokeInsnNode) node;
                     if (node1.owner().equals(slashSelfClass)/* && types.contains(node1.getMethodName() + '|' + node1.getRawParam())*/) {
                         node1.owner(slashDestClass);
                     }
@@ -348,13 +348,13 @@ public class NiximTransformer {
             if (debug)
                 logger.info("Fix <init> in replace mode.");
 
-            InvocationInsnNode node1 = null;
+            InvokeInsnNode node1 = null;
 
             final InsnList list = newInit.code.instructions;
 
             for (InsnNode node : list) {
                 if (node.code == Opcodes.INVOKESPECIAL) {
-                    InvocationInsnNode invNode = (InvocationInsnNode) node;
+                    InvokeInsnNode invNode = (InvokeInsnNode) node;
                     if (invNode.owner().equals(data.name)) {
                         node1 = invNode;
                         break;
@@ -400,7 +400,7 @@ public class NiximTransformer {
             InsnNode node = iterator.next();
             iterator.remove();
             if (node.getOpcode() == Opcodes.INVOKESPECIAL) {
-                InvocationInsnNode node1 = (InvocationInsnNode) node;
+                InvokeInsnNode node1 = (InvokeInsnNode) node;
                 if (node1.owner().equals(data.name) && node1.name().equals("<init>")) break;
                 if (debug)
                     System.out.println(node1);
@@ -499,7 +499,7 @@ public class NiximTransformer {
                 if (bsm != null) {
                     for (InsnNode node : method1.code.instructions) {
                         if (node.getOpcode() == Opcodes.INVOKEDYNAMIC) {
-                            InvokeDynamicInsnNode node1 = (InvokeDynamicInsnNode) node;
+                            InvokeDynInsnNode node1 = (InvokeDynInsnNode) node;
                             AttrBootstrapMethods.BootstrapMethod method2 = bsm.methods.get(node1.bootstrapTableIndex);
                             lambdaBSM.computeIfAbsent(node1.bootstrapTableIndex, () -> new LambdaInfo(method2)).nodes.add(node1);
                         }
@@ -581,7 +581,7 @@ public class NiximTransformer {
                         }
                         break;
                         case INVOKESPECIAL: {
-                            InvocationInsnNode invNode = (InvocationInsnNode) node;
+                            InvokeInsnNode invNode = (InvokeInsnNode) node;
 
                             if (debug)
                                 logger.info("CallSuper[Code] " + invNode.owner() + '.' + invNode.name() + ':' + invNode.rawTypes() + " //////// " + slashDestClass);
@@ -617,7 +617,7 @@ public class NiximTransformer {
                         }
                         break;
                         case INVOKEDYNAMIC:
-                            InvokeDynamicInsnNode node1 = (InvokeDynamicInsnNode) node;
+                            InvokeDynInsnNode node1 = (InvokeDynInsnNode) node;
                             if (bsm == null)
                                 throw new IllegalArgumentException("在没有BootstrapMethods的类中找到了InvokeDynamic!");
                             AttrBootstrapMethods.BootstrapMethod method1 = bsm.methods.get(node1.bootstrapTableIndex);
@@ -646,7 +646,7 @@ public class NiximTransformer {
                     case INVOKEINTERFACE:
                     case INVOKESTATIC:
                     case INVOKEVIRTUAL: {
-                        InvocationInsnNode invNode = (InvocationInsnNode) node;
+                        InvokeInsnNode invNode = (InvokeInsnNode) node;
                         if (slashSelfClass.equals(invNode.owner())) {
                             String desc = invNode.name() + '|' + invNode.rawTypes();
                             String ms = methodShadow.get(desc);
@@ -680,7 +680,7 @@ public class NiximTransformer {
         for (LambdaInfo info : lambdaBSM.values()) {
             CstMethodHandle handle;
 
-            for (InvokeDynamicInsnNode node : info.nodes) {
+            for (InvokeDynInsnNode node : info.nodes) {
                 for (Type type : node.parameters()) {
                     if (slashSelfClass.equals(type.owner))
                         type.owner = slashDestClass;
@@ -791,7 +791,7 @@ public class NiximTransformer {
                     case INVOKEINTERFACE:
                     case INVOKESTATIC:
                     case INVOKEVIRTUAL: {
-                        InvocationInsnNode invNode = (InvocationInsnNode) node;
+                        InvokeInsnNode invNode = (InvokeInsnNode) node;
                         if (invNode.owner().equals(slashSelfClass)) {
                             String desc = invNode.name() + '|' + invNode.rawTypes();
                             String ms = methodShadow.get(desc);
@@ -1053,7 +1053,7 @@ public class NiximTransformer {
 
     static class LambdaInfo {
         final AttrBootstrapMethods.BootstrapMethod bootstrapMethod;
-        final List<InvokeDynamicInsnNode> nodes = new ArrayList<>();
+        final List<InvokeDynInsnNode> nodes = new ArrayList<>();
 
         LambdaInfo(AttrBootstrapMethods.BootstrapMethod bootstrapMethod) {
             this.bootstrapMethod = bootstrapMethod;

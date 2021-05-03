@@ -14,7 +14,7 @@ import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.struct.attr.AttrCode;
 import roj.asm.struct.insn.ClassInsnNode;
-import roj.asm.struct.insn.InvocationInsnNode;
+import roj.asm.struct.insn.InvokeInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.NodeHelper;
@@ -122,7 +122,7 @@ public class DirectConstructorAccess {
         code.stackSize = size + 1;
         code.localSize = size + 1;
 
-        code.instructions.add(new InvocationInsnNode(Opcodes.INVOKESPECIAL, nName, "<init>", rawParamInit));
+        code.instructions.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, nName, "<init>", rawParamInit));
         code.instructions.add(NodeHelper.cached(Opcodes.ARETURN));
         code.instructions.add(AttrCode.METHOD_END_MARK);
 

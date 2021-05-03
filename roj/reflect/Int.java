@@ -15,27 +15,17 @@ import java.util.List;
  * @author solo6975
  * @since 2020/10/17 18:31
  */
-final class InternalAPI {
+final class Int {
     static sun.misc.Unsafe U;
     static sun.misc.JavaLangAccess JLA;
 
     static {
         try {
-            Field f = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
+            Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             f.setAccessible(true);
             U = (sun.misc.Unsafe) f.get(null);
             JLA = sun.misc.SharedSecrets.getJavaLangAccess();
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
-    }
-
-    static long getFieldOffset(@Nonnull Field field) {
-        if (Modifier.isStatic(field.getModifiers())) {
-            return U.staticFieldOffset(field);
-        } else {
-            return U.objectFieldOffset(field);
-        }
+        } catch (Throwable ignored) {}
     }
 
     static final class UFA extends IFieldAccessor {
@@ -61,7 +51,7 @@ final class InternalAPI {
 
         UFA(@Nonnull Field field) {
             super(field);
-            this.offset = getFieldOffset(field);
+            this.offset = J8Util.getFieldOffset(field);
             if (this.offset == -1) {
                 throw new IllegalArgumentException("Field offset error " + field);
             }
@@ -114,7 +104,7 @@ final class InternalAPI {
         }
 
         @Override
-        public Object get() {
+        public Object getObject() {
             checkType((byte) 8);
             checkAccess();
             return isVolatile ? U.getObjectVolatile(instance, offset) : U.getObject(instance, offset);
@@ -177,7 +167,7 @@ final class InternalAPI {
         }
 
         @Override
-        public void set(Object obj) {
+        public void setObject(Object obj) {
             if (type != 8) {
                 switch (type) {
                     case 0:

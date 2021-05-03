@@ -64,11 +64,6 @@ public abstract class KFunction extends KObject {
         return source == null ? getClass().getSimpleName() + ".java" : source;
     }
 
-    @Override
-    public KType copy() {
-        return this;
-    }
-
     public KType createInstance(IArguments args) {
         return new KInstance(this, get("prototype").asKObject());
     }

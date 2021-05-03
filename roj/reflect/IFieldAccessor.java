@@ -39,7 +39,7 @@ public abstract class IFieldAccessor {
         this.instance = null;
     }
 
-    public abstract Object get();
+    public abstract Object getObject();
 
     public abstract boolean getBoolean();
 
@@ -57,7 +57,7 @@ public abstract class IFieldAccessor {
 
     public abstract double getDouble();
 
-    public abstract void set(Object obj);
+    public abstract void setObject(Object obj);
 
     public abstract void setBoolean(boolean value);
 

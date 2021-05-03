@@ -145,7 +145,7 @@ public class AccessTransformer {
     }
 
     public static void add(String className, String fieldName) {
-        transforms.computeIfAbsent(className, Helpers::newMyHashSet).add(fieldName);
+        transforms.computeIfAbsent(className, Helpers.fnMyHashSet()).add(fieldName);
     }
 
     public static Map<String, Collection<String>> getTransforms() {

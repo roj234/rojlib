@@ -515,11 +515,11 @@ public class AttrCode extends Attribute {
             case INVOKEVIRTUAL:
             case INVOKESPECIAL:
             case INVOKESTATIC:
-                return new InvocationInsnNode(code, (CstRef) pool.get(r));
+                return new InvokeInsnNode(code, (CstRef) pool.get(r));
             case INVOKEINTERFACE:
                 return new InvokeItfInsnNode((CstRefItf) pool.get(r), r.readShort());
             case INVOKEDYNAMIC:
-                return new InvokeDynamicInsnNode((CstDynamic) pool.get(r), r.readUnsignedShort());
+                return new InvokeDynInsnNode((CstDynamic) pool.get(r), r.readUnsignedShort());
 
             case GOTO:
 

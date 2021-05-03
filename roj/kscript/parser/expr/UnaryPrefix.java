@@ -2,13 +2,13 @@ package roj.kscript.parser.expr;
 
 import roj.concurrent.OperationDone;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
-import roj.kscript.parser.Marks;
+import roj.kscript.ast.OpCode;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KDouble;
 import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
+import roj.kscript.util.NotStatementException;
 import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
@@ -39,79 +39,73 @@ public final class UnaryPrefix implements Expression {
         this.operator = operator;
     }
 
-    public String validate() {
-        switch (operator) {
-            case Symbol.inc:
-            case Symbol.dec:
-                if (this.right.type() != -1) {
-                    return ("++/-- constant (Invalid operand)");
-                }
-                System.out.println("Validate " + this);
-        }
-        return null;
-    }
-
     @Override
     public void write(ASTree tree, boolean noRet) {
         switch (operator) {
             case Symbol.logic_not:
-                right.write(tree.Mark(Marks.START), false);
-                tree.Std(ASTCode.NOT)
-                        .Mark(Marks.NEXT);
-                break;
+            case Symbol.sub:
             case Symbol.rev:
-                tree.Mark(Marks.START);
+                if(noRet)
+                    throw new NotStatementException();
+                // those could only be used inside expr...
+
                 right.write(tree, false);
-                tree.Std(ASTCode.REVERSE)
-                        .Mark(Marks.NEXT);
+
+                OpCode op;
+                switch (operator) {
+                    case Symbol.logic_not:
+                        op = OpCode.NOT;
+                        break;
+                    case Symbol.sub:
+                        op = OpCode.NEGATIVE;
+                        break;
+                    case Symbol.rev:
+                        op = OpCode.REVERSE;
+                        break;
+                    default:
+                        throw OperationDone.NEVER;
+                }
+
+                tree.Std(op);
                 break;
             case Symbol.inc:
             case Symbol.dec:
                 if (right.getClass() == Variable.class) {
                     Variable v = (Variable) right;
-                    right.write(tree.Inc(v.name, operator == Symbol.inc ? 1 : -1)
-                            .Mark(Marks.START), false);
+
+                    tree.Inc(v.name, operator == Symbol.inc ? 1 : -1);
+
+                    v._after_write_op();
+
+                    if(!noRet) {
+                        tree.Get(v.name);
+                    }
                 } else {
-                    Field field = (Field) right;
-                    field.writeLoad(tree);
-                    tree
-                            .Std(ASTCode.DUP2_2)
-                            .Std(ASTCode.GET_OBJECT)
+                    Field f = (Field) right;
+                    f.writeLoad(tree);
+
+                    tree.Std(OpCode.DUP2)
+                            .Std(OpCode.GET_OBJ)
                             .Load(KInt.valueOf(operator == Symbol.inc ? 1 : -1))
-                            .Std(ASTCode.ADD)
-                            .Std(ASTCode.PUT_OBJECT).Mark(Marks.START);
-                    field.write(tree, false);
+                            .Std(OpCode.ADD);
+
+                    if(noRet) {
+                        tree.Std(OpCode.PUT_OBJ);
+                    } else {
+                                tree.Std(OpCode.DUP)
+                                .Std(OpCode.SWAP3)
+                                .Std(OpCode.PUT_OBJ);
+                    }
 
                 }
-                tree.Mark(Marks.NEXT);
-                break;
-            case Symbol.sub:
-            case Symbol.NEGATIVE:
-                if (right.getClass() == Variable.class) {
-                    Variable v = (Variable) right;
-                    v.writeLoad(tree);
-                    tree.Std(ASTCode.NEGATIVE).Set(v.name);
-                    right.write(tree.Mark(Marks.START), false);
-                } else {
-                    Field field = (Field) right;
-                    field.writeLoad(tree);
-                    tree
-                            .Std(ASTCode.DUP2_2)
-                            .Std(ASTCode.GET_OBJECT)
-                            .Std(ASTCode.NEGATIVE)
-                            .Std(ASTCode.PUT_OBJECT).Mark(Marks.START);
-                    field.write(tree, false);
-
-                }
-                tree.Mark(Marks.NEXT);
                 break;
         }
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
-        if(operator == Symbol.sub || operator == Symbol.NEGATIVE) {
-            KType base = right.compute(parameters, thisContext);
+    public KType compute(Map<String, KType> param, IObject $this) {
+        if(operator == Symbol.sub) {
+            KType base = right.compute(param, $this);
 
             if (base.isInt()) {
                 KInt i = base.asKInt();
@@ -128,10 +122,10 @@ public final class UnaryPrefix implements Expression {
 
         if(right instanceof Variable) {
             Variable v = (Variable) right;
-            base = right.compute(parameters, thisContext);
+            base = right.compute(param, $this);
         } else {
             Field field = (Field) right;
-            base = field.parent.compute(parameters, thisContext).asObject().get(field.name);
+            base = field.parent.compute(param, $this).asObject().get(field.name);
         }
 
         if (base.isInt()) {
@@ -156,17 +150,13 @@ public final class UnaryPrefix implements Expression {
         if(right == null)
             throw new IllegalArgumentException("Missing right");
 
-        if (operator == Symbol.NEGATIVE) { // 双重否定
-            return ((UnaryPrefix)right).right.compress();
+        if (operator == Symbol.sub && right instanceof UnaryPrefix) {
+            UnaryPrefix p = (UnaryPrefix) right;
+            if (p.operator == Symbol.sub) // 双重否定, 不过这里就没有cast to number了
+                return p.right.compress();
         }
 
-        switch (operator) {
-            case Symbol.inc:
-            case Symbol.dec:
-                System.out.println(this + validate());
-                return this;
-        }
-
+        // inc/dec不能对常量使用, 所以不用管了
         if(!(right = right.compress()).isConstant()) return this;
         final Constant cst = right.asCst();
 
@@ -177,13 +167,12 @@ public final class UnaryPrefix implements Expression {
                 switch (operator) {
                     case Symbol.logic_not:
                         return Constant.valueOf(!cst.asBool());
-                    case Symbol.rev: {
+                    case Symbol.rev:
                         KInt i = cst.val().asKInt();
                         i.value = ~i.value;
                         return right;
-                    }
                     case Symbol.sub: {
-                        KInt i = cst.val().asKInt();
+                        i = cst.val().asKInt();
                         i.value = -i.value;
                         return right;
                     }
@@ -216,6 +205,7 @@ public final class UnaryPrefix implements Expression {
                 }
                 break;
         }
+
         throw OperationDone.NEVER;
     }
 
@@ -224,12 +214,11 @@ public final class UnaryPrefix implements Expression {
         switch (operator) {
             case Symbol.inc:
             case Symbol.dec:
-                return right.type();
+                return (byte) (right.type() == 1 ? 1 : 0);
             case Symbol.logic_not:
                 return 3;
             case Symbol.rev:
                 return 0;
-            case Symbol.NEGATIVE:
             case Symbol.sub:
                 switch (right.type()) {
                     case 0:
@@ -259,33 +248,20 @@ public final class UnaryPrefix implements Expression {
         return Symbol.byId(operator) + ' ' + right;
     }
 
-    public Expression getRight() {
-        return right;
-    }
-
-    public void setRight(Expression right) {
+    public String setRight(Expression right) {
         if(right == null)
-            return;
+            return "upf: right is null";
 
-        if(this.right != null && this.right instanceof UnaryPrefix) {
-            ((UnaryPrefix) this.right).setRight(right);
-            return;
-        }
-
-        switch (operator) {
-            case Symbol.inc:
-            case Symbol.dec:
-                right = right.requireWrite();
-                break;
-        }
-
-        if(right instanceof UnaryPrefix) {
-            UnaryPrefix ul = (UnaryPrefix) right;
-            if(ul.operator == Symbol.sub) {
-                operator = Symbol.NEGATIVE;
+        if(!(right instanceof Field) && !(right instanceof ArrayGet)) {
+            switch (operator) {
+                case Symbol.inc:
+                case Symbol.dec:
+                    return "unary.expecting_variable";
             }
         }
 
         this.right = right;
+
+        return null;
     }
 }

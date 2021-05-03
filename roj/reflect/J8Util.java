@@ -2,6 +2,7 @@ package roj.reflect;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 /**
  * 警告: 请小心使用
@@ -14,15 +15,19 @@ public final class J8Util {
      */
     public static void unfreezeThread(@Nonnull Thread thread) {
         try {
-            InternalAPI.U.unpark(thread);
+            Int.U.unpark(thread);
         } catch (Throwable e) {
             throw new UnsupportedOperationException("Unsafe is not exist!", e);
         }
     }
 
-    public static long objectFieldOffset(Field field) {
+    public static long getFieldOffset(Field field) {
         try {
-            return InternalAPI.U.objectFieldOffset(field);
+            if (Modifier.isStatic(field.getModifiers())) {
+                return Int.U.staticFieldOffset(field);
+            } else {
+                return Int.U.objectFieldOffset(field);
+            }
         } catch (Throwable e) {
             return -1;
         }
@@ -34,7 +39,7 @@ public final class J8Util {
         // So we can make an educated guess that its offset equals to
         // the size of object header.
         try {
-            return objectFieldOffset(Integer.class.getDeclaredField("value"));
+            return getFieldOffset(Integer.class.getDeclaredField("value"));
         } catch (NoSuchFieldException e) {
             return -1;
         }
@@ -47,7 +52,7 @@ public final class J8Util {
     @Deprecated
     public static Object instantiateObject(Class<?> clazz) throws InstantiationException {
         try {
-            return InternalAPI.U.allocateInstance(clazz);
+            return Int.U.allocateInstance(clazz);
         } catch (InstantiationException e) {
             throw e;
         } catch (Throwable e) {
@@ -57,21 +62,19 @@ public final class J8Util {
 
     public static StackTraceElement[] getTraces(Throwable t) {
         try {
-            StackTraceElement[] arr = new StackTraceElement[InternalAPI.JLA.getStackTraceDepth(t)];
+            StackTraceElement[] arr = new StackTraceElement[Int.JLA.getStackTraceDepth(t)];
             for (int i = 0; i < arr.length; i++) {
-                arr[i] = InternalAPI.JLA.getStackTraceElement(t, i);
+                arr[i] = Int.JLA.getStackTraceElement(t, i);
             }
             return arr;
-        } catch (Throwable ignored) {
-        }
+        } catch (Throwable ignored) {}
         return t.getStackTrace();
     }
 
     public static int stackDepth(Throwable t) {
         try {
-            return InternalAPI.JLA.getStackTraceDepth(t);
-        } catch (Throwable ignored) {
-        }
+            return Int.JLA.getStackTraceDepth(t);
+        } catch (Throwable ignored) {}
         return t.getStackTrace().length;
     }
 }

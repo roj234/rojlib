@@ -16,10 +16,6 @@ import java.util.Map;
 public interface Expression {
     int OBJECT = -1, INT = 0, DOUBLE = 1, STRING = 2, BOOL = 3;
 
-    default Expression requireWrite() {
-        return this;
-    }
-
     /**
      * Append itself to an {@link ASTree}
      */
@@ -55,7 +51,7 @@ public interface Expression {
         throw new IllegalArgumentException("This (" + toString() + ") - " + getClass().getName() + " is not a constant.");
     }
 
-    default KType compute(Map<String, KType> parameters, IObject thisContext) {
+    default KType compute(Map<String, KType> param, IObject $this) {
         throw new UnsupportedOperationException(getClass().getName());
     }
 
@@ -65,7 +61,7 @@ public interface Expression {
 
     /**
      * 特殊操作处理
-     * @param op_type 0: var_read; 1: var_write; 2: var_read_op_write
+     * @param op_type 1: var_read; 2: var_write;
      */
     default void mark_spec_op(ParseContext ctx, int op_type) {}
 }

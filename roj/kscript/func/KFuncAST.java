@@ -87,6 +87,7 @@ public final class KFuncAST extends KFunction {
                     break;
                 }
             }
+            f.linear(p);
             try {
                 p = p.execute(f);
             } catch (Throwable e) {
@@ -94,7 +95,8 @@ public final class KFuncAST extends KFunction {
                     se = (ScriptException) e;
                 } else {
                     ArrayList<StackTraceElement> trace = new ArrayList<>();
-                    f.trace(begin, trace);
+                    // 这告诉我们, 改签名的意义时最好换个位置
+                    f.trace(p, trace);
                     se = new ScriptException("Node#" + nodeId(begin, p) + ": " + p, trace.toArray(new StackTraceElement[trace.size()]), e);
                 }
 

@@ -18,6 +18,8 @@ import java.util.Map;
  */
 public final class Variable extends Field {
     private Constant cst;
+    private byte spec_op_type;
+    private ParseContext ctx;
 
     public Variable(String name) {
         super(new Expression() {
@@ -35,11 +37,15 @@ public final class Variable extends Field {
 
     @Override
     public void mark_spec_op(ParseContext ctx, int op_type) {
-        if(op_type == 0) {
-            cst = Constant.valueOf(ctx.useVariable(name));
-        } else {
-            ctx.assignVariable(name);
+        if(op_type == 1) {
+            KType t = ctx.maybeConstant(name);
+            if(t != null) {
+                cst = Constant.valueOf(t);
+            }
         }
+
+        spec_op_type |= op_type;
+        this.ctx = ctx;
     }
 
     @Override
@@ -73,18 +79,35 @@ public final class Variable extends Field {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
-        return parameters.getOrDefault(name, KUndefined.UNDEFINED);
+    public KType compute(Map<String, KType> param, IObject $this) {
+        return param.getOrDefault(name, KUndefined.UNDEFINED);
     }
 
     @Override
     public void write(ASTree tree, boolean noRet) {
         if (cst == null) tree.Get(name);
         else cst.write(tree, false);
+
+        _after_write_op();
+    }
+
+    void _after_write_op() {
+        if ((spec_op_type & 1) != 0) {
+            ctx.useVariable(name);
+        }
+        if ((spec_op_type & 2) != 0) {
+            ctx.assignVariable(name);
+        }
+        spec_op_type = 0;
     }
 
     @Override
-    public void writeLoad(ASTree tree) {
+    public void writeObj(ASTree tree) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void writeKey(ASTree tree) {
         throw new UnsupportedOperationException();
     }
 }

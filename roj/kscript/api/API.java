@@ -57,7 +57,7 @@ public final class API {
         if (fileParsers == null) {
             fileParsers = PARSER_CACHE_MAX == 0 ? null : new KParser[PARSER_CACHE_MAX];
             for (int i = 0; i < PARSER_CACHE_MAX; i++) {
-                fileParsers[i] = new KParser(depth);
+                fileParsers[i] = new KParser(i);
             }
         }
         if(depth > 50) {

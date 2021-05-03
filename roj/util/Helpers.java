@@ -6,6 +6,7 @@ import roj.reflect.J8Util;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -98,19 +99,41 @@ public class Helpers {
         return sb;
     }
 
+    @Deprecated
     public static <K, V> Map<K, V> newMyHashMap(Object s) {
         return new MyHashMap<>();
     }
 
+    @Deprecated
     public static <T> LinkedList<T> newLinkedList(String s) {
         return new LinkedList<>();
     }
 
+    @Deprecated
     public static <T> Set<T> newMyHashSet(Object o) {
         return new MyHashSet<>();
     }
 
+    @Deprecated
     public static <T> List<T> newArrayList(Object o) {
         return new ArrayList<>();
+    }
+
+    static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
+    static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
+    static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();
+    static final Function<?, ?> myhashsetfn = (a) -> new MyHashSet<>();
+
+    public static <R,T> Function<R, List<T>> fnArrayList() {
+        return cast(arraylistfn);
+    }
+    public static <R,T> Function<R, List<T>> fnLinkedList() {
+        return cast(linkedlistfn);
+    }
+    public static <R,K,V> Function<R, Map<K, V>> fnMyHashMap() {
+        return cast(myhashmapfn);
+    }
+    public static <R,T> Function<R, Set<T>> fnMyHashSet() {
+        return cast(myhashsetfn);
     }
 }

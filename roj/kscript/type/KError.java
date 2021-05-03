@@ -53,11 +53,6 @@ public final class KError extends KBase {
         return b == this;
     }
 
-    @Override
-    public KType copy() {
-        return this;
-    }
-
     public ScriptException getOrigin() {
         return ex;
     }

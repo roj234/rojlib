@@ -39,6 +39,8 @@ public abstract class InsnNode {
         this.bci = (char) index;
     }
 
+    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {}
+
     /**
      * 保证这是一个连接在表内的节点
      */

@@ -1,0 +1,86 @@
+package roj.kscript.parser.expr;
+
+import roj.kscript.api.IObject;
+import roj.kscript.ast.ASTree;
+import roj.kscript.ast.IfNode;
+import roj.kscript.ast.LabelNode;
+import roj.kscript.type.KType;
+
+import javax.annotation.Nonnull;
+import java.util.Map;
+
+/**
+ * 操作符 - 三元运算符 ? :
+ *
+ * @author Roj233
+ * @since 2020/10/13 22:17
+ */
+public final class TripleIf implements Expression {
+    Expression determine, truly, fake;
+
+    public TripleIf(Expression determine, Expression truly, Expression fake) {
+        this.determine = determine;
+        this.truly = truly;
+        this.fake = fake;
+    }
+
+    @Override
+    public void write(ASTree tree, boolean noRet) {
+        LabelNode ifFalse = new LabelNode();
+        LabelNode end = new LabelNode();
+
+        determine.write(tree, false);
+        truly.write(tree.If(ifFalse, IfNode.IS_TRUE).Goto(end), false);
+        fake.write(tree.Node(ifFalse), false);
+        tree.Node(end);
+
+        /**
+         * if(!determine)
+         *   goto :ifFalse
+         *  truly
+         *  goto :end
+         * :ifFalse
+         *  fake
+         * :end
+         */
+    }
+
+    @Override
+    public KType compute(Map<String, KType> param, IObject $this) {
+        return determine.compute(param, $this).asBool() ? truly.compute(param, $this) : fake.compute(param, $this);
+    }
+
+    @Nonnull
+    @Override
+    public Expression compress() {
+        truly = truly.compress();
+        fake = fake.compress();
+        if ((determine = determine.compress()).type() == -1) {
+            return this;
+        } else {
+            return determine.asCst().asBool() ? truly : fake;
+        }
+    }
+
+    @Override
+    public byte type() {
+        byte typeA = truly.type();
+        byte typeB = fake.type();
+        return typeA == typeB ? typeA : -1;
+    }
+
+    @Override
+    public boolean isEqual(Expression left) {
+        if (this == left)
+            return true;
+        if (!(left instanceof TripleIf))
+            return false;
+        TripleIf tripleIf = (TripleIf) left;
+        return tripleIf.determine.isEqual(determine) && tripleIf.truly.isEqual(truly) && tripleIf.fake.isEqual(fake);
+    }
+
+    @Override
+    public String toString() {
+        return determine.toString() + " ? " + truly + " : " + fake;
+    }
+}

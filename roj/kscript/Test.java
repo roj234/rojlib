@@ -38,6 +38,13 @@ public class Test {
                 return KUndefined.UNDEFINED;
             }
         });
+        root.define("dump_stack", new KFuncNative() {
+            @Override
+            public KType invoke(@Nonnull IObject $this, IArguments param){
+                System.out.println(((InvArgs)param).caller);
+                return KUndefined.UNDEFINED;
+            }
+        });
         root.define("timer", new KFuncNative() {
             @Override
             public KType invoke(@Nonnull IObject $this, IArguments param) {

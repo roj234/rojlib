@@ -2,6 +2,7 @@ package roj.kscript.type;
 
 import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
+import roj.kscript.parser.expr.Expression;
 
 import javax.annotation.Nonnull;
 
@@ -69,7 +70,13 @@ public interface KType {
 
     StringBuilder toString0(StringBuilder sb, int depth);
 
-    KType copy();
+
+    /**
+     * 内部方法，仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.ast.LoadDataNode}中
+     */
+    default KType copy() {
+        return this;
+    }
 
     boolean canCastTo(Type type);
 

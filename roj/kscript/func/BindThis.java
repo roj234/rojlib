@@ -1,0 +1,50 @@
+package roj.kscript.func;
+
+import roj.kscript.api.IArguments;
+import roj.kscript.api.IObject;
+import roj.kscript.type.KType;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.List;
+
+/**
+ * This file is a part of MI <br>
+ * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ *
+ * @author Roj233
+ * @since 2021/4/26 22:51
+ */
+public class BindThis extends KFunction {
+    final IObject $this;
+    final KFunction origFn;
+
+    public BindThis(IObject $this, KFunction original) {
+        this.$this = $this;
+        this.origFn = original;
+        set(original.source, original.name, original.clazz);
+    }
+
+    public static BindThis Function_proto_bind(KFunction fn, IArguments args) {
+        return new BindThis(args.get(0).asObject(), fn);
+    }
+
+    @Override
+    public KType invoke(@Nonnull IObject $this, IArguments param) {
+        return origFn.invoke(this.$this, param);
+    }
+
+    public static class AppendArguments extends IArguments {
+
+        @Nullable
+        @Override
+        public KFunction caller() {
+            return null;
+        }
+
+        @Override
+        public void trace(List<StackTraceElement> collector) {
+
+        }
+    }
+}

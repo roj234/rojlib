@@ -28,14 +28,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 语法分析器
+ * KScript语法分析器
  *
  * @author solo6975
  * @since 2020/10/3 19:20
  */
 public class KParser implements ParseContext {
     /**
-     * todo 其他的优化策略：常量（自定义来没有修改过的变量）传播， 删除未使用的变量, ASTree
+     * todo 常量（自定义来没有修改过的变量）传播， 删除未使用的变量, ASTree
      */
 
     /**
@@ -81,7 +81,7 @@ public class KParser implements ParseContext {
 
     public KParser(ContextPrimer ctx) {
         this(ctx, (type, file, e) -> {
-            System.err.println(type + ": " + file + "   " + e.toString());
+            System.err.print(type + ": " + file + "   ");
             e.printStackTrace();
         });
     }
@@ -149,7 +149,7 @@ public class KParser implements ParseContext {
             //System.out.println("---编译成功---");
             return tree.build(ctx);
         } else {
-            throw wr.err("Failed to parse file");
+            throw wr.err("compile_error_occurs");
         }
     }
 
@@ -160,7 +160,6 @@ public class KParser implements ParseContext {
     @Override
     public KFunction parseInnerFunc() throws ParseException {
         KFunction fn = API.cachedFP(depth + 1, this).parseInner(tree);
-
         wr.setLineHandler(tree);
 
         return fn;
@@ -170,9 +169,7 @@ public class KParser implements ParseContext {
         tree = ASTree.builder(parent);
         wr.setLineHandler(tree);
 
-        tree.funcName(functionParser());
-
-        //_checkDel();
+        functionParser();
 
         return success ? tree.build(ctx) : null;
     }
@@ -180,7 +177,7 @@ public class KParser implements ParseContext {
     //endregion
     //region 函数
 
-    private String functionParser() throws ParseException {
+    private void functionParser() throws ParseException {
         String name;
         Word w = wr.nextWord();
         switch(w.type()) {
@@ -193,19 +190,20 @@ public class KParser implements ParseContext {
             default:
                 _onError(w, "unexpected:" + w.val() + ":Name/'('");
                 wr.retractWord();
-                return "";
+                return;
         }
         wr.recycle(w);
+
+        tree.funcName(name);
 
         if(name != null)
             except(Symbol.left_s_bracket);
         arguments();
         except(Symbol.right_s_bracket);
+
         except(Symbol.left_l_bracket);
         body();
         except(Symbol.right_l_bracket);
-
-        return name;
     }
 
     /**
@@ -347,13 +345,14 @@ public class KParser implements ParseContext {
                     except(Symbol.right_l_bracket);
                     break;
                 default:
-                    boolean flag = Symbol.isSymbol(w);
+                    boolean flag = Symbol.is(w);
                     if(!flag) {
                         switch(w.type()) {
                             case Keyword.NEW:
                             case Keyword.NULL:
                             case Keyword.UNDEFINED:
                             case Keyword.THIS:
+                            case Keyword.ARGUMENTS:
                             case Keyword.DELETE:
                                 flag = true;
                         }
@@ -364,7 +363,6 @@ public class KParser implements ParseContext {
                         Expression expr = API.cachedEP(0).read(this, (short) 0);
                         if (expr != null) {
                             expr.write(tree, true);
-                            // tree.Std(ASTCode.POP); // 清除返回值
                             except(Symbol.semicolon);
                         }
                     } else {
@@ -383,7 +381,7 @@ public class KParser implements ParseContext {
     private void _return() throws ParseException {
         Word w = wr.nextWord();
         if (w.type() == Symbol.semicolon) {
-            tree.Std(ASTCode.RETURN_EMPTY);
+            tree.Std(OpCode.RETURN_EMPTY);
         } else {
             wr.retractWord();
             Expression expr = API.cachedEP(0).read(this, (short) 0);
@@ -393,15 +391,12 @@ public class KParser implements ParseContext {
             }
 
             expr.write(tree, false);
-            tree.Std(ASTCode.RETURN);
+            tree.Std(OpCode.RETURN);
 
             except(Symbol.semicolon);
         }
 
-        if (inBlock) {
-            except(Symbol.right_l_bracket, "unreachable_statement");
-            wr.retractWord();
-        }
+        _chkBlockEnd();
     }
 
     /**
@@ -464,7 +459,7 @@ public class KParser implements ParseContext {
 
         except(Symbol.right_l_bracket);
 
-        tree.Std(ASTCode.TRY_EXIT)/*.Goto(end)*/;
+        tree.Std(OpCode.TRY_EXIT)/*.Goto(end)*/;
 
         byte flag = 0;
 
@@ -512,7 +507,7 @@ public class KParser implements ParseContext {
 
                     if (hasVar) {
                         // todo check
-                        ctx.define(w.val(), null, catchNode); // 定义 catch(e)
+                        ctx.local(w.val(), null, catchNode); // 定义 catch(e)
                         // end try | e = pop();
 
                         tree.Set(w.val());
@@ -605,9 +600,9 @@ public class KParser implements ParseContext {
         }
         _uLabel(w);
 
-        if (inBlock) {
-            except(Symbol.right_l_bracket, "unreachable_statement");
-        }
+        except(Symbol.semicolon);
+
+        _chkBlockEnd();
     }
 
     private void _uLabel(Word w) throws ParseException {
@@ -625,12 +620,21 @@ public class KParser implements ParseContext {
             return;
         }
         expr.write(tree, false);
-        tree.Std(ASTCode.THROW);
+        tree.Std(OpCode.THROW);
 
         except(Symbol.semicolon);
 
-        if (inBlock) {
-            except(Symbol.right_l_bracket, "unreachable_statement");
+        _chkBlockEnd();
+    }
+
+    private void _chkBlockEnd() throws ParseException {
+        if(inBlock) {
+            Word w = wr.nextWord();
+            if (w.type() != Symbol.right_l_bracket) {
+                _onError(w, "unreachable_statement");
+            }
+            wr.retractWord();
+            wr.recycle(w);
         }
     }
 
@@ -681,6 +685,9 @@ public class KParser implements ParseContext {
         }
 
         equ.write(tree, false);
+
+        // todo
+        tree.If(ifFalse, IfNode.IS_TRUE);
 
         except(end);
 
@@ -789,7 +796,6 @@ public class KParser implements ParseContext {
             tree.node0(continueTo);
             for (Expression expr : execLast) {
                 expr.write(tree, true);
-                // tree.Std(ASTCode.POP); // 清除返回值
             }
             tree.Goto(ol);
         } else {
@@ -1004,7 +1010,7 @@ public class KParser implements ParseContext {
     // region 表达式和变量
 
     /**
-     * 定义全局变量 var/const (可选的赋值)
+     * 定义变量 var/const/let
      */
     private void define(int type) throws ParseException {
         Word w;
@@ -1029,11 +1035,6 @@ public class KParser implements ParseContext {
 
                     first = 1;
 
-                    if(type == Keyword.LET)
-                        ctx.define(name, KUndefined.UNDEFINED, tree.last());
-                    else
-                        ctx.global(name, KUndefined.UNDEFINED);
-
                     break;
                 case Symbol.assign:
                     if(name == null) {
@@ -1046,29 +1047,30 @@ public class KParser implements ParseContext {
                         _onError(w, "not_statement");
                         return;
                     }
-                    // todo check duplicate fix
+
+                    KType val;
+
+                    // todo if duplicate?
                     if (expr.type() != -1 && !ctx.exists(name)) {
-                        final KType val = expr.asCst().val();
-                        switch (type) {
-                            case Keyword.LET:
-                                ctx.define(name, val, tree.last());
-                                break;
-                            case Keyword.CONST:
-                                ctx.Const(name, val);
-                                break;
-                            case Keyword.VAR:
-                                ctx.global(name, val);
-                                break;
-                        }
+                        val = expr.asCst().val();
                     } else {
-                        if (type == Keyword.CONST) {
-                            _onError(w, "const_should_initialize");
-                            continue o;
-                        }
                         expr.write(tree, false);
                         tree.Set(name);
+
+                        val = null;
                     }
 
+                    switch (type) {
+                        case Keyword.LET:
+                            ctx.local(name, val, tree.last());
+                            break;
+                        case Keyword.CONST:
+                            ctx.Const(name, val);
+                            break;
+                        case Keyword.VAR:
+                            ctx.global(name, val);
+                            break;
+                    }
                     name = null;
                     break;
                 case Symbol.comma:
@@ -1077,6 +1079,21 @@ public class KParser implements ParseContext {
                     }
 
                     if(first++ == 1) {
+                        // lazy define
+                        if(name != null) {
+                            switch (type) {
+                                case Keyword.LET:
+                                    ctx.local(name, KUndefined.UNDEFINED, tree.last());
+                                    break;
+                                case Keyword.CONST:
+                                    ctx.Const(name, KUndefined.UNDEFINED);
+                                    break;
+                                case Keyword.VAR:
+                                    ctx.global(name, KUndefined.UNDEFINED);
+                                    break;
+                            }
+                        }
+
                         name = null;
                         break;
                     }
@@ -1086,6 +1103,21 @@ public class KParser implements ParseContext {
                     if (name != null && type == Keyword.CONST) {
                         _onError(w, "const_should_initialize");
                     }
+
+                    if(name != null) {
+                        switch (type) {
+                            case Keyword.LET:
+                                ctx.local(name, KUndefined.UNDEFINED, tree.last());
+                                break;
+                            case Keyword.CONST:
+                                ctx.Const(name, KUndefined.UNDEFINED);
+                                break;
+                            case Keyword.VAR:
+                                ctx.global(name, KUndefined.UNDEFINED);
+                                break;
+                        }
+                    }
+
                     break o;
             }
 
@@ -1112,29 +1144,33 @@ public class KParser implements ParseContext {
             _onError(k, "not_statement");
         } else {
             expr.write(tree, true);
-            // tree.Std(ASTCode.POP); // 清除返回值, 任何表达式都有且仅有一个返回值
         }
 
         except(Symbol.semicolon);
     }
 
     /**
+     * @return 常量值
+     */
+    @Nullable
+    @Override
+    public KType maybeConstant(String name) {
+        return ctx.isConst(name) ? ctx.globals.get(name) : null;
+    }
+
+    /**
      * 使用（访问）变量
-     * @return 可能的现在常量值
      */
     @Override
-    public KType useVariable(String name) {
+    public void useVariable(String name) {
         if (!ctx.exists(name)) {
             final int i = arguments.getOrDefault(name, -1);
             if (i != -1) {
                 ctx.loadArg(i, name);
-            //} else {
-                // undefVars.put(name, wr.index);
             }
-            return null;
+        } else {
+            ctx.updateRegion(name, tree.last());
         }
-        // todo
-        return null;//context.getNullable(name);
     }
 
     @Override

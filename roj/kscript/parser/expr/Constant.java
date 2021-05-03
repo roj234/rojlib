@@ -117,7 +117,7 @@ public final class Constant implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+    public KType compute(Map<String, KType> param, IObject $this) {
         return c;
     }
 

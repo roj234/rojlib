@@ -6,15 +6,14 @@ import roj.kscript.api.IObject;
 import roj.kscript.func.KFuncAST;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
-import roj.kscript.util.ContextPrimer;
-import roj.kscript.util.ExcpInfo;
-import roj.kscript.util.GlobalVarMap;
-import roj.kscript.util.LineInfo;
+import roj.kscript.util.*;
 import roj.kscript.util.opm.KOEntry;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * This file is a part of MI <br>
@@ -27,22 +26,24 @@ import java.util.List;
  * @since 2020/9/27 12:41
  */
 public final class Frame extends Context {
-    public Frame(ArrayList<LineInfo> lineIndexes, ContextPrimer ctx) {
+    public Frame(ArrayList<LineInfo> lineIndexes, ContextPrimer ctx, Consumer<Frame> buildCallback) {
         super();
         this.lineIndexes = lineIndexes;
         lineIndexes.trimToSize();
 
-        // todo check if Frame can be initialized before ASTree call
-        ctx.finish(this);
+        this.buildCallback = buildCallback;
 
         this.usedArgs = ctx.usedArgs;
         usedArgs.trimToSize();
-        GlobalVarMap globals = (GlobalVarMap) ctx.globals;
+
+        GlobalVarMap globals = ctx.globals;
         globals.applyDefaults();
         this.vars = globals;
     }
 
     private Frame() {}
+
+    Consumer<Frame> buildCallback;
 
     // region 函数执行周期
     /**
@@ -51,6 +52,11 @@ public final class Frame extends Context {
     public void reset(IObject $this, IArguments args) {
         this.$this = $this;
         this.args = args;
+
+        if(buildCallback != null) {
+            buildCallback.accept(this);
+            buildCallback = null;
+        }
 
         // 初始化参数
         final ArrayList<String> args1 = this.usedArgs;
@@ -73,7 +79,7 @@ public final class Frame extends Context {
         tryCatch.clear();
         exInfo.clear();
 
-        ((GlobalVarMap)vars).reset();
+        vars.reset();
 
         $this = null;
         args = null;
@@ -110,6 +116,16 @@ public final class Frame extends Context {
     V tail = head, tmp;
     // rw
     int stackSize, tmpC;
+
+    V tail(int req) {
+        if(stackSize < req)
+            throw new IllegalStateException("Stack underflow");
+        return tail;
+    }
+
+    void tail(V tail) {
+        this.tail = tail;
+    }
 
     @Nonnull
     public KType last() {
@@ -215,7 +231,7 @@ public final class Frame extends Context {
         this.parent = frame;
     }
 
-    private static final class V {
+    static final class V {
         KType v;
         V prev;
 
@@ -244,22 +260,20 @@ public final class Frame extends Context {
 
     public void trace(Node node, List<StackTraceElement> collector) {
         int line = -1;
-        if(owner.getSource() != null && !lineIndexes.isEmpty()) {
+        final ArrayList<LineInfo> linf = this.lineIndexes;
+        if(owner.getSource() != null && !linf.isEmpty()) {
             Node st = owner.begin;
 
-            int lId = 0;
-            LineInfo info = lineIndexes.get(0);
+            int lId = 1;
+            LineInfo info = linf.get(0);
 
             while (st != null) {
                 if(st == info.node) {
                     line = info.line;
 
-                    if(lId++ > lineIndexes.size()) {
-                        info = lineIndexes.get(lId);
-                    } else {
-                        int line1 = info.line;
-                        info = new LineInfo(); // node => null
-                        info.line = line1 + 1; // todo check
+                    // wssb
+                    if(lId < linf.size()) {
+                        info = linf.get(lId++);
                     }
                 }
 
@@ -268,9 +282,6 @@ public final class Frame extends Context {
 
                 st = st.next;
             }
-
-            if(st == null)
-                line = -1;
         }
 
         collector.add(new StackTraceElement(owner.getClassName(), owner.getName(), owner.getSource(), line));
@@ -309,12 +320,19 @@ public final class Frame extends Context {
     // 使用的参数 (ordered)
     ArrayList<String> usedArgs;
 
-    // 默认全局变量
-    // GlobalVarMap defGlobals;
+    Map<Node, VInfo> linearDiff;
+
+    public void linear(Node curr) {
+        VInfo diff = linearDiff.get(curr);
+        while (diff != null) {
+            vars.put(diff.id, diff.def);
+            diff = diff.next;
+        }
+    }
 
     public void applyDiff(VInfo diff) {
         while (diff != null) {
-            // todo
+            // ? linear
             vars.put(diff.id, diff.def); // null as remove => not create Entry
             diff = diff.next;
         }
@@ -365,7 +383,7 @@ public final class Frame extends Context {
             KOEntry entry = (KOEntry) self.vars.getEntry(id);
             if (entry != null) {
                 if((entry.flags & 1) != 0)
-                    throw new IllegalStateException("Write to a constant");
+                    throw new JavaException("尝试写入常量 " + id);
                 entry.v = val;
                 return;
             }
@@ -375,7 +393,7 @@ public final class Frame extends Context {
             self = parents[--i];
         }
 
-        throw new IllegalArgumentException("Undefined " + id);
+        throw new JavaException("未定义的 " + id);
     }
 
     // endregion

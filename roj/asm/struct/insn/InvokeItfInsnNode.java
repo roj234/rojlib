@@ -4,17 +4,18 @@
  * <p>
  * File version : 不知道...
  * Author: R__
- * Filename: InvocationInsnNode.java
+ * Filename: InvokeInsnNode.java
  */
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.constant.CstRefItf;
 import roj.asm.util.ConstantWriter;
+import roj.asm.util.InsnList;
 import roj.asm.util.type.ParamHelper;
 import roj.util.ByteWriter;
 
-public class InvokeItfInsnNode extends InvocationInsnNode {
+public class InvokeItfInsnNode extends InvokeInsnNode {
     public InvokeItfInsnNode() {
         super(Opcodes.INVOKEINTERFACE);
     }
@@ -25,12 +26,18 @@ public class InvokeItfInsnNode extends InvocationInsnNode {
 
     public InvokeItfInsnNode(CstRefItf ref, short flag) {
         super(Opcodes.INVOKEINTERFACE, ref);
-        //this.flag = flag;
     }
 
     @Override
     protected boolean validate() {
         return code == Opcodes.INVOKEINTERFACE;
+    }
+
+    @Override
+    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+        if(mainVer < 52)
+            throw new IllegalArgumentException("Interface supported since version 53");
+        super.verify(list, index, mainVer);
     }
 
     public byte count;
@@ -45,20 +52,21 @@ public class InvokeItfInsnNode extends InvocationInsnNode {
         toByteArray(w);
 
         // The fourth operand byte of each invokeinterface instruction must have the value zero.
-        //if((flag & 255) != 0) {
-        //    throw new IllegalArgumentException("The fourth operand byte of each invokeinterface instruction must have the value zero.");
-        //}
+        // Thus, we ignore it.
         int cnt = 1;
-        for (int i = 0; i < parameters.size(); i++) {
-            cnt += parameters.get(i).length();
+        for (int i = 0; i < params.size(); i++) {
+            cnt += params.get(i).length();
         }
         count = (byte) cnt;
 
-        // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary to store the arguments to be passed to the interface method, as implied by the descriptor of the CONSTANT_NameAndType_info structure referenced by the CONSTANT_InterfaceMethodref constant pool entry.
+        // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary
+        // to store the arguments to be passed to the interface method,
+        // as implied by the descriptor of the CONSTANT_NameAndType_info structure
+        // referenced by the CONSTANT_InterfaceMethodref constant pool entry.
 
-        parameters.add(returnType);
-        mid = pool.getItfRefId(owner, name, ParamHelper.getMethod(parameters));
-        parameters.remove(parameters.size() - 1);
+        params.add(returnType);
+        mid = pool.getItfRefId(owner, name, ParamHelper.getMethod(params));
+        params.remove(params.size() - 1);
     }
 
     public void toByteArray(ByteWriter w) {

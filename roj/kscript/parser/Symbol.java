@@ -30,8 +30,7 @@ public final class Symbol {
             "?", ":", ",", ";",
             "=", "+=", "-=", "*=", "/=", "%=",
             "&=", "^=", "|=", "<<=", ">>=", ">>>=",
-            "$<", ">$", // 预处理器 (such as minecraft:xxx)
-            "-" // 这东西不存在于lexer中
+            "$<", ">$" // 预处理器 (such as minecraft:xxx)
     };
 
     public static final short
@@ -51,8 +50,6 @@ public final class Symbol {
             and_assign = 544, xor_assign = 545, or_assign = 546, lsh_assign = 547, rsh_assign = 548, rsh_unsigned_assign = 549,
             preprocess_s = 550, preprocess_e = 551;
 
-    public static final short NEGATIVE = 552;
-
     private static final TrieTree<Short> indexOf = new TrieTree<>();
     private static final Int2IntMap priorities = new Int2IntMap();
 
@@ -70,9 +67,6 @@ public final class Symbol {
         final Int2IntMap p1 = priorities;
 
         // 操作符优先级表
-
-        p1.putInt(logic_and, 101);
-        p1.putInt(logic_or, 101);
 
         p1.putInt(and, 100);
         p1.putInt(or,  100);
@@ -98,13 +92,16 @@ public final class Symbol {
         p1.putInt(feq, 95);
         p1.putInt(equ, 95);
         p1.putInt(neq, 95);
+
+        p1.putInt(logic_and, 94);
+        p1.putInt(logic_or, 94);
     }
 
     public static short indexOf(CharSequence s) {
         return indexOf.getOrDefault(s, WordPresets.ERROR);
     }
 
-    public static boolean isSymbol(Word w) {
+    public static boolean is(Word w) {
         return w.type() > 500 && w.type() <= 1000;
     }
 
@@ -115,7 +112,7 @@ public final class Symbol {
         return prio;
     }
 
-    public static int argumentCount(short type) {
+    public static int argc(short type) {
         switch (type) {
             case logic_not:
             case inc:

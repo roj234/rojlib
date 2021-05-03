@@ -28,4 +28,9 @@ public class ScriptException extends RuntimeException {
     public StackTraceElement[] getStackTrace() {
         return traces;
     }
+
+    @Override
+    public String toString() {
+        return "脚本异常: " + getMessage();
+    }
 }

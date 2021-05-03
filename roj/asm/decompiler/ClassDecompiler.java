@@ -4,6 +4,7 @@ import roj.asm.constant.*;
 import roj.asm.struct.Method;
 import roj.asm.struct.attr.AttrCode;
 import roj.asm.struct.insn.IIndexInsnNode;
+import roj.asm.struct.insn.InvokeInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.NodeHelper;
 import roj.asm.util.type.LocalVariable;
@@ -68,7 +69,7 @@ public class ClassDecompiler {
                 break;
                 case INVOKEVIRTUAL:
                 case INVOKEINTERFACE: {
-                    roj.asm.struct.insn.InvocationInsnNode node1 = (roj.asm.struct.insn.InvocationInsnNode) node;
+                    InvokeInsnNode node1 = (InvokeInsnNode) node;
 
                     String[] paramNames = getParam(opStack, node1);
                     String targetInstance = opStack.pop();
@@ -81,7 +82,7 @@ public class ClassDecompiler {
                 }
                 break;
                 case INVOKESTATIC: {
-                    roj.asm.struct.insn.InvocationInsnNode node1 = (roj.asm.struct.insn.InvocationInsnNode) node;
+                    InvokeInsnNode node1 = (InvokeInsnNode) node;
 
                     String[] paramNames = getParam(opStack, node1);
 
@@ -93,7 +94,7 @@ public class ClassDecompiler {
                 }
                 break;
                 case INVOKESPECIAL: {
-                    roj.asm.struct.insn.InvocationInsnNode node1 = (roj.asm.struct.insn.InvocationInsnNode) node;
+                    InvokeInsnNode node1 = (InvokeInsnNode) node;
 
                     String[] paramNames = getParam(opStack, node1);
                     String targetInstance = opStack.pop();
@@ -253,7 +254,7 @@ public class ClassDecompiler {
     }
 
     @Nonnull
-    public static String[] getParam(ReuseStack<String> opStack, roj.asm.struct.insn.InvocationInsnNode node1) {
+    public static String[] getParam(ReuseStack<String> opStack, InvokeInsnNode node1) {
         int paramSize = node1.parameters().size();
 
         String[] parameterNames = new String[paramSize];

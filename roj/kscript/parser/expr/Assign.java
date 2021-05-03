@@ -1,8 +1,8 @@
 package roj.kscript.parser.expr;
 
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
+import roj.kscript.ast.OpCode;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
@@ -21,7 +21,7 @@ public final class Assign implements Expression {
     Expression right;
 
     public Assign(Expression left, Expression right) {
-        this.left = (LoadExpression) left.requireWrite();
+        this.left = (LoadExpression) left;
         this.right = right;
     }
 
@@ -56,32 +56,33 @@ public final class Assign implements Expression {
                             final int count = bin.operator == Symbol.add ? i : -i;
 
                             if (var) {
-                                String name = ((Variable) left).name;
-                                tree.Inc(name, count);
+                                Variable v = (Variable) this.left;
+                                tree.Inc(v.name, count);
+                                v._after_write_op();
                             } else {
                                 left.writeLoad(tree);
 
                                 /*if(SHOULD_SWAP_OP && !noRet) {
                                     // CURRENT: obj key
-                                    tree.Std(ASTCode.DUP2)
+                                    tree.Std(OpCode.DUP2)
                                             // CURRENT: obj key obj key
-                                            .Std(ASTCode.GET_OBJECT)
+                                            .Std(OpCode.GET_OBJECT)
                                             // CURRENT: obj key val
                                             .Load(KInt.valueOf(count))
                                             // CURRENT: obj key val int
-                                            .Std(bin.operator == Symbol.add ? ASTCode.ADD : ASTCode.SUB)
+                                            .Std(bin.operator == Symbol.add ? OpCode.ADD : OpCode.SUB)
                                             // CURRENT: obj key val
-                                            .Std(ASTCode.PUT_OBJECT);
+                                            .Std(OpCode.PUT_OBJECT);
 
                                     // CURRENT: obj key
 
                                     return;
                                 } else {*/
-                                    tree.Std(ASTCode.DUP2)
-                                            .Std(ASTCode.GET_OBJECT)
+                                    tree.Std(OpCode.DUP2)
+                                            .Std(OpCode.GET_OBJ)
                                             .Load(KInt.valueOf(count))
-                                            .Std(bin.operator == Symbol.add ? ASTCode.ADD : ASTCode.SUB)
-                                            .Std(ASTCode.PUT_OBJECT);
+                                            .Std(bin.operator == Symbol.add ? OpCode.ADD : OpCode.SUB)
+                                            .Std(OpCode.PUT_OBJ);
                                 //}
                             }
 
@@ -93,9 +94,9 @@ public final class Assign implements Expression {
                         // etc. k = k * 3;
                         if (!var) {
                             left.writeLoad(tree);
-                            bin.right.write(tree.Std(ASTCode.DUP2).Std(ASTCode.GET_OBJECT), false);
+                            bin.right.write(tree.Std(OpCode.DUP2).Std(OpCode.GET_OBJ), false);
                             bin.writeOperator(tree);
-                            tree.Std(ASTCode.PUT_OBJECT);
+                            tree.Std(OpCode.PUT_OBJ);
 
                             optimized = true;
                         }
@@ -108,12 +109,14 @@ public final class Assign implements Expression {
         if (!optimized) {
             if (var) {
                 right.write(tree, false);
-                tree.Set(((Variable) left).name);
+                Variable v = (Variable) this.left;
+                tree.Set(v.name);
+                v._after_write_op();
             } else {
                 // parent name value
                 left.writeLoad(tree);
                 right.write(tree, false);
-                tree.Std(ASTCode.PUT_OBJECT);
+                tree.Std(OpCode.PUT_OBJ);
             }
         }
 
@@ -138,14 +141,14 @@ public final class Assign implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
-        final KType result = right.compute(parameters, thisContext);
+    public KType compute(Map<String, KType> param, IObject $this) {
+        final KType result = right.compute(param, $this);
         if(left instanceof Variable) {
             Variable v = (Variable) left;
-            parameters.put(v.name, result);
+            param.put(v.name, result);
         } else {
             Field field = (Field) left;
-            field.parent.compute(parameters, thisContext).asObject().put(field.name, result);
+            field.parent.compute(param, $this).asObject().put(field.name, result);
         }
         return result;
     }

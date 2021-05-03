@@ -12,6 +12,7 @@ import roj.asm.Opcodes;
 import roj.asm.constant.Constant;
 import roj.asm.constant.CstDynamic;
 import roj.asm.util.ConstantWriter;
+import roj.asm.util.InsnList;
 import roj.asm.util.type.NativeType;
 import roj.util.ByteWriter;
 
@@ -24,19 +25,14 @@ public final class LoadConstInsnNode extends InsnNode {
         if (c == null)
             throw new NullPointerException("Constant");
 
-        /**
-         * CONSTANT_Integer, CONSTANT_Float, or CONSTANT_String if the class file version number is less than 49.0.
-         *
-         * CONSTANT_Integer, CONSTANT_Float, CONSTANT_String, or CONSTANT_Class if the class file version number is
-         * 49.0 or 50.0.
-         *
-         * CONSTANT_Integer, CONSTANT_Float, CONSTANT_String, CONSTANT_Class, CONSTANT_MethodType, or
-         * CONSTANT_MethodHandle if the class file version number is 51.0 or above.
-         */
+        _verify(code, c);
+        this.c = c;
+    }
 
+    public static void _verify(byte code, Constant c) {
         boolean dj = false;
         if(c.type == DYNAMIC) {
-            String v = ((CstDynamic)c).getDesc().getType().getString();
+            String v = ((CstDynamic) c).getDesc().getType().getString();
             dj = v.charAt(0) == NativeType.DOUBLE || v.charAt(0) == NativeType.LONG;
         }
 
@@ -61,12 +57,43 @@ public final class LoadConstInsnNode extends InsnNode {
             default:
                 ex(code, c);
         }
-        this.c = c;
+    }
+
+    @Override
+    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+        _verify(code, c);
+        /**
+         * The constant pool entry referenced by that index must be of type:
+         *
+         * Int, Float, or String if main < 49
+         *
+         * Int, Float, String, or Class if main in 49, 50
+         *
+         * Int, Float, String, Class, MethodType, or MethodHandle if main >= 51
+         */
+         switch (c.type) {
+             case INT:
+             case FLOAT:
+             case STRING:
+             case LONG:
+             case DOUBLE:
+                 break;
+             case CLASS:
+                 if(mainVer < 49)
+                     throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
+             case METHOD_TYPE:
+             case METHOD_HANDLE:
+                 if(mainVer < 51)
+                     throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
+             case DYNAMIC:
+                 if(mainVer < 55)
+                     throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
+         }
     }
 
     private static void ex(byte code, Constant c) {
-        throw new IllegalArgumentException(Opcodes.toString0(code) + " can only load CLASS, STRING, DYNAMIC, " +
-                "METHOD_HANDLE, METHOD_TYPE, FLOAT, DOUBLE, LONG or INT, got: " + c);
+        throw new IllegalArgumentException(Opcodes.toString0(code) + " can only load " + (code == Opcodes.LDC2_W ? "DOUBLE or LONG" : "CLASS, STRING, DYNAMIC, " +
+                "METHOD_HANDLE, METHOD_TYPE, FLOAT or INT") + ", got: " + c);
     }
 
     @Override

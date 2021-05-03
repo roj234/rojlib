@@ -16,7 +16,7 @@ import roj.asm.struct.Method;
 import roj.asm.struct.attr.AttrCode;
 import roj.asm.struct.insn.ClassInsnNode;
 import roj.asm.struct.insn.FieldInsnNode;
-import roj.asm.struct.insn.InvocationInsnNode;
+import roj.asm.struct.insn.InvokeInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
@@ -269,7 +269,7 @@ public final class DirectMethodAccess {
             code.stackSize = Math.max(size + i_stc, 1);
             code.localSize = size + 1;
 
-            insn.add(new InvocationInsnNode(invokeCode == null || i_stc == 1 ? Opcodes.INVOKESTATIC : (invokeCode.contains(k) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), t_Cls, method.getName(), desc));
+            insn.add(new InvokeInsnNode(invokeCode == null || i_stc == 1 ? Opcodes.INVOKESTATIC : (invokeCode.contains(k) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), t_Cls, method.getName(), desc));
             insn.add(NodeHelper.X_RETURN(ParamHelper.nativeType(method.getReturnType())));
             insn.add(AttrCode.METHOD_END_MARK);
         }
@@ -293,7 +293,7 @@ public final class DirectMethodAccess {
         code.localSize = 1;
         final InsnList insn = code.instructions;
         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
-        insn.add(new InvocationInsnNode(Opcodes.INVOKESPECIAL, MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
+        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
         insn.add(NodeHelper.cached(Opcodes.RETURN));
         insn.add(AttrCode.METHOD_END_MARK);
 

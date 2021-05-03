@@ -68,9 +68,4 @@ public final class KNull extends KObject {
     public boolean asBool() {
         return false;
     }
-
-    @Override
-    public KType copy() {
-        return this;
-    }
 }

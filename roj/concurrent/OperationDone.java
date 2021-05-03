@@ -10,8 +10,8 @@ package roj.concurrent;
 public final class OperationDone extends RuntimeException {
     static final long serialVersionUID = 2333L;
 
-    public static final OperationDone NEVER = new OperationDone("It would never happen!");
-    public static final OperationDone INSTANCE = new OperationDone("Operation has been done.");
+    public static final OperationDone NEVER = new OperationDone("It never throws, and once you caught it, the stack trace is probably useless.");
+    public static final OperationDone INSTANCE = new OperationDone("Operation done.");
 
     private OperationDone(String s) {
         super(s);

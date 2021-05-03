@@ -9,12 +9,12 @@
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
+import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
 import java.util.function.ToIntFunction;
 
-import static roj.asm.Opcodes.GOTO;
-import static roj.asm.Opcodes.GOTO_W;
+import static roj.asm.Opcodes.*;
 
 public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
     public GotoInsnNode(byte code, InsnNode target) {
@@ -46,9 +46,13 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
 
     int delta;
 
+    private int cache_id_4_verify;
+
     @Override
     public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
-        final int i = pcRev.applyAsInt(target = validate(target));
+        int i = pcRev.applyAsInt(target = validate(target));
+
+        cache_id_4_verify = i;
 
         if(i == -1) {
             delta = 0;
@@ -58,6 +62,12 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
         int od = delta;
         int nd = delta = (i - pcRev.applyAsInt(this));
         return ( ((short) od) == od ) != ( ((short) nd) == nd );
+    }
+
+    @Override
+    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+        if(cache_id_4_verify > 0 && list.get(cache_id_4_verify - 1).code == WIDE)
+            throw new IllegalArgumentException("Jump target must not \"after\" wide instruction");
     }
 
     public void toByteArray(ByteWriter w) {

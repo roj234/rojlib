@@ -10,16 +10,19 @@ package roj.reflect;
 
 import roj.collect.EmptyList;
 import roj.collect.MyHashMap;
+import roj.util.Helpers;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.*;
 
 /**
- * 动态修改Enum
+ * 动态修改Enum <BR>
+ *     推荐preload
  */
 public final class EnumHelper<E extends Enum<E>> {
     private static final Field ORDINAL_FIELD;
+    private static final DirectFieldAccessor mapSet;
 
     static {
         Field fl = null;
@@ -29,6 +32,12 @@ public final class EnumHelper<E extends Enum<E>> {
         } catch (NoSuchFieldException ignored) {
         }
         ORDINAL_FIELD = fl;
+
+        DirectFieldAccessor ecd = null;
+        try {
+            ecd = DirectFieldAccess.get(Class.class, Class.class.getDeclaredField("enumConstantDirectory"));
+        } catch (NoSuchFieldException ignored) {}
+        mapSet = ecd;
     }
 
     private final Class<E> clazz;
@@ -36,6 +45,11 @@ public final class EnumHelper<E extends Enum<E>> {
     private Field values;
     private final Collection<Field> switchFields;
     private final Deque<UndoInfo<E>> undoStack = new LinkedList<>();
+
+    private Class<?>[] lastAdditionalTypes;
+    private Constructor<?> lastConstructor;
+
+    public String valueName = "$VALUES";
 
     /**
      * Switch uses ordinal to decide enum;
@@ -60,7 +74,13 @@ public final class EnumHelper<E extends Enum<E>> {
         try {
             undoStack.push(new UndoInfo<>(this));
 
-            Constructor<?> cst = findConstructor(additionalTypes, clazz);
+            Constructor<?> cst;
+            if(Arrays.equals(additionalTypes, lastAdditionalTypes)) {
+                cst = lastConstructor;
+            } else {
+                lastConstructor = cst = findConstructor(additionalTypes, clazz);
+                lastAdditionalTypes = additionalTypes;
+            }
 
             return construct(clazz, cst, value, ordinal, additional);
         } catch (ReflectiveOperationException e) {
@@ -87,7 +107,7 @@ public final class EnumHelper<E extends Enum<E>> {
         try {
             undoStack.push(new UndoInfo<>(this));
 
-            Field vf = findValuesField();
+            Field vf = findValuesField(valueName);
 
             E[] values = values();
             for (int i = 0; i < values.length; i++) {
@@ -115,11 +135,11 @@ public final class EnumHelper<E extends Enum<E>> {
         }
     }
 
-    private Field findValuesField() {
+    private Field findValuesField(String valueId) {
         if (values == null) {
             // the values in the enum class
             for (Field field : fields) {
-                if (field.getName().equals("$VALUES")) {
+                if (field.getName().equals(valueId)) {
                     values = field;
                     break;
                 }
@@ -199,7 +219,7 @@ public final class EnumHelper<E extends Enum<E>> {
         if (add.length > 0)
             System.arraycopy(add, 0, paramType, 2, add.length);
 
-        return (clazz.getDeclaredConstructor(paramType));
+        return clazz.getDeclaredConstructor(paramType);
     }
 
     private E construct(Class<E> clazz, Constructor<?> cst, String value, int ordinal, Object[] add) throws ReflectiveOperationException {
@@ -209,7 +229,15 @@ public final class EnumHelper<E extends Enum<E>> {
         if (add.length > 0)
             System.arraycopy(add, 0, param, 2, add.length);
 
-        return clazz.cast(cst.newInstance(param));
+        E cast = clazz.cast(cst.newInstance(param));
+
+        mapSet.setInstance(clazz);
+        if(mapSet.getObject() != null) {
+            Map<String, E> map = Helpers.cast(mapSet.getObject());
+            map.put(value, cast);
+        }
+
+        return cast;
     }
 
     private void replace(String name, Object val) {
@@ -280,7 +308,7 @@ public final class EnumHelper<E extends Enum<E>> {
 
     @SuppressWarnings("unchecked")
     public E[] values() throws IllegalAccessException {
-        return (E[]) findValuesField().get(null);
+        return (E[]) findValuesField(valueName).get(null);
     }
 
     private static final class UndoInfo<E extends Enum<E>> {
@@ -304,7 +332,7 @@ public final class EnumHelper<E extends Enum<E>> {
         }
 
         private void undo() throws IllegalAccessException {
-            Field vf = helper.findValuesField();
+            Field vf = helper.findValuesField(helper.valueName);
             ReflectionUtils.setFinal(vf, values);
 
             for (int i = 0; i < values.length; i++) {

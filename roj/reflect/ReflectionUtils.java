@@ -336,12 +336,12 @@ public final class ReflectionUtils {
 
         IFieldAccessor acc = unsafeAccIfPresent(field);
         acc.setInstance(o);
-        acc.set(value);
+        acc.setObject(value);
     }
 
     public static IFieldAccessor unsafeAccIfPresent(@Nonnull Field field) {
         try {
-            return new InternalAPI.UFA(field);
+            return new Int.UFA(field);
         } catch (Throwable e) {
             return new FDA(field);
         }
@@ -368,7 +368,7 @@ public final class ReflectionUtils {
         }
 
         @Override
-        public Object get() {
+        public Object getObject() {
             try {
                 return field.get(instance);
             } catch (IllegalAccessException e) {
@@ -449,7 +449,7 @@ public final class ReflectionUtils {
         }
 
         @Override
-        public void set(Object obj) {
+        public void setObject(Object obj) {
             try {
                 field.set(instance, obj);
             } catch (IllegalAccessException e) {

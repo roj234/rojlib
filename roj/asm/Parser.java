@@ -30,6 +30,24 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+/*
+ *
+ * method returns Object => only use areturn && value instanceof 'return type'
+ * (§4.3.3).
+ *
+ * <init>(), and any method returns void, can only use 'return'.
+ *
+ * Execution never falls off the bottom of the code array.
+ *
+ * Once verify jsr/jsr_w:
+ *  stack.stream().plus(localVars.stream()).anyMatch(type == uninitialized).then(throw Error)
+ *
+ * Once verify any node:
+ *  stack.equals(lastExecutionPath.stack) || throw Error
+ *
+ * No local variable (or pair, type == long or double) can be accessed before assign.
+ *
+ */
 public final class Parser {
     public static final int SKIP_DEBUG = 0x01;
 

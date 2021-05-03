@@ -11,6 +11,7 @@ package roj.asm.struct.insn;
 import roj.asm.Opcodes;
 import roj.asm.constant.CstClass;
 import roj.asm.util.ConstantWriter;
+import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
 // new / instanceof
@@ -72,6 +73,11 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         }
 
         w.writeShort(this.cid = pool.getClassId(name));
+    }
+
+    @Override
+    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+
     }
 
     public String toString() {

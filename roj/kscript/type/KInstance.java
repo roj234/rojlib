@@ -33,9 +33,4 @@ public final class KInstance extends KObject {
 
         this.constructor = cst;
     }
-
-    @Override
-    public KType copy() {
-        return this;
-    }
 }

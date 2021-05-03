@@ -2,8 +2,8 @@ package roj.kscript.parser.expr;
 
 import roj.kscript.KConstants;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTCode;
 import roj.kscript.ast.ASTree;
+import roj.kscript.ast.OpCode;
 import roj.kscript.type.KObject;
 import roj.kscript.type.KString;
 import roj.kscript.type.KType;
@@ -42,11 +42,11 @@ public final class ObjectDefine implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> parameters, IObject thisContext) {
+    public KType compute(Map<String, KType> param, IObject $this) {
         final KObject v = (KObject) object.copy();
         if(!expr.isEmpty()) {
             for (Map.Entry<String, Expression> entry : expr.entrySet()) {
-                v.put(entry.getKey(), entry.getValue().compute(parameters, thisContext));
+                v.put(entry.getKey(), entry.getValue().compute(param, $this));
             }
         }
         return v;
@@ -58,8 +58,8 @@ public final class ObjectDefine implements Expression {
         for (Map.Entry<String, Expression> entry : expr.entrySet()) {
             Expression expr = entry.getValue();
             if (expr != null) {
-                expr.write(tree.Std(ASTCode.DUP).Load(KString.valueOf(entry.getKey())), false);
-                tree.Std(ASTCode.PUT_OBJECT);
+                expr.write(tree.Std(OpCode.DUP).Load(KString.valueOf(entry.getKey())), false);
+                tree.Std(OpCode.PUT_OBJ);
             }
         }
     }

@@ -3,9 +3,6 @@ package roj.config;
 import roj.math.MathUtils;
 import roj.text.CharList;
 
-import java.io.PrintStream;
-import java.io.PrintWriter;
-
 /**
  * Signals that an error has been reached unexpectedly
  * while parsing.
@@ -13,7 +10,7 @@ import java.io.PrintWriter;
  * @see Exception
  */
 public final class ParseException extends Exception {
-    private static final long serialVersionUID = 2703218443322787634L;
+    private static final long serialVersionUID = 3703218443322787634L;
     private static final boolean DEBUG = true;
 
     /**
@@ -49,20 +46,6 @@ public final class ParseException extends Exception {
 
     public int getLineOffset() {
         return linePos;
-    }
-
-    @Override
-    public void printStackTrace(PrintStream s) {
-        Exception e = new Exception(toString());
-        e.setStackTrace(getStackTrace());
-        e.printStackTrace(s);
-    }
-
-    @Override
-    public void printStackTrace(PrintWriter s) {
-        Exception e = new Exception(toString());
-        e.setStackTrace(getStackTrace());
-        e.printStackTrace(s);
     }
 
     @Override
@@ -137,7 +120,7 @@ public final class ParseException extends Exception {
         StringBuilder k = new StringBuilder().append("解析错误:\r\n  Line ").append(this.line).append(": ");
 
         if (line.length() > 512) {
-            k.append("偏移量 ").append(this.linePos);
+            k.append("当前行偏移量 ").append(this.linePos);
         } else {
             k.append(line).append("\r\n");
             int off = this.linePos + 9 + MathUtils.digitCount(this.line);
@@ -145,13 +128,16 @@ public final class ParseException extends Exception {
                 k.append('-');
             }
 
-            for (int i = line.length() - 1; i >= 0; i--) {
-                if (line.charAt(i) > 255)
+            for (int i = linePos; i >= 0; i--) {
+                char c = line.charAt(i);
+                if (c > 255) // 双字节我直接看做中文了, 再说吧
                     k.append('-');
+                else if(c == 9) // 制表符, cmd中显示5个
+                    k.append("----");
             }
             k.append('^');
         }
 
-        return k.append("\r\n原因: ").append(msg).append("\r\n").toString();
+        return k.append("\r\n总偏移量: ").append(this.index).append("\r\n原因: ").append(msg).append("\r\n").toString();
     }
 }

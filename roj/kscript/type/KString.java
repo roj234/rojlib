@@ -95,11 +95,6 @@ public final class KString extends KBase {
     }
 
     @Override
-    public KType copy() {
-        return this;
-    }
-
-    @Override
     public boolean canCastTo(Type type) {
         switch (type) {
             case BOOL:
