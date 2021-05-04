@@ -808,15 +808,67 @@ public abstract class MathUtils {
     }
 
     public static int parseInt(CharSequence s) throws NumberFormatException {
-        return parseInt(false, s, 10);
+        return parseInt(s, 10);
     }
 
-    public static int parseInt(boolean negative, CharSequence s, int radix) throws NumberFormatException {
-        /*int*/
+    public static int parseInt(CharSequence s, int radix) throws NumberFormatException {
         long result = 0;
 
         if (s.length() > 0) {
-            int i = negative ? 1 : 0, len = s.length();
+            int i = 0, len = s.length();
+
+            int digit;
+
+            while (i < len) {
+                if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
+                    throw new NumberFormatException("Not a number at offset " + (i - 1) + " : " + s);
+
+                result *= radix;
+                result += digit;
+            }
+        } else {
+            throw new NumberFormatException(s.toString());
+        }
+
+        if (result > 4294967295L || result < Integer.MIN_VALUE)
+            throw new NumberFormatException("Value overflow " + result + " : " + s);
+
+        return (int) result;
+    }
+
+    public static boolean parseIntErrorable(CharSequence s, int[] radixAndReturn) {
+        long result = 0;
+        int radix = radixAndReturn[0];
+
+        if (s.length() > 0) {
+            int i = 0, len = s.length();
+
+            int digit;
+
+            while (i < len) {
+                if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
+                    return false;
+
+                result *= radix;
+                result += digit;
+            }
+        } else {
+            return false;
+        }
+
+        if (result > 4294967295L || result < Integer.MIN_VALUE)
+            return false;
+
+        radixAndReturn[0] = (int) result;
+
+        return true;
+    }
+
+    public static int parseIntChecked(CharSequence s, int radix) throws NumberFormatException {
+        long result = 0;
+
+        if (s.length() > 0) {
+            int i = 0, len = s.length();
 
             byte[] c;
             switch (radix) {
@@ -835,13 +887,11 @@ public abstract class MathUtils {
                 default:
                     throw new NumberFormatException("Unsupported radix " + radix);
             }
-            if (!TextUtil.checkInt(c, s, 0, negative || radix != 10)) {
+            if (!TextUtil.checkInt(c, s, 0, radix != 10)) {
                 throw new NumberFormatException("checkInt() failed : " + s);
             }
 
             int digit;
-
-            //int prev = 0;
 
             while (i < len) {
                 if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
@@ -849,20 +899,10 @@ public abstract class MathUtils {
 
                 result *= radix;
                 result += digit;
-
-                /*if (result < prev) {
-                    throw new NumberFormatException("Value overflow " + result + " : " + s);
-                }
-
-                prev = result;*/
             }
         } else {
             throw new NumberFormatException(s.toString());
         }
-
-        //System.out.println("Result = " + (negative ? -result : result));
-
-        result = negative ? -result : result;
 
         if (result > 4294967295L || result < Integer.MIN_VALUE)
             throw new NumberFormatException("Value overflow " + result + " : " + s);

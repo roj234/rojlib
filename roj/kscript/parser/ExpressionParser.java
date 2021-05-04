@@ -6,7 +6,7 @@ import roj.concurrent.OperationDone;
 import roj.config.ParseException;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.kscript.api.API;
+import roj.kscript.KConstants;
 import roj.kscript.ast.ASTree;
 import roj.kscript.ast.LabelNode;
 import roj.kscript.func.KFunction;
@@ -241,7 +241,7 @@ public final class ExpressionParser {
         ArrayList<Expression> tmp = words;
         Int2IntMap tokens = ordered;
         if(!tmp.isEmpty() || !ordered.isEmpty()) // 使用中
-            return API.cachedEP(depth + 1).read(ctx, exprFlag);
+            return KConstants.cachedEP(depth + 1).read(ctx, exprFlag);
 
         Expression cur = null;
         // 这TM其实是个链表
@@ -434,7 +434,7 @@ public final class ExpressionParser {
                     if (expr == null) {
                         throw wr.err("invalid_right_Value");
                     }
-                    cur = new Assign(cur, new Binary(assign2op(w.type()), cur, expr, null));
+                    cur = new Assign(cur, new Binary(assign2op(w.type()), cur, expr));
                     break;
                 case Symbol.dot: {
                     if ((opFlag & 1) == 0) {
@@ -671,8 +671,7 @@ public final class ExpressionParser {
                     throw wr.err("delete.unable_variable");
             }
 
-
-            tmp.add(cur/*.compress()*/);
+            tmp.add(cur);
         } else if (pf != null) {
             throw wr.err("missing_operand");
         }
@@ -707,9 +706,11 @@ public final class ExpressionParser {
                         op = tmp.remove(v),
                         r = tmp.remove(v);
 
-                result = new Binary(((SymTmp) op).operator, l, r, i == e - 1 ? ifFalse : LabelNode._INT_FLAG_).compress();
+                result = new Binary(((SymTmp) op).operator, l, r);
                 tmp.set(v - 1, result);
             }
+            ((Binary)result).setTarget(ifFalse);
+            result = result.compress();
 
             tokens.clear();
             sort.clear();
@@ -755,7 +756,7 @@ public final class ExpressionParser {
             case Symbol.add_assign:
                 return Symbol.add;
             case Symbol.div_assign:
-                return Symbol.divide;
+                return Symbol.div;
             case Symbol.and_assign:
                 return Symbol.and;
             case Symbol.lsh_assign:

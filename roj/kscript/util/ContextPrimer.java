@@ -7,6 +7,7 @@ import roj.kscript.ast.Context;
 import roj.kscript.ast.Frame;
 import roj.kscript.ast.Node;
 import roj.kscript.type.KType;
+import roj.kscript.util.opm.GlobalVarMap;
 import roj.kscript.util.opm.KOEntry;
 import roj.util.Helpers;
 
@@ -28,19 +29,14 @@ public final class ContextPrimer {
     public ReuseStack<Set<String>> creations = new ReuseStack<>();
 
     private ContextPrimer parent;
-    private Context parentCtx;
-    private ArrayList<ContextPrimer> children = new ArrayList<>();
-    private ArrayList<Frame> hooks;
+    private Context built;
 
     public ContextPrimer(Context ctx) {
-        this.parentCtx = ctx;
         this.globals = (GlobalVarMap) ctx.getInternal();
-        this.hooks = new ArrayList<>();
     }
 
     private ContextPrimer(ContextPrimer parent) {
         this.parent = parent;
-        this.hooks = new ArrayList<>();
         this.globals = new GlobalVarMap();
     }
 
@@ -57,45 +53,34 @@ public final class ContextPrimer {
     }
 
     public void finish(Context ctx) {
+        built = ctx;
+
+        // gc
+        inRegion.clear();
+        inRegion = null;
+        creations.clear();
+        creations = null;
+
         if(parent != null) {
-            parentCtx = ctx;
-
-            inRegion.clear();
-            inRegion = null;
-            creations.clear();
-            creations = null;
-
+            // remove arg name in global, check if needed?
             for (int i = 0; i < usedArgs.size(); i++) {
                 String s = usedArgs.get(i);
                 globals.remove(s);
             }
 
-            parent.finishHook((Frame) ctx);
-        } else {
-            ctx = parentCtx;
+            // 因为现在移动了初始化时间, 所以上级一定已经初始化
+            ((Frame)ctx)._parent(parent.built);
         }
-
-        for (int i = 0; i < hooks.size(); i++) {
-            Frame frame1 = hooks.get(i);
-            frame1._parent(ctx);
-        }
-
-        children.clear();
-        children = null;
-        hooks = null;
-    }
-
-    private void finishHook(Frame frame) {
-        if(hooks != null)
-            hooks.add(frame);
-        else
-            frame._parent(parentCtx);
     }
 
     // endregion
 
     public boolean exists(String name) {
         return globals.containsKey(name) || inRegion.containsKey(name) || (parent != null && parent.exists(name));
+    }
+
+    public boolean selfExists(String name) {
+        return globals.containsKey(name) || inRegion.containsKey(name);
     }
 
     // region 作用域
@@ -144,12 +129,7 @@ public final class ContextPrimer {
     }
 
     public ContextPrimer makeChild() {
-        if(children == null)
-            throw new IllegalStateException("Built!");
-
-        ContextPrimer child = new ContextPrimer(this);
-        children.add(child);
-        return child;
+        return new ContextPrimer(this);
     }
 
     public boolean isConst(String name) {

@@ -86,7 +86,7 @@ public final class UnaryPrefix implements Expression {
 
                     tree.Std(OpCode.DUP2)
                             .Std(OpCode.GET_OBJ)
-                            .Load(KInt.valueOf(operator == Symbol.inc ? 1 : -1))
+                            .Load(KInt.Intl.valueOf(operator == Symbol.inc ? 1 : -1))
                             .Std(OpCode.ADD);
 
                     if(noRet) {
@@ -190,7 +190,7 @@ public final class UnaryPrefix implements Expression {
                             return Constant.valueOf(-cst.asDouble());
                         }
                         int isDouble = TextUtil.isNumber(cst.asString());
-                        return new Constant(isDouble == 1 ? KDouble.valueOf(-cst.asDouble()) : KInt.valueOf(-cst.asInt()));
+                        return new Constant(isDouble == 1 ? KDouble.Intl.valueOf(-cst.asDouble()) : KInt.Intl.valueOf(-cst.asInt()));
                 }
                 break;
             case 3:

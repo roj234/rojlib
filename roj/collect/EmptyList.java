@@ -12,7 +12,7 @@ import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.UnaryOperator;
 
-public class EmptyList<E> implements List<E>, Set<E> {
+public final class EmptyList<E> implements List<E>, Set<E> {
     public static final Object[] EMPTY = new Object[0];
     public static final Class<?>[] EMPTY_C = new Class<?>[0];
 
@@ -37,7 +37,7 @@ public class EmptyList<E> implements List<E>, Set<E> {
 
     @Override
     public boolean isEmpty() {
-        return false;
+        return true;
     }
 
     @Override
@@ -65,7 +65,7 @@ public class EmptyList<E> implements List<E>, Set<E> {
 
     @Override
     public boolean add(E e) {
-        return true;
+        return false;
     }
 
     @Override

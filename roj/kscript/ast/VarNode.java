@@ -13,7 +13,7 @@ import roj.asm.util.InsnList;
  */
 public class VarNode extends Node {
     public static final byte GET = 0, SET = 1;
-    final String name;
+    String name;
 
     public VarNode(String name, byte type) {
         super(type == GET ? OpCode.GET_VAR : OpCode.PUT_VAR);

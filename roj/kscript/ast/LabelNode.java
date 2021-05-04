@@ -12,13 +12,6 @@ import roj.asm.util.InsnList;
  * @since 2020/9/27 13:21
  */
 public class LabelNode extends Node {
-    public static final LabelNode _INT_FLAG_ = new LabelNode() {
-        @Override
-        public String toString() {
-            return "tce_???";
-        }
-    };
-
     public LabelNode() {
         super(OpCode.LABEL);
     }

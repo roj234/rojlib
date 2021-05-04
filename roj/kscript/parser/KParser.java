@@ -8,15 +8,17 @@ import roj.config.ParseException;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
-import roj.kscript.api.API;
+import roj.kscript.KConstants;
 import roj.kscript.api.ErrorHandler;
 import roj.kscript.ast.*;
 import roj.kscript.func.KFunction;
+import roj.kscript.parser.expr.Binary;
 import roj.kscript.parser.expr.Expression;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
 import roj.kscript.util.ContextPrimer;
 import roj.kscript.util.LabelInfo;
+import roj.kscript.util.NotStatementException;
 import roj.kscript.util.SwitchMap;
 import roj.util.Helpers;
 
@@ -132,13 +134,17 @@ public class KParser implements ParseContext {
         wr.setLineHandler(tree);
 
         Word w;
-        while (true) {
-            w = wr.nextWord();
-            if (w.type() == WordPresets.EOF) {
-                break;
-            } else {
-                statement(w);
+        try {
+            while (true) {
+                w = wr.nextWord();
+                if (w.type() == WordPresets.EOF) {
+                    break;
+                } else {
+                    statement(w);
+                }
             }
+        } catch (NotStatementException e) {
+            _onError(wr.err("not_statement"));
         }
 
         //_checkDel();
@@ -159,7 +165,7 @@ public class KParser implements ParseContext {
 
     @Override
     public KFunction parseInnerFunc() throws ParseException {
-        KFunction fn = API.cachedFP(depth + 1, this).parseInner(tree);
+        KFunction fn = KConstants.cachedFP(depth + 1, this).parseInner(tree);
         wr.setLineHandler(tree);
 
         return fn;
@@ -360,7 +366,7 @@ public class KParser implements ParseContext {
 
                     if (flag) {
                         wr.retractWord();
-                        Expression expr = API.cachedEP(0).read(this, (short) 0);
+                        Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
                         if (expr != null) {
                             expr.write(tree, true);
                             except(Symbol.semicolon);
@@ -380,11 +386,15 @@ public class KParser implements ParseContext {
      */
     private void _return() throws ParseException {
         Word w = wr.nextWord();
+        if(depth == -1) {
+            _onError(w, "return_on_top");
+        }
+
         if (w.type() == Symbol.semicolon) {
             tree.Std(OpCode.RETURN_EMPTY);
         } else {
             wr.retractWord();
-            Expression expr = API.cachedEP(0).read(this, (short) 0);
+            Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
             if (expr == null) {
                 _onError(w, "What return it is??");
                 return;
@@ -416,7 +426,7 @@ public class KParser implements ParseContext {
         wr.retractWord();
         wr.recycle(w);
 
-        KFunction fn = API.cachedFP(depth + 1, this).parseInner(tree);
+        KFunction fn = KConstants.cachedFP(depth + 1, this).parseInner(tree);
 
         wr.setLineHandler(tree);
 
@@ -427,7 +437,11 @@ public class KParser implements ParseContext {
         }
 
         // 定义函数, 整个地方都可以用
-        ctx.global(name, fn);
+        if(ctx.selfExists(name)) {
+            tree.Load(fn).Set(name);
+        } else {
+            ctx.global(name, fn);
+        }
     }
 
     // endregion
@@ -614,7 +628,7 @@ public class KParser implements ParseContext {
         Word w = wr.nextWord();
         wr.retractWord();
 
-        Expression expr = API.cachedEP(0).read(this, (short) 0);
+        Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
         if(expr == null/* || expr.type() != -1*/) {
             _onError(w, "empty_statement");
             return;
@@ -674,7 +688,7 @@ public class KParser implements ParseContext {
         if (checkBracket)
             except(Symbol.left_s_bracket);
 
-        ExpressionParser parser = API.cachedEP(0);
+        ExpressionParser parser = KConstants.cachedEP(0);
 
         LabelNode ifFalse = new LabelNode();
 
@@ -686,8 +700,8 @@ public class KParser implements ParseContext {
 
         equ.write(tree, false);
 
-        // todo
-        tree.If(ifFalse, IfNode.IS_TRUE);
+        if(!(equ instanceof Binary)) // 简单表达式 => IS_TRUE, 复杂的话有，嗯，Binary todo 测试
+            tree.If(ifFalse, IfNode.TRUE);
 
         except(end);
 
@@ -714,23 +728,19 @@ public class KParser implements ParseContext {
 
         LabelNode end = new LabelNode();
 
-
         word = wr.nextWord();
         tree.Goto(end).node0(ifFalse);
         if (word.type() == Symbol.left_l_bracket) {
             body();
             except(Symbol.right_l_bracket);
         } else {
-            //wr.retractWord();
             statement(word);
-
         }
         tree.node0(end);
 
         // if (xx) {} else if() {}
         //      is equals to
         // if (xx) {} else { if() {} }
-
     }
 
     /**
@@ -771,7 +781,7 @@ public class KParser implements ParseContext {
 
         List<Expression> execLast = new ArrayList<>();
 
-        final ExpressionParser parser = API.cachedEP(0);
+        final ExpressionParser parser = KConstants.cachedEP(0);
         do {
             Expression expr = parser.read(this, (short) (16 | 1024));
             if (expr == null)
@@ -888,7 +898,7 @@ public class KParser implements ParseContext {
     private void _switch() throws ParseException {
         except(Symbol.left_s_bracket);
 
-        Expression expr = API.cachedEP(0).read(this, (short) 256);
+        Expression expr = KConstants.cachedEP(0).read(this, (short) 256);
         if(expr == null)
             throw wr.err("empty_switch");
 
@@ -911,7 +921,7 @@ public class KParser implements ParseContext {
             switch (wd.type()) {
                 case Keyword.CASE:
 
-                    expr = API.cachedEP(0).read(this, (short) 256);
+                    expr = KConstants.cachedEP(0).read(this, (short) 256);
                     if(expr == null) {
                         _onError(wd, "case.empty");
                         return;
@@ -1042,7 +1052,7 @@ public class KParser implements ParseContext {
                         return;
                     }
 
-                    Expression expr = API.cachedEP(0).read(this, (short) 0);
+                    Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
                     if (expr == null) {
                         _onError(w, "not_statement");
                         return;
@@ -1050,10 +1060,16 @@ public class KParser implements ParseContext {
 
                     KType val;
 
-                    // todo if duplicate?
-                    if (expr.type() != -1 && !ctx.exists(name)) {
+                    // Note: 变量第一次初始化时才可以用def，后面就必须用opcode了
+                    // Note2: 这里检测同级就好
+                    boolean exist = ctx.selfExists(name);
+                    if (expr.type() != -1 && !exist) {
                         val = expr.asCst().val();
                     } else {
+                        if(exist && type == Keyword.CONST) {
+                            _onError(w, "redefine_constant");
+                        }
+
                         expr.write(tree, false);
                         tree.Set(name);
 
@@ -1139,7 +1155,7 @@ public class KParser implements ParseContext {
         }
         wr.retractWord();
 
-        Expression expr = API.cachedEP(0).read(this, (short) 0);
+        Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
         if (expr == null) {
             _onError(k, "not_statement");
         } else {
@@ -1163,12 +1179,13 @@ public class KParser implements ParseContext {
      */
     @Override
     public void useVariable(String name) {
-        if (!ctx.exists(name)) {
-            final int i = arguments.getOrDefault(name, -1);
+        if (!ctx.selfExists(name)) {
+            int i = arguments.getOrDefault(name, -1);
             if (i != -1) {
                 ctx.loadArg(i, name);
             }
         } else {
+            // 只有存在才会更新
             ctx.updateRegion(name, tree.last());
         }
     }
@@ -1187,23 +1204,16 @@ public class KParser implements ParseContext {
     // region 输出错误
 
     private boolean success = true;     // 语法解析结果
-    /*private ToIntMap<String> undefVars; // 未定义变量
-
-    private void _checkUndefVar() {
-        for (String name : undefVars.keySet()) {
-            KType type = context.getNullable(name);
-            if (type == null || type.getType() != Type.FUNCTION) {
-                _onError(new Word().reset(0, undefVars.getInt(name), ""), "undefined_Variable");
-            }
-        }
-        undefVars.clear();
-    }*/
 
     private void _onError(ParseException e) {
         success = false;
         handler.handle("ERR", file, e);
     }
 
+    /**
+     * Notice: 语法级错误(return ,,,;)需要return, 定义级的(const v;)没必要 <BR>
+     *     不过随便了, 反正是[错误]
+     */
     private void _onError(Word word, String v) {
         success = false;
         handler.handle("ERR", file, wr.err(v, word));
@@ -1227,5 +1237,4 @@ public class KParser implements ParseContext {
     }
 
     //endregion
-
 }

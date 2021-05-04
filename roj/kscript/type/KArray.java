@@ -3,6 +3,8 @@ package roj.kscript.type;
 import roj.collect.SimpleList;
 import roj.kscript.KConstants;
 import roj.kscript.api.IObject;
+import roj.kscript.util.JavaException;
+import roj.math.MathUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -35,17 +37,15 @@ public final class KArray extends KBase implements IArray {
 
     @Override
     public void put(@Nonnull String key, KType entry) {
-        try {
-            int i = Integer.parseInt(key);
-            set(i, entry);
-        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
-            throw new IllegalArgumentException("Non-number index", e);
-        }
+        int[] arr = KConstants.getLocalIntParseArray(10);
+        if(!MathUtils.parseIntErrorable(key, arr))
+            throw new JavaException("无效索引 " + key);
+        set(arr[0], entry);
     }
 
     @Override
-    public boolean isInstanceOf(IObject map) {
-        return map instanceof IArray;
+    public boolean isInstanceOf(IObject obj) {
+        return obj instanceof IArray;
     }
 
     @Override
@@ -54,13 +54,9 @@ public final class KArray extends KBase implements IArray {
     }
 
     @Override
-    public KType getOr(String id, KType kb) {
-        try {
-            int i = Integer.parseInt(id);
-            return get(i);
-        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
-            return kb;
-        }
+    public KType getOr(String key, KType def) {
+        int[] arr = KConstants.getLocalIntParseArray(10);
+        return MathUtils.parseIntErrorable(key, arr) ? get(arr[0]) : def;
     }
 
     @Override
@@ -75,9 +71,8 @@ public final class KArray extends KBase implements IArray {
     }
 
     @Override
-    public IArray add(@Nullable KType entry) {
-        list.add(entry == null ? KNull.NULL : entry);
-        return this;
+    public void add(@Nullable KType entry) {
+        list.add(entry == null ? KUndefined.UNDEFINED : entry.markImmutable(true));
     }
 
     @Override
@@ -95,7 +90,7 @@ public final class KArray extends KBase implements IArray {
                 }
             }
         }
-        list.set(index, entry == null ? KNull.NULL : entry);
+        list.set(index, entry == null ? KUndefined.UNDEFINED : entry.markImmutable(true));
     }
 
     @Override
@@ -128,6 +123,24 @@ public final class KArray extends KBase implements IArray {
     @Override
     public KType copy() {
         return new KArray(new SimpleList<>(this.list));
+    }
+
+    @Override
+    public void copyFrom(KType type) {
+        final List<KType> list1 = type.asArray().getInternal();
+        if(list.getClass() == list1.getClass() && list.getClass() == SimpleList.class) {
+            SimpleList<KType> list = (SimpleList<KType>) this.list;
+            Object[] arr = list.getRawArray();
+            if(arr.length >= list1.size()) {
+                int selfSize = list.size();
+                System.arraycopy(((SimpleList<KType>) list1).getRawArray(), 0, arr, 0, list1.size());
+                if(selfSize > list1.size()) {
+                    Arrays.fill(arr, list1.size(), selfSize, null);
+                }
+            }
+        }
+        this.list.clear();
+        this.list.addAll(list1);
     }
 
     @Override

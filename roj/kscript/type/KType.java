@@ -1,6 +1,7 @@
 package roj.kscript.type;
 
 import roj.kscript.api.IObject;
+import roj.kscript.ast.Frame;
 import roj.kscript.func.KFunction;
 import roj.kscript.parser.expr.Expression;
 
@@ -72,11 +73,18 @@ public interface KType {
 
 
     /**
-     * 内部方法，仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.ast.LoadDataNode}中
+     * 仅用于{@link Expression#compress() Expression的缩减}, {@link roj.kscript.util.opm.GlobalVarMap#reset 全局变量重置的比对}以及{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
+     *     拷贝自身, 用于加载对象, 嗯
      */
     default KType copy() {
         return this;
     }
+
+    /**
+     * 仅用于{@link roj.kscript.util.opm.GlobalVarMap#reset 全局变量重置的比对}以及{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
+     *     从同类对象中拷贝数据
+     */
+    default void copyFrom(KType type) {}
 
     boolean canCastTo(Type type);
 
@@ -92,7 +100,22 @@ public interface KType {
         return false;
     }
 
-    default boolean isImmutable() {
-        return false;
+    /**
+     * 内部对象标记, 勿覆盖 <BR>
+     *     1: default <BR>
+     *     2: int <BR>
+     *     4: double <BR>
+     *     8: internal <BR>
+     *    16: 变量
+     */
+    default int spec() {
+        return 1;
+    }
+
+    /**
+     * 使其不可变, object无效, 因为它不是用来加载对象的
+     */
+    default KType markImmutable(boolean kind) {
+        return this;
     }
 }

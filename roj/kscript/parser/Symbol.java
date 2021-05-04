@@ -43,7 +43,7 @@ public final class Symbol {
             lss = 514, gtr = 515, geq = 516, leq = 517,
             feq = 518, equ = 519, neq = 520,
             rev = 521, and = 522, or = 523, xor = 524,
-            add = 525, sub = 526, mul = 527, divide = 528, mod = 529, pow = 530,
+            add = 525, sub = 526, mul = 527, div = 528, mod = 529, pow = 530,
             lsh = 531, rsh = 532, rsh_unsigned = 533,
             ask = 534, colon = 535, comma = 536, semicolon = 537,
             assign = 538, add_assign = 539, sub_assign = 540, mul_assign = 541, div_assign = 542, mod_assign = 543,
@@ -79,7 +79,7 @@ public final class Symbol {
         p1.putInt(pow, 98);
 
         p1.putInt(mul, 97);
-        p1.putInt(divide, 97);
+        p1.putInt(div, 97);
         p1.putInt(mod, 97);
 
         p1.putInt(add, 96);

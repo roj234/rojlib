@@ -28,7 +28,7 @@ public class NodeUtil {
             if(!cvHas.remove(wrap.sth)) {
                 // append variable
                 curr.id = wrap.sth.name;
-                curr.def = wrap.sth.def;
+                curr.v = wrap.sth.def;
                 curr.next = new VInfo();
                 curr = curr.next;
             //} else {

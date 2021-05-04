@@ -28,7 +28,7 @@ public interface IObject extends KType {
         return getOr(key, KUndefined.UNDEFINED);
     }
 
-    default boolean chmod(String id, boolean configurable, boolean enumerable, KFunction getter, KFunction setter) {
+    default boolean chmod(String key, boolean configurable, boolean enumerable, KFunction getter, KFunction setter) {
         return false;
     }
 
@@ -44,11 +44,11 @@ public interface IObject extends KType {
         return get(key).canCastTo(type);
     }
 
-    boolean isInstanceOf(IObject map);
+    boolean isInstanceOf(IObject obj);
 
     IObject getProto();
 
-    KType getOr(String id, KType kb);
+    KType getOr(String key, KType def);
 
     int size();
 

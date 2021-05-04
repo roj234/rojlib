@@ -14,10 +14,7 @@ import roj.kscript.util.LineInfo;
 import roj.kscript.util.SwitchMap;
 import roj.kscript.util.Variable;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * The ASTree (basically called the Abstract Syntax Tree, a kind of machine friendly 'code'), <br>
@@ -27,6 +24,8 @@ import java.util.List;
  * @since 2020/9/28 12:44
  */
 public final class ASTree implements LineHandler {
+    public static final int COMPRESS_DT_CTXS = 1;
+
     private Node head, tail;
     private final String depth, file;
     private String self;
@@ -88,9 +87,10 @@ public final class ASTree implements LineHandler {
         Frame frame = new Frame(lineIndexes, ctx, fr -> {
             ctx.finish(fr);
             _finalOp(fr, ctx.locals);
+            System.out.println(ASTree.this);
         });
         //System.out.println("Closure chain is " + Arrays.toString(frame.parents));
-        //System.out.println("FuncAST: \r\n" + this);
+        //System.out.println("AST: \r\n" + this);
         return (KFuncAST) new KFuncAST(head, frame).set(file, self, depth);
     }
 
@@ -100,20 +100,34 @@ public final class ASTree implements LineHandler {
     private void _finalOp(Frame frame, ArrayList<Variable> lets) {
         Node cur = this.head;
 
-        MyHashSet<Frame> closures = new MyHashSet<>();
-        int fr = 0;
+        MyHashSet<String> stringInterner = new MyHashSet<>();
+        MyHashSet<KType> dataInterner = new MyHashSet<>();
 
-        if(lets.size() > 0) {
+        MyHashSet<Frame> closures = new MyHashSet<>();
+        int i = 0;
+
+        if(!lets.isEmpty()) {
             IntBiMap<Node> indexer = new IntBiMap<>();
 
             // pass 1: optimize code
             // pass 2: index nodes
             while (cur != null) {
-                indexer.put(fr++, cur);
+                indexer.put(i++, cur);
                 switch (cur.code) {
                     case PUT_VAR:
                     case GET_VAR:
-                        closures.add(frame.findProvider(((VarNode)cur).name));
+                        VarNode cur1 = (VarNode) cur;
+                        cur1.name = stringInterner.intern(cur1.name);
+                        closures.add(frame.findProvider(cur1.name));
+                        break;
+                    case INCREASE:
+                        IncrNode cur2 = (IncrNode) cur;
+                        cur2.name = stringInterner.intern(cur2.name);
+                        closures.add(frame.findProvider(cur2.name));
+                        break;
+                    case LOAD:
+                        LoadDataNode ld = ((LoadDataNode) cur);
+                        dataInterner.intern(ld.data);
                         break;
                     case GOTO:
                     case IF:
@@ -171,7 +185,18 @@ public final class ASTree implements LineHandler {
                 switch (cur.code) {
                     case PUT_VAR:
                     case GET_VAR:
-                        closures.add(frame.findProvider(((VarNode)cur).name));
+                        VarNode cur1 = (VarNode) cur;
+                        cur1.name = stringInterner.intern(cur1.name);
+                        closures.add(frame.findProvider(cur1.name));
+                        break;
+                    case INCREASE:
+                        IncrNode cur2 = (IncrNode) cur;
+                        cur2.name = stringInterner.intern(cur2.name);
+                        closures.add(frame.findProvider(cur2.name));
+                        break;
+                    case LOAD:
+                        LoadDataNode ld = ((LoadDataNode) cur);
+                        dataInterner.intern(ld.data);
                         break;
                     case GOTO:
                     case IF:
@@ -186,45 +211,27 @@ public final class ASTree implements LineHandler {
             frame.linearDiff = Collections.emptyMap();
         }
 
-        System.out.println("Closures for " + funcName() + closures);
-
         // pass 4: generate shorten closure chains.
-        fr = 0;
-        int ct = 0;
+        ArrayList<Context> sorter = new ArrayList<>();
+
         Context self = frame;
         while (self != null) {
-            if(self instanceof Frame)
-                fr++;
+            sorter.add(self);
             self = self.parent;
-            ct++;
         }
 
-        if(closures.size() < fr) {
-            Context[] selfParent = new Context[ct];
-            ct = 0;
-            self = frame;
-            while (self != null) {
-                selfParent[ct++] = self;
-                self = self.parent;
-            }
-            List<Context> sorter = Arrays.asList(selfParent);
+        if(sorter.size() - closures.size() > COMPRESS_DT_CTXS) {
+            int j = 0;
+            if(closures.remove(null)) // 使用了 Context, but, 现在是JsFile.<root>
+                closures.add((Frame) sorter.get(0));
 
-            ct = selfParent.length - fr;
-            Context[] parents = new Context[closures.size() + ct];
-            for (fr = 0; fr < ct; fr++) {
-                parents[fr] = selfParent[fr];
-            }
+            Context[] parents = new Context[closures.size()];
             for (Frame f1 : closures) {
-                parents[ct++] = f1;
+                parents[j++] = f1;
             }
 
-            Arrays.sort(parents, (o1, o2) -> {
-                int a = sorter.indexOf(o1),
-                        b = sorter.indexOf(o2);
-                if(a == -1 || b == -1)
-                    throw new IllegalArgumentException(String.valueOf(a == -1 ? o1 : o2));
-                return (a < b) ? -1 : ((a == b) ? 0 : 1);
-            });
+            Arrays.sort(parents, CtxCpr.take(sorter));
+            //System.out.println(funcName() + ".ClosureSt=" + Arrays.toString(parents));
 
             frame.parents = parents;
         }
@@ -235,7 +242,7 @@ public final class ASTree implements LineHandler {
     }
 
     /**
-     * 结果成立往下执行，不成立去往ifFalse
+     * 若栈上为false-like去往ifFalse
      */
     public ASTree If(LabelNode ifFalse, short type) {
         return Node(new IfNode(type, ifFalse));
@@ -298,13 +305,13 @@ public final class ASTree implements LineHandler {
 
     @SuppressWarnings("fallthrough")
     public void node0(Node node) {
+        ArrayList<LabelNode> labels = this.labels;
         if (node instanceof LabelNode) {
             labels.add((LabelNode) node);
             return;
         } else if (!labels.isEmpty()) {
             for (int i = 0; i < labels.size(); i++) {
-                LabelNode node1 = labels.get(i);
-                node1.next = node;
+                labels.get(i).next = node;
             }
             labels.clear();
         }
@@ -355,5 +362,25 @@ public final class ASTree implements LineHandler {
         if(ln == null)
             ln = curLine = new LineInfo();
         ln.line = line;
+    }
+
+    private static class CtxCpr implements Comparator<Context> {
+        static final CtxCpr instance = new CtxCpr();
+
+        private ArrayList<Context> sorter;
+
+        public static CtxCpr take(ArrayList<Context> sorter) {
+            instance.sorter = sorter;
+            return instance;
+        }
+
+        @Override
+        public int compare(Context o1, Context o2) {
+            int a = sorter.indexOf(o1),
+                    b = sorter.indexOf(o2);
+            if (a == -1 || b == -1)
+                throw new IllegalArgumentException(String.valueOf(a == -1 ? o1 : o2));
+            return (a < b) ? -1 : ((a == b) ? 0 : 1);
+        }
     }
 }

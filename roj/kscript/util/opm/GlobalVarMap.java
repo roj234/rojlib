@@ -1,9 +1,7 @@
-package roj.kscript.util;
+package roj.kscript.util.opm;
 
 import roj.collect.MyHashMap;
 import roj.kscript.type.KType;
-import roj.kscript.util.opm.GOEntry;
-import roj.kscript.util.opm.KOEntry;
 
 /**
  * This file is a part of MI <br>
@@ -15,10 +13,6 @@ import roj.kscript.util.opm.KOEntry;
 public class GlobalVarMap extends MyHashMap<String, KType> {
     public GlobalVarMap() {
         super(8);
-    }
-
-    public GlobalVarMap(MyHashMap<String, KType> vars) {
-        super(vars);
     }
 
     @Override
@@ -35,12 +29,34 @@ public class GlobalVarMap extends MyHashMap<String, KType> {
             if (entry == null)
                 continue;
             while (entry != null) {
-                KType def = entry.def;
-                if(def != null)
-                    entry.v = def;
+                entry.reset();
                 entry = (GOEntry) entry.next;
             }
         }
+    }
+
+    public GlobalVarMap copy() {
+        final Entry<?, ?>[] entries = this.entries;
+        GlobalVarMap other = new GlobalVarMap();
+        other.ensureCapacity(size);
+        if (entries == null)
+            return other;
+
+        for (int i = 0; i < length; i++) {
+            GOEntry entry = (GOEntry) entries[i];
+            if (entry == null)
+                continue;
+            while (entry != null) {
+                GOEntry copy = (GOEntry) other.getOrCreateEntry(entry.k);
+                copy.flags = entry.flags;
+                copy.def = entry.def;
+                copy.chk = entry.chk;
+                copy.v = entry.v;
+                entry = (GOEntry) entry.next;
+            }
+        }
+
+        return other;
     }
 
     public void applyDefaults() {
@@ -52,7 +68,7 @@ public class GlobalVarMap extends MyHashMap<String, KType> {
             if (entry == null)
                 continue;
             while (entry != null) {
-                entry.def = entry.v;
+                entry.init();
                 entry = (GOEntry) entry.next;
             }
         }
@@ -76,5 +92,27 @@ public class GlobalVarMap extends MyHashMap<String, KType> {
 
         @Override
         public void applyDefaults() {}
+
+        public GlobalVarMap copy() {
+            final Entry<?, ?>[] entries = this.entries;
+            GlobalVarMap other = new GlobalVarMap();
+            other.ensureCapacity(size);
+            if (entries == null)
+                return other;
+
+            for (int i = 0; i < length; i++) {
+                KOEntry entry = (KOEntry) entries[i];
+                if (entry == null)
+                    continue;
+                while (entry != null) {
+                    KOEntry copy = (KOEntry) other.getOrCreateEntry(entry.k);
+                    copy.flags = entry.flags;
+                    copy.v = entry.v;
+                    entry = (GOEntry) entry.next;
+                }
+            }
+
+            return other;
+        }
     }
 }

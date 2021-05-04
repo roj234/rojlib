@@ -79,7 +79,7 @@ public class ArrayDefine implements Expression {
             if (expr != null) {
                 expr.write(tree.Std(OpCode.DUP), false);
                 tree
-                        .Load(KInt.valueOf(i))
+                        .Load(KInt.Intl.valueOf(i))
                         .Std(OpCode.PUT_OBJ);
             }
         }

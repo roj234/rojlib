@@ -12,6 +12,7 @@ import roj.kscript.type.KType;
  */
 public class GOEntry extends KOEntry {
     public KType def;
+    KType chk;
 
     public GOEntry(String k, KType v) {
         super(k, v);
@@ -20,5 +21,20 @@ public class GOEntry extends KOEntry {
     @Override
     public MyHashMap.Entry<String, KType> nextEntry() {
         return this.next;
+    }
+
+    public void init() {
+        if((def = v) != null)
+            chk = def.copy();
+    }
+
+    public void reset() {
+        KType def = this.def;
+        if(def != null) {
+            KType chk = this.chk;
+             if (!def.equalsTo(chk))
+                 chk.copyFrom(def);
+             v = chk;
+        }
     }
 }

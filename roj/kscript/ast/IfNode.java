@@ -24,7 +24,7 @@ public final class IfNode extends Node {
     Node target;
     VInfo diff;
 
-    public static final short IS_TRUE = 513;
+    public static final short TRUE = 513;
 
     public IfNode(short type, LabelNode target) {
         super(OpCode.IF);
@@ -61,7 +61,7 @@ public final class IfNode extends Node {
 
         boolean v = false;
         switch (type) {
-            case IS_TRUE - 500:
+            case TRUE - 500:
                 v = b.asBool();
                 break;
             case Symbol.lss - 500:
@@ -70,7 +70,7 @@ public final class IfNode extends Node {
             case Symbol.leq - 500: {
                 KType a = frame.pop();
                 if (!a.canCastTo(Type.INT) || !b.canCastTo(Type.INT))
-                    throw new IllegalArgumentException("operand is not number " + a + ",  " + b);
+                    throw new IllegalArgumentException("operand is not number: " + a.getClass().getName() + ", " + b.getClass().getName());
 
                 if (!a.isInt() || !b.isInt()) {
                     final double aa = a.asDouble(), bb = b.asDouble();
@@ -154,7 +154,7 @@ public final class IfNode extends Node {
         String k = null;
 
         switch (type) {
-            case IS_TRUE - 500:
+            case TRUE - 500:
                 k = "false";
                 break;
             case Symbol.lss - 500:

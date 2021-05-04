@@ -4,7 +4,7 @@ import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
 import roj.kscript.ast.OpCode;
 import roj.kscript.parser.Symbol;
-import roj.kscript.type.KInt;
+import roj.kscript.type.KDouble;
 import roj.kscript.type.KType;
 
 import javax.annotation.Nonnull;
@@ -36,93 +36,98 @@ public final class Assign implements Expression {
     @Override
     public void write(ASTree tree, boolean noRet) {
         boolean var = left instanceof Variable;
-        boolean optimized = false;
+        boolean opDone = false;
 
         if (right instanceof Binary) {
             Binary bin = (Binary) right;
 
+            Expression al = null, ar = null;
             if (bin.left.isEqual(left)) {
+                al = bin.left;
+                ar = bin.right;
+            } else if(bin.right.isEqual(left)) {
+                al = bin.right;
+                ar = bin.left;
+            }
+
+            if(al != null) {
                 switch (bin.operator) {
                     case Symbol.logic_or:
                     case Symbol.logic_and:
                         break;
                     case Symbol.add:
-                    case Symbol.dec: {
+                    case Symbol.dec:
                         // i = i + 1 or i += 1; but not i++
-                        final Expression right = bin.right;
-                        if (right.type() == INT) {
-                            int i = right.asCst().asInt();
+                        if (ar.isConstant() && ar.type() == INT || ar.type() == DOUBLE) {
+                            double i = ar.asCst().asDouble();
 
-                            final int count = bin.operator == Symbol.add ? i : -i;
+                            double count = bin.operator == Symbol.add ? i : -i;
 
                             if (var) {
+                                if(((int) count) != count)
+                                    break;
                                 Variable v = (Variable) this.left;
-                                tree.Inc(v.name, count);
+                                tree.Inc(v.name, (int) count);
                                 v._after_write_op();
+                                if(!noRet) {
+                                    tree.Get(v.name);
+                                }
                             } else {
                                 left.writeLoad(tree);
 
-                                /*if(SHOULD_SWAP_OP && !noRet) {
-                                    // CURRENT: obj key
-                                    tree.Std(OpCode.DUP2)
-                                            // CURRENT: obj key obj key
-                                            .Std(OpCode.GET_OBJECT)
-                                            // CURRENT: obj key val
-                                            .Load(KInt.valueOf(count))
-                                            // CURRENT: obj key val int
-                                            .Std(bin.operator == Symbol.add ? OpCode.ADD : OpCode.SUB)
-                                            // CURRENT: obj key val
-                                            .Std(OpCode.PUT_OBJECT);
-
-                                    // CURRENT: obj key
-
-                                    return;
-                                } else {*/
-                                    tree.Std(OpCode.DUP2)
-                                            .Std(OpCode.GET_OBJ)
-                                            .Load(KInt.valueOf(count))
-                                            .Std(bin.operator == Symbol.add ? OpCode.ADD : OpCode.SUB)
-                                            .Std(OpCode.PUT_OBJ);
-                                //}
+                                tree.Std(OpCode.DUP2)
+                                        .Std(OpCode.GET_OBJ)
+                                        .Load(KDouble.Intl.valueOf(count))
+                                        .Std(bin.operator == Symbol.add ? OpCode.ADD : OpCode.SUB);
+                                if(!noRet) {
+                                    tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                                }
+                                tree.Std(OpCode.PUT_OBJ);
                             }
 
-                            optimized = true;
+                            opDone = true;
+                            break;
                         }
-                        break;
-                    }
-                    default: {
+                    default:
                         // etc. k = k * 3;
                         if (!var) {
                             left.writeLoad(tree);
-                            bin.right.write(tree.Std(OpCode.DUP2).Std(OpCode.GET_OBJ), false);
+
+                            ar.write(tree.Std(OpCode.DUP2)
+                                    .Std(OpCode.GET_OBJ), false);
                             bin.writeOperator(tree);
+
+                            if(!noRet) {
+                                tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                            }
+
                             tree.Std(OpCode.PUT_OBJ);
 
-                            optimized = true;
+                            opDone = true;
                         }
-                    }
                     break;
                 }
             }
         }
 
-        if (!optimized) {
+        if (!opDone) {
             if (var) {
                 right.write(tree, false);
                 Variable v = (Variable) this.left;
                 tree.Set(v.name);
                 v._after_write_op();
+                if(!noRet)
+                    tree.Get(v.name);
             } else {
                 // parent name value
                 left.writeLoad(tree);
                 right.write(tree, false);
+                if(!noRet) {
+                    tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                }
                 tree.Std(OpCode.PUT_OBJ);
             }
         }
-
-        // load
-        if(!noRet)
-            left.write(tree, false);
     }
 
     @Override

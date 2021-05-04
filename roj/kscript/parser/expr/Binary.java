@@ -24,16 +24,14 @@ public final class Binary implements Expression {
     Expression left, right;
     LabelNode target;
 
-    public Binary(short operator, Expression left, Expression right, LabelNode ifFalse) {
+    public Binary(short operator, Expression left, Expression right) {
         switch (operator) {
             default:
                 throw new IllegalArgumentException("Unsupported operator " + Symbol.byId(operator));
             case Symbol.pow:
             case Symbol.add:
             case Symbol.and:
-            case Symbol.divide:
-            case Symbol.logic_and:
-            case Symbol.logic_or:
+            case Symbol.div:
             case Symbol.lsh:
             case Symbol.mod:
             case Symbol.mul:
@@ -42,8 +40,8 @@ public final class Binary implements Expression {
             case Symbol.rsh_unsigned:
             case Symbol.sub:
             case Symbol.xor:
-                break;
-
+            case Symbol.logic_and:
+            case Symbol.logic_or:
             case Symbol.lss:
             case Symbol.gtr:
             case Symbol.geq:
@@ -51,7 +49,7 @@ public final class Binary implements Expression {
             case Symbol.equ:
             case Symbol.neq:
             case Symbol.feq:
-                this.target = ifFalse;
+                break;
         }
         this.operator = operator;
         this.left = left;
@@ -60,15 +58,29 @@ public final class Binary implements Expression {
 
     @Override
     public void write(ASTree tree, boolean noRet) {
-        if(noRet)
-            throw new NotStatementException();
+        if(noRet) {
+            switch (operator) {
+                case Symbol.lss:
+                case Symbol.gtr:
+                case Symbol.geq:
+                case Symbol.leq:
+                case Symbol.equ:
+                case Symbol.feq:
+                case Symbol.neq:
+                case Symbol.logic_or:
+                case Symbol.logic_and:
+                    break;
+                default:
+                    throw new NotStatementException();
+            }
+        }
 
-        left.write(tree, false);
         switch (operator) {
             case Symbol.logic_or:
             case Symbol.logic_and:
                 break;
             default:
+                left.write(tree, false);
                 right.write(tree, false);
         }
 
@@ -83,16 +95,13 @@ public final class Binary implements Expression {
             case Symbol.leq:
             case Symbol.equ:
             case Symbol.feq:
-            case Symbol.neq: {
-                if(target == null || target == LabelNode._INT_FLAG_) {
+            case Symbol.neq:
+                if(target == null) {
                     tree.IfLoad(operator);
                 } else {
-                    LabelNode end = new LabelNode();
-                    // todo optimize
                     tree.If(target, operator);
                 }
                 break;
-            }
             case Symbol.add:
                 tree.Std(OpCode.ADD);
                 break;
@@ -100,34 +109,47 @@ public final class Binary implements Expression {
                 tree.Std(OpCode.AND);
                 break;
             case Symbol.logic_and: {
-                LabelNode falseTarg = new LabelNode();
-                LabelNode fin = new LabelNode();
-                right.write(tree.If(falseTarg, IfNode.IS_TRUE), false);
-                tree.If(falseTarg, IfNode.IS_TRUE).Load(KBool.TRUE).Goto(fin).Node(falseTarg).Load(KBool.FALSE).node0(fin);
                 // if a && b
+
+                left.write(tree, false);
+                if (target != null) {
+                    right.write(tree.If(target, IfNode.TRUE), false);
+                    tree.If(target, IfNode.TRUE);
+                } else {
+                    LabelNode falseTo = new LabelNode();
+                    LabelNode fin = new LabelNode();
+                    right.write(tree.If(falseTo, IfNode.TRUE), false);
+                    tree.If(falseTo, IfNode.TRUE).Load(KBool.TRUE).Goto(fin).Node(falseTo).Load(KBool.FALSE).node0(fin);
+                }
             }
             break;
             case Symbol.logic_or: {
-                LabelNode falseTarg = new LabelNode();
+                LabelNode falseTo = new LabelNode();
                 LabelNode fin = new LabelNode();
-                right.write(tree
-                        .Std(OpCode.DUP)
-                        .If(falseTarg, IfNode.IS_TRUE)
-                        .Goto(fin)
-                        .Node(falseTarg)
-                        .Std(OpCode.POP), false);
 
-                // left, left
-
-                tree.node0(fin);
                 // if a || b
                 // = a ? a : b 而不是true/false ...
+
+                left.write(tree, false);
+                if (target != null) {
+                    right.write(tree.If(falseTo, IfNode.TRUE).Goto(fin).Node(falseTo), false);
+                    tree.If(target, IfNode.TRUE).node0(fin);
+                } else {
+                    right.write(tree
+                            .Std(OpCode.DUP)
+                            // left, left
+                            .If(falseTo, IfNode.TRUE)
+                            .Goto(fin)
+                            .Node(falseTo)
+                            .Std(OpCode.POP), false);
+                    tree.node0(fin);
+                }
             }
             break;
             case Symbol.or:
                 tree.Std(OpCode.OR);
                 break;
-            case Symbol.divide:
+            case Symbol.div:
                 tree.Std(OpCode.DIV);
                 break;
             case Symbol.lsh:
@@ -151,14 +173,38 @@ public final class Binary implements Expression {
             case Symbol.xor:
                 tree.Std(OpCode.XOR);
                 break;
+            case Symbol.pow:
+                tree.Std(OpCode.POW);
+                break;
         }
     }
 
     @Nonnull
     @Override
     public Expression compress() {
-        if (!(left = left.compress()).isConstant() || !(right = right.compress()).isConstant())
+        if ((left = left.compress()).isConstant() != (right = right.compress()).isConstant() || !right.isConstant()) {
+            switch (operator) {
+                case Symbol.logic_and:
+                    if(left.isConstant()) {
+                        if(left.asCst().asBool()) {
+                            // temporary ifload node
+                            return new TmpAsBool(right);
+                        } else {
+                            return Constant.valueOf(false);
+                        }
+                    }
+                    break;
+                case Symbol.logic_or:
+                    if(left.isConstant()) {
+                        if(left.asCst().asBool()) {
+                            return left.asCst();
+                        } else {
+                            return right;
+                        }
+                    }
+            }
             return this;
+        }
 
         final boolean d = left.type() == 1 || right.type() == 1;
         final Constant l = left.compress().asCst(), r = right.compress().asCst();
@@ -203,8 +249,8 @@ public final class Binary implements Expression {
                     case 0:
                     case 1:
                         return r.type() == 2 ? Constant.valueOf(l.asString() + r.asString()) : Constant.valueOf(d ?
-                                KDouble.valueOf(l.asDouble() + r.asDouble()) :
-                                KInt.valueOf(l.asInt() + r.asInt()));
+                                KDouble.Intl.valueOf(l.asDouble() + r.asDouble()) :
+                                KInt.Intl.valueOf(l.asInt() + r.asInt()));
                     case 2:
                         return Constant.valueOf(l.asString() + r.asString());
                     case 3:
@@ -213,20 +259,20 @@ public final class Binary implements Expression {
                 throw OperationDone.NEVER;
             case Symbol.sub:
                 return Constant.valueOf(d ?
-                        KDouble.valueOf(l.asDouble() - r.asDouble()) :
-                        KInt.valueOf(l.asInt() - r.asInt()));
-            case Symbol.divide:
+                        KDouble.Intl.valueOf(l.asDouble() - r.asDouble()) :
+                        KInt.Intl.valueOf(l.asInt() - r.asInt()));
+            case Symbol.div:
                 return Constant.valueOf(l.asDouble() / r.asDouble());
             case Symbol.mul:
                 return Constant.valueOf(d ?
-                        KDouble.valueOf(l.asDouble() * r.asDouble()) :
-                        KInt.valueOf(l.asInt() * r.asInt()));
+                        KDouble.Intl.valueOf(l.asDouble() * r.asDouble()) :
+                        KInt.Intl.valueOf(l.asInt() * r.asInt()));
             case Symbol.logic_and:
                 return Constant.valueOf(l.asBool() && r.asBool());
             case Symbol.logic_or:
                 return l.asBool() ? l : r;
             case Symbol.mod:
-                return Constant.valueOf(KInt.valueOf(d ?
+                return Constant.valueOf(KInt.Intl.valueOf(d ?
                         (int) (l.asDouble() % r.asDouble()) :
                         l.asInt() % r.asInt()));
             case Symbol.and:
@@ -253,7 +299,7 @@ public final class Binary implements Expression {
 
         switch (operator) {
             case Symbol.pow:
-                return KDouble.valueOf(Math.pow(l.asDouble(), r.asDouble()));
+                return KDouble.Intl.valueOf(Math.pow(l.asDouble(), r.asDouble()));
             case Symbol.lss:
                 return KBool.valueOf(d ?
                         l.asDouble() < r.asDouble() :
@@ -281,42 +327,42 @@ public final class Binary implements Expression {
                     case DOUBLE:
                     case BOOL:
                         return d ?
-                                KDouble.valueOf(l.asDouble() + r.asDouble()) :
-                                KInt.valueOf(l.asInt() + r.asInt());
+                                KDouble.Intl.valueOf(l.asDouble() + r.asDouble()) :
+                                KInt.Intl.valueOf(l.asInt() + r.asInt());
                     case STRING:
                         return KString.valueOf(l.asString() + r.asString());
                 }
                 throw OperationDone.NEVER;
             case Symbol.sub:
                 return d ?
-                        KDouble.valueOf(l.asDouble() - r.asDouble()) :
-                        KInt.valueOf(l.asInt() - r.asInt());
-            case Symbol.divide:
-                return KDouble.valueOf(l.asDouble() / r.asDouble());
+                        KDouble.Intl.valueOf(l.asDouble() - r.asDouble()) :
+                        KInt.Intl.valueOf(l.asInt() - r.asInt());
+            case Symbol.div:
+                return KDouble.Intl.valueOf(l.asDouble() / r.asDouble());
             case Symbol.mul:
                 return d ?
-                        KDouble.valueOf(l.asDouble() * r.asDouble()) :
-                        KInt.valueOf(l.asInt() * r.asInt());
+                        KDouble.Intl.valueOf(l.asDouble() * r.asDouble()) :
+                        KInt.Intl.valueOf(l.asInt() * r.asInt());
             case Symbol.logic_and:
                 return KBool.valueOf(l.asBool() && r.asBool());
             case Symbol.logic_or:
                 return l.asBool() ? l : r; // js原版就是这么干的
             case Symbol.mod:
-                return KInt.valueOf(d ?
+                return KInt.Intl.valueOf(d ?
                         (int) (l.asDouble() % r.asDouble()) :
                         l.asInt() % r.asInt());
             case Symbol.and:
-                return KInt.valueOf(l.asInt() & r.asInt());
+                return KInt.Intl.valueOf(l.asInt() & r.asInt());
             case Symbol.lsh:
-                return KInt.valueOf(l.asInt() << r.asInt());
+                return KInt.Intl.valueOf(l.asInt() << r.asInt());
             case Symbol.or:
-                return KInt.valueOf(l.asInt() | r.asInt());
+                return KInt.Intl.valueOf(l.asInt() | r.asInt());
             case Symbol.rsh:
-                return KInt.valueOf(l.asInt() >> r.asInt());
+                return KInt.Intl.valueOf(l.asInt() >> r.asInt());
             case Symbol.rsh_unsigned:
-                return KInt.valueOf(l.asInt() >>> r.asInt());
+                return KInt.Intl.valueOf(l.asInt() >>> r.asInt());
             case Symbol.xor:
-                return KInt.valueOf(l.asInt() ^ r.asInt());
+                return KInt.Intl.valueOf(l.asInt() ^ r.asInt());
         }
         throw OperationDone.NEVER;
     }
@@ -346,7 +392,7 @@ public final class Binary implements Expression {
             case Symbol.mod:
                 return 0;
             case Symbol.add:
-            case Symbol.divide:
+            case Symbol.div:
             case Symbol.mul:
             case Symbol.sub:
             case Symbol.pow:
@@ -374,5 +420,24 @@ public final class Binary implements Expression {
             return false;
         Binary b = (Binary) left;
         return b.left.isEqual(left) && b.right.isEqual(right) && b.operator == operator;
+    }
+
+    public void setTarget(LabelNode ifFalse) {
+        switch (operator) {
+            case Symbol.logic_and: // only those need jump
+            case Symbol.logic_or:
+            case Symbol.lss:
+            case Symbol.gtr:
+            case Symbol.geq:
+            case Symbol.leq:
+            case Symbol.equ:
+            case Symbol.neq:
+            case Symbol.feq:
+                this.target = ifFalse;
+                break;
+            default:
+                if(ifFalse != null)
+                    throw new IllegalArgumentException("Operator not support: " + Symbol.byId(operator));
+        }
     }
 }

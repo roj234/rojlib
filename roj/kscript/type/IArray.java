@@ -21,7 +21,7 @@ public interface IArray extends Iterable<KType>, KType, IObject {
     @Nonnull
     Iterator<KType> iterator();
 
-    IArray add(@Nullable KType entry);
+    void add(@Nullable KType entry);
 
     void set(int index, @Nullable KType entry);
 

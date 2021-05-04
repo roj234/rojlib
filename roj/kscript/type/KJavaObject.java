@@ -106,12 +106,12 @@ public final class KJavaObject<T> extends KBase {
 
     @Override
     public KDouble asKDouble() {
-        return KDouble.valueOfF(asDouble());
+        return KDouble.OnStack.retainForce(asDouble());
     }
 
     @Override
     public KInt asKInt() {
-        return KInt.valueOf(asInt());
+        return KInt.OnStack.valueOf(asInt());
     }
 
     @Nonnull

@@ -15,7 +15,7 @@ import roj.kscript.type.KType;
  * @since 2020/9/27 23:59
  */
 public final class IncrNode extends Node {
-    final String name;
+    String name;
     final int val;
 
     public IncrNode(String name, int val) {
@@ -29,9 +29,16 @@ public final class IncrNode extends Node {
         KType base = frame.get(name);
         if (base.isInt()) {
             KInt i = base.asKInt();
+            // 16:var or none
+            if((i.spec() & 17) == 0) {
+                frame.put(name, i = KInt.OnStack.valueOf(i.value));
+            }
             i.value += val;
         } else {
             KDouble i = base.asKDouble();
+            if((i.spec() & 17) == 0) {
+                frame.put(name, i = KDouble.OnStack.retainForce(i.value));
+            }
             i.value += val;
         }
         return next;

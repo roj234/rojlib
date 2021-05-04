@@ -11,7 +11,7 @@ import roj.kscript.type.KType;
  */
 public final class VInfo {
     public String id;
-    public KType def;
+    public KType v;
 
     public VInfo next;
 }

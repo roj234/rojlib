@@ -48,31 +48,28 @@ public class Word {
         return index;
     }
 
-    public Word number() {
+    public IntWord number() {
         int v;
-        switch (this.type) {
+        switch (type) {
             case WordPresets.HEX:
-                v = MathUtils.parseInt(false, this.val, 16);
-                //this.type = Keyword.INTEGER;
+                v = MathUtils.parseIntChecked(val, 16);
                 break;
             case WordPresets.BINARY:
-                v = MathUtils.parseInt(false, this.val, 2);
-                //this.type = Keyword.INTEGER;
+                v = MathUtils.parseIntChecked(val, 2);
                 break;
             case WordPresets.OCTAL:
-                v = MathUtils.parseInt(false, this.val, 8);
-                //this.type = Keyword.INTEGER;
+                v = MathUtils.parseIntChecked(val, 8);
                 break;
             case WordPresets.INTEGER:
-                v = MathUtils.parseInt(false, this.val, 10);
+                v = MathUtils.parseIntChecked(val, 10);
                 break;
             default:
-                return this;
+                return null;
         }
-        this.type = WordPresets.INTEGER;
-        this.val = Integer.toString(v);
+        type = WordPresets.INTEGER;
+        val = Integer.toString(v);
 
-        return this;
+        return new IntWord(index, val, v);
     }
 
     public short type() {

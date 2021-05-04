@@ -75,24 +75,25 @@ public abstract class IArguments implements IObject {
     // just ignore it
     public void put(@Nonnull String key, KType entry) {}
 
-    public boolean isInstanceOf(IObject map) {
-        return map instanceof IArguments;
+    public boolean isInstanceOf(IObject obj) {
+        return obj instanceof IArguments;
     }
 
     public final IObject getProto() {
         return KConstants.OBJECT;
     }
 
-    public KType getOr(String id, KType def) {
-        if("length".equals(id)) {
-            return KInt.valueOf(argv.size());
+    public KType getOr(String key, KType def) {
+        if("length".equals(key)) {
+            return KInt.OnStack.valueOf(argv.size());
         }
-        try {
-            int i = MathUtils.parseInt(id);
+
+        int[] arr = KConstants.getLocalIntParseArray(10);
+        if(MathUtils.parseIntErrorable(key, arr)) {
+            int i = arr[0];
             return i < 0 || i >= argv.size() ? KUndefined.UNDEFINED : argv.get(i);
-        } catch (NumberFormatException e) {
-            throw new JavaException("无效的参数, 需要'length'或int32数字");
         }
+        throw new JavaException("无效的参数, 需要'length'或int32数字");
     }
 
     public final List<KType> getInternal() {

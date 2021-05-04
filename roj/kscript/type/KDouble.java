@@ -1,5 +1,7 @@
 package roj.kscript.type;
 
+import roj.kscript.KConstants;
+
 import javax.annotation.Nonnull;
 
 /**
@@ -7,26 +9,18 @@ import javax.annotation.Nonnull;
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
  * <p>
  * @author Roj234
- * Filename: YAMLNumber.java
+ * Filename: KDouble.java
  */
-public final class KDouble extends KBase {
+public abstract class KDouble extends KBase {
     public double value;
 
-    public KDouble(double number) {
+    KDouble(double number) {
         super(Type.DOUBLE);
         this.value = number;
     }
 
-    public static KDouble valueOfF(double d) {
-        return new KDouble(d);
-    }
-
     public static KType valueOf(double d) {
-        return (((int) d) == d) ? new KInt((int) d) : new KDouble(d);
-    }
-
-    public static KType valueOf(String d) {
-        return valueOf(Double.parseDouble(d));
+        return (((int) d) == d) ? new KInt.OnStack((int) d) : new KDouble.OnStack(d);
     }
 
     @Override
@@ -36,7 +30,7 @@ public final class KDouble extends KBase {
 
     @Override
     public KInt asKInt() {
-        return isInt() ? new KInt((int) value) : super.asKInt();
+        return isInt() ? new KInt.OnStack((int) value) : super.asKInt();
     }
 
     @Override
@@ -89,8 +83,8 @@ public final class KDouble extends KBase {
     }
 
     @Override
-    public KType copy() {
-        return valueOf(value);
+    public void copyFrom(KType type) {
+        value = type.asDouble();
     }
 
     @Override
@@ -105,4 +99,60 @@ public final class KDouble extends KBase {
         return false;
     }
 
+    public static final class OnStack extends KDouble {
+        public byte s;
+
+        public OnStack(double number) {
+            super(number);
+            s = 4;
+        }
+
+        public static KType valueOf(double d) {
+            return (((int) d) == d) ? KConstants.retainStackIntHolder((int) d) : KConstants.retainStackDoubleHolder(d);
+        }
+
+        public static KDouble retainForce(double d) {
+            return KConstants.retainStackDoubleHolder(d);
+        }
+
+        @Override
+        public int spec() {
+            return s & 0xFF;
+        }
+
+        @Override
+        public KType markImmutable(boolean kind) {
+            s = (byte) (kind ? 16 : 1);
+            return this;
+        }
+
+        @Override
+        public KType copy() {
+            return valueOf(value);
+        }
+    }
+
+    public static final class Intl extends KDouble {
+        Intl(double number) {
+            super(number);
+        }
+
+        public static KType valueOf(double d) {
+            return (((int) d) == d) ? new KInt.Intl((int) d) : new Intl(d);
+        }
+
+        public static KType valueOf(String d) {
+            return valueOf(Double.parseDouble(d));
+        }
+
+        @Override
+        public int spec() {
+            return 8;
+        }
+
+        @Override
+        public KType copy() {
+            return this;
+        }
+    }
 }

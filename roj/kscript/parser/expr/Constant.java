@@ -26,11 +26,11 @@ public final class Constant implements Expression {
     }
 
     public static Constant valueOf(int word) {
-        return new Constant(KInt.valueOf(word));
+        return new Constant(KInt.Intl.valueOf(word));
     }
 
     public static Constant valueOf(double word) {
-        return new Constant(KDouble.valueOf(word));
+        return new Constant(KDouble.Intl.valueOf(word));
     }
 
     public static Constant valueOf(String word) {
@@ -56,16 +56,16 @@ public final class Constant implements Expression {
                 return valueOf(KString.valueOf(word.val()));
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F:
-                return valueOf(KDouble.valueOf(word.val()));
+                return valueOf(KDouble.Intl.valueOf(word.val()));
             case WordPresets.INTEGER:
-                return valueOf(KInt.valueOf(word.val()));
+                return valueOf(KInt.Intl.valueOf(word.val()));
             case Keyword.TRUE:
             case Keyword.FALSE:
                 return valueOf(word.val().equals("true") ? KBool.TRUE : KBool.FALSE);
             case Keyword.NAN:
-                return valueOf(KDouble.valueOf(Double.NaN));
+                return valueOf(KDouble.Intl.valueOf(Double.NaN));
             case Keyword.INFINITY:
-                return valueOf(KDouble.valueOf(Double.POSITIVE_INFINITY));
+                return valueOf(KDouble.Intl.valueOf(Double.POSITIVE_INFINITY));
             default:
                 throw OperationDone.NEVER;
         }

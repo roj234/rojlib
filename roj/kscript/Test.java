@@ -11,12 +11,14 @@ import roj.kscript.parser.KParser;
 import roj.kscript.type.*;
 import roj.kscript.util.ContextPrimer;
 import roj.kscript.util.NaFnHlp;
+import roj.kscript.util.ScriptException;
 import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -42,6 +44,13 @@ public class Test {
             @Override
             public KType invoke(@Nonnull IObject $this, IArguments param){
                 System.out.println(((InvArgs)param).caller);
+                return KUndefined.UNDEFINED;
+            }
+        });
+        root.define("var_dump", new KFuncNative() {
+            @Override
+            public KType invoke(@Nonnull IObject $this, IArguments param){
+                System.out.println(param.get(0).asKInt().spec());
                 return KUndefined.UNDEFINED;
             }
         });
@@ -85,6 +94,17 @@ public class Test {
                 return KInt.valueOf((int) (System.currentTimeMillis() & Long.MAX_VALUE));
             }
         });
+        root.define("Error", new KInitializer() {
+            @Override
+            public KType createInstance(IArguments args) {
+                String reason = args.getOr(0, "");
+
+                ArrayList<StackTraceElement> trace = new ArrayList<>();
+                args.trace(trace);
+
+                return new KError(new ScriptException(reason, trace.toArray(new StackTraceElement[trace.size()]), null));
+            }
+        });
 
         root.define("Math", NaFnHlp.builder()
                 .with("pow",  new KFuncNative() {
@@ -109,5 +129,7 @@ public class Test {
         KFunction fn = parser.parse(new File(args[0]));
 
         fn.invoke(KNull.NULL, new Arguments());
+
+        KConstants.printStats();
     }
 }

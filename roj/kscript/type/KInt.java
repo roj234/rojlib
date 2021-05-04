@@ -1,5 +1,8 @@
 package roj.kscript.type;
 
+import roj.kscript.KConstants;
+import roj.math.MathUtils;
+
 import javax.annotation.Nonnull;
 
 /**
@@ -9,24 +12,16 @@ import javax.annotation.Nonnull;
  * @author Roj234
  * Filename: KInt.java
  */
-public final class KInt extends KBase {
+public abstract class KInt extends KBase {
     public int value;
 
-    public KInt() {
-        super(Type.INT);
-    }
-
-    public KInt(int number) {
+    KInt(int number) {
         super(Type.INT);
         this.value = number;
     }
 
-    public static KInt valueOf(String v) {
-        return valueOf(Integer.parseInt(v));
-    }
-
     public static KInt valueOf(int nv) {
-        return new KInt(nv);
+        return new OnStack(nv);
     }
 
     @Override
@@ -36,7 +31,7 @@ public final class KInt extends KBase {
 
     @Override
     public KDouble asKDouble() {
-        return new KDouble(value);
+        return new KDouble.Intl(value);
     }
 
     @Override
@@ -69,8 +64,8 @@ public final class KInt extends KBase {
     }
 
     @Override
-    public KType copy() {
-        return valueOf(value);
+    public void copyFrom(KType type) {
+        value = type.asInt();
     }
 
     @Override
@@ -103,5 +98,63 @@ public final class KInt extends KBase {
     @Override
     public boolean asBool() {
         return value != 0;
+    }
+
+    public static final class OnStack extends KInt {
+        public byte s;
+
+        public OnStack(int number) {
+            super(number);
+            s = 2;
+        }
+
+        public static KInt valueOf(int nv) {
+            return KConstants.retainStackIntHolder(nv);
+        }
+
+        @Override
+        public KInt asKInt() {
+            return this;
+        }
+
+        @Override
+        public int spec() {
+            return s & 0xFF;
+        }
+
+        @Override
+        public KType markImmutable(boolean kind) {
+            s = (byte) (kind ? 16 : 1);
+            return this;
+        }
+
+        @Override
+        public KType copy() {
+            return valueOf(value);
+        }
+    }
+
+    public static final class Intl extends KInt {
+        Intl(int number) {
+            super(number);
+        }
+
+        public static KInt valueOf(int d) {
+            return new Intl(d);
+        }
+
+        public static KInt valueOf(String d) {
+            return valueOf(MathUtils.parseInt(d));
+        }
+
+        @Override
+        public int spec() {
+            return 8;
+        }
+
+        @Override
+        public KType copy() {
+            return this;
+        }
     }
 }

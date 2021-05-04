@@ -3,13 +3,12 @@ package roj.kscript.ast;
 import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.util.InsnList;
-import roj.kscript.InvArgs;
+import roj.kscript.KConstants;
 import roj.kscript.api.IArguments;
 import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KType;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -21,7 +20,6 @@ import java.util.List;
  */
 public final class InvokeNode extends Node {
     final short argc;
-    private List<KType> tmp;
 
     public InvokeNode(boolean staticCall, int argCount, boolean noRet) {
         super(staticCall ? OpCode.INVOKE : OpCode.INVOKE_NEW);
@@ -29,26 +27,26 @@ public final class InvokeNode extends Node {
             throw new IndexOutOfBoundsException("KScript only support at most 32767 parameters, got " + argCount);
         if(noRet)
             argCount |= 32768;
-        //System.out.println("NoRet " + noRet + " argc " + argCount);
         this.argc = (short) argCount;
     }
 
     @Override
     public Node execute(Frame frame) {
-        List<KType> argsL = this.tmp;
+        List<KType> argsL;
 
         int argc = this.argc & 32767;
         if (argc != 0) {
-            if (argsL == null)
-                this.tmp = argsL = Arrays.asList(new KType[argc]);
+            argsL = KConstants.retainArgsHolder(argc);
 
             for (int i = argc - 1; i >= 0; i--) {
-                argsL.set(i, frame.pop());
+                argsL.set(i, frame.pop().markImmutable(false));
             }
+        } else {
+            argsL = null;
         }
 
         KFunction fn = frame.last().asFunction();
-        IArguments args = new InvArgs(this, frame, argsL);
+        IArguments args = KConstants.retainInvArgs(this, frame, argsL);
 
         boolean v = this.argc >= 0;
         switch (code) {
@@ -72,16 +70,14 @@ public final class InvokeNode extends Node {
         }
 
         if (argc > 0)
-            for (int i = argc - 1; i >= 0; i--) {
-                argsL.set(i, null);
-            }
+            KConstants.releaseArgHolderAndInv(args, argsL);
 
         return next;
     }
 
     @Override
     public String toString() {
-        return (argc < 0 ? "void " : "") + "Invoke(" + argc + ')';
+        return (argc < 0 ? "void " : "") + "Invoke(" + (argc & 32767) + ')';
     }
 
     @Override

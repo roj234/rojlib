@@ -11,13 +11,13 @@ import roj.config.word.AbstLexer;
  */
 public abstract class KBase implements KType {
     public KBase(Type type) {
-        this.type = type;
+        this.type = (byte) type.ordinal();
     }
 
-    private final Type type;
+    private final byte type;
 
     public Type getType() {
-        return this.type;
+        return Type.VALUES[this.type];
     }
 
     @Override

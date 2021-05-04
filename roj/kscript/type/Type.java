@@ -12,6 +12,8 @@ import roj.concurrent.OperationDone;
 public enum Type {
     ARRAY, OBJECT, STRING, INT, NULL, BOOL, DOUBLE, FUNCTION, UNDEFINED, ERROR, JAVA_OBJECT;
 
+    public static final Type[] VALUES = values();
+
     public String typeof() {
         switch (this) {
             case UNDEFINED:

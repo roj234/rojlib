@@ -26,7 +26,7 @@ public final class UnaryAppendix implements Expression {
     public UnaryAppendix(short operator, Expression left) {
         switch (operator) {
             default:
-                throw new IllegalArgumentException("Unsupported op " + operator);
+                throw new IllegalArgumentException("Unsupported operator " + operator);
             case Symbol.inc:
             case Symbol.dec:
         }
@@ -56,7 +56,7 @@ public final class UnaryAppendix implements Expression {
 
             tree.Std(OpCode.DUP2)
                     .Std(OpCode.GET_OBJ)
-                    .Load(KInt.valueOf(c))
+                    .Load(KInt.Intl.valueOf(c))
                     .Std(OpCode.ADD);
 
             if(!noRet) {

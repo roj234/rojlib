@@ -6,7 +6,10 @@ import roj.kscript.api.IObject;
 import roj.kscript.func.KFuncAST;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
-import roj.kscript.util.*;
+import roj.kscript.util.ContextPrimer;
+import roj.kscript.util.ExcpInfo;
+import roj.kscript.util.JavaException;
+import roj.kscript.util.LineInfo;
 import roj.kscript.util.opm.KOEntry;
 
 import javax.annotation.Nonnull;
@@ -36,9 +39,7 @@ public final class Frame extends Context {
         this.usedArgs = ctx.usedArgs;
         usedArgs.trimToSize();
 
-        GlobalVarMap globals = ctx.globals;
-        globals.applyDefaults();
-        this.vars = globals;
+        (this.vars = ctx.globals).applyDefaults();
     }
 
     private Frame() {}
@@ -57,6 +58,8 @@ public final class Frame extends Context {
             buildCallback.accept(this);
             buildCallback = null;
         }
+
+        vars.reset();
 
         // 初始化参数
         final ArrayList<String> args1 = this.usedArgs;
@@ -78,8 +81,6 @@ public final class Frame extends Context {
 
         tryCatch.clear();
         exInfo.clear();
-
-        vars.reset();
 
         $this = null;
         args = null;
@@ -138,15 +139,13 @@ public final class Frame extends Context {
         ce();
         KType v = tail.v;
 
-        final V t = this.tail;
+        V t = this.tail;
         tail = t.prev;
 
         if (tmpC < 64) { // what is best?
             V d = tmp;
-            if (d != null)
-                d.prev = t;
             tmp = t;
-            t.prev = null;
+            t.prev = d;
             t.v = null;
             tmpC++;
         }
@@ -166,6 +165,7 @@ public final class Frame extends Context {
 
     public void push(@Nonnull KType base) {
         V entry;
+
         if (tmp != null) {
             tmpC--;
             entry = tmp;
@@ -183,7 +183,20 @@ public final class Frame extends Context {
     }
 
     public void stackClear() {
-        tail = head;
+        while(tail != head) {
+            V t = tail;
+            tail = t.prev;
+
+            // recv
+            if (tmpC < 64) {
+                V d = tmp;
+                tmp = t;
+                t.prev = d;
+                t.v = null;
+                tmpC++;
+            }
+        }
+
         stackSize = 0;
     }
 
@@ -206,7 +219,6 @@ public final class Frame extends Context {
         chain.add(null);
 
         while (pr != null) {
-            pr = pr.parent;
             chain.add(pr);
             if(theOne == pr) { // theMostUpper
                 chain.set(0, new FrameStatic(pr.parent, pr));
@@ -216,6 +228,7 @@ public final class Frame extends Context {
                 fr.parent = chain.get(chain.size() - 1);
                 return fr;
             }
+            pr = pr.parent;
         }
 
         throw new IllegalArgumentException("Frame parent not found " + theOne);
@@ -325,7 +338,7 @@ public final class Frame extends Context {
     public void linear(Node curr) {
         VInfo diff = linearDiff.get(curr);
         while (diff != null) {
-            vars.put(diff.id, diff.def);
+            vars.put(diff.id, diff.v);
             diff = diff.next;
         }
     }
@@ -333,7 +346,7 @@ public final class Frame extends Context {
     public void applyDiff(VInfo diff) {
         while (diff != null) {
             // ? linear
-            vars.put(diff.id, diff.def); // null as remove => not create Entry
+            vars.put(diff.id, diff.v); // null as remove => not create Entry
             diff = diff.next;
         }
     }
@@ -355,9 +368,9 @@ public final class Frame extends Context {
         Context self = this;
         int i = parents.length;
         while (self != null) {
-            KType base = vars.get(keys);
+            KType base = self.vars.get(keys);
             if (base != null) {
-                return base;
+                return base.markImmutable(false);
             }
 
             if(i == 0)
@@ -384,7 +397,7 @@ public final class Frame extends Context {
             if (entry != null) {
                 if((entry.flags & 1) != 0)
                     throw new JavaException("尝试写入常量 " + id);
-                entry.v = val;
+                entry.v = val.markImmutable(true);
                 return;
             }
 
@@ -403,8 +416,10 @@ public final class Frame extends Context {
     public final Frame duplicate() {
         Frame copy = new Frame();
         copy.parent = parent;
-        copy.vars = new GlobalVarMap(vars);
+        copy.vars = vars.copy();
         copy.usedArgs = usedArgs;
+        copy.linearDiff = linearDiff;
+        copy.parents = parents;
         copy.owner = owner;
         copy.lineIndexes = lineIndexes;
         return copy;
@@ -412,23 +427,37 @@ public final class Frame extends Context {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder().append("KStackFrame{");
+        StringBuilder sb = new StringBuilder().append("KStackFrame{owner=")
+                .append(owner.getClassName()).append('.').append(owner.getName());
         if(result != null) {
-            sb.append("<returning>: ").append(result).append(", ");
+            sb.append(", <returning>: ").append(result);
         }
-        sb.append("<stack>: [");
-        if (tail != head) {
-            V e = tail;
-            while (e != head) {
-                sb.append(e.v).append(", ");
-                e = e.prev;
+        if(stackSize > 0) {
+            sb.append(", <stack>: [");
+            if (tail != head) {
+                V e = tail;
+                while (e != head) {
+                    sb.append(e.v).append(", ");
+                    e = e.prev;
+                }
+                sb.delete(sb.length() - 2, sb.length());
+            }
+            sb.append("]");
+        }
+        if(!exInfo.isEmpty())
+            sb.append(", <try-catch>: ").append(exInfo);
+        if($this != null) {
+            sb.append(", this: ").append($this)
+                    .append(", arg: ").append(args);
+        }
+        sb.append(", vars: [");
+        if(!vars.isEmpty()) {
+            for (String key : vars.keySet()) {
+                sb.append(key).append(", ");
             }
             sb.delete(sb.length() - 2, sb.length());
         }
-        sb.append("], <try-catch>: ").append(exInfo);
-        if($this != null) {
-            sb.append(", this: ").append($this).append(", arguments: ").append(args);
-        }
-        return sb.append(", variables: ").append(vars).append('}').toString();
+        sb.append(']');
+        return sb.append('}').toString();
     }
 }

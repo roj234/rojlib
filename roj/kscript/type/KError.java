@@ -29,6 +29,11 @@ public final class KError extends KBase {
         return false;
     }
 
+    @Override
+    public KError asKError() {
+        return this;
+    }
+
     public Throwable getCause() {
         return ex.getCause();
     }

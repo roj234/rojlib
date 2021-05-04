@@ -56,6 +56,11 @@ public abstract class KFunction extends KObject {
         return this;
     }
 
+    @Override
+    public KType copy() {
+        return this;
+    }
+
     /**
      * 文件名 <BR>
      *     eg: test.js

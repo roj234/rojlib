@@ -35,6 +35,11 @@ public final class KNull extends KObject {
     }
 
     @Override
+    public KType copy() {
+        return this;
+    }
+
+    @Override
     public boolean equals(Object obj) {
         return obj == NULL;
     }
@@ -45,7 +50,7 @@ public final class KNull extends KObject {
     }
 
     @Override
-    public boolean isInstanceOf(IObject map) {
+    public boolean isInstanceOf(IObject obj) {
         return false;
     }
 
@@ -55,7 +60,7 @@ public final class KNull extends KObject {
     }
 
     @Override
-    public KType getOr(String id, KType def) {
+    public KType getOr(String key, KType def) {
         throw new NullPointerException("null cannot cast to object");
     }
 

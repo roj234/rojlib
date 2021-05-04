@@ -29,7 +29,13 @@ public final class NPASTNode extends Node {
                 KType b = frame.pop();
                 KType a = frame.last();
 
-                frame.setLast(KInt.valueOf(b.isInt() ? a.asInt() % b.asInt() : 0));
+                int v = b.isInt() ? a.asInt() % b.asInt() : 0;
+
+                if(a.spec() != 2) {
+                    frame.setLast(KInt.OnStack.valueOf(v));
+                } else {
+                    a.asKInt().value = v;
+                }
             }
             break;
             case XOR:
@@ -40,23 +46,8 @@ public final class NPASTNode extends Node {
 
                 boolean val = a.getType() == Type.BOOL;
                 if (val) {
-                    boolean bool = false;
-                    final boolean aa = a.asBool(), bb = b.asBool();
-                    switch (code) {
-                        case XOR:
-                            bool = aa ^ bb;
-                            break;
-                        case OR:
-                            bool = aa | bb;
-                            break;
-                        case AND:
-                            bool = aa & bb;
-                            break;
-                    }
-                    frame.setLast(KBool.valueOf(bool));
-                } else {
-                    int v = 0;
-                    final int aa = a.asInt(), bb = b.asInt();
+                    boolean v = false;
+                    boolean aa = a.asBool(), bb = b.asBool();
                     switch (code) {
                         case XOR:
                             v = aa ^ bb;
@@ -68,10 +59,31 @@ public final class NPASTNode extends Node {
                             v = aa & bb;
                             break;
                     }
-                    frame.setLast(KInt.valueOf(v));
+                    frame.setLast(KBool.valueOf(v));
+                } else {
+                    int v = 0;
+                    int aa = a.asInt(), bb = b.asInt();
+                    switch (code) {
+                        case XOR:
+                            v = aa ^ bb;
+                            break;
+                        case OR:
+                            v = aa | bb;
+                            break;
+                        case AND:
+                            v = aa & bb;
+                            break;
+                    }
+
+                    if(a.spec() != 2) {
+                        frame.setLast(KInt.OnStack.valueOf(v));
+                    } else {
+                        a.asKInt().value = v;
+                    }
                 }
             }
             break;
+            case POW:
             case MUL:
             case DIV:
             case SUB:
@@ -91,12 +103,14 @@ public final class NPASTNode extends Node {
                 }
 
                 // Number
-                if (!b.isInt() || !a.isInt()) {
-
+                if (!b.isInt() || !a.isInt() || code == OpCode.POW) {
                     double aa = b.asDouble();
                     double bb = a.asDouble();
 
                     switch (code) {
+                        case POW:
+                            aa = Math.pow(aa, bb);
+                            break;
                         case MUL:
                             aa = aa * bb;
                             break;
@@ -111,7 +125,11 @@ public final class NPASTNode extends Node {
                             break;
                     }
 
-                    frame.setLast(KDouble.valueOf(aa));
+                    if(a.spec() != 4) {
+                        frame.setLast(KDouble.OnStack.valueOf(aa));
+                    } else {
+                        a.asKDouble().value = aa;
+                    }
                 } else {
                     int aa = b.asInt();
                     int bb = a.asInt();
@@ -130,7 +148,12 @@ public final class NPASTNode extends Node {
                             aa = aa - bb;
                             break;
                     }
-                    frame.setLast(KInt.valueOf(aa));
+
+                    if(a.spec() != 2) {
+                        frame.setLast(KInt.OnStack.valueOf(aa));
+                    } else {
+                        a.asKInt().value = aa;
+                    }
                 }
             }
             break;
@@ -144,28 +167,48 @@ public final class NPASTNode extends Node {
                 // a,b => a,b , a,b
                 KType a = frame.last(1);
                 KType b = frame.last();
-                frame.push(a);
-                frame.push(b);
+                frame.push(a.markImmutable(true));
+                frame.push(b.markImmutable(true));
             }
             break;
             case DUP: {
-                frame.push(frame.last());
+                frame.push(frame.last().markImmutable(true));
             }
             break;
             case NEGATIVE: {
-                KType base = frame.last();
-                frame.setLast(KDouble.valueOf(-(base.isInt() ? base.asInt() : base.asDouble())));
+                KType a = frame.last();
+
+                if(a.isInt()) {
+                    int aa = -a.asInt();
+                    if(a.spec() != 2) {
+                        frame.setLast(KInt.OnStack.valueOf(aa));
+                    } else {
+                        a.asKInt().value = aa;
+                    }
+                } else {
+                    double aa = -a.asDouble();
+                    if(a.spec() != 4) {
+                        frame.setLast(KDouble.OnStack.valueOf(aa));
+                    } else {
+                        a.asKDouble().value = aa;
+                    }
+                }
             }
             break;
             case NOT: {
-                KType base = frame.last();
-                frame.setLast(KBool.valueOf(!base.asBool()));
+                frame.setLast(KBool.valueOf(!frame.last().asBool()));
             }
             break;
             case REVERSE: {
-                KType base = frame.last();
-                base.asInt();
-                frame.setLast(KInt.valueOf(base.isInt() ? ~base.asInt() : 0));
+                KType a = frame.last();
+                a.asInt();
+
+                int aa = a.isInt() ? ~a.asInt() : 0;
+                if(a.spec() != 2) {
+                    frame.setLast(KInt.OnStack.valueOf(aa));
+                } else {
+                    a.asKInt().value = aa;
+                }
             }
             break;
             case SHIFT_L:
@@ -176,7 +219,11 @@ public final class NPASTNode extends Node {
 
                 num.asInt();
                 if (!num.isInt()) {
-                    frame.setLast(KInt.valueOf(0));
+                    if(num.spec() != 2) {
+                        frame.setLast(KInt.OnStack.valueOf(0));
+                    } else {
+                        num.asKInt().value = 0;
+                    }
                 } else {
                     int val = count.asInt();
 
@@ -192,7 +239,12 @@ public final class NPASTNode extends Node {
                             it <<= val;
                             break;
                     }
-                    frame.setLast(KInt.valueOf(it));
+
+                    if(num.spec() != 2) {
+                        frame.setLast(KInt.OnStack.valueOf(it));
+                    } else {
+                        num.asKInt().value = it;
+                    }
                 }
             }
             break;
@@ -221,14 +273,8 @@ public final class NPASTNode extends Node {
                 return null;
             }
             case THROW: {
-                KType type = frame.pop();
-                if(type instanceof KError) {
-                    throw type.asKError().getOrigin();
-                } else if(type.canCastTo(Type.STRING)) {
-                    throw new RuntimeException(type.asString());
-                } else {
-                    throw new RuntimeException(type.toString());
-                }
+                // no pop since stack will be cleared
+                throw frame.last().asKError().getOrigin();
             }
             case SWAP: {
                 Frame.V v = frame.tail(2);
@@ -274,7 +320,11 @@ public final class NPASTNode extends Node {
         KType name = stack.pop();
         KType base = stack.last();
 
-        stack.setLast(base.asObject().get(name.asString()));
+        if(base.canCastTo(Type.ARRAY) && name.isInt()) {
+            stack.setLast(base.asArray().get(name.asInt()));
+        } else {
+            stack.setLast(base.asObject().get(name.asString()));
+        }
     }
 
     private void object__put(Frame stack) {
@@ -282,7 +332,11 @@ public final class NPASTNode extends Node {
         KType name = stack.pop();
         KType base = stack.pop();
 
-        base.asObject().put(name.asString(), val);
+        if(base.canCastTo(Type.ARRAY) && name.isInt()) {
+            base.asArray().set(name.asInt(), val);
+        } else {
+            base.asObject().put(name.asString(), val);
+        }
     }
 
     private void array_add(Frame stack) {

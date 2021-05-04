@@ -16,7 +16,7 @@ public class KObjectInst extends KObject {
     }
 
     @Override
-    public boolean chmod(String id, boolean configurable, boolean enumerable, KFunction getter, KFunction setter) {
+    public boolean chmod(String key, boolean configurable, boolean enumerable, KFunction getter, KFunction setter) {
         return false;
     }
 }

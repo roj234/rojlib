@@ -5,8 +5,8 @@ import roj.kscript.KConstants;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KType;
 import roj.kscript.type.Type;
-import roj.kscript.util.GlobalVarMap;
 import roj.kscript.util.JavaException;
+import roj.kscript.util.opm.GlobalVarMap;
 import roj.kscript.util.opm.KOEntry;
 
 import javax.annotation.Nonnull;
@@ -59,8 +59,8 @@ public class Context implements IObject {
     }
 
     @Override
-    public final boolean isInstanceOf(IObject map) {
-        return map == this;
+    public final boolean isInstanceOf(IObject obj) {
+        return obj == this;
     }
 
     @Override
@@ -69,8 +69,8 @@ public class Context implements IObject {
     }
 
     @Override
-    public final KType getOr(String id, KType kb) {
-        return getEx(id, kb);
+    public final KType getOr(String key, KType def) {
+        return getEx(key, def);
     }
 
     @Override
@@ -122,7 +122,7 @@ public class Context implements IObject {
         while (self != null) {
             KType v = self.vars.get(keys);
             if (v != null) {
-                return v;
+                return v.markImmutable(false);
             } else {
                 self = self.parent;
             }
@@ -139,7 +139,7 @@ public class Context implements IObject {
             if (entry != null) {
                 if((entry.flags & 1) == 1)
                     throw new JavaException("尝试写入常量 " + id);
-                entry.v = val;
+                entry.v = val.markImmutable(true);
                 return;
             }
             self = self.parent;

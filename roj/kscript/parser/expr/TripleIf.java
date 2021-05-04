@@ -30,9 +30,9 @@ public final class TripleIf implements Expression {
         LabelNode end = new LabelNode();
 
         determine.write(tree, false);
-        truly.write(tree.If(ifFalse, IfNode.IS_TRUE).Goto(end), false);
+        truly.write(tree.If(ifFalse, IfNode.TRUE).Goto(end), false);
         fake.write(tree.Node(ifFalse), false);
-        tree.Node(end);
+        tree.node0(end);
 
         /**
          * if(!determine)

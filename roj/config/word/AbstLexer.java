@@ -283,14 +283,14 @@ public abstract class AbstLexer {
                 temp.append('\f');
                 break;
             case 'U': // UXXXXXXXX
-                int UIndex = MathUtils.parseInt(false, input.subSequence(index, index + 8), 16);
+                int UIndex = MathUtils.parseInt(input.subSequence(index, index + 8), 16);
 
                 index += 8;
 
                 temp.append((char) UIndex);
                 break;
             case 'u': // uXXXX
-                int uIndex = MathUtils.parseInt(false, input.subSequence(index, index + 4), 16);
+                int uIndex = MathUtils.parseInt(input.subSequence(index, index + 4), 16);
 
                 index += 4;
 

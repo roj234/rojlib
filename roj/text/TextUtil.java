@@ -158,7 +158,7 @@ public class TextUtil {
             pos = limitedIndexOf(src, '%', i, len);
             if (pos == i) {
                 if (src.charAt(pos + 1) == 'u') {
-                    int ch = MathUtils.parseInt(false, src.subSequence(pos + 2, pos + 6), 16);
+                    int ch = MathUtils.parseInt(src.subSequence(pos + 2, pos + 6), 16);
 
                     /*b8buf.pointer = 2;
                     b8buf.set(0, (byte) ch);
@@ -175,7 +175,7 @@ public class TextUtil {
 
                     i = pos + 6;
                 } else {
-                    char ch = (char) MathUtils.parseInt(false, src.subSequence(pos + 1, pos + 3), 16);
+                    char ch = (char) MathUtils.parseInt(src.subSequence(pos + 1, pos + 3), 16);
                     tmp.append(ch);
                     i = pos + 3;
                 }

@@ -1,8 +1,9 @@
 package roj.collect;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
+import java.util.LinkedList;
 import java.util.ListIterator;
+import java.util.function.Predicate;
 
 /**
  * This file is a part of MI <br>
@@ -14,13 +15,38 @@ import java.util.ListIterator;
 public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     protected long timeout, lastCheck;
 
-    boolean selfRemove, update;
+    protected boolean selfRemove, update;
 
     public TimedHashMap(int timeOut) {
         this.timeout = (update = timeOut < 0) ? -timeOut : timeOut;
     }
 
-    List<TimedEntry<K, V>> list = new ArrayList<>();
+    LinkedList<TimedEntry<K, V>> list = new LinkedList<>();
+
+    public void retainOutDated(Collection<K> kholder, Collection<V> vholder, Predicate<Entry<K, V>> kPredicate, int max) {
+        long curr = System.currentTimeMillis();
+
+        selfRemove = true;
+
+        if (!this.list.isEmpty())
+            for (ListIterator<TimedEntry<K, V>> iterator = this.list.listIterator(this.list.size() - 1); iterator.hasPrevious(); ) {
+                TimedEntry<K, V> entry = iterator.previous();
+                if (curr - entry.timestamp >= timeout || max-- <= 0) {
+                    if(kPredicate.test(entry)) {
+                        kholder.add(entry.k);
+                        vholder.add(entry.v);
+                    }
+                    remove(entry.k);
+                    iterator.remove();
+                } else {
+                    break;
+                }
+            }
+
+        lastCheck = curr;
+
+        selfRemove = false;
+    }
 
     public static class TimedEntry<K, V> extends MyHashMap.Entry<K, V> {
         protected long timestamp = System.currentTimeMillis();
@@ -60,7 +86,7 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
         Entry<K, V> entry = super.getEntry(id);
         if (entry == null)
             return null;
-        final TimedEntry<?, ?> entry1 = (TimedEntry<?, ?>) entry;
+        TimedEntry<?, ?> entry1 = (TimedEntry<?, ?>) entry;
         long t = System.currentTimeMillis() - entry1.timestamp;
         if (t >= timeout) {
             if (entry.v != IntMap.NOT_USING) {

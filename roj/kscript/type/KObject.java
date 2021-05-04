@@ -56,7 +56,7 @@ public class KObject extends KBase implements IObject {
             parent = entry.canCastTo(Type.OBJECT) ? entry.asObject() : null;
             return;
         }
-        putItr(key, entry == null ? KUndefined.UNDEFINED : entry, false);
+        putItr(key, entry == null ? KUndefined.UNDEFINED : entry.markImmutable(true), false);
     }
 
     boolean putItr(String id, KType value, boolean f) {
@@ -191,6 +191,13 @@ public class KObject extends KBase implements IObject {
         return new KObject(Type.OBJECT, new ObjectPropMap(this.map), parent);
     }
 
+    @Override
+    public void copyFrom(KType type) {
+        // Not clear? maybe another custom map
+        this.map.clear();
+        this.map.putAll(type.asKObject().map);
+    }
+
     public IObject deepCopy() {
         KObject obj = new KObject(Type.OBJECT, new ObjectPropMap(this.map.size()), parent);
         obj.merge(this, false, true);
@@ -221,8 +228,8 @@ public class KObject extends KBase implements IObject {
     }
 
     @Override
-    public boolean isInstanceOf(IObject map) {
-        if (!(map instanceof KObject)) return false;
+    public boolean isInstanceOf(IObject obj) {
+        if (!(obj instanceof KObject)) return false;
 
         Set<IObject> prototypes = new MyHashSet<>();
         KObject parent = this;
@@ -233,7 +240,7 @@ public class KObject extends KBase implements IObject {
             parent = (KObject) parent.parent;
         }
 
-        parent = (KObject) map;
+        parent = (KObject) obj;
         while (true) {
             if (prototypes.contains(parent))
                 return true;
@@ -254,12 +261,13 @@ public class KObject extends KBase implements IObject {
     }
 
     @Override
-    public KType getOr(String id, KType def) {
-        KOEntry base = (KOEntry) map.getEntry(id);
+    public KType getOr(String key, KType def) {
+        KOEntry base = (KOEntry) map.getEntry(key);
         if (base != null) {
-            return base.getValue();
+            // once load
+            return base.getValue().markImmutable(false);
         } else {
-            return parent == null ? def : parent.getOr(id, def);
+            return parent == null ? def : parent.getOr(key, def);
         }
     }
 }

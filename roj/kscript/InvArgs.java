@@ -20,8 +20,10 @@ import java.util.List;
  * @since 2020/9/21 22:37
  */
 public final class InvArgs extends IArguments {
-    public final Frame caller;
-    public final InvokeNode callNode;
+    public Frame caller;
+    public InvokeNode callNode;
+
+    public InvArgs() {}
 
     /**
      * call by {@link InvokeNode}
@@ -30,6 +32,13 @@ public final class InvArgs extends IArguments {
         this.callNode = callNode;
         this.caller = frame;
         this.argv = argv == null ? Collections.emptyList() : argv;
+    }
+
+    public InvArgs reset(InvokeNode callNode, Frame frame, List<KType> argv) {
+        this.callNode = callNode;
+        this.caller = frame;
+        this.argv = argv == null ? Collections.emptyList() : argv;
+        return this;
     }
 
     @Override

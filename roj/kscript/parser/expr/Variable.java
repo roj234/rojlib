@@ -5,6 +5,7 @@ import roj.kscript.ast.ASTree;
 import roj.kscript.parser.ParseContext;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
+import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -49,6 +50,24 @@ public final class Variable extends Field {
     }
 
     @Override
+    public boolean isEqual(Expression o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Variable v = (Variable) o;
+
+        return v.name.equals(name);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = cst != null ? cst.hashCode() : 0;
+        result = 31 * result + (int) spec_op_type;
+        result = 31 * result + (ctx != null ? ctx.hashCode() : 0);
+        return result;
+    }
+
+    @Override
     public boolean setDeletion() {
         return false;
     }
@@ -85,6 +104,9 @@ public final class Variable extends Field {
 
     @Override
     public void write(ASTree tree, boolean noRet) {
+        if(noRet)
+            throw new NotStatementException();
+
         if (cst == null) tree.Get(name);
         else cst.write(tree, false);
 

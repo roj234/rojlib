@@ -164,7 +164,7 @@ public class Translator {
                 if (w2.type() != WordPresets.STRING) {
                     throw wr.err("Is not Slash_String");
                 }
-                im.put(MathUtils.parseInt(false, w1.val(), 10), w2.val());
+                im.put(MathUtils.parseInt(w1.val(), 10), w2.val());
                 w2 = wr.nextWord();
                 wr.retractWord();
                 if (w2.type() != WordPresets.INTEGER) {

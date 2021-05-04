@@ -5,7 +5,6 @@ import roj.config.ParseException;
 import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.math.MathUtils;
 import roj.text.CharList;
 
 import javax.annotation.Nonnull;
@@ -72,7 +71,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
                     w = l.readWord();
                     if(w.type() != WordPresets.INTEGER)
                         throw l.err("excepting integer");
-                    int id = MathUtils.parseInt(w.number().val());
+                    int id = w.number().number;
                     final List<AbstXML> children = xml.children;
                     if(children.size() <= id)
                         throw l.err("not enough element(" + children.size() + ")");
