@@ -24,6 +24,10 @@ public final class SortedHashTrieMap<K, V> implements Map<List<K>, V> {
             return maxHashLength();
         }
         int hashAt(T t, int hashId);
+
+        default int hashIdAt(List<T> inputs, int index, int hashId) {
+            return hashId;
+        }
     }
 
     public static final class REntry<K, V> implements Iterable<REntry<K, V>> {
@@ -464,11 +468,12 @@ public final class SortedHashTrieMap<K, V> implements Map<List<K>, V> {
             prev = entry;
             entry = entry.getChild(comparator, k);
             if (entry == null) {
-                prev.putChild(comparator, entry = new REntry<>(comparator.toImmutable(k)), hashId);
+                prev.putChild(comparator, entry = new REntry<>(comparator.toImmutable(k)), comparator.hashIdAt(s, i, hashId));
             }
         }
         if (entry.v == NOT_USING) {
             size++;
+            entry.v = null;
         }
         return entry;
     }

@@ -1,8 +1,7 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
-import roj.kscript.ast.OpCode;
+import roj.kscript.ast.Opcode;
 import roj.kscript.parser.ParseContext;
 import roj.kscript.type.KType;
 import roj.util.Helpers;
@@ -24,7 +23,7 @@ public final class Std implements Expression {
 
     @Override
     public void write(ASTree tree, boolean noRet) {
-        tree.Std(type == 1 ? OpCode.THIS : OpCode.ARGUMENTS);
+        tree.Std(type == 1 ? Opcode.THIS : Opcode.ARGUMENTS);
     }
 
     @Override
@@ -39,8 +38,8 @@ public final class Std implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
-        return $this;
+    public KType compute(Map<String, KType> param) {
+        return param.get("this");
     }
 
     @Override

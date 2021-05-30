@@ -17,6 +17,11 @@ import java.util.PrimitiveIterator;
 import java.util.function.ToIntFunction;
 
 public final class SwitchInsnNode extends InsnNode {
+    public SwitchInsnNode(byte code) {
+        super(code);
+        this.mapping = new IntMap<>();
+    }
+
     public SwitchInsnNode(byte code, InsnNode def, IntMap<InsnNode> mapping) {
         super(code);
         this.def = def;

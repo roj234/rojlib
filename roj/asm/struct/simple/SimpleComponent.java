@@ -1,6 +1,6 @@
 package roj.asm.struct.simple;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.attr.Attribute;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
@@ -15,9 +15,9 @@ import roj.util.ByteWriter;
  * @author Roj234
  * Filename: SimpleComponent.java
  */
-public abstract class SimpleComponent implements IConstantSerializable {
+public abstract class SimpleComponent implements MoFNode {
     SimpleComponent(int accesses, CstUTF name, CstUTF type) {
-        this.accesses = AccessFlag.parse((short) accesses);
+        this.accesses = AccessFlag.of(accesses);
         this.name = name;
         this.type = type;
     }
@@ -31,6 +31,11 @@ public abstract class SimpleComponent implements IConstantSerializable {
 
     public String rawDesc() {
         return type.getString();
+    }
+
+    @Override
+    public FlagList accessFlag() {
+        return accesses;
     }
 
     public final AttributeList attributes = new AttributeList();

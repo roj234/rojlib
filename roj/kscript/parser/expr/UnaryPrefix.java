@@ -1,14 +1,13 @@
 package roj.kscript.parser.expr;
 
 import roj.concurrent.OperationDone;
-import roj.kscript.api.IObject;
+import roj.config.word.NotStatementException;
 import roj.kscript.ast.ASTree;
-import roj.kscript.ast.OpCode;
+import roj.kscript.ast.Opcode;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KDouble;
 import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
-import roj.kscript.util.NotStatementException;
 import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
@@ -51,16 +50,16 @@ public final class UnaryPrefix implements Expression {
 
                 right.write(tree, false);
 
-                OpCode op;
+                Opcode op;
                 switch (operator) {
                     case Symbol.logic_not:
-                        op = OpCode.NOT;
+                        op = Opcode.NOT;
                         break;
                     case Symbol.sub:
-                        op = OpCode.NEGATIVE;
+                        op = Opcode.NEGATIVE;
                         break;
                     case Symbol.rev:
-                        op = OpCode.REVERSE;
+                        op = Opcode.REVERSE;
                         break;
                     default:
                         throw OperationDone.NEVER;
@@ -81,20 +80,20 @@ public final class UnaryPrefix implements Expression {
                         tree.Get(v.name);
                     }
                 } else {
-                    Field f = (Field) right;
+                    LoadExpression f = (LoadExpression) right;
                     f.writeLoad(tree);
 
-                    tree.Std(OpCode.DUP2)
-                            .Std(OpCode.GET_OBJ)
-                            .Load(KInt.Intl.valueOf(operator == Symbol.inc ? 1 : -1))
-                            .Std(OpCode.ADD);
+                    tree.Std(Opcode.DUP2)
+                            .Std(Opcode.GET_OBJ)
+                            .Load(KInt.valueOf(operator == Symbol.inc ? 1 : -1))
+                            .Std(Opcode.ADD);
 
                     if(noRet) {
-                        tree.Std(OpCode.PUT_OBJ);
+                        tree.Std(Opcode.PUT_OBJ);
                     } else {
-                                tree.Std(OpCode.DUP)
-                                .Std(OpCode.SWAP3)
-                                .Std(OpCode.PUT_OBJ);
+                                tree.Std(Opcode.DUP)
+                                .Std(Opcode.SWAP3)
+                                .Std(Opcode.PUT_OBJ);
                     }
 
                 }
@@ -103,16 +102,14 @@ public final class UnaryPrefix implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
+    public KType compute(Map<String, KType> param) {
         if(operator == Symbol.sub) {
-            KType base = right.compute(param, $this);
+            KType base = right.compute(param);
 
             if (base.isInt()) {
-                KInt i = base.asKInt();
-                i.value = -i.value;
+                base.setIntValue(-base.asInt());
             } else {
-                KDouble i = base.asKDouble();
-                i.value = -i.value;
+                base.setDoubleValue(-base.asDouble());
             }
             return base;
         }
@@ -122,18 +119,16 @@ public final class UnaryPrefix implements Expression {
 
         if(right instanceof Variable) {
             Variable v = (Variable) right;
-            base = right.compute(param, $this);
+            base = right.compute(param);
         } else {
             Field field = (Field) right;
-            base = field.parent.compute(param, $this).asObject().get(field.name);
+            base = field.parent.compute(param).asObject().get(field.name);
         }
 
         if (base.isInt()) {
-            KInt i = base.asKInt();
-            i.value += val;
+            base.setIntValue(base.asInt() + val);
         } else {
-            KDouble i = base.asKDouble();
-            i.value += val;
+            base.setDoubleValue(base.asDouble() + val);
         }
 
         return base;
@@ -168,12 +163,12 @@ public final class UnaryPrefix implements Expression {
                     case Symbol.logic_not:
                         return Constant.valueOf(!cst.asBool());
                     case Symbol.rev:
-                        KInt i = cst.val().asKInt();
-                        i.value = ~i.value;
+                        KType base = cst.val();
+                        base.setIntValue(~base.asInt());
                         return right;
                     case Symbol.sub: {
-                        i = cst.val().asKInt();
-                        i.value = -i.value;
+                        KType base1 = cst.val();
+                        base1.setIntValue(-base1.asInt());
                         return right;
                     }
                 }
@@ -190,7 +185,7 @@ public final class UnaryPrefix implements Expression {
                             return Constant.valueOf(-cst.asDouble());
                         }
                         int isDouble = TextUtil.isNumber(cst.asString());
-                        return new Constant(isDouble == 1 ? KDouble.Intl.valueOf(-cst.asDouble()) : KInt.Intl.valueOf(-cst.asInt()));
+                        return new Constant(isDouble == 1 ? KDouble.valueOf(-cst.asDouble()) : KInt.valueOf(-cst.asInt()));
                 }
                 break;
             case 3:

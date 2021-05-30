@@ -12,4 +12,7 @@ import java.io.IOException;
 public interface WaitingIOFuture {
     void waitFor() throws IOException;
     boolean isDone();
+    default String flag() {
+        return "";
+    }
 }

@@ -9,7 +9,7 @@
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.CstRefField;
+import roj.asm.cst.CstRefField;
 import roj.asm.struct.Clazz;
 import roj.asm.struct.Field;
 import roj.asm.util.ConstantWriter;
@@ -63,9 +63,9 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     public String owner, name;
     public Type type;
 
-    public FieldInsnNode(byte code, Clazz clazz, int i) {
+    public FieldInsnNode(byte code, Clazz clazz, int index) {
         super(code);
-        Field field = clazz.fields.get(i);
+        Field field = clazz.fields.get(index);
         this.owner = clazz.name;
         this.name = field.name;
         this.type = field.type;
@@ -105,6 +105,6 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return "#" + (int)bci + ' ' + Opcodes.toString0(code, type, owner.substring(owner.lastIndexOf('/') + 1), name);
+        return Opcodes.toString0(code, type, owner.substring(owner.lastIndexOf('/') + 1), name);
     }
 }

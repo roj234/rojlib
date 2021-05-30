@@ -12,12 +12,13 @@ public final class WordPresets {
             CHARACTER = 1001,    // 字符
             STRING = 1002,    // 字符串
 
-    INTEGER = 1100,    // 整数
-            DECIMAL_D = 1101,    // 小数
-            HEX = 1102,    // 十六进制
+    INTEGER = 1100,           // int32
+            DECIMAL_D = 1101, // float64
+            HEX = 1102,       // 十六进制 // format would change at Word#number
             BINARY = 1103,    // 二进制
-            OCTAL = 1104,    // 八进制
-            DECIMAL_F = 1105,    // 浮点数
+            OCTAL = 1104,     // 八进制
+            DECIMAL_F = 1105, // float32
+            LONG = 1106,      // int64
 
     EOF = -1,      // 文件结束
             ERROR = -2;      // 出错

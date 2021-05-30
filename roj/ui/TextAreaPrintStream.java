@@ -44,7 +44,7 @@ public class TextAreaPrintStream extends PrintStream {
         }
 
         try {
-            ByteReader.decodeUTF(-1, sb, new ByteList(arr).subList(off, len));
+            ByteReader.decodeUTF(-1, sb, new ByteList.ReadOnlySubList(arr, off, len));
         } catch (UTFDataFormatException e) {
             e.printStackTrace();
         }

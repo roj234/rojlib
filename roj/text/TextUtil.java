@@ -3,6 +3,7 @@ package roj.text;
 import roj.collect.IBitSet;
 import roj.collect.IntMap;
 import roj.collect.LongBitSet;
+import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.config.word.Lexer;
 import roj.config.word.Word;
@@ -11,7 +12,7 @@ import roj.math.MathUtils;
 import roj.util.log.LogManager;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -30,12 +31,10 @@ public class TextUtil {
     public static String translate(int type, String key) {
         Map<String, String> map = langs.get(type);
         if (map == null) {
-            LogManager.getLogger("TextUtil").warn("Language id " + type + " was not found...");
+            LogManager.getLogger("TextUtil").warn("LangId " + type + " not found");
             return key;
         }
-        String result = map.get(key);
-        if (result == null) return key;
-        return result;
+        return map.getOrDefault(key, key);
     }
 
     @Deprecated
@@ -45,34 +44,32 @@ public class TextUtil {
 
     @Deprecated
     public static Map<String, String> loadLang(String content) {
-        Map<String, String> map = new HashMap<>();
-        //map.put("status", "err");
+        MyHashMap<String, String> map = new MyHashMap<>();
         if (content == null) return map;
         try {
-            //String content = FileUtil.fileToString(file);
-            String[] entries = content.replace("\n", "/;/").replace("\r", "/;/").replace("/;//;/", "/;/").split("/;/");
-            boolean ignoreline = false;
-            StringBuilder sb = null;
-            for (String entry : entries) {
+            boolean block = false;
+            CharList sb = null;
+            for (String entry : new SimpleLineReader(content)) {
                 String[] k_v = null;
-                if (!ignoreline) {
+                if (!block) {
                     k_v = entry.split("=", 2);
                     if (k_v[1].startsWith("#strl")) {
-                        ignoreline = true;
-                        sb = new StringBuilder(k_v[1].substring(5));
+                        block = true;
+                        sb = (sb == null ? new CharList() : sb).append(k_v[1].substring(5));
                     } else {
                         map.put(k_v[0], k_v[1]);
                     }
                 } else {
                     if (entry.equals("#endl")) {
-                        ignoreline = false;
+                        block = false;
                         map.put(k_v[0], sb.toString());
-                        sb = null;
+                        sb.clear();
+                    } else {
+                        sb.append(entry).append('\n');
                     }
                 }
             }
-            //map.put("status", "ok");
-        } catch (Exception e) {
+        } catch (NullPointerException e) {
             e.printStackTrace();
         }
         return map;
@@ -81,18 +78,24 @@ public class TextUtil {
     public static CharList repeat(int num, char ch) {
         if(num <= 0) return new CharList();
         CharList sb = new CharList(num);
-        for (int i = 0; i < num; i++) {
-            sb.append(ch);
-        }
+        Arrays.fill(sb.list, ch);
+        sb.setIndex(num);
         return sb;
     }
 
     public static String scaledDouble(double d) {
-        StringBuilder sb = new StringBuilder(Double.toString(d));
-        if (sb.length() > 5) {
-            sb.delete(5, sb.length());
+        return scaledDouble(d, 5);
+    }
+
+    public static String scaledDouble(double d, int accurate) {
+        String db = Double.toString(d);
+        if (db.length() > 5) {
+            int dot = db.lastIndexOf('.');
+            if(dot != -1) {
+                db = db.substring(0, dot + 1 + accurate);
+            }
         }
-        return sb.toString();
+        return db;
     }
 
     public final static byte[] digits = {
@@ -101,32 +104,7 @@ public class TextUtil {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
     };
 
-    public static final IBitSet ASCII_CHARACTERS = LongBitSet.preFilled(digits);
-
-    /*public static CharList numberToString(int i, int radix) {
-        if (radix < 2 || radix > 10 + 26 + 26)
-            radix = 10;
-
-        CharList buf = new CharList(32 - radix);
-        boolean negative = (i < 0);
-        int charPos = 32;
-
-        if (!negative) {
-            i = -i;
-        }
-
-        while (i <= -radix) {
-            buf[charPos--] = digits[-(i % radix)];
-            i = i / radix;
-        }
-        buf[charPos] = digits[-i];
-
-        if (negative) {
-            buf[--charPos] = '-';
-        }
-
-        return ;//new Cha(buf, charPos, (33 - charPos));
-    }*/
+    public static final IBitSet ASCII_CHARACTERS = LongBitSet.preFilled(digits).addAll("~!@#$^&*()_+-=`[]\\{}|;':\",./<>?");
 
     public static StringBuilder escape(CharSequence src) {
         StringBuilder tmp = new StringBuilder(src.length() * 3);
@@ -148,34 +126,20 @@ public class TextUtil {
 
     public static StringBuilder unescape(final CharSequence src) {
         int len;
-        StringBuilder tmp = new StringBuilder(len = src.length());
+        StringBuilder tmp = new StringBuilder((len = src.length()) >> 1);
         int i = 0, pos;
-
-        //ByteList b8buf = new ByteList(2);
-        //CharList u8buf = new CharList(2);
 
         while (i < len) {
             pos = limitedIndexOf(src, '%', i, len);
             if (pos == i) {
                 if (src.charAt(pos + 1) == 'u') {
-                    int ch = MathUtils.parseInt(src.subSequence(pos + 2, pos + 6), 16);
+                    int ch = MathUtils.parseInt(src, pos + 2, pos + 6, 16);
 
-                    /*b8buf.pointer = 2;
-                    b8buf.set(0, (byte) ch);
-                    b8buf.set(1, (byte) (ch >> 8));
-
-                    try {
-                        ByteReader.decodeUTF(2, u8buf, b8buf);
-                    } catch (UTFDataFormatException e) {
-                        throw new RuntimeException(e);
-                    }
-                    tmp.append(u8buf.charAt(0));
-                    u8buf.clear();*/
                     tmp.append((char) ch);
 
                     i = pos + 6;
                 } else {
-                    char ch = (char) MathUtils.parseInt(src.subSequence(pos + 1, pos + 3), 16);
+                    char ch = (char) MathUtils.parseInt(src, pos + 1, pos + 3, 16);
                     tmp.append(ch);
                     i = pos + 3;
                 }
@@ -470,8 +434,8 @@ public class TextUtil {
         return limitedIndexOf(val, ch, 0, max);
     }
 
-    public static int limitedLastIndexOf(CharSequence val, char ch, int off, int max) {
-        for (int i = val.length() - 1 - max, low = Math.max(0, i - max); i >= low; i--) {
+    public static int lastIndexOf(CharSequence val, char ch) {
+        for (int i = val.length() - 1; i >= 0; i--) {
             if (val.charAt(i) == ch)
                 return i;
         }
@@ -479,7 +443,11 @@ public class TextUtil {
     }
 
     public static int limitedLastIndexOf(CharSequence val, char ch, int max) {
-        return limitedLastIndexOf(val, ch, 0, max);
+        for (int i = val.length() - 1, low = Math.max(0, i - max); i >= low; i--) {
+            if (val.charAt(i) == ch)
+                return i;
+        }
+        return -1;
     }
 
     private static int sizeFor(CharSequence s) {

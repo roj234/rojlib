@@ -8,11 +8,11 @@
  */
 package roj.asm.struct;
 
-import roj.asm.constant.CstClass;
+import roj.asm.cst.CstClass;
 import roj.asm.struct.attr.Attribute;
 import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.IConstantSerializable;
 import roj.asm.struct.simple.MethodSimple;
+import roj.asm.struct.simple.MoFNode;
 import roj.asm.util.*;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
@@ -33,7 +33,7 @@ public class ConstantData {
 
     public final String name, parent;
 
-    public final ConstantPool constants;
+    public ConstantPool cp;
     public final ConstantWriter writer;
 
     public final List<MethodSimple> methods = new ArrayList<>();
@@ -113,33 +113,33 @@ public class ConstantData {
         }
 
         HashSet<String> descs = new HashSet<>();
-        for (IConstantSerializable method : methods) {
+        for (MoFNode method : methods) {
             if (!descs.add(method.name() + '|' + method.rawDesc())) {
                 throw new IllegalArgumentException("Duplicate method with same name and desc! " + method.name() + method.rawDesc());
             }
         }
         descs.clear();
 
-        for (IConstantSerializable field : fields) {
+        for (MoFNode field : fields) {
             if (!descs.add(field.name() + '|' + field.rawDesc())) {
                 throw new IllegalArgumentException("Duplicate field with same name and desc! " + field.name() + field.rawDesc());
             }
         }
     }
 
-    public ConstantData(int version, ConstantPool constants, int exceptedBufferLength, int accesses, int nameIndex, int superNameIndex) {
-        this.constants = constants;
+    public ConstantData(int version, ConstantPool cp, int exceptedBufferLength, int accesses, int nameIndex, int superNameIndex) {
+        this.cp = cp;
         this.version = version;
-        this.accesses = AccessFlag.parse((short) accesses);
+        this.accesses = AccessFlag.of((short) accesses);
         this.exceptedBufferLength = exceptedBufferLength;
-        this.writer = new ConstantWriter(constants);
-        this.nameCst = ((CstClass) constants.array(nameIndex));
+        this.writer = new ConstantWriter(cp);
+        this.nameCst = ((CstClass) cp.array(nameIndex));
         this.name = nameCst.getValue().getString();
         if (superNameIndex == 0) {
             this.parentCst = null;
             this.parent = null;
         } else {
-            this.parentCst = ((CstClass) constants.array(superNameIndex));
+            this.parentCst = ((CstClass) cp.array(superNameIndex));
             this.parent = parentCst.getValue().getString();
         }
     }
@@ -181,12 +181,12 @@ public class ConstantData {
 
         w.writeShort(fields.size());
         for (int i = 0, l = fields.size(); i < l; i++) {
-            ((IConstantSerializable) fields.get(i)).toByteArray(writer, w);
+            ((MoFNode) fields.get(i)).toByteArray(writer, w);
         }
 
         w.writeShort(methods.size());
         for (int i = 0, l = methods.size(); i < l; i++) {
-            ((IConstantSerializable) methods.get(i)).toByteArray(writer, w);
+            ((MoFNode) methods.get(i)).toByteArray(writer, w);
         }
 
         w.writeShort(attributes.size());
@@ -217,16 +217,16 @@ public class ConstantData {
                 '}';
     }
 
-    public IConstantSerializable getMethodByName(String key) {
-        for (IConstantSerializable ms : methods) {
+    public MoFNode getMethodByName(String key) {
+        for (MoFNode ms : methods) {
             if(ms.name().equals(key))
                 return ms;
         }
         return null;
     }
 
-    public IConstantSerializable getFieldByName(String key) {
-        for (IConstantSerializable fs : fields) {
+    public MoFNode getFieldByName(String key) {
+        for (MoFNode fs : fields) {
             if(fs.name().equals(key))
                 return fs;
         }

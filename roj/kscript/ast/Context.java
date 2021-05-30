@@ -1,15 +1,14 @@
 package roj.kscript.ast;
 
 import roj.annotation.Internal;
-import roj.kscript.KConstants;
+import roj.kscript.Constants;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KType;
 import roj.kscript.type.Type;
 import roj.kscript.util.JavaException;
-import roj.kscript.util.opm.GlobalVarMap;
+import roj.kscript.util.opm.ConstMap;
 import roj.kscript.util.opm.KOEntry;
 
-import javax.annotation.Nonnull;
 import java.util.Map;
 
 /**
@@ -19,14 +18,14 @@ import java.util.Map;
  * @author zsy
  * @since 2021/4/17 22:52
  */
-public class Context implements IObject {
+public class Context extends IContext implements IObject {
     public Context() {
         this(null);
     }
 
     public Context(Context parent) {
         this.parent = parent;
-        this.vars = new GlobalVarMap.None();
+        this.vars = new ConstMap();
     }
 
     /**
@@ -34,28 +33,14 @@ public class Context implements IObject {
      * class可能为以下几种:
      * {@link Frame}: 上级函数作用域, 有全局对象(var/const)和部分对象(let)
      * {@link Context}: 顶层命名空间，例如浏览器中的window, 只有全局对象
-     * {@link FrameStatic}: 导出(作为返回值)的函数，其在return返回下级的所有作用域
+     * {@link Closure}: 导出(作为返回值)的函数，其在return返回下级的所有作用域
      */
     Context parent;
-    GlobalVarMap vars;
+    ConstMap vars;
 
     @Override
     public final boolean canCastTo(Type type) {
         return type == Type.OBJECT;
-    }
-
-    @Override
-    public final void put(@Nonnull String key, KType entry) {
-        putEx(key, entry);
-    }
-
-    @Nonnull
-    @Override
-    public final KType get(String key) {
-        KType base = getEx(key, null);
-        if (base == null)
-            throw new JavaException("未定义的 " + key);
-        return base;
     }
 
     @Override
@@ -65,7 +50,7 @@ public class Context implements IObject {
 
     @Override
     public final IObject getProto() {
-        return KConstants.OBJECT;
+        return Constants.OBJECT;
     }
 
     @Override
@@ -79,7 +64,7 @@ public class Context implements IObject {
     }
 
     @Override
-    public Map<String, KType> getInternal() {
+    public final Map<String, KType> getInternal() {
         return vars;
     }
 
@@ -112,7 +97,7 @@ public class Context implements IObject {
         return sb.append("[Context]");
     }
 
-    public boolean delete(String name) {
+    public final boolean delete(String name) {
         return vars.remove(name) != null;
     }
 
@@ -122,7 +107,7 @@ public class Context implements IObject {
         while (self != null) {
             KType v = self.vars.get(keys);
             if (v != null) {
-                return v.markImmutable(false);
+                return v;
             } else {
                 self = self.parent;
             }
@@ -131,7 +116,7 @@ public class Context implements IObject {
         return def;
     }
 
-    void putEx(String id, KType val) {
+    public void put(String id, KType val) {
         Context self = this;
 
         while (self != null) {
@@ -139,7 +124,7 @@ public class Context implements IObject {
             if (entry != null) {
                 if((entry.flags & 1) == 1)
                     throw new JavaException("尝试写入常量 " + id);
-                entry.v = val.markImmutable(true);
+                entry.v = val;
                 return;
             }
             self = self.parent;

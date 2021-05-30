@@ -42,6 +42,6 @@ public class U1InsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return "#" + ((int)bci) + ' ' + Opcodes.toString0(code, index);
+        return Opcodes.toString0(code, index);
     }
 }

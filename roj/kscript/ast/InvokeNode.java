@@ -3,11 +3,11 @@ package roj.kscript.ast;
 import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.util.InsnList;
-import roj.kscript.KConstants;
-import roj.kscript.api.IArguments;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KType;
+import roj.kscript.vm.ResourceManager;
 
 import java.util.List;
 
@@ -22,7 +22,7 @@ public final class InvokeNode extends Node {
     final short argc;
 
     public InvokeNode(boolean staticCall, int argCount, boolean noRet) {
-        super(staticCall ? OpCode.INVOKE : OpCode.INVOKE_NEW);
+        super(staticCall ? Opcode.INVOKE : Opcode.INVOKE_NEW);
         if(argCount > 32767 || argCount < 0)
             throw new IndexOutOfBoundsException("KScript only support at most 32767 parameters, got " + argCount);
         if(noRet)
@@ -32,21 +32,23 @@ public final class InvokeNode extends Node {
 
     @Override
     public Node execute(Frame frame) {
+        ResourceManager.get().pushStack();
+
         List<KType> argsL;
 
         int argc = this.argc & 32767;
         if (argc != 0) {
-            argsL = KConstants.retainArgsHolder(argc);
+            argsL = ResourceManager.retainArgHolder(argc);
 
             for (int i = argc - 1; i >= 0; i--) {
-                argsL.set(i, frame.pop().markImmutable(false));
+                argsL.set(i, frame.pop().setFlag(1));
             }
         } else {
             argsL = null;
         }
 
         KFunction fn = frame.last().asFunction();
-        IArguments args = KConstants.retainInvArgs(this, frame, argsL);
+        ArgList args = ResourceManager.retainArgList(this, frame, argsL);
 
         boolean v = this.argc >= 0;
         switch (code) {
@@ -70,7 +72,9 @@ public final class InvokeNode extends Node {
         }
 
         if (argc > 0)
-            KConstants.releaseArgHolderAndInv(args, argsL);
+            ResourceManager.releaseArgObjs(args, argsL);
+
+        ResourceManager.get().popStack();
 
         return next;
     }

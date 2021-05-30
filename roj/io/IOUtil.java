@@ -19,6 +19,24 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 public class IOUtil {
+    static final ThreadLocal<ByteList> BYTE_BUFFER = new ThreadLocal<ByteList>() {
+        @Override
+        public ByteList get() {
+            ByteList list = super.get();
+            list.clear();
+            return list;
+        }
+
+        @Override
+        protected ByteList initialValue() {
+            return new ByteList();
+        }
+    };
+
+    public static ByteList getSharedByteBuf() {
+        return BYTE_BUFFER.get();
+    }
+
     public static byte[] getBytes(JarFile file, JarEntry entry) throws IOException {
         return readFully(new BufferedInputStream(file.getInputStream(entry)));
     }
@@ -43,12 +61,12 @@ public class IOUtil {
         return data;
     }
 
-    private static ByteList getBytes0(Class<?> provider, String pathName) throws FileNotFoundException {
+    private static ByteList getBytes0(Class<?> provider, String pathName, ByteList list) throws FileNotFoundException {
         InputStream stream = provider.getClassLoader().getResourceAsStream(pathName);
         if (stream == null)
             throw new FileNotFoundException(pathName);
         try {
-            return readFully0(stream);
+            return readFully0(stream, list);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -56,12 +74,12 @@ public class IOUtil {
     }
 
     public static byte[] getBytes(Class<?> provider, String pathName) throws FileNotFoundException {
-        return getBytes0(provider, pathName).toByteArray();
+        return getBytes0(provider, pathName, BYTE_BUFFER.get()).toByteArray();
     }
 
     public static String readAsUTF(InputStream stream) throws IOException {
         CharList cl = new CharList();
-        ByteReader.decodeUTF(-1, cl, readFully0(stream));
+        ByteReader.decodeUTF(-1, cl, readFully0(stream, BYTE_BUFFER.get()));
         return cl.toString();
     }
 
@@ -69,17 +87,17 @@ public class IOUtil {
         if(encoding.equalsIgnoreCase("UTF-8") || encoding.equalsIgnoreCase("UTF8")) {
             return readAsUTF(in);
         } else {
-            ByteList bl = readFully0(in);
+            ByteList bl = readFully0(in, BYTE_BUFFER.get());
             return new String(bl.list, 0, bl.pos(), Charset.forName(encoding));
         }
     }
 
-    static ByteList readFully0(InputStream stream) throws IOException {
+    static ByteList readFully0(InputStream stream, ByteList list) throws IOException {
         int except = stream.available();
         if (except < 0) {
             throw new IOException("available < 0");
         }
-        ByteList list = new ByteList(except);
+        list.ensureCapacity(except);
         list.readStreamArrayFully(stream);
 
         stream.close();
@@ -88,7 +106,7 @@ public class IOUtil {
     }
 
     public static byte[] readFully(InputStream stream) throws IOException {
-        return readFully0(stream).getByteArray();
+        return readFully0(stream, BYTE_BUFFER.get()).getByteArray();
     }
 
     public static byte[] readFile(File file) throws IOException {
@@ -103,7 +121,7 @@ public class IOUtil {
 
     public static String readAsUTF(Class<?> provider, String pathName) throws IOException {
         CharList cl = new CharList();
-        ByteReader.decodeUTF(-1, cl, getBytes0(provider, pathName));
+        ByteReader.decodeUTF(-1, cl, getBytes0(provider, pathName, BYTE_BUFFER.get()));
         return cl.toString();
     }
 }

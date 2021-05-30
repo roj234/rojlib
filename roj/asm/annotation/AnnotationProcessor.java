@@ -8,7 +8,7 @@
  */
 package roj.asm.annotation;
 
-import roj.asm.transformers.AccessTransformer;
+import roj.asm.transform.AccessTransformer;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 

@@ -14,13 +14,16 @@ public final class KBool extends KBase {
             TRUE = new KBool(),
             FALSE = new KBool();
 
+    @Override
+    public Type getType() {
+        return Type.BOOL;
+    }
+
     public static KBool valueOf(boolean b) {
         return b ? TRUE : FALSE;
     }
 
-    private KBool() {
-        super(Type.BOOL);
-    }
+    private KBool() {}
 
     @Override
     public int asInt() {

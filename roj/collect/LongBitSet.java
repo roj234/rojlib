@@ -11,6 +11,7 @@ package roj.collect;
 import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
+import java.util.PrimitiveIterator;
 
 public class LongBitSet implements IBitSet {
     protected long[] set;
@@ -97,6 +98,59 @@ public class LongBitSet implements IBitSet {
         return null;
     }
 
+
+    @Override
+    public IBitSet addAll(IBitSet ibs) {
+        if(ibs instanceof SingleBitSet) {
+            SingleBitSet ibs1 = (SingleBitSet) ibs;
+            long s = ibs1.set,
+                    os = s & ~(set[0] & s);
+
+            // added how much?
+            // 110000 s
+            // 100001 set[0]
+            // 100000 os
+            // s & ~os
+            // 010000
+
+            int ds = 0;
+            while (os != 0) {
+                if (((os >>>= 1) & 1) == 1) { // both have
+                    ds++;
+                }
+            }
+
+            set[0] |= s;
+
+            size += ds;
+        } else if(ibs instanceof LongBitSet) {
+            // 100% true ...
+            LongBitSet lbs = (LongBitSet) ibs;
+            checkLimit(lbs.max, true);
+            int ml = (lbs.max >>> 6) + 1;
+            int ds = 0;
+            for (int i = 0; i < ml; i++) {
+                long s = lbs.set[i],
+                        os = s & ~(set[i] & s);
+
+                while (os != 0) {
+                    if (((os >>>= 1) & 1) == 1) { // both have
+                        ds++;
+                    }
+                }
+
+                set[i] |= s;
+            }
+
+            size += ds;
+        } else {
+            for (PrimitiveIterator.OfInt i = ibs.iterator(); i.hasNext(); ) {
+                add(i.nextInt());
+            }
+        }
+        return this;
+    }
+
     public boolean add(int e) {
         int i = checkLimit(e, true);
         if (!IBitSet.isBitTrue(set[indexFor(e)], i)) {
@@ -158,7 +212,7 @@ public class LongBitSet implements IBitSet {
     public String toString() {
         return "FastIntSet{" +
                 "set=" + Arrays.toString(set) +
-                ", maxValue=" + max +
+                ", max=" + max +
                 ", size=" + size +
                 '}';
     }
@@ -193,7 +247,6 @@ public class LongBitSet implements IBitSet {
                     pos += 64;
                 } else {
                     if (($this.set[pos >>> 6] & (1L << (pos & 63))) != 0) {
-                        //System.out.println("Found entry " + pos);
                         entry = pos++;
                         get = false;
                         return;

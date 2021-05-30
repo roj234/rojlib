@@ -1,8 +1,9 @@
 package roj.kscript.func;
 
-import roj.kscript.KConstants;
-import roj.kscript.api.IArguments;
+import roj.kscript.Constants;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
+import roj.kscript.ast.Frame;
 import roj.kscript.type.KInstance;
 import roj.kscript.type.KObject;
 import roj.kscript.type.KType;
@@ -21,9 +22,14 @@ public abstract class KFunction extends KObject {
     protected String name, source, clazz;
 
     public KFunction() {
-        super(Type.FUNCTION, new ObjectPropMap(), KConstants.FUNCTION);
-        this.put("prototype", new KObject(KConstants.OBJECT));
+        super(new ObjectPropMap(), Constants.FUNCTION);
+        this.put("prototype", new KObject(Constants.OBJECT));
         this.chmod("prototype", false, true, null, null);
+    }
+
+    @Override
+    public Type getType() {
+        return Type.FUNCTION;
     }
 
     @Override
@@ -31,7 +37,7 @@ public abstract class KFunction extends KObject {
         return this;
     }
 
-    public abstract KType invoke(@Nonnull IObject $this, IArguments param);
+    public abstract KType invoke(@Nonnull IObject $this, ArgList param);
 
     /**
      * 函数名称 <BR>
@@ -69,7 +75,11 @@ public abstract class KFunction extends KObject {
         return source == null ? getClass().getSimpleName() + ".java" : source;
     }
 
-    public KType createInstance(IArguments args) {
+    public KType createInstance(ArgList args) {
         return new KInstance(this, get("prototype").asKObject());
+    }
+
+    public KFunction onReturn(Frame frame) {
+        return this;
     }
 }

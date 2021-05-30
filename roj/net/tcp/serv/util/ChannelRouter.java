@@ -13,7 +13,7 @@ import roj.net.tcp.util.WrappedSocket;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ChannelRouter extends ChannelRouterSync {
@@ -35,12 +35,12 @@ public class ChannelRouter extends ChannelRouterSync {
     public final void calculate(Thread thread) throws IOException {
         Response reply = this.reply;
         try {
-            final Socket socket = this.channel.socket();
-            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
+            final SocketChannel socket = this.channel.socket();
+            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteAddress();
 
             if (stage < 3) {
                 if (stage == 0) {
-                    socket.setSoTimeout(router.readTimeout());
+                    //socket.setOption(StandardSocketOptions.SO_LINGER, router.readTimeout());
 
                     if(SharedConfig.THROTTLING_CHECK_ENABLED) {
                         final TimedHashMap<String, AtomicInteger> addresses = SharedConfig.CONNECTING_ADDRESSES;

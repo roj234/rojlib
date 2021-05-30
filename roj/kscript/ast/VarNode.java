@@ -13,20 +13,25 @@ import roj.asm.util.InsnList;
  */
 public class VarNode extends Node {
     public static final byte GET = 0, SET = 1;
-    String name;
+    Object name;
 
     public VarNode(String name, byte type) {
-        super(type == GET ? OpCode.GET_VAR : OpCode.PUT_VAR);
+        super(type == GET ? Opcode.GET_VAR : Opcode.PUT_VAR);
         this.name = name;
     }
 
     @Override
     public Node execute(Frame frame) {
-        if (getCode() == OpCode.GET_VAR)
-            frame.push(frame.get(name));
+        if (code == Opcode.GET_VAR)
+            frame.push(frame.get(name.toString()).setFlag(-1));
         else
-            frame.put(name, frame.pop());
+            frame.put(name.toString(), frame.pop().setFlag(0));
         return next;
+    }
+
+    @Override
+    Node replacement() {
+        return name instanceof Node ? (Node) name : name instanceof Object[] ? (Node) ((Object[])name)[1] : this;
     }
 
     @Override
@@ -36,6 +41,6 @@ public class VarNode extends Node {
 
     @Override
     public String toString() {
-        return getCode().name() + "(" + name + ')';
+        return code.name() + "(" + name + ')';
     }
 }

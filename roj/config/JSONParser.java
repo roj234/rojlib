@@ -6,7 +6,6 @@ import roj.config.word.AbstLexer;
 import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.text.CharList;
 import roj.text.TextUtil;
 
 /**
@@ -123,6 +122,7 @@ public final class JSONParser {
      * 解析对象定义 <BR>
      * {xxx: yyy, zzz: uuu}
      */
+    @SuppressWarnings("fallthrough")
     static CMapping jsonObject(AbstLexer wr, int flag) throws ParseException {
         CMapping map = new CMapping();
 
@@ -291,7 +291,7 @@ public final class JSONParser {
 
     private static class JSONLexer extends Lexer {
         @Override
-        protected Word formAlphabetClip(CharList temp) {
+        protected Word formAlphabetClip(CharSequence temp) {
             String s = temp.toString();
 
             short id = WordPresets.LITERAL;

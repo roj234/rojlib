@@ -13,11 +13,11 @@ import roj.kscript.type.KType;
  * @since 2020/9/27 18:45
  */
 public class LoadDataNode extends Node {
-    public final KType data;
+    public KType data;
     private KType curr;
 
     public LoadDataNode(KType data) {
-        super(OpCode.LOAD);
+        super(Opcode.LOAD);
         this.data = data;
         this.curr = data.copy();
     }

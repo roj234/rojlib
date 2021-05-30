@@ -1,8 +1,12 @@
 package roj.kscript.parser.expr;
 
+import roj.config.word.NotStatementException;
 import roj.kscript.ast.ASTree;
 import roj.kscript.ast.IfNode;
-import roj.kscript.util.NotStatementException;
+import roj.kscript.type.KBool;
+import roj.kscript.type.KType;
+
+import java.util.Map;
 
 /**
  * This file is a part of MI <br>
@@ -22,6 +26,11 @@ public final class TmpAsBool implements Expression {
     public void write(ASTree tree, boolean noRet) throws NotStatementException {
         right.write(tree, false);
         tree.IfLoad(IfNode.TRUE);
+    }
+
+    @Override
+    public KType compute(Map<String, KType> param) {
+        return KBool.valueOf(right.compute(param).asBool());
     }
 
     @Override

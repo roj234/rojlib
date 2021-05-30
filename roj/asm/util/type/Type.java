@@ -1,7 +1,9 @@
 package roj.asm.util.type;
 
 import roj.asm.util.IType;
+import roj.collect.CharMap;
 import roj.concurrent.OperationDone;
+import roj.text.CharList;
 
 import static roj.asm.util.type.NativeType.*;
 
@@ -13,35 +15,43 @@ import static roj.asm.util.type.NativeType.*;
  * Filename: Type.java
  */
 public class Type implements IType {
-    public static final Type VOID = new Type(IO.O, NativeType.VOID, 0);
+    private static final CharMap<Type> STD = new CharMap<>(9);
 
-    public final boolean io;
+    public static synchronized Type std(char c) {
+        Type type = STD.get(c);
+        if(type == null) {
+            STD.put(c, type = new Type(c));
+        }
+        if(type.array != 0) {
+            throw new IllegalArgumentException("Std type " + c + " have been changed.");
+        }
+        return type;
+    }
+
     public final char type;
     public String owner;
     public int array;
 
     public Type(char type) {
-        this(false, type, 0);
+        this(type, 0);
     }
 
     /**
      * TYPE_OTHER
      */
-    public Type(boolean io, char type, int array) {
-        this.io = io;
+    public Type(char type, int array) {
         this.type = NativeType.validate(type);
         this.array = array;
     }
 
     public Type(String type) {
-        this(false, type, 0);
+        this(type, 0);
     }
 
     /**
      * TYPE_CLASS
      */
-    public Type(boolean io, String owner, int array) {
-        this.io = io;
+    public Type(String owner, int array) {
         this.type = CLASS;
         this.owner = owner;
         this.array = array;
@@ -58,17 +68,17 @@ public class Type implements IType {
     }
 
     @Override
-    public void appendGeneric(StringBuilder sb) {
+    public void appendGeneric(CharList sb) {
         ParamHelper.getOne(this, sb);
     }
 
     @Override
-    public void appendString(StringBuilder sb) {
+    public void appendString(CharList sb) {
         sb.append(toString());
     }
 
     public int length() {
-        return (array == 0 && (this.type == NativeType.LONG || this.type == NativeType.DOUBLE)) ? 2 : 1;
+        return (array == 0 && (type == NativeType.LONG || type == NativeType.DOUBLE)) ? 2 : 1;
     }
 
     public String nativeName() {
@@ -105,11 +115,5 @@ public class Type implements IType {
         for (int i = 0; i < this.array; i++)
             sb.append("[]");
         return sb.toString();
-    }
-
-    public Type copy(boolean i) {
-        Type type = new Type(i, this.type, array);
-        type.owner = owner;
-        return type;
     }
 }

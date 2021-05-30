@@ -1,8 +1,7 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
-import roj.kscript.ast.OpCode;
+import roj.kscript.ast.Opcode;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KDouble;
 import roj.kscript.type.KType;
@@ -34,6 +33,7 @@ public final class Assign implements Expression {
     }
 
     @Override
+    @SuppressWarnings("fallthrough")
     public void write(ASTree tree, boolean noRet) {
         boolean var = left instanceof Variable;
         boolean opDone = false;
@@ -75,14 +75,14 @@ public final class Assign implements Expression {
                             } else {
                                 left.writeLoad(tree);
 
-                                tree.Std(OpCode.DUP2)
-                                        .Std(OpCode.GET_OBJ)
-                                        .Load(KDouble.Intl.valueOf(count))
-                                        .Std(bin.operator == Symbol.add ? OpCode.ADD : OpCode.SUB);
+                                tree.Std(Opcode.DUP2)
+                                        .Std(Opcode.GET_OBJ)
+                                        .Load(KDouble.valueOf(count))
+                                        .Std(bin.operator == Symbol.add ? Opcode.ADD : Opcode.SUB);
                                 if(!noRet) {
-                                    tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                                    tree.Std(Opcode.DUP).Std(Opcode.SWAP3);
                                 }
-                                tree.Std(OpCode.PUT_OBJ);
+                                tree.Std(Opcode.PUT_OBJ);
                             }
 
                             opDone = true;
@@ -93,15 +93,15 @@ public final class Assign implements Expression {
                         if (!var) {
                             left.writeLoad(tree);
 
-                            ar.write(tree.Std(OpCode.DUP2)
-                                    .Std(OpCode.GET_OBJ), false);
+                            ar.write(tree.Std(Opcode.DUP2)
+                                    .Std(Opcode.GET_OBJ), false);
                             bin.writeOperator(tree);
 
                             if(!noRet) {
-                                tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                                tree.Std(Opcode.DUP).Std(Opcode.SWAP3);
                             }
 
-                            tree.Std(OpCode.PUT_OBJ);
+                            tree.Std(Opcode.PUT_OBJ);
 
                             opDone = true;
                         }
@@ -123,9 +123,9 @@ public final class Assign implements Expression {
                 left.writeLoad(tree);
                 right.write(tree, false);
                 if(!noRet) {
-                    tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                    tree.Std(Opcode.DUP).Std(Opcode.SWAP3);
                 }
-                tree.Std(OpCode.PUT_OBJ);
+                tree.Std(Opcode.PUT_OBJ);
             }
         }
     }
@@ -146,14 +146,14 @@ public final class Assign implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
-        final KType result = right.compute(param, $this);
+    public KType compute(Map<String, KType> param) {
+        final KType result = right.compute(param);
         if(left instanceof Variable) {
             Variable v = (Variable) left;
             param.put(v.name, result);
         } else {
             Field field = (Field) left;
-            field.parent.compute(param, $this).asObject().put(field.name, result);
+            field.parent.compute(param).asObject().put(field.name, result);
         }
         return result;
     }

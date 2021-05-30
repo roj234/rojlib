@@ -9,14 +9,14 @@
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.Constant;
-import roj.asm.constant.CstDynamic;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstDynamic;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
 import roj.asm.util.type.NativeType;
 import roj.util.ByteWriter;
 
-import static roj.asm.constant.CstType.*;
+import static roj.asm.cst.CstType.*;
 
 public final class LoadConstInsnNode extends InsnNode {
     @SuppressWarnings("fallthrough")
@@ -31,12 +31,12 @@ public final class LoadConstInsnNode extends InsnNode {
 
     public static void _verify(byte code, Constant c) {
         boolean dj = false;
-        if(c.type == DYNAMIC) {
+        if(c.type() == DYNAMIC) {
             String v = ((CstDynamic) c).getDesc().getType().getString();
             dj = v.charAt(0) == NativeType.DOUBLE || v.charAt(0) == NativeType.LONG;
         }
 
-        switch (c.type) {
+        switch (c.type()) {
             case STRING:
             case FLOAT:
             case INT:
@@ -71,7 +71,7 @@ public final class LoadConstInsnNode extends InsnNode {
          *
          * Int, Float, String, Class, MethodType, or MethodHandle if main >= 51
          */
-         switch (c.type) {
+         switch (c.type()) {
              case INT:
              case FLOAT:
              case STRING:
@@ -81,13 +81,16 @@ public final class LoadConstInsnNode extends InsnNode {
              case CLASS:
                  if(mainVer < 49)
                      throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
+                 break;
              case METHOD_TYPE:
              case METHOD_HANDLE:
                  if(mainVer < 51)
                      throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
+                 break;
              case DYNAMIC:
                  if(mainVer < 55)
                      throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
+                 break;
          }
     }
 

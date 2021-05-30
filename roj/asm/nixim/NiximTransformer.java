@@ -11,7 +11,7 @@ package roj.asm.nixim;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.SharedCache;
-import roj.asm.constant.*;
+import roj.asm.cst.*;
 import roj.asm.struct.ConstantData;
 import roj.asm.struct.Field;
 import roj.asm.struct.Method;
@@ -22,8 +22,8 @@ import roj.asm.struct.insn.InsnNode;
 import roj.asm.struct.insn.InvokeDynInsnNode;
 import roj.asm.struct.insn.InvokeInsnNode;
 import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.IConstantSerializable;
 import roj.asm.struct.simple.MethodSimple;
+import roj.asm.struct.simple.MoFNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
@@ -99,7 +99,7 @@ public class NiximTransformer {
                     if (debug)
                         logger.info("Create BSM");
                 } else {
-                    bootstrapMethods = new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.constants);
+                    bootstrapMethods = new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.cp);
                     final ListIterator<Attribute> li = data.attributes.listIterator();
                     while (li.hasNext()) {
                         if (li.next() == attr) {
@@ -124,8 +124,8 @@ public class NiximTransformer {
                 }
             }
 
-            ListIterator<IConstantSerializable> itr = Helpers.cast(data.methods.listIterator());
-            List<IConstantSerializable> removed = new ArrayList<>();
+            ListIterator<MoFNode> itr = Helpers.cast(data.methods.listIterator());
+            List<MoFNode> removed = new ArrayList<>();
             while (itr.hasNext()) {
                 MethodSimple method = (MethodSimple) itr.next();
 
@@ -140,7 +140,7 @@ public class NiximTransformer {
 
                     itr.set(replacement);
 
-                    IConstantSerializable serializable = method;
+                    MoFNode serializable = method;
 
                     if ("<init>".equals(name)) {
                         serializable = fixInitMethod(niximData, data, replacement, method);
@@ -164,7 +164,7 @@ public class NiximTransformer {
                     replacement.name = method.name.getString();
                     replacement.accesses = method.accesses.copy();
 
-                    IConstantSerializable serializable = method;
+                    MoFNode serializable = method;
 
                     if ("<init>".equals(name)) {
                         serializable = fixInitMethod(niximData, data, replacement, method);
@@ -196,7 +196,7 @@ public class NiximTransformer {
 
             if (!niximData.methodRename.isEmpty()) {
                 Map<String, String> methodRename = niximData.methodRename;
-                for (IConstantSerializable ms : removed) {
+                for (MoFNode ms : removed) {
                     String newName = methodRename.remove(ms.name() + '|' + ms.rawDesc());
                     if (newName != null) {
 
@@ -207,7 +207,7 @@ public class NiximTransformer {
                         } else {
                             ((Method) ms).name = newName;
                         }
-                        List<IConstantSerializable> some = Helpers.cast(data.methods);
+                        List<MoFNode> some = Helpers.cast(data.methods);
                         some.add(ms);
                     }
                 }
@@ -216,7 +216,7 @@ public class NiximTransformer {
             if (!methodRemapper.isEmpty()) {
                 final Map<String, Object> pr = niximData.properties;
                 if (!pr.isEmpty()) {
-                    List<IConstantSerializable> list = Helpers.cast(data.methods);
+                    List<MoFNode> list = Helpers.cast(data.methods);
                     String sup = data.parent;
 
                     methodRemapper.keySet().removeIf(entry -> {
@@ -236,7 +236,7 @@ public class NiximTransformer {
                 logger.error("======Methods======");
                 itr = Helpers.cast(data.methods.listIterator());
                 while (itr.hasNext()) {
-                    IConstantSerializable method = itr.next();
+                    MoFNode method = itr.next();
                     logger.error(method.name() + " | " + method.rawDesc());
                 }
                 logger.error("======Nixim entries======");
@@ -250,7 +250,7 @@ public class NiximTransformer {
                 logger.error("======Methods======");
                 itr = Helpers.cast(removed.listIterator());
                 while (itr.hasNext()) {
-                    IConstantSerializable method = itr.next();
+                    MoFNode method = itr.next();
                     logger.error(method.name() + " | " + method.rawDesc());
                 }
                 logger.error("======Nixim entries======");
@@ -343,7 +343,7 @@ public class NiximTransformer {
         }
     }
 
-    private static IConstantSerializable fixInitMethod(NiximData niximData, ConstantData data, Method newInit, MethodSimple oldInit1) {
+    private static MoFNode fixInitMethod(NiximData niximData, ConstantData data, Method newInit, MethodSimple oldInit1) {
         if (niximData.methodRename.remove("<REPLACE_" + oldInit1.type.getString()) != null) {
             if (debug)
                 logger.info("Fix <init> in replace mode.");
@@ -449,14 +449,14 @@ public class NiximTransformer {
         Set<String> selfFields = new MyHashSet<>();
 
         for (FieldSimple field : data.fields) {
-            String remapName = getAnnotationValue(data.constants, field.attrByName(ANNO_TYPE), SHADOW_TYPE);
+            String remapName = getAnnotationValue(data.cp, field.attrByName(ANNO_TYPE), SHADOW_TYPE);
             if (remapName != null) {
                 String descriptor = field.type.getString();//ParamHelper.generalSingleDescriptor(field.type.getString());
                 String oName = field.name.getString() + '|' + descriptor;
                 fieldShadow.put(oName, remapName);
                 if (debug)
                     logger.info("ShadowField " + descriptor + ':' + field.name.getString() + " -> " + remapName);
-            } else if (hasAnnotation(data.constants, field.attrByName(ANNO_TYPE), COPY_TYPE)) {
+            } else if (hasAnnotation(data.cp, field.attrByName(ANNO_TYPE), COPY_TYPE)) {
                 if (debug)
                     logger.info("CopyField " + field.name.getString());
                 copyField.add(new Field(data, field));
@@ -478,19 +478,19 @@ public class NiximTransformer {
         IntMap<LambdaInfo> lambdaBSM = new IntMap<>();
 
         Attribute attr = data.attrByName("BootstrapMethods");
-        AttrBootstrapMethods bsm = attr == null ? null : new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.constants);
+        AttrBootstrapMethods bsm = attr == null ? null : new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.cp);
 
         List<MethodSimple> remapTmp = new ArrayList<>();
 
         for (MethodSimple method : data.methods) {
-            String remapName = getAnnotationValue(data.constants, method.attrByName(ANNO_TYPE), SHADOW_TYPE);
+            String remapName = getAnnotationValue(data.cp, method.attrByName(ANNO_TYPE), SHADOW_TYPE);
             if (remapName != null) {
                 String descriptor = method.type.getString();
                 String oName = method.name.getString() + '|' + descriptor;
                 methodShadow.put(oName, remapName);
                 if (debug)
                     logger.info("ShadowMethod " + descriptor + ':' + method.name.getString() + " -> " + remapName);
-            } else if (hasAnnotation(data.constants, method.attrByName(ANNO_TYPE), COPY_TYPE)) {
+            } else if (hasAnnotation(data.cp, method.attrByName(ANNO_TYPE), COPY_TYPE)) {
                 if (debug)
                     logger.info("CopyMethod " + method.name.getString());
                 Method method1;
@@ -514,7 +514,7 @@ public class NiximTransformer {
         }
 
         for (MethodSimple method : remapTmp) {
-            Data data1 = getAnnotationData(data.constants, method.attrByName(ANNO_TYPE), REMAP_METHOD_TYPE);
+            Data data1 = getAnnotationData(data.cp, method.attrByName(ANNO_TYPE), REMAP_METHOD_TYPE);
             if (data1 != null) {
                 String remapName = data1.value;
 
@@ -693,9 +693,11 @@ public class NiximTransformer {
                     logger.info("IDI: " + node);
             }
 
-            for (Constant cst : info.bootstrapMethod.arguments) {
-                if (cst.type == CstType.METHOD_HANDLE) {
-                    handle = (CstMethodHandle) cst;
+            List<Constant> args = info.bootstrapMethod.arguments;
+            for (int i = 0; i < args.size(); i++) {
+                Constant c = args.get(i);
+                if (c.type() == CstType.METHOD_HANDLE) {
+                    handle = (CstMethodHandle) c;
                     CstRef ref = handle.getRef();
 
                     boolean isSelfMethod = false;
@@ -709,8 +711,7 @@ public class NiximTransformer {
 
                     for (MethodSimple method : data.methods) {
                         if (method.name.equals(ref.desc().getName()) && method.type.equals(ref.desc().getType())) {
-                            if (debug)
-                                logger.info("Found lambda method " + method.name.getString());
+                            if (debug) logger.info("Found lambda method " + method.name.getString());
 
                             Method method1 = new Method(data, method);
 
@@ -723,8 +724,7 @@ public class NiximTransformer {
                             replaceLVTandLVTT(slashSelfClass, slashDestClass, fieldShadow, method1);
 
                             for (Type type : method1.parameters()) {
-                                if (slashSelfClass.equals(type.owner))
-                                    type.owner = slashDestClass;
+                                if (slashSelfClass.equals(type.owner)) type.owner = slashDestClass;
                             }
 
                             method1.resetParam(true);
@@ -742,9 +742,9 @@ public class NiximTransformer {
                         if (isSelfMethod) {
                             logger.error("NiximReadClass: Error: Lambda not found!");
                             logger.error("Method list below");
-                            Iterator<IConstantSerializable> itr = Helpers.cast(data.methods.listIterator());
+                            Iterator<MoFNode> itr = Helpers.cast(data.methods.listIterator());
                             while (itr.hasNext()) {
-                                IConstantSerializable method = itr.next();
+                                MoFNode method = itr.next();
                                 logger.error(method.name() + "   |   " + method.rawDesc());
                             }
                             logger.error("Method list above");
@@ -935,7 +935,7 @@ public class NiximTransformer {
     private static Object[] getClassArray(ConstantData data, Attribute attribute) {
         if (attribute == null)
             return null;
-        AttrAnnotation annotations = attribute instanceof AttrAnnotation ? (AttrAnnotation) attribute : new AttrAnnotation(false, new ByteReader(attribute.getRawData()), data.constants);
+        AttrAnnotation annotations = attribute instanceof AttrAnnotation ? (AttrAnnotation) attribute : new AttrAnnotation(false, new ByteReader(attribute.getRawData()), data.cp);
 
         List<String> list = null;
         String className = null;

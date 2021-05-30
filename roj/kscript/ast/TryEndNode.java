@@ -16,7 +16,7 @@ import roj.kscript.util.Variable;
  */
 public final class TryEndNode extends GotoNode {
     public TryEndNode(LabelNode realEnd) {
-        super(OpCode.TRY_END, realEnd);
+        super(Opcode.TRY_END, realEnd);
     }
 
     @Override

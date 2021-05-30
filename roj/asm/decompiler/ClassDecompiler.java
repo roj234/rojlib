@@ -1,6 +1,6 @@
 package roj.asm.decompiler;
 
-import roj.asm.constant.*;
+import roj.asm.cst.*;
 import roj.asm.struct.Method;
 import roj.asm.struct.attr.AttrCode;
 import roj.asm.struct.insn.IIndexInsnNode;
@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.asm.constant.CstType.*;
+import static roj.asm.cst.CstType.*;
 
 /**
  * This file is a part of MI <br>
@@ -62,7 +62,7 @@ public class ClassDecompiler {
                 case LLOAD:
                 case DLOAD:
                 case FLOAD: {
-                    roj.asm.struct.insn.IIndexInsnNode node1 = (roj.asm.struct.insn.IIndexInsnNode) node;
+                    roj.asm.struct.insn.IIndexInsnNode node1 = (IIndexInsnNode) node;
                     System.out.println("Xload_" + node1.getIndex());
                     opStack.push(varNames.get(node1.getIndex()));
                 }
@@ -137,7 +137,7 @@ public class ClassDecompiler {
 
                     String o = "<INTERNAL ERROR: unsupported ldc node>";
 
-                    switch (node1.c.type) {
+                    switch (node1.c.type()) {
                         case STRING:
                             o = ((CstString) node1.c).getValue().getString();
                             break;
@@ -199,7 +199,6 @@ public class ClassDecompiler {
                     opStack.push("return " + opStack.pop());
                     break;
                 case ICONST_0:
-                    System.out.println("iconst_0");
                     opStack.push("0");
                     break;
                 case ICONST_1:
@@ -225,7 +224,7 @@ public class ClassDecompiler {
                 case FSTORE:
                 case ISTORE:
                 case ASTORE: {
-                    roj.asm.struct.insn.IIndexInsnNode node1 = (IIndexInsnNode) node;
+                    IIndexInsnNode node1 = (IIndexInsnNode) node;
 
                     String obj = opStack.pop();
                     String className = "CLASSName(WIP)";
@@ -236,6 +235,7 @@ public class ClassDecompiler {
                     opStack.push(className + ' ' + varNames.get(node1.getIndex()) + '=' + obj);
                 }
                 break;
+                // aaload
                 case POP2:
                 case POP:
                     System.out.println("pop / pop2");

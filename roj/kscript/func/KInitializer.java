@@ -1,6 +1,6 @@
 package roj.kscript.func;
 
-import roj.kscript.api.IArguments;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
@@ -21,7 +21,7 @@ public abstract class KInitializer extends KFunction {
     }
 
     @Override
-    public KType invoke(@Nonnull IObject $this, IArguments param) {
+    public KType invoke(@Nonnull IObject $this, ArgList param) {
         return KUndefined.UNDEFINED;
     }
 
@@ -31,5 +31,5 @@ public abstract class KInitializer extends KFunction {
     }
 
     @Override
-    public abstract KType createInstance(IArguments args);
+    public abstract KType createInstance(ArgList args);
 }

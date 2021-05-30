@@ -9,16 +9,16 @@ import roj.concurrent.OperationDone;
  * @author Roj234
  * Filename: FrameType.java
  */
-public enum FrameType {
-    same(0),
-    same_local_1_stack(64),
-    same_local_1_stack_ex(247),
-    chop(248),
-    same_ex(251),
-    append(252),
-    full(255);
+public class FrameType {
+    public static final int same = (0),
+    same_local_1_stack = (64),
+    same_local_1_stack_ex = (247),
+    chop = (248),
+    same_ex = (251),
+    append = (252),
+    full = (255);
 
-    public static FrameType byId(int b) {
+    public static int byId(int b) {
         final int b1 = b & 0xFF;
         if((b1 & 128) == 0) {
                                             // 64 - 127
@@ -42,11 +42,5 @@ public enum FrameType {
                 return full;
         }
         throw OperationDone.NEVER;
-    }
-
-    public final int s;
-
-    FrameType(int s) {
-        this.s = s;
     }
 }

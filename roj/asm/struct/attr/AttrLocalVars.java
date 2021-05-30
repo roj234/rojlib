@@ -9,7 +9,7 @@
 package roj.asm.struct.attr;
 
 import roj.annotation.Internal;
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.insn.InsnNode;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;

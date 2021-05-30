@@ -22,8 +22,10 @@ public final class Variable {
     public KType def;
     public Node start, end;
 
+    public int index;
+
     @Override
     public String toString() {
-        return "Var:" + name + "=" + def + ", s=" + start + ", e=" + end + '}';
+        return "Var" + index + ':' + name + "=" + def + ", s=" + start + ", e=" + end + '}';
     }
 }

@@ -3,8 +3,6 @@ package roj.kscript.ast;
 import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.util.InsnList;
-import roj.kscript.type.KDouble;
-import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
 
 /**
@@ -15,33 +13,29 @@ import roj.kscript.type.KType;
  * @since 2020/9/27 23:59
  */
 public final class IncrNode extends Node {
-    String name;
+    Object name;
     final int val;
 
     public IncrNode(String name, int val) {
-        super(OpCode.INCREASE);
+        super(Opcode.INCREASE);
         this.name = name;
         this.val = val;
     }
 
     @Override
     public Node execute(Frame frame) {
-        KType base = frame.get(name);
+        KType base = frame.get(name.toString());
         if (base.isInt()) {
-            KInt i = base.asKInt();
-            // 16:var or none
-            if((i.spec() & 17) == 0) {
-                frame.put(name, i = KInt.OnStack.valueOf(i.value));
-            }
-            i.value += val;
+            base.setIntValue(base.asInt() + val);
         } else {
-            KDouble i = base.asKDouble();
-            if((i.spec() & 17) == 0) {
-                frame.put(name, i = KDouble.OnStack.retainForce(i.value));
-            }
-            i.value += val;
+            base.setDoubleValue(base.asDouble() + val);
         }
         return next;
+    }
+
+    @Override
+    Node replacement() {
+        return name instanceof Node ? (Node) name : name instanceof Object[] ? (Node) ((Object[])name)[1] : this;
     }
 
     @Override

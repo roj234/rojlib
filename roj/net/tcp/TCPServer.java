@@ -2,14 +2,21 @@ package roj.net.tcp;
 
 import roj.concurrent.TaskHandler;
 import roj.concurrent.pool.TaskPool;
+import roj.concurrent.task.ITask;
+import roj.net.tcp.serv.util.ChannelRouter;
 import roj.net.tcp.ssl.EngineAllocator;
 import roj.net.tcp.ssl.ServerSslConf;
 import roj.net.tcp.ssl.SslEngineFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
+import java.net.StandardSocketOptions;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 
 /**
  * This file is a part of MI <br>
@@ -19,8 +26,9 @@ import java.security.GeneralSecurityException;
  * @since 2020/12/19 13:22
  */
 public abstract class TCPServer implements Runnable {
-    protected final ServerSocket socket;
+    protected final ServerSocketChannel socket;
     protected EngineAllocator ssl;
+    protected ArrayList<ChannelRouter> routers = new ArrayList<>();
 
     public TCPServer(int port, int maxConnection, String keyStoreFile, char[] keyPassword) throws IOException, GeneralSecurityException {
         this(new InetSocketAddress(port), maxConnection, keyStoreFile, keyPassword);
@@ -40,27 +48,77 @@ public abstract class TCPServer implements Runnable {
         this.socket = socket(address, maxConnection);
     }
 
-    protected static ServerSocket socket(InetSocketAddress address, int maxConnection) throws IOException {
-        ServerSocket socket = new ServerSocket();
-        socket.setReuseAddress(true);
-        socket.bind(address, maxConnection);
-        return socket;
+    protected static ServerSocketChannel socket(InetSocketAddress address, int maxConnection) throws IOException {
+        /*.configureBlocking(false)*/
+        return ServerSocketChannel.open()
+                .setOption(StandardSocketOptions.SO_KEEPALIVE, true)
+                .setOption(StandardSocketOptions.SO_REUSEADDR, true).bind(address, maxConnection);
     }
 
     protected static EngineAllocator enableHTTPS(String keyStore, char[] password) throws IOException, GeneralSecurityException {
         return SslEngineFactory.getAnySslEngine(new ServerSslConf(keyStore, password));
     }
 
-    public final ServerSocket getSocket() {
+    public final ServerSocketChannel getSocket() {
         return socket;
     }
 
-    @Override
-    public abstract void run();
+    protected abstract ITask getTaskFor(SocketChannel client) throws IOException;
 
     protected TaskHandler getTaskHandler() {
         final int cpus = Runtime.getRuntime().availableProcessors();
-        return new TaskPool(cpus, cpus * 3, 128);
+        return new TaskPool(cpus >> 1, cpus << 1, 128);
     }
 
+    @Override
+    public void run() {
+        TaskHandler handler = getTaskHandler();
+
+        Selector selector;
+        try {
+            selector = Selector.open();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        Thread selectorThread = new Thread() {
+            @Override
+            public void run() {
+                Thread self = Thread.currentThread();
+                while (!self.isInterrupted()) {
+                    try {
+                        selector.select();
+                        for (SelectionKey key : selector.selectedKeys()) {
+                            handler.pushTask((ChannelRouter) key.attachment());
+                        }
+                        selector.selectedKeys().clear();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        };
+        selectorThread.setDaemon(true);
+        selectorThread.setName("Selector");
+        selectorThread.start();
+
+        Thread self = Thread.currentThread();
+        while (!self.isInterrupted()) {
+            try {
+                SocketChannel socket = this.socket.accept();
+
+                socket.setOption(StandardSocketOptions.SO_REUSEADDR, true)
+                        .setOption(StandardSocketOptions.SO_KEEPALIVE, true)
+                        .configureBlocking(false);
+
+                selector.wakeup();
+                socket.register(selector, SelectionKey.OP_READ, getTaskFor(socket));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        selectorThread.interrupt();
+    }
 }

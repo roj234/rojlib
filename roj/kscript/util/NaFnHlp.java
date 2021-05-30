@@ -1,7 +1,7 @@
 package roj.kscript.util;
 
-import roj.kscript.KConstants;
-import roj.kscript.api.IArguments;
+import roj.kscript.Constants;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
 import roj.kscript.func.KFuncNative;
 import roj.kscript.type.KObject;
@@ -23,7 +23,7 @@ public final class NaFnHlp {
     private final NaFnHlp parent;
 
     private NaFnHlp(NaFnHlp parent) {
-        this.object = new KObject(parent == null ? null : KConstants.OBJECT);
+        this.object = new KObject(parent == null ? null : Constants.OBJECT);
         this.parent = parent;
     }
 
@@ -31,10 +31,10 @@ public final class NaFnHlp {
         return new NaFnHlp(null);
     }
 
-    public NaFnHlp returnVoid(String name, Consumer<IArguments> consumer) {
+    public NaFnHlp returnVoid(String name, Consumer<ArgList> consumer) {
         return with(name, new KFuncNative() {
                     @Override
-                    public KType invoke(@Nonnull IObject $this, IArguments param) {
+                    public KType invoke(@Nonnull IObject $this, ArgList param) {
                         consumer.accept(param);
                         return KUndefined.UNDEFINED;
                     }

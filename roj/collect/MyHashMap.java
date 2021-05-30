@@ -16,11 +16,16 @@ import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
 public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K, V>> {
+    public void _int_plus_size() {
+        size++;
+    }
+
     public static class Entry<K, V> implements Map.Entry<K, V>, EntryIterable<Entry<K, V>> {
         public K k;
         public V v;
@@ -282,7 +287,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         return null;
     }
 
-    protected Entry<K, V> getOrCreateEntry(K id) {
+    public Entry<K, V> getOrCreateEntry(K id) {
         Entry<K, V> entry = getEntryFirst(id, true);
         if (entry.v == NOT_USING)
             return entry;
@@ -513,6 +518,22 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         int os = size;
         remove0(key, value);
         return os != size;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void removeIf(Predicate<K> predicate) {
+        if(entries == null) return;
+        K k;
+        for(Entry<?, ?> entry : entries) {
+            while (entry != null) {
+                if (entry.v != NOT_USING && predicate.test(k = (K) entry.k)) {
+                    entry = entry.next;
+                    remove(k);
+                    continue;
+                }
+                entry = entry.next;
+            }
+        }
     }
 
     @Override

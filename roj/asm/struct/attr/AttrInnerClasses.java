@@ -8,8 +8,8 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.CstClass;
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
@@ -32,7 +32,6 @@ public final class AttrInnerClasses extends Attribute {
     public AttrInnerClasses(ByteReader r, ConstantPool pool) {
         super(NAME);
         classes = parse(r, pool);
-
     }
 
     public List<InnerClass> parse(ByteReader r, ConstantPool pool) {
@@ -93,7 +92,7 @@ public final class AttrInnerClasses extends Attribute {
 
         public String toString() {
             StringBuilder sb = new StringBuilder();
-            for (PrimitiveIterator.OfInt itr = AccessFlag.parse(flags).iterator(); itr.hasNext(); ) {
+            for (PrimitiveIterator.OfInt itr = AccessFlag.of(flags).iterator(); itr.hasNext(); ) {
                 sb.append(AccessFlag.byIdInnerClass(itr.nextInt())).append(' ');
             }
             sb.append("class ");

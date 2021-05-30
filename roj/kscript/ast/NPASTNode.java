@@ -3,8 +3,11 @@ package roj.kscript.ast;
 import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.util.InsnList;
-import roj.kscript.type.*;
-import roj.kscript.util.ScriptException;
+import roj.kscript.type.KBool;
+import roj.kscript.type.KJavaObject;
+import roj.kscript.type.KType;
+import roj.kscript.type.Type;
+import roj.kscript.vm.ScriptException;
 
 /**
  * This file is a part of MI <br>
@@ -15,34 +18,31 @@ import roj.kscript.util.ScriptException;
  * @since 2020/9/27 13:23
  */
 public final class NPASTNode extends Node {
-    public NPASTNode(OpCode code) {
+    public NPASTNode(Opcode code) {
         super(code);
     }
 
     @Override
-    public Node execute(Frame frame) {
+    @SuppressWarnings("fallthrough")
+    public Node execute(Frame f) {
         switch (code) {
             case ADD_ARRAY:
-                array_add(frame);
+                array_add(f);
                 break;
             case MOD: {
-                KType b = frame.pop();
-                KType a = frame.last();
+                KType b = f.pop();
+                KType a = f.last();
 
                 int v = b.isInt() ? a.asInt() % b.asInt() : 0;
 
-                if(a.spec() != 2) {
-                    frame.setLast(KInt.OnStack.valueOf(v));
-                } else {
-                    a.asKInt().value = v;
-                }
+                a.setIntValue(v);
             }
             break;
             case XOR:
             case OR:
             case AND: {
-                KType b = frame.pop();
-                KType a = frame.last();
+                KType b = f.pop();
+                KType a = f.last();
 
                 boolean val = a.getType() == Type.BOOL;
                 if (val) {
@@ -59,7 +59,7 @@ public final class NPASTNode extends Node {
                             v = aa & bb;
                             break;
                     }
-                    frame.setLast(KBool.valueOf(v));
+                    f.setLast(KBool.valueOf(v));
                 } else {
                     int v = 0;
                     int aa = a.asInt(), bb = b.asInt();
@@ -75,11 +75,7 @@ public final class NPASTNode extends Node {
                             break;
                     }
 
-                    if(a.spec() != 2) {
-                        frame.setLast(KInt.OnStack.valueOf(v));
-                    } else {
-                        a.asKInt().value = v;
-                    }
+                    a.setIntValue(v);
                 }
             }
             break;
@@ -88,13 +84,13 @@ public final class NPASTNode extends Node {
             case DIV:
             case SUB:
             case ADD: {
-                KType b = frame.pop();
-                KType a = frame.last();
+                KType b = f.pop();
+                KType a = f.last();
 
-                if (code == OpCode.ADD && (a.isString() || b.isString())) { // string append
+                if (code == Opcode.ADD && (a.isString() || b.isString())) { // string append
                     StringBuilder sb;
                     if (a.getType() != Type.JAVA_OBJECT || !(a.asJavaObject(Object.class).getObject() instanceof StringBuilder)) {
-                        frame.setLast(new KJavaObject<>(sb = new StringBuilder(a.asString())));
+                        f.setLast(new KJavaObject<>(sb = new StringBuilder(a.asString())));
                     } else {
                         sb = a.asJavaObject(StringBuilder.class).getObject();
                     }
@@ -103,7 +99,7 @@ public final class NPASTNode extends Node {
                 }
 
                 // Number
-                if (!b.isInt() || !a.isInt() || code == OpCode.POW) {
+                if (!b.isInt() || !a.isInt() || code == Opcode.POW) {
                     double aa = b.asDouble();
                     double bb = a.asDouble();
 
@@ -125,11 +121,7 @@ public final class NPASTNode extends Node {
                             break;
                     }
 
-                    if(a.spec() != 4) {
-                        frame.setLast(KDouble.OnStack.valueOf(aa));
-                    } else {
-                        a.asKDouble().value = aa;
-                    }
+                    a.setDoubleValue(aa);
                 } else {
                     int aa = b.asInt();
                     int bb = a.asInt();
@@ -149,81 +141,59 @@ public final class NPASTNode extends Node {
                             break;
                     }
 
-                    if(a.spec() != 2) {
-                        frame.setLast(KInt.OnStack.valueOf(aa));
-                    } else {
-                        a.asKInt().value = aa;
-                    }
+                    a.setIntValue(aa);
                 }
             }
             break;
             case GET_OBJ:
-                object__get(frame);
+                object__get(f);
                 break;
             case PUT_OBJ:
-                object__put(frame);
+                object__put(f);
                 break;
             case DUP2: {
                 // a,b => a,b , a,b
-                KType a = frame.last(1);
-                KType b = frame.last();
-                frame.push(a.markImmutable(true));
-                frame.push(b.markImmutable(true));
+                KType a = f.last(1);
+                KType b = f.last();
+                f.push(a.setFlag(2));
+                f.push(b.setFlag(2));
             }
             break;
             case DUP: {
-                frame.push(frame.last().markImmutable(true));
+                f.push(f.last().setFlag(2));
             }
             break;
             case NEGATIVE: {
-                KType a = frame.last();
+                KType a = f.last();
 
                 if(a.isInt()) {
-                    int aa = -a.asInt();
-                    if(a.spec() != 2) {
-                        frame.setLast(KInt.OnStack.valueOf(aa));
-                    } else {
-                        a.asKInt().value = aa;
-                    }
+                    a.setIntValue(-a.asInt());
                 } else {
-                    double aa = -a.asDouble();
-                    if(a.spec() != 4) {
-                        frame.setLast(KDouble.OnStack.valueOf(aa));
-                    } else {
-                        a.asKDouble().value = aa;
-                    }
+                    a.setDoubleValue(-a.asDouble());
                 }
             }
             break;
             case NOT: {
-                frame.setLast(KBool.valueOf(!frame.last().asBool()));
+                f.setLast(KBool.valueOf(!f.last().asBool()));
             }
             break;
             case REVERSE: {
-                KType a = frame.last();
+                KType a = f.last();
                 a.asInt();
 
                 int aa = a.isInt() ? ~a.asInt() : 0;
-                if(a.spec() != 2) {
-                    frame.setLast(KInt.OnStack.valueOf(aa));
-                } else {
-                    a.asKInt().value = aa;
-                }
+                a.setIntValue(aa);
             }
             break;
             case SHIFT_L:
             case SHIFT_R:
             case U_SHIFT_R: {
-                KType count = frame.pop();
-                KType num = frame.last();
+                KType count = f.pop();
+                KType num = f.last();
 
                 num.asInt();
                 if (!num.isInt()) {
-                    if(num.spec() != 2) {
-                        frame.setLast(KInt.OnStack.valueOf(0));
-                    } else {
-                        num.asKInt().value = 0;
-                    }
+                    num.setIntValue(0);
                 } else {
                     int val = count.asInt();
 
@@ -240,77 +210,70 @@ public final class NPASTNode extends Node {
                             break;
                     }
 
-                    if(num.spec() != 2) {
-                        frame.setLast(KInt.OnStack.valueOf(it));
-                    } else {
-                        num.asKInt().value = it;
-                    }
+                    num.setIntValue(it);
                 }
             }
             break;
             case POP: {
-                frame.pop();
+                f.pop();
             }
             break;
             case ARGUMENTS: {
-                frame.push(frame.args);
+                f.push(f.args);
             }
             break;
             case THIS: {
-                frame.push(frame.$this);
+                f.push(f.$this);
             }
             break;
             case TRY_EXIT: {
-                TryNode info = frame.tryCatch.last();
-                if (info.fin() != null)
+                TryNode info = f.tryCatch.last();
+                if (info.fin != null)
                     throw ScriptException.TRY_EXIT;
-                return frame.tryCatch.pop().getEnd();
+                return f.tryCatch.pop().end;
             }
+            case RETURN:
+                f.result = f.pop();
             case RETURN_EMPTY:
                 return null;
-            case RETURN: {
-                frame.result = frame.pop();
-                return null;
-            }
             case THROW: {
                 // no pop since stack will be cleared
-                throw frame.last().asKError().getOrigin();
+                throw f.last().asKError().getOrigin();
             }
             case SWAP: {
-                Frame.V v = frame.tail(2);
-                Frame.V pr = v.prev;
-
-                KType t = pr.v;
-
-                pr.v = v.v;
-                v.v = t;
+                int i = f.stackSize - 1;
+                if (i < 1) throw new ArrayIndexOutOfBoundsException(i);
+                KType[] arr = f.stack;
+                KType swp = arr[i];
+                arr[i] = arr[i - 1];
+                arr[i - 1] = swp;
             }
             break;
             case SWAP3: {
-                // a b c d => d a b c
-                Frame.V v = frame.tail(4);
+                int i = f.stackSize - 1;
+                if(i < 3) throw new ArrayIndexOutOfBoundsException(i);
 
-                // a b c
-                frame.tail(v.prev);
+                // obj idx val val
+                //   => val obj idx val
 
-                Frame.V p3 = v.prev.prev.prev;
-
-                Frame.V p4 = p3.prev;
-
-                p3.prev = v;
-                v.prev = p4;
+                KType[] arr = f.stack;
+                KType swp = arr[i];
+                for (int j = 0; j < 3; j++) { // slow move
+                    arr[i - j] = arr[i - j - 1];
+                }
+                arr[i - 3] = swp;
             }
             break;
             case INSTANCE_OF: {
-                KType clazz = frame.pop();
-                KType instance = frame.last();
+                KType clazz = f.pop();
+                KType instance = f.last();
 
                 boolean result = instance.canCastTo(Type.OBJECT) && instance.asObject().isInstanceOf(clazz.asObject());
-                frame.setLast(KBool.valueOf(result));
+                f.setLast(KBool.valueOf(result));
             }
             break;
             default:
-                throw new IllegalArgumentException("Unsupported operator " + code);
+                throw new IllegalArgumentException("Unsupported op " + code);
         }
 
         return next;
@@ -321,14 +284,14 @@ public final class NPASTNode extends Node {
         KType base = stack.last();
 
         if(base.canCastTo(Type.ARRAY) && name.isInt()) {
-            stack.setLast(base.asArray().get(name.asInt()));
+            stack.setLast(base.asArray().get(name.asInt()).setFlag(4));
         } else {
-            stack.setLast(base.asObject().get(name.asString()));
+            stack.setLast(base.asObject().get(name.asString()).setFlag(4));
         }
     }
 
     private void object__put(Frame stack) {
-        KType val = stack.pop();
+        KType val = stack.pop().setFlag(3);
         KType name = stack.pop();
         KType base = stack.pop();
 
@@ -341,7 +304,7 @@ public final class NPASTNode extends Node {
 
     private void array_add(Frame stack) {
         KType val = stack.pop();
-        KType var = stack.pop();
+        KType var = stack.pop().setFlag(3);
 
         var.asArray().add(val);
     }

@@ -159,4 +159,12 @@ public final class UIUtil {
             }
         }
     }
+
+    public static void systemLook() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
+            e.printStackTrace();
+        }
+    }
 }

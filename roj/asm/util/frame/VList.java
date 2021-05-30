@@ -15,9 +15,11 @@ import javax.annotation.Nonnull;
 import java.util.Iterator;
 
 public final class VList implements Iterable<Var> {
-    public Var[] list = new Var[4];
+    static final Var[] EMPTY = new Var[0];
+
+    public Var[] list = EMPTY;
     public int size = 0;
-    private int length = 4;
+    private int cap = 0;
 
     public VList() {}
 
@@ -30,26 +32,24 @@ public final class VList implements Iterable<Var> {
     }
 
     public void ensureCapacity(int size) {
-        if (length >= size) return;
+        if (cap >= size) return;
         Var[] newList = new Var[size];
         if (this.size > 0)
             System.arraycopy(list, 0, newList, 0, this.size);
         list = newList;
-        length = size;
+        cap = size;
     }
 
-    public int add(Var e) {
-        list[size++] = e;
-
-        if (size >= length) {
-            ensureCapacity(length + 4);
+    public void add(Var e) {
+        if (size >= cap) {
+            ensureCapacity(cap + 4);
         }
 
-        return (e.type == VarType.DOUBLE || e.type == VarType.LONG) ? 2 : 1;
+        list[size++] = e;
     }
 
     public void set(int index, Var e) {
-        if (index >= length) {
+        if (index >= cap) {
             ensureCapacity(index + 4);
         }
 
@@ -72,6 +72,8 @@ public final class VList implements Iterable<Var> {
 
     public void removeTo(int index) {
         if (index < 0) throw new IllegalArgumentException("Size will < 0 after pop.");
+
+        ensureCapacity(index);
 
         /*for (int i = index; i < size; i++) {
             list[i] = null;

@@ -85,7 +85,7 @@ public final class ByteReader implements DataInput {
         return readVarInt(true);
     }
 
-    public final int readVarInt(boolean zag) {
+    public final int readVarInt(boolean canBeNegative) {
         int value = 0;
         int i = 0;
 
@@ -94,7 +94,7 @@ public final class ByteReader implements DataInput {
             value |= (chunk & 0x7F) << i;
             i += 7;
             if ((chunk & 0x80) == 0) {
-                return zag ? zag(value) : value;
+                return canBeNegative ? zag(value) : value;
             }
         }
 
@@ -324,6 +324,7 @@ public final class ByteReader implements DataInput {
         return decode0(max, out, in, inputOff, 3) - inputOff;
     }
 
+    @SuppressWarnings("fallthrough")
     private static int decode0(int max, CharList out, ByteList in, int i, int flag) throws UTFDataFormatException {
         int c;
         while (i < max) {
@@ -598,7 +599,7 @@ public final class ByteReader implements DataInput {
         return list;
     }
 
-    public int remainSize() {
+    public int remain() {
         return this.bytes.limit() - this.bytes.pos();
     }
 

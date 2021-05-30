@@ -1,18 +1,18 @@
 package roj.math;
 
 public class SimplexNoise {  // Simplex noise in 2D, 3D and 4D
-    private static final V4i[] grad3 = {new V4i(1, 1, 0), new V4i(-1, 1, 0), new V4i(1, -1, 0), new V4i(-1, -1, 0),
-            new V4i(1, 0, 1), new V4i(-1, 0, 1), new V4i(1, 0, -1), new V4i(-1, 0, -1),
-            new V4i(0, 1, 1), new V4i(0, -1, 1), new V4i(0, 1, -1), new V4i(0, -1, -1)};
+    private static final Vec4d[] grad3 = {new Vec4d(1, 1, 0), new Vec4d(-1, 1, 0), new Vec4d(1, -1, 0), new Vec4d(-1, -1, 0),
+            new Vec4d(1, 0, 1), new Vec4d(-1, 0, 1), new Vec4d(1, 0, -1), new Vec4d(-1, 0, -1),
+            new Vec4d(0, 1, 1), new Vec4d(0, -1, 1), new Vec4d(0, 1, -1), new Vec4d(0, -1, -1)};
 
-    private static final V4i[] grad4 = {new V4i(0, 1, 1, 1), new V4i(0, 1, 1, -1), new V4i(0, 1, -1, 1), new V4i(0, 1, -1, -1),
-            new V4i(0, -1, 1, 1), new V4i(0, -1, 1, -1), new V4i(0, -1, -1, 1), new V4i(0, -1, -1, -1),
-            new V4i(1, 0, 1, 1), new V4i(1, 0, 1, -1), new V4i(1, 0, -1, 1), new V4i(1, 0, -1, -1),
-            new V4i(-1, 0, 1, 1), new V4i(-1, 0, 1, -1), new V4i(-1, 0, -1, 1), new V4i(-1, 0, -1, -1),
-            new V4i(1, 1, 0, 1), new V4i(1, 1, 0, -1), new V4i(1, -1, 0, 1), new V4i(1, -1, 0, -1),
-            new V4i(-1, 1, 0, 1), new V4i(-1, 1, 0, -1), new V4i(-1, -1, 0, 1), new V4i(-1, -1, 0, -1),
-            new V4i(1, 1, 1, 0), new V4i(1, 1, -1, 0), new V4i(1, -1, 1, 0), new V4i(1, -1, -1, 0),
-            new V4i(-1, 1, 1, 0), new V4i(-1, 1, -1, 0), new V4i(-1, -1, 1, 0), new V4i(-1, -1, -1, 0)};
+    private static final Vec4d[] grad4 = {new Vec4d(0, 1, 1, 1), new Vec4d(0, 1, 1, -1), new Vec4d(0, 1, -1, 1), new Vec4d(0, 1, -1, -1),
+            new Vec4d(0, -1, 1, 1), new Vec4d(0, -1, 1, -1), new Vec4d(0, -1, -1, 1), new Vec4d(0, -1, -1, -1),
+            new Vec4d(1, 0, 1, 1), new Vec4d(1, 0, 1, -1), new Vec4d(1, 0, -1, 1), new Vec4d(1, 0, -1, -1),
+            new Vec4d(-1, 0, 1, 1), new Vec4d(-1, 0, 1, -1), new Vec4d(-1, 0, -1, 1), new Vec4d(-1, 0, -1, -1),
+            new Vec4d(1, 1, 0, 1), new Vec4d(1, 1, 0, -1), new Vec4d(1, -1, 0, 1), new Vec4d(1, -1, 0, -1),
+            new Vec4d(-1, 1, 0, 1), new Vec4d(-1, 1, 0, -1), new Vec4d(-1, -1, 0, 1), new Vec4d(-1, -1, 0, -1),
+            new Vec4d(1, 1, 1, 0), new Vec4d(1, 1, -1, 0), new Vec4d(1, -1, 1, 0), new Vec4d(1, -1, -1, 0),
+            new Vec4d(-1, 1, 1, 0), new Vec4d(-1, 1, -1, 0), new Vec4d(-1, -1, 1, 0), new Vec4d(-1, -1, -1, 0)};
 
     // To remove the need for index wrapping, double the permutation table length
     private static final short[] perm = new short[512];
@@ -52,15 +52,15 @@ public class SimplexNoise {  // Simplex noise in 2D, 3D and 4D
         return x < xi ? xi - 1 : xi;
     }
 
-    private static double dot(V4i g, double x, double y) {
+    private static double dot(Vec4d g, double x, double y) {
         return g.x * x + g.y * y;
     }
 
-    private static double dot(V4i g, double x, double y, double z) {
+    private static double dot(Vec4d g, double x, double y, double z) {
         return g.x * x + g.y * y + g.z * z;
     }
 
-    private static double dot(V4i g, double x, double y, double z, double w) {
+    private static double dot(Vec4d g, double x, double y, double z, double w) {
         return g.x * x + g.y * y + g.z * z + g.w * w;
     }
 
@@ -423,24 +423,5 @@ public class SimplexNoise {  // Simplex noise in 2D, 3D and 4D
 
         }
         return totalNoise;
-    }
-
-    // Inner class to speed up gradient computations
-    // (In Java, array access is a lot slower than member access)
-    private static class V4i {
-        double x, y, z, w;
-
-        V4i(double x, double y, double z) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
-
-        V4i(double x, double y, double z, double w) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.w = w;
-        }
     }
 }

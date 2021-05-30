@@ -1,9 +1,11 @@
 package roj.math;
 
+import roj.collect.SimpleList;
 import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * Math utilities.
@@ -27,6 +29,10 @@ public abstract class MathUtils {
         MathUtils.OCT_MAXS[15]++;
         Arrays.fill(MathUtils.BIN_MAXS, (byte) '1');
         MathUtils.BIN_MAXS[31]++;
+    }
+
+    public static int sig(int num) {
+        return num == 0 ? 0 : num < 0 ? -1 : 1;
     }
 
     //public static final BigDecimal BIG_PI = new BigDecimal("3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038964");
@@ -59,17 +65,76 @@ public abstract class MathUtils {
     }
 
     public static int max(int... ints) {
-        int i = 1;
+        int i = 0, v = Integer.MIN_VALUE, cur;
         while (i < ints.length)
-            ints[0] = Math.max(ints[0], ints[i++]);
-        return ints[0];
+            if((cur = ints[i++]) > v)
+                v = cur;
+        return v;
     }
 
     public static int min(int... ints) {
-        int i = 1;
+        int i = 0, v = Integer.MAX_VALUE, cur;
         while (i < ints.length)
-            ints[0] = Math.min(ints[0], ints[i++]);
-        return ints[0];
+            if((cur = ints[i++]) < v)
+                v = cur;
+        return v;
+    }
+
+    /**
+     * 投影点
+     * @param v 还是容器
+     */
+    public static Vec3d project(Vec3d point, Vec3d line, Vec3d v) {
+        /*Mat3d A = new Mat3d(point.x, point.y, point.z, line.x, line.y, line.z, 0, 0, 1);
+        Mat3d tmp = new Mat3d();
+
+        A.mul(tmp.set(A).invert()).mul(tmp.set(A).transpose()).mul(tmp.invert());*/
+
+        v.set(point)
+                // 1. Point和Line所在的平面的法线
+                .cross(line)
+                // 2. 与Line垂直和(法线垂直 => 平面内)的向量
+                .cross(line);
+
+        // A * line (4,5,6 * A) = B * v (1,2,3 + B * v)
+        // A = (point.x + B * v.x) / line.x = (point.y + B * v.y) / line.y;
+        double B = (line.x * point.y / line.y - point.x) / (v.x - line.x * v.y / line.y);
+        //double A = (point.y + B * v.y) / line.y;
+
+        return v.mul(B).add(point);
+    }
+
+    /**
+     * @see #legalLine(Vec3d, Vec3d, Vec3d)
+     */
+    private static Vec3d legalLine(Vec3d a, Vec3d b) {
+        return legalLine(a, b, new Vec3d());
+    }
+
+    /**
+     * 法线(与a,b都垂直的向量) <BR>
+     * 自己推的公式, 感觉没有人家{@link Vec3d#cross(Vec3d)}简洁呢
+     * @param holder 存储返回值的容器
+     */
+    private static Vec3d legalLine(Vec3d a, Vec3d b, Vec3d holder) {
+        // ux + vy + wz = 0
+        // ax + by + cz = 0
+        // define x = 1
+
+        //  vy + wz = -u
+        //  by + cz = -a
+
+        //  y = -(u + wz) / v
+        //  b( (-u - wz) / v ) + cz = -a
+
+        //  (-ub / v + a) / (-c + wb / v) = z
+
+        //            u     b     v     a        c     w     b     v
+        double z = (-a.x * b.y / a.y + b.x) / (-b.z + a.z * b.y / a.y);
+        //            u     w    z     v
+        double y = -(a.x + a.z * z) / a.y;
+
+        return holder.set(1, y, z);
     }
 
     /**
@@ -216,7 +281,7 @@ public abstract class MathUtils {
     }
 
     /**
-     * @see MathUtils#interpolate(double, double, double)
+     * @see #interpolate(double, double, double, double, double)
      */
     public static float interpolate(float in, float inMin, float inMax, float outMin, float outMax) {
         if (inMin > inMax) { // reverse
@@ -264,7 +329,19 @@ public abstract class MathUtils {
     }
 
     /**
+     * @see #interpolate(double, double, double, double, double)
+     */
+    public static double interpolateMy(double in, int inMin, int inMax, double outMin, double outMax) {
+        if (in <= inMin) return outMin;
+        if (in >= inMax) return outMax;
+
+        double xFrac = (in - inMin) / (inMax - inMin);
+        return outMin + xFrac * (outMax - outMin);
+    }
+
+    /**
      * As same as interpolate(delta, 0, 1, old, now)
+     * @see #interpolate(double, double, double, double, double)
      */
     public static double interpolate(double old, double now, double delta) {
         return old + delta * (now - old);
@@ -272,6 +349,7 @@ public abstract class MathUtils {
 
     /**
      * As same as interpolate(delta, 0, 1, old, now)
+     * @see #interpolate(double, double, double, double, double)
      */
     public static float interpolate(float old, float now, float delta) {
         return old + delta * (now - old);
@@ -695,47 +773,33 @@ public abstract class MathUtils {
     }
 
     /**
-     * 点在直线上的投影
-     *
-     * @param a     直线上的点a
-     * @param b     直线上的点b
-     * @param point 直线外的点p
-     * @return 投影点
+     * 笛卡儿积 (values所有可能的排列 = values[0].length * values[1].length * ...)
      */
-    public static Vec3d pointProject(Vec3d a, Vec3d b, Vec3d point) {
-        //return Vec3d.project(point, Vec3d.sub(b, a).normalize());
+    public static <T> void dikaerProduct(List<T[]> values, Consumer<List<T>> consumer) {
+        SimpleList<T> cache = new SimpleList<>(values.size());
+        cache._int_setSize(values.size());
+        dikaerProduct(values, 0, consumer, cache);
+    }
 
-        double x1 = a.x;
-        double y1 = a.y;
-        double z1 = a.z;
+    static <T> void dikaerProduct(List<T[]> values, int layer, Consumer<List<T>> consumer, SimpleList<T> cache) {
+        T[] v = values.get(layer);
+        boolean last = layer == values.size() - 1;
+        for (T t : v) {
+            cache.set(layer, t);
+            if (last) {
+                consumer.accept(cache);
+            } else {
+                dikaerProduct(values, layer + 1, consumer, cache);
+            }
+        }
+    }
 
-        double x2 = b.x;
-        double y2 = b.y;
-        double z2 = b.z;
-
-        double dx = b.x - a.x;
-        double dy = b.y - a.x;
-        double dz = b.z - a.x;
-
-        double px = point.x;
-        double py = point.y;
-        double pz = point.z;
-
-        if(b.equals(a))
-            return point;
-
-        Vec3d diff = Vec3d.sub(b, a); // b - a
-        double denominator = diff.len2();
-        //if (denominator == 0)
-        //    return point;
-
-        double dxyz = dx * dy * dz;
-
-        double moleculex = dx * dx * px   +   dxyz * py * pz   +   dz * dy * (x1 * y2 * z2   -   x2 * y1 * z1);
-        double moleculey = dy * dy * py   +   dxyz * px * pz   +   dx * dz * (x2 * y1 * z2   -   x1 * y2 * z1);
-        double moleculez = dz * dz * pz   +   dxyz * px * py   +   dx * dy * (x2 * y2 * z1   -   x1 * y1 * z2);
-
-        return new Vec3d(moleculex, moleculey, moleculez).mul(1 / denominator);
+    public static <T> int dikaerLength(List<T[]> stacks) {
+        int len = 1;
+        for (int i = 0; i < stacks.size(); i++) {
+            len *= stacks.get(i).length;
+        }
+        return len;
     }
 
     /**
@@ -817,6 +881,29 @@ public abstract class MathUtils {
         if (s.length() > 0) {
             int i = 0, len = s.length();
 
+            int digit;
+
+            while (i < len) {
+                if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
+                    throw new NumberFormatException("Not a number at offset " + (i - 1) + " : " + s);
+
+                result *= radix;
+                result += digit;
+            }
+        } else {
+            throw new NumberFormatException(s.toString());
+        }
+
+        if (result > 4294967295L || result < Integer.MIN_VALUE)
+            throw new NumberFormatException("Value overflow " + result + " : " + s);
+
+        return parseInt(s, 0, s.length(), radix);
+    }
+
+    public static int parseInt(CharSequence s, int i, int len, int radix) throws NumberFormatException {
+        long result = 0;
+
+        if (s.length() > 0) {
             int digit;
 
             while (i < len) {

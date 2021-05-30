@@ -9,7 +9,7 @@
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.CstClass;
+import roj.asm.cst.CstClass;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
@@ -43,7 +43,7 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         }
     }
 
-    private String name;
+    public String name;
 
     public String owner() {
         return name;
@@ -81,6 +81,6 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return "#" + (int)bci + ' ' + Opcodes.toString0(code, name.substring(name.lastIndexOf('/') + 1));
+        return Opcodes.toString0(code, name.substring(name.lastIndexOf('/') + 1));
     }
 }

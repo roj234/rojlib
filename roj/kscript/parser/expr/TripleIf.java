@@ -1,6 +1,5 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
 import roj.kscript.ast.IfNode;
 import roj.kscript.ast.LabelNode;
@@ -46,8 +45,8 @@ public final class TripleIf implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
-        return determine.compute(param, $this).asBool() ? truly.compute(param, $this) : fake.compute(param, $this);
+    public KType compute(Map<String, KType> param) {
+        return determine.compute(param).asBool() ? truly.compute(param) : fake.compute(param);
     }
 
     @Nonnull

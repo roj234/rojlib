@@ -10,15 +10,18 @@ import roj.asm.struct.insn.InsnNode;
  * Filename: Frame.java
  */
 public final class Frame {
-    public static final Frame EMPTY = new Frame(null);
+    public static final Frame EMPTY = new Frame(-1);
 
-    public FrameType type;
+    /**
+     * @see FrameType
+     */
+    public int type;
     public InsnNode target;
     public final VList
             locals = new VList(),
             stacks = new VList();
 
-    public Frame(FrameType type) {
+    public Frame(int type) {
         this.type = type;
     }
 

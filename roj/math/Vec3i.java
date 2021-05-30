@@ -8,7 +8,7 @@ import roj.util.Hasher;
  *
  * @author Maximilian Luz
  */
-public class Vec3i {
+public class Vec3i implements Vec3 {
     public int x, y, z;
 
 
@@ -282,5 +282,20 @@ public class Vec3i {
     @Override
     public String toString() {
         return this.getClass().getName() + " {" + x + ", " + y + ", " + z + "}";
+    }
+
+    @Override
+    public double x() {
+        return x;
+    }
+
+    @Override
+    public double y() {
+        return y;
+    }
+
+    @Override
+    public double z() {
+        return z;
     }
 }

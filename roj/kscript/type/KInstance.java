@@ -22,7 +22,7 @@ public final class KInstance extends KObject {
     }
 
     public KInstance(KFunction cst, KObject proto) {
-        super(Type.OBJECT, new ObjectPropMap(), proto);
+        super(new ObjectPropMap(), proto);
         for (Map.Entry<String, KType> entry : proto.getInternal().entrySet()) {
             String key = entry.getKey();
             KType value = entry.getValue();
@@ -32,5 +32,10 @@ public final class KInstance extends KObject {
         }
 
         this.constructor = cst;
+    }
+
+    @Override
+    public KType getOr(String key, KType def) {
+        return key.equals("constructor") ? constructor : super.getOr(key, def);
     }
 }

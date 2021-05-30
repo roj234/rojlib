@@ -10,60 +10,82 @@ package roj.asm.util.type;
 
 import roj.collect.SimpleList;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static roj.asm.util.type.NativeType.*;
 
 public final class ParamHelper {
+    static final ThreadLocal<CharList> sharedBuffer = ThreadLocal.withInitial(CharList::new);
+
     /**
      * Method descriptor
      */
-    public static List<Type> parseMethod(String str) {
-        String s1, s2;
-        List<Type> ioList = new SimpleList<>();
+    public static List<Type> parseMethod(String desc) {
+        List<Type> params = new SimpleList<>();
+        parseMethod(desc, params);
+        return params;
+    }
 
-        int index = str.indexOf(")");
-        s1 = str.substring(index + 1); // Output
-        s2 = str.substring(1, index);  // Input
+    @SuppressWarnings("fallthrough")
+    public static void parseMethod(String desc, List<Type> params) {
+        int index = desc.indexOf(")");
+        String ret = desc.substring(index + 1); // Output
+        Type returns = parseOne(ret.charAt(0), ret);
 
-        Type tmp3 = parseOne(IO.O, s1.charAt(0), s1);
+        CharList tmp = sharedBuffer.get();
+        tmp.clear();
 
-        CharList tmp4 = new CharList(64);
-        boolean flag = false;
-        //boolean flag2 = false;
-        int arrLv = 0;
-        for (int i = 0; i < s2.length(); i++) {
-            char cr = s2.charAt(i);
-            if (cr == 'L' && !flag) {
-                flag = true;
-            } else if (cr == ';') {
-                flag = false;
-                s1 = tmp4.toString();
-                ioList.add(new Type(IO.I, s1, arrLv));
-                tmp4.clear();
-                arrLv = 0;
-            } else if (cr == '[') {
-                arrLv++;
-            } else if (flag) {
-                tmp4.append(cr);
-            } else {
-                char type = NativeType.validate(cr);
-                ioList.add(new Type(IO.I, type, arrLv));
-                arrLv = 0;
+        boolean ref = false;
+        int arr = 0;
+        for (int i = 1; i < index; i++) {
+            char c = desc.charAt(i);
+            switch (c) {
+                case ';':
+                    if(!ref) {
+                        throw new IllegalArgumentException(desc);
+                    } else {
+                        params.add(new Type(tmp.toString(), arr));
+                        tmp.clear();
+                        arr = 0;
+                        ref = false;
+                    }
+                    break;
+                case '[':
+                    arr++;
+                    break;
+                case 'L':
+                    if(!ref) {
+                        ref = true;
+                        break;
+                    }
+                default:
+                    if(ref) {
+                        tmp.append(c);
+                    } else {
+                        NativeType.validate(c);
+                        params.add(arr == 0 ? Type.std(c) : new Type(c, arr));
+                        arr = 0;
+                    }
+                    break;
             }
         }
-        ioList.add(tmp3);
-        return ioList;
+
+        params.add(returns);
     }
 
     public static String getMethod(List<Type> list) {
-        StringBuilder sb = new StringBuilder("(");
-        for (Type type : list) {
-            if (type.io == IO.O) {
+        CharList sb = sharedBuffer.get();
+        sb.clear();
+        sb.append("(");
+        for (int i = 0; i < list.size(); i++) {
+            if (i == list.size() - 1) { // last
                 sb.append(')');
             }
-            getOne(type, sb);
+
+            getOne(list.get(i), sb);
         }
         return sb.toString();
     }
@@ -72,46 +94,51 @@ public final class ParamHelper {
         int index = str.indexOf(")");
         String s1 = str.substring(index + 1); // Output
 
-        return parseOne(IO.O, s1.charAt(0), s1);
+        return parseOne(s1.charAt(0), s1);
     }
 
     /**
      * Field descriptor
      */
     public static Type parseField(String s) {
-        return parseOne(IO.O, s.charAt(0), s);
+        return parseOne(s.charAt(0), s);
     }
 
-    private static Type parseOne(boolean io, char c0, String s) {
-        char type = NativeType.validate(c0);
-
-        switch (type) {
+    private static Type parseOne(char c0, String s) {
+        switch (NativeType.validate(c0)) {
             case ARRAY:
                 int pos = s.lastIndexOf('[') + 1;
-                String tmp = s.substring(pos);
-                Type param = parseOne(io, tmp.charAt(0), tmp);
-                param.array = pos;
+                String p1 = s.substring(pos);
+                Type param = parseOne(p1.charAt(0), p1);
+                if(param.owner == null)
+                    param = new Type(param.type, pos);
+                else
+                    param.array = pos;
                 return param;
             case CLASS:
                 if (!s.endsWith(";")) {
                     System.err.println("Class name " + s + " does not endsWith ;");
-                    return new Type(io, s.substring(1), 0);
+                    return new Type(s.substring(1), 0);
                 }
-                return new Type(io, s.substring(1, s.length() - 1), 0);
+                return new Type(s.substring(1, s.length() - 1), 0);
             default:
-                return new Type(io, type, 0);
+                return Type.std(c0);
         }
     }
 
     public static String getField(Type type) {
-        StringBuilder sb;
-        getOne(type, sb = new StringBuilder());
+        if(type.owner == null && type.array == 0)
+            return NativeType.toNativeString(type.type);
+
+        CharList sb = sharedBuffer.get();
+        sb.clear();
+        sb.ensureCapacity(2 + type.array + (type.owner == null ? 0 : type.owner.length() + 2));
+        getOne(type, sb);
         return sb.toString();
     }
 
-    public static void getOne(Type type, StringBuilder sb) {
-        int i = 0;
-        for (int q = type.array; i < q; i++) {
+    public static void getOne(Type type, CharList sb) {
+        for (int q = type.array; q > 0; q--) {
             sb.append('[');
         }
         if (type.type == NativeType.CLASS) {
@@ -125,10 +152,13 @@ public final class ParamHelper {
      * ConstantUTF8 / mostly
      */
     public static String classDescriptor(Class<?> clazz) {
-        return classDescriptor(new StringBuilder(), clazz).toString();
+        CharList sb = sharedBuffer.get();
+        sb.clear();
+
+        return classDescriptor(sb, clazz).toString();
     }
 
-    public static StringBuilder classDescriptor(StringBuilder sb, Class<?> clazz) {
+    public static CharList classDescriptor(CharList sb, Class<?> clazz) {
         Class<?> tmp;
         while ((tmp = clazz.getComponentType()) != null) {
             clazz = tmp;
@@ -162,7 +192,10 @@ public final class ParamHelper {
     }
 
     public static String classDescriptors(Class<?>[] classes, Class<?> returns) {
-        StringBuilder sb = new StringBuilder("(");
+        CharList sb = sharedBuffer.get();
+        sb.clear();
+        sb.append('(');
+
         for (Class<?> clazz : classes) {
             classDescriptor(sb, clazz);
         }
@@ -174,24 +207,27 @@ public final class ParamHelper {
      * ConstantClass
      */
     public static Type classType(String s) {
-        char type = NativeType.validate(s.charAt(0));
+        char c = NativeType.validate(s.charAt(0));
         if (s.length() == 1)
-            return new Type(IO.I, type, 0);
+            return Type.std(c);
         if (s.startsWith("[")) {
             int pos = s.lastIndexOf('[') + 1;
-            String tmp = s.substring(pos);
-            Type param = classType(tmp);
-            param.array = pos;
+            String p1 = s.substring(pos);
+            Type param = classType(p1);
+            if(param.owner == null)
+                param = new Type(param.type, pos);
+            else
+                param.array = pos;
             return param;
         } else {
-            return new Type(IO.I, s.substring(1, s.length() - 1), 0);
+            return new Type(s.substring(1, s.length() - 1), 0);
         }
     }
 
     /**
      * XLOAD / XRETURN 的前缀
      */
-    public static String nativeType(Class<?> clazz) {
+    public static String XPrefix(Class<?> clazz) {
         if (clazz.isPrimitive()) {
             switch (clazz.getName()) {
                 case "int":
@@ -213,13 +249,45 @@ public final class ParamHelper {
         return "A";
     }
 
+    /*
+     * 返回值
+     * /
+    public static String nativeReturnVal(CharSequence i) {
+        if(i.length() > 2 && i.length() < 8)
+            switch (i.toString()) {
+                case "int":
+                    return "I";
+                case "char":
+                    return "C";
+                case "byte":
+                    return "B";
+                case "boolean":
+                    return "Z";
+                case "short":
+                    return "S";
+                case "double":
+                    return "D";
+                case "long":
+                    return "J";
+                case "float":
+                    return "F";
+                case "void":
+                    return "V";
+            }
+        throw new IllegalArgumentException(i + " is not prim type");
+    }*/
+
     /**
-     * @return void <init>(String, double)
+     * @param types (Ljava/lang/String;D)V
+     * @param methodName <init>
+     * @return void <init>(java.lang.String, double)
      */
     public static String humanize(List<Type> types, String methodName) {
         Type ret = types.remove(types.size() - 1);
 
-        StringBuilder sb = new StringBuilder().append(ret).append(' ').append(methodName).append("(");
+        CharList sb = sharedBuffer.get();
+        sb.clear();
+        sb.append(ret).append(' ').append(methodName).append("(");
 
         if (!types.isEmpty()) {
             for (Type p : types) {
@@ -234,29 +302,34 @@ public final class ParamHelper {
     }
 
     /**
-     * @param in  void
-     * @param out java.lang.String, double
-     * @return ()V
+     * @param in  java.lang.String, double
+     * @param out void
+     * @return (Ljava/lang/String;D)V
      */
     public static String dehumanize(String in, String out) {
-        StringBuilder sb = (new StringBuilder(in.length() + out.length() + 4)).append('(');
-        String[] x = in.split(",");
-        for (String s : x) {
+        CharList sb = sharedBuffer.get();
+        sb.clear();
+        sb.ensureCapacity(in.length() + out.length() + 4);
+        sb.append('(');
+
+        List<String> list = TextUtil.splitStringF(new ArrayList<>(), in, ',');
+        for (int i = 0; i < list.size(); i++) {
+            String s = list.get(i);
             dehumanize(s, sb);
         }
         return dehumanize(out, sb.append(')')).toString();
     }
 
-    private static StringBuilder dehumanize(String z, StringBuilder sb) {
+    private static CharList dehumanize(String z, CharList sb) {
         if (z.isEmpty())
             return sb;
-        StringBuilder sb1 = new StringBuilder(z);
+        CharList sb1 = new CharList(z.toCharArray());
 
-        while (sb1.charAt(sb1.length() - 1) == ']' && sb1.charAt(sb1.length() - 2) == '[') {
-            sb1.deleteCharAt(sb1.length() - 1).deleteCharAt(sb1.length() - 1);
+        // Array filter
+        while (sb1.length() > 2 && sb1.charAt(sb1.length() - 1) == ']' && sb1.charAt(sb1.length() - 2) == '[') {
+            sb1.setIndex(sb1.length() - 2);
             sb.append('[');
         }
-
 
         switch (sb1.toString()) {
             case "int":
@@ -280,8 +353,9 @@ public final class ParamHelper {
         }
         for (int i = 0; i < sb1.length(); i++) {
             if (sb1.charAt(i) == '.')
-                sb1.setCharAt(i, '/');
+                sb1.set(i, '/');
         }
-        return sb.append('L').append(sb1).append(';');
+        sb.append('L').append(sb1);
+        return sb.append(';');
     }
 }

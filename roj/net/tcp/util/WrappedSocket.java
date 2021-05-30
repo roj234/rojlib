@@ -4,8 +4,7 @@ import roj.util.ByteList;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 
 /**
  * These methods may seem unnecessary but they are
@@ -15,7 +14,7 @@ import java.net.Socket;
  * @since 2020/11/29 15:33
  */
 public interface WrappedSocket extends AutoCloseable {
-    Socket socket();
+    SocketChannel socket();
 
     /**
      * @return true if successful.
@@ -25,9 +24,6 @@ public interface WrappedSocket extends AutoCloseable {
     int read() throws IOException;
 
     ByteList buffer();
-
-    OutputStream getOut();
-
 
     int write(ByteList src) throws IOException;
 

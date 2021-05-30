@@ -22,8 +22,6 @@ import roj.asm.util.type.ParamHelper;
 
 import java.lang.reflect.InvocationTargetException;
 
-import static roj.reflect.DirectMethodAccess.nextId;
-
 public class DirectConstructorAccess {
     /**
      * 获取实例化器
@@ -61,10 +59,7 @@ public class DirectConstructorAccess {
         if (!invoke.getReturnType().isAssignableFrom(target))
             throw new IllegalArgumentException("targetClass not instanceof invoke.getReturnType()");
 
-        int i;
-        synchronized (nextId) {
-            i = nextId.getAndIncrement();
-        }
+        int i = DirectMethodAccess.nextId.getAndIncrement();
 
         String clsName = "roj.reflect.DCA$" + i;
 
@@ -110,7 +105,7 @@ public class DirectConstructorAccess {
         code.instructions.add(NodeHelper.cached(Opcodes.DUP));
 
         for (int i = 0; i < params.length; ) {
-            String tag = ParamHelper.nativeType(params[i]);
+            String tag = ParamHelper.XPrefix(params[i]);
             switch (tag) {
                 case "D":
                 case "L":

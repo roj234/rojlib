@@ -8,7 +8,7 @@
  */
 package roj.asm.util;
 
-import roj.asm.constant.*;
+import roj.asm.cst.*;
 import roj.collect.FindSet;
 import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
@@ -17,32 +17,35 @@ import roj.util.Idx;
 
 import java.io.UTFDataFormatException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.PrimitiveIterator;
 
-import static roj.asm.constant.CstType.*;
+import static roj.asm.cst.CstType.*;
 
-public final class ConstantPool {
-    private Constant[] cst;
+public class ConstantPool {
+    Constant[] cst;
     int index = 1;
 
-    private boolean validated = false;
+    boolean validated = false;
     CstUTF empty;
+
+    ConstantPool() {}
 
     public ConstantPool(int len) {
         this.cst = new Constant[len];
     }
 
-    private void addConstant(Constant c) {
+    void addConstant(Constant c) {
         c.setIndex(index);
         cst[index++] = c;
-        switch (c.type) {
+        switch (c.type()) {
             case LONG:
             case DOUBLE:
-                index++;
+                cst[index++] = CstDoLHolder.HOLDER;
         }
     }
 
-    public boolean fixNPE(Constant c) {
+    private boolean fixNPE(Constant c) {
         if (empty == null) {
             this.cst = Arrays.copyOf(this.cst, this.cst.length + 1);
             addConstant(empty = new CstUTF(""));
@@ -65,12 +68,14 @@ public final class ConstantPool {
 
         final Constant[] cst = this.cst;
         Idx idx = new Idx(cst.length);
+        idx.add(0); // remove 0
+
         for (int i = 0; i < 3; i++) {
             PrimitiveIterator.OfInt itr = idx.remains();
             while (itr.hasNext()) {
                 int index = itr.nextInt();
                 Constant c = cst[index];
-                if (c == null) {
+                if (c == CstDoLHolder.HOLDER/* null */) { // and there will be not any null class
                     idx.add(index);
                     continue;
                 }
@@ -86,6 +91,7 @@ public final class ConstantPool {
                     throw new IllegalArgumentException("Constant " + c + " is referencing to invalid index " + refers.getIndex() + " ( " + refers + " )", e);
                 } catch (NullPointerException e) {
                     if (fixNPE(c)) {
+                        System.err.println("NPE found at id" + index + ", probably error occurred.");
                         validate(c, i);
                         idx.add(index);
                     } else {
@@ -101,7 +107,7 @@ public final class ConstantPool {
     private Constant getReferTo(Constant c, int level) {
         switch (level) {
             case 1: {
-                switch (c.type) {
+                switch (c.type()) {
                     case METHOD_TYPE:
                     case STRING:
                     case CLASS: {
@@ -125,7 +131,7 @@ public final class ConstantPool {
             }
             break;
             case 2: {
-                switch (c.type) {
+                switch (c.type()) {
                     case FIELD:
                     case METHOD:
                     case INTERFACE: {
@@ -144,7 +150,7 @@ public final class ConstantPool {
             }
             break;
             case 3: {
-                if (c.type == CstType.METHOD_HANDLE) {
+                if (c.type() == CstType.METHOD_HANDLE) {
                     CstMethodHandle cz = (CstMethodHandle) c;
                     return cst[cz.getRefIndex()];
                 }
@@ -155,11 +161,11 @@ public final class ConstantPool {
     }
 
     private boolean validate(Constant c, int level) throws ClassCastException {
-        if (c == null)
-            return true;
+        //if (c == null)
+        //    return true;
         switch (level) {
             case 0: {
-                switch (c.type) {
+                switch (c.type()) {
                     case METHOD_TYPE:
                     case STRING:
                     case CLASS: {
@@ -183,7 +189,7 @@ public final class ConstantPool {
             }
             break;
             case 1: {
-                switch (c.type) {
+                switch (c.type()) {
                     case FIELD:
                     case METHOD:
                     case INTERFACE: {
@@ -201,7 +207,7 @@ public final class ConstantPool {
             }
             break;
             case 2: {
-                if (c.type == CstType.METHOD_HANDLE) {
+                if (c.type() == CstType.METHOD_HANDLE) {
                     CstMethodHandle cz = (CstMethodHandle) c;
                     cz.setRef((CstRef) cst[cz.getRefIndex()]);
                     return true;
@@ -356,5 +362,18 @@ public final class ConstantPool {
     @Override
     public String toString() {
         return "ConstantPool{" + "cp=" + Arrays.toString(cst) + ", cpi=" + index + '}';
+    }
+
+    public void reload(ConstantWriter writer) {
+        cst = new Constant[writer.getIndex()];
+        int i = 1;
+
+        List<Constant> csts = writer.getConstants();
+        for (int j = 0, max = csts.size(); j < max; j++) {
+            Constant c = csts.get(j);
+            cst[i++] = c;
+            if(c.type() == DOUBLE || c.type() == LONG)
+                cst[i++] = CstDoLHolder.HOLDER;
+        }
     }
 }

@@ -8,6 +8,7 @@ import roj.collect.IntBiMap;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KType;
 import roj.kscript.type.Type;
+import roj.kscript.util.VInfo;
 import roj.kscript.util.Variable;
 
 import java.util.List;
@@ -27,15 +28,22 @@ public final class IfNode extends Node {
     public static final short TRUE = 513;
 
     public IfNode(short type, LabelNode target) {
-        super(OpCode.IF);
+        super(Opcode.IF);
         this.type = (byte) (type - 500);
         this.target = target;
     }
 
     @Override
     protected void compile() {
-        if(target.getClass() == LabelNode.class)
+        if(target.getClass() == LabelNode.class) {
             target = target.next;
+            if(target instanceof VarNode && ((VarNode) target).name instanceof Node) {
+                target = (Node) ((VarNode) target).name;
+            } else
+            if(target instanceof IncrNode && ((IncrNode) target).name instanceof Node) {
+                target = (Node) ((IncrNode) target).name;
+            }
+        }
     }
 
     @Override
@@ -151,7 +159,7 @@ public final class IfNode extends Node {
 
     @Override
     public String toString() {
-        String k = null;
+        String k;
 
         switch (type) {
             case TRUE - 500:

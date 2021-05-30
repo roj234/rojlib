@@ -5,21 +5,23 @@ import roj.collect.MyHashMap;
 import roj.collect.ReuseStack;
 import roj.collect.ToIntMap;
 import roj.config.ParseException;
+import roj.config.word.NotStatementException;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
-import roj.kscript.KConstants;
 import roj.kscript.api.ErrorHandler;
 import roj.kscript.ast.*;
 import roj.kscript.func.KFunction;
 import roj.kscript.parser.expr.Binary;
+import roj.kscript.parser.expr.ExprParser;
 import roj.kscript.parser.expr.Expression;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
 import roj.kscript.util.ContextPrimer;
 import roj.kscript.util.LabelInfo;
-import roj.kscript.util.NotStatementException;
 import roj.kscript.util.SwitchMap;
+import roj.kscript.util.Variable;
+import roj.kscript.vm.ResourceManager;
 import roj.util.Helpers;
 
 import javax.annotation.Nullable;
@@ -37,7 +39,8 @@ import java.util.Map;
  */
 public class KParser implements ParseContext {
     /**
-     * todo 常量（自定义来没有修改过的变量）传播， 删除未使用的变量, ASTree
+     * todo 常量（自定义来没有修改过的变量）传播， 删除未使用的(var)变量, 逗号+多条语句 a, b, c
+     * 还有测试, for while switch ...
      */
 
     /**
@@ -75,7 +78,7 @@ public class KParser implements ParseContext {
     }
 
     public KParser(ContextPrimer ctx, ErrorHandler handler) {
-        this.ctx = ctx;
+        this.ctx = ctx.makeChild();
         this.depth = -1;
         this.handler = handler;
         this.wr = new JSLexer();
@@ -97,13 +100,14 @@ public class KParser implements ParseContext {
     public KParser reset(KParser parent) {
         this.file = parent.file;
         this.ctx = parent.ctx.makeChild();
+        ctx.setArguments(this.arguments);
         this.wr = parent.wr;
 
         this.success = true;
         //this.undefVars = parent.undefVars;
 
         this.arguments.clear();
-        this.inBlock = false;
+        this.sectionFlag = 0;
 
         this.namedLabels.clear();
         this.labelTmp = null;
@@ -149,7 +153,7 @@ public class KParser implements ParseContext {
 
         //_checkDel();
 
-        //_checkUndefVar();
+        _checkUnused();
 
         if (success) {
             //System.out.println("---编译成功---");
@@ -165,7 +169,7 @@ public class KParser implements ParseContext {
 
     @Override
     public KFunction parseInnerFunc() throws ParseException {
-        KFunction fn = KConstants.cachedFP(depth + 1, this).parseInner(tree);
+        KFunction fn = ResourceManager.retainScriptParser(depth + 1, this).parseInner(tree);
         wr.setLineHandler(tree);
 
         return fn;
@@ -210,6 +214,21 @@ public class KParser implements ParseContext {
         except(Symbol.left_l_bracket);
         body();
         except(Symbol.right_l_bracket);
+
+        _checkUnused();
+    }
+
+    private void _checkUnused() throws ParseException {
+        wr.retractWord();
+        Word wd = wr.nextWord();
+        for (int i = 0; i < ctx.locals.size(); i++) {
+            Variable v = ctx.locals.get(i);
+            if(v.end == null)
+                _onWarning(wd, "unused_let:" + v.name);
+        }
+        for (String s : ctx.unusedGlobal) {
+            _onWarning(wd, "unused_var:" + s);
+        }
     }
 
     /**
@@ -220,7 +239,7 @@ public class KParser implements ParseContext {
     /**
      * Unreachable statement检测
      */
-    boolean inBlock;
+    byte sectionFlag;
 
     /// 参数
     private void arguments() throws ParseException {
@@ -259,7 +278,7 @@ public class KParser implements ParseContext {
      */
     @SuppressWarnings("fallthrough")
     private void body() throws ParseException {
-        inBlock = true;
+        sectionFlag |= 1;
 
         ctx.enterRegion();
 
@@ -284,6 +303,7 @@ public class KParser implements ParseContext {
     /**
      * 语句
      */
+    @SuppressWarnings("fallthrough")
     private void statement(Word w) {
         if (labelTmp != null && labelPath-- == 0) {
             labelTmp = null;
@@ -293,13 +313,12 @@ public class KParser implements ParseContext {
             switch (w.type()) {
                 case Keyword.CASE:
                 case Keyword.DEFAULT:
-                    //LabelInfo info = labels.isEmpty() ? null : labels.last();
-                    //if(info.i == LabelInfo.SWITCH) {
+                    if((sectionFlag & 4) != 0) {
                         wr.retractWord();
-                        return;
-                    //}
-                    //_onError(w, "not_statement");
-                    //break;
+                    } else {
+                        _onError(w, "not_statement");
+                    }
+                    return;
                 case Keyword.VAR:
                 case Keyword.CONST:
                 case Keyword.LET:
@@ -366,7 +385,7 @@ public class KParser implements ParseContext {
 
                     if (flag) {
                         wr.retractWord();
-                        Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
+                        Expression expr = ResourceManager.retainExprParser(0).read(this, (short) 0);
                         if (expr != null) {
                             expr.write(tree, true);
                             except(Symbol.semicolon);
@@ -391,17 +410,17 @@ public class KParser implements ParseContext {
         }
 
         if (w.type() == Symbol.semicolon) {
-            tree.Std(OpCode.RETURN_EMPTY);
+            tree.Std(Opcode.RETURN_EMPTY);
         } else {
             wr.retractWord();
-            Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
+            Expression expr = ResourceManager.retainExprParser(0).read(this, (short) 0);
             if (expr == null) {
                 _onError(w, "What return it is??");
                 return;
             }
 
             expr.write(tree, false);
-            tree.Std(OpCode.RETURN);
+            tree.Std(Opcode.RETURN);
 
             except(Symbol.semicolon);
         }
@@ -426,7 +445,7 @@ public class KParser implements ParseContext {
         wr.retractWord();
         wr.recycle(w);
 
-        KFunction fn = KConstants.cachedFP(depth + 1, this).parseInner(tree);
+        KFunction fn = ResourceManager.retainScriptParser(depth + 1, this).parseInner(tree);
 
         wr.setLineHandler(tree);
 
@@ -441,6 +460,7 @@ public class KParser implements ParseContext {
             tree.Load(fn).Set(name);
         } else {
             ctx.global(name, fn);
+            ctx.unusedGlobal.remove(name);
         }
     }
 
@@ -473,7 +493,7 @@ public class KParser implements ParseContext {
 
         except(Symbol.right_l_bracket);
 
-        tree.Std(OpCode.TRY_EXIT)/*.Goto(end)*/;
+        tree.Std(Opcode.TRY_EXIT)/*.Goto(end)*/;
 
         byte flag = 0;
 
@@ -603,19 +623,18 @@ public class KParser implements ParseContext {
             for (LabelInfo info1 : labels) {
                 if(isBreak ? info1.onBreak != null : info1.onContinue != null) {
                     tree.Goto(isBreak ? info1.onBreak : info1.onContinue);
+                    _chkBlockEnd();
                     return;
                 }
             }
         } else {
             if(isBreak ? info.onBreak != null : info.onContinue != null) {
                 tree.Goto(isBreak ? info.onBreak : info.onContinue);
+                _chkBlockEnd();
                 return;
             }
         }
         _uLabel(w);
-
-        except(Symbol.semicolon);
-
         _chkBlockEnd();
     }
 
@@ -628,13 +647,13 @@ public class KParser implements ParseContext {
         Word w = wr.nextWord();
         wr.retractWord();
 
-        Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
+        Expression expr = ResourceManager.retainExprParser(0).read(this, (short) 0);
         if(expr == null/* || expr.type() != -1*/) {
             _onError(w, "empty_statement");
             return;
         }
         expr.write(tree, false);
-        tree.Std(OpCode.THROW);
+        tree.Std(Opcode.THROW);
 
         except(Symbol.semicolon);
 
@@ -642,14 +661,19 @@ public class KParser implements ParseContext {
     }
 
     private void _chkBlockEnd() throws ParseException {
-        if(inBlock) {
+        if((sectionFlag & 1) != 0) {
             Word w = wr.nextWord();
             if (w.type() != Symbol.right_l_bracket) {
                 _onError(w, "unreachable_statement");
+                wr.retractWord();
+                wr.recycle(w);
+                return;
             }
+
             wr.retractWord();
             wr.recycle(w);
         }
+        sectionFlag |= 2;
     }
 
     /**
@@ -673,7 +697,7 @@ public class KParser implements ParseContext {
             body();
             except(Symbol.right_l_bracket);
         } else {
-            inBlock = false;
+            sectionFlag &= ~1;
             statement(word);
         }
     }
@@ -688,7 +712,7 @@ public class KParser implements ParseContext {
         if (checkBracket)
             except(Symbol.left_s_bracket);
 
-        ExpressionParser parser = KConstants.cachedEP(0);
+        ExprParser parser = ResourceManager.retainExprParser(0);
 
         LabelNode ifFalse = new LabelNode();
 
@@ -781,7 +805,7 @@ public class KParser implements ParseContext {
 
         List<Expression> execLast = new ArrayList<>();
 
-        final ExpressionParser parser = KConstants.cachedEP(0);
+        final ExprParser parser = ResourceManager.retainExprParser(0);
         do {
             Expression expr = parser.read(this, (short) (16 | 1024));
             if (expr == null)
@@ -898,7 +922,9 @@ public class KParser implements ParseContext {
     private void _switch() throws ParseException {
         except(Symbol.left_s_bracket);
 
-        Expression expr = KConstants.cachedEP(0).read(this, (short) 256);
+        Node last = tree.last();
+
+        Expression expr = ResourceManager.retainExprParser(0).read(this, (short) 256);
         if(expr == null)
             throw wr.err("empty_switch");
 
@@ -906,29 +932,32 @@ public class KParser implements ParseContext {
 
         expr.write(tree, false);
 
-        except(Symbol.right_s_bracket);
         except(Symbol.left_l_bracket);
 
         SwitchMap nodeMap = new SwitchMap();
-        LabelNode end = new LabelNode(), def = null;
+        LabelNode end = new LabelNode();
 
-        // 这个可以删除，因为优化并没啥软用，不会有人switch常量的
-        Node last = tree.last();
-        SwitchNode sw = tree.Switch(end, nodeMap);
+        SwitchNode sw = tree.Switch(null, nodeMap);
 
-        while (true) {
+        byte prev = sectionFlag;
+        sectionFlag |= 4;
+
+        o:
+        while (wr.hasNext()) {
             Word wd = wr.nextWord();
             switch (wd.type()) {
                 case Keyword.CASE:
 
-                    expr = KConstants.cachedEP(0).read(this, (short) 256);
+                    expr = ResourceManager.retainExprParser(0).read(this, (short) 512);
                     if(expr == null) {
                         _onError(wd, "case.empty");
+                        sectionFlag = prev;
                         return;
                     }
                     if(!(expr = expr.compress()).isConstant()) {
                         _onError(wd, "case.not_constant");
                     }
+                    wr.retractWord();
                     except(Symbol.colon);
 
                     final LabelNode label = tree.Label();
@@ -945,70 +974,93 @@ public class KParser implements ParseContext {
                     }
 
                     switchBlock(end);
-                    tree.Goto(end);
                     break;
                 case Keyword.DEFAULT:
                     except(Symbol.colon);
-                    if(def != null) {
+                    if(sw.def != null) {
                         _onError(wd, "duplicate_default");
                         continue;
                     }
 
-                    tree.node0(def = end);
-                    end = new LabelNode();
+                    tree.node0(sw.def = new LabelNode());
 
                     switchBlock(end);
-                    tree.Goto(end);
                     break;
+                case Symbol.right_l_bracket:
+                    break o;
                 default:
                     _onError(wd, "unexpected:" + wd.val());
+                    sectionFlag = prev;
+                    return;
             }
+
+            sectionFlag = prev;
             wr.recycle(wd);
 
-            if(cstv != null) {
+            if(nodeMap.isEmpty()) {
+                _onWarning(wd, "not_switch_case");
+            }
+
+            if (cstv != null) {
                 Node label = nodeMap.get(null);
-                if(label != null) {
-                    if(def == null) {
+                if (label != null) {
+                    if (sw.def == null) {
                         last.next = sw.next;
                     } else {
                         last.next = new GotoNode((LabelNode) label);
                     }
                     // found
-                } else  if(def != null) {
+                } else if (sw.def != null) {
                     // def
                     last.next = new GotoNode(end);
                 } else {
                     last.next = null;
-                    tree.last(last);
+                    tree.last_A(last);
                     // clear all nodes after this switch
                     // because no code will be executed
                     return;
                 }
             }
 
+            if (sw.def == null)
+                sw.def = end;
+
             tree.node0(end);
+            except(Symbol.right_l_bracket);
+            return;
+        }
+
+        if(nodeMap.isEmpty()) {
+            wr.retractWord();
+            _onWarning(wr.nextWord(), "empty_switch");
+            tree.last_A(last);
         }
     }
 
+    @SuppressWarnings("fallthrough")
     private void switchBlock(LabelNode endPoint) throws ParseException {
         enterCycle(null, endPoint);
         try {
             o:
-            while (true) {
-                Word word = wr.nextWord();
-                switch (word.type()) {
+            while (wr.hasNext()) {
+                Word w = wr.nextWord();
+                switch (w.type()) {
                     case Keyword.CASE:
                     case Keyword.DEFAULT:
+                    case Symbol.right_l_bracket:
                         wr.retractWord();
                     case WordPresets.EOF:
                         break o;
                 }
-                if (word.type() == Symbol.left_l_bracket) {
+                if (w.type() == Symbol.left_l_bracket) {
                     body();
                     except(Symbol.right_l_bracket);
                 } else {
-                    inBlock = false;
-                    statement(word);
+                    sectionFlag &= ~3;
+                    statement(w);
+                    if((sectionFlag & 2) != 0) {
+                        break;
+                    }
                 }
             }
         } finally {
@@ -1022,6 +1074,7 @@ public class KParser implements ParseContext {
     /**
      * 定义变量 var/const/let
      */
+    @SuppressWarnings("fallthrough")
     private void define(int type) throws ParseException {
         Word w;
         String name = null;
@@ -1052,7 +1105,7 @@ public class KParser implements ParseContext {
                         return;
                     }
 
-                    Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
+                    Expression expr = ResourceManager.retainExprParser(0).read(this, (short) 0);
                     if (expr == null) {
                         _onError(w, "not_statement");
                         return;
@@ -1116,17 +1169,13 @@ public class KParser implements ParseContext {
                 default:
                     _onError(w, "unexpected:" + w.val() + ":;");
                 case Symbol.semicolon:
-                    if (name != null && type == Keyword.CONST) {
-                        _onError(w, "const_should_initialize");
-                    }
-
                     if(name != null) {
                         switch (type) {
                             case Keyword.LET:
                                 ctx.local(name, KUndefined.UNDEFINED, tree.last());
                                 break;
                             case Keyword.CONST:
-                                ctx.Const(name, KUndefined.UNDEFINED);
+                                _onError(w, "const_should_initialize");
                                 break;
                             case Keyword.VAR:
                                 ctx.global(name, KUndefined.UNDEFINED);
@@ -1155,7 +1204,7 @@ public class KParser implements ParseContext {
         }
         wr.retractWord();
 
-        Expression expr = KConstants.cachedEP(0).read(this, (short) 0);
+        Expression expr = ResourceManager.retainExprParser(0).read(this, (short) 0);
         if (expr == null) {
             _onError(k, "not_statement");
         } else {
@@ -1179,6 +1228,7 @@ public class KParser implements ParseContext {
      */
     @Override
     public void useVariable(String name) {
+        ctx.chainUpdate(name);
         if (!ctx.selfExists(name)) {
             int i = arguments.getOrDefault(name, -1);
             if (i != -1) {
@@ -1192,6 +1242,7 @@ public class KParser implements ParseContext {
 
     @Override
     public void assignVariable(String name) {
+        ctx.chainUpdate(name);
         if(ctx.isConst(name)) Helpers.throwAny(wr.err("write_to_const"));
     }
 

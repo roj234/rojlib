@@ -24,6 +24,7 @@ import java.util.Arrays;
 public class JSLexer extends AbstLexer {
     public static final IBitSet JS_SPECIAL = LongBitSet.preFilled("+-*/()!~`@#%^&=,<>.?:;|[]{}");
 
+    @SuppressWarnings("fallthrough")
     public JSLexer init(CharSequence keys) {
         lastLine = 0;
         IntList lineIndexes = new IntList(100);
@@ -76,8 +77,8 @@ public class JSLexer extends AbstLexer {
                     case '/':
                         this.index = index;
                         Word word = ignoreStdNote();
-                        index = this.index;
                         if (word != null) return word;
+                        index = this.index;
                         break;
                     default: {
                         if (!WHITESPACE.contains(c)) {
@@ -100,7 +101,7 @@ public class JSLexer extends AbstLexer {
         return eof();
     }
 
-    private void applyLineHandler() {
+    protected void applyLineHandler() {
         if(lh != null) {
             int index = Arrays.binarySearch(lineIndexes, 0, lineLen - 1, this.index);
             int line = index >= 0 ? index : -index - 1;
@@ -138,9 +139,9 @@ public class JSLexer extends AbstLexer {
     }
 
     @Override
-    protected Word formAlphabetClip(CharList temp) {
-        String s = temp.toString();
-        return formClip(Keyword.indexOf(s), s);
+    protected Word formAlphabetClip(CharSequence s) {
+        short kwId = Keyword.indexOf(s);
+        return formClip(kwId, kwId == WordPresets.LITERAL ? s.toString() : Keyword.byId(kwId));
     }
 
     /// 其他字符
@@ -177,9 +178,11 @@ public class JSLexer extends AbstLexer {
 
         if (wasFound != WordPresets.ERROR) {
             this.index = index - (temp.length() - wasFoundLen);
-            temp.setIndex(wasFoundLen);
+            //temp.setIndex(wasFoundLen);
+            temp.clear();
+            // intern instead of new String()
 
-            return formClip(wasFound, temp.toString());
+            return formClip(wasFound, Symbol.byId(wasFound));
         }
         this.index = index;
 
@@ -192,6 +195,6 @@ public class JSLexer extends AbstLexer {
 
     @Override
     protected Word formNumberClip(byte flag, CharList temp) {
-        return formClip((short) (WordPresets.INTEGER + flag), temp.toString()).number();
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number();
     }
 }

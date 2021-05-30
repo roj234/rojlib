@@ -9,8 +9,8 @@
 package roj.asm.util.frame;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.CstDynamic;
-import roj.asm.constant.CstType;
+import roj.asm.cst.CstDynamic;
+import roj.asm.cst.CstType;
 import roj.asm.struct.insn.*;
 import roj.asm.util.ExceptionEntry;
 import roj.asm.util.InsnList;
@@ -19,6 +19,7 @@ import roj.asm.util.type.NativeType;
 import roj.asm.util.type.Type;
 import roj.collect.MyHashMap;
 import roj.collect.ToIntMap;
+import roj.text.CharList;
 
 import java.io.PrintStream;
 import java.util.*;
@@ -38,6 +39,8 @@ public final class FrameTraverser {
 
     VList lastStack, lastLocal;
 
+    CharList sb = new CharList();
+
     public void init(List<Type> local, boolean isStatic, boolean isConstructor, Frame firstFrame) {
         if(firstFrame == null) {
             firstFrame = Frame.EMPTY;
@@ -50,7 +53,7 @@ public final class FrameTraverser {
                 throw new IllegalArgumentException();
             }
             for (int i = isStatic ? 0 : 1; i < local.size(); i++) {
-                Var v = fromType(local.get(i));
+                Var v = fromType(local.get(i), sb);
                 if (v == null) {
                     throw new IllegalArgumentException("Unexpected VOID at local[" + i + "]");
                 }
@@ -67,7 +70,7 @@ public final class FrameTraverser {
         this.lastLocal = firstFrame.locals;
     }
 
-    private static Var fromType(Type type) {
+    private static Var fromType(Type type, CharList sb) {
         int arr = type.array;
         if (arr == 0) {
             final int i = ofType(type);
@@ -80,7 +83,7 @@ public final class FrameTraverser {
                     return obj(type.owner);
             }
         } else {
-            StringBuilder sb = new StringBuilder();
+            sb.clear();
             for (int i = 0; i < arr; i++)
                 sb.append('[');
             if (type.owner == null)
@@ -128,7 +131,7 @@ public final class FrameTraverser {
     }
 
     private void returnVal(Type type) {
-        Var v = fromType(type);
+        Var v = fromType(type, sb);
         if (v == null)
             return;
         stack.add(v);
@@ -137,7 +140,7 @@ public final class FrameTraverser {
     }
 
     private void popup(Type type) {
-        Var v = fromType(type);
+        Var v = fromType(type, sb);
         if (v == null)
             return;
         pop(v.type);
@@ -150,6 +153,7 @@ public final class FrameTraverser {
         stack.add(obj(v.owner.substring(1)));
     }
 
+    @SuppressWarnings("fallthrough")
     public Frame build(InsnNode node) {
         Frame frame = null;
 
@@ -218,6 +222,7 @@ public final class FrameTraverser {
         return frame;
     }
 
+    @SuppressWarnings("fallthrough")
     public int visitNode(InsnNode node, boolean trace) {
         if (trace) {
             final PrintStream out = System.out;
@@ -324,7 +329,7 @@ public final class FrameTraverser {
             case LDC:
             case LDC_W:
             case LDC2_W:
-                byte type1 = ((LoadConstInsnNode) node).c.type;
+                byte type1 = ((LoadConstInsnNode) node).c.type();
                 if(type1 == CstType.DYNAMIC)
                     type1 = (byte) NativeType.validate(((CstDynamic)((LoadConstInsnNode) node).c).getDesc().getType().getString().charAt(0));
 

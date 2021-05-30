@@ -21,7 +21,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     protected Object[] list;
     protected int size, length;
 
-    public int capacityType = 1;
+    public int capacityType;
 
     public SimpleList() {
         list = EmptyList.EMPTY;
@@ -68,7 +68,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
                 throw new ArrayIndexOutOfBoundsException("ArraySize locked to " + length);
             case 0:
             default:
-                return cap + 32;
+                return cap + 10;
             case 1:
                 return (int) (cap * 1.5);
             case 2:
@@ -485,8 +485,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     protected void handleAdd(int pos, E element) {
     }
 
-    @Deprecated
-    public void setSize(int i) {
+    public void _int_setSize(int i) {
         this.size = i;
     }
 

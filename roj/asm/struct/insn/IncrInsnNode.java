@@ -41,6 +41,6 @@ public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return "#" + bci + ' ' + Opcodes.toString0(code, variableId, amount);
+        return Opcodes.toString0(code, variableId, amount);
     }
 }

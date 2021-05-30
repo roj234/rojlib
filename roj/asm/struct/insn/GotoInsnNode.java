@@ -90,6 +90,6 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
     }
 
     public String toString() {
-        return super.toString() + " => " + (int)target.bci;
+        return super.toString() + " => " + target;
     }
 }

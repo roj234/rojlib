@@ -16,9 +16,9 @@ public final class KNull extends KObject {
     public static final KNull NULL = new KNull();
 
     private KNull() {
-        super(Type.NULL, new ObjectPropMap() {
+        super(new ObjectPropMap() {
             @Override
-            protected Entry<String, KType> getOrCreateEntry(String id) {
+            public Entry<String, KType> getOrCreateEntry(String id) {
                 throw new NullPointerException("null cannot cast to object");
             }
 
@@ -30,8 +30,13 @@ public final class KNull extends KObject {
     }
 
     @Override
+    public Type getType() {
+        return Type.NULL;
+    }
+
+    @Override
     public StringBuilder toString0(StringBuilder sb, int depth) {
-        return sb.append("null");
+        return sb.append("<null>");
     }
 
     @Override

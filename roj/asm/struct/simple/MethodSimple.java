@@ -9,8 +9,8 @@
 package roj.asm.struct.simple;
 
 import roj.annotation.Internal;
-import roj.asm.constant.CstUTF;
-import roj.asm.struct.IMethodData;
+import roj.asm.cst.CstUTF;
+import roj.asm.struct.IMethod;
 import roj.asm.struct.attr.Attribute;
 import roj.asm.util.FlagList;
 import roj.asm.util.type.ParamHelper;
@@ -22,7 +22,7 @@ import java.util.List;
  * {@link roj.asm.struct.ConstantData}中的简单方法, 不解析{@link Attribute}
  * 与{@link FieldSimple}的代码完全一样，{@link SimpleComponent#type}是参数
  */
-public final class MethodSimple extends SimpleComponent implements IMethodData {
+public final class MethodSimple extends SimpleComponent implements IMethod {
     public MethodSimple(int accesses, CstUTF name, CstUTF param) {
         super(accesses, name, param);
     }
@@ -58,5 +58,10 @@ public final class MethodSimple extends SimpleComponent implements IMethodData {
     public void cn(String owner, String parent) {
         this.owner = owner;
         this.parent = parent;
+    }
+
+    @Override
+    public int type() {
+        return 3;
     }
 }

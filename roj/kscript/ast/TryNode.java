@@ -4,8 +4,6 @@ import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.util.InsnList;
 
-import javax.annotation.Nullable;
-
 /**
  * This file is a part of MI <br>
  * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
@@ -14,42 +12,28 @@ import javax.annotation.Nullable;
  * @since 2020/9/27 18:50
  */
 public final class TryNode extends Node {
-    private Node err, fin, suc;
+    public Node handler, fin, end;
 
-    public TryNode(LabelNode err, LabelNode fin, LabelNode suc) {
-        super(OpCode.TRY_ENTER);
-        this.err = err;
+    public TryNode(LabelNode handler, LabelNode fin, LabelNode end) {
+        super(Opcode.TRY_ENTER);
+        this.handler = handler;
         this.fin = fin;
-        this.suc = suc;
+        this.end = end;
     }
 
     @Override
     protected void compile() {
-        if(err.getClass() != LabelNode.class) return;
+        if(handler.getClass() != LabelNode.class) return;
 
-        err = err.next;
+        handler = handler.next;
         fin = fin.next;
-        suc = suc.next;
+        end = end.next;
     }
 
     @Override
     public Node execute(Frame frame) {
         frame.tryCatch.push(this);
         return next;
-    }
-
-    public Node getEnd() {
-        return suc.next;
-    }
-
-    @Nullable
-    public Node fin() {
-        return fin.next;
-    }
-
-    @Nullable
-    public Node getHandler() {
-        return err.next;
     }
 
     @Override

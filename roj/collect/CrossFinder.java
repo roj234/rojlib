@@ -379,7 +379,7 @@ public class CrossFinder<T extends CrossFinder.CrossData> implements Iterable<Cr
 
         @Override
         public String toString() {
-            return sth == null ? "Cross{" + s + " => " + e + '}' : sth.toString();
+            return "Cross{" + s + " => " + e + '}' + sth.toString();
         }
     }
 

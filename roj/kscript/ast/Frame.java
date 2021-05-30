@@ -1,16 +1,17 @@
 package roj.kscript.ast;
 
 import roj.collect.ReuseStack;
-import roj.kscript.api.IArguments;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
-import roj.kscript.func.KFuncAST;
+import roj.kscript.func.KFunction;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
-import roj.kscript.util.ContextPrimer;
-import roj.kscript.util.ExcpInfo;
-import roj.kscript.util.JavaException;
 import roj.kscript.util.LineInfo;
-import roj.kscript.util.opm.KOEntry;
+import roj.kscript.util.VInfo;
+import roj.kscript.vm.ErrorInfo;
+import roj.kscript.vm.Func;
+import roj.kscript.vm.ResourceManager;
+import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -28,56 +29,75 @@ import java.util.function.Consumer;
  * @author Roj233
  * @since 2020/9/27 12:41
  */
-public final class Frame extends Context {
-    public Frame(ArrayList<LineInfo> lineIndexes, ContextPrimer ctx, Consumer<Frame> buildCallback) {
+public final class Frame extends IContext {
+    public Frame(ArrayList<roj.kscript.util.LineInfo> lineIndexes, Consumer<Frame> postProcessor) {
         super();
         this.lineIndexes = lineIndexes;
         lineIndexes.trimToSize();
 
-        this.buildCallback = buildCallback;
+        this.builder = postProcessor;
 
-        this.usedArgs = ctx.usedArgs;
-        usedArgs.trimToSize();
-
-        (this.vars = ctx.globals).applyDefaults();
+        // 默认栈大小 = 4
+        stack = new KType[4];
     }
 
     private Frame() {}
 
-    Consumer<Frame> buildCallback;
+    Consumer<Frame> builder;
 
     // region 函数执行周期
     /**
      * 运行前初始化
      */
-    public void reset(IObject $this, IArguments args) {
+    public void init(IObject $this, ArgList args) {
+        ResourceManager.get().pushStack();
+
         this.$this = $this;
         this.args = args;
 
-        if(buildCallback != null) {
-            buildCallback.accept(this);
-            buildCallback = null;
+        if(builder != null) {
+            builder.accept(this);
+            initChk();
+            builder = null;
         }
-
-        vars.reset();
 
         // 初始化参数
-        final ArrayList<String> args1 = this.usedArgs;
-        for (int i = 0; i < args1.size(); i++) {
-            String k = args1.get(i);
-            if (k != null) {
-                vars.put(k, args.get(i));
+        int i = 0;
+        for (; i < usedArgs.length; i++) {
+            lvt[i] = args.get(usedArgs[i]);
+        }
+
+        for (int j = 0; i < lvt.length; i++, j++) {
+            KType def = this.lvtDef[j];
+            if (def != null) {
+                KType chk = this.lvtChk[j];
+                if (!def.equalsTo(chk)) chk.copyFrom(def);
+                def = chk;
+            } else {
+                def = KUndefined.UNDEFINED;
+            }
+            lvt[i] = def;
+        }
+    }
+
+    private void initChk() {
+        if(lvtDef.length > 0) {
+            lvtChk = new KType[lvtDef.length];
+            for (int i = 0; i < lvtDef.length; i++) {
+                KType def = this.lvtDef[i];
+                if (def != null) {
+                    this.lvtChk[i] = def.copy();
+                }
             }
         }
-        // GVM已经reset
+        result = KUndefined.UNDEFINED;
     }
 
     /**
      * 运行后还原状态
      */
-    public void cleanup() {
-        tail = head;
-        stackSize = 0;
+    public void reset() {
+        stackClear();
 
         tryCatch.clear();
         exInfo.clear();
@@ -85,7 +105,9 @@ public final class Frame extends Context {
         $this = null;
         args = null;
 
-        result = null;
+        result = KUndefined.UNDEFINED;
+
+        ResourceManager.get().popStack();
     }
 
     /**
@@ -93,10 +115,8 @@ public final class Frame extends Context {
      */
     public KType returnVal() {
         KType result = this.result;
-        cleanup();
-        if(result == null)
-            return KUndefined.UNDEFINED;
-        return result instanceof KFuncAST ? ((KFuncAST) result).export(this) : result;
+        reset();
+        return result instanceof KFunction ? ((KFunction) result).onReturn(this) : result;
     }
 
     /**
@@ -108,177 +128,96 @@ public final class Frame extends Context {
     // endregion
     // region 栈
 
-    static final V head = new V(null);
-    static {
-        head.prev = head;
-    }
-
     // rw
-    V tail = head, tmp;
+    KType[] stack;
     // rw
-    int stackSize, tmpC;
-
-    V tail(int req) {
-        if(stackSize < req)
-            throw new IllegalStateException("Stack underflow");
-        return tail;
-    }
-
-    void tail(V tail) {
-        this.tail = tail;
-    }
+    int stackSize;
 
     @Nonnull
     public KType last() {
-        ce();
-        return tail.v;
+        return stack[stackSize - 1];
     }
 
     @Nonnull
     public KType pop() {
-        ce();
-        KType v = tail.v;
-
-        V t = this.tail;
-        tail = t.prev;
-
-        if (tmpC < 64) { // what is best?
-            V d = tmp;
-            tmp = t;
-            t.prev = d;
-            t.v = null;
-            tmpC++;
-        }
-
-        stackSize--;
+        KType v = stack[--stackSize];
+        stack[stackSize] = null;
         return v;
     }
 
-    private void ce() {
-        if (tail == head) throw new IllegalStateException("Stack underflow");
-    }
-
     public void setLast(@Nonnull KType base) {
-        ce();
-        tail.v = base;
+        stack[stackSize - 1] = base;
     }
 
     public void push(@Nonnull KType base) {
-        V entry;
-
-        if (tmp != null) {
-            tmpC--;
-            entry = tmp;
-            entry.v = base;
-            tmp = tmp.prev;
-        } else {
-            entry = new V(base);
+        if(stackSize == stack.length) {
+            KType[] plus = new KType[(int) (stackSize * 1.5)];
+            System.arraycopy(stack, 0, plus, 0, stackSize);
+            stack = plus;
         }
 
-        entry.prev = tail;
-        tail = entry;
+        stack[stackSize] = base;
 
         if (++stackSize > 2048)
             throw new IllegalStateException("Stack overflow(2048): " + this);
     }
 
     public void stackClear() {
-        while(tail != head) {
-            V t = tail;
-            tail = t.prev;
-
-            // recv
-            if (tmpC < 64) {
-                V d = tmp;
-                tmp = t;
-                t.prev = d;
-                t.v = null;
-                tmpC++;
-            }
+        for (int i = 0; i < stackSize; i++) {
+            stack[i] = null;
         }
-
         stackSize = 0;
     }
 
     @Nonnull
     public KType last(int i) {
         if (i >= stackSize)
-            throw new ArrayIndexOutOfBoundsException(i);
-
-        V entry = tail;
-        while (i-- > 0) {
-            entry = entry.prev;
-        }
-        return entry.v;
+            throw new ArrayIndexOutOfBoundsException(stackSize - 1 - i);
+        return stack[stackSize - 1 - i];
     }
 
-    public Frame staticize(Frame theOne) {
+    public Frame closure() {
         Frame fr = duplicate();
-        Context pr = parent;
-        ArrayList<Context> chain = new ArrayList<>();
-        chain.add(null);
 
-        while (pr != null) {
-            chain.add(pr);
-            if(theOne == pr) { // theMostUpper
-                chain.set(0, new FrameStatic(pr.parent, pr));
-                for (int i = 1; i < chain.size(); i++) {
-                    chain.set(i, new FrameStatic(chain.get(i - 1), chain.get(i)));
-                }
-                fr.parent = chain.get(chain.size() - 1);
-                return fr;
-            }
-            pr = pr.parent;
+        IContext[] arr = fr.parents;
+        for (int i = 1; i < arr.length - 1; i++) {
+            arr[i] = new Closure(parents[i]);
         }
 
-        throw new IllegalArgumentException("Frame parent not found " + theOne);
+        return fr;
     }
 
     public boolean working() {
         return args != null;
     }
 
-    public void _parent(Context frame) {
-        if(this.parent != null)
-            throw new IllegalStateException();
-        this.parent = frame;
-    }
-
-    static final class V {
-        KType v;
-        V prev;
-
-        V(KType val) {
-            this.v = val;
-        }
-    }
-
     // endregion
     // region 异常处理
 
-    public final ReuseStack<ExcpInfo> exInfo = new ReuseStack<ExcpInfo>() {
+    public final ReuseStack<ErrorInfo> exInfo = new ReuseStack<ErrorInfo>() {
         @Nonnull
         @Override
-        public ExcpInfo pop() {
+        public ErrorInfo pop() {
             if(tail == head)
-                return ExcpInfo.NONE;
+                return ErrorInfo.NONE;
 
-            ExcpInfo v = tail.value;
+            ErrorInfo v = tail.value;
             tail = tail.prev;
             size--;
             return v;
         }
-    }; // try-catch exception temp
+    };
+    // try-catch exception temp
     public final ReuseStack<TryNode> tryCatch = new ReuseStack<>();        // try-catch section
 
     public void trace(Node node, List<StackTraceElement> collector) {
         int line = -1;
-        final ArrayList<LineInfo> linf = this.lineIndexes;
+        final ArrayList<roj.kscript.util.LineInfo> linf = this.lineIndexes;
         if(owner.getSource() != null && !linf.isEmpty()) {
             Node st = owner.begin;
 
             int lId = 1;
-            LineInfo info = linf.get(0);
+            roj.kscript.util.LineInfo info = linf.get(0);
 
             while (st != null) {
                 if(st == info.node) {
@@ -310,14 +249,14 @@ public final class Frame extends Context {
     // region 内部变量
 
     // owner
-    KFuncAST owner;
+    Func owner;
 
-    public Frame init(KFuncAST owner) {
+    public Frame init(Func owner) {
         this.owner = owner;
         return this;
     }
 
-    public KFuncAST owner() {
+    public Func owner() {
         return owner;
     }
 
@@ -325,88 +264,59 @@ public final class Frame extends Context {
     IObject $this;
 
     // arguments
-    IArguments args;
+    ArgList args;
 
     // endregion
-    // region 变量作用域
+    // region 变量, and its 作用域
+
+    // var and let by index
+    KType[] lvt, lvtDef, lvtChk;
+    String[] varNames;
 
     // 使用的参数 (ordered)
-    ArrayList<String> usedArgs;
+    int[] usedArgs;
 
+    // 线性lets
     Map<Node, VInfo> linearDiff;
 
     public void linear(Node curr) {
-        VInfo diff = linearDiff.get(curr);
-        while (diff != null) {
-            vars.put(diff.id, diff.v);
-            diff = diff.next;
-        }
+        applyDiff(linearDiff.get(curr));
     }
 
     public void applyDiff(VInfo diff) {
         while (diff != null) {
             // ? linear
-            vars.put(diff.id, diff.v); // null as remove => not create Entry
+            lvt[diff.idx] = diff.v;
             diff = diff.next;
         }
     }
 
-    Frame findProvider(String key) {
-        return vars.containsKey(key) ? this : (parent instanceof Frame) ? ((Frame) parent).findProvider(key) : null;
-    }
+    // 修改锁定后的上下文 (多层闭包节省时间, 还有int化的变量)
+    IContext[] parents;
 
-    // 修改锁定后的上下文 (多层闭包节省时间)
-    Context[] parents;
-
-    /**
-     * 下级只能修改上级通过var导出的函数
-     */
-    KType getEx(String keys, KType def) {
-        if(parents == null) // 退化了, wwwww
-            return super.getEx(keys, def);
-
-        Context self = this;
-        int i = parents.length;
-        while (self != null) {
-            KType base = self.vars.get(keys);
-            if (base != null) {
-                return base.markImmutable(false);
-            }
-
-            if(i == 0)
-                break;
-            self = parents[--i];
-        }
-        return def;
-    }
-
-    /**
-     * 下级只能修改上级通过var导出的函数
-     */
     @Override
-    void putEx(String id, KType val) {
-        if(parents == null) {
-            super.putEx(id, val);
-            return;
-        }
+    public KType get(String key) {
+        return parents[parents.length - 1].get(key);
+    }
 
-        Context self = this;
-        int i = parents.length;
-        while (self != null) {
-            KOEntry entry = (KOEntry) self.vars.getEntry(id);
-            if (entry != null) {
-                if((entry.flags & 1) != 0)
-                    throw new JavaException("尝试写入常量 " + id);
-                entry.v = val.markImmutable(true);
-                return;
-            }
+    @Override
+    KType getEx(String keys, KType def) {
+        return parents[parents.length - 1].getEx(keys, def);
+    }
 
-            if(i == 0)
-                break;
-            self = parents[--i];
-        }
+    @Override
+    public void put(String id, KType val) {
+        parents[parents.length - 1].put(id, val);
+    }
 
-        throw new JavaException("未定义的 " + id);
+    @Override
+    KType getIdx(int index) {
+        return lvt[index];
+    }
+
+    @Override
+    void putIdx(int index, KType value) {
+        lvt[index] = value;
     }
 
     // endregion
@@ -415,11 +325,21 @@ public final class Frame extends Context {
      */
     public final Frame duplicate() {
         Frame copy = new Frame();
-        copy.parent = parent;
-        copy.vars = vars.copy();
+        copy.stack = new KType[stack.length]; // inheritance
         copy.usedArgs = usedArgs;
         copy.linearDiff = linearDiff;
-        copy.parents = parents;
+        if(lvt.length == 0) {
+            copy.lvt = copy.lvtChk = copy.lvtDef = lvt;
+            copy.parents = parents;
+        } else {
+            copy.lvtDef = lvtDef;
+            copy.lvt = new KType[lvt.length];
+            copy.initChk();
+            copy.parents = new IContext[parents.length];
+            if(parents.length > 0)
+                System.arraycopy(parents, 1, copy.parents, 1, parents.length - 1);
+            copy.parents[0] = copy;
+        }
         copy.owner = owner;
         copy.lineIndexes = lineIndexes;
         return copy;
@@ -427,37 +347,20 @@ public final class Frame extends Context {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder().append("KStackFrame{owner=")
-                .append(owner.getClassName()).append('.').append(owner.getName());
+        StringBuilder sb = new StringBuilder().append("KFrame{");
         if(result != null) {
-            sb.append(", <returning>: ").append(result);
+            sb.append("<return>: ").append(result).append(", ");
         }
         if(stackSize > 0) {
-            sb.append(", <stack>: [");
-            if (tail != head) {
-                V e = tail;
-                while (e != head) {
-                    sb.append(e.v).append(", ");
-                    e = e.prev;
-                }
-                sb.delete(sb.length() - 2, sb.length());
-            }
-            sb.append("]");
+            sb.append("<stack>: [").append(ArrayUtil.toString(stack, 0, stackSize)).append("], ");
         }
+        sb.append("<var>: [").append(ArrayUtil.toString(lvt, 0, lvt.length)).append("], ");
         if(!exInfo.isEmpty())
-            sb.append(", <try-catch>: ").append(exInfo);
+            sb.append("<try>: ").append(exInfo).append("], ");
         if($this != null) {
-            sb.append(", this: ").append($this)
+            sb.append("this: ").append($this)
                     .append(", arg: ").append(args);
         }
-        sb.append(", vars: [");
-        if(!vars.isEmpty()) {
-            for (String key : vars.keySet()) {
-                sb.append(key).append(", ");
-            }
-            sb.delete(sb.length() - 2, sb.length());
-        }
-        sb.append(']');
         return sb.append('}').toString();
     }
 }

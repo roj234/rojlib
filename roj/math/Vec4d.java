@@ -20,6 +20,12 @@ public class Vec4d {
         this(0, 0, 0, 1);
     }
 
+    public Vec4d(double x, double y, double z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
     /**
      * Constructs a new vector with the given values.
      *

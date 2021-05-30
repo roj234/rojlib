@@ -19,25 +19,14 @@ import roj.asm.struct.insn.FieldInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.NodeHelper;
-import roj.asm.util.type.IO;
-import roj.asm.util.type.NativeType;
 import roj.asm.util.type.ParamHelper;
 import roj.asm.util.type.Type;
-import roj.math.MutableInt;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.util.List;
 
 import static roj.asm.util.type.NativeType.*;
 
 public class DirectFieldAccess {
-    static final Type OBJI = new Type(IO.I, "java/lang/Object", 0);
-    static final Type VOIDO = new Type(IO.O, NativeType.VOID, 0);
-    static final Type OBJ = new Type(IO.O, "java/lang/Object", 0);
-
-    private static final MutableInt nextIndex = new MutableInt(0);
-
     public static DirectFieldAccessor get(Object obj, String field) {
         return get(obj, findField((Class<?>) obj, field));
     }
@@ -57,10 +46,7 @@ public class DirectFieldAccess {
 
     @SuppressWarnings("unchecked")
     public static <T extends Instanced> T get(Object obj, java.lang.reflect.Field field, Class<T> getter_setter_class) {
-        int i;
-        synchronized (nextIndex) {
-            i = nextIndex.getAndIncrement();
-        }
+        int i = DirectMethodAccess.nextId.getAndIncrement();
 
         String className = obj.getClass() == Class.class ? ((Class<?>) obj).getName() : obj.getClass().getName();
         Type par = ParamHelper.parseField(ParamHelper.classDescriptor(field.getType()));
@@ -70,11 +56,6 @@ public class DirectFieldAccess {
         try {
             ClassDefiner loader = ClassDefiner.INSTANCE;
             byte[] code = getClassCode("roj/reflect/DFA$" + i, className, field.getName(), par, getter_setter_class);
-            if (DirectMethodAccess.DEBUG) {
-                try (FileOutputStream fos = new FileOutputStream(new File(newClassName + ".class"))) {
-                    fos.write(code);
-                }
-            }
             loader.defineClass(newClassName, code);
 
             Class<?> clz = Class.forName(newClassName);
@@ -91,10 +72,7 @@ public class DirectFieldAccess {
 
     @SuppressWarnings("unchecked")
     public static <T> T getStatic(Class<?> clazz, java.lang.reflect.Field field, Class<T> getter_setter_class) {
-        int i;
-        synchronized (nextIndex) {
-            i = nextIndex.getAndIncrement();
-        }
+        int i = DirectMethodAccess.nextId.getAndIncrement();
 
         String newClassName = "roj.reflect.DFA$" + i;
 
@@ -104,11 +82,6 @@ public class DirectFieldAccess {
         try {
             ClassDefiner loader = ClassDefiner.INSTANCE;
             final byte[] code = getStaticClassCode("roj/reflect/DFA$" + i, className, field.getName(), par, getter_setter_class);
-            if (DirectMethodAccess.DEBUG) {
-                try (FileOutputStream fos = new FileOutputStream(new File(newClassName + ".class"))) {
-                    fos.write(code);
-                }
-            }
             loader.defineClass(newClassName, code);
 
             Class<?> clz = Class.forName(newClassName);
@@ -124,7 +97,7 @@ public class DirectFieldAccess {
 
         targetName = targetName.replace('.', '/');
 
-        Type clsType = new Type(IO.I, targetName, 0);
+        Type clsType = new Type(targetName, 0);
 
         final String INSTANCE_FIELD_NAME = "obj";
 
@@ -189,22 +162,22 @@ public class DirectFieldAccess {
         List<Type> types = m.parameters();
         int len = 1;
         if ("set".equals(prefix)) {
-            m.setReturnType(VOIDO);
+            m.setReturnType(Type.std(VOID));
             types.clear();
-            if (p.type == CLASS || p.type == NativeType.ARRAY) {
+            /*if (p.type == CLASS || p.type == NativeType.ARRAY) {
                 if (g_sClass == DirectFieldAccessor.class) {
                     p = OBJI;
                 } else {
-                    p = p.copy(IO.I);
+                    p = p;
                 }
             } else {
-                p = new Type(IO.I, p.type, 0);
-            }
+                p = new Type(p.type, 0);
+            }*/
             types.add(p);
             len++;
         } else {
             types.clear();
-            m.setReturnType((p.type == CLASS || p.type == NativeType.ARRAY) ? (g_sClass == DirectFieldAccessor.class ? OBJ : p) : new Type(IO.O, p.type, 0));
+            m.setReturnType(p/*(p.type == CLASS || p.type == NativeType.ARRAY) ? (g_sClass == DirectFieldAccessor.class ? OBJ : p) : new Type(p.type, 0)*/);
         }
         String t = null;
         switch (p.type) {

@@ -5,7 +5,8 @@ import roj.net.tcp.util.WrappedSocket;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.net.Socket;
+import java.net.StandardSocketOptions;
+import java.nio.channels.SocketChannel;
 
 /**
  * This file is a part of MI <br>
@@ -15,10 +16,10 @@ import java.net.Socket;
  * @since 2020/10/9 22:48
  */
 public abstract class ClientSocket {
-    protected Socket server;
+    protected SocketChannel server;
     protected WrappedSocket channel;
 
-    protected int readTimeout = -1, writeTimeout = -1, connectTimeout = -1;
+    protected int readTimeout = -1, writeTimeout = -1;
     protected InetSocketAddress endpoint;
     protected Proxy proxy;
 
@@ -51,35 +52,15 @@ public abstract class ClientSocket {
         return this;
     }
 
-    protected Socket createSocket(String server, int port) throws IOException {
-        Socket socket;
-        if (proxy != null) {
-            switch (proxy.type()) {
-                case SOCKS:
-                    socket = new Socket(proxy);
-                    break;
-                case DIRECT:
-                    socket = new Socket();
-                    break;
-                default:
-                    // Still connecting through a proxy
-                    // server & port will be the proxy address and port
-                    socket = new Socket(Proxy.NO_PROXY);
-                    break;
-            }
-        } else
-            socket = new Socket();
-
+    protected SocketChannel createSocket(String server, int port) throws IOException {
         this.endpoint = new InetSocketAddress(server, port/* & 0xFFFF*/);
-        if (readTimeout >= 0)
-            socket.setSoTimeout(readTimeout);
-        socket.setReuseAddress(true);
-        return socket;
+        return (SocketChannel) SocketChannel.open().setOption(StandardSocketOptions.SO_REUSEADDR, true)
+                .setOption(StandardSocketOptions.SO_KEEPALIVE, true).configureBlocking(false);
     }
 
     protected void connect() throws IOException {
         if (!connected()) {
-            server.connect(endpoint, connectTimeout <= 0 ? 0 : connectTimeout);
+            server.connect(endpoint);
             channel = getChannel();
         }
     }
@@ -101,14 +82,6 @@ public abstract class ClientSocket {
         }
     }
 
-    public void connectTimeout(int timeout) {
-        connectTimeout = timeout;
-    }
-
-    public int connectTimeout() {
-        return connectTimeout;
-    }
-
     public void writeTimeout(int timeout) {
         writeTimeout = timeout;
     }
@@ -118,13 +91,6 @@ public abstract class ClientSocket {
     }
 
     public void readTimeout(int timeout) {
-        if (server != null && timeout >= 0) {
-            try {
-                server.setSoTimeout(timeout);
-            } catch (IOException e) {
-                return;
-            }
-        }
         readTimeout = timeout;
     }
 

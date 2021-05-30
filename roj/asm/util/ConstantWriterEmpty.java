@@ -1,6 +1,6 @@
 package roj.asm.util;
 
-import roj.asm.constant.Constant;
+import roj.asm.cst.Constant;
 import roj.util.ByteWriter;
 
 /**

@@ -9,8 +9,9 @@ import roj.util.Hasher;
  * @author Maximilian Luz
  */
 public class Mat3d {
-    private double[] raw = new double[9];
+    public double raw0,raw1,raw2,raw3,raw4,raw5,raw6,raw7,raw8;
 
+    public Mat3d() {}
 
     /**
      * Constructs a new matrix with the given properties.
@@ -19,15 +20,15 @@ public class Mat3d {
                  double a21, double a22, double a23,
                  double a31, double a32, double a33) {
 
-        raw[0] = a11;
-        raw[1] = a12;
-        raw[2] = a13;
-        raw[3] = a21;
-        raw[4] = a22;
-        raw[5] = a23;
-        raw[6] = a31;
-        raw[7] = a32;
-        raw[8] = a33;
+        raw0 = a11;
+        raw1 = a12;
+        raw2 = a13;
+        raw3 = a21;
+        raw4 = a22;
+        raw5 = a23;
+        raw6 = a31;
+        raw7 = a32;
+        raw8 = a33;
     }
 
     /**
@@ -36,7 +37,7 @@ public class Mat3d {
      * @param matrix the (at least) 16 element array from which the matrix should be created.
      */
     public Mat3d(double[] matrix) {
-        System.arraycopy(matrix, 0, this.raw, 0, 9);
+        set(matrix);
     }
 
     /**
@@ -45,16 +46,7 @@ public class Mat3d {
      * @param matrix the matrix to be copied.
      */
     public Mat3d(Mat3d matrix) {
-        this(matrix.raw);
-    }
-
-    /**
-     * Returns the (row-major) array by which this matrix is backed.
-     *
-     * @return the array backing this matrix.
-     */
-    public double[] getRaw() {
-        return raw;
+        set(matrix);
     }
 
     /**
@@ -66,15 +58,15 @@ public class Mat3d {
                      double a21, double a22, double a23,
                      double a31, double a32, double a33) {
 
-        raw[0] = a11;
-        raw[1] = a12;
-        raw[2] = a13;
-        raw[4] = a21;
-        raw[5] = a22;
-        raw[6] = a23;
-        raw[8] = a31;
-        raw[9] = a32;
-        raw[10] = a33;
+        raw0 = a11;
+        raw1 = a12;
+        raw2 = a13;
+        raw3 = a21;
+        raw4 = a22;
+        raw5 = a23;
+        raw6 = a31;
+        raw7 = a32;
+        raw8 = a33;
 
         return this;
     }
@@ -86,7 +78,15 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d set(double[] raw) {
-        System.arraycopy(raw, 0, this.raw, 0, 9);
+        raw0 = raw[0];
+        raw1 = raw[1];
+        raw2 = raw[2];
+        raw3 = raw[3];
+        raw4 = raw[4];
+        raw5 = raw[5];
+        raw6 = raw[6];
+        raw7 = raw[7];
+        raw8 = raw[8];
         return this;
     }
 
@@ -97,7 +97,15 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d set(Mat3d other) {
-        System.arraycopy(other.raw, 0, this.raw, 0, 9);
+        raw0 = other.raw0;
+        raw1 = other.raw1;
+        raw2 = other.raw2;
+        raw3 = other.raw3;
+        raw4 = other.raw4;
+        raw5 = other.raw5;
+        raw6 = other.raw6;
+        raw7 = other.raw7;
+        raw8 = other.raw8;
         return this;
     }
 
@@ -107,7 +115,8 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d makeIdentity() {
-        System.arraycopy(Mat3d.identity, 0, this.raw, 0, 9);
+        raw0 = raw4 = raw8 = 1;
+        raw1 = raw2 = raw3 = raw5 = raw6 = raw7 = 0;
         return this;
     }
 
@@ -117,9 +126,9 @@ public class Mat3d {
      * @return the calculated determinant.
      */
     public double det() {
-        return raw[0] * (raw[4] * raw[8] - raw[5] * raw[7])
-                - raw[1] * (raw[3] * raw[8] - raw[5] * raw[6])
-                + raw[2] * (raw[3] * raw[7] - raw[4] * raw[6]);
+        return raw0 * (raw4 * raw8 - raw5 * raw7)
+                - raw1 * (raw3 * raw8 - raw5 * raw6)
+                + raw2 * (raw3 * raw7 - raw4 * raw6);
     }
 
     /**
@@ -128,7 +137,7 @@ public class Mat3d {
      * @return {@code true} iff this matrix is affine.
      */
     public boolean isAffine() {
-        return raw[6] == 0.0 && raw[7] == 0.0 && raw[8] == 1.0;
+        return raw6 == 0.0 && raw7 == 0.0 && raw8 == 1.0;
     }
 
     /**
@@ -138,15 +147,15 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d add(Mat3d other) {
-        raw[0] += other.raw[0];
-        raw[1] += other.raw[1];
-        raw[2] += other.raw[2];
-        raw[3] += other.raw[3];
-        raw[4] += other.raw[4];
-        raw[5] += other.raw[5];
-        raw[6] += other.raw[6];
-        raw[7] += other.raw[7];
-        raw[8] += other.raw[8];
+        raw0 += other.raw0;
+        raw1 += other.raw1;
+        raw2 += other.raw2;
+        raw3 += other.raw3;
+        raw4 += other.raw4;
+        raw5 += other.raw5;
+        raw6 += other.raw6;
+        raw7 += other.raw7;
+        raw8 += other.raw8;
         return this;
     }
 
@@ -157,15 +166,15 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d sub(Mat3d other) {
-        raw[0] -= other.raw[0];
-        raw[1] -= other.raw[1];
-        raw[2] -= other.raw[2];
-        raw[3] -= other.raw[3];
-        raw[4] -= other.raw[4];
-        raw[5] -= other.raw[5];
-        raw[6] -= other.raw[6];
-        raw[7] -= other.raw[7];
-        raw[8] -= other.raw[8];
+        raw0 -= other.raw0;
+        raw1 -= other.raw1;
+        raw2 -= other.raw2;
+        raw3 -= other.raw3;
+        raw4 -= other.raw4;
+        raw5 -= other.raw5;
+        raw6 -= other.raw6;
+        raw7 -= other.raw7;
+        raw8 -= other.raw8;
         return this;
     }
 
@@ -176,17 +185,17 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d mul(Mat3d other) {
-        this.raw = new double[]{
-                this.raw[0] * other.raw[0] + this.raw[1] * other.raw[3] + this.raw[2] * other.raw[6],
-                this.raw[0] * other.raw[1] + this.raw[1] * other.raw[4] + this.raw[2] * other.raw[7],
-                this.raw[0] * other.raw[2] + this.raw[1] * other.raw[5] + this.raw[2] * other.raw[8],
-                this.raw[3] * other.raw[0] + this.raw[4] * other.raw[3] + this.raw[5] * other.raw[6],
-                this.raw[3] * other.raw[1] + this.raw[4] * other.raw[4] + this.raw[5] * other.raw[7],
-                this.raw[3] * other.raw[2] + this.raw[4] * other.raw[5] + this.raw[5] * other.raw[8],
-                this.raw[6] * other.raw[0] + this.raw[7] * other.raw[3] + this.raw[8] * other.raw[6],
-                this.raw[6] * other.raw[1] + this.raw[7] * other.raw[4] + this.raw[8] * other.raw[7],
-                this.raw[6] * other.raw[2] + this.raw[7] * other.raw[5] + this.raw[8] * other.raw[8]
-        };
+        set(new double[]{
+                raw0 * other.raw0 + raw1 * other.raw3 + raw2 * other.raw6,
+                raw0 * other.raw1 + raw1 * other.raw4 + raw2 * other.raw7,
+                raw0 * other.raw2 + raw1 * other.raw5 + raw2 * other.raw8,
+                raw3 * other.raw0 + raw4 * other.raw3 + raw5 * other.raw6,
+                raw3 * other.raw1 + raw4 * other.raw4 + raw5 * other.raw7,
+                raw3 * other.raw2 + raw4 * other.raw5 + raw5 * other.raw8,
+                raw6 * other.raw0 + raw7 * other.raw3 + raw8 * other.raw6,
+                raw6 * other.raw1 + raw7 * other.raw4 + raw8 * other.raw7,
+                raw6 * other.raw2 + raw7 * other.raw5 + raw8 * other.raw8
+        });
 
         return this;
     }
@@ -198,9 +207,9 @@ public class Mat3d {
      * @return the product of this matrix and the specified vectors.
      */
     public Vec3d mul(Vec3d v) {
-        return new Vec3d(this.raw[0] * v.x + this.raw[1] * v.y + this.raw[2] * v.z,
-                this.raw[3] * v.x + this.raw[4] * v.y + this.raw[5] * v.z,
-                this.raw[6] * v.x + this.raw[7] * v.y + this.raw[8] * v.z);
+        return new Vec3d(raw0 * v.x + raw1 * v.y + raw2 * v.z,
+                raw3 * v.x + raw4 * v.y + raw5 * v.z,
+                raw6 * v.x + raw7 * v.y + raw8 * v.z);
     }
 
     /**
@@ -210,15 +219,15 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d mul(double scalar) {
-        raw[0] *= scalar;
-        raw[1] *= scalar;
-        raw[2] *= scalar;
-        raw[3] *= scalar;
-        raw[4] *= scalar;
-        raw[5] *= scalar;
-        raw[6] *= scalar;
-        raw[7] *= scalar;
-        raw[8] *= scalar;
+        raw0 *= scalar;
+        raw1 *= scalar;
+        raw2 *= scalar;
+        raw3 *= scalar;
+        raw4 *= scalar;
+        raw5 *= scalar;
+        raw6 *= scalar;
+        raw7 *= scalar;
+        raw8 *= scalar;
         return this;
     }
 
@@ -242,9 +251,9 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d translate(double x, double y) {
-        raw[2] = raw[0] * x + raw[1] * y + raw[2];
-        raw[5] = raw[3] * x + raw[4] * y + raw[5];
-        raw[8] = raw[6] * x + raw[7] * y + raw[8];
+        raw2 = raw0 * x + raw1 * y + raw2;
+        raw5 = raw3 * x + raw4 * y + raw5;
+        raw8 = raw6 * x + raw7 * y + raw8;
         return this;
     }
 
@@ -268,12 +277,12 @@ public class Mat3d {
      * @return this matrix.
      */
     public Mat3d scale(double sx, double sy) {
-        this.raw[0] *= sx;
-        this.raw[1] *= sy;
-        this.raw[3] *= sx;
-        this.raw[4] *= sy;
-        this.raw[6] *= sx;
-        this.raw[7] *= sy;
+        this.raw0 *= sx;
+        this.raw1 *= sy;
+        this.raw3 *= sx;
+        this.raw4 *= sy;
+        this.raw6 *= sx;
+        this.raw7 *= sy;
         return this;
     }
 
@@ -288,17 +297,17 @@ public class Mat3d {
         double s = Math.sin(Math.toRadians(angle));
         double c = Math.cos(Math.toRadians(angle));
 
-        raw = new double[]{
-                raw[0] * c + raw[1] * s,
-                raw[0] * (-s) + raw[1] * c,
-                raw[2],
-                raw[3] * c + raw[4] * s,
-                raw[3] * (-s) + raw[4] * c,
-                raw[5],
-                raw[6] * c + raw[7] * s,
-                raw[6] * (-s) + raw[7] * c,
-                raw[8]
-        };
+        double u = raw0, v = raw1;
+        raw0 = u * c + v * s;
+        raw1 = -u * s + v * c;
+
+        u = raw3;v = raw4;
+        raw3 = u * c + v * s;
+        raw4 = -u * s + v * c;
+
+        u = raw6;v = raw7;
+        raw6 = u * c + v * s;
+        raw7 = -u * s + v * c;
 
         return this;
     }
@@ -311,17 +320,17 @@ public class Mat3d {
     public Mat3d transpose() {
         double swp;
 
-        swp = this.raw[1];
-        this.raw[1] = this.raw[3];
-        this.raw[3] = swp;
+        swp = this.raw1;
+        this.raw1 = this.raw3;
+        this.raw3 = swp;
 
-        swp = this.raw[2];
-        this.raw[2] = this.raw[6];
-        this.raw[6] = swp;
+        swp = this.raw2;
+        this.raw2 = this.raw6;
+        this.raw6 = swp;
 
-        swp = this.raw[5];
-        this.raw[5] = this.raw[7];
-        this.raw[7] = swp;
+        swp = this.raw5;
+        this.raw5 = this.raw7;
+        this.raw7 = swp;
 
         return this;
     }
@@ -345,25 +354,28 @@ public class Mat3d {
      */
     public Mat3d invertAffine() {
         // calculate determinant of upper left 2x2 matrix
-        double det = 1.0 / (raw[0] * raw[4] - raw[1] * raw[3]);
+        double det = 1.0 / (raw0 * raw4 - raw1 * raw3);
         if (det == 0) return null;
 
         // calculate inverse of upper 2x2 matrix
-        double m0 = raw[4] / det;
-        double m1 = -raw[1] / det;
-        double m2 = -raw[3] / det;
-        double m3 = raw[0] / det;
+        double m0 = raw4 / det;
+        double m1 = -raw1 / det;
+        double m2 = -raw3 / det;
+        double m3 = raw0 / det;
+
+        raw0 = m0;
+        raw1 = m1;
+
+        raw3 = m2;
+        raw4 = m3;
 
         // calculate product of inverse upper 2x2 matrix and translation part
-        double tx = m0 * (-raw[2]) + m1 * (-raw[5]);
-        double ty = m2 * (-raw[2]) + m2 * (-raw[5]);
+        double u = -raw2, v = -raw5;
+        raw2 = m0 * u + m1 * v; // tx
+        raw5 = m2 * u + m2 * v; // ty
 
-        // assemble inverse matrix
-        this.raw = new double[]{
-                m0, m1, tx,
-                m2, m3, ty,
-                0, 0, 1
-        };
+        raw6 = raw7 = 0;
+        raw8 = 1;
 
         return this;
     }
@@ -376,24 +388,25 @@ public class Mat3d {
      */
     public Mat3d invertGeneral() {
         double[] tmp = new double[]{
-                raw[4] * raw[8] - raw[5] * raw[7],
-                raw[2] * raw[7] - raw[1] * raw[8],
-                raw[1] * raw[5] - raw[2] * raw[4],
-                raw[5] * raw[6] - raw[3] * raw[8],
-                raw[0] * raw[8] - raw[2] * raw[6],
-                raw[2] * raw[3] - raw[0] * raw[5],
-                raw[3] * raw[7] - raw[4] * raw[6],
-                raw[1] * raw[6] - raw[0] * raw[7],
-                raw[0] * raw[4] - raw[1] * raw[3]
+                raw4 * raw8 - raw5 * raw7,
+                raw2 * raw7 - raw1 * raw8,
+                raw1 * raw5 - raw2 * raw4,
+                raw5 * raw6 - raw3 * raw8,
+                raw0 * raw8 - raw2 * raw6,
+                raw2 * raw3 - raw0 * raw5,
+                raw3 * raw7 - raw4 * raw6,
+                raw1 * raw6 - raw0 * raw7,
+                raw0 * raw4 - raw1 * raw3
         };
 
-        double det = raw[0] * tmp[0] + raw[1] * (-tmp[3]) + raw[2] * tmp[6];
+        double det = raw0 * tmp[0] + raw1 * (-tmp[3]) + raw2 * tmp[6];
         if (det == 0) return null;
 
         for (int i = 0; i < 9; i++)
-            raw[i] /= i;
+            tmp[i] /= det;
 
-        raw = tmp;
+        set(tmp);
+
         return this;
     }
 
@@ -403,7 +416,7 @@ public class Mat3d {
      * @return a new identity matrix.
      */
     public static Mat3d identity() {
-        return new Mat3d(identity);
+        return new Mat3d().makeIdentity();
     }
 
     /**
@@ -447,9 +460,9 @@ public class Mat3d {
      * @return {@code v}.
      */
     public static Vec3d mulInPlace(Mat3d m, Vec3d v) {
-        double x = m.raw[0] * v.x + m.raw[1] * v.y + m.raw[2] * v.z;
-        double y = m.raw[3] * v.x + m.raw[4] * v.y + m.raw[5] * v.z;
-        double z = m.raw[6] * v.x + m.raw[7] * v.y + m.raw[8] * v.z;
+        double x = m.raw0 * v.x + m.raw1 * v.y + m.raw2 * v.z;
+        double y = m.raw3 * v.x + m.raw4 * v.y + m.raw5 * v.z;
+        double z = m.raw6 * v.x + m.raw7 * v.y + m.raw8 * v.z;
 
         v.x = x;
         v.y = y;
@@ -578,23 +591,23 @@ public class Mat3d {
         if (!(obj instanceof Mat3d)) return false;
 
         Mat3d other = (Mat3d) obj;
-        return this.raw[0] == other.raw[0]
-                && this.raw[1] == other.raw[1]
-                && this.raw[2] == other.raw[2]
-                && this.raw[3] == other.raw[3]
-                && this.raw[4] == other.raw[4]
-                && this.raw[5] == other.raw[5]
-                && this.raw[6] == other.raw[6]
-                && this.raw[7] == other.raw[7]
-                && this.raw[8] == other.raw[8];
+        return this.raw0 == other.raw0
+                && this.raw1 == other.raw1
+                && this.raw2 == other.raw2
+                && this.raw3 == other.raw3
+                && this.raw4 == other.raw4
+                && this.raw5 == other.raw5
+                && this.raw6 == other.raw6
+                && this.raw7 == other.raw7
+                && this.raw8 == other.raw8;
     }
 
     @Override
     public int hashCode() {
         return new Hasher()
-                .add(this.raw[0]).add(this.raw[1]).add(this.raw[2])
-                .add(this.raw[3]).add(this.raw[4]).add(this.raw[5])
-                .add(this.raw[6]).add(this.raw[7]).add(this.raw[8])
+                .add(this.raw0).add(this.raw1).add(this.raw2)
+                .add(this.raw3).add(this.raw4).add(this.raw5)
+                .add(this.raw6).add(this.raw7).add(this.raw8)
                 .getHash();
     }
 

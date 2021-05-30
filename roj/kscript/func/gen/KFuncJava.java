@@ -9,10 +9,12 @@ import roj.kscript.func.KFunction;
  * @author Roj233
  * @since 2020/9/27 13:01
  */
-public abstract class KFuncJava extends KFunction {
-    private KFuncJava() {}
+abstract class KFuncJava extends KFunction {
+    KFuncJava() {}
 
     abstract KFuncJava copyAs(int id);
+
+    abstract Object get_set_Object(Object object);
 
     @Override
     public StringBuilder toString0(StringBuilder sb, int depth) {

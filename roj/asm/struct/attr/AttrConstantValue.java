@@ -8,7 +8,7 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.Constant;
+import roj.asm.cst.Constant;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 

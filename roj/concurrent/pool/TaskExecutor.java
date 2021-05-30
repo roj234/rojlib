@@ -11,6 +11,7 @@ public class TaskExecutor extends Thread implements TaskHandler, Executor {
     ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
     final ThreadStateMonitor monitor;
     final int timeout;
+    boolean sleeping;
 
     public TaskExecutor() {
         this(null);
@@ -30,11 +31,10 @@ public class TaskExecutor extends Thread implements TaskHandler, Executor {
         this.monitor = monitor;
     }
 
-    /**
-     * 这么设计
-     * ITask执行速度远大于插入速度 同时 又有多个线程插入
-     * -> '总是'会执行的
-     */
+    public boolean sleeping() {
+        return sleeping;
+    }
+    
     @Override
     public void run() {
         out:
@@ -44,11 +44,13 @@ public class TaskExecutor extends Thread implements TaskHandler, Executor {
                     notifyAll();
                 }
 
+                sleeping = true;
                 try {
                     Thread.sleep(timeout);
                 } catch (InterruptedException e) {
                     // maybe there's something to do now.
                 }
+                sleeping = false;
 
                 if (tasks.isEmpty()) {
                     synchronized (this) {

@@ -1,10 +1,10 @@
 package roj.asm.util;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.CstDouble;
-import roj.asm.constant.CstFloat;
-import roj.asm.constant.CstInt;
-import roj.asm.constant.CstLong;
+import roj.asm.cst.CstDouble;
+import roj.asm.cst.CstFloat;
+import roj.asm.cst.CstInt;
+import roj.asm.cst.CstLong;
 import roj.asm.struct.insn.*;
 import roj.collect.CharMap;
 

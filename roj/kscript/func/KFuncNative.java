@@ -1,6 +1,6 @@
 package roj.kscript.func;
 
-import roj.kscript.api.IArguments;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KType;
 
@@ -19,7 +19,7 @@ public abstract class KFuncNative extends KFunction {
     }
 
     @Override
-    public abstract KType invoke(@Nonnull IObject $this, IArguments param);
+    public abstract KType invoke(@Nonnull IObject $this, ArgList param);
 
     @Override
     public StringBuilder toString0(StringBuilder sb, int depth) {

@@ -8,20 +8,25 @@ import javax.annotation.Nonnull;
 public final class Version {
     public static final Version INFINITY = new Version("999999.999999.999999");
 
-    private final String value;
+    private String value;
     private final IntList items;
 
+    public Version() {
+        this.items = new IntList();
+    }
+
     public Version(String version) {
-        this.value = version;
         this.items = new IntList();
 
         this.parse(version, false);
     }
 
-    public void parse(String version, boolean ex) {
+    public Version parse(String version, boolean ex) {
+        items.clear();
+
         CharList buf = new CharList(10);
 
-        filterNonNumber(buf, version, ex);
+        filterNonNumber(buf, value = version, ex);
         version = buf.toString();
         buf.clear();
 
@@ -29,6 +34,10 @@ public final class Version {
         for (int i = 0; i < version.length(); i++) {
             char c = version.charAt(i);
             if (c == '.') {
+                if(dot) {
+                    // duplicate dot
+                    throw new IllegalArgumentException("Invalid version " + version);
+                }
                 dot = true;
             } else {
                 if (dot) {
@@ -43,6 +52,8 @@ public final class Version {
         if (buf.length() != 0) {
             this.items.add(MathUtils.parseInt(buf));
         }
+
+        return this;
     }
 
     private void filterNonNumber(CharList buf, String version, boolean ex) {

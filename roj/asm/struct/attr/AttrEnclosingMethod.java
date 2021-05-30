@@ -8,8 +8,8 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.CstClass;
-import roj.asm.constant.CstNameAndType;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstNameAndType;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.type.ParamHelper;
 import roj.asm.util.type.Type;

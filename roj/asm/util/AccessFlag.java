@@ -32,7 +32,7 @@ public class AccessFlag {
         M_TRANSITIVE = 0x0020,
         M_STATIC_PHASE = 0x0040;
 
-    public static FlagList parse(short flag) {
+    public static FlagList of(int flag) {
         return new FlagList(flag);
     }
 

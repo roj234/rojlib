@@ -10,12 +10,11 @@
 package roj.asm.struct.attr;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.*;
-import roj.asm.struct.IMethodData;
+import roj.asm.cst.*;
+import roj.asm.struct.IMethod;
 import roj.asm.struct.insn.*;
 import roj.asm.util.*;
 import roj.asm.util.frame.*;
-import roj.asm.util.type.IO;
 import roj.asm.util.type.Type;
 import roj.collect.*;
 import roj.util.ByteList;
@@ -32,23 +31,23 @@ import java.util.PrimitiveIterator;
 import static roj.asm.Opcodes.*;
 
 public class AttrCode extends Attribute {
-    public AttrCode(IMethodData method) {
+    public AttrCode(IMethod method) {
         super("Code");
         this.owner = method;
     }
 
-    public AttrCode(IMethodData method, ByteList list, ConstantPool pool) {
+    public AttrCode(IMethod method, ByteList list, ConstantPool pool) {
         this(method, new ByteReader(list), pool);
     }
 
-    public AttrCode(IMethodData method, ByteReader list, ConstantPool pool) {
+    public AttrCode(IMethod method, ByteReader list, ConstantPool pool) {
         this(method);
         initialize(pool, list);
     }
 
     public static final InsnNode METHOD_END_MARK = EndOfInsn.INSTANCE;
 
-    public IMethodData owner;
+    public IMethod owner;
 
     public final InsnList instructions = new InsnList();
 
@@ -147,35 +146,33 @@ public class AttrCode extends Attribute {
             node.toByteArray(w);
         }
 
-        int length = list.pos() - (lenIdx);
-        list.markAndGo(lenIdx - 4);
-        w.writeInt(length).list.back();
+        int cp = list.pos();
+        list.pos(lenIdx - 4);
+        w.writeInt(cp - lenIdx).list.pos(cp);
 
         w.writeShort(this.exceptions.size());
-        for (ExceptionEntry ex : this.exceptions) {
-            w.writeShort(pcRev.getInt(InsnNode.validate(ex.start)))
-                    .writeShort(pcRev.getInt(InsnNode.validate(ex.end)))
-                    .writeShort(pcRev.getInt(InsnNode.validate(ex.handler)))
-                    .writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : pool.getClassId(ex.type));
+        ArrayList<ExceptionEntry> exs = this.exceptions;
+        for (int i = 0; i < exs.size(); i++) {
+            ExceptionEntry ex = exs.get(i);
+            w.writeShort(pcRev.getInt(InsnNode.validate(ex.start))).writeShort(pcRev.getInt(InsnNode.validate(ex.end))).writeShort(pcRev.getInt(InsnNode.validate(ex.handler))).writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : pool.getClassId(ex.type));
         }
 
         int index = list.pos();
         w.writeShort(0);
 
         final AttributeList attrs = this.attributes;
-        int attrLen = attrs.size();
-        for (int i = 0; i < attrLen; i++) {
+        int aLen = attrs.size();
+        for (int i = 0; i < aLen; i++) {
             Attribute attribute = attrs.get(i);
             if(attribute instanceof ICodeAttribute) {
-                w.writeShort(pool.getUtfId(attribute.name)).writeInt(-1);
+                w.writeShort(pool.getUtfId(attribute.name)).writeInt(0);
 
-                int index1 = list.pos();
+                lenIdx = list.pos();
                 ((ICodeAttribute) attribute).toByteArray(pool, w, pcRev);
-                int plusLen = list.pos() - index1;
+                cp = list.pos();
+                list.pos(lenIdx - 4);
+                w.writeInt(cp - lenIdx).list.pos(cp);
 
-                list.markAndGo(index1 - 4);
-                w.writeInt(plusLen);
-                list.back();
             } else {
                 attribute.toByteArray(pool, w);
             }
@@ -183,21 +180,23 @@ public class AttrCode extends Attribute {
 
         if (this.frames != null) {
             w.writeShort(pool.getUtfId("StackMapTable")).writeInt(0);
-            int lenIdx1 = list.pos();
 
             if (computeFrames)
                 recalculateFrames(pcRev);
 
+            lenIdx = list.pos();
             writeFrames(pool, w.writeShort(frames.size()), pcRev);
 
-            int length1 = list.pos() - lenIdx1;
-            list.markAndGo(lenIdx1 - 4);
-            w.writeInt(length1).list.back();
-            attrLen++;
+            cp = list.pos();
+            list.pos(lenIdx - 4);
+            w.writeInt(cp - lenIdx).list.pos(cp);
+
+            aLen++;
         }
 
-        list.markAndGo(index);
-        w.writeShort(attrLen).list.back();
+        lenIdx = list.pos();
+        list.pos(index);
+        w.writeShort(aLen).list.pos(lenIdx);
 
         instructions.add(METHOD_END_MARK);
     }
@@ -249,7 +248,6 @@ public class AttrCode extends Attribute {
             for (int e = insn.size(); i < e; i++) {
                 node = insn.get(i);
                 pcRev.putInt(node, w.list.pos());
-                node.setBci(w.list.pos());
 
                 // 简化的终止条件: 此轮node return false并且长度不变
                 if (node.handlePCRev(pcRev) && reccIdx == -1) {
@@ -285,7 +283,7 @@ public class AttrCode extends Attribute {
             List<Type> list = new SimpleList<>();
             boolean isStatic = owner.access().contains(AccessFlag.STATIC);
             if (!isStatic) // this
-                list.add(new Type(IO.I, owner.ownerClass(), 0));
+                list.add(new Type(owner.ownerClass(), 0));
             List<Type> types = owner.parameters();
             list.addAll(types);
 
@@ -300,7 +298,7 @@ public class AttrCode extends Attribute {
             List<Type> list = new SimpleList<>();
             boolean isStatic = owner.access().contains(AccessFlag.STATIC);
             if (!isStatic) // this
-                list.add(new Type(IO.I, owner.ownerClass(), 0));
+                list.add(new Type(owner.ownerClass(), 0));
             List<Type> types = owner.parameters();
             list.addAll(types);
 
@@ -350,7 +348,6 @@ public class AttrCode extends Attribute {
                 throw new InternalError("At " + (owner == null ? "??" : owner.ownerClass() + '.' + owner.name()), e);
             }
             if (currNode != null) {
-                currNode.setBci(prevIndex);
                 pci.put(prevIndex, currNode);
 
                 prevNode = currNode;
@@ -423,7 +420,7 @@ public class AttrCode extends Attribute {
             List<Type> list = new SimpleList<>();
             boolean isStatic = owner.access().contains(AccessFlag.STATIC);
             if (!isStatic) // this
-                list.add(new Type(IO.I, owner.ownerClass(), 0));
+                list.add(new Type(owner.ownerClass(), 0));
             List<Type> types = owner.parameters();
             list.addAll(types);
 
@@ -451,7 +448,7 @@ public class AttrCode extends Attribute {
                 List<Type> list = new SimpleList<>();
                 boolean isStatic = owner.access().contains(AccessFlag.STATIC);
                 if (!isStatic) // this
-                    list.add(new Type(IO.I, owner.ownerClass(), 0));
+                    list.add(new Type(owner.ownerClass(), 0));
                 List<Type> types = owner.parameters();
                 list.addAll(types);
 
@@ -617,8 +614,11 @@ public class AttrCode extends Attribute {
     }
 
     public static InsnNode parseTableSwitch(ByteReader r) {
-        if ((r.index & 3) != 0) {
+        /*if ((r.index & 3) != 0) {
             r.index = r.index + 4 - (r.index & 3);
+        }*/
+        while ((r.index & 3) != 0) {
+            r.index++;
         }
 
         int def = r.readInt();
@@ -634,21 +634,26 @@ public class AttrCode extends Attribute {
         while (count > i) {
             mapping.put(i++ + low, r.readInt());
         }
+
         return new SwchPrimer(Opcodes.TABLESWITCH, def, mapping);
     }
 
     public static InsnNode parseLookupSwitch(ByteReader r) {
-        while (r.index % 4 != 0) {
+        while ((r.index & 3) != 0) {
             r.index++;
         }
-        int defaultValue = r.readInt();
-        int switchValueCount = r.readInt();
-        LinkedIntMap<Integer> mapping = new LinkedIntMap<>(switchValueCount + 5);
-        while (switchValueCount > 0) {
+        int def = r.readInt();
+        int count = r.readInt();
+
+        if(count > 100000)
+            throw new IllegalArgumentException("length > 100000");
+
+        LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count + 5);
+        while (count > 0) {
             mapping.put(r.readInt(), r.readInt());
-            switchValueCount--;
+            count--;
         }
-        return new SwchPrimer(Opcodes.LOOKUPSWITCH, defaultValue, mapping);
+        return new SwchPrimer(Opcodes.LOOKUPSWITCH, def, mapping);
     }
 
     @SuppressWarnings("fallthrough")
@@ -656,11 +661,11 @@ public class AttrCode extends Attribute {
         Frame prev = getFirstFrame();
         if (prev == null)
             prev = Frame.EMPTY;
-        for (Frame curr : frames) {
-            int type = curr.type.s;
+        for (int j = 0; j < frames.size(); j++) {
+            Frame curr = frames.get(j);
+
             int offset = pcRev.getInt(InsnNode.validate(curr.target));
-            if (prev.target != null)
-                offset -= pcRev.getInt(InsnNode.validate(prev.target)) + 1;
+            if (prev.target != null) offset -= pcRev.getInt(InsnNode.validate(prev.target)) + 1;
             if (offset > 65535 || offset < 0) {
                 if (prev.target != null)
                     System.err.println("Prev bci: " + pcRev.getInt(InsnNode.validate(prev.target)));
@@ -671,58 +676,57 @@ public class AttrCode extends Attribute {
 
                 throw new IllegalArgumentException("Illegal curr offset");
             }
+
+            int type = curr.type;
             switch (curr.type) {
-                case same:
+                case FrameType.same:
                     if (offset < 64) {
                         type = offset;
                     } else {
-                        type = FrameType.same_ex.s;
-                        curr.type = FrameType.same_ex;
+                        curr.type = type = FrameType.same_ex;
                     }
                     break;
-                case same_local_1_stack:
+                case FrameType.same_local_1_stack:
                     if (offset < 64) {
                         type = offset + 64;
                     } else {
-                        type = FrameType.same_local_1_stack_ex.s;
-                        curr.type = FrameType.same_local_1_stack_ex;
+                        curr.type = type = FrameType.same_local_1_stack_ex;
                     }
                     break;
-                case chop:
+                case FrameType.chop:
                     type = 251 - (prev.locals.size - curr.locals.size);
                     break;
-                case append:
+                case FrameType.append:
                     type = 251 + (curr.locals.size - prev.locals.size);
                     break;
-                case same_ex:
-                case same_local_1_stack_ex:
-                case full:
+                case FrameType.same_ex:
+                case FrameType.same_local_1_stack_ex:
+                case FrameType.full:
                     break;
             }
             w.writeByte((byte) type);
             switch (curr.type) {
-                case same:
+                case FrameType.same:
                     break;
-                case same_local_1_stack_ex:
+                case FrameType.same_local_1_stack_ex:
                     w.writeShort(offset);
-                case same_local_1_stack:
+                case FrameType.same_local_1_stack:
                     writeVType(curr.stacks.get(0), w, pool, pcRev);
                     break;
-                case chop:
+                case FrameType.chop:
                     // 251 - type
-                case same_ex:
+                case FrameType.same_ex:
                     w.writeShort(offset);
                     break;
-                case append:
+                case FrameType.append:
                     w.writeShort(offset);
                     //writeVerify(curr.stacks.get(0), w, pool);
                     for (int i = curr.locals.size + 251 - type, e = curr.locals.size; i < e; i++) {
                         writeVType(curr.locals.get(i), w, pool, pcRev);
                     }
                     break;
-                case full:
-                    w.writeShort(offset)
-                            .writeShort(curr.locals.size);
+                case FrameType.full:
+                    w.writeShort(offset).writeShort(curr.locals.size);
                     for (int i = 0, e = curr.locals.size; i < e; i++) {
                         writeVType(curr.locals.get(i), w, pool, pcRev);
                     }
@@ -762,7 +766,6 @@ public class AttrCode extends Attribute {
 
         int allOffset = -1;
         for (int k = 0; k < tableLen; k++) {
-
             int type = r.readUByte();
             curr = new Frame(FrameType.byId(type));
 
@@ -771,29 +774,29 @@ public class AttrCode extends Attribute {
 
             int offset = -1;
             switch (curr.type) {
-                case same:
+                case FrameType.same:
                     offset = type;
                     // 变量 相同
                     // 栈 空
                     break;
-                case same_ex:
+                case FrameType.same_ex:
                     offset = r.readUnsignedShort();
                     // 同上
                     break;
-                case same_local_1_stack:
+                case FrameType.same_local_1_stack:
                     offset = type - 64;
                     curr.stacks.removeTo(1);
                     curr.stacks.set(0, getVType(pool, r, pcCounter));
                     // 变量 相同
                     // 栈 一个
                     break;
-                case same_local_1_stack_ex:
+                case FrameType.same_local_1_stack_ex:
                     offset = r.readUnsignedShort();
                     curr.stacks.removeTo(1);
                     curr.stacks.set(0, getVType(pool, r, pcCounter));
                     // 同上
                     break;
-                case chop:
+                case FrameType.chop:
                     offset = r.readUnsignedShort();
                     if (curr.locals.size < 251 - type) {
                         throw new IllegalStateException(owner.ownerClass() + '.' + owner.name() + ": Chop(" + (251 - type) + "): too few: " + curr.locals);
@@ -802,7 +805,7 @@ public class AttrCode extends Attribute {
                     // 变量 k个没了
                     // 栈 空
                     break;
-                case append: {
+                case FrameType.append: {
                     offset = r.readUnsignedShort();
                     int count = type - 251;
                     while (count > 0) {
@@ -817,7 +820,7 @@ public class AttrCode extends Attribute {
                     // 栈 空
                 }
                 break;
-                case full: {
+                case FrameType.full: {
                     offset = r.readUnsignedShort();
                     int count = r.readUnsignedShort();
 

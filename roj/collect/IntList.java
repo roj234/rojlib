@@ -61,6 +61,8 @@ public class IntList implements Iterable<Integer> {
 
     @Nonnull
     public int[] toArray() {
+        if(size == 0)
+            return EMPTY;
         int[] arr = new int[size];
         System.arraycopy(list, 0, arr, 0, size);
         return arr;

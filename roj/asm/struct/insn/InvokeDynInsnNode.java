@@ -9,7 +9,7 @@
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.CstDynamic;
+import roj.asm.cst.CstDynamic;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.type.ParamHelper;
 import roj.asm.util.type.Type;

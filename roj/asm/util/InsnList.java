@@ -59,7 +59,6 @@ public final class InsnList extends ArrayList<InsnNode> {
 
             for (int e = insn.size() - 1; i < e; i++) {
                 pcRev.putByValue(w.list.pos(), node);
-                node.setBci(w.list.pos());
                 node = insn.get(i);
 
                 // 简化的终止条件: 此轮node return false并且长度不变

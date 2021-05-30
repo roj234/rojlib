@@ -48,7 +48,7 @@ public class Word {
         return index;
     }
 
-    public IntWord number() {
+    public IntWord number() { // todo double
         int v;
         switch (type) {
             case WordPresets.HEX:

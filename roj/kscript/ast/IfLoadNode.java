@@ -17,7 +17,7 @@ public final class IfLoadNode extends Node {
     final byte type;
 
     public IfLoadNode(short type) {
-        super(OpCode.IF_LOAD);
+        super(Opcode.IF_LOAD);
         if(type == IfNode.TRUE - 500)
             throw new IllegalArgumentException("NO IS_TRUE available");
         this.type = (byte) (type - 500);

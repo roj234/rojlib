@@ -1,11 +1,10 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
+import roj.config.word.NotStatementException;
 import roj.kscript.ast.ASTree;
 import roj.kscript.parser.ParseContext;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
-import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -98,7 +97,7 @@ public final class Variable extends Field {
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
+    public KType compute(Map<String, KType> param) {
         return param.getOrDefault(name, KUndefined.UNDEFINED);
     }
 

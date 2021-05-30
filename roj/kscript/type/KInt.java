@@ -1,6 +1,6 @@
 package roj.kscript.type;
 
-import roj.kscript.KConstants;
+import roj.kscript.vm.ResourceManager;
 import roj.math.MathUtils;
 
 import javax.annotation.Nonnull;
@@ -12,26 +12,24 @@ import javax.annotation.Nonnull;
  * @author Roj234
  * Filename: KInt.java
  */
-public abstract class KInt extends KBase {
+public class KInt extends KBase {
     public int value;
 
-    KInt(int number) {
-        super(Type.INT);
+    protected KInt(int number) {
         this.value = number;
     }
 
+    @Override
+    public Type getType() {
+        return Type.INT;
+    }
+
     public static KInt valueOf(int nv) {
-        return new OnStack(nv);
+        return new KInt(nv);
     }
 
-    @Override
-    public KInt asKInt() {
-        return this;
-    }
-
-    @Override
-    public KDouble asKDouble() {
-        return new KDouble.Intl(value);
+    public static KInt valueOf(String d) {
+        return valueOf(MathUtils.parseInt(d));
     }
 
     @Override
@@ -47,6 +45,16 @@ public abstract class KInt extends KBase {
     @Override
     public int asInt() {
         return value;
+    }
+
+    @Override
+    public void setIntValue(int intValue) {
+        value = intValue;
+    }
+
+    @Override
+    public void setDoubleValue(double doubleValue) {
+        value = (int) doubleValue;
     }
 
     @Nonnull
@@ -100,61 +108,13 @@ public abstract class KInt extends KBase {
         return value != 0;
     }
 
-    public static final class OnStack extends KInt {
-        public byte s;
-
-        public OnStack(int number) {
-            super(number);
-            s = 2;
-        }
-
-        public static KInt valueOf(int nv) {
-            return KConstants.retainStackIntHolder(nv);
-        }
-
-        @Override
-        public KInt asKInt() {
-            return this;
-        }
-
-        @Override
-        public int spec() {
-            return s & 0xFF;
-        }
-
-        @Override
-        public KType markImmutable(boolean kind) {
-            s = (byte) (kind ? 16 : 1);
-            return this;
-        }
-
-        @Override
-        public KType copy() {
-            return valueOf(value);
-        }
+    @Override
+    public KType copy() {
+        return new KInt(value);
     }
 
-    public static final class Intl extends KInt {
-        Intl(int number) {
-            super(number);
-        }
-
-        public static KInt valueOf(int d) {
-            return new Intl(d);
-        }
-
-        public static KInt valueOf(String d) {
-            return valueOf(MathUtils.parseInt(d));
-        }
-
-        @Override
-        public int spec() {
-            return 8;
-        }
-
-        @Override
-        public KType copy() {
-            return this;
-        }
+    @Override
+    public KType setFlag(int kind) {
+        return ResourceManager.get().allocI(value, kind);
     }
 }

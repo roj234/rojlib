@@ -12,6 +12,7 @@ import roj.io.down.MTDProgress;
 import roj.io.down.STDProgress;
 import roj.text.CharList;
 import roj.util.ByteList;
+import roj.util.ByteWriter;
 import roj.util.Operation;
 
 import java.io.*;
@@ -65,7 +66,7 @@ public final class FileUtil {
     public static void copyFile(File source, File target) throws IOException {
         try (FileInputStream fis = new FileInputStream(source)) {
             try (FileOutputStream fos = new FileOutputStream(target)) {
-                IOUtil.readFully0(fis).writeToStream(fos);
+                IOUtil.readFully0(fis, IOUtil.BYTE_BUFFER.get()).writeToStream(fos);
             }
         }
     }
@@ -207,7 +208,7 @@ public final class FileUtil {
 
                     holder.set(new ByteList(length).readStreamArrayFully(is).toByteArray());
                 }
-            });
+            }, false);
         } catch (UnknownHostException e) {
             throw new FileNotFoundException("网址不存在: " + url);
         }
@@ -246,7 +247,7 @@ public final class FileUtil {
                 infoFile = null;
         }
 
-        if(infoFile != null) {
+        if(infoFile != null && infoFile.isFile()) {
             File lockTest = new File(infoFile.getAbsolutePath() + System.currentTimeMillis());
             if(!infoFile.renameTo(lockTest) || !lockTest.renameTo(infoFile))
                 throw new IOException("文件已被占用");
@@ -257,37 +258,41 @@ public final class FileUtil {
         try {
 
             process302(new URL(url), (httpConn) -> {
-                long length = httpConn.getContentLengthLong();
-
-                httpConn.disconnect();
-
-                if (tempFile.length() != length) {
-                    RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
-                    raf.setLength(length);
-                    raf.close();
-                }
-
-                final Downloader downloader = new Downloader(pid, tempFile, fInfoFile, httpConn.getURL(), 0, length, handler);
-                handler.onInitial(1);
-                downloader.run();
-                handler.onReturn();
-
-                StringBuilder err = new StringBuilder();
-
-                if (!tempFile.renameTo(file)) {
-                    err.append("; 文件重命名失败, 请手动把 ").append(tempFile.getName()).append(" 重命名为 ").append(file.getName());
-                }
-                if (deleteInfo && (fInfoFile != null && !fInfoFile.delete())) {
-                    err.append("; 下载进度删除失败 ").append(fInfoFile.getName());
-                }
-
-                if(err.length() > 0)
-                    throw new IOException(err.toString());
-            });
+                singleThread0(file, handler, pid, deleteInfo, tempFile, fInfoFile, httpConn);
+            }, false);
 
         } catch (UnknownHostException e) {
             throw new FileNotFoundException("网址不存在: " + url);
         }
+    }
+
+    private static void singleThread0(File file, IProgressHandler handler, int pid, boolean deleteInfo, File tempFile, File fInfoFile, HttpURLConnection httpConn) throws IOException {
+        long length = httpConn.getContentLengthLong();
+
+        httpConn.disconnect();
+
+        if (tempFile.length() != length) {
+            RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
+            raf.setLength(length);
+            raf.close();
+        }
+
+        final Downloader downloader = new Downloader(pid, tempFile, fInfoFile, httpConn.getURL(), 0, length, handler);
+        handler.onInitial(1);
+        downloader.run();
+        handler.onReturn();
+
+        StringBuilder err = new StringBuilder();
+
+        if (!tempFile.renameTo(file)) {
+            err.append("文件重命名失败, 请手动把 ").append(tempFile.getName()).append(" 重命名为 ").append(file.getName());
+        }
+        if (deleteInfo && (fInfoFile != null && !fInfoFile.delete())) {
+            err.append("; 下载进度删除失败 ").append(fInfoFile.getName());
+        }
+
+        if(err.length() > 0)
+            throw new IOException(err.toString());
     }
 
     /**
@@ -376,12 +381,39 @@ public final class FileUtil {
         List<AbstractCalcTask<Void>> tasks = new ArrayList<>(threadMax);
         try {
             process302(url, (conn) -> {
-                long length = conn.getContentLengthLong();
-
-                conn.disconnect();
 
                 URL url1 = conn.getURL();
 
+                if(/*conn.getResponseCode() != 206*/conn.getHeaderField("ETag") == null) { // Partial content
+                    singleThread0(file, handler, 0, deleteInfo, tempFile, fInfoFile, conn);
+                    return;
+                }
+
+                AppendOnlyCache aoc = new AppendOnlyCache(new File(fInfoFile.getAbsolutePath() + ".tag"));
+                aoc.read();
+                if(!aoc.contains("ETag")) {
+                    aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
+                    aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));
+                } else {
+                    String ck = conn.getHeaderField("ETag");
+                    if (!aoc.getUTF("ETag").equals(ck)) {
+                        if(!fInfoFile.delete()) {
+                            throw new IOException("文件已被占用");
+                        }
+                    } else {
+                        ck = conn.getHeaderField("Last-Modified");
+                        if (!aoc.getUTF("Last-Modified").equals(ck)) {
+                            if(!fInfoFile.delete()) {
+                                throw new IOException("文件已被占用");
+                            }
+                        }
+                    }
+                }
+                aoc.close();
+
+                conn.disconnect();
+
+                long length = conn.getContentLengthLong();
                 if (tempFile.length() != length) {
                     RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
                     raf.setLength(length); // alloc
@@ -407,9 +439,26 @@ public final class FileUtil {
                     if (downloader.getDownloaded() != -1)
                         tasks.add(downloader);
                 }
-            });
+            }, true);
         } catch (UnknownHostException e) {
             throw new FileNotFoundException("网址不存在: " + address);
+        }
+
+        if(tasks.isEmpty()) {
+            return new WaitingIOFuture() {
+                @Override
+                public void waitFor() {}
+
+                @Override
+                public boolean isDone() {
+                    return true;
+                }
+
+                @Override
+                public String flag() {
+                    return "unsupported";
+                }
+            };
         }
 
         handler.onInitial(tasks.size());
@@ -418,73 +467,17 @@ public final class FileUtil {
             ioPool.pushTask(task);
         }
 
-        return new WaitingIOFuture() {
-            @Override
-            public void waitFor() throws IOException {
-                for (AbstractCalcTask<Void> task : tasks) {
-                    try {
-                        task.get();
-                    } catch (InterruptedException e) {
-                        System.err.println("That shouldn't happen!");
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        handler.errorCaught();
-
-                        Throwable cause = e.getCause();
-                        if(cause instanceof RuntimeException) {
-                            throw (RuntimeException) cause;
-                        }
-
-                        if(cause instanceof IOException) {
-                            throw (IOException) cause;
-                        }
-
-                        throw new RuntimeException(cause);
-                    }
-                }
-
-                handler.onReturn();
-
-                StringBuilder err = new StringBuilder();
-
-                if (!tempFile.renameTo(file)) {
-                    err.append("; 文件重命名失败, 请手动把 ").append(tempFile.getName()).append(" 重命名为 ").append(file.getName());
-                }
-                if (deleteInfo && (fInfoFile != null && !fInfoFile.delete())) {
-                    err.append("; 下载进度删除失败 ").append(fInfoFile.getName());
-                }
-                //if (lockFile.isFile() && !lockFile.delete()) {
-                //    err.append("; 文件锁删除失败 ").append(lockFile.getName());
-                //}
-
-                if(err.length() > 0)
-                    throw new IOException(err.toString());
-            }
-
-            @Override
-            public boolean isDone() {
-                boolean done = true;
-                for (int i = 0; i < tasks.size(); i++) {
-                    AbstractCalcTask<Void> task = tasks.get(i);
-                    if (!task.isDone()) return false;
-                }
-                return true;
-            }
-
-            @Override
-            public String toString() {
-                return tasks.toString();
-            }
-        };
+        return new MTD(tasks, handler, tempFile, file, deleteInfo, fInfoFile);
     }
 
-    public static void process302(URL url, Operation<IOException, HttpURLConnection> operation) throws IOException {
+    public static void process302(URL url, Operation<IOException, HttpURLConnection> operation, boolean headOnly) throws IOException {
         HttpURLConnection conn;
         do {
             conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(15 * 1000);
+            conn.setRequestMethod(headOnly ? "HEAD" : "GET");
+            conn.setConnectTimeout(TIMEOUT);
             conn.setRequestProperty("User-Agent", USER_AGENT);
+            conn.setRequestProperty("Range", "bytes=0-");
             int code = conn.getResponseCode();
             if (code >= 200 && code < 400) {
                 String location = conn.getHeaderField("Location");
@@ -505,4 +498,78 @@ public final class FileUtil {
         } while (true);
     }
 
+    private static class MTD implements WaitingIOFuture {
+        private final List<AbstractCalcTask<Void>> tasks;
+        private final IProgressHandler handler;
+        private final File tempFile;
+        private final File file;
+        private final boolean deleteInfo;
+        private final File fInfoFile;
+
+        public MTD(List<AbstractCalcTask<Void>> tasks, IProgressHandler handler, File tempFile, File file, boolean deleteInfo, File fInfoFile) {
+            this.tasks = tasks;
+            this.handler = handler;
+            this.tempFile = tempFile;
+            this.file = file;
+            this.deleteInfo = deleteInfo;
+            this.fInfoFile = fInfoFile;
+        }
+
+        @Override
+        public void waitFor() throws IOException {
+            for (AbstractCalcTask<Void> task : tasks) {
+                try {
+                    task.get();
+                } catch (InterruptedException e) {
+                    System.err.println("That shouldn't happen!");
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    handler.errorCaught();
+
+                    Throwable cause = e.getCause();
+                    if(cause instanceof RuntimeException) {
+                        throw (RuntimeException) cause;
+                    }
+
+                    if(cause instanceof IOException) {
+                        throw (IOException) cause;
+                    }
+
+                    throw new RuntimeException(cause);
+                }
+            }
+
+            handler.onReturn();
+
+            StringBuilder err = new StringBuilder();
+
+            if (!tempFile.renameTo(file)) {
+                err.append("文件重命名失败, 请手动把 ").append(tempFile.getName()).append(" 重命名为 ").append(file.getName());
+            }
+            if (deleteInfo && (fInfoFile != null && !fInfoFile.delete())) {
+                err.append("; 下载进度删除失败 ").append(fInfoFile.getName());
+            }
+            //if (lockFile.isFile() && !lockFile.delete()) {
+            //    err.append("; 文件锁删除失败 ").append(lockFile.getName());
+            //}
+
+            if(err.length() > 0)
+                throw new IOException(err.toString());
+        }
+
+        @Override
+        public boolean isDone() {
+            boolean done = true;
+            for (int i = 0; i < tasks.size(); i++) {
+                AbstractCalcTask<Void> task = tasks.get(i);
+                if (!task.isDone()) return false;
+            }
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return tasks.toString();
+        }
+    }
 }

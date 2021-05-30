@@ -3,11 +3,13 @@ package roj.kscript.util;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ReuseStack;
+import roj.collect.ToIntMap;
 import roj.kscript.ast.Context;
 import roj.kscript.ast.Frame;
+import roj.kscript.ast.IContext;
 import roj.kscript.ast.Node;
 import roj.kscript.type.KType;
-import roj.kscript.util.opm.GlobalVarMap;
+import roj.kscript.util.opm.ConstMap;
 import roj.kscript.util.opm.KOEntry;
 import roj.util.Helpers;
 
@@ -21,23 +23,28 @@ import java.util.Set;
  * @since 2020/10/17 23:52
  */
 public final class ContextPrimer {
-    public final ArrayList<String> usedArgs = new ArrayList<>();
-    public final GlobalVarMap globals;
-    public final ArrayList<Variable> locals = new ArrayList<>();
+    static final ToIntMap<String> NIL = new ToIntMap<>(0);
 
+    public ArrayList<String> usedArgs = new ArrayList<>();
+    public final ConstMap globals;
+    public ArrayList<Variable> locals = new ArrayList<>();
+
+    public MyHashSet<String> unusedGlobal = new MyHashSet<>();
     private MyHashMap<String, Variable> inRegion = new MyHashMap<>();
+    private ToIntMap<String> arguments = NIL;
     public ReuseStack<Set<String>> creations = new ReuseStack<>();
 
-    private ContextPrimer parent;
-    private Context built;
+    public ContextPrimer parent;
+    public IContext built;
 
     public ContextPrimer(Context ctx) {
-        this.globals = (GlobalVarMap) ctx.getInternal();
+        this.globals = (ConstMap) ctx.getInternal();
+        built = ctx;
     }
 
     private ContextPrimer(ContextPrimer parent) {
         this.parent = parent;
-        this.globals = new GlobalVarMap();
+        this.globals = new ConstMap();
     }
 
     // region 代码块
@@ -52,7 +59,7 @@ public final class ContextPrimer {
         }
     }
 
-    public void finish(Context ctx) {
+    public void handle(Frame ctx) {
         built = ctx;
 
         // gc
@@ -60,17 +67,19 @@ public final class ContextPrimer {
         inRegion = null;
         creations.clear();
         creations = null;
+        for (String s : unusedGlobal)
+            globals.remove(s);
+        unusedGlobal.clear();
+        unusedGlobal = null;
 
-        if(parent != null) {
-            // remove arg name in global, check if needed?
-            for (int i = 0; i < usedArgs.size(); i++) {
-                String s = usedArgs.get(i);
-                globals.remove(s);
-            }
+        arguments = NIL;
+    }
 
-            // 因为现在移动了初始化时间, 所以上级一定已经初始化
-            ((Frame)ctx)._parent(parent.built);
-        }
+    public void finish() {
+        usedArgs.clear();
+        usedArgs = null;
+        //locals.clear();
+        //locals = null;
     }
 
     // endregion
@@ -86,11 +95,19 @@ public final class ContextPrimer {
     // region 作用域
 
     public void global(String key, KType val) {
-        globals.putIfAbsent(key, val);
+        if(globals.putIfAbsent(key, val) == null) {
+            unusedGlobal.add(key);
+        } else {
+            unusedGlobal.remove(key);
+        }
     }
 
     public void Const(String key, KType val) {
-        globals.putIfAbsent(key, val);
+        if(globals.putIfAbsent(key, val) == null) {
+            unusedGlobal.add(key);
+        } else {
+            unusedGlobal.remove(key);
+        }
         globals.markConst(key);
     }
 
@@ -113,7 +130,7 @@ public final class ContextPrimer {
 
     public void loadArg(int id, String as) {
         if(parent == null) {
-            throw new IllegalArgumentException("<global> function doesn't has any parameter.");
+            throw new IllegalArgumentException("<global> function doesn't have any parameter.");
         }
 
         KType v = globals.get(as);
@@ -146,6 +163,11 @@ public final class ContextPrimer {
         v.end = last;
     }
 
+    public void chainUpdate(String key) {
+        if(!unusedGlobal.remove(key) && !globals.containsKey(key) && !arguments.containsKey(key) && parent != null)
+            parent.chainUpdate(key);
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("Ctx{");
@@ -167,5 +189,23 @@ public final class ContextPrimer {
         if(parent != null)
             sb.append("parent=").append(parent).append(", ");
         return sb.append('}').toString();
+    }
+
+    public Frame findProvider(String key) {
+        return globals.containsKey(key) || inLocal(key) ? (Frame) this.built : !(parent.built instanceof Frame) ? null : parent.findProvider(key);
+    }
+
+    private boolean inLocal(String key) {
+        if(locals == null) return false;
+        for (int i = 0; i < locals.size(); i++) {
+            Variable variable = locals.get(i);
+            if (variable.name.equals(key))
+                return true;
+        }
+        return false;
+    }
+
+    public void setArguments(ToIntMap<String> arguments) {
+        this.arguments = arguments;
     }
 }

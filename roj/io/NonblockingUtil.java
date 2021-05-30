@@ -10,7 +10,6 @@ import roj.reflect.DirectMethodAccess;
 import roj.util.ByteList;
 import sun.nio.ch.DirectBuffer;
 import sun.nio.ch.FileChannelImpl;
-import sun.nio.ch.IOUtil;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -20,6 +19,7 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.SocketChannel;
 
 /**
  * This file is a part of MI <br>
@@ -29,7 +29,7 @@ import java.nio.channels.FileChannel;
  * @since 2020/12/6 14:15
  */
 public final class NonblockingUtil {
-    static DirectFieldAccessor implGet, socketFD, fileFD;
+    static DirectFieldAccessor implGet, socketFD, socketChFD, fileFD;
     static SocketNIODispatcher snd;
     static FileNIODispatcher fnf;
     static AI1 blockConf, fciDelegate, fcDelegate;
@@ -38,6 +38,7 @@ public final class NonblockingUtil {
         try {
             implGet = DirectFieldAccess.get(Socket.class, "impl");
             socketFD = DirectFieldAccess.get(SocketImpl.class, "fd");
+            socketChFD = DirectFieldAccess.get(Class.forName("sun.nio.ch.SocketChannelImpl"), "fd");
             fileFD = DirectFieldAccess.get(FileChannelImpl.class, "fd");
 
             blockConf = DirectMethodAccess.getStatic(AI1.class, "configureBlocking", IOUtil.class, "configureBlocking");
@@ -250,6 +251,14 @@ public final class NonblockingUtil {
         socketFD.clearInstance();
 
         blockConf.configureBlocking(fd, false);
+
+        return fd;
+    }
+
+    public static FileDescriptor fd(SocketChannel socket) {
+        socketChFD.setInstance(socket);
+        FileDescriptor fd = (FileDescriptor) socketFD.getObject();
+        socketChFD.clearInstance();
 
         return fd;
     }

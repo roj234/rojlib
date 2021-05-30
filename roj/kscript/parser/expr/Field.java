@@ -1,11 +1,10 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
+import roj.config.word.NotStatementException;
 import roj.kscript.ast.ASTree;
-import roj.kscript.ast.OpCode;
+import roj.kscript.ast.Opcode;
 import roj.kscript.type.KString;
 import roj.kscript.type.KType;
-import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -54,12 +53,12 @@ public class Field implements LoadExpression {
             throw new NotStatementException();
 
         parent.write(tree, false);
-        tree.Load(KString.valueOf(name)).Std(delete ? OpCode.DELETE_OBJ : OpCode.GET_OBJ);
+        tree.Load(KString.valueOf(name)).Std(delete ? Opcode.DELETE_OBJ : Opcode.GET_OBJ);
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
-        return parent.compute(param, $this).asObject().get(name);
+    public KType compute(Map<String, KType> param) {
+        return parent.compute(param).asObject().get(name);
     }
 
     @Override

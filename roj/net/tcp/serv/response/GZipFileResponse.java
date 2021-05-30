@@ -77,7 +77,7 @@ public class GZipFileResponse extends FileResponse {
             byte[] hex = this.hex;
             int off = NetworkUtil.number2hex(buf.pos(), hex);
 
-            channel.getOut().write(hex, off, 10 - off);
+            channel.write(new ByteList.ReadOnlySubList(hex, off, 10 - off));
 
             buf.addAll(hex, 8, 2);
 

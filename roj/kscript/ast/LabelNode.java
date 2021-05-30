@@ -13,11 +13,11 @@ import roj.asm.util.InsnList;
  */
 public class LabelNode extends Node {
     public LabelNode() {
-        super(OpCode.LABEL);
+        super(Opcode.LABEL);
     }
 
     public LabelNode(LabelNode node) {
-        super(OpCode.LABEL);
+        super(Opcode.LABEL);
         this.next = node.next;
     }
 

@@ -9,8 +9,8 @@
  */
 package roj.asm;
 
-import roj.asm.constant.CstClass;
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.*;
 import roj.asm.struct.attr.AttrCode;
 import roj.asm.struct.attr.AttrUnknown;
@@ -98,7 +98,7 @@ public final class Parser {
          *
          * super_class, interfaces_count, fields_count, methods_count: zero
          */
-        result.accesses = AccessFlag.parse(r.readShort());
+        result.accesses = AccessFlag.of(r.readShort());
         try {
             result.name = pool.getName(r);
         } catch (ArrayIndexOutOfBoundsException e) {
@@ -126,7 +126,7 @@ public final class Parser {
         if(module && len != 0)
             throw new IllegalArgumentException("Module should not have fields");
         for (int i = 0; i < len; i++) {
-            FlagList access = AccessFlag.parse(r.readShort());
+            FlagList access = AccessFlag.of(r.readShort());
             CstUTF name = (CstUTF) pool.get(r);
             CstUTF desc = (CstUTF) pool.get(r);
 
@@ -140,7 +140,7 @@ public final class Parser {
             throw new IllegalArgumentException("Module should not have methods");
         List<Method> methods = result.methods;
         for (int i = 0; i < len; i++) {
-            FlagList access = AccessFlag.parse(r.readShort());
+            FlagList access = AccessFlag.of(r.readShort());
             CstUTF name = (CstUTF) pool.get(r);
             CstUTF desc = (CstUTF) pool.get(r);
 
@@ -205,79 +205,74 @@ public final class Parser {
 
     @Nonnull
     private static ConstantData parse1(ByteReader r) {
-        try {
-            if (r.readInt() != 0xcafebabe) {
-                throw new IllegalArgumentException("Illegal header");
-            }
-            int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
+        if (r.readInt() != 0xcafebabe) {
+            throw new IllegalArgumentException("Illegal header");
+        }
+        int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
-            ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-            pool.read(r);
-            pool.valid();
+        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+        pool.read(r);
+        pool.valid();
 
-            ConstantData result = new ConstantData(version, pool, r.length(), r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+        ConstantData result = new ConstantData(version, pool, r.length(), r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
-            int len = r.readUnsignedShort();
+        int len = r.readUnsignedShort();
 
-            List<CstClass> itf = result.interfaces;
-            for (int i = 0; i < len; i++) {
-                itf.add((CstClass) pool.get(r));
-            }
+        List<CstClass> itf = result.interfaces;
+        for (int i = 0; i < len; i++) {
+            itf.add((CstClass) pool.get(r));
+        }
 
-            len = r.readUnsignedShort();
-            List<FieldSimple> fields = result.fields;
-            for (int i = 0; i < len; i++) {
-                FieldSimple field = new FieldSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+        len = r.readUnsignedShort();
+        List<FieldSimple> fields = result.fields;
+        for (int i = 0; i < len; i++) {
+            FieldSimple field = new FieldSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
 
-                AttributeList attributes = field.attributes;
-                int attrLen = r.readUnsignedShort();
-                attributes.ensureCapacity(attrLen);
+            AttributeList attributes = field.attributes;
+            int attrLen = r.readUnsignedShort();
+            attributes.ensureCapacity(attrLen);
 
-                for (int j = 0; j < attrLen; j++) {
-                    String name0 = ((CstUTF) pool.get(r)).getString();
-
-                    Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
-                    attributes.add(attr);
-                }
-                fields.add(field);
-            }
-
-            len = r.readUnsignedShort();
-            List<MethodSimple> methods = result.methods;
-            for (int i = 0; i < len; i++) {
-                MethodSimple method = new MethodSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
-                method.cn(result.name, result.parent);
-
-                AttributeList attributes = method.attributes;
-                int attrLen = r.readUnsignedShort();
-                attributes.ensureCapacity(attrLen);
-
-                for (int j = 0; j < attrLen; j++) {
-                    String name0 = ((CstUTF) pool.get(r)).getString();
-
-                    Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
-                    attributes.add(attr);
-                }
-                methods.add(method);
-            }
-
-            len = r.readUnsignedShort();
-            AttributeList attributes = result.attributes;
-            attributes.ensureCapacity(len);
-
-            for (int i = 0; i < len; i++) {
+            for (int j = 0; j < attrLen; j++) {
                 String name0 = ((CstUTF) pool.get(r)).getString();
 
                 Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
-
                 attributes.add(attr);
             }
-
-            return result;
-        } catch (Throwable e) {
-            e.printStackTrace();
-            throw e;
+            fields.add(field);
         }
+
+        len = r.readUnsignedShort();
+        List<MethodSimple> methods = result.methods;
+        for (int i = 0; i < len; i++) {
+            MethodSimple method = new MethodSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+            method.cn(result.name, result.parent);
+
+            AttributeList attributes = method.attributes;
+            int attrLen = r.readUnsignedShort();
+            attributes.ensureCapacity(attrLen);
+
+            for (int j = 0; j < attrLen; j++) {
+                String name0 = ((CstUTF) pool.get(r)).getString();
+
+                Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+                attributes.add(attr);
+            }
+            methods.add(method);
+        }
+
+        len = r.readUnsignedShort();
+        AttributeList attributes = result.attributes;
+        attributes.ensureCapacity(len);
+
+        for (int i = 0; i < len; i++) {
+            String name0 = ((CstUTF) pool.get(r)).getString();
+
+            Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+
+            attributes.add(attr);
+        }
+
+        return result;
     }
 
     public static byte[] toByteArray(ConstantData c) {
@@ -327,12 +322,16 @@ public final class Parser {
         List<?>[] arr = new List<?>[2];
         for (int k = 0; k < 2; k++) {
             len = r.readUnsignedShort();
-            List<AccessData.D> components = new ArrayList<>(len);
+            List<AccessData.D> com = new ArrayList<>(len);
             for (int i = 0; i < len; i++) {
                 int offset = r.index;
-                r.index += 2; // acc
 
-                components.add(new AccessData.D(((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString(), offset));
+                short acc = r.readShort();
+
+                AccessData.D d = new AccessData.D(((CstUTF) pool.get(r)).getString(),
+                        ((CstUTF) pool.get(r)).getString(), offset);
+                d.acc = acc;
+                com.add(d);
 
                 int attrs = r.readUnsignedShort();
                 for (int j = 0; j < attrs; j++) {
@@ -341,7 +340,7 @@ public final class Parser {
                     r.index += ol;
                 }
             }
-            arr[k] = components;
+            arr[k] = com;
         }
 
         return new AccessData(buf, Helpers.cast(arr[0]), Helpers.cast(arr[1]), cfo, self, parent, itf);
@@ -399,7 +398,7 @@ public final class Parser {
         AttrCode code;
         if (!(attribute instanceof AttrCode)) {
             int index = method.attributes.indexOf(attribute);
-            method.attributes.set(index, code = new AttrCode(method, attribute.getRawData(), clazz.constants));
+            method.attributes.set(index, code = new AttrCode(method, attribute.getRawData(), clazz.cp));
         } else {
             code = (AttrCode) attribute;
         }

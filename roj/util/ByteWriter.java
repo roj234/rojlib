@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 public class ByteWriter {
-    public final ByteList list;
+    public ByteList list;
 
     public ByteWriter() {
         list = new ByteList();
@@ -51,8 +51,8 @@ public class ByteWriter {
         return writeVarInt(i, true);
     }
 
-    public ByteWriter writeVarInt(int i, boolean p) {
-        if (p) {
+    public ByteWriter writeVarInt(int i, boolean canBeNegative) {
+        if (canBeNegative) {
             i = zig(i);
         }
         writeVarInt(list, i);
@@ -70,7 +70,7 @@ public class ByteWriter {
         return (i & Integer.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
     }
 
-    public ByteWriter writeString(String s) {
+    public ByteWriter writeString(CharSequence s) {
         if (s == null) {
             writeInt(-1);
             return this;
@@ -88,7 +88,7 @@ public class ByteWriter {
         return this;
     }
 
-    public ByteWriter writeVString(String s) {
+    public ByteWriter writeVString(CharSequence s) {
         if (s == null) {
             throw new NullPointerException("s");
         }
@@ -164,7 +164,7 @@ public class ByteWriter {
         return this;
     }
 
-    public ByteWriter writeChars(String s) {
+    public ByteWriter writeChars(CharSequence s) {
         for (int i = 0; i < s.length(); i++) {
             writeShort(s.charAt(i));
         }
@@ -269,9 +269,13 @@ public class ByteWriter {
         list.addAll(array, off, len);
     }
 
-    public ByteWriter writeAllUTF(String s) {
+    public ByteWriter writeAllUTF(CharSequence s) {
         writeUTF(list, s, 2);
         return this;
+    }
+
+    public void writeJavaUTF(CharSequence s) {
+        writeUTF(list, s, 0);
     }
 
     private static class AsDataOutput implements DataOutput {

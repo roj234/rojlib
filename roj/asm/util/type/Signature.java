@@ -10,6 +10,7 @@ package roj.asm.util.type;
 
 import roj.asm.util.IType;
 import roj.collect.MyHashMap;
+import roj.text.CharList;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,7 +49,7 @@ public class Signature implements IType {
 
     @Override
     public String toGeneric() {
-        StringBuilder sb = new StringBuilder();
+        CharList sb = new CharList();
         if (!genericTypeMap.isEmpty()) {
             sb.append('<');
             for (Map.Entry<String, Collection<Generic>> entry : genericTypeMap.entrySet()) {
@@ -88,19 +89,19 @@ public class Signature implements IType {
     }
 
     @Override
-    public void appendGeneric(StringBuilder sb) {
+    public void appendGeneric(CharList sb) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void appendString(StringBuilder sb) {
+    public void appendString(CharList sb) {
         throw new UnsupportedOperationException();
     }
 
     public String getSignatureType() {
         if (genericTypeMap.isEmpty())
             return "";
-        StringBuilder sb = new StringBuilder().append('<');
+        CharList sb = new CharList(40).append('<');
         for (Map.Entry<String, Collection<Generic>> entry : genericTypeMap.entrySet()) {
             sb.append(entry.getKey());
             Collection<Generic> list = entry.getValue();
@@ -110,18 +111,19 @@ public class Signature implements IType {
                     value.appendString(sb);
                     sb.append(" & ");
                 }
-                sb.deleteCharAt(sb.length() - 1).deleteCharAt(sb.length() - 1).deleteCharAt(sb.length() - 1);
+                sb.setIndex(sb.length() - 3);
             }
             sb.append(", ");
         }
-        return sb.deleteCharAt(sb.length() - 1).deleteCharAt(sb.length() - 1).append('>').toString();
+        sb.setIndex(sb.length() - 2);
+        return sb.append('>').toString();
     }
 
     public String toString() {
         if (type == FIELD_OR_CLASS) {
             return returns.toString();
         } else {
-            StringBuilder sb = new StringBuilder();
+            CharList sb = new CharList();
             if (type == METHOD) {
                 returns.appendString(sb);
                 sb.append(' ').append('(');
@@ -129,7 +131,8 @@ public class Signature implements IType {
                     value.appendString(sb);
                     sb.append(", ");
                 }
-                sb.delete(sb.length() - 2, sb.length()).append(')');
+                sb.setIndex(sb.length() - 2);
+                sb.append(')');
             } else {
                 for (IType value : values) {
                     value.appendString(sb);

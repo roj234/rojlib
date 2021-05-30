@@ -1,5 +1,6 @@
 package roj.kscript.type;
 
+import roj.kscript.api.IArray;
 import roj.kscript.api.IObject;
 import roj.kscript.ast.Frame;
 import roj.kscript.func.KFunction;
@@ -21,19 +22,19 @@ public interface KType {
 
     Type getType();
 
-    default KInt asKInt() {
-        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.INT);
-    }
-
-    default KDouble asKDouble() {
-        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.DOUBLE);
-    }
-
     default int asInt() {
         throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.INT);
     }
 
+    default void setIntValue(int intValue) {
+        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.INT);
+    }
+
     default double asDouble() {
+        throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.DOUBLE);
+    }
+
+    default void setDoubleValue(double doubleValue) {
         throw new ClassCastException(getType().name() + ' ' + toString() + " cannot cast to " + Type.DOUBLE);
     }
 
@@ -73,7 +74,7 @@ public interface KType {
 
 
     /**
-     * 仅用于{@link Expression#compress() Expression的缩减}, {@link roj.kscript.util.opm.GlobalVarMap#reset 全局变量重置的比对}以及{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
+     * 仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
      *     拷贝自身, 用于加载对象, 嗯
      */
     default KType copy() {
@@ -81,7 +82,7 @@ public interface KType {
     }
 
     /**
-     * 仅用于{@link roj.kscript.util.opm.GlobalVarMap#reset 全局变量重置的比对}以及{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
+     * 仅用于{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
      *     从同类对象中拷贝数据
      */
     default void copyFrom(KType type) {}
@@ -101,21 +102,11 @@ public interface KType {
     }
 
     /**
-     * 内部对象标记, 勿覆盖 <BR>
-     *     1: default <BR>
-     *     2: int <BR>
-     *     4: double <BR>
-     *     8: internal <BR>
-     *    16: 变量
+     * kind = 0: 作为本地变量 <br>
+     *     kind = 1: 作为外部变量 <br>
+     *     kind = -1: 返回栈
      */
-    default int spec() {
-        return 1;
-    }
-
-    /**
-     * 使其不可变, object无效, 因为它不是用来加载对象的
-     */
-    default KType markImmutable(boolean kind) {
+    default KType setFlag(int kind) {
         return this;
     }
 }

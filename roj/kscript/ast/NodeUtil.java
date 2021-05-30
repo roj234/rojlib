@@ -2,6 +2,7 @@ package roj.kscript.ast;
 
 import roj.collect.CrossFinder;
 import roj.collect.MyHashSet;
+import roj.kscript.util.VInfo;
 import roj.kscript.util.Variable;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class NodeUtil {
             CrossFinder.Wrap<Variable> wrap = dest.get(i);
             if(!cvHas.remove(wrap.sth)) {
                 // append variable
-                curr.id = wrap.sth.name;
+                curr.idx = wrap.sth.index;
                 curr.v = wrap.sth.def;
                 curr.next = new VInfo();
                 curr = curr.next;
@@ -37,7 +38,7 @@ public class NodeUtil {
         }
         // Pass 2: check dest.remove
         for (Variable var : cvHas) {
-            curr.id = var.name;
+            curr.idx = var.index;
             curr.next = new VInfo();
             curr = curr.next;
         }

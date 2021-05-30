@@ -1,6 +1,7 @@
 package roj.kscript.type;
 
 import roj.config.word.AbstLexer;
+import roj.math.MathUtils;
 import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
@@ -15,11 +16,15 @@ import java.util.Objects;
  */
 public final class KString extends KBase {
     private final String value;
-    private byte valueType = -2;
+    private byte vt = -2;
 
     public KString(String string) {
-        super(Type.STRING);
         this.value = string;
+    }
+
+    @Override
+    public Type getType() {
+        return Type.STRING;
     }
 
     public static final KString EMPTY = new KString("");
@@ -39,8 +44,7 @@ public final class KString extends KBase {
         if (checkType() >= 0) {
             try {
                 return Double.parseDouble(value);
-            } catch (NumberFormatException ignored) {
-            }
+            } catch (NumberFormatException ignored) {}
         }
         return super.asDouble();
     }
@@ -49,9 +53,8 @@ public final class KString extends KBase {
     public int asInt() {
         if (checkType() >= 0) {
             try {
-                return Integer.parseInt(value);
-            } catch (NumberFormatException ignored) {
-            }
+                return MathUtils.parseInt(value);
+            } catch (NumberFormatException ignored) {}
         }
         return super.asInt();
     }
@@ -108,17 +111,17 @@ public final class KString extends KBase {
     }
 
     private int checkType() {
-        if (valueType == -2) {
-            valueType = (byte) TextUtil.isNumber(this.value);
-            if (valueType == -1) {
+        if (vt == -2) {
+            vt = (byte) TextUtil.isNumber(this.value);
+            if (vt == -1) {
                 switch (value) {
                     case "NaN":
                     case "Infinity":
-                        valueType = 1;
+                        vt = 1;
                 }
             }
         }
-        return valueType;
+        return vt;
     }
 
 }

@@ -8,7 +8,7 @@
  */
 package roj.asm.struct.anno;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.type.ParamHelper;

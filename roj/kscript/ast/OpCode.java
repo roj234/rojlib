@@ -7,7 +7,7 @@ package roj.kscript.ast;
  * @author Roj233
  * @since 2020/9/27 12:31
  */
-public enum OpCode {
+public enum Opcode {
     GET_OBJ, PUT_OBJ, DELETE_OBJ, // 属性(Object)
     ADD_ARRAY, // 数组 []=
     INVOKE, INVOKE_NEW, INSTANCE_OF, // 函数

@@ -1,5 +1,6 @@
 package roj.kscript.type;
 
+import roj.kscript.api.IArray;
 import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
 
@@ -16,8 +17,12 @@ public final class KJavaObject<T> extends KBase {
     private T val;
 
     public KJavaObject(T val) {
-        super(Type.JAVA_OBJECT);
         this.val = val;
+    }
+
+    @Override
+    public Type getType() {
+        return Type.JAVA_OBJECT;
     }
 
     public void setObject(T object) {
@@ -68,7 +73,7 @@ public final class KJavaObject<T> extends KBase {
             case OBJECT:
                 return val instanceof IObject;
             case ARRAY:
-                return val instanceof IArray;
+                return val instanceof roj.kscript.api.IArray;
         }
         return false;
     }
@@ -104,16 +109,6 @@ public final class KJavaObject<T> extends KBase {
         return asJavaObject(CharSequence.class).getOr("").toString();
     }
 
-    @Override
-    public KDouble asKDouble() {
-        return KDouble.OnStack.retainForce(asDouble());
-    }
-
-    @Override
-    public KInt asKInt() {
-        return KInt.OnStack.valueOf(asInt());
-    }
-
     @Nonnull
     @Override
     public IObject asObject() {
@@ -122,7 +117,7 @@ public final class KJavaObject<T> extends KBase {
 
     @Nonnull
     @Override
-    public IArray asArray() {
+    public roj.kscript.api.IArray asArray() {
         return asJavaObject(IArray.class).getObject();
     }
 

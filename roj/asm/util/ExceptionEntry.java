@@ -1,6 +1,6 @@
 package roj.asm.util;
 
-import roj.asm.constant.CstClass;
+import roj.asm.cst.CstClass;
 import roj.asm.struct.insn.InsnNode;
 
 /**

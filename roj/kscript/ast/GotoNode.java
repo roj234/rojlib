@@ -5,6 +5,7 @@ import roj.asm.struct.Method;
 import roj.asm.util.InsnList;
 import roj.collect.CrossFinder;
 import roj.collect.IntBiMap;
+import roj.kscript.util.VInfo;
 import roj.kscript.util.Variable;
 
 import java.util.List;
@@ -20,19 +21,26 @@ public class GotoNode extends Node {
     Node target;
     VInfo diff;
 
-    GotoNode(OpCode code, LabelNode label) {
+    GotoNode(Opcode code, LabelNode label) {
         super(code);
         this.target = label;
     }
 
     public GotoNode(LabelNode label) {
-        this(OpCode.GOTO, label);
+        this(Opcode.GOTO, label);
     }
 
     @Override
     protected void compile() {
-        if(target.getClass() == LabelNode.class)
+        if(target.getClass() == LabelNode.class) {
             target = target.next;
+            if(target instanceof VarNode && ((VarNode) target).name instanceof Node) {
+                target = (Node) ((VarNode) target).name;
+            } else
+            if(target instanceof IncrNode && ((IncrNode) target).name instanceof Node) {
+                target = (Node) ((IncrNode) target).name;
+            }
+        }
     }
 
     @Override
@@ -58,5 +66,10 @@ public class GotoNode extends Node {
     @Override
     public String toString() {
         return "Goto " + target;
+    }
+
+    public void checkNext(Node prev) {
+        if(target == next)
+            prev.next = target;
     }
 }

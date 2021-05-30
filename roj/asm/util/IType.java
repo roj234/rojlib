@@ -1,5 +1,7 @@
 package roj.asm.util;
 
+import roj.text.CharList;
+
 /**
  * This file is a part of MI <br>
  * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
@@ -12,7 +14,7 @@ public interface IType {
 
     String toGeneric();
 
-    void appendGeneric(StringBuilder sb);
+    void appendGeneric(CharList sb);
 
-    void appendString(StringBuilder sb);
+    void appendString(CharList sb);
 }

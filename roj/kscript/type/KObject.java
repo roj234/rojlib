@@ -23,18 +23,21 @@ public class KObject extends KBase implements IObject {
     protected IObject parent;
 
     public KObject(IObject proto) {
-        super(Type.OBJECT);
         this.map = new ObjectPropMap();
         if(proto != null)
             map.put("_proto_", proto);
     }
 
     @Internal
-    public KObject(Type type, MyHashMap<String, KType> map, IObject proto) {
-        super(type);
-        this.map = map;
+    public KObject(MyHashMap<String, KType> prop, IObject proto) {
+        this.map = prop;
         if(proto != null)
-            map.put("_proto_", proto);
+            prop.put("_proto_", proto);
+    }
+
+    @Override
+    public Type getType() {
+        return Type.OBJECT;
     }
 
     public boolean delete(String id) {
@@ -45,18 +48,13 @@ public class KObject extends KBase implements IObject {
         return map.size();
     }
 
-    @Nonnull
-    public Set<Map.Entry<String, KType>> entrySet() {
-        return map.entrySet();
-    }
-
     @Override
     public void put(@Nonnull String key, KType entry) {
         if("_proto_".equals(key)) {
             parent = entry.canCastTo(Type.OBJECT) ? entry.asObject() : null;
             return;
         }
-        putItr(key, entry == null ? KUndefined.UNDEFINED : entry.markImmutable(true), false);
+        putItr(key, entry == null ? KUndefined.UNDEFINED : entry, false);
     }
 
     boolean putItr(String id, KType value, boolean f) {
@@ -188,7 +186,7 @@ public class KObject extends KBase implements IObject {
 
     @Override
     public KType copy() {
-        return new KObject(Type.OBJECT, new ObjectPropMap(this.map), parent);
+        return new KObject(new ObjectPropMap(this.map), parent);
     }
 
     @Override
@@ -199,7 +197,7 @@ public class KObject extends KBase implements IObject {
     }
 
     public IObject deepCopy() {
-        KObject obj = new KObject(Type.OBJECT, new ObjectPropMap(this.map.size()), parent);
+        KObject obj = new KObject(new ObjectPropMap(this.map.size()), parent);
         obj.merge(this, false, true);
         return obj;
     }
@@ -265,7 +263,7 @@ public class KObject extends KBase implements IObject {
         KOEntry base = (KOEntry) map.getEntry(key);
         if (base != null) {
             // once load
-            return base.getValue().markImmutable(false);
+            return base.getValue();
         } else {
             return parent == null ? def : parent.getOr(key, def);
         }

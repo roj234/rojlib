@@ -72,6 +72,10 @@ public class AppendOnlyCache implements Closeable {
         }
     }
 
+    public boolean contains(String name) {
+        return infoMap.containsKey(name);
+    }
+
     public ByteList get(String name, ByteList list) throws IOException {
         long[] arr = infoMap.get(name);
         if(arr == null)
@@ -81,6 +85,20 @@ public class AppendOnlyCache implements Closeable {
         rf.readFully(list.list, list.offset(), (int)arr[1]);
         list.pos((int) arr[1]);
         return list;
+    }
+
+    public byte[] getBytes(String name) throws IOException {
+        ByteList bl = get(name, new ByteList());
+        if(bl == null)
+            return null;
+        return bl.getByteArray();
+    }
+
+    public String getUTF(String name) throws IOException {
+        ByteList bl = get(name, new ByteList());
+        if(bl == null)
+            return null;
+        return ByteReader.readUTF(bl);
     }
 
     public void append(String name, ByteList list) throws IOException {

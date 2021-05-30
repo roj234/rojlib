@@ -5,7 +5,6 @@ import roj.config.ParseException;
 import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.text.CharList;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -20,7 +19,7 @@ import java.util.*;
 public abstract class AbstXML implements Iterable<AbstXML> {
     private static class XSLexer extends Lexer {
         @Override
-        protected Word formAlphabetClip(CharList temp) {
+        protected Word formAlphabetClip(CharSequence temp) {
             String s = temp.toString();
 
             short id = WordPresets.LITERAL;
@@ -55,6 +54,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
     }
 
     // child(5).child(2).child(3)
+    @SuppressWarnings("fallthrough")
     public static AbstXML getXS(AbstXML xml, String key) throws ParseException {
         Lexer l = new XSLexer().init(key);
 

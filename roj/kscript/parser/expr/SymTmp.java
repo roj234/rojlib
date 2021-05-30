@@ -4,8 +4,6 @@ import roj.collect.MyHashSet;
 import roj.kscript.ast.ASTree;
 import roj.kscript.parser.Symbol;
 
-import javax.annotation.Nonnull;
-
 /**
  * 临时操作符1 - 保存运算符
  *
@@ -46,12 +44,6 @@ public final class SymTmp implements Expression {
 
     @Override
     public void write(ASTree tree, boolean noRet) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Nonnull
-    @Override
-    public Expression compress() {
         throw new UnsupportedOperationException();
     }
 

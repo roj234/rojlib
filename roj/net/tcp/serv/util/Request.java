@@ -10,6 +10,7 @@ import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -181,7 +182,11 @@ public final class Request {
         if(buffer != null)
             buffer.clear();
 
-        return new Request(act, version, path, headers, postFields, (InetSocketAddress) socket.socket().getRemoteSocketAddress());
+        try {
+            return new Request(act, version, path, headers, postFields, (InetSocketAddress) socket.socket().getRemoteAddress());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static Request parseAsync(WrappedSocket socket, Router router, Object[] holder) throws IllegalRequestException {

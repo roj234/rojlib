@@ -8,8 +8,8 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.Constant;
-import roj.asm.constant.CstRefUTF;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstRefUTF;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;

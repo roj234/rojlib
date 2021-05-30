@@ -8,9 +8,9 @@
  */
 package roj.asm.struct;
 
-import roj.asm.constant.CstClass;
-import roj.asm.constant.CstNameAndType;
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstNameAndType;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.attr.*;
 import roj.asm.struct.simple.FieldSimple;
 import roj.asm.struct.simple.MethodSimple;
@@ -36,7 +36,7 @@ public final class Clazz {
     public Clazz(int version, int acc, String name, String parent) {
         this();
         this.version = version;
-        this.accesses = AccessFlag.parse((short) acc);
+        this.accesses = AccessFlag.of((short) acc);
         this.name = name;
         this.parent = parent;
     }
@@ -63,18 +63,24 @@ public final class Clazz {
 
         this.attributes = new AttributeList(data.attributes.size());
 
-        ConstantPool pool = data.constants;
+        ConstantPool pool = data.cp;
         ByteReader r = new ByteReader();
 
-        for (Attribute attr : data.attributes) {
-            r.refresh(attr.getRawData());
+        AttributeList attrs = data.attributes;
+        for (int i = 0; i < attrs.size(); i++) {
+            Attribute attr = attrs.get(i);
+            if(attr.getClass() == AttrUnknown.class) {
+                r.refresh(attr.getRawData());
 
-            String name = attr.name;
+                String name = attr.name;
 
-            handleAttribute(pool, r, name, r.length());
+                handleAttribute(pool, r, name, r.length());
 
-            if (!r.isFinished()) {
-                System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not read correctly!");
+                if (!r.isFinished()) {
+                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
+                }
+            } else {
+                attributes.add(attr);
             }
         }
     }
@@ -208,11 +214,7 @@ public final class Clazz {
         }
     }
 
-    /**
-     * 未实现Class注解:
-     * RuntimeVisibleTypeAnnotations
-     * RuntimeInvisibleTypeAnnotations
-     */
+    @SuppressWarnings("fallthrough")
     public void handleAttribute(ConstantPool pool, ByteReader r, String name, int length) {
         Attribute attr;
         switch (name) {

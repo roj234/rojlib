@@ -8,10 +8,10 @@
  */
 package roj.asm.struct;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.attr.*;
 import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.IConstantSerializable;
+import roj.asm.struct.simple.MoFNode;
 import roj.asm.util.*;
 import roj.asm.util.type.ParamHelper;
 import roj.asm.util.type.Signature;
@@ -22,7 +22,7 @@ import roj.util.ByteWriter;
 
 import java.util.PrimitiveIterator;
 
-public final class Field implements IConstantSerializable {
+public final class Field implements MoFNode {
     public Field(FlagList accesses, String name, String type) {
         this.accesses = accesses;
         this.name = name;
@@ -38,18 +38,24 @@ public final class Field implements IConstantSerializable {
     public Field(ConstantData data, FieldSimple field) {
         this(field.accesses, field.name.getString(), field.type.getString());
 
-        ConstantPool pool = data.constants;
+        ConstantPool pool = data.cp;
         ByteReader r = new ByteReader();
 
-        for (Attribute attr : field.attributes) {
-            r.refresh(attr.getRawData());
+        AttributeList al = field.attributes;
+        for (int i = 0; i < al.size(); i++) {
+            Attribute attr = al.get(i);
+            if(attr.getClass() == AttrUnknown.class) {
+                r.refresh(attr.getRawData());
 
-            String name = attr.name;
+                String name = attr.name;
 
-            handleAttribute(pool, r, name, r.length());
+                handleAttribute(pool, r, name, r.length());
 
-            if (!r.isFinished()) {
-                System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not read correctly!");
+                if (!r.isFinished()) {
+                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
+                }
+            } else {
+                attributes.add(attr);
             }
         }
     }
@@ -125,6 +131,16 @@ public final class Field implements IConstantSerializable {
     @Override
     public String rawDesc() {
         return ParamHelper.getField(type);
+    }
+
+    @Override
+    public int type() {
+        return 1;
+    }
+
+    @Override
+    public FlagList accessFlag() {
+        return accesses;
     }
 
     public AttrAnnotation getAnnotations() {

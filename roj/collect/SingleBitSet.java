@@ -1,15 +1,15 @@
+package roj.collect;
+
+import javax.annotation.Nonnull;
+import java.util.PrimitiveIterator;
+
 /**
  * This file is a part of MI <br>
  * (L) Copyleft 2018-20XX 版权没有，仿冒不究
  * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: IntSetL.java
+ * @author Roj234
+ * Filename: SingleBitSet.java
  */
-package roj.collect;
-
-import javax.annotation.Nonnull;
-
 public class SingleBitSet implements IBitSet {
     protected long set;
     protected int max = -1;
@@ -47,7 +47,14 @@ public class SingleBitSet implements IBitSet {
 
     @Override
     public int size() {
-        throw new UnsupportedOperationException();
+        int i = 0;
+        long set = this.set;
+        while (set != 0) {
+            if (((set >>>= 1) & 1) == 1) {
+                i++;
+            }
+        }
+        return i;
     }
 
     public boolean add(int e) {
@@ -93,6 +100,23 @@ public class SingleBitSet implements IBitSet {
         max = len;
     }
 
+    @Override
+    public IBitSet addAll(IBitSet ibs) {
+        if(ibs instanceof SingleBitSet) {
+            SingleBitSet ibs1 = (SingleBitSet) ibs;
+            set |= ibs1.set;
+            max = Math.max(max, ibs1.max);
+        } else {
+            for (PrimitiveIterator.OfInt i = ibs.iterator(); i.hasNext(); ) {
+                int e = i.nextInt();
+                if(e >= 64)
+                    throw new IndexOutOfBoundsException("SBS only supports at most 64 values");
+                add(e);
+            }
+        }
+        return this;
+    }
+
     public void clear() {
         set = 0;
         max = -1;
@@ -127,10 +151,6 @@ public class SingleBitSet implements IBitSet {
                 pos++;
             }
             entry = -1;
-        }
-
-        public Integer next() {
-            return nextInt();
         }
 
         public int nextInt() {

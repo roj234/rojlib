@@ -57,6 +57,7 @@ public final class ParseException extends Exception {
         return lineContent.toString();
     }
 
+    @SuppressWarnings("fallthrough")
     private void lineParser() {
         if(this.line != -2) return;
 

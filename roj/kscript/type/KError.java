@@ -1,6 +1,6 @@
 package roj.kscript.type;
 
-import roj.kscript.util.ScriptException;
+import roj.kscript.vm.ScriptException;
 
 import javax.annotation.Nonnull;
 
@@ -15,8 +15,12 @@ public final class KError extends KBase {
     private final ScriptException ex;
 
     public KError(ScriptException e) {
-        super(Type.ERROR);
         this.ex = e;
+    }
+
+    @Override
+    public Type getType() {
+        return Type.ERROR;
     }
 
     @Override

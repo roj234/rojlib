@@ -8,7 +8,7 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
@@ -48,7 +48,7 @@ public final class AttrMethodParameters extends Attribute {
         short count = r.readUByte();
         for (int i = 0; i < count; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
-            FlagList list = AccessFlag.parse(r.readShort());
+            FlagList list = AccessFlag.of(r.readShort());
             flags.put(name, list);
         }
     }

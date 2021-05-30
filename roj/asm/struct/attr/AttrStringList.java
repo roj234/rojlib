@@ -8,7 +8,7 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
@@ -45,6 +45,7 @@ public final class AttrStringList extends Attribute {
                 for (; i < len; i++) {
                     classes.add(pool.getName(r));
                 }
+                break;
             case 1:
                 for (; i < len; i++) {
                     classes.add(((CstUTF) pool.get(r)).getString());

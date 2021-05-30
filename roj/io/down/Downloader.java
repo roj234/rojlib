@@ -127,7 +127,7 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
 
     @Override
     public String toString() {
-        return "ADR#" + id + " of " + url.getPath();
+        return "Downloader#" + id + " " + startPos + " => " + (startPos + length - 1) + " (downloaded " + downloaded + ")";
     }
 
     public long getDownloaded() {
@@ -152,7 +152,8 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
         conn.setConnectTimeout(FileUtil.TIMEOUT);
         conn.setReadTimeout(FileUtil.TIMEOUT);
         conn.setRequestProperty("User-Agent", FileUtil.USER_AGENT);
-        conn.setRequestProperty("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + this.length));
+        conn.setRequestProperty("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
+        //System.out.println(this);
         return conn.getInputStream();
     }
 
@@ -168,7 +169,6 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
         int speedLowCount = 0;
         try {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
             InputStream is = setConnectData(conn);
 
             try {

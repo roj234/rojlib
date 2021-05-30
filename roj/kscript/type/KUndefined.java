@@ -12,8 +12,11 @@ import javax.annotation.Nonnull;
 public final class KUndefined extends KBase {
     public static final KUndefined UNDEFINED = new KUndefined();
 
-    private KUndefined() {
-        super(Type.UNDEFINED);
+    private KUndefined() {}
+
+    @Override
+    public Type getType() {
+        return Type.UNDEFINED;
     }
 
     @Override
@@ -44,7 +47,7 @@ public final class KUndefined extends KBase {
 
     @Override
     public int hashCode() {
-        return 0;
+        return 235789;
     }
 
     @Override

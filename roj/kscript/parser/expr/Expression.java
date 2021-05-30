@@ -1,10 +1,9 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
+import roj.config.word.NotStatementException;
 import roj.kscript.ast.ASTree;
 import roj.kscript.parser.ParseContext;
 import roj.kscript.type.KType;
-import roj.kscript.util.NotStatementException;
 
 import javax.annotation.Nonnull;
 import java.util.Map;
@@ -51,7 +50,7 @@ public interface Expression {
         throw new IllegalArgumentException("This (" + toString() + ") - " + getClass().getName() + " is not a constant.");
     }
 
-    default KType compute(Map<String, KType> param, IObject $this) {
+    default KType compute(Map<String, KType> param) {
         throw new UnsupportedOperationException(getClass().getName());
     }
 

@@ -21,15 +21,16 @@ public abstract class Attribute {
 
     public final ByteWriter toByteArray(ConstantWriter pool, ByteWriter w) {
         w.writeShort(pool.getUtfId(name)).writeInt(-1);
-        final ByteList list = w.list;
+        ByteList list = w.list;
 
-        int index = list.pos();
+        int lenIdx = list.pos();
         toByteArray1(pool, w);
-        int plusLen = list.pos() - index;
+        int cp = list.pos();
 
-        list.markAndGo(index - 4);
-        w.writeInt(plusLen);
-        list.back();
+        list.pos(lenIdx - 4);
+        w.writeInt(cp - lenIdx);
+        list.pos(cp);
+
         return w;
     }
 

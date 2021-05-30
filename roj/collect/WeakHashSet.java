@@ -8,6 +8,7 @@
  */
 package roj.collect;
 
+import roj.concurrent.OperationDone;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
@@ -33,11 +34,10 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
 
         @Override
         public int hashCode() {
-            Object ano = get();
-            return ano == null ? 0 : ano.hashCode();
+            return hash;
         }
 
-        private int index;
+        private int hash;
         private Entry next;
 
         @Override
@@ -108,9 +108,6 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
         return size() == 0;
     }
 
-    void afterPut(K key) {
-    }
-
     public void resize() {
         Entry[] newEntries = new Entry[length];
         Entry entry;
@@ -121,11 +118,10 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
             entries[i] = null;
             while (entry != null) {
                 next = entry.next;
-                int newKey = indexFor(entry.hashCode());
+                int newKey = indexFor(entry.hash);
                 Entry old = newEntries[newKey];
                 newEntries[newKey] = entry;
                 entry.next = old;
-                entry.index = newKey;
                 entry = next;
             }
         }
@@ -145,7 +141,8 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
 
         removeClearedEntry();
 
-        int index = indexFor(key);
+        int hash = key.hashCode();
+        int index = indexFor(hash);
         Entry result;
         if (this.entries == null)
             this.entries = new Entry[length];
@@ -157,9 +154,8 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
         }
 
         if (result == null) {
-            (entries[index] = new Entry(queue, key)).index = index;
+            (entries[index] = new Entry(queue, key)).hash = hash;
             size++;
-            afterPut(key);
             return true;
         }
         while (true) {
@@ -170,9 +166,8 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
                 break;
             result = result.next;
         }
-        (result.next = new Entry(queue, key)).index = index;
+        (result.next = new Entry(queue, key)).hash = hash;
         size++;
-        afterPut(key);
         return true;
     }
 
@@ -191,7 +186,7 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
 
         if (this.entries == null)
             return false;
-        int index = indexFor(key);
+        int index = indexFor(key.hashCode());
         Entry curr = entries[index];
         Entry prev = null;
         while (curr != null) {
@@ -246,7 +241,7 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
 
         removeClearedEntry();
 
-        int index = indexFor(key);
+        int index = indexFor(key.hashCode());
         Entry curr = entries[index];
         while (curr != null) {
             if (Objects.equals(curr.get(), key)) {
@@ -276,8 +271,8 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
         return ArrayIterator.byIterator(Helpers.cast(iterator()), a);
     }
 
-    int indexFor(@Nonnull Object obj) {
-        return obj.hashCode() & (length - 1);
+    int indexFor(int obj) {
+        return obj & (length - 1);
     }
 
     @Override
@@ -292,20 +287,20 @@ public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
         return sb.append('}').toString();
     }
 
-    private void removeClearedEntry() {
+    public void removeClearedEntry() {
         Entry entry;
         while ((entry = (Entry) queue.poll()) != null) {
-            Entry curr = entries[entry.index];
+            Entry curr = entries[indexFor(entry.hash)];
             Entry prev = null;
             while (curr != entry) {
                 prev = curr;
-                if (curr == null)
-                    break;
                 curr = curr.next;
+                if (curr == null)
+                    throw OperationDone.NEVER;
             }
 
             if (prev == null) {
-                entries[entry.index] = null;
+                entries[indexFor(entry.hash)] = null;
             } else {
                 prev.next = curr.next;
             }

@@ -9,7 +9,7 @@
 package roj.asm.struct.attr;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.*;
+import roj.asm.cst.*;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.type.ParamHelper;
@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static roj.asm.constant.CstType.*;
+import static roj.asm.cst.CstType.*;
 
 public final class AttrBootstrapMethods extends Attribute {
     public AttrBootstrapMethods() {
@@ -55,7 +55,7 @@ public final class AttrBootstrapMethods extends Attribute {
             List<Constant> list = new ArrayList<>(argc);
             for (int j = 0; j < argc; j++) {
                 Constant c = pool.get(r);
-                switch (c.type) {
+                switch (c.type()) {
                     case STRING:
                     case CLASS:
                     case INT:
@@ -71,7 +71,7 @@ public final class AttrBootstrapMethods extends Attribute {
                 list.add(c);
             }
             final CstRef ref = handle.getRef();
-            methods.add(new BootstrapMethod(ref.getClassName(), ref.desc().getName().getString(), ref.desc().getType().getString(), handle.kind, ref.type, list));
+            methods.add(new BootstrapMethod(ref.getClassName(), ref.desc().getName().getString(), ref.desc().getType().getString(), handle.kind, ref.type(), list));
         }
 
         return methods;
@@ -199,7 +199,7 @@ public final class AttrBootstrapMethods extends Attribute {
 
             CstMethodType mType = null;
             for (Constant c : arguments) {
-                if (c.type == CstType.METHOD_TYPE) {
+                if (c.type() == CstType.METHOD_TYPE) {
                     mType = (CstMethodType) c;
                     break;
                 }

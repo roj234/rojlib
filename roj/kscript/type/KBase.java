@@ -10,26 +10,17 @@ import roj.config.word.AbstLexer;
  * Filename: KBase.java
  */
 public abstract class KBase implements KType {
-    public KBase(Type type) {
-        this.type = (byte) type.ordinal();
-    }
-
-    private final byte type;
-
-    public Type getType() {
-        return Type.VALUES[this.type];
-    }
+    protected KBase() {}
 
     @Override
     public final String toString() {
         return toString0(new StringBuilder(), 0).toString();
     }
 
-    protected static String addSlash(String key) {
+    protected static String optionalSlashes(String key) {
         for (int i = 0; i < key.length(); i++) {
-            char c = key.charAt(i);
-            if (AbstLexer.SPECIAL_CHARS.contains(c)) {
-                return "\"" + AbstLexer.addSlashes(key) + "\"";
+            if (AbstLexer.SPECIAL_CHARS.contains(key.charAt(i))) {
+                return '"' + AbstLexer.addSlashes(key) + '"';
             }
         }
         return key;

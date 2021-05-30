@@ -1,11 +1,10 @@
 package roj.kscript.parser.expr;
 
 import roj.kscript.Arguments;
-import roj.kscript.api.API;
-import roj.kscript.api.IObject;
-import roj.kscript.api.NativeMethod;
+import roj.kscript.api.MethodsAPI;
 import roj.kscript.ast.ASTree;
 import roj.kscript.func.KFunction;
+import roj.kscript.type.KNull;
 import roj.kscript.type.KType;
 
 import javax.annotation.Nonnull;
@@ -22,13 +21,13 @@ import java.util.Map;
  */
 public final class Method implements Expression {
     Expression func;
-    final List<Expression> args;
-    final boolean isNew;
+    public final List<Expression> args;
+    public byte flag;
 
     public Method(Expression line, List<Expression> args, boolean isNew) {
         this.func = line;
         this.args = args;
-        this.isNew = isNew;
+        this.flag = (byte) (isNew ? 1 : 0);
     }
 
     @Override
@@ -38,92 +37,99 @@ public final class Method implements Expression {
         if (!(left instanceof Method))
             return false;
         Method method = (Method) left;
-        return method.func.isEqual(func) && method.isNew == isNew && ArrayDefine.arrayEq(args, method.args);
+        return method.func.isEqual(func) && (method.flag & 1) == (flag & 1) && ArrayDef.arrayEq(args, method.args);
     }
 
     @Override
     public void write(ASTree tree, boolean noRet) {
         this.func.write(tree, false);
-        for (Expression expr : args) {
+        compressArg();
+        for (int i = 0; i < args.size(); i++) {
+            Expression expr = args.get(i);
             expr.write(tree, false);
         }
-        if (isNew) {
+
+        if ((flag & 1) != 0) {
             tree.New(args.size(), noRet);
         } else {
             tree.Invoke(args.size(), noRet);
         }
+    }
 
+    private void compressArg() {
+        if((flag & 2) == 0) {
+            List<Expression> args = this.args;
+            for (int i = 0; i < args.size(); i++) {
+                Expression cp = args.get(i).compress();
+                if(!cp.isConstant())
+                    flag |= 4;
+                args.set(i, cp);
+            }
+            flag |= 2;
+        }
     }
 
     @Nonnull
     @Override
     public Expression compress() {
         func = func.compress();
+        compressArg();
 
-        final List<Expression> args = this.args;
-        for (int i = 0; i < args.size(); i++) {
-            args.set(i, args.get(i).compress());
-        }
-
-        if (!API.PRECOMPILE_NATIVE)
+        CharSequence sb = getFuncPath(func);
+        if(sb == null)
             return this;
-
-        List<KType> exprs = new ArrayList<>(args.size());
-        for (int i = 0; i < args.size(); i++) {
-            Expression expr = args.get(i);
-            if (!expr.isConstant()) {
-                return this;
+        if((flag & 4) == 0) {
+            KType pc = MethodsAPI.preCompute(sb, getCst());
+            if (pc != null) {
+                return Constant.valueOf(pc);
             }
-            exprs.add(expr.asCst().val());
         }
 
-        KType res = getNativeFunction(func, exprs);
-        return res == null ? this : Constant.valueOf(res);
+        Expression expr = MethodsAPI.getDedicated(sb, this);
+        return expr == null ? this : expr;
     }
 
-    private static KType getNativeFunction(Expression func, List<KType> args) {
-        if (!API.PRECOMPILE_NATIVE)
-            return null;
-
+    private static CharSequence getFuncPath(Expression func) {
         if (!(func instanceof Field)) {
             return null;
         }
         Field f = (Field) func;
-        List<String> fieldNames = new ArrayList<>();
 
-        fieldNames.add(f.name);
+        List<String> fieldDot = new ArrayList<>();
+        fieldDot.add(f.name);
         while (f.parent instanceof Field) {
             f = (Field) f.parent;
-            fieldNames.add(f.name);
+            fieldDot.add(f.name);
         }
 
         if (!(f instanceof Variable)) {
             return null;
         }
 
-        Collections.reverse(fieldNames);
-        StringBuilder sb = new StringBuilder(fieldNames.size() * 5);
-        for (String s : fieldNames) {
+        Collections.reverse(fieldDot);
+        StringBuilder sb = new StringBuilder(fieldDot.size() * 5);
+        for (String s : fieldDot) {
             sb.append(s).append('.');
         }
         sb.deleteCharAt(sb.length() - 1);
-        return API.NATIVE_METHODS.getOrDefault(sb, NativeMethod.NULL).handle(args);
+        return sb;
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
-        List<KType> exprs = new ArrayList<>(args.size());
+    public KType compute(Map<String, KType> param) {
+        List<KType> vals = new ArrayList<>(args.size());
         for (int i = 0; i < args.size(); i++) {
-            exprs.add(args.get(i).compute(param, $this));
+            vals.add(args.get(i).compute(param));
         }
 
-        KType nf = getNativeFunction(func, exprs);
+        CharSequence sb = getFuncPath(func);
+        KType nf = MethodsAPI.preCompute(sb, vals);
         if(nf != null)
             return nf;
 
         try {
-            KFunction func = this.func.compute(param, $this).asFunction();
-            return func.invoke($this, new Arguments(exprs));
+            KFunction func = this.func.compute(param).asFunction();
+            return func.invoke(KNull.NULL, new Arguments(vals));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Not a simple expression");
         }
@@ -131,26 +137,28 @@ public final class Method implements Expression {
 
     @Override
     public byte type() {
-        if (!API.PRECOMPILE_NATIVE)
+        if((flag & 4) != 0)
             return -1;
 
+        List<KType> exprs = getCst();
+
+        KType res = MethodsAPI.preCompute(getFuncPath(func), getCst());
+
+        return res == null ? -1 : Constant.typeOf(res);
+    }
+
+    private List<KType> getCst() {
         List<KType> exprs = new ArrayList<>(args.size());
         for (int i = 0; i < args.size(); i++) {
-            Expression expr = args.get(i);
-            if (!expr.isConstant()) {
-                return -1;
-            }
-            exprs.add(expr.asCst().val());
+            exprs.add(args.get(i).asCst().val());
         }
-
-        KType res = getNativeFunction(func, exprs);
-        return res == null ? -1 : Constant.typeOf(res);
+        return exprs;
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        if (isNew) {
+        if ((flag & 1) != 0) {
             sb.append("new ");
         }
         sb.append(func.toString()).append('(');

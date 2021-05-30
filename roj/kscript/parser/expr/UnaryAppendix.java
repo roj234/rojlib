@@ -1,10 +1,8 @@
 package roj.kscript.parser.expr;
 
-import roj.kscript.api.IObject;
 import roj.kscript.ast.ASTree;
-import roj.kscript.ast.OpCode;
+import roj.kscript.ast.Opcode;
 import roj.kscript.parser.Symbol;
-import roj.kscript.type.KDouble;
 import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
 
@@ -54,16 +52,16 @@ public final class UnaryAppendix implements Expression {
         } else {
             left.writeLoad(tree);
 
-            tree.Std(OpCode.DUP2)
-                    .Std(OpCode.GET_OBJ)
-                    .Load(KInt.Intl.valueOf(c))
-                    .Std(OpCode.ADD);
+            tree.Std(Opcode.DUP2)
+                    .Std(Opcode.GET_OBJ)
+                    .Load(KInt.valueOf(c))
+                    .Std(Opcode.ADD);
 
             if(!noRet) {
-                tree.Std(OpCode.DUP).Std(OpCode.SWAP3);
+                tree.Std(Opcode.DUP).Std(Opcode.SWAP3);
             }
 
-            tree.Std(OpCode.PUT_OBJ);
+            tree.Std(Opcode.PUT_OBJ);
         }
     }
 
@@ -78,27 +76,25 @@ public final class UnaryAppendix implements Expression {
     }
 
     @Override
-    public KType compute(Map<String, KType> param, IObject $this) {
+    public KType compute(Map<String, KType> param) {
         int val = operator == Symbol.inc ? 1 : -1;
         KType base;
         KType copy;
 
         if(left instanceof Variable) {
             Variable v = (Variable) left;
-            base = left.compute(param, $this);
+            base = left.compute(param);
         } else {
             Field field = (Field) left;
-            base = field.parent.compute(param, $this).asObject().get(field.name);
+            base = field.parent.compute(param).asObject().get(field.name);
         }
 
         copy = base.copy();
 
         if (base.isInt()) {
-            KInt i = base.asKInt();
-            i.value += val;
+            base.setIntValue(base.asInt() + val);
         } else {
-            KDouble i = base.asKDouble();
-            i.value += val;
+            base.setDoubleValue(base.asDouble() + val);
         }
 
         return copy;

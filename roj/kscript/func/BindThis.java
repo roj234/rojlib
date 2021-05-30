@@ -1,6 +1,6 @@
 package roj.kscript.func;
 
-import roj.kscript.api.IArguments;
+import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KType;
 
@@ -25,16 +25,16 @@ public class BindThis extends KFunction {
         set(original.source, original.name, original.clazz);
     }
 
-    public static BindThis Function_proto_bind(KFunction fn, IArguments args) {
+    public static BindThis Function_proto_bind(KFunction fn, ArgList args) {
         return new BindThis(args.get(0).asObject(), fn);
     }
 
     @Override
-    public KType invoke(@Nonnull IObject $this, IArguments param) {
+    public KType invoke(@Nonnull IObject $this, ArgList param) {
         return origFn.invoke(this.$this, param);
     }
 
-    public static class AppendArguments extends IArguments {
+    public static class AppendArguments extends ArgList {
 
         @Nullable
         @Override

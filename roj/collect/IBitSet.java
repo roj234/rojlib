@@ -40,4 +40,18 @@ public interface IBitSet extends Iterable<Integer> {
     static boolean isBitTrue(long i, int bit) {
         return (i & (1L << bit)) != 0;
     }
+
+    default IBitSet addAll(CharSequence s) {
+        for (int i = 0; i < s.length(); i++)
+            add(s.charAt(i));
+        return this;
+    }
+
+    default IBitSet addAll(int... array) {
+        for (int i : array)
+            add(i);
+        return this;
+    }
+
+    IBitSet addAll(IBitSet ibs);
 }

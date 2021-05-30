@@ -2,7 +2,7 @@ package roj.reflect.misc;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.constant.CstLong;
+import roj.asm.cst.CstLong;
 import roj.asm.struct.Clazz;
 import roj.asm.struct.Method;
 import roj.asm.struct.attr.AttrCode;

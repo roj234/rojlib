@@ -50,6 +50,7 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
         this.lines = (string == null || string.length() == 0) ? Collections.emptyList() : slrParserV2(string, cleanEmptyLines);
     }
 
+    @SuppressWarnings("fallthrough")
     public static List<String> slrParserV2(CharSequence keys, boolean clean) {
         CharList chars = new CharList(20);
         List<String> list = new ArrayList<>();

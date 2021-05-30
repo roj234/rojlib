@@ -8,7 +8,7 @@ import roj.util.Hasher;
  *
  * @author Maximilian Luz
  */
-public class Vec3f {
+public class Vec3f implements Vec3 {
     public float x, y, z;
 
     /**
@@ -174,8 +174,7 @@ public class Vec3f {
      * @return the angle.
      */
     public double angle(Vec3f other) {
-        double angle = dot(other) / len() * other.len();
-        return Math.acos(angle);
+        return dot(other) / len() * other.len();
     }
 
     /**
@@ -401,5 +400,20 @@ public class Vec3f {
     @Override
     public String toString() {
         return this.getClass().getName() + " {" + x + ", " + y + ", " + z + "}";
+    }
+
+    @Override
+    public double x() {
+        return x;
+    }
+
+    @Override
+    public double y() {
+        return y;
+    }
+
+    @Override
+    public double z() {
+        return z;
     }
 }

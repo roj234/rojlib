@@ -19,13 +19,13 @@ import static roj.collect.IntMap.NOT_USING;
 
 public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSet<K> {
     public static class Entry<K> implements EntryIterable<Entry<K>> {
-        protected K k;
+        public K k;
 
         protected Entry(K k) {
             this.k = k;
         }
 
-        protected Entry<K> next;
+        public Entry<K> next;
 
         @Override
         public Entry<K> nextEntry() {
@@ -333,13 +333,13 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
         return firstUnused;
     }
 
-    int indexFor(K id) {
+    protected int indexFor(K id) {
         int v;
         return id == null ? 0 : ((v = id.hashCode()) ^ (v >>> 16)) & (length - 1);
     }
 
     @SuppressWarnings("unchecked")
-    Entry<K> getEntryFirst(K id, boolean create) {
+    protected Entry<K> getEntryFirst(K id, boolean create) {
         int i = indexFor(id);
         if (entries == null) {
             if (!create)

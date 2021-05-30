@@ -240,12 +240,12 @@ public class BinaryHeap<T> implements Collection<T> {
     }
 
     public int indexOfEquals(T node) {
-        if(entries == null)
+        if(entries == null || node == null)
             return -1;
 
         final T[] e = this.entries;
         for (int i = 1 ; i <= size; i++) {
-            if (Objects.equals(node, e[i]))
+            if (node.equals(e[i]))
                 return i;
         }
 
@@ -260,8 +260,8 @@ public class BinaryHeap<T> implements Collection<T> {
         return entries[size];
     }
 
-    public T array(int idx) {
-        return entries[idx];
+    public T get(int idx) {
+        return entries[idx + 1];
     }
 
     @SafeVarargs

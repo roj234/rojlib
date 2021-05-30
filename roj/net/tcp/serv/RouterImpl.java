@@ -6,7 +6,7 @@ import roj.net.tcp.util.ResponseCode;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.Map;
 
 /**
@@ -26,12 +26,13 @@ public class RouterImpl implements Router {
     }
 
     @Override
-    public Response response(Socket socket, Request request) throws IOException {
+    public Response response(SocketChannel socket, Request request) throws IOException {
         String conn = request.headers().getOrDefault("Connection", "");
         switch (conn) {
             case "close":
+                break;
             case "keep-alive":
-                socket.setKeepAlive(!conn.equals("close"));
+                // ...
                 break;
             case "upgrade":
                 return tryUpgrade(socket, request);
@@ -44,7 +45,7 @@ public class RouterImpl implements Router {
      * Connection: upgrade
      * Upgrade: protocol-name[/protocol-version]
      */
-    protected Response tryUpgrade(Socket socket, Request request) {
+    protected Response tryUpgrade(SocketChannel socket, Request request) {
         String newRequest = request.headers("Upgrade");
         if ("h2c".equals(newRequest)) {
             HeadResponse response = new HeadResponse();

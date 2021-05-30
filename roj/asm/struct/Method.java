@@ -8,10 +8,10 @@
  */
 package roj.asm.struct;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.attr.*;
-import roj.asm.struct.simple.IConstantSerializable;
 import roj.asm.struct.simple.MethodSimple;
+import roj.asm.struct.simple.MoFNode;
 import roj.asm.util.*;
 import roj.asm.util.type.*;
 import roj.collect.SimpleList;
@@ -22,9 +22,9 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.PrimitiveIterator;
 
-public final class Method implements IMethodData, IConstantSerializable {
+public final class Method implements IMethod, MoFNode {
     public Method(int accesses, Clazz owner, String name, String desc) {
-        this(AccessFlag.parse((short) accesses), owner.name, owner.parent, name, desc);
+        this(AccessFlag.of((short) accesses), owner.name, owner.parent, name, desc);
     }
 
     public Method(FlagList accesses, Clazz owner, String name, String desc) {
@@ -34,7 +34,7 @@ public final class Method implements IMethodData, IConstantSerializable {
 
 
     public Method(int accesses, ConstantData owner, String name, String desc) {
-        this(AccessFlag.parse((short) accesses), owner.name, owner.parent, name, desc);
+        this(AccessFlag.of((short) accesses), owner.name, owner.parent, name, desc);
     }
 
     public Method(FlagList accesses, ConstantData owner, String name, String desc) {
@@ -62,18 +62,24 @@ public final class Method implements IMethodData, IConstantSerializable {
         this.desc = method.type.getString();
         this.attributes = new AttributeList(method.attributes.size());
 
-        ConstantPool pool = data.constants;
+        ConstantPool pool = data.cp;
         ByteReader r = new ByteReader();
 
-        for (Attribute attr : method.attributes) {
-            r.refresh(attr.getRawData());
+        AttributeList al = method.attributes;
+        for (int i = 0; i < al.size(); i++) {
+            Attribute attr = al.get(i);
+            if(attr.getClass() == AttrUnknown.class) {
+                r.refresh(attr.getRawData());
 
-            String name = attr.name;
+                String name = attr.name;
 
-            handleAttribute(pool, r, name, r.length());
+                handleAttribute(pool, r, name, r.length());
 
-            if (!r.isFinished()) {
-                System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not read correctly!");
+                if (!r.isFinished()) {
+                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
+                }
+            } else {
+                attributes.add(attr);
             }
         }
     }
@@ -164,11 +170,15 @@ public final class Method implements IMethodData, IConstantSerializable {
     public void toByteArray(ConstantWriter pool, ByteWriter w) {
         w.writeShort(accesses.flag).writeShort(pool.getUtfId(name));
 
-        initParam();
+        if(parameters == null && desc != null) {
+            w.writeShort(pool.getUtfId(desc));
+        } else {
+            par();
 
-        parameters.add(returnType);
-        w.writeShort(pool.getUtfId(ParamHelper.getMethod(parameters)));
-        parameters.remove(parameters.size() - 1);
+            parameters.add(returnType);
+            w.writeShort(pool.getUtfId(ParamHelper.getMethod(parameters)));
+            parameters.remove(parameters.size() - 1);
+        }
 
         aOn(code);
         if (signature != null)
@@ -195,7 +205,7 @@ public final class Method implements IMethodData, IConstantSerializable {
         if (signature != null) {
             sb.append(signature.toString().replaceFirst(" ", " " + name));
         } else {
-            initParam();
+            par();
 
             sb.append(returnType).append(' ').append(name).append('(');
 
@@ -266,40 +276,43 @@ public final class Method implements IMethodData, IConstantSerializable {
 
     @Override
     public List<Type> parameters() {
-        initParam();
+        par();
         return parameters;
     }
 
     public Type getReturnType() {
-        initParam();
+        par();
         return returnType;
     }
 
     public void setReturnType(Type returnType) {
-        initParam();
+        par();
         this.returnType = returnType;
     }
 
-    public void resetParam(boolean side) {
-        if (side) {
-            this.parameters.add(returnType);
-            this.desc = ParamHelper.getMethod(this.parameters);
-            this.parameters.remove(this.parameters.size() - 1);
+    public void resetParam(boolean byList) {
+        if (byList) {
+            parameters.add(returnType);
+            desc = ParamHelper.getMethod(parameters);
+            parameters.remove(parameters.size() - 1);
         } else {
-            this.parameters = null;
+            if(parameters != null) {
+                parameters.clear();
+                ParamHelper.parseMethod(desc, parameters);
+                returnType = parameters.remove(parameters.size() - 1);
+            }
         }
     }
 
-    private void initParam() {
+    private void par() {
         if (parameters == null) {
-            if (desc == null) {
-                this.parameters = new SimpleList<>();
-                this.returnType = Type.VOID;
+            if (desc == null) { // fallback
+                parameters = new SimpleList<>();
+                returnType = Type.std(NativeType.VOID);
                 return;
             }
-            this.parameters = ParamHelper.parseMethod(desc);
-            this.returnType = parameters.get(parameters.size() - 1);
-            parameters.remove(parameters.size() - 1);
+            parameters = ParamHelper.parseMethod(desc);
+            returnType = parameters.remove(parameters.size() - 1);
         }
     }
 
@@ -310,6 +323,16 @@ public final class Method implements IMethodData, IConstantSerializable {
 
     public String rawDesc() {
         return this.desc;
+    }
+
+    @Override
+    public int type() {
+        return 2;
+    }
+
+    @Override
+    public FlagList accessFlag() {
+        return accesses;
     }
 
     public AttrAnnotation getAnnotations() {

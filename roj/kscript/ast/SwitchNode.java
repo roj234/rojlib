@@ -6,6 +6,7 @@ import roj.asm.util.InsnList;
 import roj.collect.CrossFinder;
 import roj.collect.IntBiMap;
 import roj.kscript.util.SwitchMap;
+import roj.kscript.util.VInfo;
 import roj.kscript.util.Variable;
 import roj.util.Helpers;
 
@@ -19,12 +20,12 @@ import java.util.List;
  * @since 2020/9/27 23:02
  */
 public final class SwitchNode extends Node {
-    private Node def;
+    public Node def;
     private VInfo diff;
     private final SwitchMap map;
 
     public SwitchNode(Node def, SwitchMap map) {
-        super(OpCode.SWITCH);
+        super(Opcode.SWITCH);
         this.def = def;
         this.map = Helpers.cast(map);
     }

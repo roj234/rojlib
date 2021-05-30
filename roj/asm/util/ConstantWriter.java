@@ -8,7 +8,7 @@
  */
 package roj.asm.util;
 
-import roj.asm.constant.*;
+import roj.asm.cst.*;
 import roj.collect.FindSet;
 import roj.collect.MyHashSet;
 import roj.text.TextUtil;
@@ -18,12 +18,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static roj.asm.constant.CstType.*;
+import static roj.asm.cst.CstType.*;
 
 public class ConstantWriter {
     private final List<Constant> constants;
     private final FindSet<Constant> refMap;
 
+    // threadlocal needed?
     private final CstUTF fp0 = new CstUTF();
     private final CstClass fp1 = new CstClass();
     private final CstRefField fp2 = new CstRefField();
@@ -47,9 +48,9 @@ public class ConstantWriter {
         this.constants = new ArrayList<>(cst.length);
         this.refMap = new MyHashSet<>(cst.length);
 
-        for (Constant c : cst) {
-            if (c == null)
-                continue;
+        for (int i = 1; i < cst.length; i++) {
+            Constant c = cst[i];
+            if (c == CstDoLHolder.HOLDER) continue;
             refMap.add(c);
             this.constants.add(c);
         }
@@ -64,7 +65,7 @@ public class ConstantWriter {
         constants.add(c);
         c.setIndex(index++);
 
-        switch (c.type) {
+        switch (c.type()) {
             case LONG:
             case DOUBLE:
                 index++;
@@ -79,9 +80,8 @@ public class ConstantWriter {
         if (utf == fp0) {
             utf = new CstUTF(msg);
             addConstant(utf);
-        }
-        if (!utf.getString().equals(msg)) {
-            System.out.println("Unfit utf id!!! How can it be??? G: '" + utf.getString() + "' R: '" + msg + '\'');
+        } else if (!utf.getString().equals(msg)) {
+            throw new IllegalStateException("Unfit utf id!!! G: '" + utf.getString() + "' E: '" + msg + '\'');
         }
 
         return utf;
@@ -337,7 +337,7 @@ public class ConstantWriter {
 
     @SuppressWarnings("unchecked")
     public <T extends Constant> T reset(T c) {
-        switch (c.type) {
+        switch (c.type()) {
             case STRING:
             case CLASS:
             case METHOD_TYPE: {
@@ -372,7 +372,7 @@ public class ConstantWriter {
                 // No need to do anything, just append it
                 break;
             default:
-                throw new IllegalArgumentException("Unsupported type: " + c.type);
+                throw new IllegalArgumentException("Unsupported type: " + c.type());
         }
 
         Constant found = refMap.find(c);
@@ -389,10 +389,9 @@ public class ConstantWriter {
     }
 
     public void writeTo(ByteWriter writer) {
-        final List<Constant> csts = this.constants;
+        List<Constant> csts = this.constants;
         for (int i = 0; i < csts.size(); i++) {
-            Constant cst = csts.get(i);
-            cst.write(writer);
+            csts.get(i).write(writer);
         }
     }
 
@@ -426,7 +425,7 @@ public class ConstantWriter {
     }*/
 
     private static Constant copy(Constant c) {
-        switch (c.type) {
+        switch (c.type()) {
             case METHOD_TYPE:
             case STRING:
             case CLASS: {
@@ -467,7 +466,7 @@ public class ConstantWriter {
             case DYNAMIC:
             case INVOKE_DYNAMIC: {
                 CstDynamic cz = (CstDynamic) c;
-                CstDynamic dyn = new CstDynamic(c.type == INVOKE_DYNAMIC, cz.bootstrapTableIndex, 0);
+                CstDynamic dyn = new CstDynamic(c.type() == INVOKE_DYNAMIC, cz.bootstrapTableIndex, 0);
                 dyn.setDesc(cz.getDesc());
                 return dyn;
             }
@@ -483,7 +482,7 @@ public class ConstantWriter {
     }
 
     private static Constant getClass(Constant c) {
-        switch (c.type) {
+        switch (c.type()) {
             case STRING:
                 return new CstString(0);
             case METHOD_TYPE:

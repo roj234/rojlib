@@ -1,9 +1,9 @@
 package roj.asm.util;
 
 import roj.asm.Parser;
-import roj.asm.constant.Constant;
-import roj.asm.constant.CstString;
-import roj.asm.constant.CstType;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstString;
+import roj.asm.cst.CstType;
 import roj.asm.struct.ConstantData;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
@@ -244,7 +244,7 @@ public class Translator {
         if (map == null)
             return null;
 
-        Constant[] constants = data.constants.array();
+        Constant[] constants = data.cp.array();
 
         for (IntMap.Entry<String> entry : map.entrySet()) {
             final CstString string = (CstString) constants[entry.getKey()];
@@ -286,8 +286,8 @@ public class Translator {
 
         IntMap<String> map = new IntMap<>();
 
-        for (Constant s : data.constants.array()) {
-            if (s != null && s.type == CstType.STRING) {
+        for (Constant s : data.cp.array()) {
+            if (s != null && s.type() == CstType.STRING) {
                 map.put(s.getIndex(), ((CstString) s).getValue().getString());
             }
         }

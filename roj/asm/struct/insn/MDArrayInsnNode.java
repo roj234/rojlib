@@ -9,7 +9,7 @@
 package roj.asm.struct.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.constant.CstClass;
+import roj.asm.cst.CstClass;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 

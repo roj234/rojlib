@@ -100,23 +100,8 @@ public class Helpers {
     }
 
     @Deprecated
-    public static <K, V> Map<K, V> newMyHashMap(Object s) {
-        return new MyHashMap<>();
-    }
-
-    @Deprecated
     public static <T> LinkedList<T> newLinkedList(String s) {
         return new LinkedList<>();
-    }
-
-    @Deprecated
-    public static <T> Set<T> newMyHashSet(Object o) {
-        return new MyHashSet<>();
-    }
-
-    @Deprecated
-    public static <T> List<T> newArrayList(Object o) {
-        return new ArrayList<>();
     }
 
     static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();

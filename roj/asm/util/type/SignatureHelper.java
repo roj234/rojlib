@@ -249,7 +249,7 @@ public class SignatureHelper {
             final char c = s.charAt(i);
             if (canBePrimitive) {
                 if (NativeType.isValidate(c) && c != NativeType.CLASS) {
-                    return new Object[]{new Type(IO.I, c, arrayLevel), i + 1};
+                    return new Object[]{new Type(c, arrayLevel), i + 1};
                 }
             }
 

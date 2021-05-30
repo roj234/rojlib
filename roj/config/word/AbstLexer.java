@@ -81,6 +81,10 @@ public abstract class AbstLexer {
      * String 重转义
      */
     public static String addSlashes(CharSequence key) {
+        if(key instanceof CharList) {
+            return addSlashes0((CharList) key);
+        }
+
         StringBuilder sb = key instanceof StringBuilder ? (StringBuilder) key : new StringBuilder(key);
         for (int i = 0; i < sb.length(); i++) {
             char c = sb.charAt(i);
@@ -107,6 +111,39 @@ public abstract class AbstLexer {
                     break;
                 case '\f':
                     sb.setCharAt(i, '\\');
+                    sb.insert(++i, 'f');
+                    break;
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String addSlashes0(CharList sb) {
+        for (int i = 0; i < sb.length(); i++) {
+            char c = sb.charAt(i);
+            switch (c) {
+                case '\\':
+                case '"':
+                    sb.insert(i++, '\\');
+                    break;
+                case '\n':
+                    sb.set(i, '\\');
+                    sb.insert(++i, 'n');
+                    break;
+                case '\r':
+                    sb.set(i, '\\');
+                    sb.insert(++i, 'r');
+                    break;
+                case '\t':
+                    sb.set(i, '\\');
+                    sb.insert(++i, 't');
+                    break;
+                case '\b':
+                    sb.set(i, '\\');
+                    sb.insert(++i, 'b');
+                    break;
+                case '\f':
+                    sb.set(i, '\\');
                     sb.insert(++i, 'f');
                     break;
             }
@@ -339,7 +376,7 @@ public abstract class AbstLexer {
     /**
      * 生成字母(变量/literal)块
      */
-    protected Word formAlphabetClip(CharList temp) throws ParseException {
+    protected Word formAlphabetClip(CharSequence temp) {
         return formClip(WordPresets.LITERAL, temp);
     }
 
@@ -349,49 +386,45 @@ public abstract class AbstLexer {
     protected abstract Word readSpecial() throws ParseException;
 
     /**
+     * int double
      * @return [数字] 块
      */
     @SuppressWarnings("fallthrough")
     protected Word readDigit() throws ParseException {
         CharSequence input = this.input;
-        int index = this.index;
+        int i = this.index;
 
         CharList temp = this.found;
         temp.clear();
 
+        /**
+         * 0: int
+         * 1: double
+         * 2: hex
+         * 3: bin
+         * 4: oct
+         */
         byte flag = 0;
+        byte exp = 0;
 
         o:
-        while (index < input.length()) {
-            char c = input.charAt(index++);
+        while (i < input.length()) {
+            char c = input.charAt(i++);
             switch (c) {
-                case 'E':
-                case 'e':
-                    if (flag != 2) {
-                        if ((flag & 128) == 0 && flag != 3) {
-                            flag = (byte) (1 | 128);
-                            temp.append(c);
-                        } else {
-                            this.index = index;
-                            unexpected(String.valueOf(c));
-                        }
-                    } else {
-                        temp.append(c);
-                    }
-                    break;
                 case '_':
                     continue;
                 case '.':
-                    if (flag != 0) unexpected(".");
+                    // 1.xE3
+                    if (exp != 0) unexpected(".");
                     flag = 1; // decimal
+                    exp |= 1;
                 default:
                     if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX.contains(c))) {
                         temp.append(c);
-                        if (flag == 0 && temp.length() == 2) { // 075463754
-                            if (temp.charAt(0) == '0' && temp.charAt(1) != '.') flag = 4;
-                        }
+                        if (flag == 0 && temp.length() == 2 // 075463754
+                                && temp.charAt(0) == '0' && temp.charAt(1) != '.') flag = 4;
                     } else {
-                        index--;
+                        i--;
                         break o;
                     }
                     break;
@@ -401,7 +434,7 @@ public abstract class AbstLexer {
                         temp.delete(0);
                         flag = 2; // hex
                     } else {
-                        this.index = index;
+                        this.index = i;
                         unexpected(String.valueOf(c));
                     }
                     break;
@@ -418,25 +451,170 @@ public abstract class AbstLexer {
                                 break;
                             }
                         default:
-                            this.index = index;
+                            this.index = i;
                             unexpected(String.valueOf(c));
                             break;
 
                     }
+                    break;
+                case 'E':
+                case 'e':
+                    if(flag == 2) {
+                        temp.append(c);
+                        break;
+                    }
+
+                    if ((flag == 0 || flag == 1) && temp.length() > 0 && (exp & 2) == 0) {
+                        flag = 1;
+                        exp |= 2;
+                        break;
+                    }
+
+                    this.index = i;
+                    unexpected(String.valueOf(c));
+                    break;
             }
         }
 
-        this.index = index;
+        this.index = i;
 
         if (temp.length() == 0) {
             return eof();
         }
 
-        flag &= 127;
+        char last = temp.charAt(temp.length() - 1);
+
+        if (last == '.') {
+            unexpected(String.valueOf(last));
+        }
+
+        return formNumberClip(flag, temp);
+    }
+
+    /**
+     * 6 种数字，尽在掌握
+     */
+    @SuppressWarnings("fallthrough")
+    protected Word readDigitAdvanced() throws ParseException {
+        CharSequence input = this.input;
+        int i = this.index;
+
+        CharList temp = this.found;
+        temp.clear();
+
+        /**
+         * 0: int
+         * 1: double
+         * 2: hex
+         * 3: bin
+         * 4: oct
+         * 5: float
+         * 6: long
+         */
+        byte flag = 0;
+        byte exp = 0;
+
+        o:
+        while (i < input.length()) {
+            char c = input.charAt(i++);
+            switch (c) {
+                case '_':
+                    continue;
+                case '.':
+                    // 1.xE3
+                    if (exp != 0) unexpected(".");
+                    flag = 1; // decimal
+                    exp |= 1;
+                default:
+                    if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX.contains(c))) {
+                        temp.append(c);
+                        if (flag == 0 && temp.length() == 2 // 075463754
+                            && temp.charAt(0) == '0' && temp.charAt(1) != '.') flag = 4;
+                    } else {
+                        i--;
+                        break o;
+                    }
+                    break;
+                case 'X':
+                case 'x':
+                    if (flag == 0 && temp.length() == 1) {
+                        temp.delete(0);
+                        flag = 2; // hex
+                    } else {
+                        this.index = i;
+                        unexpected(String.valueOf(c));
+                    }
+                    break;
+                case 'B':
+                case 'b':
+                    switch (flag) {
+                        case 2:
+                            temp.append(c);
+                            break;
+                        case 0:
+                            if (temp.length() == 1) {
+                                flag = 3;
+                                temp.delete(0);
+                                break;
+                            }
+                        default:
+                            this.index = i;
+                            unexpected(String.valueOf(c));
+                            break;
+
+                    }
+                    break;
+                case 'D':
+                case 'd':
+                case 'E':
+                case 'e':
+                case 'F':
+                case 'f':
+                    if(flag == 2) {
+                        temp.append(c);
+                        break;
+                    }
+
+                    boolean ex = c == 'e' || c == 'E';
+                    // if and only if => !(exp && ex) throw error
+                    // => if(!ex || !exp)
+
+                    if ((flag == 0 || flag == 1) && temp.length() > 0 && (!ex || (exp & 2) == 0)) {
+                        flag = (byte) (c == 'F' || c == 'f' ? 5 : 1);
+
+                        if(ex) {
+                            exp |= 2;
+                            break;
+                        } else {
+                            break o;
+                        }
+                    }
+
+                    this.index = i;
+                    unexpected(String.valueOf(c));
+                    break;
+                case 'L':
+                case 'l':
+                    if (flag == 0 && temp.length() > 0) {
+                        flag = 6;
+                        break o;
+                    }
+
+                    this.index = i;
+                    unexpected(String.valueOf(c));
+                    break;
+            }
+        }
+
+        this.index = i;
+
+        if (temp.length() == 0) {
+            return eof();
+        }
 
         char last = temp.charAt(temp.length() - 1);
 
-        if (!NUMBER.contains(last) && (flag != 2 || !HEX.contains(last))) {
+        if (last == '.') {
             unexpected(String.valueOf(last));
         }
 
@@ -500,6 +678,7 @@ public abstract class AbstLexer {
     /**
      * 忽略 // 或 /* ... *\/ 注释
      */
+    @SuppressWarnings("fallthrough")
     protected final Word ignoreStdNote() throws ParseException {
         CharSequence input = this.input;
         int index = this.index;

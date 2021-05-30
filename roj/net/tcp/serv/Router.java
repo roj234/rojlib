@@ -4,7 +4,7 @@ import roj.net.tcp.serv.util.Request;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 
 /**
  * This file is a part of MI <br>
@@ -23,7 +23,7 @@ public interface Router {
         return 1500;
     }
 
-    Response response(Socket socket, Request request) throws IOException;
+    Response response(SocketChannel socket, Request request) throws IOException;
 
     default int maxLength() {
         return 1048576; // 1MB

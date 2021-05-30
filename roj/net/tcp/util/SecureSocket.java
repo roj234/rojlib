@@ -13,8 +13,8 @@ import javax.net.ssl.SSLException;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 /**
  * A helper class which performs I/O using the SSLEngine API.
@@ -40,24 +40,7 @@ import java.nio.ByteBuffer;
  * </PRE>
  *
  * <p>
- * These buffers handle all of the intermediary data for the SSL
- * connection.
- * To decrease memory consuming, we requiring [networkOut] to be
- * flushed before trying to wrap new data, but this restriction
- * can be removed by using larger buffers.
- * <p>
- * There are many, many ways to handle compute and I/O strategies.
- * What follows is a relatively simple one.
- * The reader is encouraged to develop the strategy that best fits the application.
- * <p>
- * There's lots of room for enhancements and improvement in this example.
- * <p>
- * We're checking for SSL/TLS end-of-stream truncation attacks via slEngine.closeInbound().
- * When you reach the end of a input stream via a read() returning -1 or an IOException, we call
- * sslEngine.closeInbound() to signal to the sslEngine that no more input will be available.
- * If the peer's close_notify message has not yet been received,
- * this could indicate a truncation attack, in which an attacker is trying to prematurely close the connection.
- * The closeInbound() will throw an exception if this condition were present.
+ * A pile of trash mountain
  */
 // todo better
 public class SecureSocket extends InsecureSocket {
@@ -99,7 +82,7 @@ public class SecureSocket extends InsecureSocket {
 
     private boolean shutdown = false;
 
-    protected SecureSocket(Socket sc, FileDescriptor fd, EngineAllocator sslc, boolean isClient) throws IOException {
+    protected SecureSocket(SocketChannel sc, FileDescriptor fd, EngineAllocator sslc, boolean isClient) throws IOException {
         super(sc, fd);
 
         /*
@@ -123,7 +106,7 @@ public class SecureSocket extends InsecureSocket {
         networkOut.limit(0);
     }
 
-    public static SecureSocket get(Socket sc, FileDescriptor fd, EngineAllocator ssl, boolean isClient) throws IOException {
+    public static SecureSocket get(SocketChannel sc, FileDescriptor fd, EngineAllocator ssl, boolean isClient) throws IOException {
         SecureSocket cio = new SecureSocket(sc, fd, ssl, isClient);
 
         // Create a buffer using the normal expected application size we'll
@@ -156,7 +139,7 @@ public class SecureSocket extends InsecureSocket {
             int wrote;
             do {
                 wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, list, SharedConfig.WRITE_MAX));
-            } while (wrote == -3 && output != null);
+            } while (wrote == -3 && socket.isOpen());
             if(wrote > 0) {
                 bb.position(bb.position() + wrote);
             }

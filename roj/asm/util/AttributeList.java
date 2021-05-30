@@ -16,6 +16,10 @@ import java.util.Map;
 public final class AttributeList extends SimpleList<Attribute> {
     private Map<String, Attribute> byName;
 
+    public void putByName(Attribute attribute) {
+        putByName(attribute.name, attribute);
+    }
+
     public void putByName(String name, Attribute attribute) {
         int index = -1;
         for (int i = 0; i < size; i++) {

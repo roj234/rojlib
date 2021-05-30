@@ -8,9 +8,9 @@
  */
 package roj.asm.struct.attr;
 
-import roj.asm.constant.CstModule;
-import roj.asm.constant.CstPackage;
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstModule;
+import roj.asm.cst.CstPackage;
+import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;

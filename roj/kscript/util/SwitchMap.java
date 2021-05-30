@@ -6,7 +6,6 @@ import roj.collect.MyHashMap;
 import roj.kscript.ast.Frame;
 import roj.kscript.ast.Node;
 import roj.kscript.ast.NodeUtil;
-import roj.kscript.ast.VInfo;
 import roj.kscript.type.KType;
 import roj.kscript.util.opm.SWEntry;
 
@@ -15,6 +14,8 @@ import java.util.List;
 /**
  * This file is a part of MI <br>
  * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ *
+ * Switch节点使用的Map
  *
  * @author Roj233
  * @since 2021/4/28 18:47
@@ -67,13 +68,17 @@ public class SwitchMap extends MyHashMap<KType, Node> {
     }
 
     public Node getAndApply(Frame frame, Node def, VInfo diff) {
-        SWEntry entry = (SWEntry) getEntry(frame.pop());
-        if(entry != null) {
-            frame.applyDiff(entry.diff);
-            return entry.v;
-        } else {
-            frame.applyDiff(diff);
-            return def;
+        KType zero = frame.pop();
+        SWEntry entry = (SWEntry) getEntryFirst(zero, false);
+        while (entry != null) {
+            if (zero.equalsTo(entry.k)) {
+                frame.applyDiff(entry.diff);
+                return entry.v;
+            }
+            entry = (SWEntry) entry.next;
         }
+
+        frame.applyDiff(diff);
+        return def;
     }
 }

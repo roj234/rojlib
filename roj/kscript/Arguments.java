@@ -1,6 +1,6 @@
 package roj.kscript;
 
-import roj.kscript.api.IArguments;
+import roj.kscript.api.ArgList;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KType;
 import roj.reflect.J8Util;
@@ -19,9 +19,9 @@ import java.util.List;
  * @author Roj233
  * @since 2020/9/21 22:37
  */
-public final class Arguments extends IArguments {
+public final class Arguments extends ArgList {
     private final KFunction caller;
-    private final IArguments prev;
+    private final ArgList prev;
     private final StackTraceElement[] traces;
 
     /**
@@ -38,16 +38,16 @@ public final class Arguments extends IArguments {
         this(argv, null, null, 2);
     }
 
-    public Arguments(List<KType> argv, IArguments prev) {
+    public Arguments(List<KType> argv, ArgList prev) {
         this(argv, prev, null, 2);
     }
 
 
-    public Arguments(List<KType> argv, IArguments prev, KFunction caller) {
+    public Arguments(List<KType> argv, ArgList prev, KFunction caller) {
         this(argv, prev, caller, 2);
     }
 
-    private Arguments(List<KType> argv, IArguments prev, KFunction caller, int strip) {
+    private Arguments(List<KType> argv, ArgList prev, KFunction caller, int strip) {
         this.caller = caller;
         argv.getClass();
         this.argv = argv;

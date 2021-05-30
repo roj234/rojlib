@@ -45,6 +45,7 @@ public class Lexer extends AbstLexer {
     }
 
     @Override
+    @SuppressWarnings("fallthrough")
     public Word readWord() throws ParseException {
         CharSequence input = this.input;
         int index = this.index;
@@ -61,6 +62,7 @@ public class Lexer extends AbstLexer {
                     Word word = ignoreStdNote();
                     if (word != null)
                         return word;
+                    index = this.index;
                     break;
                 default: {
                     if (!WHITESPACE.contains(c)) {
@@ -123,7 +125,6 @@ public class Lexer extends AbstLexer {
 
     @Override
     protected Word formNumberClip(byte flag, CharList temp) throws ParseException {
-        //retract();
-        return formClip((short) (WordPresets.INTEGER + flag), temp.toString()).number();
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number();
     }
 }

@@ -8,7 +8,7 @@
  */
 package roj.asm.struct.simple;
 
-import roj.asm.constant.CstUTF;
+import roj.asm.cst.CstUTF;
 import roj.asm.struct.attr.Attribute;
 
 /**
@@ -17,5 +17,10 @@ import roj.asm.struct.attr.Attribute;
 public final class FieldSimple extends SimpleComponent {
     public FieldSimple(int accesses, CstUTF name, CstUTF typeName) {
         super(accesses, name, typeName);
+    }
+
+    @Override
+    public int type() {
+        return 4;
     }
 }

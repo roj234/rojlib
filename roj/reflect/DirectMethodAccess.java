@@ -21,7 +21,6 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
-import roj.asm.util.type.IO;
 import roj.asm.util.type.ParamHelper;
 import roj.asm.util.type.Type;
 import roj.collect.IBitSet;
@@ -29,11 +28,12 @@ import roj.collect.SingleBitSet;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class DirectMethodAccess {
     public static final String MAGIC_ACCESSOR_CLASS = "sun/reflect/MagicAccessorImpl";
-    public static boolean DEBUG;
+    public static boolean DEBUG; // no-op currently
 
     static final AtomicInteger nextId = new AtomicInteger();
 
@@ -122,8 +122,10 @@ public final class DirectMethodAccess {
         //assert invokeMethodName.length == methodName.length;
         java.lang.reflect.Method[] targetMethods = new java.lang.reflect.Method[invokeMethodName.length];
 
+        java.lang.reflect.Method[] invokeMethods = invoker.getMethods();
+        List<java.lang.reflect.Method> targetMethods1 = ReflectionUtils.getMethods(tClass);
         for (int i = 0, len = targetMethods.length; i < len; i++) {
-            targetMethods[i] = findTargetMethod(invoker, invokeMethodName[i], tClass, methodName[i], nci);
+            targetMethods[i] = findTargetMethod(invokeMethods, targetMethods1, invokeMethodName[i], methodName[i], nci);
         }
 
         int i = nextId.getAndIncrement();
@@ -141,25 +143,18 @@ public final class DirectMethodAccess {
         }
     }
 
-    /**
-     * (静态方法)获得IInvoker
-     *
-     * @param invoker    实现IInvoker的class
-     * @param target     目标的类
-     * @param methodName 方法名字
-     */
     @Nonnull
-    private static java.lang.reflect.Method findTargetMethod(Class<?> invoker, String invokeMethodName, Class<?> target, String methodName, boolean nci) {
+    static java.lang.reflect.Method findTargetMethod(java.lang.reflect.Method[] invokerMethods, List<java.lang.reflect.Method> targetMethods, String invokeMethodName, String methodName, boolean nci) {
         java.lang.reflect.Method invokeMethod = null;
 
-        for (java.lang.reflect.Method method : invoker.getMethods()) {
+        for (java.lang.reflect.Method method : invokerMethods) {
             if (method.getName().equals(invokeMethodName)) {
                 invokeMethod = method;
                 break;
             }
         }
         if (invokeMethod == null)
-            throw new IllegalArgumentException("No " + invoker.getName() + ".invoke(?) found.");
+            throw new IllegalArgumentException("No invoke(?) found.");
 
         Class<?>[] invokeParams = invokeMethod.getParameterTypes();
 
@@ -169,7 +164,7 @@ public final class DirectMethodAccess {
         java.lang.reflect.Method targetMethod = null;
 
         outer:
-        for (java.lang.reflect.Method method : ReflectionUtils.getMethods(target)) {
+        for (java.lang.reflect.Method method : targetMethods) {
             boolean i_ist = (method.getModifiers() & AccessFlag.STATIC) == 0;
             int off = (nci && i_ist ? 1 : 0);
             if (method.getName().equals(methodName) && method.getParameterCount() == invokeParams.length - off) {
@@ -188,7 +183,7 @@ public final class DirectMethodAccess {
         }
 
         if (targetMethod == null)
-            throw new IllegalArgumentException("No such method: '" + target.getName() + '.' + methodName + "', desc '" + ParamHelper.classDescriptors(invokeParams, invokeMethod.getReturnType()) + '\'');
+            throw new IllegalArgumentException("No such method in dest " + methodName + " '" + ParamHelper.classDescriptors(invokeParams, invokeMethod.getReturnType()) + '\'');
 
         return targetMethod;
     }
@@ -204,7 +199,7 @@ public final class DirectMethodAccess {
 
         FieldInsnNode getInstance = null;
         if (invokeCode != null && !nonCachedInstance) {
-            Type targetType = new Type(IO.I, t_Cls.replace('.', '/'), 0);
+            Type targetType = new Type(t_Cls.replace('.', '/'), 0);
 
             /**
              * target selfName.obj
@@ -229,6 +224,7 @@ public final class DirectMethodAccess {
 
 
             String desc = ParamHelper.classDescriptors(params, method.getReturnType());
+            System.out.println("Desc " + desc);
 
             Method invoke = new Method(pubFlags, out, i_Methods[k], desc);
             AttrCode code;
@@ -257,7 +253,7 @@ public final class DirectMethodAccess {
 
             int size = nonCachedInstance ? 1 : 0;
             for (Class<?> param : params) {
-                String tag = ParamHelper.nativeType(param);
+                String tag = ParamHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), ++size);
                 switch (tag) {
                     case "D":
@@ -270,7 +266,7 @@ public final class DirectMethodAccess {
             code.localSize = size + 1;
 
             insn.add(new InvokeInsnNode(invokeCode == null || i_stc == 1 ? Opcodes.INVOKESTATIC : (invokeCode.contains(k) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), t_Cls, method.getName(), desc));
-            insn.add(NodeHelper.X_RETURN(ParamHelper.nativeType(method.getReturnType())));
+            insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(method.getReturnType())));
             insn.add(AttrCode.METHOD_END_MARK);
         }
 

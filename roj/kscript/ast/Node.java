@@ -17,10 +17,10 @@ import roj.kscript.util.Variable;
  * @since 2020/9/27 12:30
  */
 public abstract class Node {
-    OpCode code;
+    Opcode code;
     public Node next;
 
-    protected Node(OpCode code) {
+    protected Node(Opcode code) {
         this.code = code;
     }
 
@@ -35,8 +35,12 @@ public abstract class Node {
         return code.toString();
     }
 
-    public final OpCode getCode() {
+    public final Opcode getCode() {
         return code;
+    }
+
+    Node replacement() {
+        return this;
     }
 
     protected void genDiff(CrossFinder<CrossFinder.Wrap<Variable>> var, IntBiMap<Node> idx) {}

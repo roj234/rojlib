@@ -16,7 +16,7 @@ import roj.util.log.LogManager;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ChannelRouterSync implements ITaskUncancelable {
@@ -34,10 +34,10 @@ public class ChannelRouterSync implements ITaskUncancelable {
         Response reply = null;
         Request request = null;
         try {
-            final Socket socket = this.channel.socket();
-            socket.setSoTimeout(router.readTimeout());
+            final SocketChannel socket = this.channel.socket();
+            //socket.setSoTimeout(router.readTimeout());
 
-            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
+            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteAddress();
             int visited;
             if(SharedConfig.THROTTLING_CHECK_ENABLED) {
                 final TimedHashMap<String, AtomicInteger> addresses = SharedConfig.CONNECTING_ADDRESSES;

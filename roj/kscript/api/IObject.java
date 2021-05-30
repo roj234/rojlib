@@ -16,7 +16,7 @@ import javax.annotation.Nullable;
  * @since 2020/10/27 13:11
  */
 public interface IObject extends KType {
-    void put(@Nonnull String key, KType entry);
+    void put(String key, KType entry);
 
     @Nullable
     default KType getOrNull(String key) {

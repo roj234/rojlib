@@ -8,7 +8,7 @@ import roj.util.Hasher;
  *
  * @author Maximilian Luz
  */
-public class Vec3d {
+public class Vec3d implements Vec3 {
     public double x, y, z;
 
 
@@ -185,8 +185,7 @@ public class Vec3d {
      * @return the angle.
      */
     public double angle(Vec3d other) {
-        double angle = dot(other) / (len() * other.len());
-        return Math.acos(angle);
+        return dot(other) / (len() * other.len());
     }
 
     /**
@@ -267,6 +266,7 @@ public class Vec3d {
     }
 
     /**
+     * 外积/法线(与a,b都垂直的向量) <BR>
      * Calculates and returns the cross-product of this vector with the specified one.
      *
      * @param v the vector to calculate the cross-product with.
@@ -275,11 +275,10 @@ public class Vec3d {
     public Vec3d cross(Vec3d v) {
         double x = this.y * v.z - v.y * this.z;
         double y = this.z * v.x - v.z * this.x;
-        double z = this.x * v.y - v.x * this.y;
+        this.z = this.x * v.y - v.x * this.y;
 
         this.x = x;
         this.y = y;
-        this.z = z;
 
         return this;
     }
@@ -416,5 +415,20 @@ public class Vec3d {
     @Override
     public String toString() {
         return this.getClass().getName() + " {" + x + ", " + y + ", " + z + "}";
+    }
+
+    @Override
+    public double x() {
+        return x;
+    }
+
+    @Override
+    public double y() {
+        return y;
+    }
+
+    @Override
+    public double z() {
+        return z;
     }
 }

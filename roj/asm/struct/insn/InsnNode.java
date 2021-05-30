@@ -17,6 +17,9 @@ import roj.util.ByteWriter;
 
 import java.util.function.ToIntFunction;
 
+/**
+ * QUESTION: native.hashCode好慢？
+ */
 public abstract class InsnNode {
     protected InsnNode(byte code) {
         setOpcode(code);
@@ -24,19 +27,11 @@ public abstract class InsnNode {
 
     public byte code;
 
-    @Deprecated
-    protected char bci;
-
     public void setOpcode(byte code) {
         this.code = code;
         if (!validate()) {
             throw new IllegalArgumentException("Unsupported opcode " + Integer.toHexString(this.code & 0xFF));
         }
-    }
-
-    //@Deprecated
-    public void setBci(int index) {
-        this.bci = (char) index;
     }
 
     public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {}
@@ -58,7 +53,7 @@ public abstract class InsnNode {
         return node;
     }
 
-    InsnNode next = null;
+    protected InsnNode next = null;
 
     public boolean isJumpSource() {
         return this instanceof IJumpInsnNode || getClass() == SwitchInsnNode.class;
@@ -82,8 +77,8 @@ public abstract class InsnNode {
             next = insnList.get(pos);
     }
 
-    public byte getOpcode() {
-        return this.code;
+    public final byte getOpcode() {
+        return code;
     }
 
     protected boolean validate() {
@@ -92,7 +87,7 @@ public abstract class InsnNode {
 
     @Internal
     public void toByteArray(ByteWriter w) {
-        w.writeByte(getOpcode());
+        w.writeByte(code);
     }
 
     /**
@@ -107,7 +102,7 @@ public abstract class InsnNode {
     }
 
     public String toString() {
-        return "#" + ((int)bci) + ' ' + Opcodes.toString0(code);
+        return Opcodes.toString0(code);
     }
 
     public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {

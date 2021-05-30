@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
 
 public class ByteList {
     public byte[] list;
-    protected int pointer, writePtr, length, marked = -1;
+    protected int pointer, writePtr, length;
 
     public ByteList() {
         this.length = 0;
@@ -102,7 +102,7 @@ public class ByteList {
     public final void addAll(ByteList array, int start, int length) {
         if (array.getClass() == ByteList.EmptyByteList.class)
             return;
-        addAll(array.list, start, length);
+        addAll(array.list, start + offset(), length);
     }
 
     public void set(int index, byte e) {
@@ -119,19 +119,6 @@ public class ByteList {
         if (index > pointer)
             throw new ArrayIndexOutOfBoundsException("Required " + index + " Current " + pointer);
         return list[index]; // 2
-    }
-
-    public void markAndGo(int pos) {
-        this.marked = pointer;
-        this.pointer = pos;
-    }
-
-    public final void mark() {
-        this.marked = pointer;
-    }
-
-    public final void back() {
-        this.pointer = marked;
     }
 
     public void pos(int id) {
@@ -157,7 +144,6 @@ public class ByteList {
     public void clear() {
         pointer = 0;
         writePtr = 0;
-        marked = -1;
     }
 
     public String getString() {
@@ -275,7 +261,6 @@ public class ByteList {
 
         list = array;
         writePtr = 0;
-        marked = -1;
         if (array == null) {
             pointer = 0;
             length = -1;
@@ -497,11 +482,6 @@ public class ByteList {
         @Override
         public String getString() {
             return new String(list, offset, length - offset, StandardCharsets.UTF_8);
-        }
-
-        @Override
-        public void markAndGo(int pos) {
-            super.markAndGo(offset + pos);
         }
 
         @Override

@@ -10,7 +10,7 @@ import roj.concurrent.OperationDone;
  * Filename: Type.java
  */
 public enum Type {
-    ARRAY, OBJECT, STRING, INT, NULL, BOOL, DOUBLE, FUNCTION, UNDEFINED, ERROR, JAVA_OBJECT;
+    ARRAY, OBJECT, STRING, INT, NULL, BOOL, DOUBLE, FUNCTION, UNDEFINED, ERROR, JAVA_OBJECT, LONG, FLOAT;
 
     public static final Type[] VALUES = values();
 

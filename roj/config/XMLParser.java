@@ -336,6 +336,7 @@ public class XMLParser {
             return eof();
         }
 
+        @SuppressWarnings("fallthrough")
         public XText readString(int CDATA, String name) throws ParseException {
             CharSequence input = this.input;
             int index = this.index;

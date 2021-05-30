@@ -11,7 +11,7 @@ import roj.text.CharList;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -40,7 +40,7 @@ public class StaticZipRouter implements Router {
     }
 
     @Override
-    public Response response(Socket socket, Request request) throws IOException {
+    public Response response(SocketChannel socket, Request request) throws IOException {
         String url = request.path().substring(1);
 
         boolean flag = url.endsWith("/");

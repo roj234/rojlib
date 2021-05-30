@@ -2,6 +2,7 @@ package roj.net.tcp.voice;
 
 import roj.concurrent.task.ITaskUncancelable;
 import roj.net.tcp.util.WrappedSocket;
+import roj.util.ByteList;
 
 /**
  * This file is a part of MI <br>
@@ -11,6 +12,7 @@ import roj.net.tcp.util.WrappedSocket;
  * @since 2020/12/19 23:23
  */
 public class VoiceHandler implements ITaskUncancelable {
+    WrappedSocket socket;
 
     public VoiceHandler(WrappedSocket socket, VoiceServer server) {
 
@@ -18,7 +20,8 @@ public class VoiceHandler implements ITaskUncancelable {
 
     @Override
     public void calculate(Thread thread) throws Exception {
-
+        ByteList list = socket.buffer();
+        socket.read();
     }
 
     @Override

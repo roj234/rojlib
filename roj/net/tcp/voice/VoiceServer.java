@@ -11,6 +11,7 @@ package roj.net.tcp.voice;
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.pool.TaskPool;
+import roj.concurrent.task.ITask;
 import roj.io.NonblockingUtil;
 import roj.net.tcp.TCPServer;
 import roj.net.tcp.util.InsecureSocket;
@@ -21,7 +22,7 @@ import roj.util.Helpers;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.Map;
@@ -77,39 +78,21 @@ public final class VoiceServer extends TCPServer {
     }
 
     @Override
-    public void run() {
-        TaskHandler handler = getTaskHandler();
+    protected ITask getTaskFor(SocketChannel client) throws IOException {
+        FileDescriptor fd = NonblockingUtil.fd(client);
 
-        Thread current = Thread.currentThread();
+        WrappedSocket cio = (
+                ssl != null ?
+                        SecureSocket.get(client, fd, ssl, false) :
+                        new InsecureSocket(client, fd)
+        );
 
-        while (!current.isInterrupted()) {
-            while (blockLock.get()) {
-                Thread.yield();
-            }
-
-            try {
-                Socket socket = this.socket.accept();
-                socket.setReuseAddress(true);
-                socket.setSoLinger(true, 2);
-
-                FileDescriptor fd = NonblockingUtil.fd(socket);
-
-                WrappedSocket cio = (
-                        ssl != null ?
-                                SecureSocket.get(socket, fd, ssl, false) :
-                                new InsecureSocket(socket, fd)
-                );
-
-                handler.pushTask(new VoiceHandler(cio, this));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        return new VoiceHandler(cio, this);
     }
 
     protected TaskHandler getTaskHandler() {
         final int cpus = Runtime.getRuntime().availableProcessors();
-        return new TaskPool(0, cpus, 4);
+        return new TaskPool(0, cpus, 8);
     }
 
     public static final class User {

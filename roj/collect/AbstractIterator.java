@@ -12,7 +12,7 @@ import java.util.NoSuchElementException;
  */
 public abstract class AbstractIterator<T> implements Iterator<T> {
     public T result;
-    private int stage = INITIAL;
+    protected int stage = INITIAL;
 
     public static final int INITIAL = 0;
     public static final int GOTTEN = 1;
@@ -88,7 +88,7 @@ public abstract class AbstractIterator<T> implements Iterator<T> {
         stage = INITIAL;
     }
 
-    public void remove(T currentObject) {
+    public void remove(T obj) {
         throw new UnsupportedOperationException();
     }
 }

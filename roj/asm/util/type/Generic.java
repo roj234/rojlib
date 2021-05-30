@@ -10,6 +10,7 @@ package roj.asm.util.type;
 
 import roj.annotation.Internal;
 import roj.asm.util.IType;
+import roj.text.CharList;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -56,11 +57,12 @@ public class Generic implements IType {
     }
 
     @Internal
-    public void appendGeneric(StringBuilder sb) {
+    public void appendGeneric(CharList sb) {
         if (owner.equals("*")) {
             sb.append('*');
         } else {
-            sb.append(getCatDesc()).append(owner);
+            sb.append(getCatDesc());
+            sb.append(owner);
             if (children != null && !children.isEmpty()) {
                 sb.append('<');
                 for (IType child : children) {
@@ -139,7 +141,7 @@ public class Generic implements IType {
         throw new UnsupportedOperationException();
     }
 
-    public void appendString(StringBuilder sb) {
+    public void appendString(CharList sb) {
         switch (extendType) {
             case TYPE_SUPERS:
                 sb.append("? supers ");
@@ -153,22 +155,22 @@ public class Generic implements IType {
             sb.append('<');
             for (IType child : children) {
                 child.appendString(sb);
-                sb.append(',').append(' ');
+                sb.append(", ");
             }
-            sb.delete(sb.length() - 2, sb.length()).append('>');
+            sb.setIndex(sb.length() - 2);
+            sb.append('>');
         }
         if (subClass != null) {
-            sb.append('.');
-            subClass.appendString(sb);
+            subClass.appendString(sb.append('.'));
         }
         for (int i = 0; i < array; i++) {
-            sb.append('[').append(']');
+            sb.append("[]");
         }
     }
 
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        appendString(sb);
-        return sb.toString();
+        CharList cl = new CharList();
+        appendString(cl);
+        return cl.toString();
     }
 }
