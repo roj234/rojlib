@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config.word;
 
 import roj.collect.IBitSet;
@@ -11,11 +36,11 @@ import roj.util.ByteReader;
 import java.io.UTFDataFormatException;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author solo6975
- * @since 2020/10/31 14:22
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/10/31 14:22
  */
 public abstract class AbstLexer {
     public static final IBitSet
@@ -40,9 +65,7 @@ public abstract class AbstLexer {
     protected final CharList found = new CharList(32);
 
     //=========== Data
-    public int index;
-
-    protected Snapshot last;
+    public int index, lastWord;
     protected CharSequence input;
 
     // region 初始化
@@ -185,13 +208,7 @@ public abstract class AbstLexer {
     // region Word
 
     public final Word nextWord() throws ParseException {
-        if(last == null) {
-            last = snapshot();
-            last.hash = 0;
-        } else {
-            snapshot(last);
-        }
-
+        lastWord = index;
         return readWord();
     }
 
@@ -204,11 +221,11 @@ public abstract class AbstLexer {
 
     public static final class Snapshot {
         public int index;
-        private int hash;
+        final CharSequence hash;
 
         public Snapshot(int index, CharSequence cvHash) {
             this.index = index;
-            this.hash = System.identityHashCode(cvHash);
+            this.hash = cvHash;
         }
 
         @Override
@@ -218,7 +235,7 @@ public abstract class AbstLexer {
     }
 
     public final void restore(Snapshot ss) {
-        if (ss.hash != 0 && ss.hash != System.identityHashCode(input)) {
+        if (ss.hash != input) {
             throw new ClassCastException("Input was changed.");
         }
         if(ss.index < 0)
@@ -237,8 +254,10 @@ public abstract class AbstLexer {
     }
 
     public final void retractWord() {
-        restore(last);
-        last.index = -1;
+        if(lastWord == -1)
+            throw new IllegalArgumentException("Unable retract");
+        index = lastWord;
+        lastWord = -1;
     }
 
     /**
@@ -349,7 +368,7 @@ public abstract class AbstLexer {
     /**
      * @return 标识符 or 变量, 或者换句话说, literal
      */
-    protected Word readAlphabet() throws ParseException {
+    protected Word readLiteral() throws ParseException {
         CharSequence input = this.input;
         int index = this.index;
 
@@ -383,19 +402,29 @@ public abstract class AbstLexer {
     /**
      * @return 其他字符
      */
-    protected abstract Word readSpecial() throws ParseException;
+    protected abstract Word readSymbol() throws ParseException;
 
     /**
      * int double
      * @return [数字] 块
+     * @param sign 检测符号, 必须有1字符空间,因为当作你已知有个符号
      */
     @SuppressWarnings("fallthrough")
-    protected Word readDigit() throws ParseException {
+    protected Word readDigit(boolean sign) throws ParseException {
         CharSequence input = this.input;
         int i = this.index;
 
         CharList temp = this.found;
         temp.clear();
+
+        boolean negative = false;
+        if(sign) {
+            char c = input.charAt(i++);
+            //case '+':
+            if (c == '-') {
+                negative = true;
+            }
+        }
 
         /**
          * 0: int
@@ -479,7 +508,9 @@ public abstract class AbstLexer {
         this.index = i;
 
         if (temp.length() == 0) {
-            return eof();
+            if(i == input.length())
+                return eof();
+            unexpected(String.valueOf(input.charAt(i)));
         }
 
         char last = temp.charAt(temp.length() - 1);
@@ -488,19 +519,28 @@ public abstract class AbstLexer {
             unexpected(String.valueOf(last));
         }
 
-        return formNumberClip(flag, temp);
+        return formNumberClip(flag, temp, negative);
     }
 
     /**
      * 6 种数字，尽在掌握
      */
     @SuppressWarnings("fallthrough")
-    protected Word readDigitAdvanced() throws ParseException {
+    protected Word readDigitAdvanced(boolean sign) throws ParseException {
         CharSequence input = this.input;
         int i = this.index;
 
         CharList temp = this.found;
         temp.clear();
+
+        boolean negative = false;
+        if(sign) {
+            char c = input.charAt(i++);
+            //case '+':
+            if (c == '-') {
+                negative = true;
+            }
+        }
 
         /**
          * 0: int
@@ -618,10 +658,10 @@ public abstract class AbstLexer {
             unexpected(String.valueOf(last));
         }
 
-        return formNumberClip(flag, temp);
+        return formNumberClip(flag, temp, negative);
     }
 
-    protected abstract Word formNumberClip(byte flag, CharList temp) throws ParseException;
+    protected abstract Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException;
 
     /**
      * 获取常量字符
@@ -645,11 +685,11 @@ public abstract class AbstLexer {
      *
      * @param id 词类型
      */
-    protected Word formClip(short id, CharSequence string) {
+    protected Word formClip(short id, CharSequence s) {
         if(cached == null) {
-            return new Word().reset(id, index, string.toString());
+            return new Word().reset(id, index, s.toString());
         }
-        Word w = cached.reset(id, index, string.toString());
+        Word w = cached.reset(id, index, s.toString());
         cached = null;
         return w;
     }
@@ -715,7 +755,7 @@ public abstract class AbstLexer {
                 break;
                 default:
                     this.index--;
-                    return readSpecial();
+                    return readSymbol();
             }
         }
         this.index = index;
@@ -733,11 +773,11 @@ public abstract class AbstLexer {
         throw err("未预料的'" + val + "'");
     }
 
-    public final ParseException err(String reason, int index) {
+    protected final ParseException err(String reason, int index) {
         return new ParseException(input, reason, index, null);
     }
 
-    public final ParseException err(String reason, Word word) {
+    public ParseException err(String reason, Word word) {
         return new ParseException(input, reason + " 在 " + word.val(), word.getIndex(), null);
     }
 
@@ -745,7 +785,7 @@ public abstract class AbstLexer {
         return err(reason, (Throwable) null);
     }
 
-    public final ParseException err(String reason, Throwable cause) {
+    public ParseException err(String reason, Throwable cause) {
         return new ParseException(input, reason, this.index, cause);
     }
 

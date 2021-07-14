@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config;
 
 import roj.collect.LongBitSet;
@@ -29,34 +54,34 @@ import static roj.config.JSONParser.unexpected;
  */
 public class XMLParser {
     public static final short
-            left_curly_bracket = 0,
-            right_curly_bracket = 1,
-            slash = 2, equ = 3, ask = 4,
-            semicolon = 5, not = 6, colon = 7,
-            namespace = 8, unknown = 9;
+            left_curly_bracket = 10,
+            right_curly_bracket = 11,
+            slash = 12, equ = 13, ask = 14,
+            semicolon = 15, not = 16, colon = 17,
+            namespace = 18, unknown = 19;
 
     public static void main(String[] args) throws ParseException {
         String xml = TextUtil.concat(args, ' ');
 
         System.out.println("INPUT = " + xml);
 
-        final XMLHeader xmls = parse(xml);
+        final XHeader xmls = parse(xml);
         System.out.print("XML = " + xmls.toString());
     }
 
-    public static XMLHeader parse(String string) throws ParseException {
+    public static XHeader parse(String string) throws ParseException {
         return parse((XMLexer) new XMLexer().init(string));
     }
 
-    public static XMLHeader parse(XMLexer wr) throws ParseException {
-        XMLHeader ce = xmlHeader(wr);
+    public static XHeader parse(XMLexer wr) throws ParseException {
+        XHeader ce = xmlHeader(wr);
         if (wr.hasNext()) {
             throw wr.err("期待 /EOF");
         }
         return ce;
     }
 
-    public static XMLHeader xmlHeader(XMLexer wr) throws ParseException {
+    public static XHeader xmlHeader(XMLexer wr) throws ParseException {
         Word w = wr.nextWord();
         if (w.type() == left_curly_bracket) {
             except(wr, ask, "?");
@@ -65,7 +90,7 @@ public class XMLParser {
                 unexpected(wr, w.val(), "xml");
             }
 
-            MyHashMap<String, ConfEntry> attributes = new MyHashMap<>();
+            MyHashMap<String, CEntry> attributes = new MyHashMap<>();
             ArrayList<AbstXML> children = new ArrayList<>();
 
             o:
@@ -79,7 +104,7 @@ public class XMLParser {
                     case WordPresets.LITERAL: {
                         String aName = w.val();
                         except(wr, equ, "=");
-                        attributes.put(aName, ConfEntry.of(wr.nextWord()));
+                        attributes.put(aName, of(wr.nextWord()));
                     }
                     break;
                     case right_curly_bracket:
@@ -105,7 +130,7 @@ public class XMLParser {
                 }
             }
 
-            return new XMLHeader(attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children);
+            return new XHeader(attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children);
 
         } else {
             unexpected(wr, w.val());
@@ -131,7 +156,7 @@ public class XMLParser {
             }
 
             String value = null;
-            MyHashMap<String, ConfEntry> attributes = new MyHashMap<>();
+            MyHashMap<String, CEntry> attributes = new MyHashMap<>();
             ArrayList<AbstXML> children = new ArrayList<>();
 
             boolean needCloseTag = true;
@@ -150,7 +175,7 @@ public class XMLParser {
                         String aName = w.val();
                         except(wr, equ, "=");
                         // todo 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
-                        attributes.put(aName, ConfEntry.of(wr.nextWord()));
+                        attributes.put(aName, of(wr.nextWord()));
                     }
                     break;
                     default:
@@ -242,18 +267,46 @@ public class XMLParser {
         }
     }
 
-    public static final class XMLexer extends Lexer {
-        static final LongBitSet SPECIAL = LongBitSet.preFilled("+-<>/=?;!:");
+    public static CEntry of(Word word) {
+        switch (word.type()) {
+            case WordPresets.DECIMAL_D:
+            case WordPresets.DECIMAL_F:
+                return CDouble.valueOf(word.val());
+            case WordPresets.INTEGER:
+                return CInteger.valueOf(word.val());
+            case WordPresets.STRING:
+                return CString.valueOf(word.val());
+            case WordPresets.LITERAL:
+                switch (word.val()) {
+                    case "true":
+                        return CBoolean.valueOf(true);
+                    case "false":
+                        return CBoolean.valueOf(false);
+                    default:
+                        return CString.valueOf(word.val());
+                }
+        }
+        throw new IllegalArgumentException(String.valueOf(word));
+    }
 
-        Set<String> noCloseTags = Collections.emptySet();
+    public static final class XMLexer extends Lexer {
+        static final LongBitSet XML_SPECIAL = LongBitSet.preFilled("+-<>/=?;!:");
+
+        public Set<String> noCloseTags = Collections.emptySet();
+        public boolean keepAmp;
 
         public XMLexer noCloseTags(@Nonnull Set<String> noCloseTags) {
             this.noCloseTags = noCloseTags;
             return this;
         }
 
+        public XMLexer keepAmp(boolean keepAmp) {
+            this.keepAmp = keepAmp;
+            return this;
+        }
+
         @Override
-        protected Word readAlphabet() {
+        protected Word readLiteral() {
             CharSequence input = this.input;
             int index = this.index;
 
@@ -268,7 +321,7 @@ public class XMLParser {
                     ns = true;
                     temp.append(c);
                 } else {
-                    if (!SPECIAL.contains(c) && !WHITESPACE.contains(c)) {
+                    if (!XML_SPECIAL.contains(c) && !WHITESPACE.contains(c)) {
                         temp.append(c);
                     } else {
                         index--;
@@ -315,18 +368,20 @@ public class XMLParser {
                     default: {
                         if (!WHITESPACE.contains(c)) {
                             this.index = index - 1;
-                            if (SPECIAL.contains(c)) {
-                                switch (c) { // todo +-
-                                    case '+':
-                                        next();
+                            if (XML_SPECIAL.contains(c)) {
+                                switch (c) {
                                     case '-':
-                                        return readDigit();
+                                    case '+':
+                                        if(input.length() > index && NUMBER.contains(input.charAt(index))) {
+                                            return readDigit(true);
+                                        }
+                                        break;
                                 }
-                                return readSpecial();
+                                return readSymbol();
                             } else if (NUMBER.contains(c)) {
-                                return readDigit();
+                                return readDigit(false);
                             } else {
-                                return readAlphabet();
+                                return readLiteral();
                             }
                         }
                     }
@@ -350,12 +405,14 @@ public class XMLParser {
                     while (index < input.length()) {
                         char c = input.charAt(index++);
                         switch (c) {
-                            case '&':
-                                temp.append(decodeEntity());
-                                break;
                             case '<':
                                 index--;
                                 break o;
+                            case '&':
+                                if(!keepAmp) {
+                                    temp.append(decodeEntity());
+                                    break;
+                                }
                             default:
                                 temp.append(c);
                                 break;
@@ -424,7 +481,7 @@ public class XMLParser {
         }
 
         private char decodeEntity() throws ParseException {
-            String v = readAlphabet().val();
+            String v = readLiteral().val();
 
             char c;
             switch (v) {
@@ -444,51 +501,68 @@ public class XMLParser {
                     c = '"';
                     break;
                 default:
-                    throw err("无效转义符");
+                    throw err("无效转义符/作者不知道的转义符");
             }
 
-            if (!readSpecial().val().equals(";")) {
+            if (!readSymbol().val().equals(";")) {
                 throw err("转义需要以;结束");
             }
 
             return c;
         }
 
-        @Override
-        protected Word readSpecial() throws ParseException {
-            char c = next();
+        /**
+         * 回收利用Word对象
+         */
+        protected Word formClip(short id, CharSequence s) {
+            if(cached == null) {
+                cached = new Word();
+            }
+            return cached.reset(id, index, s.toString());
+        }
 
+        @Override
+        protected Word readSymbol() throws ParseException {
+            String v;
             short id;
-            switch (c) {
+            switch (next()) {
                 case '<':
+                    v = "<";
                     id = left_curly_bracket;
                     break;
                 case '/':
+                    v = "/";
                     id = slash;
                     break;
                 case '>':
+                    v = ">";
                     id = right_curly_bracket;
                     break;
                 case '=':
+                    v = "=";
                     id = equ;
                     break;
                 case '?':
+                    v = "?";
                     id = ask;
                     break;
                 case ';':
+                    v = ";";
                     id = semicolon;
                     break;
                 case '!':
+                    v = "!";
                     id = not;
                     break;
                 case ':':
+                    v = ":";
                     id = colon;
                     break;
                 default:
-                    throw err("无效字符 '" + c + '\'');
+                    throw err("无效字符 '" + offset(-1) + '\'');
             }
 
-            return formClip(id, String.valueOf(c));
+            return formClip(id, v);
         }
 
         public boolean checkCDATATag(Word w) {

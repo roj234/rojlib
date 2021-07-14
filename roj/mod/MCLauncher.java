@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.mod;
 
 import roj.collect.MyHashMap;
@@ -5,18 +30,15 @@ import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.WaitingIOFuture;
-import roj.concurrent.pool.PrefixFactory;
 import roj.concurrent.pool.TaskExecutor;
-import roj.concurrent.pool.TaskPool;
 import roj.concurrent.task.AbstractCalcTask;
-import roj.concurrent.task.ExecutionTask;
 import roj.concurrent.task.ITask;
-import roj.concurrent.task.ITaskUncancelable;
+import roj.concurrent.task.ITaskNaCl;
 import roj.config.JSONParser;
 import roj.config.ParseException;
+import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.config.data.ConfEntry;
 import roj.config.word.AbstLexer;
 import roj.io.BOMInputStream;
 import roj.io.FileUtil;
@@ -53,22 +75,19 @@ import java.util.zip.ZipFile;
 import static roj.mod.Shared.*;
 
 /**
- * This file is a part of more items mod (MI) <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- * <p>
- * @author Asyncorized_MC
- * @since 2020/8/10
+ * Roj234's Minecraft Launcher
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/31 21:17
  */
 public class MCLauncher extends JFrame {
     @Nullable
-    static JFrame frame;
-
-    static TaskPool parallel = new TaskPool(1, Runtime.getRuntime().availableProcessors() * 2, 16, 1024, new PrefixFactory("AsyncTasker", 5000));
-    static TaskExecutor handler;
+    static JFrame activeWindow;
 
     public static void main(String[] args) {
         UIUtil.systemLook();
-        loadConfig();
+        load();
 
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
 
@@ -79,44 +98,36 @@ public class MCLauncher extends JFrame {
             return;
         }
 
-        frame = new MCLauncher();
-
-        UIUtil.setLogo(frame, "FMD_logo.png");
-
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        activeWindow = new MCLauncher();
+        activeWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
 
     public MCLauncher() {
-        super("MCLauncher " + VERSION + " — Roj234");
+        super("Roj234的启动器 " + VERSION);
+        UIUtil.setLogo(this, "FMD_logo.png");
 
         JButton button = new JButton("启动");
         button.addActionListener(MCLauncher::runClient);
-        button.setToolTipText("启动已选择的MC版本");
         add(button);
 
         button = new JButton("调试");
-        button.setToolTipText("启动，带有log");
         button.addActionListener(MCLauncher::debug);
         add(button);
 
         button = new JButton("选择核心");
         button.addActionListener(MCLauncher::selectVersion);
-        button.setToolTipText("选择不同的MC版本");
+        button.setToolTipText("选择MC版本");
         add(button);
 
         button = new JButton("下载中心");
         button.addActionListener(MCLauncher::download);
-        button.setToolTipText("下载安装Minecraft和/或/Forge");
+        button.setToolTipText("下载Minecraft和Forge");
         add(button);
 
         button = new JButton("配置");
         button.addActionListener(MCLauncher::config);
-        button.setToolTipText("配置启动器");
+        button.setToolTipText("配置<当前版本>的玩家名等");
         add(button);
-
-        //button = new JButton("打开FMD");
-        //button.addActionListener(MCLauncher::startFMD);
-        //add(button);
 
         pack();
         setLayout(new FlowLayout());
@@ -129,32 +140,8 @@ public class MCLauncher extends JFrame {
 
     // region Select version
 
-    // region check
-    static TaskExecutor sv;
-    private static void checkAvailability() {
-        if(sv != null && !sv.sleeping()) {
-            error("有操作正进行");
-            throw new RuntimeException("Service temporary unavailable");
-        }
-    }
-    // endregion
-
     private static void selectVersion(ActionEvent event) {
-        if(!Thread.currentThread().getName().equals("svTmp")) {
-            checkAvailability();
-            if (checkMCRun()) return;
-
-            if(sv == null) {
-                sv = new TaskExecutor();
-                sv.setName("svTmp");
-                sv.start();
-            }
-
-            sv.pushTask(new ExecutionTask(() -> {
-                selectVersion(null);
-            }));
-            return;
-        }
+        if (checkMCRun()) return;
 
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
 
@@ -179,7 +166,7 @@ public class MCLauncher extends JFrame {
                 obj[i] = index == -1 ? s : s.substring(0, index);
             }
 
-            String cv = launcher_conf.getString("mc_version");
+            String cv = config.getString("mc_version");
             for (i = 0; i < obj.length; i++) {
                 if(obj[i].equals(cv)) {
                     break;
@@ -188,7 +175,7 @@ public class MCLauncher extends JFrame {
             if(i >= obj.length)
                 i = 0;
 
-            String s = (String) JOptionPane.showInputDialog(frame,"请选择你的MC版本:\n", "询问", JOptionPane.QUESTION_MESSAGE, null, obj, obj[i]);
+            String s = (String) JOptionPane.showInputDialog(activeWindow,"请选择你的MC版本:\n", "询问", JOptionPane.QUESTION_MESSAGE, null, obj, obj[i]);
             if(s == null)
                 return;
             for (i = 0; i < obj.length; i++) {
@@ -228,10 +215,17 @@ public class MCLauncher extends JFrame {
     // endregion
     // region waiter
 
+    private static TaskExecutor waiter;
     public static final int TIMEOUT_TIME = 60000;
     public static PrintStream waitOut;
 
     private static void waitFor(List<ITask> tasks) {
+        if(waiter == null) {
+            waiter = new TaskExecutor();
+            waiter.setDaemon(true);
+            waiter.start();
+        }
+
         long str = System.currentTimeMillis();
 
         if(waitOut == null) {
@@ -240,7 +234,7 @@ public class MCLauncher extends JFrame {
 
         if(tasks == null) {
             if (parallel.taskLength() > 0) {
-                handler.pushTask(new WaitTask(waitOut));
+                waiter.pushTask(new Waiter(waitOut));
 
                 waitFin(str);
             }
@@ -248,7 +242,7 @@ public class MCLauncher extends JFrame {
             int once = MAIN_CONFIG.get("通用").asMap().getNumber("最大线程数");
             int remain = tasks.size();
 
-            handler.pushTask(new WaitTask(waitOut));
+            waiter.pushTask(new Waiter(waitOut));
 
             boolean skip = false;
             while(remain > 0) {
@@ -300,11 +294,11 @@ public class MCLauncher extends JFrame {
     }
 
     private static int ifBreakWait() {
-        if(frame == null)
+        if(activeWindow == null)
             return 1;
 
         Object[] options = { "继续等", "不等了", "不再提示" };
-        int m = JOptionPane.showOptionDialog(frame, "等了一分钟了，还没下完", "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        int m = JOptionPane.showOptionDialog(activeWindow, "等了一分钟了，还没下完", "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 
         switch (m) {
             case JOptionPane.YES_OPTION: // con
@@ -319,13 +313,11 @@ public class MCLauncher extends JFrame {
         }
     }
 
-    static final class WaitTask implements ITaskUncancelable {
+    static final class Waiter implements ITaskNaCl {
         private final PrintStream out;
-        int i;
 
-        public WaitTask(PrintStream out) {
+        public Waiter(PrintStream out) {
             this.out = out;
-            i = 0;
         }
 
         @Override
@@ -346,12 +338,11 @@ public class MCLauncher extends JFrame {
             return parallel.taskLength() > 0;
         }
     }
+
     // endregion
     // region download MC
 
     private static void download(ActionEvent event) {
-        checkAvailability();
-
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
         CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
 
@@ -360,25 +351,25 @@ public class MCLauncher extends JFrame {
             error("无法创建minecraft目录");
         }
 
-        Object[] options = { "MC", launcher_conf.getString("mc_version") + "的Forge" };
-        int m = JOptionPane.showOptionDialog(frame, "你下嘛？", "询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        Object[] options = { "MC", config.getString("mc_version") + "的Forge" };
+        int m = JOptionPane.showOptionDialog(activeWindow, "你下嘛？", "询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
         if(m == JOptionPane.YES_OPTION) {
             CList versions = getMcVersionList(cfgLan);
             if (versions == null) return;
 
-            new VersionSelectWindow(versions.raw(), false);
+            new VersionSelect(versions.raw(), false);
         } else if(m == JOptionPane.NO_OPTION) {
-            if(launcher_conf.getString("mc_version").contains("forge")) {
-                if(JOptionPane.showConfirmDialog(frame, "似乎这个版本装了forge,继续吗?", "询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null) != JOptionPane.YES_OPTION)
+            if(config.getString("mc_version").contains("forge")) {
+                if(JOptionPane.showConfirmDialog(activeWindow, "似乎这个版本装了forge,继续吗?", "询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null) != JOptionPane.YES_OPTION)
                     return;
             }
 
-            if(!launcher_conf.containsKey("mc_conf")) {
+            if(!config.containsKey("mc_conf")) {
                 error("请选择一个MC版本");
                 return;
             }
 
-            String mcVer = launcher_conf.getString("mc_version");
+            String mcVer = config.getString("mc_version");
 
             CList versions;
             try {
@@ -392,19 +383,19 @@ public class MCLauncher extends JFrame {
                 return;
             }
 
-            new VersionSelectWindow(versions.raw(), true);
+            new VersionSelect(versions.raw(), true);
         }
     }
 
-    static CList cache_mc_ver;
+    static CList cache_mc_versions;
     public static CList getMcVersionList(CMapping cfgLan) {
-        CList versions = cache_mc_ver;
+        CList versions = cache_mc_versions;
         if(versions == null) {
             try {
                 CharList out = new CharList(100000);
                 ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址"))));
 
-                cache_mc_ver = versions = JSONParser.parseIntern(out).asMap().get("versions").asList();
+                cache_mc_versions = versions = JSONParser.parseIntern(out).asMap().get("versions").asList();
             } catch (ParseException | IOException e) {
                 error("获取数据出了点错...\n请查看控制台");
                 e.printStackTrace();
@@ -448,7 +439,7 @@ public class MCLauncher extends JFrame {
         assets = new File(assets, "/objects/");
         CharList tmp = new CharList();
         ArrayList<Object[]> missingEntries = new ArrayList<>();
-        for (Map.Entry<String, ConfEntry> entry : objects.entrySet()) {
+        for (Map.Entry<String, CEntry> entry : objects.entrySet()) {
             CMapping val = entry.getValue().asMap();
             String hash = val.getString("hash");
             String url = tmp.append(hash, 0, 2).append('/').append(hash).toString();
@@ -506,10 +497,10 @@ public class MCLauncher extends JFrame {
         try {
             File mcNative = new File(mcJson.getParentFile(), "/$natives/");
             result = getRunConf(mcRoot, mcJson, mcNative, cfgGen);
-            launcher_conf.put("mc_conf", mc_conf = (CMapping) result[0]);
-            launcher_conf.put("native_path", mcNative.getAbsolutePath());
+            config.put("mc_conf", mc_conf = (CMapping) result[0]);
+            config.put("native_path", mcNative.getAbsolutePath());
             jsonDesc = (CMapping) result[3];
-            launcher_conf.put("mc_version", jsonDesc.getString("id"));
+            config.put("mc_version", jsonDesc.getString("id"));
 
             save();
         } catch (IOException e) {
@@ -522,7 +513,7 @@ public class MCLauncher extends JFrame {
 
         boolean fl = result[4] == Boolean.TRUE;
         if (fl) CmdUtil.warning("高版本警告");
-        launcher_conf.put("high_ver", fl);
+        config.put("high_ver", fl);
 
         if(!doAssets)
             return true;
@@ -583,10 +574,10 @@ public class MCLauncher extends JFrame {
                 return;
             }
 
-            if(frame instanceof MCLauncher)
+            if(activeWindow instanceof MCLauncher)
                 info(name + "下载成功.");
         } else {
-            CharList tmp0 = new CharList(20).append(launcher_conf.getString("mc_version")).append('-').append(map.getString("version"));
+            CharList tmp0 = new CharList(20).append(config.getString("mc_version")).append('-').append(map.getString("version"));
             if(map.containsKey("branch", roj.config.data.Type.STRING)) {
                 tmp0.append('-').append(map.getString("branch"));
             }
@@ -598,7 +589,7 @@ public class MCLauncher extends JFrame {
             String url = tmp1.append("-installer.jar").toString();
 
             CMapping found = null;
-            for (ConfEntry entry : map.get("files").asList()) {
+            for (CEntry entry : map.get("files").asList()) {
                 CMapping ent = entry.asMap();
                 if(ent.getString("category").equals("installer")) {
                     found = ent;
@@ -621,13 +612,13 @@ public class MCLauncher extends JFrame {
                 return;
             }
 
-            if(frame instanceof MCLauncher)
+            if(activeWindow instanceof MCLauncher)
                 info("Forge由广告链接支持,若自动化了它的下载及安装\n请考虑点这里赞助 https://www.patreon.com/LexManos/\n点击确定继续安装");
 
             try {
-                if (installForge(tmpFile, map.getString("version"), launcher_conf.getBoolean("high_ver"))) {
+                if (installForge(tmpFile, map.getString("version"), config.getBoolean("high_ver"))) {
                     waitFor(null);
-                    if(frame instanceof MCLauncher)
+                    if(activeWindow instanceof MCLauncher)
                         info("安装成功,您可以手动删除tmp目录下的\nfg-xxx-tmp-lib目录和xxx-fgInst-tmp.jar");
                 }
             } catch (IOException e) {
@@ -646,7 +637,7 @@ public class MCLauncher extends JFrame {
             return false;
         }
 
-        final String ver = launcher_conf.getString("mc_version") + "-forge-" + fgVersion;
+        final String ver = config.getString("mc_version") + "-forge-" + fgVersion;
         File installDir = new File(mcRoot, "/versions/" + ver + '/');
         if(installDir.isDirectory()) {
             //error("forge可能已安装,若之前安装失败,请手动删除目录 " + installDir.getAbsolutePath());
@@ -676,8 +667,8 @@ public class MCLauncher extends JFrame {
         }
 
         if(instConf.containsKey("icon")) {
-            if (!instConf.getString("minecraft").equals(launcher_conf.getString("mc_version"))) {
-                CmdUtil.warning("版本可能不匹配! " + instConf.getString("minecraft") + " - " + launcher_conf.getString("mc_version"));
+            if (!instConf.getString("minecraft").equals(config.getString("mc_version"))) {
+                CmdUtil.warning("版本可能不匹配! " + instConf.getString("minecraft") + " - " + config.getString("mc_version"));
             }
 
             ZipEntry verJson = zf.getEntry(instConf.getString("json").substring(1));
@@ -709,7 +700,7 @@ public class MCLauncher extends JFrame {
                 Map<String, Version> versions = new MyHashMap<>();
                 Map<String, String> libraries = new MyHashMap<>();
                 final String libUrl = cfgGen.getString("libraries地址");
-                for (ConfEntry entry : instConf.get("libraries").asList()) {
+                for (CEntry entry : instConf.get("libraries").asList()) {
                     final CMapping data = entry.asMap();
                     if (data.getString("name").startsWith("net.minecraftforge:forge:") && data.get("downloads").asMap().get("artifact").asMap().getString("url").isEmpty())
                         continue;
@@ -724,10 +715,10 @@ public class MCLauncher extends JFrame {
                 }
                 int cpLen = cpTmp.length();
 
-                Set<String> forced = MAIN_CONFIG.get("启动器配置").asMap().get("作为MC自身lib的key").asList().getStringSet();
+                Set<String> forced = MAIN_CONFIG.get("启动器配置").asMap().get("作为MC自身lib的key").asList().asStringSet();
                 CMapping data = instConf.get("data").asMap();
                 MyHashMap<String, String> map = new MyHashMap<>(data.size());
-                for (Map.Entry<String, ConfEntry> entry : data.entrySet()) {
+                for (Map.Entry<String, CEntry> entry : data.entrySet()) {
                     String s = entry.getValue().asMap().getString("client");
                     String v;
                     if (s.startsWith("'")) {
@@ -761,7 +752,7 @@ public class MCLauncher extends JFrame {
                     map.put(entry.getKey(), v);
                 }
 
-                map.put("MINECRAFT_JAR", launcher_conf.get("mc_conf").asMap().getString("jar"));
+                map.put("MINECRAFT_JAR", config.get("mc_conf").asMap().getString("jar"));
 
                 CmdUtil.info("Parallel: 导出安装器maven");
                 Enumeration<? extends ZipEntry> e = zf.entries();
@@ -789,10 +780,8 @@ public class MCLauncher extends JFrame {
                 waitFor(null);
                 CmdUtil.info("开始安装Forge...");
 
-                final PrintStream out = new PrintStream(new FileOutputStream(new File(BASE, "forge_install.log")));
-
                 List<String> keys = new ArrayList<>();
-                for (ConfEntry process : instConf.get("processors").asList()) {
+                for (CEntry process : instConf.get("processors").asList()) {
                     CMapping op = process.asMap();
                     File path = new File(libraryPath, mavenPath(op.getString("jar")).toString());
                     if (!path.isFile()) {
@@ -818,7 +807,7 @@ public class MCLauncher extends JFrame {
                     }
                     keys.add(mainCls);
 
-                    for (ConfEntry entry : op.get("args").asList()) {
+                    for (CEntry entry : op.get("args").asList()) {
                         String s = entry.asString();
 
                         if (s.startsWith("{")) {
@@ -834,7 +823,7 @@ public class MCLauncher extends JFrame {
                     if(DEBUG)
                         System.out.println(keys);
 
-                    if(runProcess(keys, TMP_DIR, out, null) != 0) {
+                    if(runProcess(keys, TMP_DIR, 5, new File(BASE, "forge_install.log")) != 0) {
                         CmdUtil.error("尝试清空tmp/fg-xx-xxx-tmp-lib文件夹");
                         return false;
                     }
@@ -935,19 +924,19 @@ public class MCLauncher extends JFrame {
         return cl.append('.').append(ext);
     }
 
-    static final class VersionSelectWindow extends ReflectToolWindow {
-        List<ConfEntry> versions;
+    static final class VersionSelect extends ReflectTool {
+        List<CEntry> versions;
         boolean fg;
 
-        VersionSelectWindow(List<ConfEntry> versions, boolean isForge) {
+        VersionSelect(List<CEntry> versions, boolean isForge) {
             super(false, "版本");
             setTitle("版本安装");
 
             final String id = fg ? "version" : "id";
-            versions.sort(new Comparator<ConfEntry>() {
+            versions.sort(new Comparator<CEntry>() {
                final Version v1 = new Version(), v2 = new Version();
                 @Override
-                public int compare(ConfEntry o1, ConfEntry o2) {
+                public int compare(CEntry o1, CEntry o2) {
                     return v1.parse(o2.asMap().getString(id), false).compareTo(v2.parse(o1.asMap().getString(id), false));
                 }
             });
@@ -956,7 +945,7 @@ public class MCLauncher extends JFrame {
             addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosed(WindowEvent e) {
-                    VersionSelectWindow.this.onClose();
+                    VersionSelect.this.onClose();
                 }
             });
             setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -975,20 +964,20 @@ public class MCLauncher extends JFrame {
             synchronized (this) {
                 notifyAll();
             }
-            if(frame != null)
-                frame.requestFocus();
+            if(activeWindow != null)
+                activeWindow.requestFocus();
         }
 
         @Override
         protected void search(ActionEvent event) {
-            resultPane.removeAll();
+            result.removeAll();
             int y = 2;
 
-            String str = className.getText().toLowerCase();
+            String str = classInp.getText().toLowerCase();
             List<String> entries = new ArrayList<>();
             final String id = fg ? "version" : "id";
             for (int i = 0; i < versions.size(); i++) {
-                ConfEntry entry = versions.get(i);
+                CEntry entry = versions.get(i);
                 CMapping map = entry.asMap();
                 if (map.getString(id).toLowerCase().startsWith(str)) {
                     entries.add(map.getString(id));
@@ -1002,32 +991,32 @@ public class MCLauncher extends JFrame {
                 labelNotify.setForeground(Color.RED);
                 labelNotify.setBounds(220, y, 80, 15);
                 y += 22;
-                resultPane.add(labelNotify);
+                result.add(labelNotify);
             } else if(entries.size() >= 100) {
                 JLabel labelNotify = new JLabel("结果超过" + 100 +  "个!");
                 labelNotify.setForeground(Color.RED);
                 labelNotify.setBounds(200, y, 100, 15);
                 y += 22;
-                resultPane.add(labelNotify);
+                result.add(labelNotify);
             }
             for(String entry : entries) {
                 JButton button = new JButton(entry);
                 button.setBounds(5, y, 480, 20);
                 y += 22;
                 button.addActionListener(this::choose);
-                resultPane.add(button);
+                result.add(button);
             }
 
-            resultPane.setPreferredSize(new Dimension(500, y));
-            scrollPane.validate();
-            resultPane.updateUI();
+            result.setPreferredSize(new Dimension(500, y));
+            scroll.validate();
+            result.updateUI();
         }
 
         private void choose(ActionEvent event) {
             String text = ((JButton)event.getSource()).getText();
             final String id = fg ? "version" : "id";
             for (int i = 0; i < versions.size(); i++) {
-                ConfEntry entry = versions.get(i);
+                CEntry entry = versions.get(i);
                 CMapping map = entry.asMap();
                 if (map.getString(id).equals(text)) {
                     SwingUtilities.invokeLater(() -> {
@@ -1042,25 +1031,21 @@ public class MCLauncher extends JFrame {
 
     // endregion
     // endregion
-    // region config
+    // region projectConfig
 
-    static CMapping launcher_conf;
+    static CMapping config;
 
-    private static void save() {
+    static void save() {
         try (FileOutputStream fos = new FileOutputStream(new File(BASE, "launcher.json"))) {
-            fos.write(launcher_conf.toShortJSON().getBytes(StandardCharsets.UTF_8));
+            fos.write(config.toShortJSON().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             error("配置保存失败\n详情看控制台");
             e.printStackTrace();
         }
     }
 
-    public static void loadConfig() {
-        if(launcher_conf != null) return;
-
-        handler = new TaskExecutor();
-        handler.setDaemon(true);
-        handler.start();
+    static void load() {
+        if(config != null) return;
 
         File conf = new File(BASE, "launcher.json");
         if(conf.isFile()) {
@@ -1070,50 +1055,47 @@ public class MCLauncher extends JFrame {
                     CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getEncoding());
                 }
 
-                launcher_conf = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding())).asMap();
-                if(launcher_conf.containsKey("native_path")) {
-                    File native_path = new File(launcher_conf.getString("native_path"));
+                config = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding())).asMap();
+                if(config.containsKey("native_path")) {
+                    File native_path = new File(config.getString("native_path"));
                     if (!native_path.isDirectory()) {
-                        error("native目录不见了!\n如果你移动或修改了MC目录,请重新选择版本!");
-                        launcher_conf.remove("mc_conf");
-                        launcher_conf.remove("native_path");
-                        launcher_conf.remove("mc_version");
+                        error("你移动或修改了MC目录,请重新选择版本!");
+                        config.remove("mc_conf");
+                        config.remove("native_path");
+                        config.remove("mc_version");
+                        save();
                     }
                 }
+                return;
             } catch (Throwable e) {
                 error("配置加载失败\n详情看控制台");
                 e.printStackTrace();
-                launcher_conf = new CMapping();
             }
-        } else {
-            launcher_conf = new CMapping();
         }
+        config = new CMapping();
     }
 
     // region edit
 
     private static void config(ActionEvent event) {
-        checkAvailability();
-
-        if(!launcher_conf.getBoolean("我看过提示了")) {
-            error("启动器配置文件保存于FMD目录下launcher.json\n主配置文件保存于FMD目录下config.json");
-            error("这个窗口修改的仅限于当前版本,重新选择后会被覆盖!\n此消息仅提示一次!");
-            launcher_conf.put("我看过提示了", true);
-            save();
-        }
-
-        if(!launcher_conf.containsKey("mc_conf", roj.config.data.Type.MAP)) {
+        if(!config.containsKey("mc_conf", roj.config.data.Type.MAP)) {
             error("请选择版本!");
         } else {
-            new CVConf();
+            if(!config.getBoolean("tip1")) {
+                error("这里的修改在重新选择版本后会被通用配置覆盖");
+                error("启动配置保存在launcher.json\n通用配置保存在config.json");
+                config.put("tip1", true);
+                save();
+            }
+            new Config();
         }
     }
 
-    static final class CVConf extends JFrame {
+    static final class Config extends JFrame {
         private final JTextField nameInput, jvmInput, mcInput;
 
-        public CVConf() {
-            super("版本配置");
+        public Config() {
+            super("当前版本配置");
             UIUtil.setLogo(this, "FMD_logo.png");
 
             setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -1130,7 +1112,7 @@ public class MCLauncher extends JFrame {
             label.setBounds(10,70,80,25);
             add(label);
 
-            final CMapping mc_conf = launcher_conf.get("mc_conf").asMap();
+            final CMapping mc_conf = config.get("mc_conf").asMap();
 
             nameInput = new JTextField(mc_conf.getString("player_name"), 0);
             nameInput.setBounds(80,10,200,25);
@@ -1167,7 +1149,7 @@ public class MCLauncher extends JFrame {
             if(s.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "名字不能为空", "错误", JOptionPane.WARNING_MESSAGE);
             } else {
-                final CMapping mc_conf = launcher_conf.get("mc_conf").asMap();
+                final CMapping mc_conf = config.get("mc_conf").asMap();
                 mc_conf.put("player_name", s);
                 mc_conf.put("jvmArg", jvmInput.getText().trim());
                 mc_conf.put("mcArg", mcInput.getText().trim());
@@ -1188,7 +1170,7 @@ public class MCLauncher extends JFrame {
 
     private static boolean checkMCRun() {
         if (task != null && !task.isDone()) {
-            int n = JOptionPane.showConfirmDialog(frame, "MC没有退出,是否结束进程?", "询问", JOptionPane.YES_NO_OPTION);
+            int n = JOptionPane.showConfirmDialog(activeWindow, "MC没有退出,是否结束进程?", "询问", JOptionPane.YES_NO_OPTION);
             if (n == JOptionPane.YES_OPTION) task.cancel(true);
             else return true;
         }
@@ -1196,7 +1178,7 @@ public class MCLauncher extends JFrame {
     }
     // endregion
 
-    public static int runClient(CMapping mc_conf, File nativePath, boolean doLog, Consumer<Process> consumer) throws IOException {
+    public static int runClient(CMapping mc_conf, File nativePath, int doLog, Consumer<Process> consumer) throws IOException {
         Map<String, String> env = new MyHashMap<>(4);
         env.put("natives_directory", '"' + AbstLexer.addSlashes(nativePath.getAbsolutePath()) + '"');
         env.put("classpath", '"' + AbstLexer.addSlashes(new StringBuilder(mc_conf.getString("libraries")).append(mc_conf.getString("jar"))) + '"');
@@ -1228,36 +1210,34 @@ public class MCLauncher extends JFrame {
 
         SimpleList<String> list = new SimpleList<>();
         list.add("java");
-        roj.text.TextUtil.replaceVariable(env, mc_conf.getString("jvmArg"), list);
+        TextUtil.replaceVariable(env, mc_conf.getString("jvmArg"), list);
         list.add(mc_conf.getString("mainClass"));
-        roj.text.TextUtil.replaceVariable(mcEnv, mc_conf.getString("mcArg"), list);
+        TextUtil.replaceVariable(mcEnv, mc_conf.getString("mcArg"), list);
 
-        return runProcess(list, new File(mc_conf.getString("root")), doLog ? System.out : null, consumer);
+        return runProcess(list, new File(mc_conf.getString("root")), doLog, consumer);
     }
 
     // region UI
     private static void runClient(ActionEvent event) {
-        checkAvailability();
         if (checkMCRun()) return;
 
-        if(!launcher_conf.containsKey("mc_conf")) {
+        if(!config.containsKey("mc_conf")) {
             error("没有选择版本!");
             return;
         }
 
-        handler.pushTask(task = new RunMinecraftTask(false));
+        parallel.pushTask(task = new RunMinecraftTask(false));
     }
 
     private static void debug(ActionEvent event) {
-        checkAvailability();
         if (checkMCRun()) return;
 
-        if(!launcher_conf.containsKey("mc_conf")) {
+        if(!config.containsKey("mc_conf")) {
             error("没有选择版本!");
             return;
         }
 
-        handler.pushTask(task = new RunMinecraftTask(true));
+        parallel.pushTask(task = new RunMinecraftTask(true));
     }
 
     // endregion
@@ -1397,17 +1377,17 @@ public class MCLauncher extends JFrame {
     private static String buildNewArgs(CList mcArg) {
         StringBuilder arg = new StringBuilder();
 
-        for(ConfEntry entry : mcArg) {
+        for(CEntry entry : mcArg) {
             switch (entry.getType()) {
                 case STRING:
                     arg.append(slash(entry.asString())).append(' ');
                     break;
                 case MAP:
                     if(isRuleFit(entry.asMap().get("rules").asList())) {
-                        ConfEntry entry1 = entry.asMap().get("value");
+                        CEntry entry1 = entry.asMap().get("value");
                         if (entry1.getType() == roj.config.data.Type.LIST) {
                             CList values = entry1.asList();
-                            for (ConfEntry value : values) {
+                            for (CEntry value : values) {
                                 arg.append(slash(value.asString())).append(' ');
                             }
                         } else {
@@ -1443,7 +1423,7 @@ public class MCLauncher extends JFrame {
             File nativePath = (File) imArg.get("nativePath");
             File libraryPath = (File) imArg.get("libraryPath");
             TaskHandler handler = (TaskHandler) imArg.get("handler");
-            for (ConfEntry entry : list) {
+            for (CEntry entry : list) {
                 detectLibrary(entry.asMap(), versions, libraryPath, nativePath, libraries, mirror, handler);
             }
         }
@@ -1632,7 +1612,7 @@ public class MCLauncher extends JFrame {
         }
 
         if(handler != null) {
-            final DownMcFileTask task = downMcFileAsTask(artifact, libFile, mirror.isEmpty() ? null : mirror);
+            final DownMcFile task = downMcFileAsTask(artifact, libFile, mirror.isEmpty() ? null : mirror);
             if(task != null) {
                 task.then(cb);
                 handler.pushTask(task);
@@ -1651,7 +1631,7 @@ public class MCLauncher extends JFrame {
 
     private static boolean isRuleFit(CList rules) {
         boolean fitRule = rules.size() == 0;
-        for(ConfEntry entry : rules) {
+        for(CEntry entry : rules) {
             CMapping entry1 = entry.asMap();
             switch (entry1.getString("action")) {
                 case "allow":
@@ -1702,7 +1682,7 @@ public class MCLauncher extends JFrame {
         }
         if(ruleEntry.containsKey("features")) {
             CMapping features = ruleEntry.get("features").asMap();
-            for(Map.Entry<String, ConfEntry> entry : features.entrySet()) {
+            for(Map.Entry<String, CEntry> entry : features.entrySet()) {
                 if(!canFitFeature(entry))
                     return false;
             }
@@ -1711,18 +1691,18 @@ public class MCLauncher extends JFrame {
         throw new IllegalArgumentException("未知规则: " + ruleEntry.toJSON());
     }
 
-    private static boolean canFitFeature(Map.Entry<String, ConfEntry> entry){
+    private static boolean canFitFeature(Map.Entry<String, CEntry> entry){
         String k = entry.getKey();
         switch (k) {
             case "is_demo_user":
             case "has_custom_resolution":
                 return false;
         }
-        final ConfEntry value = entry.getValue();
+        final CEntry value = entry.getValue();
         switch (value.getType()) {
             case STRING:
             case DOUBLE:
-            case NUMBER:
+            case INTEGER:
             case BOOL:
                 CmdUtil.warning("FMD发现了一个未知规则: '" + k + "' 请手动判断这个规则是否符合");
                 CmdUtil.warning(k + ": " + value.asString());
@@ -1742,7 +1722,7 @@ public class MCLauncher extends JFrame {
         CList exclude = extractInfo.get("exclude").asList();
 
         TrieTreeSet trieTree = new TrieTreeSet();
-        for(ConfEntry entry : exclude) {
+        for(CEntry entry : exclude) {
             trieTree.add(entry.asString());
         }
         trieTree.add("META-INF");
@@ -1782,7 +1762,7 @@ public class MCLauncher extends JFrame {
 
         @Override
         public void calculate(Thread thread) throws Exception {
-            runClient(launcher_conf.get("mc_conf").asMap(), new File(launcher_conf.getString("native_path")), log, this);
+            runClient(config.get("mc_conf").asMap(), new File(config.getString("native_path")), log ? 1 : 0, this);
             run = true;
         }
 
@@ -1815,11 +1795,11 @@ public class MCLauncher extends JFrame {
     // region Alert window
 
     public static void error(String s) {
-        JOptionPane.showMessageDialog(frame, s, "错误", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(activeWindow, s, "错误", JOptionPane.ERROR_MESSAGE);
     }
 
     public static void info(String s) {
-        JOptionPane.showMessageDialog(frame, s, "提示", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(activeWindow, s, "提示", JOptionPane.INFORMATION_MESSAGE);
     }
 
     // endregion
@@ -1835,37 +1815,22 @@ public class MCLauncher extends JFrame {
         return tmpFile;
     }
 
-    public static DownMcFileTask downMcFileAsTask(CMapping map, File targetFile, String mirror) {
-        String url = map.get("url").asString();
-
-        if (mirror != null) {
-            url = url.replace("launchermeta.mojang.com", mirror);
-            url = url.replace("launcher.mojang.com", mirror);
-            url = url.replace("libraries.minecraft.net", mirror);
-            url = url.replace("files.minecraftforge.net/maven", mirror);
-            url = url.replace("maven.minecraftforge.net", mirror);
-        }
+    public static DownMcFile downMcFileAsTask(CMapping map, File targetFile, String mirror) {
+        String url = replaceMirror(map, mirror);
 
         if (!targetFile.exists()) {
             CmdUtil.info("下载 " + url);
 
             BigInteger sha1 = map.containsKey("sha1") ? new BigInteger(map.get("sha1").asString(), 16) : null;
 
-            return new DownMcFileTask(url, targetFile, sha1);
+            return new DownMcFile(url, targetFile, sha1);
         } else {
             return null;
         }
     }
 
     public static void downloadMinecraftFile(CMapping map, File targetFile, String mirror, boolean async) throws IOException {
-        String url = map.get("url").asString();
-
-        if (mirror != null) {
-            url = url.replace("launchermeta.mojang.com", mirror);
-            url = url.replace("launcher.mojang.com", mirror);
-            url = url.replace("libraries.minecraft.net", mirror);
-            url = url.replace("files.minecraftforge.net/maven", mirror);
-        }
+        String url = replaceMirror(map, mirror);
 
         if (!targetFile.exists()) {
             CmdUtil.info("开始下载 " + url);
@@ -1916,6 +1881,19 @@ public class MCLauncher extends JFrame {
                 }
             } while (true);
         }
+    }
+
+    private static String replaceMirror(CMapping map, String mirror) {
+        String url = map.get("url").asString();
+
+        if (mirror != null) {
+            url = url.replace("launchermeta.mojang.com", mirror);
+            url = url.replace("launcher.mojang.com", mirror);
+            url = url.replace("libraries.minecraft.net", mirror);
+            url = url.replace("files.minecraftforge.net/maven", mirror);
+            url = url.replace("maven.minecraftforge.net", mirror);
+        }
+        return url;
     }
 
     public static void downloadAndVerifyMD5(String url, String md5ToCheck, File targetFile, boolean async) throws IOException {
@@ -1978,7 +1956,7 @@ public class MCLauncher extends JFrame {
         }
     }
 
-    private static class DownMcFileTask extends AbstractCalcTask<Void> {
+    private static class DownMcFile extends AbstractCalcTask<Void> {
         private final String url;
         private final File target;
         private final BigInteger sha1;
@@ -1991,7 +1969,7 @@ public class MCLauncher extends JFrame {
 
         static PrintStream err;
 
-        public DownMcFileTask(String url, File target, BigInteger sha1) {
+        public DownMcFile(String url, File target, BigInteger sha1) {
             this.url = url;
             this.target = target;
             this.sha1 = sha1;
@@ -2138,78 +2116,37 @@ public class MCLauncher extends JFrame {
     // endregion
     // region Process management
 
-    public static int runProcess(List<String> tokens, File dir, PrintStream log, Consumer<Process> consumer) throws IOException {
+    @SuppressWarnings("unchecked")
+    public static int runProcess(List<String> tokens, File dir, int flag, Object obj) throws IOException {
         if(DEBUG)
             System.out.println("参数: '" + tokens + "'");
-        Process process = new ProcessBuilder(tokens).directory(dir).start();
-        if(consumer != null)
-            consumer.accept(process);
+        ProcessBuilder pb = new ProcessBuilder(tokens).directory(dir);
+        if((flag & 1) != 0)
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                    .redirectError(ProcessBuilder.Redirect.INHERIT);
+        else {
+            File debug = (flag & 4) == 0 ? new File(dir, "debug.log") : (File) obj;
+            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(debug))
+                    .redirectError(ProcessBuilder.Redirect.appendTo(debug));
+        }
 
-        InputStream err = process.getErrorStream();
-        parallel.pushTask(new StreamReader(err, log));
-
-        InputStream in = process.getInputStream();
-        new StreamReader(in, log).calculate(null);
+        Process process = pb.start();
+        if(obj instanceof Consumer)
+            ((Consumer<Process>)obj).accept(process);
 
         // 会导致无法窗口化, 可能是缓冲区满了....
-        //try {
-        //    process.waitFor();
-        //} catch (InterruptedException e) {
-        //    e.printStackTrace();
-        //}
-
-        try {
-            parallel.waitUntilFinish();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        CmdUtil.info("客户端已关闭");
-        return process.exitValue();
-    }
-
-    static final class StreamReader implements ITaskUncancelable {
-        InputStream in;
-        PrintStream out;
-        boolean doRead;
-
-        public StreamReader(InputStream in, PrintStream os) {
-            this.in = in;
-            this.out = os;
-            this.doRead = os != null;
-        }
-
-        public StreamReader(InputStream in, boolean doRead) {
-            this.in = in;
-            if(doRead)
-                this.out = System.out;
-            this.doRead = doRead;
-        }
-
-        @Override
-        public void calculate(Thread thread) throws IOException {
-            if(doRead) {
-                BufferedReader br = new BufferedReader(new InputStreamReader(in));
-                String line;
-                final PrintStream out = this.out;
-                while ((line = br.readLine()) != null) {
-                    out.println(line);
-                }
-            } else {
-                byte[] buf = new byte[1024];
-                final InputStream in = this.in;
-                while (in.read(buf) != -1) {
-                    try {
-                        Thread.sleep(5);
-                    } catch (InterruptedException ignored) {}
-                }
+        if((flag & 2) != 0) {
+            try {
+                process.waitFor();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        }
 
-        @Override
-        public boolean isDone() {
-            return false;
+            CmdUtil.info("客户端已关闭");
+            return process.exitValue();
         }
+        return 0;
     }
+
     // endregion
 }

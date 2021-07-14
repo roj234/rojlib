@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.parser;
 
 import roj.collect.Int2IntMap;
@@ -6,13 +31,11 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- * <p>
- * 符号
+ * No description provided
  *
- * @author solo6975
- * @since 2020/10/3 20:03
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/10/3 20:03
  */
 public final class Symbol {
     public static final String[] operators = {
@@ -30,25 +53,27 @@ public final class Symbol {
             "?", ":", ",", ";",
             "=", "+=", "-=", "*=", "/=", "%=",
             "&=", "^=", "|=", "<<=", ">>=", ">>>=",
-            "$<", ">$" // 预处理器 (such as minecraft:xxx)
+            "$<", ">$", // 预处理器 (such as minecraft:xxx)
+            "..." // spread
     };
 
     public static final short
-            left_l_bracket = 501, right_l_bracket = 502,
-            left_m_bracket = 503, right_m_bracket = 504,
-            left_s_bracket = 505, right_s_bracket = 506,
-            lambda = 507, dot = 508,
-            inc = 509, dec = 510,
-            logic_not = 511, logic_and = 512, logic_or = 513,
-            lss = 514, gtr = 515, geq = 516, leq = 517,
-            feq = 518, equ = 519, neq = 520,
-            rev = 521, and = 522, or = 523, xor = 524,
-            add = 525, sub = 526, mul = 527, div = 528, mod = 529, pow = 530,
-            lsh = 531, rsh = 532, rsh_unsigned = 533,
-            ask = 534, colon = 535, comma = 536, semicolon = 537,
-            assign = 538, add_assign = 539, sub_assign = 540, mul_assign = 541, div_assign = 542, mod_assign = 543,
-            and_assign = 544, xor_assign = 545, or_assign = 546, lsh_assign = 547, rsh_assign = 548, rsh_unsigned_assign = 549,
-            preprocess_s = 550, preprocess_e = 551;
+            left_l_bracket = 41 /*Keyword.ARGUMENTS + 2*/, right_l_bracket = 42,
+            left_m_bracket = 43, right_m_bracket = 44,
+            left_s_bracket = 45, right_s_bracket = 46,
+            lambda = 47, dot = 48,
+            inc = 49, dec = 50,
+            logic_not = 51, logic_and = 52, logic_or = 53,
+            lss = 54, gtr = 55, geq = 56, leq = 57,
+            feq = 58, equ = 59, neq = 60,
+            rev = 61, and = 62, or = 63, xor = 64,
+            add = 65, sub = 66, mul = 67, div = 68, mod = 69, pow = 70,
+            lsh = 71, rsh = 72, rsh_unsigned = 73,
+            ask = 74, colon = 75, comma = 76, semicolon = 77,
+            assign = 78, add_assign = 79, sub_assign = 80, mul_assign = 81, div_assign = 82, mod_assign = 83,
+            and_assign = 84, xor_assign = 85, or_assign = 86, lsh_assign = 87, rsh_assign = 88, rsh_unsigned_assign = 89,
+            preprocess_s = 90, preprocess_e = 91,
+            spread = 92, rest = spread;
 
     private static final TrieTree<Short> indexOf = new TrieTree<>();
     private static final Int2IntMap priorities = new Int2IntMap();
@@ -57,10 +82,8 @@ public final class Symbol {
     }
 
     static {
-        int i = 500;
-        final String[] operators1 = operators;
-        for (int j = 0; j < operators1.length - 1; j++) {
-            String operator = operators1[j];
+        int i = 40;
+        for (String operator : operators) {
             indexOf.put(operator, (short) ++i);
         }
 
@@ -102,7 +125,7 @@ public final class Symbol {
     }
 
     public static boolean is(Word w) {
-        return w.type() > 500 && w.type() <= 1000;
+        return w.type() > 40 && w.type() <= 100;
     }
 
     public static int priorityFor(Word word) {
@@ -139,7 +162,7 @@ public final class Symbol {
     }
 
     public static String byId(short operator) {
-        return operators[operator - 501];
+        return operators[operator - 41];
     }
 
     public static boolean hasMore(CharSequence cs) {

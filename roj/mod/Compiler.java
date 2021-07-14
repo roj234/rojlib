@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.mod;
 
 import roj.io.IOUtil;
@@ -15,14 +40,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * This file is a part of more items mod (MI)
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
- * Author: Asyncorized_MC
- * Filename: Compiler.java
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/6/1 1:54
  */
 public class Compiler {
-    public static boolean compile(List<String> optionList, List<File> fileList, @Nullable PrintStream errorOutput, @Nullable String baseLocation, @Nullable Set<String> skipErrors, boolean showErrorCode, @Nullable Processor processor) throws IOException {
+    public static boolean compile(List<String> optionList, List<File> fileList, @Nullable PrintStream errorOutput, @Nullable Set<String> skipErrors, boolean showErrorCode, @Nullable Processor processor) {
         if(fileList.isEmpty()) {
             CmdUtil.warning("没有源文件!", true);
             return false;
@@ -30,17 +55,17 @@ public class Compiler {
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if(compiler == null)
-            throw new InternalError("错误：没有安装JDK!!!!");
-        StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, Locale.CHINA, StandardCharsets.UTF_8);
+            throw new InternalError("请安装JDK");
+        StandardJavaFileManager fm = compiler.getStandardFileManager(diagnostics, Locale.CHINA, StandardCharsets.UTF_8);
 
-        Iterable<? extends JavaFileObject> compilationUnit = fileManager.getJavaFileObjectsFromFiles(fileList);
+        Iterable<? extends JavaFileObject> files = fm.getJavaFileObjectsFromFiles(fileList);
         JavaCompiler.CompilationTask task = compiler.getTask(
                 null,
-                fileManager,
+                fm,
                 diagnostics,
                 optionList,
                 null,
-                compilationUnit);
+                files);
 
         if(processor != null)
             task.setProcessors(Collections.singleton(processor));
@@ -49,24 +74,22 @@ public class Compiler {
         try {
             result = task.call();
         } catch (ArrayIndexOutOfBoundsException e) {
-            diagnostics.report(new CustomtDiagnostic("用户类文件中的class读取失败", Diagnostic.Kind.ERROR));
+            diagnostics.report(new MyDiagnostic("用户类文件中的class读取失败", Diagnostic.Kind.ERROR));
         }
         CmdUtil.bg(result ? CmdUtil.Color.BLUE : CmdUtil.Color.RED, false);
         CmdUtil.fg(CmdUtil.Color.WHITE, true);
 
         if(skipErrors == null)
             skipErrors = Collections.emptySet();
-        if(baseLocation == null)
-            baseLocation = "";
         if(errorOutput == null)
             errorOutput = System.out;
 
         EnumMap<Diagnostic.Kind, MutableInt> kinds = new EnumMap<>(Diagnostic.Kind.class);
-        for (Diagnostic<? extends JavaFileObject> diagnostic : diagnostics.getDiagnostics()) {
-            if(!skipErrors.contains(diagnostic.getCode()))
-                errorOutput.println(buildErrorMessage(baseLocation, diagnostic, kinds));
+        for (Diagnostic<? extends JavaFileObject> diag : diagnostics.getDiagnostics()) {
+            if(!skipErrors.contains(diag.getCode()))
+                errorOutput.println(buildErrorMessage( diag, kinds));
             if(showErrorCode)
-                errorOutput.println(diagnostic.getCode());
+                errorOutput.println(diag.getCode());
         }
         for (Map.Entry<Diagnostic.Kind, MutableInt> entry : kinds.entrySet()) {
             errorOutput.println(entry.getValue().getValue() + " 个 " + getErrorMsg(entry.getKey(), null));
@@ -75,19 +98,19 @@ public class Compiler {
         return result;
     }
 
-    private static String buildErrorMessage(String start, Diagnostic<? extends JavaFileObject> diagnostic, EnumMap<Diagnostic.Kind, MutableInt> map) throws IOException {
+    private static String buildErrorMessage(Diagnostic<? extends JavaFileObject> diag, EnumMap<Diagnostic.Kind, MutableInt> map) {
         StringBuilder sb = new StringBuilder();
-        if(diagnostic.getSource() != null) {
-            String file = diagnostic.getSource().toUri().toString();
+        if(diag.getSource() != null) {
+            String file = diag.getSource().toUri().toString();
             sb.append(file, 6, file.length()).append(':');
-            if(diagnostic.getLineNumber() >= 0)
-                sb.append(diagnostic.getLineNumber()).append(':');
+            if(diag.getLineNumber() >= 0)
+                sb.append(diag.getLineNumber()).append(':');
             sb.append(' ');
         }
-        sb.append(getErrorMsg(diagnostic.getKind(), map)).append(':').append(' ').append(diagnostic.getMessage(Locale.CHINA)).append('\n');
-        if(diagnostic.getLineNumber() >= 0) {
-            sb.append(getNearCode(diagnostic.getSource(), diagnostic.getLineNumber())).append('\n');
-            for (int i = 0; i < diagnostic.getColumnNumber(); i++) {
+        sb.append(getErrorMsg(diag.getKind(), map)).append(':').append(' ').append(diag.getMessage(Locale.CHINA)).append('\n');
+        if(diag.getLineNumber() >= 0) {
+            sb.append(getNearCode(diag.getSource(), diag.getLineNumber())).append('\n');
+            for (int i = 0; i < diag.getColumnNumber(); i++) {
                 sb.append(' ');
             }
             sb.setCharAt(sb.length() - 1, '^');
@@ -97,11 +120,16 @@ public class Compiler {
         return sb.toString();
     }
 
-    private static String getNearCode(JavaFileObject source, long lineNumber) throws IOException {
+    private static String getNearCode(JavaFileObject source, long lineNumber) {
         if(lineNumber == -1)
             return "";
-        SimpleLineReader is = new SimpleLineReader(IOUtil.readAsUTF(source.openInputStream()), false);
-        return is.get((int) lineNumber - 1);
+        try {
+            SimpleLineReader is = new SimpleLineReader(IOUtil.readAsUTF(source.openInputStream()), false);
+            return is.get((int) lineNumber - 1);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "<ERROR> failed to get " + source.getName() + " due to " + e;
+        }
     }
 
     private static String getErrorMsg(Diagnostic.Kind kind, EnumMap<Diagnostic.Kind, MutableInt> kinds) {
@@ -126,11 +154,11 @@ public class Compiler {
         throw new IllegalArgumentException();
     }
 
-    private static class CustomtDiagnostic implements Diagnostic<JavaFileObject> {
+    private static class MyDiagnostic implements Diagnostic<JavaFileObject> {
         final String msg;
         final Kind kind;
 
-        private CustomtDiagnostic(String msg, Kind kind) {
+        private MyDiagnostic(String msg, Kind kind) {
             this.msg = msg;
             this.kind = kind;
         }

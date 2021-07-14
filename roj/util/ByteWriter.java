@@ -1,11 +1,29 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: ByteWriter.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.util;
 
 import javax.annotation.Nonnull;
@@ -13,6 +31,13 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/30 23:4
+ */
 public class ByteWriter {
     public ByteList list;
 
@@ -94,6 +119,25 @@ public class ByteWriter {
         }
         writeUTF(list, s, 1);
         return this;
+    }
+
+    public ByteWriter writeVarLong(long i) {
+        return writeVarLong(i, true);
+    }
+
+    public ByteWriter writeVarLong(long i, boolean canBeNegative) {
+        if (canBeNegative) {
+            i = zig(i);
+        }
+        do {
+            list.add((byte) ((i & 0x7F) | 0x80));
+        } while ((i >>>= 7) != 0);
+        list.list[list.pointer - 1] &= 0x7F;
+        return this;
+    }
+
+    public static long zig(long i) {
+        return (i & Long.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
     }
 
     public ByteWriter writeBytes(byte[] bs) {
@@ -199,24 +243,26 @@ public class ByteWriter {
 
     public static void writeUTF(ByteList list, CharSequence str, int type) {
         int len = str.length();
-        if (type == 0 && len > 65535)
-            throw new ArrayIndexOutOfBoundsException("String too long: > 65535 bytes");
 
-        int utfLen = byteCountUTF8(str);
+        if(type == 0 || type == 1) {
+            if (type == 0 && len > 65535)
+                throw new ArrayIndexOutOfBoundsException("String too long: > 65535 bytes");
 
-        if (type == 0 && utfLen > 65535)
-            throw new ArrayIndexOutOfBoundsException("Encoded string too long: " + utfLen + " bytes");
+            int utfLen = byteCountUTF8(str);
 
-        list.ensureCapacity((utfLen * 2) + 2);
+            if (type == 0 && utfLen > 65535) throw new ArrayIndexOutOfBoundsException("Encoded string too long: " + utfLen + " bytes");
 
-        switch (type) {
-            case 1:
-                writeVarInt(list, utfLen);
-                break;
-            case 0:
-                list.add((byte) (utfLen >> 8));
-                list.add((byte) utfLen);
-                break;
+            list.ensureCapacity((utfLen * 2) + 2);
+
+            switch (type) {
+                case 1:
+                    writeVarInt(list, utfLen);
+                    break;
+                case 0:
+                    list.add((byte) (utfLen >> 8));
+                    list.add((byte) utfLen);
+                    break;
+            }
         }
 
         int c;

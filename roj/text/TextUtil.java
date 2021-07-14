@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.text;
 
 import roj.collect.IBitSet;
@@ -5,7 +30,7 @@ import roj.collect.IntMap;
 import roj.collect.LongBitSet;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
-import roj.config.word.Lexer;
+import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.math.MathUtils;
@@ -17,11 +42,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
+ * No description provided
+ *
  * @author Roj234
- * Filename: TextUtil.java
+ * @version 0.1
+ * @since 2021/6/19 0:14
  */
 public class TextUtil {
     @Deprecated
@@ -42,27 +67,29 @@ public class TextUtil {
         langs.put(type, loadLang(string));
     }
 
-    @Deprecated
-    public static Map<String, String> loadLang(String content) {
+    public static Map<String, String> loadLang(CharSequence content) {
         MyHashMap<String, String> map = new MyHashMap<>();
         if (content == null) return map;
         try {
             boolean block = false;
-            CharList sb = null;
+            CharList sb = new CharList();
+            List<String> k_v = new ArrayList<>();
             for (String entry : new SimpleLineReader(content)) {
-                String[] k_v = null;
+                if(entry.startsWith("#") || entry.isEmpty()) continue;
                 if (!block) {
-                    k_v = entry.split("=", 2);
-                    if (k_v[1].startsWith("#strl")) {
+                    k_v.clear();
+                    splitStringF(k_v, sb, entry, '=', 2);
+                    if (k_v.get(1).startsWith("#strl")) {
                         block = true;
-                        sb = (sb == null ? new CharList() : sb).append(k_v[1].substring(5));
+                        sb.clear();
+                        sb.append(k_v.get(1).substring(5));
                     } else {
-                        map.put(k_v[0], k_v[1]);
+                        map.put(k_v.get(0), k_v.get(1));
                     }
                 } else {
                     if (entry.equals("#endl")) {
                         block = false;
-                        map.put(k_v[0], sb.toString());
+                        map.put(k_v.get(0), sb.toString());
                         sb.clear();
                     } else {
                         sb.append(entry).append('\n');
@@ -388,7 +415,7 @@ public class TextUtil {
 
     public static void replaceVariable(Map<String, String> env, String tag, List<String> list) {
         try {
-            Lexer lexer = new Lexer().init(tag);
+            Tokenizer lexer = new Tokenizer().init(tag);
             while (lexer.hasNext()) {
                 Word word = lexer.readStringToken();
                 String val = word.val();

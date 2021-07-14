@@ -1,12 +1,29 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: mi.Main.java
- * 基于Java SE Binary 8 构造
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.asm;
 
 import roj.asm.cst.CstClass;
@@ -47,6 +64,14 @@ import java.util.List;
  *
  * No local variable (or pair, type == long or double) can be accessed before assign.
  *
+ */
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/29 17:16
+ * 基于Java SE Binary 8 构造
  */
 public final class Parser {
     public static final int SKIP_DEBUG = 0x01;
@@ -296,6 +321,10 @@ public final class Parser {
         return parse2(buf, new ByteReader(buf));
     }
 
+    public static AccessData parseAccessImmutable(ByteList buf) {
+        return parse2(null, new ByteReader(buf));
+    }
+
     @Nonnull
     private static AccessData parse2(byte[] buf, ByteReader r) {
         if (r.readInt() != 0xcafebabe) {
@@ -347,6 +376,12 @@ public final class Parser {
     }
 
     public static List<String> simpleData(byte[] buf) {
+        if (buf == null)
+            return null;
+        return simpleData(new ByteList(buf));
+    }
+
+    public static List<String> simpleData(ByteList buf) {
         if (buf == null)
             return null;
 

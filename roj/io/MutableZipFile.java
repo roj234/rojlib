@@ -1,0 +1,640 @@
+package roj.io;
+
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.collect.UnionerL;
+import roj.text.CharList;
+import roj.util.ByteList;
+import roj.util.ByteReader;
+import roj.util.ByteWriter;
+
+import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.util.Map;
+import java.util.Random;
+import java.util.zip.*;
+
+/**
+ * 你别指望这东西能打开分卷压缩文件，连删除都麻烦着呢
+ *
+ * @author Roj233
+ * @since 2021/7/10 17:09
+ */
+public class MutableZipFile implements Closeable, AutoCloseable {
+    public static void main(String[] args) throws IOException {
+        MutableZipFile file = new MutableZipFile(new File(args[0]));
+        //System.out.println(file.entries);
+        byte[] data = file.getFileData("test.txt");
+        if(data != null)
+            System.out.println(ByteReader.readUTF(new ByteList(data)));
+        if(args.length == 1) {
+            file.setFileData("test.txt", ByteWriter.encodeUTF("测试数据123123123"));
+        } else {
+            int seed = Integer.parseInt(args[1]);
+            Random rnd = new Random(seed);
+            for (int i = 0; i < 1000; i++) {
+                file.setFileData("test" + rnd.nextInt(2000) + ".txt", ByteWriter.encodeUTF("测试数据" + i));
+            }
+        }
+        file.store();
+    }
+
+    File file;
+    RandomAccessFile zip;
+    MyHashMap<String, EFile> entries = new MyHashMap<>();
+    MyHashSet<ModFile> modified = new MyHashSet<>();
+    EEOF eof;
+
+    ByteList buffer = new ByteList();
+    Inflater inflater = new Inflater(true);
+    Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+    CRC32 crc = new CRC32();
+
+    public static final int HEADER_EOF = 0x504b0506;
+    public static final int HEADER_FILE = 0x504b0304;
+    public static final int HEADER_ATTRIBUTE = 0x504b0102;
+
+    public MutableZipFile(File file) throws IOException {
+        this.file = file;
+        zip = new RandomAccessFile(file, "r");
+        zip.seek(0);
+        readInternal();
+        verify();
+    }
+
+    private void verify() throws IOException {
+        for (EFile file : entries.values()) {
+            if(file.attr == null)
+                throw new IllegalArgumentException(file.name + " doesnt have a CDir definition!");
+            if(file.attr.fileHeader != file.offset - 30 - file.name.length() - file.extra.length) {
+                throw new IllegalArgumentException(file.name + " offset nonmatch: req " + file.attr.fileHeader + " computed " + (file.offset - 30 - file.name.length() - file.extra.length));
+            }
+        }
+        zip.seek(eof.cDirOffset + eof.cDirLen);
+        int v = zip.readInt();
+        if(v != HEADER_EOF) {
+            throw new IllegalArgumentException("Dir length error: got " + eof.cDirLen + " val " + Integer.toHexString(v));
+        }
+        zip.seek(eof.cDirOffset);
+        v = zip.readInt();
+        if(v != HEADER_ATTRIBUTE) {
+            throw new IllegalArgumentException("Dir offset error: got " + eof.cDirOffset + " val " + Integer.toHexString(v));
+        }
+    }
+
+    private void readInternal() throws IOException {
+        buffer.ensureCapacity(64);
+        CharList out = new CharList();
+
+        long len = zip.length();
+        while (zip.getFilePointer() < len) {
+            int header = zip.readInt();
+            switch (header) {
+                case HEADER_EOF:
+                    if(eof != null)
+                        throw new ZipException("Duplicate End_Of_Core_Directory entry found at " + zip.getFilePointer());
+                    eof = readEOF(out);
+                    break;
+                case HEADER_ATTRIBUTE:
+                    readAttr(out);
+                    break;
+                case HEADER_FILE:
+                    readFile(out);
+                    break;
+                default:
+                    throw new ZipException("Unexpected ZIP Header: " + Integer.toHexString(header));
+            }
+        }
+    }
+
+    static final byte[] EMPTY = new byte[0];
+
+    private void readFile(CharList out) throws IOException {
+        byte[] buf = buffer.list;
+        zip.read(buf, 0, 26);
+        EFile entry = new EFile();
+
+        //entry.minExtractVer = buf[0] | buf[1] << 8;
+        //entry.flags = buf[2] | buf[3] << 8;
+        //entry.compressMethod = buf[4] | buf[5] << 8;
+        //entry.lastModify = _date(buf[6] | buf[7] << 8, buf[8] | buf[9] << 8);
+        //entry.CRC32 = buf[10] | buf[11] << 8 | buf[12] << 16 | buf[12] << 24;
+        int cSize = /*entry.cSize =*/ (buf[14] & 0xFF) | (buf[15] & 0xFF) << 8 | (buf[16] & 0xFF) << 16 | (buf[17] & 0xFF) << 24;
+        //entry.uSize = buf[18] | buf[19] << 8 | buf[20] << 16 | buf[21] << 24;
+
+        int nameLen = (buf[22] & 0xFF) | (buf[23] & 0xFF) << 8;
+        int extraLen = (buf[24] & 0xFF) | (buf[25] & 0xFF) << 8;
+
+        buffer.ensureCapacity(nameLen);
+        zip.read(buf = buffer.list, 0, nameLen);
+
+        //if(charset == StandardCharsets.UTF_8) {
+            buffer.pos(nameLen);
+            ByteReader.decodeUTF(-1, out, buffer);
+            entry.name = out.toString();
+            out.clear();
+        //} else {
+        //    entry.name = new String(buf, 0, nameLen, charset);
+        //}
+
+        entries.put(entry.name, entry);
+
+        if(extraLen > 0) {
+            zip.read(buf, 0, extraLen);
+            buffer.pos(extraLen);
+            entry.extra = buffer.toByteArray();
+        } else {
+            entry.extra = EMPTY;
+        }
+
+        long off = zip.getFilePointer();
+
+        if(off >= zip.length())
+            throw new EOFException();
+
+        entry.offset = off;
+        zip.seek(off + /*entry.*/cSize);
+    }
+
+    private Attr readAttr(CharList out) throws IOException {
+        byte[] buf = buffer.list;
+        zip.read(buf, 0, 42);
+        Attr entry = new Attr();
+
+        //entry.ver = buf[0] | buf[1] << 8;
+        //entry.minExtractVer = buf[2] | buf[3] << 8;
+        //entry.flags = buf[4] | buf[5] << 8;
+        entry.compressMethod = (buf[6] & 0xFF) | (buf[7] & 0xFF) << 8;
+        //entry.lastModify = _date(buf[8] | buf[9] << 8, buf[10] | buf[11] << 8);
+        entry.CRC32 = (buf[12] & 0xFF) | (buf[13] & 0xFF) << 8 | (buf[14] & 0xFF) << 16 | (buf[15] & 0xFF) << 24;
+        entry.cSize = (buf[16] & 0xFF) | (buf[17] & 0xFF) << 8 | (buf[18] & 0xFF) << 16 | (buf[19] & 0xFF) << 24;
+        entry.uSize = (buf[20] & 0xFF) | (buf[21] & 0xFF) << 8 | (buf[22] & 0xFF) << 16 | (buf[23] & 0xFF) << 24;
+
+        //entry.diskId = buf[30] | buf[31] << 8;
+        //entry.attrIn = buf[32] | buf[33] << 8;
+        //entry.attrEx = buf[34] | buf[35] << 8 | buf[36] << 16 | buf[37] << 24;
+        entry.fileHeader = (buf[38] & 0xFF) | (buf[39] & 0xFF) << 8 | (buf[40] & 0xFF) << 16 | (buf[41] & 0xFF) << 24;
+
+        int nameLen = (buf[24] & 0xFF) | (buf[25] & 0xFF) << 8;
+        int extraLen = (buf[26] & 0xFF) | (buf[27] & 0xFF) << 8;
+        int commentLen = (buf[28] & 0xFF) | (buf[29] & 0xFF) << 8;
+
+        buffer.ensureCapacity(Math.max(nameLen, commentLen));
+        zip.read(buf = buffer.list, 0, nameLen);
+
+        buffer.pos(nameLen);
+        ByteReader.decodeUTF(-1, out, buffer);
+        String name/*entry.name*/ = out.toString();
+        out.clear();
+
+        if(commentLen > 0) {
+            zip.read(buf, 0, commentLen);
+            buffer.pos(commentLen);
+            //ByteReader.decodeUTF(-1, out, buffer);
+            //entry.comment = out.toString();
+            //out.clear();
+        }
+
+        EFile file = entries.get(/*entry.name*/name);
+        if(file == null)
+            throw new IllegalArgumentException("FileNode " + name + " is null");
+        file.attr = entry;
+
+        if(extraLen > 0) {
+            zip.read(buf, 0, extraLen);
+            //buffer.pos(extraLen);
+            //entry.extra = buffer.toByteArray();
+        }
+
+        long off = zip.getFilePointer();
+
+        if(off >= zip.length())
+            throw new EOFException();
+        //entry.offset = off;
+        //zip.seek(off/* + entry.cSize*/);
+
+        return entry;
+    }
+
+    private EEOF readEOF(CharList cl) throws IOException {
+        byte[] buf = buffer.list;
+        if(zip.read(buf, 0, 18) < 18)
+            throw new EOFException();
+        EEOF entry = new EEOF();
+
+        //entry.diskId = buf[0] | buf[1] << 8;
+        //entry.cDirBegin = buf[2] | buf[3] << 8;
+        //entry.cDirOnDisk = buf[4] | buf[5] << 8;
+        //entry.cDirTotal = buf[6] | buf[7] << 8;
+        entry.cDirLen = (buf[8] & 0xFF) | (buf[9] & 0xFF) << 8 | (buf[10] & 0xFF) << 16 | (buf[11] & 0xFF) << 24;
+        entry.cDirOffset = (buf[12] & 0xFF) | (buf[13] & 0xFF) << 8 | (buf[14] & 0xFF) << 16 | (buf[15] & 0xFF) << 24;
+
+        int commentLen = (buf[16] & 0xFF) | (buf[17] & 0xFF) << 8;
+
+        if(commentLen > 0) {
+            buffer.ensureCapacity(commentLen);
+            if(zip.read(buffer.list, 0, commentLen) < commentLen)
+                throw new EOFException();
+
+            buffer.pos(commentLen);
+            ByteReader.decodeUTF(-1, cl, buffer);
+            entry.comment = cl.toString();
+            cl.clear();
+        } else {
+            entry.comment = "";
+        }
+
+        //entry.offset = zip.getFilePointer();
+
+        return entry;
+    }
+
+    //private static long _date(int time, int date) {
+    //    return (long)date << 32 | time;
+    //}
+
+    public byte[] getFileData(String entry) throws IOException {
+        EFile file = entries.get(entry);
+        if(file == null)
+            return null;
+        if(file.data != null)
+            return file.data;
+
+        zip.seek(file.offset);
+        Attr attr = file.attr;
+        buffer.ensureCapacity(attr.cSize);
+        if(zip.read(buffer.list, 0, attr.cSize) < attr.cSize)
+            throw new IOException("Reading error: not read " + attr.cSize);
+
+        switch (attr.compressMethod) {
+            case ZipEntry.DEFLATED:
+                Inflater inflater = this.inflater;
+                inflater.setInput(buffer.list, 0, attr.cSize);
+                byte[] dec = new byte[attr.uSize];
+                try {
+                    if(inflater.inflate(dec, 0, dec.length) < dec.length)
+                        throw new ZipException("Data error");
+                } catch (DataFormatException e) {
+                    e.printStackTrace();
+                    throw new ZipException("Data format error");
+                }
+                inflater.reset();
+                return file.data = dec;
+            case ZipEntry.STORED:
+                buffer.pos(attr.cSize);
+                return file.data = buffer.toByteArray();
+            default:
+                throw new ZipException("Unsupported compression method " + Integer.toHexString(attr.compressMethod));
+        }
+    }
+
+    public void setFileData(String entry, ByteList content) {
+        ModFile file = new ModFile();
+        file.name = entry;
+        if(file == (file = modified.find(file))) {
+            file.file = entries.get(entry);
+            modified.add(file);
+        }
+        file.compress = true;
+        file.data = content;
+    }
+
+    public void setFileDataMore(Map<String, ByteList> content) {
+        for (Map.Entry<String, ByteList> entry : content.entrySet()) {
+            ModFile file = new ModFile();
+            file.name = entry.getKey();
+            if(file == (file = modified.find(file))) {
+                file.file = entries.get(entry.getKey());
+                modified.add(file);
+            }
+            file.compress = true;
+            file.data = entry.getValue();
+        }
+    }
+
+    public void store() throws IOException {
+        if(modified.isEmpty()) return;
+
+        EFile minFile = null;
+
+        UnionerL<EFile> uFile = new UnionerL<>();
+
+        for(ModFile file : modified) {
+            EFile o = entries.get(file.name);
+            if(o != null) {
+                if (minFile == null || minFile.offset > o.offset) {
+                    minFile = o;
+                }
+                uFile.add(o);
+            }
+            file.file = o;
+        }
+
+        File tmpFile = new File(file + ".1" + /*System.currentTimeMillis() +*/  ".tmp");
+
+        FileChannel cf = zip.getChannel();
+        FileChannel ct = FileChannel.open(tmpFile.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+
+        // write linear EFile header
+        if(minFile != null) {
+            for (EFile file : entries.values()) {
+                if (file.offset >= minFile.offset && !uFile.add(file)) { // ^=
+                    uFile.remove(file);
+                }
+            }
+
+            long offset = minFile.startPos();
+            long begin = 0, len = offset;
+            while (begin < offset) {
+                long write = cf.transferTo(begin, len, ct);
+                begin += write;
+                len -= write;
+            }
+
+            begin = len = -1;
+            System.out.println("Entries " + uFile);
+            long delta = 0;
+            for (UnionerL.Region region : uFile) { // index modified
+                if(region.node().next() != null) {
+                    UnionerL.Point point = region.node();
+                    if(point.end())
+                        point = point.next();
+
+                    EFile file1 = point.owner();
+                    file1.attr.fileHeader += delta;
+                    file1.offset += delta;
+
+                    continue; // find intersection regions
+                }
+                if(begin == -1) { // node k
+                    begin = region.node().pos();
+                    if(len != -1) {
+                        delta += (len - begin);
+                    }
+                    System.out.println("From " + region.node());
+                } else { // node k + 1
+                    len = region.node().pos() - begin;
+                    System.out.println("To " + region.node());
+                    while (begin < len) {
+                        long write = cf.transferTo(begin, len, ct);
+                        begin += write;
+                        len -= write;
+                    }
+
+                    begin = -1;
+                }
+            }
+        } else {
+            long offset = eof.cDirOffset;
+            long begin = 0, len = offset;
+            while (begin < offset) {
+                long write = cf.transferTo(begin, len, ct);
+                begin += write;
+                len -= write;
+            }
+        }
+        ct.close();
+
+        FileOutputStream appender = new FileOutputStream(tmpFile, true);
+
+        ByteWriter writer = new ByteWriter();
+
+        // write modified EFile header
+        for(ModFile file : modified) {
+            if(file.file == null) {
+                EFile ef = file.file = new EFile();
+                ef.attr = new Attr();
+                entries.put(ef.name = file.name, ef);
+            }
+
+            Deflater deflater = this.deflater;
+            deflater.setInput(file.data.list, 0, file.data.pos());
+            deflater.finish();
+
+            ByteList buffer = this.buffer;
+            buffer.ensureCapacity(512);
+            int off = 0;
+            while (!deflater.finished()) {
+                off += deflater.deflate(buffer.list, off, 512);
+                buffer.ensureCapacity(off + 256);
+            }
+
+            crc.reset();
+            crc.update(file.data.list, 0, file.data.pos());
+
+            EFile file1 = file.file;
+            file1.offset = tmpFile.length() + 30 + file1.name.length() + file1.extra.length;
+
+            Attr attr = file1.attr;
+            attr.fileHeader = (int) tmpFile.length();
+            attr.compressMethod = 8;
+            attr.CRC32 = (int) crc.getValue();
+            attr.uSize = file.data.pos();
+            attr.cSize = (int) deflater.getBytesWritten();
+
+            deflater.reset();
+
+            writeFile(appender, writer, file.file);
+
+            appender.write(buffer.list, 0, off);
+        }
+
+        // write ALL CDir header
+        eof.cDirOffset = tmpFile.length();
+        ByteList bl = writer.list;
+        for (EFile file : entries.values()) {
+            writeAttr(writer, file);
+            if(bl.pos() > 1024) {
+                bl.writeToStream(appender);
+                bl.clear();
+            }
+        }
+        if(bl.pos() > 0) {
+            bl.writeToStream(appender);
+        }
+        bl.clear();
+
+        eof.cDirLen = tmpFile.length() - eof.cDirOffset;
+
+        writeEOF(writer);
+
+        bl.writeToStream(appender);
+        bl.clear();
+
+        appender.close();
+        modified.clear();
+        buffer.clear();
+
+        zip.close();
+        if(!tmpFile.renameTo(file)) {
+            FileChannel t = FileChannel.open(file.toPath(), StandardOpenOption.WRITE);
+            FileChannel f = FileChannel.open(tmpFile.toPath(), StandardOpenOption.READ);
+            long off = tmpFile.length();
+            long i = 0, len = off;
+            while (i < off) {
+                long write = f.transferTo(i, len, t);
+                i += write;
+                len -= write;
+            }
+
+            f.close();
+            t.close();
+        }
+        zip = new RandomAccessFile(file, "r");
+    }
+
+    @Override
+    public void close() throws IOException {
+        inflater.end();
+        deflater.end();
+        entries.clear();
+        modified.clear();
+        zip.close();
+        buffer.list = null;
+    }
+
+    private static void writeFile(FileOutputStream appender, ByteWriter util, EFile file) throws IOException {
+        Attr attr = file.attr;
+        util.writeInt(HEADER_FILE)
+                .writeShortR(20)
+                .writeShortR(attr.compressMethod | 2048)
+                .writeShortR(attr.compressMethod)
+                .writeIntR(0)
+                .writeIntR(attr.CRC32)
+                .writeIntR(attr.cSize)
+                .writeIntR(attr.uSize)
+                .writeShortR(ByteWriter.byteCountUTF8(file.name))
+                .writeShortR(0);
+        util.writeAllUTF(file.name);
+        util.list.writeToStream(appender);
+        util.list.clear();
+    }
+
+    private static void writeAttr(ByteWriter util, EFile file) {
+        Attr attr = file.attr;
+
+        util.writeInt(HEADER_ATTRIBUTE)
+        .writeShortR(20)
+        .writeShortR(20)
+        .writeShortR(attr.compressMethod | 2048)
+        .writeShortR(attr.compressMethod)
+        .writeIntR(0)
+        .writeIntR(attr.CRC32)
+        .writeIntR(attr.cSize)
+        .writeIntR(attr.uSize)
+        .writeShortR(ByteWriter.byteCountUTF8(file.name))
+        .writeShortR(0) // ext
+        .writeShortR(0) // comment
+        .writeShortR(0) // disk
+        .writeShortR(0) // attrIn
+        .writeIntR(0) // attrEx
+        .writeIntR(attr.fileHeader);
+        util.writeAllUTF(file.name);
+    }
+
+    private void writeEOF(ByteWriter util) {
+        EEOF eof = this.eof;
+
+        util.writeInt(HEADER_EOF)
+            .writeShortR(0)
+            .writeShortR(0)
+            .writeShortR(entries.size())
+            .writeShortR(entries.size())
+            .writeIntR((int) eof.cDirLen)
+            .writeIntR((int) eof.cDirOffset)
+            .writeShortR(ByteWriter.byteCountUTF8(eof.comment))
+            .writeAllUTF(eof.comment);
+    }
+
+    public static class EFile implements UnionerL.Section {
+        //int minExtractVer;
+        //int flags;
+        //int compressMethod;
+        //long lastModify;
+        //int CRC32;
+        //int cSize, uSize;
+        String name;
+        byte[] extra;
+
+        byte[] data;
+
+        long offset;
+
+        Attr attr;
+
+        @Override
+        public String toString() {
+            return "EFile{" + "name='" + name + '\'' + ", offset=" + offset + ", attr=" + attr + '}';
+        }
+
+        @Override
+        public long startPos() {
+            return offset - 30 - name.length() - extra.length;
+        }
+
+        @Override
+        public long endPos() {
+            return offset + attr.cSize;
+        }
+    }
+
+    public static class Attr {
+        //int ver;
+        //int minExtractVer;
+        //int flags;
+        int compressMethod;
+        //long lastModify;
+        int CRC32;
+        int cSize, uSize;
+        //String name, comment;
+        //int diskId;
+        //int attrIn, attrEx;
+        int fileHeader;
+
+        //long offset;
+
+        //byte[] extra;
+
+        @Override
+        public String toString() {
+            return "Attr{" + "compress=" + compressMethod + ", CRC32=" + CRC32 + ", cSize=" + cSize + ", uSize" +
+                    "=" + uSize + '}';
+        }
+    }
+
+    public static class EEOF {
+        //int diskId;
+        //int cDirBegin;
+        //int cDirOnDisk;
+        //int cDirTotal;
+        long cDirLen, cDirOffset;
+        //long offset;
+        String comment;
+
+        @Override
+        public String toString() {
+            return "EEOF{" + "cDirLen=" + cDirLen + ", cDirOffset=" + cDirOffset + ", comment='" + comment + '\'' + '}';
+        }
+    }
+
+    public static class ModFile {
+        EFile file;
+        boolean compress;
+        String name;
+        ByteList data;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ModFile file = (ModFile) o;
+            return name.equals(file.name);
+        }
+
+        @Override
+        public int hashCode() {
+            return name.hashCode();
+        }
+    }
+}

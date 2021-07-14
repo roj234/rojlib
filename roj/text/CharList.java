@@ -1,11 +1,29 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: ByteList.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.text;
 
 import javax.annotation.Nonnull;
@@ -15,6 +33,13 @@ import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/6/19 1:28
+ */
 public class CharList implements CharSequence {
     public char[] list;
     protected int ptr;
@@ -165,7 +190,7 @@ public class CharList implements CharSequence {
     }
 
     @Override
-    public CharSequence subSequence(int start, int end) {
+    public CharList subSequence(int start, int end) {
         int len = length();
 
         if (start == 0 && end == len) {
@@ -184,6 +209,7 @@ public class CharList implements CharSequence {
     }
 
     public CharList replace(char a, char b) {
+        char[] list = this.list;
         for (int i = getOffset(); i < ptr; i++) {
             if (list[i] == a) {
                 list[i] = b;
@@ -193,6 +219,7 @@ public class CharList implements CharSequence {
     }
 
     public CharList replace(char o, char n, int i, int len) {
+        char[] list = this.list;
         for (i += getOffset(); i < len; i++) {
             if (list[i] == o) {
                 list[i] = n;
@@ -201,12 +228,70 @@ public class CharList implements CharSequence {
         return this;
     }
 
+    public void replace(int start, int end, CharSequence s) {
+        if (start < 0) {
+            throw new StringIndexOutOfBoundsException(start);
+        } else {
+            if (start > end) {
+                throw new StringIndexOutOfBoundsException();
+            } else {
+                if(end > this.ptr)
+                    end = this.ptr;
+
+                int origLen = end - start;
+                if (origLen > 0) {
+                    if(origLen > s.length()) {
+                        int delta = s.length() - origLen; // < 0
+                        System.arraycopy(list, end, list, end + delta, this.ptr - end - delta);
+                        this.ptr += delta;
+                        end = start + s.length();
+                    } else if(origLen < s.length()) {
+                        insert(end, s, origLen, s.length());
+                    }
+
+                    char[] list = this.list;
+                    int j = 0;
+                    while (start < end) {
+                        list[start++] = s.charAt(j++);
+                    }
+                }
+            }
+        }
+    }
+
+    public CharList replace(CharSequence source, CharSequence target) {
+        int pos = 0;
+        while ((pos = indexOf(source, pos)) != -1) {
+            replace(pos, pos + source.length(), target);
+            pos += source.length();
+        }
+        return this;
+    }
+
+    public int indexOf(CharSequence sequence, int offset) {
+        int i = offset + getOffset();
+
+        o:
+        for (; i < ptr; i++) {
+            if (list[i] == sequence.charAt(0)) {
+                for (int j = 0; j < sequence.length(); j++) {
+                    if(list[i + j] != sequence.charAt(j)) {
+                        continue o;
+                    }
+                }
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     public int getOffset() {
         return 0;
     }
 
     public String formString(int start, int length) {
-        return length == 0 ? "" : new String(list, start, start + length);
+        return length == 0 ? "" : new String(list, start + getOffset(), start - getOffset() + length);
     }
 
     @Override
@@ -256,6 +341,26 @@ public class CharList implements CharSequence {
                 }
             }
         }
+    }
+
+    public CharList trim() {
+        int len = ptr;
+        int st = 0;
+        char[] val = list;    /* avoid getfield opcode */
+
+        while ((st < len) && (val[st] <= ' ')) {
+            st++;
+        }
+        while ((st < len) && (val[len - 1] <= ' ')) {
+            len--;
+        }
+
+        ptr = len;
+        if(st > 0) {
+            delete(0, st);
+        }
+
+        return this;
     }
 
     public CharList insert(int pos, char str) {
@@ -376,10 +481,6 @@ public class CharList implements CharSequence {
         @Override
         public void clear() {
             throw new UnsupportedOperationException("Readonly");
-        }
-
-        public String formString(int start, int length) {
-            return super.formString(start + offset, length);
         }
 
         @Override

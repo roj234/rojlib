@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.parser.expr;
 
 import roj.concurrent.OperationDone;
@@ -92,8 +117,8 @@ public final class Binary implements Expression {
             case Symbol.gtr:
             case Symbol.geq:
             case Symbol.leq:
-            case Symbol.equ:
             case Symbol.feq:
+            case Symbol.equ:
             case Symbol.neq:
                 if(target == null) {
                     tree.IfLoad(operator);
@@ -187,7 +212,7 @@ public final class Binary implements Expression {
                     if(left.isConstant()) {
                         if(left.asCst().asBool()) {
                             // temporary ifload node
-                            return new TmpAsBool(right);
+                            return new AsBool(right);
                         } else {
                             return Constant.valueOf(false);
                         }
@@ -329,17 +354,12 @@ public final class Binary implements Expression {
             case Symbol.feq:
                 return KBool.valueOf(l.getType() == r.getType() && l.equalsTo(r));
             case Symbol.add:
-                switch (l.getType()) {
-                    case INT:
-                    case DOUBLE:
-                    case BOOL:
-                        return d ?
-                                KDouble.valueOf(l.asDouble() + r.asDouble()) :
-                                KInt.valueOf(l.asInt() + r.asInt());
-                    case STRING:
-                        return KString.valueOf(l.asString() + r.asString());
+                if (l.getType() == Type.STRING) {
+                    return KString.valueOf(l.asString() + r.asString());
                 }
-                throw OperationDone.NEVER;
+                return d ?
+                        KDouble.valueOf(l.asDouble() + r.asDouble()) :
+                        KInt.valueOf(l.asInt() + r.asInt());
             case Symbol.sub:
                 return d ?
                         KDouble.valueOf(l.asDouble() - r.asDouble()) :

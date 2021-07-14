@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.type;
 
 import roj.collect.SimpleList;
@@ -5,7 +30,7 @@ import roj.kscript.Constants;
 import roj.kscript.api.IArray;
 import roj.kscript.api.IObject;
 import roj.kscript.util.JavaException;
-import roj.kscript.vm.ResourceManager;
+import roj.kscript.vm.KScriptVM;
 import roj.math.MathUtils;
 
 import javax.annotation.Nonnull;
@@ -15,11 +40,11 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
+ * No description provided
+ *
  * @author Roj234
- * Filename: YAMLList.java
+ * @version 0.1
+ * @since 2021/6/16 23:19
  */
 public final class KArray extends KBase implements roj.kscript.api.IArray {
     final List<KType> list;
@@ -43,7 +68,7 @@ public final class KArray extends KBase implements roj.kscript.api.IArray {
 
     @Override
     public void put(@Nonnull String key, KType entry) {
-        int[] arr = ResourceManager.retainNumParseTmp(10);
+        int[] arr = KScriptVM.retainNumParseTmp(10);
         if(!MathUtils.parseIntErrorable(key, arr))
             throw new JavaException("无效索引 " + key);
         set(arr[0], entry);
@@ -61,7 +86,7 @@ public final class KArray extends KBase implements roj.kscript.api.IArray {
 
     @Override
     public KType getOr(String key, KType def) {
-        int[] arr = ResourceManager.retainNumParseTmp(10);
+        int[] arr = KScriptVM.retainNumParseTmp(10);
         return MathUtils.parseIntErrorable(key, arr) ? get(arr[0]) : def;
     }
 

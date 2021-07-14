@@ -1,28 +1,54 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.ast;
 
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Method;
-import roj.asm.util.InsnList;
 import roj.kscript.type.KType;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author Roj233
- * @since 2020/9/27 23:59
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/9/27 23:59
  */
 public final class LvtIncrNode extends Node {
     int ctxId, varId;
     final int val;
 
     public LvtIncrNode(int val) {
-        super(Opcode.INCREASE);
         this.val = val;
     }
 
     @Override
-    public Node execute(Frame frame) {
+    public Opcode getCode() {
+        return Opcode.INCREASE;
+    }
+
+    @Override
+    public Node exec(Frame frame) {
         KType base = frame.parents[ctxId].getIdx(varId);
         if (base.isInt()) {
             base.setIntValue(base.asInt() + val);
@@ -30,11 +56,6 @@ public final class LvtIncrNode extends Node {
             base.setDoubleValue(base.asDouble() + val);
         }
         return next;
-    }
-
-    @Override
-    public void toVMCode(Clazz clazz, Method method, InsnList list) {
-
     }
 
     @Override

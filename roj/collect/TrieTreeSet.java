@@ -1,19 +1,29 @@
-/**
- * This file is a part of more items mod (MI)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 76
- * Author: R__
- * Filename: java
- * Trie Tree的实现
- * 查询一个单词是否存在的时间复杂度仅为该单词的长度、存储空间小
- * = O(n.length)
- * 理想是美好的，实际上，这个除了让我算法知识有点长进，速度内存都是渣渣
- * <p>
- * 我想: entrySet需要CharList...
- * https://github.com/ZGJackie/Simple-Algorithms-Guide/wiki/%E5%AD%97%E5%85%B8%E6%A0%91---Trie-Tree
- * 这样还可以实现基本类型ArrayMap甚至是ObjectArrayMap (不过我懒得弄了)
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.collect;
 
 import roj.concurrent.OperationDone;
@@ -30,7 +40,13 @@ import java.util.function.Predicate;
 
 import static roj.collect.TrieTree.COMPRESS_START_DEPTH;
 import static roj.collect.TrieTree.MIN_REMOVE_ARRAY_SIZE;
-
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/4/30 19:27
+ */
 public final class TrieTreeSet implements Set<CharSequence> {
     private static class Entry extends TrieEntry<Entry> {
         boolean isEnd;

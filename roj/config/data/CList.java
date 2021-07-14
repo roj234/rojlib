@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config.data;
 
 import roj.collect.IntList;
@@ -12,17 +37,25 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
+ * No description provided
+ *
  * @author Roj234
- * Filename: YAMLList.java
+ * @version 0.1
+ * @since 2021/5/31 21:17
  */
-public final class CList extends ConfEntry implements Iterable<ConfEntry> {
-    final List<ConfEntry> list;
+public final class CList extends CEntry implements Iterable<CEntry> {
+    final List<CEntry> list;
 
     public CList() {
         this(new ArrayList<>());
+    }
+
+    public CList(int size) {
+        this.list = new ArrayList<>(size);
+    }
+
+    public CList(List<CEntry> list) {
+        this.list = list;
     }
 
     public static CList of(Object... objects) {
@@ -32,25 +65,15 @@ public final class CList extends ConfEntry implements Iterable<ConfEntry> {
                 list.add(CString.valueOf(o.toString()));
             } else if (o instanceof Number) {
                 Number num = (Number) o;
-                list.add(num.doubleValue() == num.longValue() ? CInteger.valueOf(num.intValue()) : CDouble.valueOf(num.doubleValue()));
-            } else if (o instanceof ConfEntry) {
-                list.add((ConfEntry) o);
+                list.add(num.doubleValue() == num.longValue() ? CInteger.valueOf(num.intValue()) :
+                        CDouble.valueOf(num.doubleValue()));
+            } else if (o instanceof CEntry) {
+                list.add((CEntry) o);
             } else if (o instanceof Boolean) {
                 list.add(CBoolean.valueOf((Boolean) o));
-            } else
-                throw new ClassCastException(o.getClass() + " is unable cast. ");
+            } else throw new ClassCastException(o.getClass() + " is unable cast. ");
         }
         return list;
-    }
-
-    public CList(int size) {
-        super(Type.LIST);
-        this.list = new ArrayList<>(size);
-    }
-
-    public CList(List<ConfEntry> list) {
-        super(Type.LIST);
-        this.list = list;
     }
 
     public int size() {
@@ -58,43 +81,45 @@ public final class CList extends ConfEntry implements Iterable<ConfEntry> {
     }
 
     @Nonnull
-    public Iterator<ConfEntry> iterator() {
+    public Iterator<CEntry> iterator() {
         return list.iterator();
     }
 
-    public CList add(@Nullable ConfEntry entry) {
+    public CList add(@Nullable CEntry entry) {
         list.add(entry == null ? CNull.NULL : entry);
         return this;
     }
 
-    public void set(int index, @Nullable ConfEntry entry) {
+    public void set(int index, @Nullable CEntry entry) {
         list.set(index, entry == null ? CNull.NULL : entry);
     }
 
     @Nonnull
-    public ConfEntry get(int index) {
+    public CEntry get(int index) {
         return list.get(index);
     }
 
-    /*@Nullable
-    public Type getComponentType() {
-        return list.isEmpty() ? null : list.get(0).type();
-    }*/
+    @Nonnull
+    @Override
+    public Type getType() {
+        return Type.LIST;
+    }
 
-    public MyHashSet<String> getStringSet() {
+    public MyHashSet<String> asStringSet() {
         MyHashSet<String> stringSet = new MyHashSet<>(list.size());
-        for (ConfEntry entry : list) {
+        for (CEntry entry : list) {
             try {
                 String val = entry.asString();
                 stringSet.add(val);
-            } catch (ClassCastException ignored) {}
+            } catch (ClassCastException ignored) {
+            }
         }
         return stringSet;
     }
 
-    public SimpleList<String> getStringList() {
+    public SimpleList<String> asStringList() {
         SimpleList<String> stringList = new SimpleList<>(list.size());
-        for (ConfEntry entry : list) {
+        for (CEntry entry : list) {
             try {
                 String val = entry.asString();
                 stringList.add(val);
@@ -104,11 +129,11 @@ public final class CList extends ConfEntry implements Iterable<ConfEntry> {
         return stringList;
     }
 
-    public int[] getNumberList() {
+    public int[] asIntList() {
         IntList numberList = new IntList(list.size());
-        for (ConfEntry entry : list) {
+        for (CEntry entry : list) {
             try {
-                int val = entry.asNumber();
+                int val = entry.asInteger();
                 numberList.add(val);
             } catch (ClassCastException ignored) {
             }
@@ -126,21 +151,13 @@ public final class CList extends ConfEntry implements Iterable<ConfEntry> {
     public StringBuilder toYAML(StringBuilder sb, int depth) {
         if (!list.isEmpty()) {
             sb.append('\n');
-            for (ConfEntry entry : list) {
-                /*if(entry.type() == Type.MAP) {
-                    CMapping map = entry.asMap();
-                    if(!map.map.isEmpty()) {
-                        int len = sb.length();
-                        map.toStringIntl(sb, depth);
-                        sb.insert(len + 2, "- ");
-                        continue;
-                    }
-                }*/
-
-                for (int i = 0; i < depth; i++) {
+            for (int i = 0; i < list.size(); i++) {
+                CEntry entry = list.get(i);
+                for (int j = 0; j < depth; j++) {
                     sb.append(' ');
                 }
-                sb.append('-').append(' ').append(entry.toYAML(new StringBuilder(), depth + 2)).append('\n');
+                sb.append('-').append(' ');
+                entry.toYAML(sb, depth + 4).append('\n');
             }
             return sb.delete(sb.length() - 1, sb.length());
         }
@@ -151,19 +168,16 @@ public final class CList extends ConfEntry implements Iterable<ConfEntry> {
     public StringBuilder toJSON(StringBuilder sb, int depth) {
         sb.append('[');
         if (!list.isEmpty()) {
-            if(depth > 0)
-               sb.append('\n');
-            for (ConfEntry entry : list) {
+            if (depth > 0) sb.append('\n');
+            for (CEntry entry : list) {
                 for (int i = 0; i < depth + 4; i++) {
                     sb.append(' ');
                 }
                 entry.toJSON(sb, depth + 4).append(',');
-                if(depth > 0)
-                    sb.append('\n');
+                if (depth > 0) sb.append('\n');
             }
-            if(depth > 0) {
+            if (depth > 0) {
                 sb.delete(sb.length() - 2, sb.length() - 1);
-                //sb.append('\n');
                 for (int i = 0; i < depth; i++) {
                     sb.append(' ');
                 }
@@ -193,7 +207,7 @@ public final class CList extends ConfEntry implements Iterable<ConfEntry> {
         this.list.addAll(list.list);
     }
 
-    public List<ConfEntry> raw() {
+    public List<CEntry> raw() {
         return list;
     }
 

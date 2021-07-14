@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.collect;
 
 import roj.math.MathUtils;
@@ -5,21 +30,15 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
 /**
- * This file is a part of MI <br>
- * <br>
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <br>
- * <br>
- * 以整数作为Key的Map
- * <pre>
- * 基于Hash-like机制实现的较高速Map
- * 完美解决Map&lt;Integer, V&gt; 与 Map&lt;Short, V&gt;的问题
- * </pre>
+ * No description provided
  *
- * @param <V> Type of Value
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/4/21 22:51
  */
 public class IntMap<V> implements CItrMap<IntMap.Entry<V>> {
     public static final Object NOT_USING = new Object() {
@@ -173,10 +192,18 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>> {
     void afterPut(Entry<V> entry) {
     }
 
-    public V computeIfAbsent(int k, @Nonnull Supplier<V> supplier) {
+    public V computeIfAbsentSp(int k, @Nonnull Supplier<V> supplier) {
         V v = get(k);
         if (v == null && !containsKey(k)) {
             put(k, v = supplier.get());
+        }
+        return v;
+    }
+
+    public V computeIfAbsent(int k, @Nonnull IntFunction<V> fn) {
+        V v = get(k);
+        if (v == null && !containsKey(k)) {
+            put(k, v = fn.apply(k));
         }
         return v;
     }

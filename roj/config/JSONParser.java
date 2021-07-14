@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config;
 
 import roj.collect.MyHashSet;
@@ -15,19 +40,18 @@ import roj.text.TextUtil;
  * 可以直接复制到JavaScript中
  * <p>
  * @author Roj234
- * Filename: JSONParser.java
  */
 public final class JSONParser {
-    public static final short
-            TRUE = 0,
-            FALSE = 1,
-            NULL = 2,
-            left_l_bracket = 3,
-            right_l_bracket = 4,
-            left_m_bracket = 5,
-            right_m_bracket = 6,
-            comma = 7,
-            colon = 8;
+    static final short
+            TRUE = 10,
+            FALSE = 11,
+            NULL = 12,
+            left_l_bracket = 13,
+            right_l_bracket = 14,
+            left_m_bracket = 15,
+            right_m_bracket = 16,
+            comma = 17,
+            colon = 18;
 
     public static void main(String[] args) throws ParseException {
         String json = TextUtil.concat(args, ' ');
@@ -37,33 +61,33 @@ public final class JSONParser {
         System.out.print("JSON = " + parse(json).toJSON());
     }
 
-    public static ConfEntry parse(CharSequence string) throws ParseException {
+    public static CEntry parse(CharSequence string) throws ParseException {
         return parse(new JSONLexer().init(string), 0);
     }
 
-    public static ConfEntry parse(CharSequence string, int flag) throws ParseException {
+    public static CEntry parse(CharSequence string, int flag) throws ParseException {
         return parse(new JSONLexer().init(string), flag);
     }
 
-    public static ConfEntry parseIntern(CharSequence string) throws ParseException {
+    public static CEntry parseIntern(CharSequence string) throws ParseException {
         return parse(new JSONLexer() {
             final MyHashSet<String> set = new MyHashSet<>();
 
             @Override
-            protected Word formClip(short id, CharSequence string) {
-                if(cached == null) {
-                    return new Word().reset(id, index, set.intern(string.toString()));
-                }
-                Word w = cached.reset(id, index, set.intern(string.toString()));
-                cached = null;
-                return w;
+            protected Word formClip(short id, CharSequence s) {
+                return super.formClip(id, set.intern(s.toString()));
             }
 
         }.init(string), 0);
     }
 
-    public static ConfEntry parse(AbstLexer wr, int flag) throws ParseException {
-        ConfEntry ce = jsonRead(wr, flag & 253, true);
+    /**
+     * @param flag <BR>
+     *             1: 对重复的key报错 <BR>
+     *             2: 仁慈模式 (忽略key中的literal string)
+     */
+    public static CEntry parse(AbstLexer wr, int flag) throws ParseException {
+        CEntry ce = jsonRead(wr, (byte) flag);
         if (wr.hasNext()) {
             throw wr.err("期待 /EOF");
         }
@@ -74,44 +98,28 @@ public final class JSONParser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    static CList jsonArray(AbstLexer wr, int flag) throws ParseException {
+    static CList jsonArray(AbstLexer wr, byte flag) throws ParseException {
         CList list = new CList();
 
-        boolean hasMore = true;
-        try {
-            hasMore = wr.offset(1) != ']';
-        } catch (ArrayIndexOutOfBoundsException ignored) {
-        }
+        boolean more = false;
 
-        Word w;
         o:
         while (true) {
-            w = wr.nextWord();
+            Word w = wr.nextWord();
             switch (w.type()) {
                 case right_m_bracket:
                     break o;
                 case comma:
-                    if (hasMore) {
+                    if (more) {
                         unexpected(wr, ",");
                     }
-                    hasMore = true;
-                    continue;
+                    more = true;
+                    break;
                 default:
                     wr.retractWord();
+                    more = false;
+                    list.add(jsonRead(wr, flag));
                     break;
-            }
-
-            hasMore = false;
-
-            ConfEntry result = jsonRead(wr, 2 | (flag & 253), false);
-
-            if (result != null) {
-                list.add(result);
-            } else {
-                if (wr.nextWord().type() != right_m_bracket) {
-                    unexpected(wr, "<空>");
-                }
-                break;
             }
         }
 
@@ -123,60 +131,46 @@ public final class JSONParser {
      * {xxx: yyy, zzz: uuu}
      */
     @SuppressWarnings("fallthrough")
-    static CMapping jsonObject(AbstLexer wr, int flag) throws ParseException {
+    static CMapping jsonObject(AbstLexer wr, byte flag) throws ParseException {
         CMapping map = new CMapping();
 
-        boolean hasMore = wr.remain() <= 1 || wr.offset(1) != '}';
+        boolean more = false;
 
         o:
         while (true) {
-            Word name = wr.nextWord();
+            Word name = wr.nextWord().copy();
             switch (name.type()) {
                 case right_l_bracket:
                     break o;
                 case comma:
-                    if (hasMore) {
+                    if (more) {
                         unexpected(wr, ",");
                     }
-                    hasMore = true;
+                    more = true;
                     continue;
-
                 case WordPresets.STRING:
                     break;
                 case WordPresets.LITERAL:
-                    if((flag & 128) != 0)
+                    if((flag & 2) != 0)
                         break;
                 default:
                     unexpected(wr, name.val(), "字符串");
             }
 
-            if((flag & 64) != 0 && map.containsKey(name.val()))
+            if((flag & 1) != 0 && map.containsKey(name.val()))
                 throw wr.err("重复的key: " + name.val());
 
-            hasMore = false;
+            more = false;
 
-            final Word word = wr.nextWord();
-            if (word.type() != colon)
-                unexpected(wr, word.val(), ":");
+            Word w = wr.nextWord();
+            if (w.type() != colon)
+                unexpected(wr, w.val(), ":");
 
-            ConfEntry result = jsonRead(wr, 1 | (flag & 253), false);
-
-            boolean end = wr.nextWord().type() == right_l_bracket;
-
-            if (result != null) {
-                map.put(name.val(), result);
-            } else {
-                unexpected(wr, "empty_statement");
-            }
-
-            if (end) {
-                break;
-            }
-            wr.retractWord();
+            map.put(name.val(), jsonRead(wr, flag));
         }
 
         if (map.containsKey("==", Type.STRING)) {
-            ObjectSerializer<?> deserializer = ObjectSerializer.REGISTRY.get(map.getString("=="));
+            ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
             if (deserializer != null) {
                 return new CObject<>(map, deserializer);
             }/* else {
@@ -187,106 +181,38 @@ public final class JSONParser {
         return map;
     }
 
-    /**
-     * @param flag <BR>
-     *             1  : in 定义对象 <BR>
-     *             2  : in 定义数组 <BR>
-     *             64 : 对重复的key报错
-     *             128: 仁慈模式 (忽略key中的literal string)
-     */
     @SuppressWarnings("fallthrough")
-    private static ConfEntry jsonRead(AbstLexer wr, int flag, boolean isOut) throws ParseException {
-        ConfEntry cur = null;
-
-        Word w;
-
-        o:
-        while (true) {
-            w = wr.nextWord();
-            switch (w.type()) {
-                case left_m_bracket: {
-                    if (cur != null) unexpected(wr, w.val());
-                    cur = jsonArray(wr, flag);
-                }
-                break;
-                case WordPresets.STRING:
-                    if (cur != null) unexpected(wr, w.val());
-                    cur = CString.valueOf(w.val());
-                    break;
-                case WordPresets.DECIMAL_D:
-                case WordPresets.DECIMAL_F:
-                    if (cur != null) unexpected(wr, w.val());
-                    cur = CDouble.valueOf(w.val());
-                    break;
-                case WordPresets.INTEGER:
-                    if (cur != null) unexpected(wr, w.val());
-                    cur = CInteger.valueOf(w.val());
-                    break;
-                case TRUE:
-                case FALSE:
-                    if (cur != null) unexpected(wr, w.val());
-                    cur = CBoolean.valueOf(w.val());
-                    break;
-                case NULL:
-                    if (cur != null) unexpected(wr, w.val());
-                    cur = CNull.NULL;
-                    break;
-                case left_l_bracket: {
-                    if (cur != null) unexpected(wr, "{");
-                    cur = jsonObject(wr, flag);
-                }
-                break;
-
-                case WordPresets.EOF:
-                    if (isOut && cur != null) {
-                        return cur;
-                    }
-
-                default:
-                    unexpected(wr, w.val());
-                    break;
-
-                case right_m_bracket: {
-                    if ((flag & 2) == 0) {
-                        unexpected(wr, "]");
-                    } else {
-                        wr.retractWord();
-                        break o;
-                    }
-                }
-                break;
-
-                case right_l_bracket: {
-                    if ((flag & 1) == 0) {
-                        unexpected(wr, "}");
-                    } else {
-                        wr.retractWord();
-                        break o;
-                    }
-                }
-                break;
-
-                case comma: {
-                    if ((flag & 3) == 0) {
-                        unexpected(wr, ",");
-                    } else {
-                        wr.retractWord();
-                        break o;
-                    }
-                }
-                break;
-            }
+    private static CEntry jsonRead(AbstLexer wr, byte flag) throws ParseException {
+        Word w = wr.nextWord();
+        switch (w.type()) {
+            case left_m_bracket:
+                return jsonArray(wr, flag);
+            case WordPresets.STRING:
+                return CString.valueOf(w.val());
+            case WordPresets.DECIMAL_D:
+            case WordPresets.DECIMAL_F:
+                return CDouble.valueOf(w.val());
+            case WordPresets.INTEGER:
+                return CInteger.valueOf(w.val());
+            case TRUE:
+            case FALSE:
+                return CBoolean.valueOf(w.type() == TRUE);
+            case NULL:
+                return CNull.NULL;
+            case left_l_bracket:
+                return jsonObject(wr, flag);
+            default:
+                unexpected(wr, w.val());
+                return null;
         }
-
-        return cur;
     }
 
-    static void unexpected(AbstLexer wr, String word, String expecting) throws ParseException {
-        throw wr.err("未预料的: " + word + ", 期待: " + expecting);
+    static void unexpected(AbstLexer wr, String got, String expect) throws ParseException {
+        throw wr.err("未预料的: " + got + ", 期待: " + expect);
     }
 
-    static void unexpected(AbstLexer wr, String s) throws ParseException {
-        throw wr.err("未预料的: " + s);
+    static void unexpected(AbstLexer wr, String got) throws ParseException {
+        throw wr.err("未预料的: " + got);
     }
 
     private static class JSONLexer extends Lexer {
@@ -310,35 +236,52 @@ public final class JSONParser {
             return formClip(id, s);
         }
 
+        /**
+         * 回收利用Word对象
+         */
+        protected Word formClip(short id, CharSequence s) {
+            if(cached == null) {
+                cached = new Word();
+            }
+            return cached.reset(id, index, s.toString());
+        }
+
         @Override
-        protected Word readSpecial() throws ParseException {
+        protected final Word readSymbol() throws ParseException {
             char c = next();
 
+            String v;
             short id;
             switch (c) {
                 case '{':
+                    v = "{";
                     id = left_l_bracket;
                     break;
                 case '}':
+                    v = "}";
                     id = right_l_bracket;
                     break;
                 case '[':
+                    v = "[";
                     id = left_m_bracket;
                     break;
                 case ']':
+                    v = "]";
                     id = right_m_bracket;
                     break;
                 case ':':
+                    v = ":";
                     id = colon;
                     break;
                 case ',':
+                    v = ",";
                     id = comma;
                     break;
                 default:
                     throw err("无效字符 '" + c + '\'');
             }
 
-            return formClip(id, String.valueOf(c));
+            return formClip(id, v);
         }
     }
 }

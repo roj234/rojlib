@@ -1,11 +1,36 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.mod.util;
 
-import roj.asm.remapper.Mapping;
-import roj.asm.remapper.Util;
-import roj.asm.remapper.util.FlDesc;
-import roj.asm.remapper.util.MtDesc;
+import roj.asm.mapper.Mapping;
+import roj.asm.mapper.Util;
+import roj.asm.mapper.util.FlDesc;
+import roj.asm.mapper.util.MtDesc;
+import roj.asm.type.ParamHelper;
 import roj.asm.util.FlagList;
-import roj.asm.util.type.ParamHelper;
 import roj.collect.FilterList;
 import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
@@ -28,11 +53,11 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * Mapping helper
  *
- * @author solo6975
- * @since 2020/8/29 22:25
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/8/29 22:25
  */
 public class MappingHelper {
     // 4mb

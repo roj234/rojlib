@@ -1,6 +1,30 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.ast;
 
-import roj.collect.ReuseStack;
 import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
 import roj.kscript.func.KFunction;
@@ -10,7 +34,8 @@ import roj.kscript.util.LineInfo;
 import roj.kscript.util.VInfo;
 import roj.kscript.vm.ErrorInfo;
 import roj.kscript.vm.Func;
-import roj.kscript.vm.ResourceManager;
+import roj.kscript.vm.KScriptVM;
+import roj.kscript.vm.ScriptException;
 import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
@@ -20,17 +45,14 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * 运行时栈帧 StackFrame <BR>
- *     保存运行时所有数据 (理论上支持多线程了)
- *
- * @author Roj233
- * @since 2020/9/27 12:41
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/9/27 12:41
  */
-public final class Frame extends IContext {
-    public Frame(ArrayList<roj.kscript.util.LineInfo> lineIndexes, Consumer<Frame> postProcessor) {
+public class Frame extends IContext {
+    public Frame(ArrayList<LineInfo> lineIndexes, Consumer<Frame> postProcessor) {
         super();
         this.lineIndexes = lineIndexes;
         lineIndexes.trimToSize();
@@ -41,17 +63,16 @@ public final class Frame extends IContext {
         stack = new KType[4];
     }
 
-    private Frame() {}
+    Frame() {}
 
     Consumer<Frame> builder;
 
     // region 函数执行周期
     /**
      * 运行前初始化
+     * @return can simple TCO
      */
-    public void init(IObject $this, ArgList args) {
-        ResourceManager.get().pushStack();
-
+    public boolean init(IObject $this, ArgList args) {
         this.$this = $this;
         this.args = args;
 
@@ -61,10 +82,13 @@ public final class Frame extends IContext {
             builder = null;
         }
 
+        KScriptVM.get().pushStack(stackUsed + lvt.length);
+
         // 初始化参数
         int i = 0;
-        for (; i < usedArgs.length; i++) {
-            lvt[i] = args.get(usedArgs[i]);
+        int[] args1 = this.usedArgs;
+        for (; i < args1.length; i++) {
+            lvt[i] = args.get(args1[i]);
         }
 
         for (int j = 0; i < lvt.length; i++, j++) {
@@ -78,9 +102,11 @@ public final class Frame extends IContext {
             }
             lvt[i] = def;
         }
+
+        return true;
     }
 
-    private void initChk() {
+    final void initChk() {
         if(lvtDef.length > 0) {
             lvtChk = new KType[lvtDef.length];
             for (int i = 0; i < lvtDef.length; i++) {
@@ -97,30 +123,31 @@ public final class Frame extends IContext {
      * 运行后还原状态
      */
     public void reset() {
-        stackClear();
-
-        tryCatch.clear();
-        exInfo.clear();
+        for (int i = 0; i < stackUsed; i++) {
+            stack[i].memory(6);
+            stack[i] = null;
+        }
+        stackUsed = 0;
 
         $this = null;
         args = null;
 
         result = KUndefined.UNDEFINED;
 
-        ResourceManager.get().popStack();
+        KScriptVM.get().popStack();
     }
 
     /**
      * 获取返回值
      */
-    public KType returnVal() {
+    public final KType returnVal() {
         KType result = this.result;
         reset();
         return result instanceof KFunction ? ((KFunction) result).onReturn(this) : result;
     }
 
     /**
-     * 暂存返回值，若函数运行到此结束，则{@link Node#execute(Frame)}会返回null
+     * 暂存返回值，若函数运行到此结束，则{@link Node#exec(Frame)}会返回null
      */
     // rw
     public KType result;
@@ -131,52 +158,52 @@ public final class Frame extends IContext {
     // rw
     KType[] stack;
     // rw
-    int stackSize;
+    int stackUsed;
 
     @Nonnull
-    public KType last() {
-        return stack[stackSize - 1];
+    public final KType last() {
+        return stack[stackUsed - 1];
     }
 
     @Nonnull
-    public KType pop() {
-        KType v = stack[--stackSize];
-        stack[stackSize] = null;
+    public final KType pop() {
+        KType v = stack[--stackUsed].memory(6);
+        stack[stackUsed] = null;
         return v;
     }
 
-    public void setLast(@Nonnull KType base) {
-        stack[stackSize - 1] = base;
+    public final void setLast(@Nonnull KType base) {
+        stack[stackUsed - 1] = base;
     }
 
-    public void push(@Nonnull KType base) {
-        if(stackSize == stack.length) {
-            KType[] plus = new KType[(int) (stackSize * 1.5)];
-            System.arraycopy(stack, 0, plus, 0, stackSize);
+    public final void push(@Nonnull KType base) {
+        if(stackUsed == stack.length) {
+            KType[] plus = new KType[(int) (stackUsed * 1.5)];
+            System.arraycopy(stack, 0, plus, 0, stackUsed);
             stack = plus;
         }
 
-        stack[stackSize] = base;
+        stack[stackUsed] = base.memory(5);
 
-        if (++stackSize > 2048)
+        if (++stackUsed > 2048)
             throw new IllegalStateException("Stack overflow(2048): " + this);
     }
 
-    public void stackClear() {
-        for (int i = 0; i < stackSize; i++) {
+    public final void stackClear() {
+        for (int i = 0; i < stackUsed; i++) {
             stack[i] = null;
         }
-        stackSize = 0;
+        stackUsed = 0;
     }
 
     @Nonnull
-    public KType last(int i) {
-        if (i >= stackSize)
-            throw new ArrayIndexOutOfBoundsException(stackSize - 1 - i);
-        return stack[stackSize - 1 - i];
+    public final KType last(int i) {
+        if (i >= stackUsed)
+            throw new ArrayIndexOutOfBoundsException(stackUsed - 1 - i);
+        return stack[stackUsed - 1 - i];
     }
 
-    public Frame closure() {
+    public final Frame closure() {
         Frame fr = duplicate();
 
         IContext[] arr = fr.parents;
@@ -187,37 +214,43 @@ public final class Frame extends IContext {
         return fr;
     }
 
-    public boolean working() {
+    public final boolean working() {
         return args != null;
     }
 
     // endregion
-    // region 异常处理
+    // region 异常处理.nothing
 
-    public final ReuseStack<ErrorInfo> exInfo = new ReuseStack<ErrorInfo>() {
-        @Nonnull
-        @Override
-        public ErrorInfo pop() {
-            if(tail == head)
-                return ErrorInfo.NONE;
+    public void pushTry(TryEnterNode node) {
+        throw new UnsupportedOperationException("Unexpected call");
+    }
+    public TryEnterNode popTry() {
+        throw new UnsupportedOperationException("Unexpected call");
+    }
 
-            ErrorInfo v = tail.value;
-            tail = tail.prev;
-            size--;
-            return v;
-        }
-    };
-    // try-catch exception temp
-    public final ReuseStack<TryNode> tryCatch = new ReuseStack<>();        // try-catch section
+    public TryEnterNode popTryOrNull() {
+        throw new UnsupportedOperationException("Unexpected call");
+    }
 
-    public void trace(Node node, List<StackTraceElement> collector) {
+    public void pushError(int stage, TryEnterNode info, ScriptException ex) {
+        throw new UnsupportedOperationException("Unexpected call");
+    }
+
+    public ErrorInfo popError() {
+        throw new UnsupportedOperationException("Unexpected call");
+    }
+
+    // endregion
+    // region 异常处理.行号计算
+
+    public final void trace(Node node, List<StackTraceElement> collector) {
         int line = -1;
-        final ArrayList<roj.kscript.util.LineInfo> linf = this.lineIndexes;
+        final ArrayList<LineInfo> linf = this.lineIndexes;
         if(owner.getSource() != null && !linf.isEmpty()) {
             Node st = owner.begin;
 
             int lId = 1;
-            roj.kscript.util.LineInfo info = linf.get(0);
+            LineInfo info = linf.get(0);
 
             while (st != null) {
                 if(st == info.node) {
@@ -240,10 +273,7 @@ public final class Frame extends IContext {
         args.trace(collector);
     }
 
-    // endregion
-    // region 异常处理.行号计算
-
-    private ArrayList<LineInfo> lineIndexes;
+    ArrayList<LineInfo> lineIndexes;
 
     // endregion
     // region 内部变量
@@ -251,12 +281,12 @@ public final class Frame extends IContext {
     // owner
     Func owner;
 
-    public Frame init(Func owner) {
+    public final Frame init(Func owner) {
         this.owner = owner;
         return this;
     }
 
-    public Func owner() {
+    public final Func owner() {
         return owner;
     }
 
@@ -271,6 +301,7 @@ public final class Frame extends IContext {
 
     // var and let by index
     KType[] lvt, lvtDef, lvtChk;
+    // used for low-level function
     String[] varNames;
 
     // 使用的参数 (ordered)
@@ -279,14 +310,14 @@ public final class Frame extends IContext {
     // 线性lets
     Map<Node, VInfo> linearDiff;
 
-    public void linear(Node curr) {
+    public final void linear(Node curr) {
         applyDiff(linearDiff.get(curr));
     }
 
-    public void applyDiff(VInfo diff) {
+    public final void applyDiff(VInfo diff) {
         while (diff != null) {
             // ? linear
-            lvt[diff.idx] = diff.v;
+            lvt[diff.id] = diff.v;
             diff = diff.next;
         }
     }
@@ -295,27 +326,27 @@ public final class Frame extends IContext {
     IContext[] parents;
 
     @Override
-    public KType get(String key) {
+    public final KType get(String key) {
         return parents[parents.length - 1].get(key);
     }
 
     @Override
-    KType getEx(String keys, KType def) {
+    final KType getEx(String keys, KType def) {
         return parents[parents.length - 1].getEx(keys, def);
     }
 
     @Override
-    public void put(String id, KType val) {
+    public final void put(String id, KType val) {
         parents[parents.length - 1].put(id, val);
     }
 
     @Override
-    KType getIdx(int index) {
+    final KType getIdx(int index) {
         return lvt[index];
     }
 
     @Override
-    void putIdx(int index, KType value) {
+    final void putIdx(int index, KType value) {
         lvt[index] = value;
     }
 
@@ -323,11 +354,12 @@ public final class Frame extends IContext {
     /**
      * 防止与{@link IObject#copy()}重名
      */
-    public final Frame duplicate() {
+    public Frame duplicate() {
         Frame copy = new Frame();
         copy.stack = new KType[stack.length]; // inheritance
         copy.usedArgs = usedArgs;
         copy.linearDiff = linearDiff;
+
         if(lvt.length == 0) {
             copy.lvt = copy.lvtChk = copy.lvtDef = lvt;
             copy.parents = parents;
@@ -335,9 +367,7 @@ public final class Frame extends IContext {
             copy.lvtDef = lvtDef;
             copy.lvt = new KType[lvt.length];
             copy.initChk();
-            copy.parents = new IContext[parents.length];
-            if(parents.length > 0)
-                System.arraycopy(parents, 1, copy.parents, 1, parents.length - 1);
+            copy.parents = parents.clone();
             copy.parents[0] = copy;
         }
         copy.owner = owner;
@@ -351,12 +381,10 @@ public final class Frame extends IContext {
         if(result != null) {
             sb.append("<return>: ").append(result).append(", ");
         }
-        if(stackSize > 0) {
-            sb.append("<stack>: [").append(ArrayUtil.toString(stack, 0, stackSize)).append("], ");
+        if(stackUsed > 0) {
+            sb.append("<stack>: [").append(ArrayUtil.toString(stack, 0, stackUsed)).append("], ");
         }
         sb.append("<var>: [").append(ArrayUtil.toString(lvt, 0, lvt.length)).append("], ");
-        if(!exInfo.isEmpty())
-            sb.append("<try>: ").append(exInfo).append("], ");
         if($this != null) {
             sb.append("this: ").append($this)
                     .append(", arg: ").append(args);

@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.net.tcp.util;
 
 import roj.config.ParseException;
@@ -9,11 +34,11 @@ import roj.text.CharList;
 import roj.util.ByteWriter;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author solo6975
- * @since 2021/2/4 16:56
+ * @author Roj234
+ * @version 0.1
+ * @since  2021/2/4 16:56
  */
 public final class HTTPHeaderLexer extends AbstLexer {
     public HTTPHeaderLexer init(CharSequence s) {
@@ -25,40 +50,40 @@ public final class HTTPHeaderLexer extends AbstLexer {
      * 读词
      */
     public String readHttpWord() {
-        CharSequence input = this.input;
-        int index = this.index;
+        CharSequence in = this.input;
+        int i = this.index;
 
-        last = last == null ? snapshot() : snapshot(last);
+        lastWord = i;
 
         CharList temp = this.found;
         temp.clear();
 
         int remain;
-        while ((remain = input.length() - index) > 0) {
-            int c = input.charAt(index++);
+        while ((remain = in.length() - i) > 0) {
+            int c = in.charAt(i++);
             switch (c) {
                 case '\r':
-                    if (remain > 1 && input.charAt(index) == '\n') {
-                        index++;
-                        if (remain > 3 && input.charAt(index) == '\r' && input.charAt(index + 1) == '\n') {
-                            this.index = index + 2;
+                    if (remain > 1 && in.charAt(i) == '\n') {
+                        i++;
+                        if (remain > 3 && in.charAt(i) == '\r' && in.charAt(i + 1) == '\n') {
+                            this.index = i + 2;
                             return SharedConfig._SHOULD_EOF;
                         }
                     } else {
-                        this.index = index;
+                        this.index = i;
                         return SharedConfig._ERROR;
                     }
                     break;
                 case ':':
-                    if (input.charAt(index++) != ' ') {
-                        this.index = index;
+                    if (in.charAt(i++) != ' ') {
+                        this.index = i;
                         return SharedConfig._ERROR;
                     }
 
-                    while ((c = input.charAt(index++)) != '\r' || input.charAt(index) != '\n') {
+                    while ((c = in.charAt(i++)) != '\r' || in.charAt(i) != '\n') {
                         temp.append((char) c);
                     }
-                    this.index = index - 1;
+                    this.index = i - 1;
 
                     if (temp.length() == 0) {
                         return "";
@@ -68,20 +93,20 @@ public final class HTTPHeaderLexer extends AbstLexer {
 
                 default: {
                     if (!WHITESPACE.contains(c)) {
-                        index--;
+                        i--;
 
-                        while (index < input.length()) {
-                            c = input.charAt(index++);
+                        while (i < in.length()) {
+                            c = in.charAt(i++);
 
                             if (!WHITESPACE.contains(c) && c != ':') {
                                 temp.append((char) c);
                             } else {
-                                index--;
+                                i--;
                                 break;
                             }
                         }
 
-                        this.index = index;
+                        this.index = i;
 
                         if (temp.length() == 0) {
                             return null;
@@ -92,7 +117,7 @@ public final class HTTPHeaderLexer extends AbstLexer {
                 }
             }
         }
-        this.index = index;
+        this.index = i;
         return SharedConfig._SHOULD_EOF;
     }
 
@@ -108,12 +133,12 @@ public final class HTTPHeaderLexer extends AbstLexer {
      * @return 其他字符
      */
     @Override
-    protected Word readSpecial() {
+    protected Word readSymbol() {
         return null;
     }
 
     @Override
-    protected Word formNumberClip(byte flag, CharList temp) {
+    protected Word formNumberClip(byte flag, CharList temp, boolean negative) {
         return null;
     }
 

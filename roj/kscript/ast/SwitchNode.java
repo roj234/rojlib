@@ -1,10 +1,32 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.ast;
 
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Method;
-import roj.asm.util.InsnList;
-import roj.collect.CrossFinder;
 import roj.collect.IntBiMap;
+import roj.collect.Unioner;
 import roj.kscript.util.SwitchMap;
 import roj.kscript.util.VInfo;
 import roj.kscript.util.Variable;
@@ -13,11 +35,11 @@ import roj.util.Helpers;
 import java.util.List;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author Roj233
- * @since 2020/9/27 23:02
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/9/27 23:02
  */
 public final class SwitchNode extends Node {
     public Node def;
@@ -25,9 +47,13 @@ public final class SwitchNode extends Node {
     private final SwitchMap map;
 
     public SwitchNode(Node def, SwitchMap map) {
-        super(Opcode.SWITCH);
         this.def = def;
         this.map = Helpers.cast(map);
+    }
+
+    @Override
+    public Opcode getCode() {
+        return Opcode.SWITCH;
     }
 
     @Override
@@ -39,8 +65,8 @@ public final class SwitchNode extends Node {
     }
 
     @Override
-    protected void genDiff(CrossFinder<CrossFinder.Wrap<Variable>> var, IntBiMap<Node> idx) {
-        List<CrossFinder.Wrap<Variable>> self = var._collect_modifiable_int_(idx.getByValue(this)),
+    protected void genDiff(Unioner<Unioner.Wrap<Variable>> var, IntBiMap<Node> idx) {
+        List<Unioner.Wrap<Variable>> self = var._collect_modifiable_int_(idx.getByValue(this)),
             dest = var._collect_modifiable_int_(idx.getByValue(def));
         if(self != dest) {
             diff = NodeUtil.calcDiff(self, dest);
@@ -49,13 +75,8 @@ public final class SwitchNode extends Node {
     }
 
     @Override
-    public Node execute(Frame frame) {
+    public Node exec(Frame frame) {
         return map.getAndApply(frame, def, diff);
-    }
-
-    @Override
-    public void toVMCode(Clazz clazz, Method method, InsnList list) {
-
     }
 
     @Override

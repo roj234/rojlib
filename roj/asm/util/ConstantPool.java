@@ -1,11 +1,29 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: ConstantPool.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.asm.util;
 
 import roj.asm.cst.*;
@@ -22,6 +40,13 @@ import java.util.PrimitiveIterator;
 
 import static roj.asm.cst.CstType.*;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/29 17:16
+ */
 public class ConstantPool {
     Constant[] cst;
     int index = 1;
@@ -33,6 +58,10 @@ public class ConstantPool {
 
     public ConstantPool(int len) {
         this.cst = new Constant[len];
+    }
+
+    public int index() {
+        return index;
     }
 
     void addConstant(Constant c) {
@@ -64,36 +93,40 @@ public class ConstantPool {
             throw new IllegalStateException("ConstantPool is marked unmodifiable.");
         int len = cst.length;
 
-        FindSet<Constant> constantSet = new MyHashSet<>();
+        FindSet<Constant> uniquer = new MyHashSet<>(cst.length);
 
         final Constant[] cst = this.cst;
         Idx idx = new Idx(cst.length);
         idx.add(0); // remove 0
 
-        for (int i = 0; i < 3; i++) {
+        for (int pass = 0; pass < 3; pass++) {
             PrimitiveIterator.OfInt itr = idx.remains();
             while (itr.hasNext()) {
-                int index = itr.nextInt();
-                Constant c = cst[index];
+                int i = itr.nextInt();
+                Constant c = cst[i];
                 if (c == CstDoLHolder.HOLDER/* null */) { // and there will be not any null class
-                    idx.add(index);
+                    idx.add(i);
                     continue;
                 }
 
                 try {
-                    boolean flag = validate(c, i);
+                    boolean flag = validate(c, pass);
                     if (flag) {
-                        cst[index] = constantSet.find(c);
-                        idx.add(index);
+                        if(c != (c = uniquer.find(c))) {
+                            cst[pass] = c;
+                        } else {
+                            uniquer.add(c);
+                        }
+                        idx.add(i);
                     }
                 } catch (ClassCastException e) {
-                    Constant refers = getReferTo(c, i);
+                    Constant refers = getReferTo(c, pass);
                     throw new IllegalArgumentException("Constant " + c + " is referencing to invalid index " + refers.getIndex() + " ( " + refers + " )", e);
                 } catch (NullPointerException e) {
                     if (fixNPE(c)) {
-                        System.err.println("NPE found at id" + index + ", probably error occurred.");
-                        validate(c, i);
-                        idx.add(index);
+                        System.err.println("NPE found at id" + i + ", probably error occurred.");
+                        validate(c, pass);
+                        idx.add(i);
                     } else {
                         throw e;
                     }

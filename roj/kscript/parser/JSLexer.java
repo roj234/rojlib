@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.parser;
 
 import roj.collect.IBitSet;
@@ -8,21 +33,22 @@ import roj.config.word.AbstLexer;
 import roj.config.word.LineHandler;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
+import roj.kscript.api.I18n;
 import roj.text.CharList;
 
 import java.util.Arrays;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- * <p>
- * 词法分析
+ * JavaScript Lexer : string => tokens
  *
- * @author solo6975
- * @since 2020/10/3 19:20
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/10/3 19:20
  */
 public class JSLexer extends AbstLexer {
     public static final IBitSet JS_SPECIAL = LongBitSet.preFilled("+-*/()!~`@#%^&=,<>.?:;|[]{}");
+
+    public boolean acceptsNumber;
 
     @SuppressWarnings("fallthrough")
     public JSLexer init(CharSequence keys) {
@@ -84,11 +110,19 @@ public class JSLexer extends AbstLexer {
                         if (!WHITESPACE.contains(c)) {
                             this.index = index - 1;
                             if (JS_SPECIAL.contains(c)) {
-                                return readSpecial();
+                                switch (c) {
+                                    case '-':
+                                    case '+':
+                                        if(acceptsNumber && input.length() > index && NUMBER.contains(input.charAt(index))) {
+                                            return readDigit(true);
+                                        }
+                                        break;
+                                }
+                                return readSymbol();
                             } else if (NUMBER.contains(c)) {
-                                return readDigit();
+                                return readDigit(false);
                             } else {
-                                return readAlphabet();
+                                return readLiteral();
                             }
                         }
                     }
@@ -113,7 +147,7 @@ public class JSLexer extends AbstLexer {
     }
 
     @Override
-    protected Word readAlphabet() {
+    protected Word readLiteral() {
         CharSequence input = this.input;
         int index = this.index;
 
@@ -146,7 +180,7 @@ public class JSLexer extends AbstLexer {
 
     /// 其他字符
     @Override
-    protected Word readSpecial() throws ParseException {
+    protected Word readSymbol() throws ParseException {
         CharSequence input = this.input;
         int index = this.index;
 
@@ -194,7 +228,15 @@ public class JSLexer extends AbstLexer {
     }
 
     @Override
-    protected Word formNumberClip(byte flag, CharList temp) {
-        return formClip((short) (WordPresets.INTEGER + flag), temp).number();
+    protected Word formNumberClip(byte flag, CharList temp, boolean negative) {
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
+    }
+
+    public ParseException err(String reason, Word word) {
+        return new ParseException(input, I18n.translate(reason) + I18n.at + word.val(), word.getIndex(), null);
+    }
+
+    public ParseException err(String reason, Throwable cause) {
+        return new ParseException(input, I18n.translate(reason), this.index, cause);
     }
 }

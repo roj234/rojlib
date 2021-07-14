@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.util;
 
 import roj.collect.MyHashMap;
@@ -8,6 +33,7 @@ import roj.kscript.ast.Context;
 import roj.kscript.ast.Frame;
 import roj.kscript.ast.IContext;
 import roj.kscript.ast.Node;
+import roj.kscript.parser.expr.Expression;
 import roj.kscript.type.KType;
 import roj.kscript.util.opm.ConstMap;
 import roj.kscript.util.opm.KOEntry;
@@ -25,14 +51,16 @@ import java.util.Set;
 public final class ContextPrimer {
     static final ToIntMap<String> NIL = new ToIntMap<>(0);
 
-    public ArrayList<String> usedArgs = new ArrayList<>();
+    public ArrayList<String> usedArgs  = new ArrayList<>();
+    public int               restParId = -1;
+
     public final ConstMap globals;
     public ArrayList<Variable> locals = new ArrayList<>();
 
-    public MyHashSet<String> unusedGlobal = new MyHashSet<>();
-    private MyHashMap<String, Variable> inRegion = new MyHashMap<>();
-    private ToIntMap<String> arguments = NIL;
-    public ReuseStack<Set<String>> creations = new ReuseStack<>();
+    public MyHashSet<String>            unusedGlobal = new MyHashSet<>();
+    private MyHashMap<String, Variable> inRegion  = new MyHashMap<>();
+    private ToIntMap<String>            parameter = NIL;
+    public ReuseStack<Set<String>>      creations = new ReuseStack<>();
 
     public ContextPrimer parent;
     public IContext built;
@@ -72,7 +100,7 @@ public final class ContextPrimer {
         unusedGlobal.clear();
         unusedGlobal = null;
 
-        arguments = NIL;
+        parameter = NIL;
     }
 
     public void finish() {
@@ -128,7 +156,20 @@ public final class ContextPrimer {
 
     // endregion
 
-    public void loadArg(int id, String as) {
+    public void setRestId(int i) {
+        restParId = i;
+        System.out.println("Rest par is wip");
+    }
+
+    public boolean isAdvanced() {
+        return false;
+    }
+
+    public void setDefault(int parId, Expression expr) {
+        System.out.println("Default val is wip");
+    }
+
+    public void loadPar(int id, String as) {
         if(parent == null) {
             throw new IllegalArgumentException("<global> function doesn't have any parameter.");
         }
@@ -138,10 +179,10 @@ public final class ContextPrimer {
             globals.put(as, null);
 
             usedArgs.ensureCapacity(id);
-            while (usedArgs.size() < id) {
+            while (usedArgs.size() <= id) {
                 usedArgs.add(null);
             }
-            usedArgs.add(as);
+            usedArgs.set(id, as);
         }
     }
 
@@ -164,7 +205,7 @@ public final class ContextPrimer {
     }
 
     public void chainUpdate(String key) {
-        if(!unusedGlobal.remove(key) && !globals.containsKey(key) && !arguments.containsKey(key) && parent != null)
+        if(!unusedGlobal.remove(key) && !globals.containsKey(key) && !parameter.containsKey(key) && parent != null)
             parent.chainUpdate(key);
     }
 
@@ -205,7 +246,11 @@ public final class ContextPrimer {
         return false;
     }
 
-    public void setArguments(ToIntMap<String> arguments) {
-        this.arguments = arguments;
+    public void setParameter(ToIntMap<String> parameter) {
+        this.parameter = parameter;
+    }
+
+    public boolean top() {
+        return parent == null || !(parent.built instanceof Frame);
     }
 }

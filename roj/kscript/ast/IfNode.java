@@ -1,10 +1,32 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.ast;
 
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Method;
-import roj.asm.util.InsnList;
-import roj.collect.CrossFinder;
 import roj.collect.IntBiMap;
+import roj.collect.Unioner;
 import roj.kscript.parser.Symbol;
 import roj.kscript.type.KType;
 import roj.kscript.type.Type;
@@ -14,31 +36,35 @@ import roj.kscript.util.Variable;
 import java.util.List;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author Roj233
- * @since 2020/9/27 18:50
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/9/27 18:50
  */
 public final class IfNode extends Node {
     final byte type;
     Node target;
     VInfo diff;
 
-    public static final short TRUE = 513;
+    public static final short TRUE = 53;
 
     public IfNode(short type, LabelNode target) {
-        super(Opcode.IF);
-        this.type = (byte) (type - 500);
+        this.type = (byte) (type - 53);
         this.target = target;
+    }
+
+    @Override
+    public Opcode getCode() {
+        return Opcode.IF;
     }
 
     @Override
     protected void compile() {
         if(target.getClass() == LabelNode.class) {
             target = target.next;
-            if(target instanceof VarNode && ((VarNode) target).name instanceof Node) {
-                target = (Node) ((VarNode) target).name;
+            if(target instanceof VarGNode && ((VarGNode) target).name instanceof Node) {
+                target = (Node) ((VarGNode) target).name;
             } else
             if(target instanceof IncrNode && ((IncrNode) target).name instanceof Node) {
                 target = (Node) ((IncrNode) target).name;
@@ -47,8 +73,8 @@ public final class IfNode extends Node {
     }
 
     @Override
-    protected void genDiff(CrossFinder<CrossFinder.Wrap<Variable>> var, IntBiMap<Node> idx) {
-        List<CrossFinder.Wrap<Variable>> self = var._collect_modifiable_int_(idx.getByValue(this)),
+    protected void genDiff(Unioner<Unioner.Wrap<Variable>> var, IntBiMap<Node> idx) {
+        List<Unioner.Wrap<Variable>> self = var._collect_modifiable_int_(idx.getByValue(this)),
                 dest = var._collect_modifiable_int_(idx.getByValue(target));
         if(self != dest) {
             diff = NodeUtil.calcDiff(self, dest);
@@ -56,7 +82,7 @@ public final class IfNode extends Node {
     }
 
     @Override
-    public Node execute(Frame frame) {
+    public Node exec(Frame frame) {
         boolean _if = calcIf(frame, type);
         if(_if)
             return next;
@@ -69,53 +95,53 @@ public final class IfNode extends Node {
 
         boolean v = false;
         switch (type) {
-            case TRUE - 500:
+            case TRUE - 53:
                 v = b.asBool();
                 break;
-            case Symbol.lss - 500:
-            case Symbol.gtr - 500:
-            case Symbol.geq - 500:
-            case Symbol.leq - 500: {
+            case Symbol.lss - 53:
+            case Symbol.gtr - 53:
+            case Symbol.geq - 53:
+            case Symbol.leq - 53: {
                 KType a = frame.pop();
-                if (!a.canCastTo(Type.INT) || !b.canCastTo(Type.INT))
-                    throw new IllegalArgumentException("operand is not number: " + a.getClass().getName() + ", " + b.getClass().getName());
+                //if (!a.canCastTo(Type.INT) || !b.canCastTo(Type.INT))
+                //    throw new IllegalArgumentException("operand is not number: " + a.getClass().getName() + ", " + b.getClass().getName());
 
                 if (!a.isInt() || !b.isInt()) {
                     final double aa = a.asDouble(), bb = b.asDouble();
                     switch (type) {
-                        case Symbol.lss - 500:
+                        case Symbol.lss - 53:
                             v = aa < bb;
                             break;
-                        case Symbol.gtr - 500:
+                        case Symbol.gtr - 53:
                             v = aa > bb;
                             break;
-                        case Symbol.geq - 500:
+                        case Symbol.geq - 53:
                             v = aa >= bb;
                             break;
-                        case Symbol.leq - 500:
+                        case Symbol.leq - 53:
                             v = aa <= bb;
                             break;
                     }
                 } else {
                     final int aa = a.asInt(), bb = b.asInt();
                     switch (type) {
-                        case Symbol.lss - 500:
+                        case Symbol.lss - 53:
                             v = aa < bb;
                             break;
-                        case Symbol.gtr - 500:
+                        case Symbol.gtr - 53:
                             v = aa > bb;
                             break;
-                        case Symbol.geq - 500:
+                        case Symbol.geq - 53:
                             v = aa >= bb;
                             break;
-                        case Symbol.leq - 500:
+                        case Symbol.leq - 53:
                             v = aa <= bb;
                             break;
                     }
                 }
             }
             break;
-            case Symbol.feq - 500: {
+            case Symbol.feq - 53: {
                 KType a = frame.pop();
                 switch (b.getType()) {
                     case BOOL:
@@ -141,10 +167,10 @@ public final class IfNode extends Node {
                 }
             }
             break;
-            case Symbol.equ - 500:
-            case Symbol.neq - 500: {
+            case Symbol.equ - 53:
+            case Symbol.neq - 53: {
                 KType a = frame.pop();
-                v = (type == (Symbol.equ - 500)) == a.equalsTo(b);
+                v = (type == (Symbol.equ - 53)) == a.equalsTo(b);
             }
             break;
         }
@@ -153,37 +179,32 @@ public final class IfNode extends Node {
     }
 
     @Override
-    public void toVMCode(Clazz clazz, Method method, InsnList list) {
-
-    }
-
-    @Override
     public String toString() {
         String k;
 
         switch (type) {
-            case TRUE - 500:
+            case TRUE - 53:
                 k = "false";
                 break;
-            case Symbol.lss - 500:
+            case Symbol.lss - 53:
                 k = ">=";
                 break;
-            case Symbol.gtr - 500:
+            case Symbol.gtr - 53:
                 k = "<=";
                 break;
-            case Symbol.geq - 500:
+            case Symbol.geq - 53:
                 k = "<";
                 break;
-            case Symbol.leq - 500:
+            case Symbol.leq - 53:
                 k = ">";
                 break;
-            case Symbol.feq - 500:
+            case Symbol.feq - 53:
                 k = "!===";
                 break;
-            case Symbol.equ - 500:
+            case Symbol.equ - 53:
                 k = "!=";
                 break;
-            case Symbol.neq - 500:
+            case Symbol.neq - 53:
                 k = "==";
                 break;
             default:

@@ -1,11 +1,29 @@
-/**
- * This file is a part of MI <br>
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 7
- * Author: R__
- * Filename: MyHashSet.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.collect;
 
 import roj.math.MathUtils;
@@ -17,6 +35,13 @@ import java.util.*;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/6/15 21:33
+ */
 public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSet<K> {
     public static class Entry<K> implements EntryIterable<Entry<K>> {
         public K k;
@@ -166,7 +191,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
     }
 
     @SuppressWarnings("unchecked")
-    protected void resize() {
+    private void resize() {
         //System.err.println("扩容为: "+ DELIM);
         Entry<?>[] newEntries = new Entry<?>[length];
         Entry<K> entry;
@@ -306,7 +331,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
         notUsing = entry;
     }
 
-    Entry<K> getEntry(K id) {
+    public Entry<K> getEntry(K id) {
         Entry<K> entry = getEntryFirst(id, false);
         while (entry != null) {
             if (Objects.equals(id, entry.k))
@@ -317,7 +342,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
     }
 
     @SuppressWarnings("unchecked")
-    Entry<K> getOrCreateEntry(K id) {
+    public Entry<K> getOrCreateEntry(K id) {
         Entry<K> entry = getEntryFirst(id, true);
         if (entry.k == NOT_USING)
             return entry;
@@ -339,7 +364,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
     }
 
     @SuppressWarnings("unchecked")
-    protected Entry<K> getEntryFirst(K id, boolean create) {
+    public Entry<K> getEntryFirst(K id, boolean create) {
         int i = indexFor(id);
         if (entries == null) {
             if (!create)

@@ -1,48 +1,75 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.collect;
 
 import javax.annotation.Nonnull;
 import java.util.PrimitiveIterator;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
+ * No description provided
+ *
  * @author Roj234
- * Filename: SingleBitSet.java
+ * @version 0.1
+ * @since 2021/5/11 22:58
  */
 public class SingleBitSet implements IBitSet {
     protected long set;
-    protected int max = -1;
+    protected byte max;
 
     public SingleBitSet() {
+        max = -1;
     }
 
     private SingleBitSet(long set, int max) {
         this.set = set;
-        this.max = max;
+        this.max = (byte) max;
     }
 
     public boolean contains(int key) {
-        if (key > 63) return false;
-        return IBitSet.isBitTrue(set, checkLimit(key));
+        if (key < 0) return false;
+        return (set & (1L << key)) != 0;
     }
 
-    private int checkLimit(int i) {
-        if (i >= 64) {
-            throw new IllegalArgumentException("FastIntSetL can only contains 64 bits");
+    private static void check(int i) {
+        if (i < 0 || i >= 64) {
+            throw new IllegalArgumentException("SingleBitSet suppport: [0, 63], got " + i);
         }
-        if (i > max)
-            max = i;
-        return i & 63;
     }
 
-    public Integer first() {
-        if (max == -1) return null;
+    public int first() {
+        if (max == -1) return -1;
         for (int i = 0; i <= max; i++) {
-            if (contains(i))
+            if ((set & (1L << i)) != 0)
                 return i;
         }
-        return null;
+        return -1;
+    }
+
+    public int last() {
+        return max;
     }
 
     @Override
@@ -58,18 +85,22 @@ public class SingleBitSet implements IBitSet {
     }
 
     public boolean add(int e) {
-        int i = checkLimit(e);
-        if (contains(e)) {
+        check(e);
+        if (e > max)
+            max = (byte) e;
+        if ((set & (1L << e)) != 0) {
             return false;
         } else {
-            set |= 1 << i;
+            set |= 1 << e;
             return true;
         }
     }
 
     public boolean remove(int i) {
-        if (contains(i)) {
-            set ^= 1 << checkLimit(i);
+        if(i < 0)
+            return false;
+        if ((set & (1L << i)) != 0) {
+            set ^= 1 << i;
             return true;
         }
         return false;
@@ -87,17 +118,17 @@ public class SingleBitSet implements IBitSet {
 
     public void fillAll() {
         set = 0xffffffffffffffffL;
-        max = 64;
+        max = 63;
     }
 
     public void fillAll(int len) {
-        int o = len & 63;
+        check(len);
         long k = 0;
-        for (int i = 0; i < o; i++) {
+        for (int i = 0; i <= len; i++) {
             k |= 1 << i;
         }
         set = k;
-        max = len;
+        max = (byte) len;
     }
 
     @Override
@@ -105,7 +136,7 @@ public class SingleBitSet implements IBitSet {
         if(ibs instanceof SingleBitSet) {
             SingleBitSet ibs1 = (SingleBitSet) ibs;
             set |= ibs1.set;
-            max = Math.max(max, ibs1.max);
+            max = (byte) Math.max(max, ibs1.max);
         } else {
             for (PrimitiveIterator.OfInt i = ibs.iterator(); i.hasNext(); ) {
                 int e = i.nextInt();

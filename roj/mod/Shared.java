@@ -1,7 +1,36 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.mod;
 
-import roj.asm.remapper.IRemapper;
-import roj.asm.remapper.RemapperV2;
+import roj.asm.mapper.ConstMapper;
+import roj.asm.mapper.util.FlDesc;
+import roj.asm.mapper.util.MtDesc;
+import roj.collect.MyHashMap;
+import roj.concurrent.pool.PrefixFactory;
+import roj.concurrent.pool.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.config.JSONParser;
 import roj.config.ParseException;
@@ -10,39 +39,44 @@ import roj.io.BOMInputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.ui.CmdUtil;
+import roj.util.ByteWriter;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * FMD Shared Data / Utility Methods
  *
- * @author solo6975
- * @since 2020/8/29 11:38
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/8/29 11:38
  */
 public final class Shared {
     public static final boolean DEBUG;
+    public static final Map<String, String> srg2mcp = new MyHashMap<>(1000, 1.5f);
     static final boolean ENABLE_CONCURRENT = false;
 
-    public static final String VERSION = "1.4.4";
+    public static final String VERSION = "1.5.0-beta";
 
     public static final File BASE, TMP_DIR, PROJ_CONF_DIR;
 
-    static Config config;
+    static Project currentProject;
     static boolean isForgeMap;
 
-    static RemapperV2 reverseRemapper;
-    static final RemapperV2 remapper = new RemapperV2();
+    static ConstMapper mapperFwd = new ConstMapper(), mapperRev;
+
+    public static TaskPool parallel = new TaskPool(1, Runtime.getRuntime().availableProcessors() * 2, 16, 1024, new PrefixFactory("AsyncTasker", 5000));
+
+    public static final CMapping MAIN_CONFIG;
 
     static {
         File base;
         try {
-            base = new File(ModDevelopment.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile().getParentFile();
+            base = new File(FMDMain.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile().getParentFile();
         } catch (URISyntaxException e) {
             e.printStackTrace();
             base = new File("").getAbsoluteFile();
@@ -61,14 +95,7 @@ public final class Shared {
             CmdUtil.error("无法创建配置保存文件夹: " + PROJ_CONF_DIR.getAbsolutePath());
             System.exit(-2);
         }
-    }
 
-    public static final File CONF_INDEX = new File(BASE, "config/index.json"),
-            MC_CONF = new File(BASE, "config/mc.json");
-
-    public static final CMapping MAIN_CONFIG;
-
-    static {
         File file = new File(BASE, "config.json");
         try {
             final BOMInputStream bom = new BOMInputStream(new FileInputStream(file), "UTF8");
@@ -76,7 +103,7 @@ public final class Shared {
                 CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getEncoding());
             }
 
-            MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 64).asMap();
+            MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 2).asMap();
 
             DEBUG = MAIN_CONFIG.getBoolean("调试模式");
 
@@ -97,10 +124,24 @@ public final class Shared {
         }
     }
 
+    public static final File CONF_INDEX = new File(BASE, "config/index.json");
+
     public static final String MERGED_FILE_NAME = "forgeMcBin";
 
+    public static void setConfig(String path) {
+        try(FileOutputStream fos = new FileOutputStream(CONF_INDEX)) {
+            CMapping map = new CMapping();
+            map.put("config", path);
+            map.put("forgeMapping", isForgeMap);
+            ByteWriter.encodeUTF(map.toJSON()).writeToStream(fos);
+        } catch (IOException e) {
+            CmdUtil.error("配置保存", e);
+        }
+        currentProject = Project.load(path);
+    }
+
     public static boolean loadConfig(boolean forced) {
-        if(config == null) {
+        if(currentProject == null) {
             if(!CONF_INDEX.isFile())
                 return false;
             String cf;
@@ -110,14 +151,14 @@ public final class Shared {
                 isForgeMap = map.getBoolean("forgeMapping");
             } catch (ParseException | ClassCastException e) {
                 CmdUtil.warning("配置索引(config/index.json)解析失败, 使用默认配置", e);
-                cf = BASE.getAbsolutePath() + "/config/default.json";
+                cf = "default";
             } catch (IOException e) {
                 throw new RuntimeException("配置索引读取失败", e);
             }
 
-            File file = new File(cf);
+            File file = new File(BASE, "/config/" + cf + ".json");
             if(forced || file.isFile()) {
-                config = new Config(file);
+                currentProject = Project.load(cf);
                 return true;
             } else
                 return false;
@@ -125,28 +166,29 @@ public final class Shared {
         return false;
     }
 
-    public static void initRemapper() {
-        if(remapper.getClassMap().isEmpty()) {
+    public static void initForwardMapper() {
+        if(mapperFwd.getClassMap().isEmpty()) {
             try {
-                remapper.prepareEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false, true);
-                CmdUtil.success("映射表已加载");
+                mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false, true);
+                if(DEBUG)
+                    CmdUtil.success("正向映射表已加载");
             } catch (Exception e) {
-                e.printStackTrace();
+                CmdUtil.error("正向映射表加载失败", e);
             }
         }
     }
 
-    public static IRemapper getReverseRemapper() {
-        if(reverseRemapper == null) {
-            reverseRemapper = new RemapperV2();
-            try {
-                reverseRemapper.prepareEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), null, true, false);
+    public static ConstMapper getReverseMapper() {
+        if(mapperRev == null) {
+            initForwardMapper();
+
+            mapperRev = new ConstMapper(mapperFwd);
+            mapperRev.reverse();
+
+            if(DEBUG)
                 CmdUtil.success("反向映射表已加载");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
         }
-        return reverseRemapper;
+        return mapperRev;
     }
 
     public static void threadWait(ITask... tasks) {
@@ -162,29 +204,40 @@ public final class Shared {
         }
 
         for(ITask task : tasks) {
-            MCLauncher.parallel.pushTask(task);
+            parallel.pushTask(task);
         }
 
         try {
-            MCLauncher.parallel.waitUntilFinish();
+            parallel.waitUntilFinish();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
 
-    public static void setCurrentConfig(String path) {
+    public static void saveForgeMapping() {
         try(FileOutputStream fos = new FileOutputStream(CONF_INDEX)) {
             CMapping map = new CMapping();
-            map.put("config", path);
+            map.put("config", currentProject.name);
             map.put("forgeMapping", isForgeMap);
-            fos.write(map.toJSON().getBytes(StandardCharsets.UTF_8));
+            ByteWriter.encodeUTF(map.toJSON()).writeToStream(fos);
         } catch (IOException e) {
-            CmdUtil.error("", e);
+            CmdUtil.error("配置保存", e);
         }
     }
 
-    public static void updateConfig() {
-        if(config != null)
-            setCurrentConfig(config.getFile().getAbsolutePath());
+    public static void load_S2M_Map() {
+        Map<String, String> srg2mcp = Shared.srg2mcp;
+        if(srg2mcp.isEmpty()) {
+            Shared.initForwardMapper();
+
+            ConstMapper fwd = mapperFwd;
+            for (Map.Entry<FlDesc, String> entry : fwd.getFieldMap().entrySet()) {
+                srg2mcp.put(entry.getValue(), entry.getKey().name);
+            }
+
+            for (Map.Entry<MtDesc, String> entry : fwd.getMethodMap().entrySet()) {
+                srg2mcp.put(entry.getValue(), entry.getKey().name);
+            }
+        }
     }
 }

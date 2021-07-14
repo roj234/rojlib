@@ -1,11 +1,29 @@
-/**
- * This file is a part of MI <br>
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: IntSetL.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.collect;
 
 import javax.annotation.Nonnull;
@@ -13,9 +31,16 @@ import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/11 23:9
+ */
 public class LongBitSet implements IBitSet {
     protected long[] set;
-    protected int maxLen;
+    protected int cap;
     protected int max = -1;
     protected int size;
 
@@ -25,7 +50,7 @@ public class LongBitSet implements IBitSet {
 
     public LongBitSet(int size) {
         this.set = new long[(size >> 6) + 1];
-        this.maxLen = set.length << 6;
+        this.cap = set.length << 6;
     }
 
     public static LongBitSet preFilled(String data) {
@@ -53,32 +78,19 @@ public class LongBitSet implements IBitSet {
     }
 
     public boolean contains(int key) {
-        if ((key >>> 6) >= set.length) return false;
-        int k = checkLimit(key, false);
-        return k != -1 && IBitSet.isBitTrue(set[indexFor(key)], k);
+        if (key < 0 || (key >>> 6) >= set.length) return false;
+        return (set[key >>> 6] & (1L << (key & 63))) != 0;
     }
 
-    private int indexFor(int key) {
-        return key >> 6;
-    }
-
-    private int checkLimit(int i, boolean check) {
-        if (i >= maxLen) {
-            if (!check)
-                return -1;
+    private void expand(int i) {
+        if (i >= cap) {
             long[] newSet = new long[(i >> 6) + 1];
 
-            //if(newSet.length - set.length > 1)
-            //	System.err.println("FIS is linear so not auto-increment!!! curr: " + maxLen + ", need: " + i);
-
-            this.maxLen = newSet.length << 6;
+            this.cap = newSet.length << 6;
             System.arraycopy(set, 0, newSet, 0, set.length);
 
             this.set = newSet;
         }
-        if (i > max)
-            max = i;
-        return i & 63;
     }
 
     public int size() {
@@ -89,15 +101,18 @@ public class LongBitSet implements IBitSet {
         return size() == 0;
     }
 
-    public Integer first() {
-        if (max == -1) return null;
+    public int first() {
+        if (max == -1) return -1;
         for (int i = 0; i <= max; i++) {
             if (contains(i))
                 return i;
         }
-        return null;
+        return -1;
     }
 
+    public int last() {
+        return max;
+    }
 
     @Override
     public IBitSet addAll(IBitSet ibs) {
@@ -126,7 +141,7 @@ public class LongBitSet implements IBitSet {
         } else if(ibs instanceof LongBitSet) {
             // 100% true ...
             LongBitSet lbs = (LongBitSet) ibs;
-            checkLimit(lbs.max, true);
+            expand(lbs.max);
             int ml = (lbs.max >>> 6) + 1;
             int ds = 0;
             for (int i = 0; i < ml; i++) {
@@ -152,18 +167,44 @@ public class LongBitSet implements IBitSet {
     }
 
     public boolean add(int e) {
-        int i = checkLimit(e, true);
-        if (!IBitSet.isBitTrue(set[indexFor(e)], i)) {
-            set[indexFor(e)] |= 1L << i;
+        if(e < 0) throw new IllegalArgumentException();
+        if (e > max)
+            max = e;
+        expand(e);
+        long v = set[e >>> 6];
+        if (v != (v = v | 1L << (e & 63))) {
+            set[e >>> 6] = v;
             size++;
             return true;
         }
         return false;
     }
 
-    public boolean remove(int i) {
-        if (contains(i)) {
-            set[indexFor(i)] ^= 1L << checkLimit(i, false);
+    public boolean remove(int e) {
+        if (e < 0 || (e >>> 6) >= set.length) return false;
+        expand(e);
+        if ((set[e >>> 6] & 1L << (e & 63)) != 0) {
+            set[e >>> 6] &= ~(1L << (e & 63));
+            if (e == max) {
+                int o = e >>> 6;
+                while (true) {
+                    long v;
+                    if((v = set[o--]) != 0) {
+                        int pos = 0;
+                        while (v != 0) {
+                            v >>>= 1;
+                            pos++;
+                        }
+                        max = o << 6 | pos;
+                        break;
+                    }
+
+                    if(o == -1) {
+                        max = 0;
+                        break;
+                    }
+                }
+            }
             size--;
             return true;
         }
@@ -177,7 +218,7 @@ public class LongBitSet implements IBitSet {
 
     public void fillAll() {
         Arrays.fill(set, 0xffffffffffffffffL);
-        size = max = maxLen;
+        size = max = cap;
     }
 
     public void fillAll(int len) {
@@ -196,7 +237,7 @@ public class LongBitSet implements IBitSet {
     }
 
     public IBitSet copy() {
-        LongBitSet copied = new LongBitSet(maxLen);
+        LongBitSet copied = new LongBitSet(cap);
         System.arraycopy(set, 0, copied.set, 0, set.length);
         copied.max = this.max;
         return copied;

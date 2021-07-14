@@ -1,18 +1,43 @@
-/**
- * This file is a part of MI <br>
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 5
- * Author: R__
- * Filename: LinkedMyHashMap.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.collect;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/4/25 23:1
+ */
 public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
-    private boolean reversed;
+    private boolean reversed, accessOrder;
 
     protected Entry<K, V> createEntry(K id) {
         return new LinkedEntry<>(id, null);
@@ -66,7 +91,11 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
     final LinkedEntry<K, V> head = new LinkedEntry<>(null, null);
     LinkedEntry<K, V> tail = head;
 
-    public LinkedMyHashMap<K, V> setReverse(boolean isReverse) {
+    public void setAccessOrder(boolean accessOrder) {
+        this.accessOrder = accessOrder;
+    }
+
+    public LinkedMyHashMap<K, V> setReverseIterate(boolean isReverse) {
         this.reversed = isReverse;
         return this;
     }
@@ -118,11 +147,27 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
         entry1._next = head; // mark of END
     }
 
+    @Override
     void afterRemove(Entry<K, V> entry) {
         LinkedEntry<K, V> entry1 = (LinkedEntry<K, V>) entry;
         entry1.prev._next = entry1._next;
         if (entry1._next != null) {
             entry1._next.prev = entry1.prev;
+        }
+    }
+
+    @Override
+    void afterAccess(K key, V original, V now, Entry<K, V> entry) {
+        if(accessOrder) {
+            LinkedEntry<K, V> entry1 = (LinkedEntry<K, V>) entry;
+            entry1.prev._next = entry1._next;
+            if (entry1._next != null) {
+                entry1._next.prev = entry1.prev;
+            }
+            entry1.prev = tail;
+            tail._next = entry1;
+            tail = entry1;
+            entry1._next = head;
         }
     }
 

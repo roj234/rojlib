@@ -1,11 +1,29 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
+/*
+ * This file is a part of MI
  *
- * File version : 不知道...
- * Author: R__
- * Filename: HotReload.java
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.mod;
 
 import roj.asm.Parser;
@@ -26,23 +44,28 @@ import java.lang.instrument.Instrumentation;
 import java.nio.file.*;
 import java.util.Set;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/30 19:59
+ */
 public final class HotReload {
     public static void main(String[] args) throws IOException {
-        System.out.println("热重载class文件测试工具 1.0 beta");
         if(args.length == 0) {
-            System.out.println("参数缺失: path");
+            System.out.println("重载测试工具: 参数缺失: path");
             return;
         }
 
         File path = new File(TextUtil.concat(args, ' '));
 
-
-        System.out.println("B64Encode: " + Base64.encode(ByteWriter.encodeUTF(path.getAbsolutePath()), new CharList()));
+        System.out.println("Path: " + Base64.encode(ByteWriter.encodeUTF(path.getAbsolutePath()), new CharList()));
 
         AppendOnlyCache aoc = new AppendOnlyCache(new File(path, "modified.bin"));
         aoc.clear();
         while (true) {
-            String ques = UIUtil.userInput("class路径... or 留空转换 or CLR 清除");
+            String ques = UIUtil.userInput("class路径, 留空转换 or CLR 清除");
 
             if(ques.equals("CLR")) {
                 aoc.clear();
@@ -138,12 +161,12 @@ public final class HotReload {
 
     }
 
-    private static class Runner implements Runnable {
+    static final class Runner implements Runnable {
         final WatchService watcher;
         final Instrumentation inst;
         final Path path;
 
-        private Runner(WatchService watcher, Instrumentation inst, Path path) {
+         Runner(WatchService watcher, Instrumentation inst, Path path) {
             this.watcher = watcher;
             this.inst = inst;
             this.path = path;

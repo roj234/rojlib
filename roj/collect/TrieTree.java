@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.collect;
 
 import roj.concurrent.OperationDone;
@@ -15,16 +40,11 @@ import java.util.function.Function;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * This file is a part of more items mod (MI)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * Trie Tree的实现
- * 查询一个单词是否存在的时间复杂度仅为该单词的长度、存储空间小
- * = O(n.length)
- * 理想是美好的，实际上，这个速度内存都是渣渣
- * 比起HashMap的O(1)
- * <p>
- * 但是，他可以做出搜索来...
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/2/21 10:39
  */
 public class TrieTree<V> implements Map<CharSequence, V> {
     static final int COMPRESS_START_DEPTH = 1,

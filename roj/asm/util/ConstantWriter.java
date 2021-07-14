@@ -1,15 +1,32 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: ConstantWriter.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.asm.util;
 
 import roj.asm.cst.*;
-import roj.collect.FindSet;
 import roj.collect.MyHashSet;
 import roj.text.TextUtil;
 import roj.util.ByteWriter;
@@ -20,9 +37,16 @@ import java.util.List;
 
 import static roj.asm.cst.CstType.*;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/29 17:16
+ */
 public class ConstantWriter {
     private final List<Constant> constants;
-    private final FindSet<Constant> refMap;
+    private final MyHashSet<Constant> refMap;
 
     // threadlocal needed?
     private final CstUTF fp0 = new CstUTF();
@@ -33,13 +57,10 @@ public class ConstantWriter {
     private final CstNameAndType fp5 = new CstNameAndType();
 
     private int index = 1;
-    private boolean dirty;
 
     public ConstantWriter() {
         this.constants = new ArrayList<>(80);
         this.refMap = new MyHashSet<>(80);
-
-        dirty = true;
     }
 
     public ConstantWriter(ConstantPool pool) {
@@ -56,8 +77,6 @@ public class ConstantWriter {
         }
 
         this.index = pool.index;
-
-        dirty = false;
     }
 
     void addConstant(Constant c) {
@@ -70,7 +89,6 @@ public class ConstantWriter {
             case DOUBLE:
                 index++;
         }
-        dirty = true;
     }
 
     public CstUTF getUtf(String msg) {
@@ -388,49 +406,24 @@ public class ConstantWriter {
         return Collections.unmodifiableList(constants);
     }
 
-    public void writeTo(ByteWriter writer) {
+    public void write(ByteWriter writer) {
         List<Constant> csts = this.constants;
         for (int i = 0; i < csts.size(); i++) {
             csts.get(i).write(writer);
         }
     }
 
-    //public void reIndex() {
-    //reIndex(null, true);
-    //}
+    public void clump() {
 
-    /*private void reIndex(ByteWriter writer, boolean set) {
-        // as ConstantPool merged index, set index to the lowest one ?
-        // fixed: not duplicate now
-
-        int i = 1;
-        for (ListIterator<Constant> iterator = constants.listIterator(); iterator.hasNext(); ) {
-            Constant cst = iterator.next();
-            if (cst.getIndex() != i) {
-                System.err.println("Index mismatch! " + i + "  " + cst.getIndex());
-                cst = copy(cst);
-                cst.setIndex(i);
-                iterator.set(cst);
-            }
-            if (!set)
-                cst.write(writer);
-            switch (cst.type) {
-                case LONG:
-                case DOUBLE:
-                    i++;
-            }
-            i++;
-        }
-        index = i;
-    }*/
-
+    }
+/*
     private static Constant copy(Constant c) {
         switch (c.type()) {
             case METHOD_TYPE:
             case STRING:
             case CLASS: {
                 CstRefUTF cz = (CstRefUTF) c;
-                CstRefUTF result = (CstRefUTF) getClass(c);
+                CstRefUTF result = (CstRefUTF) newInst(c);
                 result.setValue(cz.getValue());
                 return result;
             }
@@ -448,7 +441,7 @@ public class ConstantWriter {
             case INT:
             case LONG:
             case FLOAT: {
-                return getClass(c);
+                return newInst(c);
             }
 
             case PACKAGE:
@@ -457,7 +450,7 @@ public class ConstantWriter {
             case INTERFACE:
             case METHOD: {
                 CstRef cz = (CstRef) c;
-                CstRef result = (CstRef) getClass(c);
+                CstRef result = (CstRef) newInst(c);
                 result.setClazz(cz.getClazz());
                 result.desc(cz.desc());
                 return result;
@@ -481,7 +474,7 @@ public class ConstantWriter {
         throw new IllegalArgumentException();
     }
 
-    private static Constant getClass(Constant c) {
+    private static Constant newInst(Constant c) {
         switch (c.type()) {
             case STRING:
                 return new CstString(0);
@@ -506,17 +499,13 @@ public class ConstantWriter {
         }
         throw new RuntimeException();
     }
-
+*/
     @Override
     public String toString() {
-        return "ConstantWriter{" + "constants=" + TextUtil.prettyPrint(constants) + ", index=" + index + '}';
+        return "ConstantWriter{" + "constants[" + index + "]=" + TextUtil.prettyPrint(constants) + '}';
     }
 
     public int getIndex() {
         return index;
-    }
-
-    public boolean dirty() {
-        return dirty;
     }
 }

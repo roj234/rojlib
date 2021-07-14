@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.type;
 
 import roj.kscript.api.IArray;
@@ -9,11 +34,11 @@ import roj.kscript.parser.expr.Expression;
 import javax.annotation.Nonnull;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author Roj233
- * @since 2020/10/27 13:13
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/10/27 13:13
  */
 public interface KType {
     default <T> KJavaObject<T> asJavaObject(Class<T> clazz) {
@@ -74,7 +99,7 @@ public interface KType {
 
 
     /**
-     * 仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
+     * 仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.ast.LoadDataNode#exec(Frame) 加载KType}中 <BR>
      *     拷贝自身, 用于加载对象, 嗯
      */
     default KType copy() {
@@ -82,7 +107,7 @@ public interface KType {
     }
 
     /**
-     * 仅用于{@link roj.kscript.ast.LoadDataNode#execute(Frame) 加载KType}中 <BR>
+     * 仅用于{@link roj.kscript.ast.LoadDataNode#exec(Frame) 加载KType}中 <BR>
      *     从同类对象中拷贝数据
      */
     default void copyFrom(KType type) {}
@@ -102,11 +127,16 @@ public interface KType {
     }
 
     /**
+     * kind =-1: 从变量返回栈上 <br>
      * kind = 0: 作为本地变量 <br>
-     *     kind = 1: 作为外部变量 <br>
-     *     kind = -1: 返回栈
+     * kind = 1: 作为方法参数 <br>
+     * kind = 2: 复制 <br>
+     * kind = 3: 从栈去外部 <br>
+     * kind = 4: 从外部进入栈 <br>
+     * kind = 5: 引用计数+1 <br>
+     * kind = 6: 引用计数-1
      */
-    default KType setFlag(int kind) {
+    default KType memory(int kind) {
         return this;
     }
 }

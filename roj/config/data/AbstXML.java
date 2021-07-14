@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config.data;
 
 import roj.collect.MyHashMap;
@@ -10,11 +35,11 @@ import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * No description provided
  *
- * @author solo6975
- * @since 2020/10/31 15:28
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/10/31 15:28
  */
 public abstract class AbstXML implements Iterable<AbstXML> {
     private static class XSLexer extends Lexer {
@@ -31,7 +56,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         }
 
         @Override
-        protected Word readSpecial() throws ParseException {
+        protected Word readSymbol() throws ParseException {
             char c = next();
 
             short id;
@@ -71,7 +96,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
                     w = l.readWord();
                     if(w.type() != WordPresets.INTEGER)
                         throw l.err("excepting integer");
-                    int id = w.number().number;
+                    int id = w.number().asInt();
                     final List<AbstXML> children = xml.children;
                     if(children.size() <= id)
                         throw l.err("not enough element(" + children.size() + ")");
@@ -94,10 +119,10 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return xml;
     }
 
-    protected Map<String, ConfEntry> attributes;
+    protected Map<String, CEntry> attributes;
     protected List<AbstXML> children;
 
-    public AbstXML(Map<String, ConfEntry> attributes, List<AbstXML> children) {
+    public AbstXML(Map<String, CEntry> attributes, List<AbstXML> children) {
         this.attributes = attributes;
         this.children = children;
     }
@@ -114,7 +139,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return children.size();
     }
 
-    public final ConfEntry getAttribute(String name) {
+    public final CEntry getAttribute(String name) {
         return attributes.getOrDefault(name, CNull.NULL);
     }
 
@@ -153,7 +178,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return children.get(index);
     }
 
-    public final Map<String, ConfEntry> getAttributes() {
+    public final Map<String, CEntry> getAttributes() {
         initMap();
         return attributes;
     }
@@ -206,7 +231,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         }
         if (map.containsKey("children", Type.LIST)) {
             initList();
-            for (ConfEntry entry : map.get("children").asList()) {
+            for (CEntry entry : map.get("children").asList()) {
                 this.children.add(addChildren(entry.asMap()));
             }
         }

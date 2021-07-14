@@ -1,6 +1,32 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.io;
 
 import org.jetbrains.annotations.Async;
+import roj.collect.MyHashMap;
 import roj.concurrent.Holder;
 import roj.concurrent.WaitingIOFuture;
 import roj.concurrent.pool.PrefixFactory;
@@ -23,18 +49,17 @@ import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
+ * No description provided
+ *
  * @author Roj234
- * Filename: FileUtil.java
+ * @version 0.1
+ * @since 2021/5/29 22:1
  */
 public final class FileUtil {
     public static final MessageDigest MD5, SHA1;
@@ -82,28 +107,30 @@ public final class FileUtil {
     }
 
     public static Map<String, InputStream> findAndOpenStream(File path) throws FileNotFoundException {
-        return findAndOpenStream(path, new HashMap<>(), "", TRUE_PREDICT);
+        return findAndOpenStream(path, new MyHashMap<>(), new CharList(), TRUE_PREDICT);
     }
 
     public static Map<String, InputStream> findAndOpenStream(File path, Predicate<File> predicate) throws FileNotFoundException {
-        return findAndOpenStream(path, new HashMap<>(), "", predicate);
+        return findAndOpenStream(path, new MyHashMap<>(), new CharList(), predicate);
     }
 
     public static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, Predicate<File> predicate) throws FileNotFoundException {
-        return findAndOpenStream(file, map, "", predicate);
+        return findAndOpenStream(file, map, new CharList(), predicate);
     }
 
-    private static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, String relative, Predicate<File> predicate) throws FileNotFoundException {
+    private static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, CharList relative, Predicate<File> predicate) throws FileNotFoundException {
         File[] files1 = file.listFiles();
         if (files1 != null) {
+            int fl = relative.length();
             for (File file1 : files1) {
                 if (file1.isDirectory()) {
-                    findAndOpenStream(file1, map, relative + file1.getName() + File.separatorChar, predicate);
+                    findAndOpenStream(file1, map, relative.append(file1.getName()).append(File.separatorChar), predicate);
                 } else {
                     if (predicate.test(file1)) {
-                        map.put(relative + file1.getName(), new FileInputStream(file1));
+                        map.put(relative.append(file1.getName()).toString(), new FileInputStream(file1));
                     }
                 }
+                relative.setIndex(fl);
             }
         }
         return map;

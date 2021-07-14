@@ -1,196 +1,291 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.collect;
 
+import roj.util.ArrayUtil;
+
 import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
-import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * A simple ring buffer
  *
- * @author Roj233
- * @since 2021/4/13 23:25
+ * @author Roj234
+ * @version 0.1
+ * @since  2021/4/13 23:25
  */
-public class RingBuffer<T> implements List<T> {
-    Object[] array;
-    int rPtr, wPtr, size;
+public final class RingBuffer<T> implements Iterable<T> {
+    /*public static void main(String[] args) {
+        RingBuffer<Integer> buffer = new RingBuffer<>(9);
+        Random rnd = new Random(5342);
+        for (int i = 0; i < 999; i++) {
+            switch (rnd.nextInt(4)) {
+                case 0:
+                    if(buffer.size < 9) {
+                        buffer.push(i);
+                    }
+                    break;
+                case 1:
+                    if(buffer.size < 9) {
+                        buffer.unshift(i);
+                    }
+                    break;
+                case 2:
+                    if(buffer.size > 0) {
+                        buffer.pop();
+                    }
+                    break;
+                case 3:
+                    if(buffer.size > 0) {
+                        buffer.shift();
+                    }
+                    break;
+            }
+        }
+        System.out.println(buffer);
+        for (Object o : buffer)
+            System.out.println(o);
+    }*/
 
-    @Override
+    Object[] array;
+    int begin, end, size;
+
+    public RingBuffer(int capacity) {
+        array = new Object[capacity];
+    }
+
     public int size() {
         return size;
     }
 
-    @Override
-    public boolean isEmpty() {
-        return size == 0;
-    }
-
-    @Override
     public boolean contains(Object o) {
-        return false;
+        return indexOf(o) != -1;
     }
 
     @Nonnull
-    @Override
     public Iterator<T> iterator() {
-        return null;
+        return size == 0 ? Collections.emptyIterator() : new AbstractIterator<T>() {
+            int i = begin;
+            boolean f;
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public boolean computeNext() {
+                if(f) {
+                    if (i == end) return false;
+                    if (i == array.length) {
+                        i = 0;
+                    }
+                }
+                f = true;
+                result = (T) array[i++];
+                return true;
+            }
+        };
     }
 
-    @Override
-    public void forEach(Consumer<? super T> action) {
+    //  0  1  2  3
+    //           E
+    //  ------------
+    //     0  1  2
+    //     S
+    //  ------------
+    //    [4, 5, 6]
+    @SuppressWarnings("unchecked")
+    public T push(T t) {
+        if(size < array.length) {
+            size++;
+        } else {
+            if (end == begin) {
+                begin++;
+                if (begin == array.length) {
+                    begin = 0;
+                }
+            }
+        }
 
+        T orig = (T) array[end];
+        array[end++] = t;
+        if(end == array.length) {
+            end = 0;
+        }
+        return orig;
     }
 
-    @Nonnull
-    @Override
-    public Object[] toArray() {
-        return new Object[0];
-    }
-
-    @Nonnull
-    @Override
-    public <T1> T1[] toArray(@Nonnull T1[] a) {
-        return null;
-    }
-
-    @Override
-    public boolean add(T t) {
-        return false;
-    }
-
-    @Override
-    public boolean remove(Object o) {
-        return false;
-    }
-
+    //  0  1  2  3
+    //        E
+    //  ------------
+    //     0  1  2
+    //        S
+    //  ------------
+    //    [/, /, /]
+    @SuppressWarnings("unchecked")
     public T pop() {
-        return null;
+        if(size == 0)
+            throw new NoSuchElementException();
+        size--;
+
+        int e = this.end;
+
+        if(e == 0) {
+            e = array.length;
+        }
+
+        T val = (T) array[--e];
+        array[e] = null;
+
+        if(e == begin) {
+            if(e == 0) {
+                begin = array.length - 1;
+            } else {
+                begin--;
+            }
+        }
+        this.end = e;
+
+        if(size == 0) {
+            begin = end = 0;
+        }
+
+        return val;
     }
 
+    //  0  1  2  3
+    //           E
+    //  ------------
+    //     0  1  2
+    //     S
+    //  ------------
+    //    [4, 3, 2]
+    @SuppressWarnings("unchecked")
+    public T unshift(T t) {
+        if(size < array.length) {
+            size++;
+        }
+
+        int b = begin;
+
+        if(end == 0) {
+            end = array.length - 1;
+        }
+        if(end == b) {
+            end--;
+        }
+
+        if(b == 0) {
+            begin = b = array.length - 1;
+        } else {
+            begin = --b;
+        }
+
+        T orig = (T) array[b];
+        array[b] = t;
+
+        return orig;
+    }
+
+    //     1  2  3
+    //     E
+    //  ------------
+    //     0  1  2
+    //     S
+    //  ------------
+    //    [/, /, /]
+    @SuppressWarnings("unchecked")
     public T shift() {
-        return null;
+        if(size == 0)
+            throw new NoSuchElementException();
+        size--;
+
+        T val = (T) array[begin];
+        array[begin++] = null;
+
+        if(begin == array.length)
+            begin = 0;
+
+        if(size == 0) {
+            begin = end = 0;
+        }
+
+        return val;
     }
 
-    public boolean unshift(T t) {
-        return false;
-    }
-
-    public boolean push(T t) {
-        return false;
-    }
-
-    public void removeLast() {
-
-    }
-
-    @Override
-    public boolean containsAll(@Nonnull Collection<?> c) {
-        return false;
-    }
-
-    @Override
-    public boolean addAll(@Nonnull Collection<? extends T> c) {
-        return false;
-    }
-
-    @Override
-    public boolean addAll(int index, @Nonnull Collection<? extends T> c) {
-        return false;
-    }
-
-    @Override
-    public boolean removeAll(@Nonnull Collection<?> c) {
-        return false;
-    }
-
-    @Override
-    public boolean removeIf(Predicate<? super T> filter) {
-        return false;
-    }
-
-    @Override
-    public boolean retainAll(@Nonnull Collection<?> c) {
-        return false;
-    }
-
-    @Override
-    public void replaceAll(UnaryOperator<T> operator) {
-
-    }
-
-    @Override
-    public void sort(Comparator<? super T> c) {
-
-    }
-
-    @Override
     public void clear() {
-
+        begin = end = size = 0;
+        Arrays.fill(array, null);
     }
 
-    @Override
-    public T get(int index) {
-        return null;
+    @SuppressWarnings("unchecked")
+    public T get(int i) {
+        return (T) array[i];
     }
 
-    @Override
-    public T set(int index, T element) {
-        return null;
+    @SuppressWarnings("unchecked")
+    public T set(int i, T val) {
+        T orig = (T) array[i];
+        array[i] = val;
+        return orig;
     }
 
-    @Override
-    public void add(int index, T element) {
-
-    }
-
-    @Override
-    public T remove(int index) {
-        return null;
-    }
-
-    @Override
     public int indexOf(Object o) {
-        return 0;
+        for (int i = 0; i < array.length; i++) {
+            if(o.equals(array[i])) {
+                return i;
+            }
+        }
+        return -1;
     }
 
-    @Override
     public int lastIndexOf(Object o) {
-        return 0;
-    }
-
-    @Nonnull
-    @Override
-    public ListIterator<T> listIterator() {
-        return null;
-    }
-
-    @Nonnull
-    @Override
-    public ListIterator<T> listIterator(int index) {
-        return null;
-    }
-
-    @Nonnull
-    @Override
-    public List<T> subList(int fromIndex, int toIndex) {
-        return null;
+        for (int i = array.length - 1; i >= 0; i--) {
+            if(o.equals(array[i])) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override
-    public Spliterator<T> spliterator() {
-        return null;
-    }
-
-    @Override
-    public Stream<T> stream() {
-        return null;
-    }
-
-    @Override
-    public Stream<T> parallelStream() {
-        return null;
+    public String toString() {
+        StringBuilder sb = new StringBuilder().append("RingBuffer{\n  ");
+        for (int i = 0; i < array.length; i++) {
+            sb.append(i).append(' ');
+        }
+        sb.append("\n  ");
+        for (int i = 0; i < begin; i++) {
+            sb.append("  ");
+        }
+        sb.append("S\n  ");
+        for (int i = 0; i < end; i++) {
+            sb.append("  ");
+        }
+        return sb.append("E\n  ")
+        .append(ArrayUtil.toString(array, 0, array.length)).toString();
     }
 }

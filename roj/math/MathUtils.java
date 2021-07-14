@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.math;
 
 import roj.collect.SimpleList;
@@ -876,45 +901,26 @@ public abstract class MathUtils {
     }
 
     public static int parseInt(CharSequence s, int radix) throws NumberFormatException {
-        long result = 0;
-
-        if (s.length() > 0) {
-            int i = 0, len = s.length();
-
-            int digit;
-
-            while (i < len) {
-                if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
-                    throw new NumberFormatException("Not a number at offset " + (i - 1) + " : " + s);
-
-                result *= radix;
-                result += digit;
-            }
-        } else {
-            throw new NumberFormatException(s.toString());
-        }
-
-        if (result > 4294967295L || result < Integer.MIN_VALUE)
-            throw new NumberFormatException("Value overflow " + result + " : " + s);
-
-        return parseInt(s, 0, s.length(), radix);
+        boolean n = s.charAt(0) == '-';
+        int i = parseInt(s, n ? 1 : 0, s.length(), radix);
+        return n ? -i : i;
     }
 
-    public static int parseInt(CharSequence s, int i, int len, int radix) throws NumberFormatException {
+    public static int parseInt(CharSequence s, int i, int end, int radix) throws NumberFormatException {
         long result = 0;
 
-        if (s.length() > 0) {
+        if (end - i > 0) {
             int digit;
 
-            while (i < len) {
+            while (i < end) {
                 if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
-                    throw new NumberFormatException("Not a number at offset " + (i - 1) + " : " + s);
+                    throw new NumberFormatException("Not a number at offset " + (i - 1) + "(" + s.charAt(i - 1) + "): " + s);
 
                 result *= radix;
                 result += digit;
             }
         } else {
-            throw new NumberFormatException(s.toString());
+            throw new NumberFormatException("Len=0: " + s);
         }
 
         if (result > 4294967295L || result < Integer.MIN_VALUE)
@@ -951,7 +957,7 @@ public abstract class MathUtils {
         return true;
     }
 
-    public static int parseIntChecked(CharSequence s, int radix) throws NumberFormatException {
+    public static int parseIntChecked(CharSequence s, int radix, boolean negative) throws NumberFormatException {
         long result = 0;
 
         if (s.length() > 0) {
@@ -974,7 +980,7 @@ public abstract class MathUtils {
                 default:
                     throw new NumberFormatException("Unsupported radix " + radix);
             }
-            if (!TextUtil.checkInt(c, s, 0, radix != 10)) {
+            if (!TextUtil.checkInt(c, s, 0, negative)) {
                 throw new NumberFormatException("checkInt() failed : " + s);
             }
 
@@ -994,6 +1000,6 @@ public abstract class MathUtils {
         if (result > 4294967295L || result < Integer.MIN_VALUE)
             throw new NumberFormatException("Value overflow " + result + " : " + s);
 
-        return (int) result;
+        return negative ? (int) -result : (int) result;
     }
 }

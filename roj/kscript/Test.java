@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript;
 
 import roj.config.ParseException;
@@ -11,9 +36,8 @@ import roj.kscript.parser.KParser;
 import roj.kscript.type.*;
 import roj.kscript.util.ContextPrimer;
 import roj.kscript.util.NaFnHlp;
-import roj.kscript.vm.ResourceManager;
+import roj.kscript.vm.KScriptVM;
 import roj.kscript.vm.ScriptException;
-import roj.kscript.vm.VM_ArgList;
 import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 
@@ -24,10 +48,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
+ * No description provided
+ *
  * @author Roj234
+ * @version 0.1
+ * @since 2021/6/17 0:46
  */
 public class Test {
     static long last;
@@ -37,15 +62,9 @@ public class Test {
         root.define("println", new KFuncNative() {
             @Override
             public KType invoke(@Nonnull IObject $this, ArgList param){
+                System.out.print(" ");
                 final KType base = param.getOr(0, KUndefined.UNDEFINED);
-                System.out.println("P: " + (base.canCastTo(Type.STRING) ? base.asString() : base.toString()));
-                return KUndefined.UNDEFINED;
-            }
-        });
-        root.define("dump_stack", new KFuncNative() {
-            @Override
-            public KType invoke(@Nonnull IObject $this, ArgList param){
-                System.out.println(((VM_ArgList)param).caller);
+                System.out.println(base.canCastTo(Type.STRING) ? base.asString() : base.toString());
                 return KUndefined.UNDEFINED;
             }
         });
@@ -132,6 +151,6 @@ public class Test {
 
         fn.invoke(KNull.NULL, new Arguments());
 
-        ResourceManager.printStats();
+        KScriptVM.printStats();
     }
 }

@@ -1,12 +1,29 @@
-/**
- * This file is a part of MI <br>
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 76
- * Author: R__
- * Filename: MyHashMap.java
- * 基于Hash-like机制实现的较高速Map
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.collect;
 
 import roj.math.MathUtils;
@@ -21,6 +38,14 @@ import java.util.function.Predicate;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/6/18 11:5
+ * 基于Hash-like机制实现的较高速Map
+ */
 public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K, V>> {
     public void _int_plus_size() {
         size++;
@@ -180,8 +205,9 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             size++;
             entry.v = e;
             return null;
+        } else {
+            afterAccess(key, old, entry.v = e, entry);
         }
-        afterChange(key, old, entry.v = e, entry);
         return old;
     }
 
@@ -198,7 +224,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         }
     }
 
-    void afterChange(K key, V original, V now, Entry<K, V> entry) {
+    void afterAccess(K key, V original, V now, Entry<K, V> entry) {
     }
 
     void afterRemove(Entry<K, V> entry) {
@@ -279,7 +305,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
     public Entry<K, V> getEntry(K id) {
         Entry<K, V> entry = getEntryFirst(id, false);
         while (entry != null) {
-            if (Objects.equals(entry.k, id)) {
+            if (Objects.equals(id, entry.k)) {
                 return entry;
             }
             entry = entry.next;
@@ -317,11 +343,17 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             entries = new Entry<?, ?>[length];
         }
         Entry<K, V> entry;
-        if ((entry = (Entry<K, V>) entries[i]) == null) {
-            if (!create)
-                return null;
-            entries[i] = entry = getCachedEntry(id);
-        }
+        //try {
+            if ((entry = (Entry<K, V>) entries[i]) == null) {
+                if (!create) return null;
+                entries[i] = entry = getCachedEntry(id);
+            }
+        //} catch (ArrayIndexOutOfBoundsException e) {
+        //    System.err.println("Note " + i + " of " + id +  " at " + length);
+        //    System.out.println(this);
+        //    System.exit(-1);
+        //    throw e;
+        //}
         return entry;
     }
 

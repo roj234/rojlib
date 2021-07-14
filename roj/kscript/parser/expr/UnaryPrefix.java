@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.parser.expr;
 
 import roj.concurrent.OperationDone;
@@ -22,8 +47,8 @@ import java.util.Map;
  * @since 2020/10/13 22:17
  */
 public final class UnaryPrefix implements Expression {
-    private short operator;
-    private Expression right;
+    private final short      operator;
+    private       Expression right;
 
     public UnaryPrefix(short operator) {
         switch (operator) {
@@ -33,6 +58,7 @@ public final class UnaryPrefix implements Expression {
             case Symbol.rev:
             case Symbol.inc:
             case Symbol.dec:
+            case Symbol.add:
             case Symbol.sub:
         }
         this.operator = operator;
@@ -43,6 +69,7 @@ public final class UnaryPrefix implements Expression {
         switch (operator) {
             case Symbol.logic_not:
             case Symbol.sub:
+            case Symbol.add:
             case Symbol.rev:
                 if(noRet)
                     throw new NotStatementException();
@@ -60,6 +87,9 @@ public final class UnaryPrefix implements Expression {
                         break;
                     case Symbol.rev:
                         op = Opcode.REVERSE;
+                        break;
+                    case Symbol.add:
+                        op = Opcode.CAST_INT;
                         break;
                     default:
                         throw OperationDone.NEVER;
@@ -103,19 +133,23 @@ public final class UnaryPrefix implements Expression {
 
     @Override
     public KType compute(Map<String, KType> param) {
-        if(operator == Symbol.sub) {
-            KType base = right.compute(param);
+        KType base;
+        switch (operator) {
+            case Symbol.add:
+                base = right.compute(param);
+                return base.isInt() ? base : KInt.valueOf(base.asInt());
+            case Symbol.sub:
+                base = right.compute(param);
 
-            if (base.isInt()) {
-                base.setIntValue(-base.asInt());
-            } else {
-                base.setDoubleValue(-base.asDouble());
-            }
-            return base;
+                if (base.isInt()) {
+                    base.setIntValue(-base.asInt());
+                } else {
+                    base.setDoubleValue(-base.asDouble());
+                }
+                return base;
         }
 
         int val = operator == Symbol.inc ? 1 : -1;
-        KType base;
 
         if(right instanceof Variable) {
             Variable v = (Variable) right;
@@ -147,8 +181,10 @@ public final class UnaryPrefix implements Expression {
 
         if (operator == Symbol.sub && right instanceof UnaryPrefix) {
             UnaryPrefix p = (UnaryPrefix) right;
-            if (p.operator == Symbol.sub) // 双重否定, 不过这里就没有cast to number了
-                return p.right.compress();
+            if (p.operator == Symbol.sub) { // 双重否定
+                Expression expr = p.right.compress();
+                return expr.isConstant() ? (expr.asCst().val().isInt() ? expr : Constant.valueOf(KInt.valueOf(expr.asCst().asInt()))) : new AsInt(expr);
+            }
         }
 
         // inc/dec不能对常量使用, 所以不用管了
@@ -156,23 +192,25 @@ public final class UnaryPrefix implements Expression {
         final Constant cst = right.asCst();
 
         switch (right.type()) {
-            case -1:
-                return this;
             case 0:
                 switch (operator) {
                     case Symbol.logic_not:
                         return Constant.valueOf(!cst.asBool());
-                    case Symbol.rev:
+                    case Symbol.rev: {
                         KType base = cst.val();
                         base.setIntValue(~base.asInt());
                         return right;
+                    }
                     case Symbol.sub: {
                         KType base1 = cst.val();
                         base1.setIntValue(-base1.asInt());
                         return right;
                     }
+                    case Symbol.add:
+                        return right;
                 }
                 break;
+            case -1:
             case 1: // support not but cant rev
             case 2:
                 switch (operator) {
@@ -186,6 +224,8 @@ public final class UnaryPrefix implements Expression {
                         }
                         int isDouble = TextUtil.isNumber(cst.asString());
                         return new Constant(isDouble == 1 ? KDouble.valueOf(-cst.asDouble()) : KInt.valueOf(-cst.asInt()));
+                    case Symbol.add:
+                        return Constant.valueOf(cst.asInt());
                 }
                 break;
             case 3:
@@ -197,6 +237,8 @@ public final class UnaryPrefix implements Expression {
                         return Constant.valueOf(operand ? ~1 : ~0);
                     case Symbol.sub:
                         return Constant.valueOf(operand ? -1 : -0);
+                    case Symbol.add:
+                        return Constant.valueOf(operand ? +1 : +0);
                 }
                 break;
         }

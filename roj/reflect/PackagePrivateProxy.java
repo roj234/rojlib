@@ -1,11 +1,29 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: MIAccessTransformer.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.reflect;
 
 import roj.asm.Opcodes;
@@ -16,22 +34,28 @@ import roj.asm.struct.Method;
 import roj.asm.struct.attr.AttrCode;
 import roj.asm.struct.insn.FieldInsnNode;
 import roj.asm.struct.insn.InvokeInsnNode;
+import roj.asm.type.ParamHelper;
+import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
-import roj.asm.util.type.ParamHelper;
-import roj.asm.util.type.Type;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 
 /**
  * 有空再支持非空init吧
  */
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/6/18 9:51
+ */
 public final class PackagePrivateProxy {
     @SuppressWarnings("unchecked")
-    public static <T> T proxyIt(Class<T> source_class, Class<?> proxy_class, String custom_package, String... proxy_method) {
+    public static <T> Class<T> proxyIt(Class<T> source_class, Class<?> proxy_class, String custom_package, String... proxy_method) {
         java.lang.reflect.Method[] targetMethods = new java.lang.reflect.Method[proxy_method.length];
 
         java.lang.reflect.Method[] invokeMethods = proxy_class.getMethods();
@@ -41,30 +65,27 @@ public final class PackagePrivateProxy {
         }
 
         int i = DirectMethodAccess.nextId.getAndIncrement();
-        String newClassName = custom_package + ".Proxy$" + i;
+        String newClassName = "_" + custom_package + ".Proxy$" + i;
 
         try {
 
-            final byte[] code = compile(custom_package.replace('.', '/') + "/Proxy$" + i, proxy_class.getName(), source_class.getName(), targetMethods);
+            final byte[] code = compile("_"+custom_package.replace('.', '/') + "/Proxy$" + i, proxy_class.getName(), source_class.getName(), targetMethods);
             ClassDefiner.INSTANCE.defineClass(newClassName, code);
 
-            Class<?> clz = Class.forName(newClassName);
-            return (T) SunReflection.createClass(clz);
-        } catch (ClassFormatError | IllegalAccessException | ClassNotFoundException | InstantiationException | InvocationTargetException e) {
-            throw new RuntimeException("DMA Internal error!", e);
+            return (Class<T>) Class.forName(newClassName);
+        } catch (ClassFormatError | ClassNotFoundException e) {
+            throw new RuntimeException("3P Internal error!", e);
         }
     }
 
     static byte[] compile(String self, String proxy, String parent, java.lang.reflect.Method[] methods) {
         Clazz out = new Clazz();
 
-        parent = parent.replace('.', '/');
-
-        makeClassHeader(self, parent, out);
+        makeClassHeader(self, parent = parent.replace('.', '/'), out);
 
         FlagList pubFlags = new FlagList(AccessFlag.PUBLIC);
 
-        Type field = new Type(proxy.replace('.', '/'), 0);
+        Type field = new Type(proxy = proxy.replace('.', '/'), 0);
 
         /**
          * target self.obj
@@ -103,7 +124,8 @@ public final class PackagePrivateProxy {
                 }
             }
 
-            code.stackSize = Math.max(size, 1);
+            code.stackSize = Math.max(size, 2);
+            System.out.println(size);
             code.localSize = size + 1;
 
             insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, proxy, method.getName(), desc)); // delegate to proxy class

@@ -1,8 +1,38 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.parser.expr;
 
+import roj.asm.Opcodes;
+import roj.asm.struct.insn.*;
+import roj.asm.util.InsnList;
+import roj.asm.util.NodeHelper;
 import roj.kscript.Arguments;
 import roj.kscript.api.MethodsAPI;
 import roj.kscript.ast.ASTree;
+import roj.kscript.ast.CompileContext;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KNull;
 import roj.kscript.type.KType;
@@ -19,9 +49,9 @@ import java.util.Map;
  * @author Roj233
  * @since 2020/10/13 22:17
  */
-public final class Method implements Expression {
+public class Method implements Expression {
     Expression func;
-    public final List<Expression> args;
+    public List<Expression> args;
     public byte flag;
 
     public Method(Expression line, List<Expression> args, boolean isNew) {
@@ -30,11 +60,13 @@ public final class Method implements Expression {
         this.flag = (byte) (isNew ? 1 : 0);
     }
 
+    Method() {}
+
     @Override
     public boolean isEqual(Expression left) {
         if (this == left)
             return true;
-        if (!(left instanceof Method))
+        if (left == null || getClass() != left.getClass())
             return false;
         Method method = (Method) left;
         return method.func.isEqual(func) && (method.flag & 1) == (flag & 1) && ArrayDef.arrayEq(args, method.args);
@@ -56,6 +88,76 @@ public final class Method implements Expression {
         }
     }
 
+    @Override
+    public void toVMCode(CompileContext ctx, boolean noRet) {
+        this.func.toVMCode(ctx, false);
+
+        InsnList list = ctx.list;
+        if(args.isEmpty()) {
+            list.add(NodeHelper.cached(Opcodes.ACONST_NULL));
+        } else {
+            compressArg();
+            list.add(NodeHelper.loadInt(args.size()));
+            list.add(NodeHelper.cached(Opcodes.ICONST_0));
+            list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/KScriptVM", "retainArgHolder", "(IZ)Ljava/util/List;"));
+            for (int i = 0; i < args.size(); i++) {
+                Expression expr = args.get(i);
+                list.add(NodeHelper.cached(Opcodes.DUP));
+                list.add(NodeHelper.loadInt(i));
+                expr.toVMCode(ctx, false);
+                list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"));
+                list.add(NodeHelper.cached(Opcodes.POP));
+            }
+        }
+
+        list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/type/KType", "asFunction", "()Lroj/kscript/func/KFunction;"));
+        list.add(NodeHelper.cached(Opcodes.DUP));
+
+        int i = ctx.createTmpVar("fn");
+        NodeHelper.compress(list, Opcodes.ASTORE, i);
+
+        list.add(NodeHelper.cached(Opcodes.SWAP));
+        list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/KScriptVM", "retainJITArgList", "(Lroj/kscript/func/KFunction;Ljava/util/List;)Lroj/kscript/api/ArgList;"));
+
+        int j = ctx.createTmpVar("args");
+        NodeHelper.compress(list, Opcodes.ASTORE, j);
+
+        NodeHelper.compress(list, Opcodes.ALOAD, i);
+        ctx.endTmpVar(i);
+        if((flag & 1) == 0) {
+            // static
+            ctx.loadThis();
+            NodeHelper.compress(list, Opcodes.ALOAD, j);
+
+            list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/func/KFunction", "invoke", "(Lroj/kscript/api/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;"));
+        } else {
+            list.add(NodeHelper.cached(Opcodes.DUP));
+            list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/func/KFunction", "createInstance", "()Lroj/kscript/type/KType;"));
+            list.add(NodeHelper.cached(Opcodes.DUP));
+            list.add(new ClassInsnNode(Opcodes.INSTANCEOF, "roj/kscript/api/IObject"));
+
+            LabelInsnNode label = new LabelInsnNode();
+
+            InvokeInsnNode invoke = new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/func/KFunction", "invoke",
+                                                       "(Lroj/kscript/api/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;");
+
+            list.add(new IfInsnNode(Opcodes.IFNE, invoke)); // instanceof
+
+            list.add(new GotoInsnNode(label));
+
+            NodeHelper.compress(list, Opcodes.ALOAD, j);
+            list.add(invoke);
+
+            list.add(label);
+        }
+        if(noRet)
+            list.add(NodeHelper.cached(Opcodes.POP));
+
+        NodeHelper.compress(list, Opcodes.ALOAD, j);
+        list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/KScriptVM", "releaseArgList", "(Lroj/kscript/api/ArgList;)V"));
+        ctx.endTmpVar(j);
+    }
+
     private void compressArg() {
         if((flag & 2) == 0) {
             List<Expression> args = this.args;
@@ -63,6 +165,8 @@ public final class Method implements Expression {
                 Expression cp = args.get(i).compress();
                 if(!cp.isConstant())
                     flag |= 4;
+                if(cp instanceof Spread)
+                    flag |= 8; // dynamic
                 args.set(i, cp);
             }
             flag |= 2;
@@ -74,6 +178,10 @@ public final class Method implements Expression {
     public Expression compress() {
         func = func.compress();
         compressArg();
+
+        if((flag & 8) != 0) {
+            return new MethodSpreaded(this);
+        }
 
         CharSequence sb = getFuncPath(func);
         if(sb == null)
@@ -137,7 +245,7 @@ public final class Method implements Expression {
 
     @Override
     public byte type() {
-        if((flag & 4) != 0)
+        if((flag & 12) != 0)
             return -1;
 
         List<KType> exprs = getCst();

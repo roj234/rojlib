@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.kscript.ast;
 
 import org.jetbrains.annotations.Range;
@@ -7,11 +32,13 @@ import roj.config.word.LineHandler;
 import roj.kscript.type.KType;
 import roj.kscript.util.*;
 import roj.kscript.util.opm.ConstMap;
+import roj.kscript.vm.ErrorInfo;
 import roj.kscript.vm.Func;
 import roj.kscript.vm.Func_Try;
 import roj.util.Helpers;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * The ASTree (basically called the Abstract Syntax Tree, a kind of machine friendly 'code'), <br>
@@ -29,7 +56,6 @@ public final class ASTree implements LineHandler {
 
     private final ArrayList<LineInfo> lineIndexes = new ArrayList<>();
     private LineInfo curLine;
-    private boolean hasTry;
 
     private final ArrayList<LabelNode> labels = new ArrayList<>();
 
@@ -69,17 +95,49 @@ public final class ASTree implements LineHandler {
             tree.node0(head);
     }
 
-    public Func build(ContextPrimer ctx) {
-        Frame frame = new Frame(lineIndexes, fr -> {
+    public Func build(ContextPrimer ctx, int maxTryLevel) {
+        Consumer<Frame> hnd = fr -> {
             _finalOp(fr, ctx);
-            if(DEBUG)
+            if (DEBUG)
                 System.out.println(ASTree.this);
-        });
+        };
 
-        return (Func) (hasTry ? new Func_Try(head, frame) : new Func(head, frame)).set(file, self, depth);
+        boolean advanced = maxTryLevel > 0 | ctx.isAdvanced();
+
+        if(advanced) {
+            FramePlus frame = new FramePlus(lineIndexes, hnd);
+
+            if (maxTryLevel > 0) {
+                frame.tryNodeBuf = new TryEnterNode[maxTryLevel];
+                ErrorInfo[] ei = frame.tryDataBuf = new ErrorInfo[maxTryLevel];
+                for (int i = 0; i < maxTryLevel; i++) {
+                    ei[i] = new ErrorInfo(0, null, null);
+                }
+            }
+
+            //if(ctx.defaults.size() > 0) {
+
+            //}
+
+            return (Func) (maxTryLevel > 0 ? new Func_Try(head, frame) : new Func(head, frame)).set(file, self, depth);
+        } else {
+            return (Func) new Func(head, new Frame(lineIndexes, hnd)).set(file, self, depth);
+        }
     }
 
     static KType[] EMPTY = new KType[0];
+
+    private static KType _find(MyHashSet<KType> dataUniquer, KType toFind) {
+        MyHashSet.Entry<KType> entry = dataUniquer.getEntryFirst(toFind, false);
+        while (entry != null) {
+            if (toFind.equalsTo(entry.k)) {
+                return entry.k;
+            }
+            entry = entry.next;
+        }
+        dataUniquer.add(toFind);
+        return toFind;
+    }
 
     /**
      * 后处理
@@ -108,17 +166,17 @@ public final class ASTree implements LineHandler {
             Node prev = null, n1;
             while (cur != null) {
                 indexer.put(i++, cur);
-                switch (cur.code) {
+                switch (cur.getCode()) {
                     case PUT_VAR:
-                    case GET_VAR:
-                        VarNode cur1 = (VarNode) cur;
+                    case GET_VAR: {
+                        VarGNode cur1 = (VarGNode) cur;
                         Frame fr = ctx.findProvider(cur1.name.toString());
-                        if(fr != null) {
-                            cur1.name = new Object[] {
+                        if (fr != null) {
+                            cur1.name = new Object[]{
                                     cur1.name,
-                                    n1 = new LvtVarNode(cur1.code)
+                                    n1 = cur.getCode() == Opcode.GET_VAR ? new LVarGNode() : new LVarSNode()
                             };
-                            if(prev != null)
+                            if (prev != null)
                                 prev.next = n1;
                             else
                                 head = frame.owner.begin = n1;
@@ -128,16 +186,17 @@ public final class ASTree implements LineHandler {
                         } else {
                             closures.put(null, Collections.emptyList());
                         }
-                        break;
-                    case INCREASE:
+                    }
+                    break;
+                    case INCREASE: {
                         IncrNode cur2 = (IncrNode) cur;
                         Frame fr1 = ctx.findProvider(cur2.name.toString());
-                        if(fr1 != null) {
-                            cur2.name = new Object[] {
+                        if (fr1 != null) {
+                            cur2.name = new Object[]{
                                     cur2.name,
                                     n1 = new LvtIncrNode(cur2.val)
                             };
-                            if(prev != null)
+                            if (prev != null)
                                 prev.next = n1;
                             else
                                 head = frame.owner.begin = n1;
@@ -147,10 +206,35 @@ public final class ASTree implements LineHandler {
                         } else {
                             closures.put(null, Collections.emptyList());
                         }
-                        break;
-                    case LOAD:
+                    }
+                    break;
+                    case LOAD: {
                         LoadDataNode ld = ((LoadDataNode) cur);
-                        ld.data = dataUniquer.intern(ld.data);
+                        ld.data = _find(dataUniquer, ld.data);
+                    }
+                    break;
+                    case INVOKE:
+                        sect: {
+                            InvokeNode node1 = (InvokeNode) cur;
+                            if(!ctx.top()) {
+                                if(cur.next != null)
+                                    switch (cur.next.getCode()) {
+                                        default:
+                                            break sect;
+                                        case RETURN:
+                                        case RETURN_EMPTY:
+                                            break;
+                                    }
+
+                                n1 = new TailCall(node1);
+                                if (prev != null)
+                                    prev.next = n1;
+                                else
+                                    head = frame.owner.begin = n1;
+                                n1.next = cur.next.next;
+                                indexer.put(i - 1, cur = n1);
+                            }
+                        }
                         break;
                 }
 
@@ -158,14 +242,14 @@ public final class ASTree implements LineHandler {
                 cur = cur.next;
             }
 
-            CrossFinder<CrossFinder.Wrap<Variable>> cf = new CrossFinder<>(lets.size() + 1);
+            Unioner<Unioner.Wrap<Variable>> cf = new Unioner<>(lets.size() + 1);
 
             for (int j = 0; j < lets.size(); j++) {
                 Variable v = lets.get(j);
                 // cf: start include and end exclude
                 if (v.end != null) {
-                    cf.add(new CrossFinder.Wrap<>(v, v.start == null ? 0 : indexer.getByValue(v.start.replacement()),
-                            indexer.getByValue(v.end.replacement()) + 1));
+                    cf.add(new Unioner.Wrap<>(v, v.start == null ? 0 : indexer.getByValue(v.start.replacement()),
+                                                  indexer.getByValue(v.end.replacement()) + 1));
                 }
             }
 
@@ -174,13 +258,13 @@ public final class ASTree implements LineHandler {
             List<Variable> usedVar = new ArrayList<>();
             int slotInUse = vars.size() + usedArgs.size(), maxInUse = vars.size() + usedArgs.size();
 
-            List<CrossFinder.Wrap<Variable>> last = Collections.emptyList();
-            for (CrossFinder.Region region : cf) {
-                List<CrossFinder.Wrap<Variable>> curr = region._int_mod_value();
+            List<Unioner.Wrap<Variable>> last = Collections.emptyList();
+            for (Unioner.Region region : cf) {
+                List<Unioner.Wrap<Variable>> curr = region._int_mod_value();
 
-                CrossFinder.Point point = region.node();
+                Unioner.Point point = region.node();
                 while (point != null) {
-                    CrossFinder.Wrap<Variable> vari = point.owner();
+                    Unioner.Wrap<Variable> vari = point.owner();
                     if(point.end()) {
                         if(vari.sth.index == slotInUse)
                             slotInUse--;
@@ -204,7 +288,7 @@ public final class ASTree implements LineHandler {
                 last = curr;
             }
 
-            mkVarName(frame, vars, usedVar, usedArgs);
+            mkVarName(frame, vars, usedVar, usedArgs, ctx.restParId);
 
             if(vars.isEmpty() && maxInUse == usedArgs.size()) {
                 frame.lvt = usedArgs.isEmpty() ? EMPTY : new KType[usedArgs.size()];
@@ -231,10 +315,11 @@ public final class ASTree implements LineHandler {
 
             // pass 3: create actions on control flow nodes.
             while (cur != null) {
-                switch (cur.code) {
+                switch (cur.getCode()) {
                     case IF:
                     case SWITCH:
-                    case TRY_ENTER: // only these node need to be compiled for better performance
+                    case TRY_ENTER:
+                    case TRY_EXIT: // only these node need to be compiled for better performance
                         cur.compile();
                         cur.genDiff(cf, indexer);
                         break;
@@ -254,17 +339,17 @@ public final class ASTree implements LineHandler {
             Node prev = null, n1;
             // pass 1: transform variable node
             while (cur != null) {
-                switch (cur.code) {
+                switch (cur.getCode()) {
                     case PUT_VAR:
-                    case GET_VAR:
-                        VarNode cur1 = (VarNode) cur;
+                    case GET_VAR: {
+                        VarGNode cur1 = (VarGNode) cur;
                         Frame fr = ctx.findProvider(cur1.name.toString());
-                        if(fr != null) {
-                            cur1.name = new Object[] {
+                        if (fr != null) {
+                            cur1.name = new Object[]{
                                     cur1.name,
-                                    n1 = new LvtVarNode(cur1.code)
+                                    n1 = cur.getCode() == Opcode.GET_VAR ? new LVarGNode() : new LVarSNode()
                             };
-                            if(prev != null)
+                            if (prev != null)
                                 prev.next = n1;
                             else
                                 head = frame.owner.begin = n1;
@@ -274,29 +359,53 @@ public final class ASTree implements LineHandler {
                         } else {
                             closures.put(null, Collections.emptyList());
                         }
-                        break;
-                    case INCREASE:
+                    }
+                    break;
+                    case INCREASE: {
                         IncrNode cur2 = (IncrNode) cur;
                         Frame fr1 = ctx.findProvider(cur2.name.toString());
-                        if(fr1 != null) {
-                            cur2.name = new Object[] {
+                        if (fr1 != null) {
+                            cur2.name = new Object[]{
                                     cur2.name,
                                     n1 = new LvtIncrNode(cur2.val)
                             };
-                            if(prev != null)
+                            if (prev != null)
                                 prev.next = n1;
                             else
                                 head = frame.owner.begin = n1;
                             n1.next = cur.next;
-                            cur = n1;
                             closures.computeIfAbsent(fr1, Helpers.fnArrayList()).add(cur2);
                         } else {
                             closures.put(null, Collections.emptyList());
                         }
-                        break;
-                    case LOAD:
+                    }
+                    break;
+                    case LOAD: {
                         LoadDataNode ld = ((LoadDataNode) cur);
-                        ld.data = dataUniquer.intern(ld.data);
+                        ld.data = _find(dataUniquer, ld.data);
+                    }
+                    break;
+                    case INVOKE:
+                        sect: {
+                            InvokeNode node1 = (InvokeNode) cur;
+                            if(!ctx.top()) {
+                                if(cur.next != null)
+                                    switch (cur.next.getCode()) {
+                                        default:
+                                            break sect;
+                                        case RETURN:
+                                        case RETURN_EMPTY:
+                                            break;
+                                    }
+
+                                n1 = new TailCall(node1);
+                                if (prev != null)
+                                    prev.next = n1;
+                                else
+                                    head = frame.owner.begin = n1;
+                                n1.next = cur.next.next;
+                            }
+                        }
                         break;
                 }
 
@@ -304,7 +413,7 @@ public final class ASTree implements LineHandler {
                 cur = cur.next;
             }
 
-            mkVarName(frame, vars, Collections.emptyList(), usedArgs);
+            mkVarName(frame, vars, Collections.emptyList(), usedArgs, ctx.restParId);
 
             if(vars.isEmpty()) {
                 frame.lvt = usedArgs.isEmpty() ? EMPTY : new KType[usedArgs.size()];
@@ -326,10 +435,11 @@ public final class ASTree implements LineHandler {
 
             // pass 3: create actions on control flow nodes.
             while (cur != null) {
-                switch (cur.code) {
+                switch (cur.getCode()) {
                     case IF:
                     case SWITCH:
-                    case TRY_ENTER: // only these nodes need to be compiled for better performance
+                    case TRY_ENTER:
+                    case TRY_EXIT: // only these nodes need to be compiled for better performance
                         cur.compile();
                         break;
                     case GOTO:
@@ -354,7 +464,7 @@ public final class ASTree implements LineHandler {
         ctx.finish();
     }
 
-    private void mkVarName(Frame frame, ConstMap vars, List<Variable> lets, ArrayList<String> usedArgs) {
+    private static void mkVarName(Frame frame, ConstMap vars, List<Variable> lets, ArrayList<String> usedArgs, int spreadArgId) {
         for (int j = 0; j < usedArgs.size(); j++) {
             String key = usedArgs.get(j);
             if(key != null) {
@@ -373,6 +483,11 @@ public final class ASTree implements LineHandler {
                 usedArgs1.add(j);
             }
         }
+
+        if(spreadArgId >= 0 && usedArgs.size() > spreadArgId && usedArgs.get(spreadArgId) != null) {
+            usedArgs1.add(-1);
+        }
+
         frame.usedArgs = usedArgs1.toArray();
         for (String key : vars.keySet()) {
             st[i++] = key;
@@ -425,15 +540,15 @@ public final class ASTree implements LineHandler {
 
             int ctxId = sorter.indexOf(key);
             for (Node node : entry.getValue()) {
-                if(node instanceof VarNode) {
-                    VarNode n = (VarNode) node;
+                if(node instanceof VarGNode) {
+                    VarGNode n = (VarGNode) node;
                     String name = (String) ((Object[])n.name)[0];
-                    if(n.code == Opcode.PUT_VAR) {
+                    if(n.getCode() == Opcode.PUT_VAR) {
                         if(ctx.globals.isConst(name)) {
                             throw new JavaException("无法写入常量 " + name);
                         }
                     }
-                    LvtVarNode n1 = (LvtVarNode) ((Object[])n.name)[1];
+                    LVarGNode n1 = (LVarGNode) ((Object[])n.name)[1];
                     n.name = n1;
                     n1.ctxId = ctxId;
                     n1.varId = Arrays.asList(((Frame)key).varNames).indexOf(name);
@@ -455,7 +570,7 @@ public final class ASTree implements LineHandler {
     }
 
     public ASTree Std(Opcode code) {
-        return Node(new NPASTNode(code));
+        return Node(new NPNode(code));
     }
 
     /**
@@ -484,6 +599,14 @@ public final class ASTree implements LineHandler {
         return Node(new InvokeNode(false, argc, noRet));
     }
 
+    public ASTree InvokeSpread(@Range(from = 0, to = Integer.MAX_VALUE) int argc, boolean noRet, long activeBits) {
+        return Node(new InvokeDynamicNode(true, argc, noRet, activeBits));
+    }
+
+    public ASTree NewSpread(@Range(from = 0, to = Integer.MAX_VALUE) int argc, boolean noRet, long activeBits) {
+        return Node(new InvokeDynamicNode(false, argc, noRet, activeBits));
+    }
+
     public ASTree Inc(String name, int count) {
         return Node(new IncrNode(name, count));
     }
@@ -505,18 +628,23 @@ public final class ASTree implements LineHandler {
     }
 
     public ASTree Get(String name) {
-        return Node(new VarNode(name, VarNode.GET));
+        return Node(new VarGNode(name));
     }
 
     public void Set(String name) {
-        node0(new VarNode(name, VarNode.SET));
+        node0(new VarSNode(name));
     }
 
-    public ASTree TryEnter(LabelNode _catch, LabelNode _finally, LabelNode _norm_exec_end) {
-        return Node(new TryNode(_catch, _finally, _norm_exec_end));
+    public TryEnterNode TryEnter(LabelNode _catch, LabelNode _finally, LabelNode _norm_exec_end) {
+        TryEnterNode node = new TryEnterNode(_catch, _finally, _norm_exec_end);
+        node0(node);
+        return node;
     }
 
-    public ASTree TryEnd(LabelNode realEnd) {
+    /**
+     * catch / finally 的 终点
+     */
+    public ASTree TryRegionEnd(LabelNode realEnd) {
         return Node(new TryEndNode(realEnd));
     }
 
@@ -532,9 +660,6 @@ public final class ASTree implements LineHandler {
             }
             labels.clear();
         }
-
-        if(node.getClass() == TryNode.class)
-            hasTry = true;
 
         if(curLine != null) {
             curLine.node = node;
@@ -565,15 +690,13 @@ public final class ASTree implements LineHandler {
 
     public void Clear() {
         head = tail = null;
+        labels.clear();
+        lineIndexes.clear();
+        curLine = null;
     }
 
     public Node last() {
         return tail;
-    }
-
-    public void last(Node last) {
-        last.getClass();
-        tail = last;
     }
 
     @Override

@@ -1,26 +1,52 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config.data;
 
 /**
- * This file is a part of MI <br>
- * (L) Copyleft 2020-20XX 版权没有, 仿冒不究,如有雷同,纯属活该
- * <p>
+ * Config Type
+ *
  * @author Roj234
- * Filename: Type.java
+ * @version 0.1
+ * @since 2021/4/21 22:51
  */
 public enum Type {
-    LIST, MAP, STRING, NUMBER, NULL, BOOL, DOUBLE, LIST_MAP, SERIALIZED_OBJECT, JVAV_OBJECT, JVAV_FUNCTION;
+    LIST, MAP, STRING, INTEGER, NULL, BOOL, DOUBLE, LONG, OBJECT, COMMENT,
+    YAML_TIMESTAMP, YAML_DATE, YAML_ORDERED_MAP;
 
     public boolean isNumber() {
-        return this == NUMBER || this == DOUBLE;
+        return this == INTEGER || this == DOUBLE;
     }
 
-    public boolean canFit(Type type) {
+    public boolean fits(Type type) {
         switch (this) {
             case DOUBLE:
-            case NUMBER:
+            case INTEGER:
             case BOOL:
             case STRING:
-                return type == DOUBLE || type == NUMBER || type == BOOL || type == STRING;
+                return type == DOUBLE || type == INTEGER || type == BOOL || type == STRING;
             case NULL:
                 return false;
             default:

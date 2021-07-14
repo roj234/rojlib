@@ -1,3 +1,28 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.math;
 
 import roj.util.Hasher;
@@ -8,13 +33,13 @@ import roj.util.Hasher;
  *
  * @author Maximilian Luz
  */
-public class Mat4d {
+public class Mat4d implements Cloneable {
     public Mat4d() {}
 
-    public double raw0,raw1,raw2,raw3,
-            raw4,raw5,raw6,raw7,
-            raw8,raw9,raw10,raw11,
-            raw12,raw13,raw14,raw15;
+    public double m00, m01, m02, m03,
+            m10, m11, m12, m13,
+            m20, m21, m22, m23,
+            m30, m31, m32, m33;
 
 
     /**
@@ -25,22 +50,22 @@ public class Mat4d {
                  double a31, double a32, double a33, double a34,
                  double a41, double a42, double a43, double a44) {
 
-        raw0 = a11;
-        raw1 = a12;
-        raw2 = a13;
-        raw3 = a14;
-        raw4 = a21;
-        raw5 = a22;
-        raw6 = a23;
-        raw7 = a24;
-        raw8 = a31;
-        raw9 = a32;
-        raw10 = a33;
-        raw11 = a34;
-        raw12 = a41;
-        raw13 = a42;
-        raw14 = a43;
-        raw15 = a44;
+        m00 = a11;
+        m01 = a12;
+        m02 = a13;
+        m03 = a14;
+        m10 = a21;
+        m11 = a22;
+        m12 = a23;
+        m13 = a24;
+        m20 = a31;
+        m21 = a32;
+        m22 = a33;
+        m23 = a34;
+        m30 = a41;
+        m31 = a42;
+        m32 = a43;
+        m33 = a44;
     }
 
     /**
@@ -62,10 +87,10 @@ public class Mat4d {
     }
 
     public Mat4f toFloatMatrix() {
-        return new Mat4f((float) raw0, (float) raw1, (float) raw2, (float) raw3,
-                (float) raw4, (float) raw5, (float) raw6, (float) raw7,
-                (float) raw8, (float) raw9, (float) raw10, (float) raw11,
-                (float) raw12, (float) raw13, (float) raw14, (float) raw15);
+        return new Mat4f((float) m00, (float) m01, (float) m02, (float) m03,
+                (float) m10, (float) m11, (float) m12, (float) m13,
+                (float) m20, (float) m21, (float) m22, (float) m23,
+                (float) m30, (float) m31, (float) m32, (float) m33);
     }
 
     /**
@@ -78,22 +103,22 @@ public class Mat4d {
                      double a31, double a32, double a33, double a34,
                      double a41, double a42, double a43, double a44) {
 
-        raw0 = a11;
-        raw1 = a12;
-        raw2 = a13;
-        raw3 = a14;
-        raw4 = a21;
-        raw5 = a22;
-        raw6 = a23;
-        raw7 = a24;
-        raw8 = a31;
-        raw9 = a32;
-        raw10 = a33;
-        raw11 = a34;
-        raw12 = a41;
-        raw13 = a42;
-        raw14 = a43;
-        raw15 = a44;
+        m00 = a11;
+        m01 = a12;
+        m02 = a13;
+        m03 = a14;
+        m10 = a21;
+        m11 = a22;
+        m12 = a23;
+        m13 = a24;
+        m20 = a31;
+        m21 = a32;
+        m22 = a33;
+        m23 = a34;
+        m30 = a41;
+        m31 = a42;
+        m32 = a43;
+        m33 = a44;
 
         return this;
     }
@@ -105,22 +130,22 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d set(double[] raw) {
-        raw0 = raw[0];
-        raw1 = raw[1];
-        raw2 = raw[2];
-        raw3 = raw[3];
-        raw4 = raw[4];
-        raw5 = raw[5];
-        raw6 = raw[6];
-        raw7 = raw[7];
-        raw8 = raw[8];
-        raw9 = raw[9];
-        raw10 = raw[10];
-        raw11 = raw[11];
-        raw12 = raw[12];
-        raw13 = raw[13];
-        raw14 = raw[14];
-        raw15 = raw[15];
+        m00 = raw[0];
+        m01 = raw[1];
+        m02 = raw[2];
+        m03 = raw[3];
+        m10 = raw[4];
+        m11 = raw[5];
+        m12 = raw[6];
+        m13 = raw[7];
+        m20 = raw[8];
+        m21 = raw[9];
+        m22 = raw[10];
+        m23 = raw[11];
+        m30 = raw[12];
+        m31 = raw[13];
+        m32 = raw[14];
+        m33 = raw[15];
         return this;
     }
 
@@ -131,22 +156,22 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d set(Mat4d other) {
-        raw0 = other.raw0;
-        raw1 = other.raw1;
-        raw2 = other.raw2;
-        raw3 = other.raw3;
-        raw4 = other.raw4;
-        raw5 = other.raw5;
-        raw6 = other.raw6;
-        raw7 = other.raw7;
-        raw8 = other.raw8;
-        raw9 = other.raw9;
-        raw10 = other.raw10;
-        raw11 = other.raw11;
-        raw12 = other.raw12;
-        raw13 = other.raw13;
-        raw14 = other.raw14;
-        raw15 = other.raw15;
+        m00 = other.m00;
+        m01 = other.m01;
+        m02 = other.m02;
+        m03 = other.m03;
+        m10 = other.m10;
+        m11 = other.m11;
+        m12 = other.m12;
+        m13 = other.m13;
+        m20 = other.m20;
+        m21 = other.m21;
+        m22 = other.m22;
+        m23 = other.m23;
+        m30 = other.m30;
+        m31 = other.m31;
+        m32 = other.m32;
+        m33 = other.m33;
         return this;
     }
 
@@ -156,8 +181,8 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d makeIdentity() {
-        raw0 = raw5 = raw10 = raw15 = 1;
-        raw1 = raw2 = raw3 = raw4 = raw6 = raw7 = raw8 = raw9 = raw11 = raw12 = raw13 = raw14 = 0;
+        m00 = m11 = m22 = m33 = 1;
+        m01 = m02 = m03 = m10 = m12 = m13 = m20 = m21 = m23 = m30 = m31 = m32 = 0;
         return this;
     }
 
@@ -175,25 +200,25 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d makeOrtho(double left, double right, double top, double bottom, double near, double far) {
-        raw0 = 2.0 / (right - left);
-        raw1 = 0;
-        raw2 = 0;
-        raw3 = -(right + left) / (right - left);
+        m00 = 2.0f / (right - left);
+        m01 = 0;
+        m02 = 0;
+        m03 = -(right + left) / (right - left);
 
-        raw4 = 0;
-        raw5 = 2.0 / (top - bottom);
-        raw6 = 0;
-        raw7 = -(top + bottom) / (top - bottom);
+        m10 = 0;
+        m11 = 2.0f / (top - bottom);
+        m12 = 0;
+        m13 = -(top + bottom) / (top - bottom);
 
-        raw8 = 0;
-        raw9 = 0;
-        raw10 = -2.0 / (far - near);
-        raw11 = -(far + near) / (far - near);
+        m20 = 0;
+        m21 = 0;
+        m22 = -2.0f / (far - near);
+        m23 = -(far + near) / (far - near);
 
-        raw12 = 0;
-        raw13 = 0;
-        raw14 = 0;
-        raw15 = 1;
+        m30 = 0;
+        m31 = 0;
+        m32 = 0;
+        m33 = 1;
 
         return this;
     }
@@ -208,25 +233,25 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d makePerspective(double fovy, double aspectRatio, double zNear, double zFar) {
-        double f = (1 / Math.tan(Math.toRadians(fovy / 2)));
+        double f = 1 / Math.tan(Math.toRadians(fovy / 2));
 
-        raw1 = 0;
-        raw2 = 0;
-        raw3 = 0;
-        raw4 = 0;
-        raw6 = 0;
-        raw7 = 0;
-        raw8 = 0;
-        raw9 = 0;
-        raw12 = 0;
-        raw13 = 0;
-        raw15 = 0;
+        m01 = 0;
+        m02 = 0;
+        m03 = 0;
+        m10 = 0;
+        m12 = 0;
+        m13 = 0;
+        m20 = 0;
+        m21 = 0;
+        m30 = 0;
+        m31 = 0;
+        m33 = 0;
 
-        raw0 = f / aspectRatio;
-        raw5 = f;
-        raw10 = (zFar + zNear) / (zNear - zFar);
-        raw11 = (2 * zNear * zFar) / (zNear - zFar);
-        raw14 = -1;
+        m00 = f / aspectRatio;
+        m11 = f;
+        m22 = (zFar + zNear) / (zNear - zFar);
+        m23 = (2 * zNear * zFar) / (zNear - zFar);
+        m32 = -1;
 
         return this;
     }
@@ -272,22 +297,22 @@ public class Mat4d {
         double upY = sideZ * fwdX - sideX * fwdZ;
         double upZ = sideX * fwdY - sideY * fwdX;
 
-        raw0 = sideX;
-        raw1 = sideY;
-        raw2 = sideZ;
-        raw3 = 0;
-        raw4 = upX;
-        raw5 = upY;
-        raw6 = upZ;
-        raw7 = 0;
-        raw8 = -fwdX;
-        raw9 = -fwdY;
-        raw10 = -fwdZ;
-        raw11 = 0;
-        raw12 = 0;
-        raw13 = 0;
-        raw14 = 0;
-        raw15 = 1;
+        m00 = sideX;
+        m01 = sideY;
+        m02 = sideZ;
+        m03 = 0;
+        m10 = upX;
+        m11 = upY;
+        m12 = upZ;
+        m13 = 0;
+        m20 = -fwdX;
+        m21 = -fwdY;
+        m22 = -fwdZ;
+        m23 = 0;
+        m30 = 0;
+        m31 = 0;
+        m32 = 0;
+        m33 = 1;
 
         return this.translate(-eye.x, -eye.y, -eye.z);
     }
@@ -298,9 +323,9 @@ public class Mat4d {
      * @return the calculated determinant of the upper left 3x3 sub-matrix.
      */
     public double det3() {
-        return raw0 * (raw5 * raw10 - raw6 * raw9)
-                - raw1 * (raw4 * raw10 - raw6 * raw8)
-                + raw2 * (raw4 * raw9 - raw5 * raw8);
+        return m00 * (m11 * m22 - m12 * m21)
+                - m01 * (m10 * m22 - m12 * m20)
+                + m02 * (m10 * m21 - m11 * m20);
     }
 
     /**
@@ -311,17 +336,17 @@ public class Mat4d {
     public double det() {
         // TODO: test!!
         // 2x2 determinants enumerated from left to right
-        double d1 = raw8 * raw13 - raw9 * raw12;
-        double d2 = raw8 * raw14 - raw10 * raw12;
-        double d3 = raw8 * raw15 - raw11 * raw12;
-        double d4 = raw9 * raw14 - raw10 * raw13;
-        double d5 = raw9 * raw15 - raw11 * raw13;
-        double d6 = raw10 * raw15 - raw11 * raw14;
+        double d1 = m20 * m31 - m21 * m30;
+        double d2 = m20 * m32 - m22 * m30;
+        double d3 = m20 * m33 - m23 * m30;
+        double d4 = m21 * m32 - m22 * m31;
+        double d5 = m21 * m33 - m23 * m31;
+        double d6 = m22 * m33 - m23 * m32;
 
-        return raw0 * (raw5 * d6 - raw6 * d5 + raw7 * d4)
-                - raw1 * (raw4 * d6 - raw6 * d3 + raw7 * d2)
-                + raw2 * (raw4 * d5 - raw5 * d3 + raw7 * d1)
-                - raw3 * (raw4 * d4 - raw5 * d2 + raw6 * d1);
+        return m00 * (m11 * d6 - m12 * d5 + m13 * d4)
+                - m01 * (m10 * d6 - m12 * d3 + m13 * d2)
+                + m02 * (m10 * d5 - m11 * d3 + m13 * d1)
+                - m03 * (m10 * d4 - m11 * d2 + m12 * d1);
     }
 
     /**
@@ -330,7 +355,7 @@ public class Mat4d {
      * @return {@code true} iff this matrix is affine.
      */
     public boolean isAffine() {
-        return raw12 == 0.0 && raw13 == 0.0 && raw14 == 0.0 && raw15 == 1.0;
+        return m30 == 0.0f && m31 == 0.0f && m32 == 0.0f && m33 == 1.0f;
     }
 
     /**
@@ -340,22 +365,22 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d add(Mat4d other) {
-        raw0 += other.raw0;
-        raw1 += other.raw1;
-        raw2 += other.raw2;
-        raw3 += other.raw3;
-        raw4 += other.raw4;
-        raw5 += other.raw5;
-        raw6 += other.raw6;
-        raw7 += other.raw7;
-        raw8 += other.raw8;
-        raw9 += other.raw9;
-        raw10 += other.raw10;
-        raw11 += other.raw11;
-        raw12 += other.raw12;
-        raw13 += other.raw13;
-        raw14 += other.raw14;
-        raw15 += other.raw15;
+        m00 += other.m00;
+        m01 += other.m01;
+        m02 += other.m02;
+        m03 += other.m03;
+        m10 += other.m10;
+        m11 += other.m11;
+        m12 += other.m12;
+        m13 += other.m13;
+        m20 += other.m20;
+        m21 += other.m21;
+        m22 += other.m22;
+        m23 += other.m23;
+        m30 += other.m30;
+        m31 += other.m31;
+        m32 += other.m32;
+        m33 += other.m33;
         return this;
     }
 
@@ -366,50 +391,56 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d sub(Mat4d other) {
-        raw0 -= other.raw0;
-        raw1 -= other.raw1;
-        raw2 -= other.raw2;
-        raw3 -= other.raw3;
-        raw4 -= other.raw4;
-        raw5 -= other.raw5;
-        raw6 -= other.raw6;
-        raw7 -= other.raw7;
-        raw8 -= other.raw8;
-        raw9 -= other.raw9;
-        raw10 -= other.raw10;
-        raw11 -= other.raw11;
-        raw12 -= other.raw12;
-        raw13 -= other.raw13;
-        raw14 -= other.raw14;
-        raw15 -= other.raw15;
+        m00 -= other.m00;
+        m01 -= other.m01;
+        m02 -= other.m02;
+        m03 -= other.m03;
+        m10 -= other.m10;
+        m11 -= other.m11;
+        m12 -= other.m12;
+        m13 -= other.m13;
+        m20 -= other.m20;
+        m21 -= other.m21;
+        m22 -= other.m22;
+        m23 -= other.m23;
+        m30 -= other.m30;
+        m31 -= other.m31;
+        m32 -= other.m32;
+        m33 -= other.m33;
         return this;
     }
 
     /**
-     * Multiplies this matrix with the specified matrix, i.e. {@code this * other}.
+     * Multiplies this matrix with the specified matrix, i.e. {@code this * o}.
      *
-     * @param other the matrix to multiply with.
+     * @param o the matrix to multiply with.
      * @return this matrix.
      */
-    public Mat4d mul(Mat4d other) {
-        set(new double[]{
-                raw0 * other.raw0 + raw1 * other.raw4 + raw2 * other.raw8 + raw3 * other.raw12,
-                raw0 * other.raw1 + raw1 * other.raw5 + raw2 * other.raw9 + raw3 * other.raw13,
-                raw0 * other.raw2 + raw1 * other.raw6 + raw2 * other.raw10 + raw3 * other.raw14,
-                raw0 * other.raw3 + raw1 * other.raw7 + raw2 * other.raw11 + raw3 * other.raw15,
-                raw4 * other.raw0 + raw5 * other.raw4 + raw6 * other.raw8 + raw7 * other.raw12,
-                raw4 * other.raw1 + raw5 * other.raw5 + raw6 * other.raw9 + raw7 * other.raw13,
-                raw4 * other.raw2 + raw5 * other.raw6 + raw6 * other.raw10 + raw7 * other.raw14,
-                raw4 * other.raw3 + raw5 * other.raw7 + raw6 * other.raw11 + raw7 * other.raw15,
-                raw8 * other.raw0 + raw9 * other.raw4 + raw10 * other.raw8 + raw11 * other.raw12,
-                raw8 * other.raw1 + raw9 * other.raw5 + raw10 * other.raw9 + raw11 * other.raw13,
-                raw8 * other.raw2 + raw9 * other.raw6 + raw10 * other.raw10 + raw11 * other.raw14,
-                raw8 * other.raw3 + raw9 * other.raw7 + raw10 * other.raw11 + raw11 * other.raw15,
-                raw12 * other.raw0 + raw13 * other.raw4 + raw14 * other.raw8 + raw15 * other.raw12,
-                raw12 * other.raw1 + raw13 * other.raw5 + raw14 * other.raw9 + raw15 * other.raw13,
-                raw12 * other.raw2 + raw13 * other.raw6 + raw14 * other.raw10 + raw15 * other.raw14,
-                raw12 * other.raw3 + raw13 * other.raw7 + raw14 * other.raw11 + raw15 * other.raw15
-        });
+    public Mat4d mul(Mat4d o) {
+        double r0 = m00, r1 = m01, r2 = m02, r3 = m03;
+
+        m00 = r0 * o.m00 + r1 * o.m10 + r2 * o.m20 + r3 * o.m30;
+        m01 = r0 * o.m01 + r1 * o.m11 + r2 * o.m21 + r3 * o.m31;
+        m02 = r0 * o.m02 + r1 * o.m12 + r2 * o.m22 + r3 * o.m32;
+        m03 = r0 * o.m03 + r1 * o.m13 + r2 * o.m23 + r3 * o.m33;
+
+        r0 = m10; r1 = m11; r2 = m12; r3 = m13;
+        m10 = r0 * o.m00 + r1 * o.m10 + r2 * o.m20 + r3 * o.m30;
+        m11 = r0 * o.m01 + r1 * o.m11 + r2 * o.m21 + r3 * o.m31;
+        m12 = r0 * o.m02 + r1 * o.m12 + r2 * o.m22 + r3 * o.m32;
+        m13 = r0 * o.m03 + r1 * o.m13 + r2 * o.m23 + r3 * o.m33;
+
+        r0 = m20; r1 = m21; r2 = m22; r3 = m23;
+        m20 = r0 * o.m00 + r1 * o.m10 + r2 * o.m20 + r3 * o.m30;
+        m21 = r0 * o.m01 + r1 * o.m11 + r2 * o.m21 + r3 * o.m31;
+        m22 = r0 * o.m02 + r1 * o.m12 + r2 * o.m22 + r3 * o.m32;
+        m23 = r0 * o.m03 + r1 * o.m13 + r2 * o.m23 + r3 * o.m33;
+
+        r0 = m30; r1 = m31; r2 = m32; r3 = m33;
+        m30 = r0 * o.m00 + r1 * o.m10 + r2 * o.m20 + r3 * o.m30;
+        m31 = r0 * o.m01 + r1 * o.m11 + r2 * o.m21 + r3 * o.m31;
+        m32 = r0 * o.m02 + r1 * o.m12 + r2 * o.m22 + r3 * o.m32;
+        m33 = r0 * o.m03 + r1 * o.m13 + r2 * o.m23 + r3 * o.m33;
 
         return this;
     }
@@ -421,10 +452,10 @@ public class Mat4d {
      * @return the product of this matrix and the specified vectors.
      */
     public Vec4d mul(Vec4d v) {
-        return new Vec4d(raw0 * v.x + raw1 * v.y + raw2 * v.z + raw3 * v.w,
-                raw4 * v.x + raw5 * v.y + raw6 * v.z + raw7 * v.w,
-                raw8 * v.x + raw9 * v.y + raw10 * v.z + raw11 * v.w,
-                raw12 * v.x + raw13 * v.y + raw14 * v.z + raw15 * v.w);
+        return new Vec4d(m00 * v.x + m01 * v.y + m02 * v.z + m03 * v.w,
+                m10 * v.x + m11 * v.y + m12 * v.z + m13 * v.w,
+                m20 * v.x + m21 * v.y + m22 * v.z + m23 * v.w,
+                m30 * v.x + m31 * v.y + m32 * v.z + m33 * v.w);
     }
 
     /**
@@ -434,22 +465,22 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d mul(double scalar) {
-        raw0 *= scalar;
-        raw1 *= scalar;
-        raw2 *= scalar;
-        raw3 *= scalar;
-        raw4 *= scalar;
-        raw5 *= scalar;
-        raw6 *= scalar;
-        raw7 *= scalar;
-        raw8 *= scalar;
-        raw9 *= scalar;
-        raw10 *= scalar;
-        raw11 *= scalar;
-        raw12 *= scalar;
-        raw13 *= scalar;
-        raw14 *= scalar;
-        raw15 *= scalar;
+        m00 *= scalar;
+        m01 *= scalar;
+        m02 *= scalar;
+        m03 *= scalar;
+        m10 *= scalar;
+        m11 *= scalar;
+        m12 *= scalar;
+        m13 *= scalar;
+        m20 *= scalar;
+        m21 *= scalar;
+        m22 *= scalar;
+        m23 *= scalar;
+        m30 *= scalar;
+        m31 *= scalar;
+        m32 *= scalar;
+        m33 *= scalar;
         return this;
     }
 
@@ -475,10 +506,36 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d translate(double x, double y, double z) {
-        raw3 = raw0 * x + raw1 * y + raw2 * z + raw3;
-        raw7 = raw4 * x + raw5 * y + raw6 * z + raw7;
-        raw11 = raw8 * x + raw9 * y + raw10 * z + raw11;
-        raw15 = raw12 * x + raw13 * y + raw14 * z + raw15;
+        m03 = m00 * x + m01 * y + m02 * z + m03;
+        m13 = m10 * x + m11 * y + m12 * z + m13;
+        m23 = m20 * x + m21 * y + m22 * z + m23;
+        m33 = m30 * x + m31 * y + m32 * z + m33;
+        return this;
+    }
+
+    /**
+     * Applies an absolute translation to this matrix.
+     *
+     * @see #translate(double, double, double)
+     * @return this matrix.
+     */
+    public Mat4d translateAbs(double x, double y, double z) {
+        m03 = m00 * x + m01 * y + m02 * z;
+        m13 = m10 * x + m11 * y + m12 * z;
+        m23 = m20 * x + m21 * y + m22 * z;
+        m33 = m30 * x + m31 * y + m32 * z;
+        return this;
+    }
+
+    /**
+     * Reset this matrix's translation.
+     * @return this matrix.
+     */
+    public Mat4d resetTranslation() {
+        m03 = 0;
+        m13 = 0;
+        m23 = 0;
+        m33 = 0;
         return this;
     }
 
@@ -503,18 +560,18 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d scale(double sx, double sy, double sz) {
-        raw0 *= sx;
-        raw1 *= sy;
-        raw2 *= sz;
-        raw4 *= sx;
-        raw5 *= sy;
-        raw6 *= sz;
-        raw8 *= sx;
-        raw9 *= sy;
-        raw10 *= sz;
-        raw12 *= sx;
-        raw13 *= sy;
-        raw14 *= sz;
+        m00 *= sx;
+        m01 *= sy;
+        m02 *= sz;
+        m10 *= sx;
+        m11 *= sy;
+        m12 *= sz;
+        m20 *= sx;
+        m21 *= sy;
+        m22 *= sz;
+        m30 *= sx;
+        m31 *= sy;
+        m32 *= sz;
         return this;
     }
 
@@ -541,14 +598,15 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d rotate(double x, double y, double z, double angle) {
-        double s = Math.sin(angle);
-        double c = Math.cos(angle);
-        double omc = 1.0 - c;
+        double s = MathUtils.sin(angle);
+        double c = MathUtils.cos(angle);
+        double omc = 1.0f - c;
+
+        double xz = x * z;
+        double ys = y * s;
 
         double xx = x * x;
         double xy = x * y;
-        double xz = x * z;
-        double ys = y * s;
         double zs = z * s;
 
         double r0 = xx * omc + c;
@@ -567,25 +625,61 @@ public class Mat4d {
         double r9 = yz * omc + xs;
         double r10 = zz * omc + c;
 
-        double u = raw0, v = raw1, w = raw2;
-        raw0 = u * r0 + v * r4 + w * r8;
-        raw1 = u * r1 + v * r5 + w * r9;
-        raw2 = u * r2 + v * r6 + w * r10;
+        double u = m00, v = m01, w = m02;
+        m00 = u * r0 + v * r4 + w * r8;
+        m01 = u * r1 + v * r5 + w * r9;
+        m02 = u * r2 + v * r6 + w * r10;
 
-        u = raw4;v = raw5;w = raw6;
-        raw4 = u * r0 + v * r4 + w * r8;
-        raw5 = u * r1 + v * r5 + w * r9;
-        raw6 = u * r2 + v * r6 + w * r10;
+        u = m10;v = m11;w = m12;
+        m10 = u * r0 + v * r4 + w * r8;
+        m11 = u * r1 + v * r5 + w * r9;
+        m12 = u * r2 + v * r6 + w * r10;
 
-        u = raw8;v = raw9;w = raw10;
-        raw8 = u * r0 + v * r4 + w * r8;
-        raw9 = u * r1 + v * r5 + w * r9;
-        raw10 = u * r2 + v * r6 + w * r10;
+        u = m20;v = m21;w = m22;
+        m20 = u * r0 + v * r4 + w * r8;
+        m21 = u * r1 + v * r5 + w * r9;
+        m22 = u * r2 + v * r6 + w * r10;
 
-        u = raw12;v = raw13;w = raw14;
-        raw12 = u * r0 + v * r4 + w * r8;
-        raw13 = u * r1 + v * r5 + w * r9;
-        raw14 = u * r2 + v * r6 + w * r10;
+        u = m30;v = m31;w = m32;
+        m30 = u * r0 + v * r4 + w * r8;
+        m31 = u * r1 + v * r5 + w * r9;
+        m32 = u * r2 + v * r6 + w * r10;
+
+        return this;
+    }
+
+    /**
+     * Applies an absolute rotation-operation to this matrix.
+     * @see #rotate(double, double, double, double)
+     * @return this matrix.
+     */
+    public Mat4d rotateAbs(double x, double y, double z, double angle) {
+        double s = MathUtils.sin(angle);
+        double c = MathUtils.cos(angle);
+        double omc = 1.0f - c;
+
+        double xy = x * y;
+        double zs = z * s;
+
+        m00 = ( x * x ) * omc + c;
+        m01 = xy * omc - zs;
+        double xz = x * z;
+        double ys = y * s;
+        m02 = xz * omc + ys;
+
+        m10 = xy * omc + zs;
+        m11 = ( y * y ) * omc + c;
+        double yz = y * z;
+        double xs = x * s;
+        m12 = yz * omc - xs;
+
+        m20 = xz * omc - ys;
+        m21 = yz * omc + xs;
+        m22 = ( z * z ) * omc + c;
+
+        // 3 7 11 15 => translation
+
+        m30 = m31 = m32 = 0;
 
         return this;
     }
@@ -598,24 +692,24 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d rotateX(double angle) {
-        double s = Math.sin(angle);
-        double c = Math.cos(angle);
+        double s = MathUtils.sin(angle);
+        double c = MathUtils.cos(angle);
 
-        double u = raw1, v = raw2;
-        raw1 = u * c + v * s;
-        raw2 = -u * s + v * c;
+        double u = m01, v = m02;
+        m01 = u * c + v * s;
+        m02 = -u * s + v * c;
 
-        u = raw5;v = raw6;
-        raw5 = u * c + v * s;
-        raw6 = -u * s + v * c;
+        u = m11;v = m12;
+        m11 = u * c + v * s;
+        m12 = -u * s + v * c;
 
-        u = raw9;v = raw10;
-        raw9 = u * c + v * s;
-        raw10 = -u * s + v * c;
+        u = m21;v = m22;
+        m21 = u * c + v * s;
+        m22 = -u * s + v * c;
 
-        u = raw13;v = raw14;
-        raw13 = u * c + v * s;
-        raw14 = -u * s + v * c;
+        u = m31;v = m32;
+        m31 = u * c + v * s;
+        m32 = -u * s + v * c;
 
         return this;
     }
@@ -628,24 +722,24 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d rotateY(double angle) {
-        double s = Math.sin(angle);
-        double c = Math.cos(angle);
+        double s = MathUtils.sin(angle);
+        double c = MathUtils.cos(angle);
 
-        double u = raw0, v = raw2;
-        raw0 = u * c - v * s;
-        raw2 = u * s + v * c;
+        double u = m00, v = m02;
+        m00 = u * c - v * s;
+        m02 = u * s + v * c;
 
-        u = raw4;v = raw6;
-        raw4 = u * c - v * s;
-        raw6 = u * s + v * c;
+        u = m10;v = m12;
+        m10 = u * c - v * s;
+        m12 = u * s + v * c;
 
-        u = raw8;v = raw10;
-        raw8 = u * c - v * s;
-        raw10 = u * s + v * c;
+        u = m20;v = m22;
+        m20 = u * c - v * s;
+        m22 = u * s + v * c;
 
-        u = raw12;v = raw14;
-        raw12 = u * c - v * s;
-        raw14 = u * s + v * c;
+        u = m30;v = m32;
+        m30 = u * c - v * s;
+        m32 = u * s + v * c;
 
         return this;
     }
@@ -658,24 +752,24 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d rotateZ(double angle) {
-        double s = Math.sin(Math.toRadians(angle));
-        double c = Math.cos(Math.toRadians(angle));
+        double s = MathUtils.sin(angle);
+        double c = MathUtils.cos(angle);
 
-        double u = raw0, v = raw1;
-        raw0 = u * c + v * s;
-        raw1 = -u * s + v * c;
+        double u = m00, v = m01;
+        m00 = u * c + v * s;
+        m01 = -u * s + v * c;
 
-        u = raw4;v = raw5;
-        raw4 = u * c + v * s;
-        raw5 = -u * s + v * c;
+        u = m10;v = m11;
+        m10 = u * c + v * s;
+        m11 = -u * s + v * c;
 
-        u = raw8;v = raw9;
-        raw8 = u * c + v * s;
-        raw9 = -u * s + v * c;
+        u = m20;v = m21;
+        m20 = u * c + v * s;
+        m21 = -u * s + v * c;
 
-        u = raw12;v = raw13;
-        raw12 = u * c + v * s;
-        raw13 = -u * s + v * c;
+        u = m30;v = m31;
+        m30 = u * c + v * s;
+        m31 = -u * s + v * c;
 
         return this;
     }
@@ -688,29 +782,29 @@ public class Mat4d {
     public Mat4d transpose() {
         double swp;
 
-        swp = raw1;
-        raw1 = raw4;
-        raw4 = swp;
+        swp = m01;
+        m01 = m10;
+        m10 = swp;
 
-        swp = raw2;
-        raw2 = raw8;
-        raw8 = swp;
+        swp = m02;
+        m02 = m20;
+        m20 = swp;
 
-        swp = raw6;
-        raw6 = raw9;
-        raw9 = swp;
+        swp = m12;
+        m12 = m21;
+        m21 = swp;
 
-        swp = raw3;
-        raw3 = raw12;
-        raw12 = swp;
+        swp = m03;
+        m03 = m30;
+        m30 = swp;
 
-        swp = raw7;
-        raw7 = raw13;
-        raw13 = swp;
+        swp = m13;
+        m13 = m31;
+        m31 = swp;
 
-        swp = raw11;
-        raw11 = raw14;
-        raw14 = swp;
+        swp = m23;
+        m23 = m32;
+        m32 = swp;
 
         return this;
     }
@@ -723,17 +817,17 @@ public class Mat4d {
     public Mat4d transpose3() {
         double swp;
 
-        swp = raw1;
-        raw1 = raw4;
-        raw4 = swp;
+        swp = m01;
+        m01 = m10;
+        m10 = swp;
 
-        swp = raw2;
-        raw2 = raw8;
-        raw8 = swp;
+        swp = m02;
+        m02 = m20;
+        m20 = swp;
 
-        swp = raw6;
-        raw6 = raw9;
-        raw9 = swp;
+        swp = m12;
+        m12 = m21;
+        m21 = swp;
 
         return this;
     }
@@ -757,42 +851,42 @@ public class Mat4d {
      */
     public Mat4d invertAffine() {
         // calculate inverse of upper 3x3 matrix
-        double m0 = raw5 * raw10 - raw6 * raw9;
-        double m1 = raw2 * raw9 - raw1 * raw10;
-        double m2 = raw1 * raw6 - raw2 * raw5;
-        double m3 = raw6 * raw8 - raw4 * raw10;
-        double m4 = raw0 * raw10 - raw2 * raw8;
-        double m5 = raw2 * raw4 - raw0 * raw6;
-        double m6 = raw4 * raw9 - raw5 * raw8;
-        double m7 = raw1 * raw8 - raw0 * raw9;
-        double m8 = raw0 * raw5 - raw1 * raw4;
+        double m0 = m11 * m22 - m12 * m21;
+        double m1 = m02 * m21 - m01 * m22;
+        double m2 = m01 * m12 - m02 * m11;
+        double m3 = m12 * m20 - m10 * m22;
+        double m4 = m00 * m22 - m02 * m20;
+        double m5 = m02 * m10 - m00 * m12;
+        double m6 = m10 * m21 - m11 * m20;
+        double m7 = m01 * m20 - m00 * m21;
+        double m8 = m00 * m11 - m01 * m10;
 
-        double det = raw0 * m0 + raw1 * (-m3) + raw2 * m6;
+        double det = m00 * m0 + m01 * (-m3) + m02 * m6;
         if (det == 0) return null;
 
         m0 /= det;m1 /= det;m2 /= det;m3 /= det;m4 /= det;m5 /= det;m6 /= det;m7 /= det;m8 /= det;
 
-        raw0 = m0;
-        raw1 = m1;
-        raw2 = m2;
+        m00 = m0;
+        m01 = m1;
+        m02 = m2;
 
-        raw4 = m3;
-        raw5 = m4;
-        raw6 = m5;
+        m10 = m3;
+        m11 = m4;
+        m12 = m5;
 
-        raw8 = m6;
-        raw9 = m7;
-        raw10 = m8;
+        m20 = m6;
+        m21 = m7;
+        m22 = m8;
 
         // calculate product of inverse upper 3x3 matrix and translation part
-        double u = -raw3, v = -raw7, w = -raw11;
+        double u = -m03, v = -m13, w = -m23;
 
-        raw3 = m0 * u + m1 * v + m2 * w; // tx
-        raw7 = m3 * u + m4 * v + m5 * w; // ty
-        raw11 = m6 * u + m7 * v + m8 * w; // tz
+        m03 = m0 * u + m1 * v + m2 * w; // tx
+        m13 = m3 * u + m4 * v + m5 * w; // ty
+        m23 = m6 * u + m7 * v + m8 * w; // tz
 
-        raw12 = raw13 = raw14 = 0;
-        raw15 = 1;
+        m30 = m31 = m32 = 0;
+        m33 = 1;
 
         // assemble inverse matrix
 
@@ -806,45 +900,45 @@ public class Mat4d {
      * @return this matrix.
      */
     public Mat4d invertGeneral() {
-        double d10d15 = raw10 * raw15 - raw11 * raw14;
-        double d06d15 = raw6 * raw15 - raw7 * raw14;
-        double d06d11 = raw6 * raw11 - raw7 * raw10;
-        double d02d15 = raw2 * raw15 - raw3 * raw14;
-        double d02d11 = raw2 * raw11 - raw3 * raw10;
-        double d02d07 = raw2 * raw7 - raw3 * raw6;
-        double d09d15 = raw9 * raw15 - raw11 * raw13;
-        double d05d15 = raw5 * raw15 - raw7 * raw13;
-        double d05d11 = raw5 * raw11 - raw7 * raw9;
-        double d01d15 = raw1 * raw15 - raw3 * raw13;
-        double d01d11 = raw1 * raw11 - raw3 * raw9;
-        double d01d07 = raw1 * raw7 - raw3 * raw5;
-        double d09d14 = raw9 * raw14 - raw10 * raw13;
-        double d05d14 = raw5 * raw14 - raw6 * raw13;
-        double d05d10 = raw5 * raw10 - raw6 * raw9;
-        double d01d14 = raw1 * raw14 - raw2 * raw13;
-        double d01d10 = raw1 * raw10 - raw2 * raw9;
-        double d01d06 = raw1 * raw6 - raw2 * raw5;
+        double d10d15 = m22 * m33 - m23 * m32;
+        double d06d15 = m12 * m33 - m13 * m32;
+        double d06d11 = m12 * m23 - m13 * m22;
+        double d02d15 = m02 * m33 - m03 * m32;
+        double d02d11 = m02 * m23 - m03 * m22;
+        double d02d07 = m02 * m13 - m03 * m12;
+        double d09d15 = m21 * m33 - m23 * m31;
+        double d05d15 = m11 * m33 - m13 * m31;
+        double d05d11 = m11 * m23 - m13 * m21;
+        double d01d15 = m01 * m33 - m03 * m31;
+        double d01d11 = m01 * m23 - m03 * m21;
+        double d01d07 = m01 * m13 - m03 * m11;
+        double d09d14 = m21 * m32 - m22 * m31;
+        double d05d14 = m11 * m32 - m12 * m31;
+        double d05d10 = m11 * m22 - m12 * m21;
+        double d01d14 = m01 * m32 - m02 * m31;
+        double d01d10 = m01 * m22 - m02 * m21;
+        double d01d06 = m01 * m12 - m02 * m11;
 
         double[] tmp = {
-                raw5 * d10d15 - raw9 * d06d15 + raw13 * d06d11,
-                -raw1 * d10d15 + raw9 * d02d15 - raw13 * d02d11,
-                raw1 * d06d15 - raw5 * d02d15 + raw13 * d02d07,
-                -raw1 * d06d11 + raw5 * d02d11 - raw9 * d02d07,
-                -raw4 * d10d15 + raw8 * d06d15 - raw12 * d06d11,
-                raw0 * d10d15 - raw8 * d02d15 + raw12 * d02d11,
-                -raw0 * d06d15 + raw4 * d02d15 - raw12 * d02d07,
-                raw0 * d06d11 - raw4 * d02d11 + raw8 * d02d07,
-                raw4 * d09d15 - raw8 * d05d15 + raw12 * d05d11,
-                -raw0 * d09d15 + raw8 * d01d15 - raw12 * d01d11,
-                raw0 * d05d15 - raw4 * d01d15 + raw12 * d01d07,
-                -raw0 * d05d11 + raw4 * d01d11 - raw8 * d01d07,
-                -raw4 * d09d14 + raw8 * d05d14 - raw12 * d05d10,
-                raw0 * d09d14 - raw8 * d01d14 + raw12 * d01d10,
-                -raw0 * d05d14 + raw4 * d01d14 - raw12 * d01d06,
-                raw0 * d05d10 - raw4 * d01d10 + raw8 * d01d06
+                m11 * d10d15 - m21 * d06d15 + m31 * d06d11,
+                -m01 * d10d15 + m21 * d02d15 - m31 * d02d11,
+                m01 * d06d15 - m11 * d02d15 + m31 * d02d07,
+                -m01 * d06d11 + m11 * d02d11 - m21 * d02d07,
+                -m10 * d10d15 + m20 * d06d15 - m30 * d06d11,
+                m00 * d10d15 - m20 * d02d15 + m30 * d02d11,
+                -m00 * d06d15 + m10 * d02d15 - m30 * d02d07,
+                m00 * d06d11 - m10 * d02d11 + m20 * d02d07,
+                m10 * d09d15 - m20 * d05d15 + m30 * d05d11,
+                -m00 * d09d15 + m20 * d01d15 - m30 * d01d11,
+                m00 * d05d15 - m10 * d01d15 + m30 * d01d07,
+                -m00 * d05d11 + m10 * d01d11 - m20 * d01d07,
+                -m10 * d09d14 + m20 * d05d14 - m30 * d05d10,
+                m00 * d09d14 - m20 * d01d14 + m30 * d01d10,
+                -m00 * d05d14 + m10 * d01d14 - m30 * d01d06,
+                m00 * d05d10 - m10 * d01d10 + m20 * d01d06
         };
 
-        double det = raw0 * tmp[0] + raw1 * tmp[4] + raw2 * tmp[8] + raw3 * tmp[12];
+        double det = m00 * tmp[0] + m01 * tmp[4] + m02 * tmp[8] + m03 * tmp[12];
         if (det == 0) return null;
 
         for (int i = 0; i < 16; i++)
@@ -959,10 +1053,10 @@ public class Mat4d {
      * @return {@code v}.
      */
     public static Vec4d mulInPlace(Mat4d m, Vec4d v) {
-        double x = m.raw0 * v.x + m.raw1 * v.y + m.raw2 * v.z + m.raw3 * v.w;
-        double y = m.raw4 * v.x + m.raw5 * v.y + m.raw6 * v.z + m.raw7 * v.w;
-        double z = m.raw8 * v.x + m.raw9 * v.y + m.raw10 * v.z + m.raw11 * v.w;
-        double w = m.raw12 * v.x + m.raw13 * v.y + m.raw14 * v.z + m.raw15 * v.w;
+        double x = m.m00 * v.x + m.m01 * v.y + m.m02 * v.z + m.m03 * v.w;
+        double y = m.m10 * v.x + m.m11 * v.y + m.m12 * v.z + m.m13 * v.w;
+        double z = m.m20 * v.x + m.m21 * v.y + m.m22 * v.z + m.m23 * v.w;
+        double w = m.m30 * v.x + m.m31 * v.y + m.m32 * v.z + m.m33 * v.w;
 
         v.x = x;
         v.y = y;
@@ -1140,37 +1234,59 @@ public class Mat4d {
         return new Mat4d(m).invertGeneral();
     }
 
+    public static Mat4d mix(Mat4d a, Mat4d b, double percentA, Mat4d store) {
+        double percentB = 1 - percentA;
+
+        store.m00 = a.m00 * percentA +  b.m00 * percentB;
+        store.m01 = a.m01 * percentA +  b.m01 * percentB;
+        store.m02 = a.m02 * percentA +  b.m02 * percentB;
+        store.m03 = a.m03 * percentA +  b.m03 * percentB;
+        store.m10 = a.m10 * percentA +  b.m10 * percentB;
+        store.m11 = a.m11 * percentA +  b.m11 * percentB;
+        store.m12 = a.m12 * percentA +  b.m12 * percentB;
+        store.m13 = a.m13 * percentA +  b.m13 * percentB;
+        store.m20 = a.m20 * percentA +  b.m20 * percentB;
+        store.m21 = a.m21 * percentA +  b.m21 * percentB;
+        store.m22 = a.m22 * percentA + b.m22 * percentB;
+        store.m23 = a.m23 * percentA + b.m23 * percentB;
+        store.m30 = a.m30 * percentA + b.m30 * percentB;
+        store.m31 = a.m31 * percentA + b.m31 * percentB;
+        store.m32 = a.m32 * percentA + b.m32 * percentB;
+        store.m33 = a.m33 * percentA + b.m33 * percentB;
+
+        return store;
+    }
 
     @Override
     public boolean equals(Object obj) {
         if (!(obj instanceof Mat4d)) return false;
 
         Mat4d other = (Mat4d) obj;
-        return raw0 == other.raw0
-                && raw1 == other.raw1
-                && raw2 == other.raw2
-                && raw3 == other.raw3
-                && raw4 == other.raw4
-                && raw5 == other.raw5
-                && raw6 == other.raw6
-                && raw7 == other.raw7
-                && raw8 == other.raw8
-                && raw9 == other.raw9
-                && raw10 == other.raw10
-                && raw11 == other.raw11
-                && raw12 == other.raw12
-                && raw13 == other.raw13
-                && raw14 == other.raw14
-                && raw15 == other.raw15;
+        return m00 == other.m00
+                && m01 == other.m01
+                && m02 == other.m02
+                && m03 == other.m03
+                && m10 == other.m10
+                && m11 == other.m11
+                && m12 == other.m12
+                && m13 == other.m13
+                && m20 == other.m20
+                && m21 == other.m21
+                && m22 == other.m22
+                && m23 == other.m23
+                && m30 == other.m30
+                && m31 == other.m31
+                && m32 == other.m32
+                && m33 == other.m33;
     }
 
     @Override
     public int hashCode() {
         return new Hasher()
-                .add(raw0).add(raw1).add(raw2).add(raw3)
-                .add(raw4).add(raw5).add(raw6).add(raw7)
-                .add(raw8).add(raw9).add(raw10).add(raw11)
-                .add(raw12).add(raw13).add(raw14).add(raw15)
+                .add(m00).add(m01).add(m02).add(m03)
+                .add(m10).add(m11).add(m12).add(m13)
+                .add(m20).add(m21).add(m22).add(m23)
+                .add(m30).add(m31).add(m32).add(m33)
                 .getHash();
     }
 }

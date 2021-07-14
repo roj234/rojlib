@@ -1,47 +1,44 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package roj.config.word;
 
 import roj.config.ParseException;
 import roj.text.CharList;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- * <p>
- * 词法分析
+ * No description provided
  *
- * @author solo6975
- * @since 2020/10/3 19:20
+ * @author Roj234
+ * @version 0.1
+ * @since  2020/10/3 19:20
  */
 public class Lexer extends AbstLexer {
     public Lexer init(CharSequence s) {
         super.init(s);
         return this;
-    }
-
-    public Word readStringToken() throws ParseException {
-        CharSequence input = this.input;
-        int index = this.index;
-
-        while (index < input.length()) {
-            int c = input.charAt(index++);
-            switch (c) {
-                case '=':
-                    this.index = index;
-                    return formClip(WordPresets.INTEGER, "=");
-                case '\'':
-                case '"':
-                    this.index = index;
-                    return readConstString((char) c);
-                default: {
-                    if (!WHITESPACE.contains(c)) {
-                        this.index = index - 1;
-                        return readArg();
-                    }
-                }
-            }
-        }
-        this.index = index;
-        return eof();
     }
 
     @Override
@@ -68,19 +65,19 @@ public class Lexer extends AbstLexer {
                     if (!WHITESPACE.contains(c)) {
                         this.index = index - 1;
                         if (SPECIAL.contains(c)) {
-                            if(hasNext() && NUMBER.contains(offset(0))) { // ... may need fix
-                                switch (c) {
-                                    case '+':
-                                        next();
-                                    case '-':
-                                        return readDigit().negative();
-                                }
+                            switch (c) {
+                                case '-':
+                                case '+':
+                                    if(input.length() > index && NUMBER.contains(input.charAt(index))) {
+                                        return readDigit(true);
+                                    }
+                                    break;
                             }
-                            return readSpecial();
+                            return readSymbol();
                         } else if (NUMBER.contains(c)) {
-                            return readDigit();
+                            return readDigit(false);
                         } else {
-                            return readAlphabet();
+                            return readLiteral();
                         }
                     }
                 }
@@ -90,41 +87,16 @@ public class Lexer extends AbstLexer {
         return eof();
     }
 
-    private Word readArg() throws ParseException {
-        CharSequence input = this.input;
-        int index = this.index;
-
-        CharList temp = this.found;
-        temp.clear();
-
-        while (index < input.length()) {
-            int c = input.charAt(index++);
-            if (!WHITESPACE.contains(c) && c != '=') {
-                temp.append((char) c);
-            } else {
-                index--;
-                break;
-            }
-        }
-        this.index = index;
-
-        if (temp.length() == 0) {
-            return eof();
-        }
-
-        return formAlphabetClip(temp);
-    }
-
     /**
      * 其他字符
      */
     @Override
-    protected Word readSpecial() throws ParseException {
+    protected Word readSymbol() throws ParseException {
         return formClip(WordPresets.ERROR, String.valueOf(next()));
     }
 
     @Override
-    protected Word formNumberClip(byte flag, CharList temp) throws ParseException {
-        return formClip((short) (WordPresets.INTEGER + flag), temp).number();
+    protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
     }
 }

@@ -1,17 +1,37 @@
-/**
- * This file is a part of more items mod (MoreId)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究,如有雷同,纯属活该
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: MIAccessTransformer.java
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
+
 package roj.asm.nixim;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.SharedCache;
 import roj.asm.cst.*;
+import roj.asm.frame.Frame;
+import roj.asm.frame.Var;
 import roj.asm.struct.ConstantData;
 import roj.asm.struct.Field;
 import roj.asm.struct.Method;
@@ -24,12 +44,10 @@ import roj.asm.struct.insn.InvokeInsnNode;
 import roj.asm.struct.simple.FieldSimple;
 import roj.asm.struct.simple.MethodSimple;
 import roj.asm.struct.simple.MoFNode;
+import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
-import roj.asm.util.frame.Frame;
-import roj.asm.util.frame.Var;
-import roj.asm.util.type.*;
 import roj.collect.*;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -46,6 +64,13 @@ import java.util.*;
 
 import static roj.asm.Opcodes.*;
 
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/6/18 9:51
+ */
 public class NiximTransformer {
     protected static final Map<String, List<NiximData>> classRemapping = new MyHashMap<>();
 
@@ -501,7 +526,7 @@ public class NiximTransformer {
                         if (node.getOpcode() == Opcodes.INVOKEDYNAMIC) {
                             InvokeDynInsnNode node1 = (InvokeDynInsnNode) node;
                             AttrBootstrapMethods.BootstrapMethod method2 = bsm.methods.get(node1.bootstrapTableIndex);
-                            lambdaBSM.computeIfAbsent(node1.bootstrapTableIndex, () -> new LambdaInfo(method2)).nodes.add(node1);
+                            lambdaBSM.computeIfAbsentSp(node1.bootstrapTableIndex, () -> new LambdaInfo(method2)).nodes.add(node1);
                         }
                     }
                 }
@@ -621,7 +646,7 @@ public class NiximTransformer {
                             if (bsm == null)
                                 throw new IllegalArgumentException("在没有BootstrapMethods的类中找到了InvokeDynamic!");
                             AttrBootstrapMethods.BootstrapMethod method1 = bsm.methods.get(node1.bootstrapTableIndex);
-                            lambdaBSM.computeIfAbsent(node1.bootstrapTableIndex, () -> new LambdaInfo(method1)).nodes.add(node1);
+                            lambdaBSM.computeIfAbsentSp(node1.bootstrapTableIndex, () -> new LambdaInfo(method1)).nodes.add(node1);
                             break;
                     }
                 }
