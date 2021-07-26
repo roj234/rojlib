@@ -171,7 +171,7 @@ public class ArenaRenderer {
                 bb.pos(i + lenDis, j + lenDis, -0.025D).color(r, g, b, anime).endVertex();
                 RenderUtils.TESSELLATOR.draw();
 
-                bb.begin(7, DefaultVertexFormats.POSITION_COLOR);
+                bb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
                 bb.pos(i + lenDis, j + lenDis, lz + 0.025F).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, j + lenDis, lz + 0.025F).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, j + lenDis_, lz + 0.025F).color(r, g, b, anime).endVertex();
@@ -195,7 +195,7 @@ public class ArenaRenderer {
                 bb.pos(-0.025D, i + lenDis, j + lenDis).color(r, g, b, anime).endVertex();
                 RenderUtils.TESSELLATOR.draw();
 
-                bb.begin(7, DefaultVertexFormats.POSITION_COLOR);
+                bb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
                 bb.pos(lx + 0.025F, i + lenDis, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(lx + 0.025F, i + lenDis_, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(lx + 0.025F, i + lenDis_, j + lenDis_).color(r, g, b, anime).endVertex();
@@ -204,5 +204,7 @@ public class ArenaRenderer {
                 RenderUtils.TESSELLATOR.draw();
             }
         }
+
+        GlStateManager.enableCull();
     }
 }

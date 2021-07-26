@@ -34,6 +34,7 @@ import roj.util.ByteReader;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
 /**
@@ -101,9 +102,7 @@ public class StreamLikeSequence implements CharSequence {
                         start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);
                     }
 
-                    try {
-                        Thread.sleep(5);
-                    } catch (InterruptedException ignored) {}
+                    LockSupport.parkNanos(1);
                 } else {
                     if(read == -1) {
                         bufOff = -1;

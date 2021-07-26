@@ -28,13 +28,13 @@ package ilib.asm.fasterforge.transformers;
 import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.insn.FieldInsnNode;
-import roj.asm.struct.insn.InsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
 
 import java.util.ListIterator;
 

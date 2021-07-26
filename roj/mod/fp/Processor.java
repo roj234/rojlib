@@ -25,6 +25,7 @@
  */
 package roj.mod.fp;
 
+import roj.mod.Shared;
 import roj.ui.CmdUtil;
 
 import java.io.File;
@@ -43,7 +44,6 @@ import java.util.function.IntSupplier;
  */
 public abstract class Processor implements Runnable, IntSupplier, BiConsumer<Integer, File> {
     File forgeJar, mcJar, mcServer;
-    Thread thread;
     volatile int exitCode = 0x23232323;
 
     static Method addURL;
@@ -72,17 +72,7 @@ public abstract class Processor implements Runnable, IntSupplier, BiConsumer<Int
     }
 
     public int getAsInt() {
-        if(thread == null)
-            throw new IllegalStateException("Not start yet");
-
-        if (thread.isAlive() && exitCode == 0x23232323) {
-            try {
-                synchronized (this) {
-                    this.wait();
-                }
-            } catch (Exception ignored) {
-            }
-        }
+        Shared.parallel.waitUntilFinish();
         return exitCode;
     }
 

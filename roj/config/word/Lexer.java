@@ -37,7 +37,8 @@ import roj.text.CharList;
  */
 public class Lexer extends AbstLexer {
     public Lexer init(CharSequence s) {
-        super.init(s);
+        this.index = 0;
+        this.input = s;
         return this;
     }
 

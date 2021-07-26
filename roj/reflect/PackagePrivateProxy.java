@@ -28,12 +28,12 @@ package roj.reflect;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Field;
-import roj.asm.struct.Method;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.insn.FieldInsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.Field;
+import roj.asm.tree.Method;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
@@ -168,6 +168,6 @@ public final class PackagePrivateProxy {
 
         clz.parent = parentName;
         clz.interfaces.add("roj/reflect/Instanced");
-        clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC, AccessFlag.PUBLIC);
+        clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC | AccessFlag.PUBLIC);
     }
 }

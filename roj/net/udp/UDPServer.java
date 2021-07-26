@@ -29,6 +29,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.SocketAddress;
 import java.net.SocketException;
 
 public class UDPServer implements Runnable {
@@ -49,6 +50,12 @@ public class UDPServer implements Runnable {
         }).run();
     }
 
+    public UDPServer(SocketAddress addr, int bufferSize, MessageHandler consumer) throws SocketException {
+        this.handler = consumer;
+        this.socket = new DatagramSocket(addr);
+        this.buffer = new byte[bufferSize];
+    }
+
     public UDPServer(int port, int bufferSize, MessageHandler consumer) throws SocketException {
         this.handler = consumer;
         this.socket = new DatagramSocket(port);
@@ -59,9 +66,8 @@ public class UDPServer implements Runnable {
     public void run() {
         final DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 
-        Thread thread = Thread.currentThread();
-
-        while (!thread.isInterrupted()) {
+        Thread self = Thread.currentThread();
+        while (!self.isInterrupted()) {
             try {
                 this.socket.receive(packet);
             } catch (IOException e) {
@@ -79,11 +85,6 @@ public class UDPServer implements Runnable {
             }
         }
 
-        this.socket.close();
-    }
-
-    @Override
-    protected void finalize() {
         this.socket.close();
     }
 }

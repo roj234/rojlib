@@ -27,7 +27,7 @@ package roj.kscript.parser.expr;
 
 import roj.asm.Opcodes;
 import roj.asm.cst.CstUTF;
-import roj.asm.struct.insn.LoadConstInsnNode;
+import roj.asm.tree.insn.LoadConstInsnNode;
 import roj.asm.util.NodeHelper;
 import roj.config.word.NotStatementException;
 import roj.kscript.ast.ASTree;

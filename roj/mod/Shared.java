@@ -46,6 +46,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.StandardWatchEventKinds;
 import java.util.Map;
 
 /**
@@ -60,14 +61,17 @@ public final class Shared {
     public static final Map<String, String> srg2mcp = new MyHashMap<>(1000, 1.5f);
     static final boolean ENABLE_CONCURRENT = false;
 
-    public static final String VERSION = "1.5.0-beta";
+    public static final String VERSION = "1.5.3";
 
     public static final File BASE, TMP_DIR, PROJ_CONF_DIR;
 
     static Project currentProject;
     static boolean isForgeMap;
 
-    static ConstMapper mapperFwd = new ConstMapper(), mapperRev;
+    static final ConstMapper mapperFwd = new ConstMapper();
+    static ConstMapper mapperRev;
+
+    static FileWatcher watcher;
 
     public static TaskPool parallel = new TaskPool(1, Runtime.getRuntime().availableProcessors() * 2, 16, 1024, new PrefixFactory("AsyncTasker", 5000));
 
@@ -82,6 +86,11 @@ public final class Shared {
             base = new File("").getAbsoluteFile();
         }
         BASE = base;
+
+        Compiler.BASE_PATH = BASE.getAbsolutePath();
+        if(File.separatorChar != '/') {
+            Compiler.BASE_PATH = Compiler.BASE_PATH.replace(File.separatorChar, '/');
+        }
 
         TMP_DIR = new File(BASE, "tmp/");
 
@@ -105,12 +114,12 @@ public final class Shared {
 
             MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 2).asMap();
 
-            DEBUG = MAIN_CONFIG.getBoolean("调试模式");
+            DEBUG = MAIN_CONFIG.getBool("调试模式");
 
             CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
             // 4KB
-            FileUtil.MIN_ASYNC_SIZE = cfgGen.getBoolean("使用多线程下载") ? 1024 * 4 : Integer.MAX_VALUE;
-            FileUtil.ENABLE_ENDPOINT_RECOVERY = cfgGen.getBoolean("开启断点续传");
+            FileUtil.MIN_ASYNC_SIZE = cfgGen.getBool("使用多线程下载") ? 1024 * 4 : Integer.MAX_VALUE;
+            FileUtil.ENABLE_ENDPOINT_RECOVERY = cfgGen.getBool("开启断点续传");
             FileUtil.USER_AGENT = cfgGen.getString("UserAgent");
 
         } catch (ParseException | ClassCastException e) {
@@ -121,6 +130,22 @@ public final class Shared {
             CmdUtil.error(file.getAbsolutePath() + " 读取失败!", e);
             System.exit(-2);
             throw new RuntimeException();
+        }
+
+        if(MAIN_CONFIG.getDot("FMD配置.文件修改监控").asBool()) {
+            try {
+                watcher = new FileWatcher();
+
+                watcher.register(new File(BASE, "/class/").toPath(), path -> {
+                    CmdUtil.warning("库文件已被修改,重新加载映射表...");
+                    mapperFwd.clear();
+                    initForwardMapper();
+                    mapperRev = null;
+                }, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+                watcher.start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -148,7 +173,7 @@ public final class Shared {
             try {
                 CMapping map = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(CONF_INDEX))).asMap();
                 cf = map.getString("config");
-                isForgeMap = map.getBoolean("forgeMapping");
+                isForgeMap = map.getBool("forgeMapping");
             } catch (ParseException | ClassCastException e) {
                 CmdUtil.warning("配置索引(config/index.json)解析失败, 使用默认配置", e);
                 cf = "default";
@@ -158,7 +183,13 @@ public final class Shared {
 
             File file = new File(BASE, "/config/" + cf + ".json");
             if(forced || file.isFile()) {
-                currentProject = Project.load(cf);
+                try {
+                    currentProject = Project.load(cf);
+                } catch (Throwable e) {
+                    CmdUtil.warning("配置读取失败, 使用默认配置", e);
+                    currentProject = Project.load("default");
+                    setConfig("default");
+                }
                 return true;
             } else
                 return false;
@@ -168,12 +199,16 @@ public final class Shared {
 
     public static void initForwardMapper() {
         if(mapperFwd.getClassMap().isEmpty()) {
-            try {
-                mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false, true);
-                if(DEBUG)
-                    CmdUtil.success("正向映射表已加载");
-            } catch (Exception e) {
-                CmdUtil.error("正向映射表加载失败", e);
+            synchronized (mapperFwd) {
+                if(mapperFwd.getClassMap().isEmpty()) {
+                    try {
+                        mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
+                        if (DEBUG)
+                            CmdUtil.success("正向映射表已加载");
+                    } catch (Exception e) {
+                        CmdUtil.error("正向映射表加载失败", e);
+                    }
+                }
             }
         }
     }
@@ -207,11 +242,7 @@ public final class Shared {
             parallel.pushTask(task);
         }
 
-        try {
-            parallel.waitUntilFinish();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        parallel.waitUntilFinish();
     }
 
     public static void saveForgeMapping() {

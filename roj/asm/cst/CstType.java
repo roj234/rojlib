@@ -25,7 +25,8 @@
  */
 
 package roj.asm.cst;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -51,7 +52,7 @@ public class CstType {
             INVOKE_DYNAMIC = 18,
             MODULE = 19,
             PACKAGE = 20;
-    public static final byte DOUBLE_LONG_HOLDER = 127;
+    public static final byte _TOP_ = 127;
 
     public static final String[] indexes = {
             "UTF", null, "INT", "FLOAT", "LONG", "DOUBLE", "CLASS", "STRING",
@@ -60,7 +61,7 @@ public class CstType {
             "MODULE", "PACKAGE"
     };
 
-    public static String byId(int id) {
-        return id > 20 ? null : indexes[id - 1];
+    public static String toString(int id) {
+        return id < 1 || id > 20 ? null : indexes[id - 1];
     }
 }

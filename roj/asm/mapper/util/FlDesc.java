@@ -28,10 +28,7 @@ package roj.asm.mapper.util;
 import roj.asm.cst.CstRef;
 import roj.asm.util.FlagList;
 
-public final class FlDesc {
-    public String owner, name;
-    public FlagList flags;
-
+public final class FlDesc extends KEntry {
     public FlDesc(String owner, String name) {
         this.owner = owner;
         this.name = name;

@@ -30,9 +30,8 @@ import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstRef;
 import roj.asm.util.FlagList;
 
-public class MtDesc {
-    public String owner, name, param;
-    public FlagList flags;
+public class MtDesc extends KEntry {
+    public String param;
 
     public MtDesc(String owner, String name, String param) {
         this.owner = owner;

@@ -53,7 +53,7 @@ public class LongBitSet implements IBitSet {
         this.cap = set.length << 6;
     }
 
-    public static LongBitSet preFilled(String data) {
+    public static LongBitSet from(String data) {
         LongBitSet set = new LongBitSet(data.length());
         for (int i = 0; i < data.length(); i++) {
             set.add(data.charAt(i));
@@ -61,7 +61,7 @@ public class LongBitSet implements IBitSet {
         return set;
     }
 
-    public static LongBitSet preFilled(byte... data) {
+    public static LongBitSet from(byte... data) {
         LongBitSet set = new LongBitSet(data.length);
         for (byte i : data) {
             set.add(i);
@@ -69,7 +69,7 @@ public class LongBitSet implements IBitSet {
         return set;
     }
 
-    public static LongBitSet preFilled(int... data) {
+    public static LongBitSet from(int... data) {
         LongBitSet set = new LongBitSet(data.length);
         for (int i : data) {
             set.add(i);
@@ -313,6 +313,7 @@ public class LongBitSet implements IBitSet {
         public FItr reset() {
             get = true;
             pos = 0;
+            previous = -1;
             return this;
         }
 

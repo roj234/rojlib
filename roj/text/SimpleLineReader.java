@@ -26,6 +26,8 @@
 package roj.text;
 
 import roj.io.IOUtil;
+import roj.util.ByteList;
+import roj.util.ByteReader;
 
 import javax.annotation.Nonnull;
 import java.io.Closeable;
@@ -35,7 +37,7 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * No description provided
+ * Simple Line Reader
  *
  * @author Roj234
  * @version 0.1
@@ -53,13 +55,21 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
      * @param stream InputStream
      */
     public SimpleLineReader(InputStream stream) throws IOException {
-        this(IOUtil.readAsUTF(stream), true);
+        this(readAsUTF(stream), true);
         this.stream = stream;
     }
 
     public SimpleLineReader(InputStream stream, boolean cleanEmptyLines) throws IOException {
-        this(IOUtil.readAsUTF(stream), cleanEmptyLines);
+        this(readAsUTF(stream), cleanEmptyLines);
         this.stream = stream;
+    }
+
+    private static CharSequence readAsUTF(InputStream stream) throws IOException {
+        CharList cl = new CharList();
+        ByteList buf = IOUtil.getSharedByteBuf();
+        ByteReader.decodeUTF(-1, cl, buf.readStreamArrayFully(stream));
+        buf.clear();
+        return cl;
     }
 
     /**

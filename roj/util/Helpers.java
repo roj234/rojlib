@@ -142,11 +142,11 @@ public class Helpers {
         return sb;
     }
 
-    @Deprecated
-    public static <T> LinkedList<T> newLinkedList(String s) {
-        return new LinkedList<>();
+    public static <T> Predicate<T> alwaysTrue() {
+        return cast(alwaystrue);
     }
 
+    static final Predicate<?> alwaystrue = (a) -> true;
     static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
     static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
     static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();

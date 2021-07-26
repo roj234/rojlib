@@ -38,8 +38,8 @@ import javax.net.ssl.SSLException;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
 
 /**
  * A helper class which performs I/O using the SSLEngine API.
@@ -107,7 +107,7 @@ public class SecureSocket extends InsecureSocket {
 
     private boolean shutdown = false;
 
-    protected SecureSocket(SocketChannel sc, FileDescriptor fd, EngineAllocator sslc, boolean isClient) throws IOException {
+    protected SecureSocket(Socket sc, FileDescriptor fd, EngineAllocator sslc, boolean isClient) throws IOException {
         super(sc, fd);
 
         /*
@@ -131,7 +131,7 @@ public class SecureSocket extends InsecureSocket {
         networkOut.limit(0);
     }
 
-    public static SecureSocket get(SocketChannel sc, FileDescriptor fd, EngineAllocator ssl, boolean isClient) throws IOException {
+    public static SecureSocket get(Socket sc, FileDescriptor fd, EngineAllocator ssl, boolean isClient) throws IOException {
         SecureSocket cio = new SecureSocket(sc, fd, ssl, isClient);
 
         // Create a buffer using the normal expected application size we'll
@@ -164,7 +164,7 @@ public class SecureSocket extends InsecureSocket {
             int wrote;
             do {
                 wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, list, SharedConfig.WRITE_MAX));
-            } while (wrote == -3 && socket.isOpen());
+            } while (wrote == -3 && !socket.isClosed());
             if(wrote > 0) {
                 bb.position(bb.position() + wrote);
             }

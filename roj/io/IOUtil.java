@@ -35,7 +35,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -130,7 +131,7 @@ public class IOUtil {
     }
 
     public static byte[] readFully(InputStream stream) throws IOException {
-        return readFully0(stream, BYTE_BUFFER.get()).getByteArray();
+        return readFully0(stream, BYTE_BUFFER.get()).toByteArray();
     }
 
     public static byte[] readFile(File file) throws IOException {

@@ -25,7 +25,8 @@
  */
 
 package roj.asm.cst;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -34,7 +35,11 @@ package roj.asm.cst;
  */
 public class CstMethodType extends CstRefUTF {
     public CstMethodType(int valueIndex) {
-        super(CstType.METHOD_TYPE, valueIndex);
+        super(valueIndex);
     }
 
+    @Override
+    public byte type() {
+        return CstType.METHOD_TYPE;
+    }
 }

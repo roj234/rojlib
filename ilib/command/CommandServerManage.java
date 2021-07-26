@@ -32,7 +32,7 @@ import io.netty.channel.ChannelHandler;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
-import roj.net.tcp.serv.HTTPServer;
+import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.Router;
@@ -46,7 +46,7 @@ import roj.util.ByteList;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.zip.ZipFile;
 
@@ -140,7 +140,7 @@ public final class CommandServerManage extends AbstractSubCommand {
                         });
                     }*/
 
-                    HTTPServer server1 = new HTTPServer(port, 512, router);
+                    HttpServer server1 = new HttpServer(port, 512, router);
                     Thread thread = new Thread(server1, "ImpLib-HTTPServer");
                     thread.setDaemon(true);
                     thread.start();
@@ -156,7 +156,7 @@ public final class CommandServerManage extends AbstractSubCommand {
 
     private static class ServerManageRouter implements Router {
         @Override
-        public Response response(SocketChannel socket, Request request) {
+        public Response response(Socket socket, Request request) {
             switch (request.path()) {
                 case "status":
                 case "tps":
@@ -175,7 +175,7 @@ public final class CommandServerManage extends AbstractSubCommand {
         }
 
         @Override
-        public SocketChannel socket() {
+        public Socket socket() {
             return null;
         }
 

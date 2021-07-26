@@ -37,7 +37,7 @@ import javax.annotation.Nonnull;
 public final class CBoolean extends CEntry {
     public static final CBoolean TRUE = new CBoolean(), FALSE = new CBoolean();
 
-    private CBoolean() {}
+    public CBoolean() {}
 
     @Nonnull
     @Override
@@ -70,8 +70,13 @@ public final class CBoolean extends CEntry {
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return this == TRUE;
+    }
+
+    @Override
+    public boolean equalsTo(CEntry entry) {
+        return entry.getType().fits(Type.BOOL) && entry.asBool() == asBool();
     }
 
     @Override

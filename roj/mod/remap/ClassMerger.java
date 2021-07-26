@@ -27,23 +27,25 @@ package roj.mod.remap;
 
 import roj.asm.cst.CstClass;
 import roj.asm.mapper.util.Context;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.Field;
-import roj.asm.struct.Method;
-import roj.asm.struct.attr.AttrInnerClasses;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
-import roj.asm.struct.simple.MoFNode;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Field;
+import roj.asm.tree.Method;
+import roj.asm.tree.attr.AttrInnerClasses;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
+import roj.asm.tree.simple.MoFNode;
 import roj.collect.MyHashMap;
 import roj.ui.CmdUtil;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.ListIterator;
 
 /**
- * No description provided
+ * Merge client and server classes
  *
  * @author Roj234
  * @version 0.1
@@ -55,37 +57,45 @@ public class ClassMerger {
     public int serverOnly, clientOnly, both;
     public int mergedField, mergedMethod, replaceMethod;
 
-    public Collection<Context> process(List<Context> clientContexts, List<Context> serverContexts) {
-        Map<String, Context> contextMap = new MyHashMap<>();
-        for(Context context : clientContexts) {
-            contextMap.put(context.getName(), context);
+    public Collection<Context> process(List<Context> main, List<Context> sub) {
+        MyHashMap<String, Context> byName = new MyHashMap<>();
+        for (int i = 0; i < main.size(); i++) {
+            Context ctx = main.get(i);
+            byName.put(ctx.getName(), ctx);
         }
 
-        clientOnly = clientContexts.size();
-        serverOnly = serverContexts.size();
+        clientOnly = main.size();
+        serverOnly = sub.size();
 
-        for(Context context : serverContexts) {
-            if(contextMap.containsKey(context.getName())) {
-                processOne(contextMap.get(context.getName()), context);
+        for (int i = 0; i < sub.size(); i++) {
+            Context sc = sub.get(i);
+
+            Context mc = byName.putIfAbsent(sc.getName(), sc);
+            if (mc != null) {
+                if(processOne(mc, sc)) {
+                    mc.get();
+                }
                 clientOnly--;
                 serverOnly--;
                 both++;
-            } else {
-                contextMap.put(context.getName(), context);
             }
         }
 
-        return contextMap.values();
+        return byName.values();
     }
 
-    private void processOne(Context main, Context sub) {
+    private boolean processOne(Context main, Context sub) {
         ConstantData subData = sub.getData();
         ConstantData mainData = main.getData();
 
-        for(MoFNode ms : subData.methods) {
+        boolean flag = false;
+
+        List<? extends MoFNode> methods = subData.methods;
+        for (int i = 0; i < methods.size(); i++) {
+            MoFNode ms = methods.get(i);
             MoFNode found = null;
             int index = -1;
-            for (ListIterator<MethodSimple> iterator = mainData.methods.listIterator(); iterator.hasNext(); ) {
+            for (ListIterator<? extends MoFNode> iterator = mainData.methods.listIterator(); iterator.hasNext(); ) {
                 MoFNode ms2 = iterator.next();
                 if (ms.name().equals(ms2.name()) && ms.rawDesc().equals(ms2.rawDesc())) {
                     found = ms2;
@@ -93,48 +103,57 @@ public class ClassMerger {
                     break;
                 }
             }
-            if(found == null) {
+            if (found == null) {
                 mergedMethod++;
                 mainData.methods.add(Helpers.cast(ms instanceof Method ? ms : new Method(subData, (MethodSimple) ms)));
+                flag = true;
             } else {
-                mainData.methods.set(index, Helpers.cast(detectPriority(mainData, found, subData, ms)));
+                Method mm = found instanceof Method ? (Method) found : new Method(mainData, (MethodSimple) found);
+
+                Method v = detectPriority(mainData, mm, subData, ms);
+                if(v != mm) {
+                    mainData.methods.set(index, Helpers.cast(v));
+                    flag = true;
+                }
             }
         }
 
-        for(MoFNode fs : subData.fields) {
+        List<? extends MoFNode> fields = subData.fields;
+        for (int i = 0; i < fields.size(); i++) {
+            MoFNode fs = fields.get(i);
             boolean found = false;
-            for(MoFNode fs2 : mainData.fields) {
-                if(fs.name().equals(fs2.name()) && fs.rawDesc().equals(fs2.rawDesc())) {
+            for (MoFNode fs2 : mainData.fields) {
+                if (fs.name().equals(fs2.name()) && fs.rawDesc().equals(fs2.rawDesc())) {
                     found = true;
                     break;
                 }
             }
-            if(!found) {
+            if (!found) {
                 mergedField++;
                 mainData.fields.add(Helpers.cast(fs instanceof Field ? fs : new Field(subData, (FieldSimple) fs)));
+                flag = true;
             }
         }
 
         processInnerClasses(mainData, subData);
         processItf(mainData, subData);
 
+        return flag;
     }
 
-    private Method detectPriority(ConstantData cstM, MoFNode main, ConstantData cstS, MoFNode sub) {
-        Method mainMethod = main instanceof Method ? (Method) main : new Method(cstM, (MethodSimple) main);
+    private Method detectPriority(ConstantData cstM, Method mainMethod, ConstantData cstS, MoFNode sub) {
         Method subMethod = sub instanceof Method ? (Method) sub : new Method(cstS, (MethodSimple) sub);
 
         if(subMethod.code == null)
             return mainMethod;
-        if(mainMethod.code == null) {
+        if(mainMethod.code == null)
             return subMethod;
-        }
 
         if(mainMethod.code.instructions.size() != subMethod.code.instructions.size()) {
             replaceMethod++;
 
             if(DEBUG)
-                CmdUtil.warning("同名同参方法覆盖!" + cstM.name + '.' + main.name() + main.rawDesc());
+                CmdUtil.warning("同名同参方法覆盖!" + cstM.name + '.' + mainMethod.name() + mainMethod.rawDesc());
         }
 
         // 指令合并太草了
@@ -145,30 +164,35 @@ public class ClassMerger {
     }
 
     private void processInnerClasses(ConstantData main, ConstantData sub) {
-        AttrInnerClasses mainAttr = getAttr(main);
         AttrInnerClasses subAttr = getAttr(sub);
         if(subAttr == null)
             return;
+        AttrInnerClasses mainAttr = getAttr(main);
         if(mainAttr == null) {
             main.addAttribute(subAttr);
             return;
         }
 
-        for (AttrInnerClasses.InnerClass sc : subAttr.classes) {
-            boolean found = false;
-            for (AttrInnerClasses.InnerClass mc : mainAttr.classes) {
+        List<AttrInnerClasses.InnerClass> scs = subAttr.classes;
+        List<AttrInnerClasses.InnerClass> mcs = mainAttr.classes;
+        o:
+        for (int i = 0; i < scs.size(); i++) {
+            AttrInnerClasses.InnerClass sc = scs.get(i);
+
+            for (int j = 0; j < mcs.size(); j++) {
+                AttrInnerClasses.InnerClass mc = mcs.get(j);
                 if (mc.equals(sc)) {
-                    found = true;
-                    break;
+                    continue o;
                 }
             }
-            if(!found) {
-                mainAttr.classes.add(sc);
-            }
+
+            mainAttr.classes.add(sc);
         }
+
+        main.attributes.putByName(mainAttr);
     }
 
-    private AttrInnerClasses getAttr(ConstantData clz) {
+    private static AttrInnerClasses getAttr(ConstantData clz) {
         AttrInnerClasses aIC = null;
         Attribute attr = clz.attrByName("InnerClasses");
         if(attr instanceof AttrInnerClasses) {
@@ -183,12 +207,14 @@ public class ClassMerger {
         List<CstClass> mainItf = main.interfaces;
         List<CstClass> subItf = sub.interfaces;
 
-        for (CstClass n : subItf) {
+        for (int i = 0; i < subItf.size(); i++) {
+            CstClass n = subItf.get(i);
             if (!mainItf.contains(n)) {
                 mainItf.add(n);
             }
         }
 
-        mainItf.sort(Comparator.comparing(clz -> clz.getValue().getString()));
+        // 这是干么？不懂
+        //mainItf.sort(Comparator.comparing(clz -> clz.getValue().getString()));
     }
 }

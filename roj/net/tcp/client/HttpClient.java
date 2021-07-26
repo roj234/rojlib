@@ -105,7 +105,7 @@ public class HttpClient extends ClientSocket {
 
     @Override
     protected WrappedSocket getChannel() throws IOException {
-        return ssl ? SecureSocket.get(server, NonblockingUtil.fd(server), CLIENT_ALLOCATOR, true) : new InsecureSocket(server, NonblockingUtil.fd(server));
+        return ssl ? SecureSocket.get(server.socket(), NonblockingUtil.fd(server), CLIENT_ALLOCATOR, true) : new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
     }
 
     boolean ssl;

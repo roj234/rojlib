@@ -272,6 +272,10 @@ public final class UnionerL<T extends UnionerL.Section> implements Iterable<Unio
         return new ArrayIterator<>(data, 0, arrSize);
     }
 
+    public Region regionAt(int index) {
+        return data[index];
+    }
+
     /**
      *  The <i>insertion point</i> is defined as the point at which the
      *         key would be inserted into the array: the index of the first
@@ -318,18 +322,16 @@ public final class UnionerL<T extends UnionerL.Section> implements Iterable<Unio
         StringBuilder sb = new StringBuilder("Unioner[");
         for (int i = 0; i < arrSize; i++) {
             Point d = data[i].node;
-            sb.append(data[i].value).append('{');
+            sb.append("\n  Values: ").append(data[i].value).append("\n  Points: {\n   ");
             if(d != null) {
                 while (d != null) {
-                    sb.append(d.owner).append(d.end ? ":e:" : ":s:").append(d.pos()).append(',');
+                    sb.append(d.owner).append(',').append(d.pos()).append(d.end ? ",E\n   " : ",S\n   ");
                     d = d.next;
                 }
-                sb.setLength(sb.length() - 1);
+                sb.setLength(sb.length() - 4);
             }
-            sb.append("},");
+            sb.append("}");
         }
-        if(arrSize > 0)
-            sb.setLength(sb.length() - 1);
         return sb.append(']').toString();
     }
 
@@ -377,6 +379,11 @@ public final class UnionerL<T extends UnionerL.Section> implements Iterable<Unio
 
         public boolean end() {
             return end;
+        }
+
+        @Override
+        public String toString() {
+            return "At(" + pos() + "," + (end ? "E" : "S") + "," + owner + ")";
         }
 
         @SuppressWarnings("unchecked")

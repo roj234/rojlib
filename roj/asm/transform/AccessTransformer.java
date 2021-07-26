@@ -27,10 +27,10 @@
 package roj.asm.transform;
 
 import roj.asm.Parser;
-import roj.asm.struct.AccessData;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrInnerClasses;
-import roj.asm.struct.attr.Attribute;
+import roj.asm.tree.AccessData;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.AttrInnerClasses;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
@@ -47,7 +47,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -104,7 +105,7 @@ public class AccessTransformer {
 
     public static void doAT(FlagList list, boolean evenProtected) {
         list.remove(AccessFlag.PRIVATE | AccessFlag.FINAL);
-        if (!evenProtected && list.contains(AccessFlag.PROTECTED)) {
+        if (!evenProtected && list.hasAll(AccessFlag.PROTECTED)) {
             return;
         }
         list.remove(AccessFlag.PROTECTED);
@@ -136,10 +137,10 @@ public class AccessTransformer {
         AccessData data = Parser.parseAccessDirect(bytecode);
 
         if (names.contains("<$extend>")) {
-            FlagList list = data.getClassFlag();
+            FlagList list = data.accessFlag();
             list.remove(AccessFlag.FINAL | AccessFlag.PRIVATE | AccessFlag.PROTECTED);
             list.add(AccessFlag.PUBLIC);
-            data.setClassFlag(list);
+            data.accessFlag(list);
         }
 
         boolean evenProtected = true;
@@ -151,17 +152,17 @@ public class AccessTransformer {
             names = new Universe();
         }
 
-        for (AccessData.D field : data.fields) {
+        for (AccessData.MOF field : data.fields) {
             if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
                 continue;
-            FlagList list = data.getFlagFor(field);
+            FlagList list = field.accessFlag();
             doAT(list, evenProtected);
             data.setFlagFor(field, list);
         }
-        for (AccessData.D field : data.methods) {
+        for (AccessData.MOF field : data.methods) {
             if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
                 continue;
-            FlagList list = data.getFlagFor(field);
+            FlagList list = field.accessFlag();
             doAT(list, evenProtected);
             data.setFlagFor(field, list);
         }

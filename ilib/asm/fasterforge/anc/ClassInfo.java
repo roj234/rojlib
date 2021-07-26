@@ -27,7 +27,7 @@ package ilib.asm.fasterforge.anc;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import roj.asm.struct.anno.Annotation;
+import roj.asm.tree.anno.Annotation;
 import roj.text.StringPool;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;

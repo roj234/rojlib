@@ -87,6 +87,11 @@ public final class CInteger extends CEntry {
     }
 
     @Override
+    public boolean equalsTo(CEntry entry) {
+        return entry.getType().fits(Type.INTEGER) && entry.asInteger() == value;
+    }
+
+    @Override
     public int hashCode() {
         return value;
     }

@@ -25,9 +25,8 @@
  */
 package roj.config.data;
 
-import roj.collect.MyHashMap;
-
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +39,7 @@ import java.util.Map;
  */
 public final class XHeader extends AbstXML {
     public XHeader() {
-        super(new MyHashMap<>(), new ArrayList<>());
+        super(Collections.emptyMap(), new ArrayList<>());
     }
 
     public XHeader(Map<String, CEntry> attributes, List<AbstXML> children) {
@@ -60,11 +59,11 @@ public final class XHeader extends AbstXML {
                 entry.getValue().toJSON(sb, 0);
             }
         }
-        sb.append('>');
+        sb.append('?').append('>');
         if (!children.isEmpty()) {
             sb.append('\n');
-            for (AbstXML entry : children) {
-                entry.toXML(sb, 0).append('\n');
+            for (int i = 0; i < children.size(); i++) {
+                children.get(i).toXML(sb, 0).append('\n');
             }
             sb.delete(sb.length() - 1, sb.length());
         }
@@ -81,8 +80,8 @@ public final class XHeader extends AbstXML {
         }
         sb.append('?').append('>');
         if (!children.isEmpty()) {
-            for (AbstXML entry : children) {
-                entry.toCompatXML(sb);
+            for (int i = 0; i < children.size(); i++) {
+                children.get(i).toCompatXML(sb);
             }
             sb.delete(sb.length() - 1, sb.length());
         }
@@ -90,15 +89,12 @@ public final class XHeader extends AbstXML {
     }
 
     public CMapping toJSON() {
-        CMapping map = super.toJSON();
-        map.put("__type__", "XML.Header");
-
-        return map;
+        return super.toJSON().asMap();
     }
 
     @Override
     protected StringBuilder toXML(StringBuilder sb, int depth) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Should not call by underlevel");
     }
 
     public static XHeader fromJSON(CMapping map) {

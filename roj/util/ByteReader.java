@@ -32,7 +32,8 @@ import javax.annotation.Nonnull;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.UTFDataFormatException;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -165,7 +166,7 @@ public final class ByteReader implements DataInput {
             return "";
         final ByteList bytes = readBytesDelegated(count);
         try {
-            return decodeUTF(count, bytes);
+            return decodeUTFC(count, bytes);
         } catch (UTFDataFormatException e) {
             return bytes.getString();
         }
@@ -183,7 +184,7 @@ public final class ByteReader implements DataInput {
         }
         final ByteList bytes = readBytesDelegated(count);
         try {
-            return decodeUTF(count, bytes);
+            return decodeUTFC(count, bytes);
         } catch (UTFDataFormatException e) {
             return bytes.getString();
         }
@@ -197,7 +198,7 @@ public final class ByteReader implements DataInput {
             return "";
         final ByteList bytes = readBytesDelegated(count);
         try {
-            return decodeUTF(count, bytes);
+            return decodeUTFC(count, bytes);
         } catch (UTFDataFormatException e) {
             return bytes.getString();
         }
@@ -313,30 +314,28 @@ public final class ByteReader implements DataInput {
 
     @Override
     public String readUTF() throws UTFDataFormatException {
-        return readUTF0(true);
+        return readUTF0(readUnsignedShort());
     }
 
-    public String readVUTF() {
-        try {
-            return readUTF0(false);
-        } catch (UTFDataFormatException e) {
-            throw new RuntimeException(e);
-        }
+    public String readUTF0(int len) throws UTFDataFormatException {
+        return decodeUTFC(len, readBytesDelegated(len));
     }
-
-    private String readUTF0(boolean javaUTF) throws UTFDataFormatException {
-        int len = javaUTF ? readUnsignedShort() : readVarInt(false);
-
-        ByteList bytes = readBytesDelegated(len);
-
-        return decodeUTF(len, bytes);
-    }
-
 
     public static String readUTF(ByteList list) throws UTFDataFormatException {
         CharList cl = new CharList(list.pos());
         decodeUTF(-1, cl, list);
         return cl.toString();
+    }
+
+    public ByteList readZeroEnd(int max) {
+        int i = index;
+        while (max-- > 0) {
+            if(bytes.get(i++) == 0) {
+                ByteList sub = bytes.subList(index, i - index);
+                index = i;
+            }
+        }
+        return null;
     }
 
     public static void decodeUTF(int max, CharList out, ByteList in) throws UTFDataFormatException {
@@ -511,7 +510,7 @@ public final class ByteReader implements DataInput {
     }
 
     private CharList cc;
-    private String decodeUTF(int len, ByteList bytes) throws UTFDataFormatException {
+    public String decodeUTFC(int len, ByteList bytes) throws UTFDataFormatException {
         if (this.cc == null) {
             this.cc = new CharList(len);
         }
@@ -549,8 +548,7 @@ public final class ByteReader implements DataInput {
         return (char) readUnsignedShort();
     }
 
-    private byte bitIndex, numBits, numBytes;
-    private int bitMask;
+    public byte bitIndex;
 
     public final int readBit1() {
         byte bi = this.bitIndex;
@@ -561,48 +559,10 @@ public final class ByteReader implements DataInput {
         return bit;
     }
 
-    public final int readBit2() {
-        final int i = index;
-        final int b = this.bytes.get(i) << 8 | this.bytes.get(i + 1);
-
-        int bi = this.bitIndex;
-        int result = (b >>> (bi & 0x7)) & this.bitMask;
-        this.index += (bi += this.numBits) >> 3;
-        this.bitIndex = (byte) (bi & 0x7);
-        return result;
-    }
-
-    public final int readBit3() {
-        final int i = index;
-        final int b = this.bytes.get(i) << 16 | this.bytes.get(i + 1) << 8 | this.bytes.get(i + 2);
-
-        int bi = this.bitIndex;
-        int result = (b >>> (bi & 0x7)) & this.bitMask;
-        this.index += (bi += this.numBits) >> 3;
-        this.bitIndex = (byte) (bi & 0x7);
-        return result;
-    }
-
-    public final int readBit() {
-        switch (numBytes) {
-            case 1:
-                return readBit1();
-            case 2:
-                return readBit2();
-            case 3:
-                return readBit3();
-        }
-        return 0;
-    }
-
-    public final void setNumBits(int numBits) {
-        if (numBits < 1 || numBits > 17)
-            throw new IllegalArgumentException("get bit count must in [1,17]");
-        this.numBits = (byte) numBits;
+    public final int readBit(int numBits) {
         switch (numBits) {
             case 1:
-                numBytes = 1;
-                break;
+                return readBit1();
             case 2:
             case 3:
             case 4:
@@ -610,9 +570,13 @@ public final class ByteReader implements DataInput {
             case 6:
             case 7:
             case 8:
-            case 9:
-                numBytes = 2;
-                break;
+            case 9: {
+                int d = (((((bytes.get(index) & 0xFF) << 8) | (bytes.get0(
+                        index + 1) & 0xFF)) << bitIndex) & 0xFFFF) >> 16 - numBits;
+                index += (bitIndex += numBits) >> 3;
+                bitIndex &= 0x7;
+                return d;
+            }
             case 10:
             case 11:
             case 12:
@@ -620,23 +584,22 @@ public final class ByteReader implements DataInput {
             case 14:
             case 15:
             case 16:
-            case 17:
-                numBytes = 3;
-                break;
+            case 17: {
+                int d = (((((bytes.get(index) & 0xFF) << 16) | ((bytes.get0(index + 1) & 0xFF) << 8) | (bytes.get0(
+                        index + 2) & 0xFF)) << bitIndex) & 0xFFFFFF) >> 24 - numBits;
+                index += (bitIndex += numBits) >> 3;
+                bitIndex &= 0x7;
+                return d;
+            }
+            default:
+                throw new IllegalArgumentException("get bit count must in [1,17]");
         }
-        this.bitMask = (1 << numBits) - 1;
     }
 
-    public static boolean isBitTrue(int i, int bit) {
-        return (i & (1 << bit)) != 0;
-    }
-
-    public static int readBits(int n, int fromInclude, int toInclude) {
-        int k = 0;
-        for (int i = fromInclude; i <= toInclude; i++) {
-            k |= (1 << i);
-        }
-        return (n & k) >>> fromInclude;
+    public void skipBits(int i) {
+        bitIndex += i;
+        this.index += bitIndex >> 3;
+        this.bitIndex = (byte) (bitIndex & 0x7);
     }
 
     public ByteList readBytesDelegated(int length) {
@@ -648,7 +611,7 @@ public final class ByteReader implements DataInput {
     }
 
     public int remain() {
-        return this.bytes.limit() - this.bytes.pos();
+        return this.bytes.limit() - index;
     }
 
     public int length() {

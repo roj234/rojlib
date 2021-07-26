@@ -25,8 +25,8 @@
  */
 package roj.kscript.ast;
 
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Method;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.Method;
 import roj.asm.util.InsnList;
 
 /**

@@ -40,12 +40,12 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
-import roj.asm.struct.Clazz;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.attr.AttrSourceFile;
-import roj.asm.struct.insn.FieldInsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.AttrSourceFile;
+import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
@@ -114,9 +114,9 @@ public final class EventInvokerV2 implements IEventListener {
 
         final FlagList flags = new FlagList(AccessFlag.PUBLIC);
 
-        data.fields.add(new roj.asm.struct.Field(flags, "i", "[Ljava/lang/Object;"));
+        data.fields.add(new roj.asm.tree.Field(flags, "i", "[Ljava/lang/Object;"));
 
-        roj.asm.struct.Method init = new roj.asm.struct.Method(flags, data, "<init>", "(Ljava/lang/Object;)V");
+        roj.asm.tree.Method init = new roj.asm.tree.Method(flags, data, "<init>", "(Ljava/lang/Object;)V");
         data.methods.add(init);
         AttrCode code = init.code = new AttrCode(init);
 
@@ -133,7 +133,7 @@ public final class EventInvokerV2 implements IEventListener {
         insns.add(NodeHelper.cached(Opcodes.RETURN));
         insns.add(AttrCode.METHOD_END_MARK);
 
-        roj.asm.struct.Method invoke = new roj.asm.struct.Method(flags, data, "invoke", HANDLER_FUNC_DESC);
+        roj.asm.tree.Method invoke = new roj.asm.tree.Method(flags, data, "invoke", HANDLER_FUNC_DESC);
         data.methods.add(invoke);
         code = invoke.code = new AttrCode(invoke);
 

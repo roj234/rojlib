@@ -27,7 +27,8 @@
 package roj.asm.cst;
 
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -53,12 +54,12 @@ public final class CstNameAndType extends Constant {
 
     @Override
     protected final void write0(ByteWriter w) {
-        w.writeShort(getNameIndex());
-        w.writeShort(getTypeIndex());
+        w.writeShort(getNameIndex())
+        .writeShort(getTypeIndex());
     }
 
     public final String toString() {
-        return super.toString() + " " + (name == null ? nameIndex : name.getString()) + ':' + (type == null ? typeIndex : type.getString());
+        return super.toString() + " " + (name == null ? nameIndex : name.getString() + " (" + name.getIndex() + ")") + ':' + (type == null ? typeIndex : type.getString() + " (" + type.getIndex() + ")");
     }
 
 

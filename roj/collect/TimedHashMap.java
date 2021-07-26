@@ -35,12 +35,12 @@ import java.util.function.Predicate;
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/5/4 14:32java
+ * @since 2021/5/4 14:32
  */
 public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     protected long timeout, lastCheck;
 
-    protected boolean selfRemove, update;
+    protected boolean update;
 
     public TimedHashMap(int timeOut) {
         this.timeout = (update = timeOut < 0) ? -timeOut : timeOut;
@@ -51,12 +51,10 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     public void retainOutDated(Collection<K> kholder, Collection<V> vholder, Predicate<Entry<K, V>> kPredicate, int max) {
         long curr = System.currentTimeMillis();
 
-        selfRemove = true;
-
         if (!this.list.isEmpty())
             for (ListIterator<TimedEntry<K, V>> iterator = this.list.listIterator(this.list.size() - 1); iterator.hasPrevious(); ) {
                 TimedEntry<K, V> entry = iterator.previous();
-                if (curr - entry.timestamp >= timeout || max-- <= 0) {
+                if (curr - entry.timestamp >= timeout && max-- > 0) {
                     if(kPredicate.test(entry)) {
                         kholder.add(entry.k);
                         vholder.add(entry.v);
@@ -69,8 +67,6 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
             }
 
         lastCheck = curr;
-
-        selfRemove = false;
     }
 
     public static class TimedEntry<K, V> extends MyHashMap.Entry<K, V> {
@@ -82,13 +78,8 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     }
 
     @Override
-    protected void putRemovedEntry(Entry<K, V> entry) {
-    }
-
-    @Override
     void afterRemove(Entry<K, V> entry) {
-        if (!selfRemove)
-            throw new IllegalStateException("There is not remove!");
+        list.remove(entry);
     }
 
     @Override
@@ -110,9 +101,7 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
         long t = System.currentTimeMillis() - entry1.timestamp;
         if (t >= timeout) {
             if (entry.v != IntMap.NOT_USING) {
-                selfRemove = true;
                 remove(entry.k);
-                selfRemove = false;
             }
             return null;
         }
@@ -124,21 +113,17 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     public void clearOutdatedEntry() {
         long curr = System.currentTimeMillis();
 
-        selfRemove = true;
-
         if (!this.list.isEmpty())
             for (ListIterator<TimedEntry<K, V>> iterator = this.list.listIterator(this.list.size() - 1); iterator.hasPrevious(); ) {
                 TimedEntry<K, V> entry = iterator.previous();
                 if (curr - entry.timestamp >= timeout) {
                     remove(entry.k);
                     iterator.remove();
-                } else {
+                } else if(!update) {
                     break;
                 }
             }
 
         lastCheck = curr;
-
-        selfRemove = false;
     }
 }

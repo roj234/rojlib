@@ -28,7 +28,8 @@ package roj.asm.cst;
 
 import roj.annotation.Internal;
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -53,7 +54,7 @@ public abstract class Constant {
     public abstract int hashCode();
 
     public String toString() {
-        return type() + "#" + index;
+        return CstType.toString(type()) + "#" + index;
     }
 
     @Internal

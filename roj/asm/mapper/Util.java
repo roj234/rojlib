@@ -29,6 +29,7 @@ import roj.asm.mapper.util.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
+import roj.concurrent.SharedThreads;
 import roj.io.ZipUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -39,13 +40,17 @@ import roj.util.Helpers;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
-import java.util.zip.*;
+import java.util.function.Predicate;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Mapper Util
@@ -76,7 +81,7 @@ public final class Util {
         return (MtDesc) ThreadBasedCache.get()[1];
     }
 
-    public static <T> FirstCollection<T> shareFC(T first, Collection<T> collection) {
+    public static <T> FirstCollection<T> shareFC(T first, List<T> collection) {
         FirstCollection<T> fc = Helpers.cast(ThreadBasedCache.get()[3]);
         fc.first = first;
         fc.target = collection;
@@ -101,43 +106,34 @@ public final class Util {
             ZipUtil.close(zos);
     }
 
-    @Nonnull
-    public static List<Context> prepareContexts(@Nonnull Map<String, InputStream> classes) {
-        List<Context> arr = new ArrayList<>(classes.size());
-        for(Map.Entry<String, InputStream> entry : classes.entrySet()) {
-            arr.add(new Context(entry.getKey().replace('\\', '/'), entry.getValue()));
-        }
-        return arr;
+    public static Thread writeResourceAsync(@Nonnull ZipOutputStream zos, @Nonnull Map<String, ?> resources) {
+        Thread writer = new Thread(new ResWriter(zos, resources), "Resource Writer");
+        writer.setDaemon(true);
+        writer.start();
+        return writer;
     }
 
-    public static Thread createResourceWriter(@Nonnull ZipOutputStream zos, @Nonnull Map<String, InputStream> resources) {
-        Thread resourceWriter = new Thread(new ResWriter(zos, resources), "Resource Writer");
-        resourceWriter.setDaemon(true);
-        resourceWriter.start();
-        return resourceWriter;
-    }
+    static void concurrent(String name, Consumer<Context> consumer, List<List<Context>> ctxs) {
+        ArrayList<Worker> wait = new ArrayList<>();
 
-    static void waitfor(String name, Consumer<Context> consumer, List<List<Context>> ctxs) {
-        ArrayList<Thread> threads = new ArrayList<>();
-
-        Thread t;
-
-        threads.ensureCapacity(ctxs.size());
-        for(int i = 0, e = ctxs.size();i < e; i++) {
-            threads.add(t = new Worker(ctxs.get(i), consumer, name + i));
-            t.start();
+        wait.ensureCapacity(ctxs.size());
+        for(int i = 0, e = ctxs.size(); i < e; i++) {
+            Worker worker = new Worker(ctxs.get(i), consumer, name + i);
+            SharedThreads.CPU_POOL.pushTask(worker);
+            wait.add(worker);
         }
 
         try {
-            for(Thread t2 : threads) {
-                t2.join();
+            for(Worker t2 : wait) {
+                t2.get();
             }
-        } catch (InterruptedException ignored) {}
-
-        threads.clear();
+        } catch (InterruptedException ignored) {
+        } catch (ExecutionException e) {
+            throw (RuntimeException) e.getCause();
+        }
     }
 
-    public static boolean isPackageSame(String packageA, String packageB) {
+    public static boolean arePackagesSame(String packageA, String packageB) {
         int ia = packageA.lastIndexOf('/');
 
         if(packageB.lastIndexOf('/') != ia)
@@ -276,34 +272,33 @@ public final class Util {
         return str == null ? fd : str;
     }
 
-    public static List<Context> prepareContextFromZip(File input, Charset charset) throws IOException {
-        ZipInputStream inputJar = new ZipInputStream(new FileInputStream(input), charset);
 
-        List<Context> ctxs = new ArrayList<>(1024);
+    public static List<Context> ctxFromStream(Map<String, InputStream> streams) throws IOException {
+        List<Context> ctx = new ArrayList<>(streams.size());
 
-        while (true) {
-            ZipEntry zn;
-            try {
-                zn = inputJar.getNextEntry();
-                if(zn == null)
-                    break;
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
-            }
-            if (zn.isDirectory()) continue;
-            if (zn.getName().endsWith(".class")) {
-                ctxs.add(new Context(zn.getName().replace('\\', '/'), new ByteList().readStreamArrayFully(inputJar)));
-            }
+        ByteList bl = new ByteList();
+        for (Map.Entry<String, InputStream> entry : streams.entrySet()) {
+            Context c = new Context(entry.getKey().replace('\\', '/'), bl.readStreamArrayFully(entry.getValue()).toByteArray());
+            entry.getValue().close();
+            c.getData();
+            bl.clear();
+            ctx.add(c);
         }
 
-        inputJar.close();
-
-        return ctxs;
+        return ctx;
     }
 
-    public static ZipFile prepareInputFromZip(File input, Charset charset, Map<String, InputStream> streams) throws IOException {
-        ZipFile inputJar = new ZipFile(input, ZipFile.OPEN_READ, charset);
+    public static final Predicate<String> alwaysTrue = s -> true;
+    public static List<Context> ctxFromZip(File input, Charset charset) throws IOException {
+        return ctxFromZip(input, charset, alwaysTrue);
+    }
 
+    public static List<Context> ctxFromZip(File input, Charset charset, Predicate<String> filter) throws IOException {
+        ZipFile inputJar = new ZipFile(input, charset);
+
+        List<Context> ctx = new ArrayList<>();
+
+        ByteList bl = new ByteList();
         Enumeration<? extends ZipEntry> en = inputJar.entries();
         while (en.hasMoreElements()) {
             ZipEntry zn;
@@ -313,13 +308,50 @@ public final class Util {
                 throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
             }
             if (zn.isDirectory()) continue;
-            //if (zn.getName().endsWith(".class")) {
-                streams.put(zn.getName(), inputJar.getInputStream(zn));
-            //} else {
-            //    streams.put(zn.getName(), inputJar.getInputStream(zn));
-            //}
+            if (zn.getName().endsWith(".class") && filter.test(zn.getName())) {
+                InputStream in = inputJar.getInputStream(zn);
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
+                in.close();
+                c.getData();
+                bl.clear();
+                ctx.add(c);
+            }
         }
 
-        return inputJar;
+        inputJar.close();
+
+        return ctx;
+    }
+
+    public static List<Context> ctxFromZip(File input, Charset charset, Map<String, byte[]> res) throws IOException {
+        ZipFile inputJar = new ZipFile(input, charset);
+
+        List<Context> ctx = new ArrayList<>();
+
+        ByteList bl = new ByteList();
+        Enumeration<? extends ZipEntry> en = inputJar.entries();
+        while (en.hasMoreElements()) {
+            ZipEntry zn;
+            try {
+                zn = en.nextElement();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
+            }
+            if (zn.isDirectory()) continue;
+            InputStream in = inputJar.getInputStream(zn);
+            bl.readStreamArrayFully(in);
+            in.close();
+            if (zn.getName().endsWith(".class")) {
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.toByteArray());
+                ctx.add(c);
+            } else {
+                res.put(zn.getName(), bl.toByteArray());
+            }
+            bl.clear();
+        }
+
+        inputJar.close();
+
+        return ctx;
     }
 }

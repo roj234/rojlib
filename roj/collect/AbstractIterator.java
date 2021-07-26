@@ -116,4 +116,8 @@ public abstract class AbstractIterator<T> implements Iterator<T> {
     public void remove(T obj) {
         throw new UnsupportedOperationException();
     }
+
+    public boolean reset() {
+        return false;
+    }
 }

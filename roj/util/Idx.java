@@ -26,13 +26,13 @@
 
 package roj.util;
 
+import roj.collect.IntIterator;
 import roj.collect.LongBitSet;
-
-import java.util.PrimitiveIterator;
 
 /**
  * Idx 槽位筛选器
- *//**
+ */
+/**
  * No description provided
  *
  * @author Roj234
@@ -69,7 +69,7 @@ public final class Idx {
         return adds == len;
     }
 
-    public PrimitiveIterator.OfInt remains() {
+    public IntIterator remains() {
         return list.iterator();
     }
 

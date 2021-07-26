@@ -25,11 +25,6 @@
  */
 package roj.net.tcp.ssl;
 
-import io.netty.buffer.ByteBufAllocator;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
-
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
@@ -107,59 +102,7 @@ public final class SslEngineFactory {
     }
 
     public static EngineAllocator getAnySslEngine(SslConfig config) throws IOException, GeneralSecurityException {
-        if(config.preferNetty()) {
-            try {
-                return Netty.getNettyOpenSslEngine(config, (ByteBufAllocator) config.getAllocator());
-            } catch (Error e) {
-                e.printStackTrace();
-            }
-        }
         return getJavaSslEngine(config);
-    }
-
-    public static final class Netty {
-        public static EngineAllocator getNettyOpenSslEngine(SslConfig cfg, ByteBufAllocator alloc) throws IOException, GeneralSecurityException {
-            SslContext context = getNettyOpenSslServerContext(cfg.getPkPath(), cfg.isNeedClientAuth() ? cfg.getCaPath() : null, cfg.getPasswd(), cfg.isServerSide());
-
-            return new Alloc(context, alloc, cfg);
-        }
-
-        private static SslContext getNettyOpenSslServerContext(String pkPath, String caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
-            // 密钥管理器
-            KeyManagerFactory kmf = null;
-            if (serverSide) {
-                kmf = getKeyManagerFactory(pkPath, passwd);
-            }
-
-            // 信任库
-            TrustManagerFactory tf = null;
-            if (caPath != null) {
-                tf = getTrustManagerFactory(caPath, passwd);
-            } else if (!serverSide)
-                System.err.println("Client must verify server.");
-
-            SslContextBuilder builder = serverSide ? SslContextBuilder.forServer(kmf) : SslContextBuilder.forClient();
-
-            return builder.trustManager(tf).sslProvider(SslProvider.OPENSSL).build();
-        }
-
-        private static final class Alloc extends EngineAllocator {
-            private final SslContext context;
-            private final ByteBufAllocator alloc;
-
-            public Alloc(SslContext context, ByteBufAllocator alloc, SslConfig cfg) {
-                super(cfg);
-                this.context = context;
-                this.alloc = alloc;
-            }
-
-            @Override
-            public SSLEngine allocate() {
-                SSLEngine sslEngine = context.newEngine(alloc);
-                config(sslEngine, config);
-                return sslEngine;
-            }
-        }
     }
 
     private static final class Alloc extends EngineAllocator {

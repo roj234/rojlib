@@ -34,7 +34,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static roj.asm.type.NativeType.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -273,34 +274,6 @@ public final class ParamHelper {
         return "A";
     }
 
-    /*
-     * 返回值
-     * /
-    public static String nativeReturnVal(CharSequence i) {
-        if(i.length() > 2 && i.length() < 8)
-            switch (i.toString()) {
-                case "int":
-                    return "I";
-                case "char":
-                    return "C";
-                case "byte":
-                    return "B";
-                case "boolean":
-                    return "Z";
-                case "short":
-                    return "S";
-                case "double":
-                    return "D";
-                case "long":
-                    return "J";
-                case "float":
-                    return "F";
-                case "void":
-                    return "V";
-            }
-        throw new IllegalArgumentException(i + " is not prim type");
-    }*/
-
     /**
      * @param types (Ljava/lang/String;D)V
      * @param methodName <init>
@@ -330,7 +303,7 @@ public final class ParamHelper {
      * @param out void
      * @return (Ljava/lang/String;D)V
      */
-    public static String dehumanize(String in, String out) {
+    public static String dehumanize(CharSequence in, CharSequence out) {
         CharList sb = sharedBuffer.get();
         sb.clear();
         sb.ensureCapacity(in.length() + out.length() + 4);
@@ -339,15 +312,15 @@ public final class ParamHelper {
         List<String> list = TextUtil.splitStringF(new ArrayList<>(), in, ',');
         for (int i = 0; i < list.size(); i++) {
             String s = list.get(i);
-            dehumanize(s, sb);
+            dehumanize0(s, sb);
         }
-        return dehumanize(out, sb.append(')')).toString();
+        return dehumanize0(out, sb.append(')')).toString();
     }
 
-    private static CharList dehumanize(String z, CharList sb) {
-        if (z.isEmpty())
+    public static CharList dehumanize0(CharSequence z, CharList sb) {
+        if (z.length() == 0)
             return sb;
-        CharList sb1 = new CharList(z.toCharArray());
+        CharList sb1 = new CharList().append(z);
 
         // Array filter
         while (sb1.length() > 2 && sb1.charAt(sb1.length() - 1) == ']' && sb1.charAt(sb1.length() - 2) == '[') {
@@ -381,5 +354,19 @@ public final class ParamHelper {
         }
         sb.append('L').append(sb1);
         return sb.append(';');
+    }
+
+    public static String normalize(String owner, int array) {
+        if(array > 0) {
+            CharList cl = new CharList(owner.length() + array + 3);
+            for (int i = 0; i < array; i++) {
+                cl.append('[');
+            }
+            cl.append('L');
+
+            return cl.append(owner).replace('/', '.').append(';').toString();
+        } else {
+            return owner.replace('/', '.');
+        }
     }
 }

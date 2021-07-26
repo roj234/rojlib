@@ -25,7 +25,8 @@
  */
 
 package roj.asm.cst;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -34,15 +35,17 @@ package roj.asm.cst;
  */
 public final class CstPackage extends CstRefUTF {
     public CstPackage(int valueIndex) {
-        super(CstType.PACKAGE, valueIndex);
+        super(valueIndex);
     }
 
-    public CstPackage() {
-        super(CstType.PACKAGE);
-    }
+    public CstPackage() {}
 
     public CstPackage(String name) {
-        super(CstType.PACKAGE, 0);
         setValue(new CstUTF(name));
+    }
+
+    @Override
+    public byte type() {
+        return CstType.PACKAGE;
     }
 }

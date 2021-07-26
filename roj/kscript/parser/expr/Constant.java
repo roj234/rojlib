@@ -80,9 +80,9 @@ public final class Constant implements Expression {
                 return valueOf(KString.valueOf(word.val()));
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F:
-                return valueOf(KDouble.valueOf(word.val()));
+                return valueOf(KDouble.valueOf(word.number().asDouble()));
             case WordPresets.INTEGER:
-                return valueOf(KInt.valueOf(word.val()));
+                return valueOf(KInt.valueOf(word.number().asInt()));
             case Keyword.TRUE:
             case Keyword.FALSE:
                 return valueOf(word.val().equals("true") ? KBool.TRUE : KBool.FALSE);

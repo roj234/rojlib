@@ -27,7 +27,7 @@
 package roj.mod;
 
 import roj.asm.Parser;
-import roj.asm.struct.AccessData;
+import roj.asm.tree.AccessData;
 import roj.io.AppendOnlyCache;
 import roj.io.IOUtil;
 import roj.text.CharList;

@@ -77,7 +77,7 @@ public final class CString extends CEntry {
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return Boolean.parseBoolean(value);
     }
 
@@ -87,6 +87,11 @@ public final class CString extends CEntry {
         if (o == null || getClass() != o.getClass()) return false;
         CString that = (CString) o;
         return Objects.equals(value, that.value);
+    }
+
+    @Override
+    public boolean equalsTo(CEntry entry) {
+        return entry.getType().fits(Type.STRING) && entry.asString().equals(value);
     }
 
     @Override

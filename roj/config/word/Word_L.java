@@ -35,19 +35,19 @@ package roj.config.word;
 public class Word_L extends NumberWord {
     public long number;
 
-    public Word_L(int index, String val, long i) {
-        reset(WordPresets.LONG, index, val);
+    public Word_L(int index, long i) {
+        reset(WordPresets.LONG, index, null);
         this.number = i;
     }
 
     @Override
     public int asInt() {
-        throw new UnsupportedOperationException();
+        return (int) number;
     }
 
     @Override
     public double asDouble() {
-        throw new UnsupportedOperationException();
+        return number;
     }
 
     @Override

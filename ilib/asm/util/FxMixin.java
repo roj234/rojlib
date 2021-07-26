@@ -29,7 +29,7 @@ import roj.asm.Parser;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
-import roj.asm.struct.ConstantData;
+import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 
 /**

@@ -33,7 +33,7 @@ import com.google.common.collect.Lists;
 import net.minecraft.launchwrapper.IClassTransformer;
 import org.apache.commons.io.IOUtils;
 import roj.asm.Parser;
-import roj.asm.struct.ConstantData;
+import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 import roj.text.SimpleLineReader;
 

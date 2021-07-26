@@ -25,7 +25,7 @@
  */
 package roj.asm.util;
 
-import roj.asm.struct.attr.Attribute;
+import roj.asm.tree.attr.Attribute;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 

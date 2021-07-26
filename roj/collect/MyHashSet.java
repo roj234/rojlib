@@ -382,14 +382,14 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
 
 
     public String toString() {
-        StringBuilder sb = new StringBuilder("MyHashSet").append('{');
+        StringBuilder sb = new StringBuilder().append('[');
         for (K key : this) {
             sb.append(key).append(',');
         }
         if (!isEmpty()) {
             sb.deleteCharAt(sb.length() - 1);
         }
-        return sb.append('}').toString();
+        return sb.append(']').toString();
     }
 
     public void slowClear() {

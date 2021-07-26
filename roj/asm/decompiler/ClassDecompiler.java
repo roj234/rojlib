@@ -26,10 +26,10 @@
 package roj.asm.decompiler;
 
 import roj.asm.cst.*;
-import roj.asm.struct.Method;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.insn.IIndexInsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
+import roj.asm.tree.Method;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.IIndexInsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.type.LocalVariable;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
@@ -69,7 +69,7 @@ public class ClassDecompiler {
         List<LocalVariable> LVT = code.getLVT() == null ? null : code.getLVT().list;
 
         //初始化本地变量表名，首先如果是实例方法，需要把this放入第一个，然后依次将方法参数名放入
-        boolean isStaticMethod = method.access().contains(AccessFlag.STATIC);
+        boolean isStaticMethod = method.access().hasAll(AccessFlag.STATIC);
         if (!isStaticMethod) {
             varNames.add("this");
         }
@@ -77,7 +77,7 @@ public class ClassDecompiler {
             varNames.add("var" + (x + 1));
         }
 
-        for (roj.asm.struct.insn.InsnNode node : code.instructions) {
+        for (roj.asm.tree.insn.InsnNode node : code.instructions) {
             byte opc = node.code;
             if ((opc >= 0x15 && opc <= 0x2d) || (opc >= 0x36 && opc <= 0x4e)) {
                 node = NodeHelper.decompress(node);
@@ -88,7 +88,7 @@ public class ClassDecompiler {
                 case LLOAD:
                 case DLOAD:
                 case FLOAD: {
-                    roj.asm.struct.insn.IIndexInsnNode node1 = (IIndexInsnNode) node;
+                    roj.asm.tree.insn.IIndexInsnNode node1 = (IIndexInsnNode) node;
                     System.out.println("Xload_" + node1.getIndex());
                     opStack.push(varNames.get(node1.getIndex()));
                 }
@@ -147,7 +147,7 @@ public class ClassDecompiler {
                     System.out.println("return");
                     break;
                 case NEW: {
-                    roj.asm.struct.insn.ClassInsnNode node1 = (roj.asm.struct.insn.ClassInsnNode) node;
+                    roj.asm.tree.insn.ClassInsnNode node1 = (roj.asm.tree.insn.ClassInsnNode) node;
                     opStack.push(node1.owner().replace('/', '.'));
                     break;
                 }
@@ -159,7 +159,7 @@ public class ClassDecompiler {
                 case LDC2_W:
                 case LDC_W:
                 case LDC: {
-                    roj.asm.struct.insn.LoadConstInsnNode node1 = (roj.asm.struct.insn.LoadConstInsnNode) node;
+                    roj.asm.tree.insn.LoadConstInsnNode node1 = (roj.asm.tree.insn.LoadConstInsnNode) node;
 
                     String o = "<INTERNAL ERROR: unsupported ldc node>";
 

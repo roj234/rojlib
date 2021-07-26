@@ -60,7 +60,7 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>> {
     protected static final int MAX_NOT_USING = 5;
 
     @SuppressWarnings("unchecked")
-    public void putAll(IntMap<V> map) {
+    public void putAll(IntMap<? extends V> map) {
         if (map.entries == null) return;
         this.ensureCapacity(size + map.size());
         for (int i = 0; i < map.length; i++) {
@@ -131,7 +131,7 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>> {
     }
 
     @SuppressWarnings("unchecked")
-    public IntMap(IntMap<V> map) {
+    public IntMap(IntMap<? extends V> map) {
         ensureCapacity(map.size);
         this.loadFactor = map.loadFactor;
         if (map.size() == 0) return;

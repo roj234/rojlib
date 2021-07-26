@@ -84,6 +84,10 @@ public final class RingBuffer<T> implements Iterable<T> {
         return size;
     }
 
+    public boolean isEmpty() {
+        return size == 0;
+    }
+
     public boolean contains(Object o) {
         return indexOf(o) != -1;
     }
@@ -105,6 +109,28 @@ public final class RingBuffer<T> implements Iterable<T> {
                 }
                 f = true;
                 result = (T) array[i++];
+                return true;
+            }
+        };
+    }
+
+    @Nonnull
+    public Iterator<T> iteratorReverse() {
+        return size == 0 ? Collections.emptyIterator() : new AbstractIterator<T>() {
+            int i = end;
+            boolean f;
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public boolean computeNext() {
+                if(f) {
+                    if (i == begin) return false;
+                    if (i == -1) {
+                        i = array.length - 1;
+                    }
+                }
+                f = true;
+                result = (T) array[i--];
                 return true;
             }
         };
@@ -251,6 +277,46 @@ public final class RingBuffer<T> implements Iterable<T> {
         T orig = (T) array[i];
         array[i] = val;
         return orig;
+    }
+
+    public boolean remove(T entry) {
+        int i = indexOf(entry);
+        if(i == -1)
+            return false;
+        remove(i);
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    public T remove(int index) {
+        T t = (T) array[index];
+
+        if(begin > end) {
+            /**
+             * E   S =>
+             * 0 1 2 3 4
+             */
+            if(index > end && index < begin)
+                throw new IllegalStateException();
+            if(index > end) {
+                // 2, 3, or 4
+                // need move twice
+
+            }
+
+        } else {
+            if(index < begin || index > end)
+                throw new IllegalStateException();
+            /**
+             *   S     E
+             * 0 1 2 3 4
+             */
+            if(end > index)
+                System.arraycopy(array, index + 1, array, index, end - index);
+            end--;
+        }
+
+        return t;
     }
 
     public int indexOf(Object o) {

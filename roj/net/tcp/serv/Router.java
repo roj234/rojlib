@@ -29,7 +29,7 @@ import roj.net.tcp.serv.util.Request;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 
 /**
  * No description provided
@@ -45,10 +45,10 @@ public interface Router {
     }
 
     default int readTimeout() {
-        return 1500;
+        return 5000;
     }
 
-    Response response(SocketChannel socket, Request request) throws IOException;
+    Response response(Socket socket, Request request) throws IOException;
 
     default int maxLength() {
         return 1048576; // 1MB

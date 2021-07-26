@@ -46,7 +46,7 @@ import java.util.Arrays;
  * @since  2020/10/3 19:20
  */
 public class JSLexer extends AbstLexer {
-    public static final IBitSet JS_SPECIAL = LongBitSet.preFilled("+-*/()!~`@#%^&=,<>.?:;|[]{}");
+    public static final IBitSet JS_SPECIAL = LongBitSet.from("+-*/()!~`@#%^&=,<>.?:;|[]{}");
 
     public boolean acceptsNumber;
 

@@ -31,11 +31,12 @@ import ilib.asm.Loader;
 import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
-import roj.asm.struct.ConstantData;
+import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 import roj.util.log.ILogger;
 import roj.util.log.LogManager;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

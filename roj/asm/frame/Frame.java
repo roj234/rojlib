@@ -25,7 +25,7 @@
  */
 package roj.asm.frame;
 
-import roj.asm.struct.insn.InsnNode;
+import roj.asm.tree.insn.InsnNode;
 
 /**
  * No description provided

@@ -25,7 +25,7 @@
  */
 package roj.asm.type;
 
-import roj.asm.struct.insn.InsnNode;
+import roj.asm.tree.insn.InsnNode;
 import roj.asm.util.IType;
 
 /**

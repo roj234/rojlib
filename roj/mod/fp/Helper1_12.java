@@ -44,7 +44,7 @@ import java.util.jar.JarFile;
  * @since  2020/8/29 8:54
  */
 final class Helper1_12 {
-    static InputStream forgeInit(File forgeFile) throws IOException {
+    static ByteList forgeInit(File forgeFile) throws IOException {
         JarFile jarFile = new JarFile(forgeFile);
         Enumeration<JarEntry> enumeration = jarFile.entries();
         JarEntry deobfData = null;
@@ -56,7 +56,7 @@ final class Helper1_12 {
             }
         }
         try (InputStream is = new BufferedInputStream(new LzmaInputStream(jarFile.getInputStream(deobfData)))) {
-            return new ByteList().readStreamFully(is).asInputStream();
+            return new ByteList().readStreamFully(is);
         }
     }
 

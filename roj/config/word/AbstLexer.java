@@ -44,11 +44,11 @@ import java.io.UTFDataFormatException;
  */
 public abstract class AbstLexer {
     public static final IBitSet
-            NUMBER = LongBitSet.preFilled("0123456789"),
-            WHITESPACE = LongBitSet.preFilled(" \r\n\t"),
-            SPECIAL = LongBitSet.preFilled("+-\\/*()!~`@#$%^&_=,<>.?\"':;|[]{}"),
-            HEX = LongBitSet.preFilled("ABCDEFabcdef"),
-            SPECIAL_CHARS = LongBitSet.preFilled(
+            NUMBER = LongBitSet.from("0123456789"),
+            WHITESPACE = LongBitSet.from(" \r\n\t"),
+            SPECIAL = LongBitSet.from("+-\\/*()!~`@#$%^&_=,<>.?\"':;|[]{}"),
+            HEX = LongBitSet.from("ABCDEFabcdef"),
+            SPECIAL_CHARS = LongBitSet.from(
                     32, 33,
                     // "
                     35, 36, 37, 38,
@@ -57,7 +57,7 @@ public abstract class AbstLexer {
                     58, 59, 60, 61, 62, 63,
                     91, 93, 94, 95, 96,
                     123, 124, 125, 126
-    );
+                                           );
 
     /**
      * 暂存
@@ -219,6 +219,10 @@ public abstract class AbstLexer {
         index = input == null ? 0 : input.length();
     }
 
+    public CharSequence getText() {
+        return input;
+    }
+
     public static final class Snapshot {
         public int index;
         final CharSequence hash;
@@ -264,53 +268,46 @@ public abstract class AbstLexer {
      * 获取转义字符串
      */
     @SuppressWarnings("fallthrough")
-    public final CharList readSlashString(char end) throws ParseException {
-        CharSequence input = this.input;
-        int index = this.index;
+    public final CharList readSlashString(char end, boolean zhuanyi) throws ParseException {
+        CharSequence in = this.input;
+        int i = this.index;
 
-        CharList temp = this.found;
-        temp.clear();
+        CharList v = this.found;
+        v.clear();
 
         boolean slash = false;
         boolean quoted = true;
 
-        o:
-        while (index < input.length()) {
-            char c = input.charAt(index++);
+        while (i < in.length()) {
+            char c = in.charAt(i++);
             if (slash) {
-                index = slashHandler(c, temp, index);
+                i = slashHandler(c, v, i);
                 slash = false;
             } else {
-                switch (c) {
-                    case '\'':
-                    case '"':
-                        if(end == c) {
-                            quoted = false;
-                            break o;
-                        } else {
-                            temp.append(c);
-                        }
-                        break;
-                    case '\\':
+                if(end == c) {
+                    quoted = false;
+                    break;
+                } else {
+                    if(zhuanyi && c == '\\') {
                         slash = true;
-                        break;
-                    default:
-                        temp.append(c);
+                    } else {
+                        v.append(c);
+                    }
                 }
             }
         }
 
         int orig = this.index;
-        this.index = index;
+        this.index = i;
 
         if (slash) {
-            throw err("未终止的 T_SLASH (\\)", orig);
+            throw err("未终止的 SLASH (\\)", orig);
         }
         if (quoted) {
-            throw err("未终止的 T_QUOTE (" + end + ")", orig);
+            throw err("未终止的 QUOTE (" + end + ")", orig);
         }
 
-        return temp;
+        return v;
     }
 
     /**
@@ -667,7 +664,7 @@ public abstract class AbstLexer {
      * 获取常量字符
      */
     protected final Word readConstChar() throws ParseException {
-        CharList list = readSlashString('\'');
+        CharList list = readSlashString('\'', true);
         if (list.length() != 1)
             throw err("未结束的字符常量");
         return formClip(WordPresets.CHARACTER, list);
@@ -677,7 +674,7 @@ public abstract class AbstLexer {
      * 获取常量字符串
      */
     protected final Word readConstString(char key) throws ParseException {
-        return formClip(WordPresets.STRING, readSlashString(key));
+        return formClip(WordPresets.STRING, readSlashString(key, true));
     }
 
     /**

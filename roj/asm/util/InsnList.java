@@ -25,15 +25,15 @@
  */
 package roj.asm.util;
 
-import roj.asm.struct.insn.InsnNode;
-import roj.asm.struct.insn.LabelInsnNode;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.LabelInsnNode;
 import roj.collect.IntBiMap;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 
-import static roj.asm.struct.attr.AttrCode.METHOD_END_MARK;
+import static roj.asm.tree.attr.AttrCode.METHOD_END_MARK;
 
 /**
  * No description provided

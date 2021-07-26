@@ -34,7 +34,7 @@ import javax.annotation.Nonnull;
  * @version 0.1
  * @since 2021/5/31 21:17
  */
-public final class CLong extends CEntry {
+public class CLong extends CEntry {
     public long value;
 
     public CLong(long number) {
@@ -82,6 +82,11 @@ public final class CLong extends CEntry {
         if (o == null || getClass() != o.getClass()) return false;
         CLong that = (CLong) o;
         return that.value == value;
+    }
+
+    @Override
+    public boolean equalsTo(CEntry entry) {
+        return entry.getType().fits(Type.LONG) && entry.asLong() == value;
     }
 
     @Override

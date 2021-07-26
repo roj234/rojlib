@@ -32,13 +32,10 @@ import roj.asm.mapper.struct.AttrLVT_Simple;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.FlDesc;
 import roj.asm.mapper.util.MtDesc;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrInnerClasses;
-import roj.asm.struct.attr.AttrUTF;
-import roj.asm.struct.attr.AttrUnknown;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.*;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
 import roj.asm.type.SignatureHelper;
@@ -51,8 +48,6 @@ import roj.collect.MyHashMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -68,10 +63,10 @@ import java.util.function.UnaryOperator;
  */
 public final class CodeMapper extends Mapping {
     public static final boolean
-            DEBUG = Boolean.parseBoolean(System.getProperty("fmd.debugRename", "false")),
-            REPLACE_DESC = Boolean.parseBoolean(System.getProperty("fmd.replaceDesc", "false"));
+            DEBUG = Boolean.parseBoolean(System.getProperty("roj.codeMapper.debug", "false")),
+            REPLACE_DESC = Boolean.parseBoolean(System.getProperty("roj.codeMapper.replaceDesc", "false"));
 
-    public static final IBitSet HUMAN_READABLE_TOKENS = LongBitSet.preFilled("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
+    public static final IBitSet HUMAN_READABLE_TOKENS = LongBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
 
     private Map<String, ?> paramNameMap = null;
     private byte paramNameType;
@@ -94,46 +89,37 @@ public final class CodeMapper extends Mapping {
         this.validVarChars = o.validVarChars;
     }
 
-    public CodeMapper(Mapping remapper) {
-        read(remapper);
+    public CodeMapper(Mapping mapping) {
+        read(mapping);
     }
 
-    public final CodeMapper read(Mapping remapper) {
-        this.classMap = remapper.getClassMap();
-        this.fieldMap = (MyHashMap<FlDesc, String>) remapper.getFieldMap();
-        this.methodMap = (MyHashMap<MtDesc, String>) remapper.getMethodMap();
+    public final CodeMapper read(Mapping mapping) {
+        this.classMap = mapping.getClassMap();
+        this.fieldMap = (MyHashMap<FlDesc, String>) mapping.getFieldMap();
+        this.methodMap = (MyHashMap<MtDesc, String>) mapping.getMethodMap();
         return this;
     }
 
-    public final void remap(boolean singleThread, Collection<Context> classes) {
-        if(singleThread) {
-            Context holder = null;
+    public final void remap(boolean singleThread, Collection<Context> arr) {
+        if(singleThread || arr.size() < 50 * Util.CPU) {
+            Context cur = null;
 
             try {
-                for(Context entry : classes) {
-                    holder = entry;
+                for(Context entry : arr) {
+                    cur = entry;
                     processOne(entry);
                 }
             } catch (Throwable e) {
-                final File file = new File("NR错误_" + (hashCode() ^ System.currentTimeMillis()) + ".class");
-                try(FileOutputStream fos = new FileOutputStream(file)) {
-                    holder.get().writeToStream(fos);
-                } catch (Throwable ignored) {
-                    try(FileOutputStream fos = new FileOutputStream(file)) {
-                        fos.write(holder.getData().toString().getBytes());
-                    } catch (Throwable ignored1) {}
-                }
-                e.printStackTrace();
-                System.exit(-1);
+                throw new RuntimeException("At parsing " + cur, e);
             }
         } else {
             List<List<Context>> splitedContexts = new ArrayList<>();
             List<Context> tmp = new ArrayList<>();
 
-            int splitThreshold = (classes.size() / Runtime.getRuntime().availableProcessors()) + 1;
+            int splitThreshold = (arr.size() / Runtime.getRuntime().availableProcessors()) + 1;
 
             int i = 0;
-            for (Context entry : classes) {
+            for (Context entry : arr) {
                 if(i >= splitThreshold) {
                     splitedContexts.add(tmp);
                     tmp = new ArrayList<>(splitThreshold);
@@ -144,59 +130,41 @@ public final class CodeMapper extends Mapping {
             }
             splitedContexts.add(tmp);
 
-            Util.waitfor("NRWorker", this::processOne, splitedContexts);
+            Util.concurrent("NRWorker", this::processOne, splitedContexts);
         }
     }
 
+    // 致天天想着搞优化的我: 有顺序！！！
     public final void processOne(Context ctx) {
         ConstantData data = ctx.getData();
-        mapAttribute(data.cp, data.attributes);
-        mapParam(ctx, data);
 
-        if(rewrite) {
-            ctx.reset();
-        } else {
-            ctx.refresh();
-        }
-    }
-
-    final void mapAttribute(ConstantPool pool, AttributeList list) {
-        Attribute a = (Attribute) list.getByName("Signature");
+        // 这里都成了String，要第一个！
+        Attribute a = (Attribute) data.attributes.getByName("InnerClasses");
         if(a != null) {
-            if(a instanceof AttrUTF) {
-                AttrUTF au = (AttrUTF) a;
-
-                Signature generic = SignatureHelper.parse(au.value);
-
-                generic.rename(NAME_REMAPPER);
-
-                au.value = generic.toGeneric();
-            } else {
-                Signature generic = SignatureHelper.parse(((CstUTF) pool.array()[new ByteReader(a.getRawData()).readUnsignedShort()]).getString());
-
-                generic.rename(NAME_REMAPPER);
-
-                list.putByName(new AttrUTF(AttrUTF.SIGNATURE, generic.toGeneric()));
-            }
-        }
-
-        a = (Attribute) list.getByName("InnerClasses");
-        if(a != null) {
-            AttrInnerClasses attr;
+            AttrInnerClasses ic;
             if(a instanceof AttrInnerClasses)
-                attr = (AttrInnerClasses) a;
+                ic = (AttrInnerClasses) a;
             else
-                list.putByName(attr = new AttrInnerClasses(new ByteReader(a.getRawData()), pool));
+                data.attributes.putByName(ic = new AttrInnerClasses(new ByteReader(a.getRawData()), data.cp));
 
-            List<AttrInnerClasses.InnerClass> classes = attr.classes;
+            List<AttrInnerClasses.InnerClass> classes = ic.classes;
             for (int j = 0; j < classes.size(); j++) {
                 AttrInnerClasses.InnerClass clz = classes.get(j);
                 if (clz.name != null && clz.parent != null) {
                     String name = Util.mapOwner(classMap, clz.parent + '$' + clz.name, false);
                     if (name != null) {
-                        int i = name.indexOf('$');
-                        clz.name = name.substring(i + 1);
-                        clz.parent = name.substring(0, i);
+                        int i = name.lastIndexOf('$');
+                        if(i == -1) {
+                            if(DEBUG)
+                                System.out.println("[CM Warn] No '$' sig: " + clz.parent + '$' + clz.name + " => " + name);
+                            clz.name = name;
+                            name = Util.mapOwner(classMap, clz.parent, false);
+                            if(name != null)
+                                clz.parent = name;
+                        } else {
+                            clz.name = name.substring(i + 1);
+                            clz.parent = name.substring(0, i);
+                        }
                     }
                 }
                 if (clz.self != null) {
@@ -205,6 +173,73 @@ public final class CodeMapper extends Mapping {
                         clz.self = name;
                 }
             }
+        }
+
+        a = (Attribute) data.attributes.getByName("BootstrapMethods");
+        if(a != null) {
+            AttrBootstrapMethods bs;
+            if(a instanceof AttrBootstrapMethods)
+                bs = (AttrBootstrapMethods) a;
+            else
+                data.attributes.putByName(bs = new AttrBootstrapMethods(new ByteReader(a.getRawData()), data.cp));
+
+            List<AttrBootstrapMethods.BootstrapMethod> methods = bs.methods;
+            for (int i = 0; i < methods.size(); i++) {
+                AttrBootstrapMethods.BootstrapMethod ibm = methods.get(i);
+                List<Constant> args = ibm.arguments;
+                for (int j = 0; j < args.size(); j++) {
+                    Constant cst = args.get(j);
+                    if (cst.type() == CstType.METHOD_TYPE) {
+                        CstMethodType type = (CstMethodType) cst;
+
+                        String oldCls = type.getValue().getString();
+                        String newCls = Util.transformMethodParam(classMap, oldCls);
+
+                        if (!oldCls.equals(newCls)) {
+                            if (REPLACE_DESC)
+                                type.getValue().setString(newCls);
+                            else
+                                type.setValue(data.writer.getUtf(newCls));
+                            if (DEBUG) {
+                                System.out.println("[" + data.name + "]BootstrapMethod " + i + "-" + j + ": " + oldCls + ' ' + newCls);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 泛型的UTF(几乎)不可能重复，但真碰到了我倒霉，还是放前面，至于和BSM重复？滚蛋
+        mapSignature(data.cp, data.attributes);
+
+        mapParam(ctx, data);
+
+        if(rewrite) {
+            ctx.validateSelf();
+        } else {
+            ctx.refresh();
+        }
+    }
+
+    final void mapSignature(ConstantPool pool, AttributeList list) {
+        Attribute a = (Attribute) list.getByName("Signature");
+        if(a == null) {
+            return;
+        }
+        if(a instanceof AttrUTF) {
+            AttrUTF au = (AttrUTF) a;
+
+            Signature generic = SignatureHelper.parse(au.value);
+
+            generic.rename(NAME_REMAPPER);
+
+            au.value = generic.toGeneric();
+        } else {
+            Signature generic = SignatureHelper.parse(((CstUTF) pool.array()[new ByteReader(a.getRawData()).readUnsignedShort()]).getString());
+
+            generic.rename(NAME_REMAPPER);
+
+            list.putByName(new AttrUTF(AttrUTF.SIGNATURE, generic.toGeneric()));
         }
     }
 
@@ -269,7 +304,7 @@ public final class CodeMapper extends Mapping {
                     }
                 }
 
-                mapAttribute(data.cp, method.attributes);
+                mapSignature(data.cp, method.attributes);
                 max = Math.max(transform_LVT_LVTT_ST(data, method), max);
             } else {
                 throw new IllegalArgumentException("toByteArray (rewrite) is needed");
@@ -312,7 +347,7 @@ public final class CodeMapper extends Mapping {
                 }
             }
 
-            mapAttribute(data.cp, field.attributes);
+            mapSignature(data.cp, field.attributes);
         }
 
         List<CstRef> cst = ctx.getFieldConstants();
@@ -339,6 +374,7 @@ public final class CodeMapper extends Mapping {
         cst = ctx.getMethodConstants();
         for (i = 0; i < cst.size(); i++) {
             CstRef method = cst.get(i);
+
             /**
              * 修改{@link CstRefField}方法调用
              */

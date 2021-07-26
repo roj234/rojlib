@@ -29,6 +29,7 @@ package roj.asm.util;
 import roj.asm.cst.*;
 import roj.collect.MyHashSet;
 import roj.text.TextUtil;
+import roj.util.ByteList;
 import roj.util.ByteWriter;
 
 import java.util.ArrayList;
@@ -45,6 +46,8 @@ import static roj.asm.cst.CstType.*;
  * @since 2021/5/29 17:16
  */
 public class ConstantWriter {
+    private static final boolean DEBUG = false;
+
     private final List<Constant> constants;
     private final MyHashSet<Constant> refMap;
 
@@ -57,6 +60,7 @@ public class ConstantWriter {
     private final CstNameAndType fp5 = new CstNameAndType();
 
     private int index = 1;
+    private int duplicateEntry;
 
     public ConstantWriter() {
         this.constants = new ArrayList<>(80);
@@ -68,15 +72,22 @@ public class ConstantWriter {
 
         this.constants = new ArrayList<>(cst.length);
         this.refMap = new MyHashSet<>(cst.length);
+        this.index = pool.index;
 
         for (int i = 1; i < cst.length; i++) {
             Constant c = cst[i];
-            if (c == CstDoLHolder.HOLDER) continue;
-            refMap.add(c);
+            if (c == CstTop.TOP) continue;
+            if(!refMap.add(c)) {
+                if(c != refMap.find(c)) {
+                    duplicateEntry++;
+                    c.setIndex(refMap.find(c).getIndex());
+                }
+            }
             this.constants.add(c);
         }
 
-        this.index = pool.index;
+        if(duplicateEntry > 0 && DEBUG)
+            new Throwable("Duplicate entry: " + duplicateEntry).printStackTrace();
     }
 
     void addConstant(Constant c) {
@@ -393,12 +404,11 @@ public class ConstantWriter {
                 throw new IllegalArgumentException("Unsupported type: " + c.type());
         }
 
-        Constant found = refMap.find(c);
-        if (found == c) {
+        if (!refMap.contains(c)) {
             addConstant(c);
             return c;
         } else {
-            return (T) found;
+            return (T) refMap.find(c);
         }
     }
 
@@ -413,96 +423,31 @@ public class ConstantWriter {
         }
     }
 
+    public void debugWrite() {
+        List<Constant> csts = this.constants;
+        System.out.println("ConstantWriter is " + getIndex() + " sizeReal = " + csts.size());
+        ByteWriter w = new ByteWriter(new ByteList());
+        for (int i = 0; i < csts.size(); i++) {
+            Constant cst = csts.get(i);
+            cst.write(w);
+            System.out.println("write " + cst);
+            System.out.println("  order " + i);
+            System.out.println("  content " + w.list);
+            w.list.clear();
+        }
+    }
+
     public void clump() {
 
     }
-/*
-    private static Constant copy(Constant c) {
-        switch (c.type()) {
-            case METHOD_TYPE:
-            case STRING:
-            case CLASS: {
-                CstRefUTF cz = (CstRefUTF) c;
-                CstRefUTF result = (CstRefUTF) newInst(c);
-                result.setValue(cz.getValue());
-                return result;
-            }
-            case NAME_AND_TYPE: {
-                CstNameAndType cz = (CstNameAndType) c;
-                CstNameAndType result = new CstNameAndType(0, 0);
-                result.setName(cz.getName());
-                result.setType(cz.getType());
-                return result;
-            }
-            case UTF: {
-                return new CstUTF(((CstUTF) c).getString());
-            }
-            case DOUBLE:
-            case INT:
-            case LONG:
-            case FLOAT: {
-                return newInst(c);
-            }
 
-            case PACKAGE:
-            case MODULE:
-            case FIELD:
-            case INTERFACE:
-            case METHOD: {
-                CstRef cz = (CstRef) c;
-                CstRef result = (CstRef) newInst(c);
-                result.setClazz(cz.getClazz());
-                result.desc(cz.desc());
-                return result;
-            }
-
-            case DYNAMIC:
-            case INVOKE_DYNAMIC: {
-                CstDynamic cz = (CstDynamic) c;
-                CstDynamic dyn = new CstDynamic(c.type() == INVOKE_DYNAMIC, cz.bootstrapTableIndex, 0);
-                dyn.setDesc(cz.getDesc());
-                return dyn;
-            }
-
-            case METHOD_HANDLE: {
-                CstMethodHandle cz = (CstMethodHandle) c;
-                CstMethodHandle result = new CstMethodHandle(cz.kind, 0);
-                result.setRef(cz.getRef());
-                return result;
-            }
-        }
-        throw new IllegalArgumentException();
-    }
-
-    private static Constant newInst(Constant c) {
-        switch (c.type()) {
-            case STRING:
-                return new CstString(0);
-            case METHOD_TYPE:
-                return new CstMethodType(0);
-            case CLASS:
-                return new CstClass(0);
-            case DOUBLE:
-                return new CstDouble(((CstDouble) c).value);
-            case INT:
-                return new CstInt(((CstInt) c).value);
-            case LONG:
-                return new CstLong(((CstLong) c).value);
-            case FLOAT:
-                return new CstFloat(((CstFloat) c).value);
-            case FIELD:
-                return new CstRefField(0, 0);
-            case METHOD:
-                return new CstRefMethod(0, 0);
-            case INTERFACE:
-                return new CstRefItf(0, 0);
-        }
-        throw new RuntimeException();
-    }
-*/
     @Override
     public String toString() {
         return "ConstantWriter{" + "constants[" + index + "]=" + TextUtil.prettyPrint(constants) + '}';
+    }
+
+    public int hasDuplicateEntry() {
+        return duplicateEntry;
     }
 
     public int getIndex() {

@@ -37,7 +37,7 @@ import roj.net.tcp.util.SharedConfig;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 
@@ -90,9 +90,9 @@ public class Test {
 
         HTTPResponse gzc = new CachedFileResponse(new File("E:/章节修复.txt"));
 
-        HTTPServer server = new HTTPServer(2333, 2048, new RouterImpl(new Router() {
+        HttpServer server = new HttpServer(2333, 2048, new RouterImpl(new Router() {
                     @Override
-                    public Response response(SocketChannel socket, Request request) throws IOException {
+                    public Response response(Socket socket, Request request) throws IOException {
                         Reply reply;
                         int action = request.action();
 
@@ -103,7 +103,7 @@ public class Test {
                             case "":
                                 StringBuilder sb = new StringBuilder().append("<h1>Welcome! <br> Asyncorized_MC's HTTP(S) Server</h1>");
 
-                                sb.append("欢迎您,来自").append(socket.getRemoteAddress()).append("的客人! <br/><font color='red'>第二次更新后已支持流式处理请求！</font>" +
+                                sb.append("欢迎您,来自").append(socket.getRemoteSocketAddress()).append("的客人! <br/><font color='red'>第二次更新后已支持流式处理请求！</font>" +
                                         "您访问的路径是:").append(request.host()).append(request.path()).append("<br/ >")
                                         .append(request.path())
                                         .append("<br/>HEADER:").append(request.headers()).append("<br/ >")
@@ -127,7 +127,7 @@ public class Test {
         System.out.println("Write buffer: " + SharedConfig.WRITE_MAX);
         System.out.println("UTF-8 decode buffer: " + SharedConfig.MAX_CHAR_BUFFER_CAPACITY);
         System.out.println("Native buffer: " + SharedConfig.DIRECT_CACHE_MAX);
-        System.out.println("Listening on " + server.getSocket().getLocalAddress());
+        System.out.println("Listening on " + server.getSocket().getLocalSocketAddress());
 
         server.run();
     }

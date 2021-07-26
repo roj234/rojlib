@@ -26,7 +26,7 @@
 
 package roj.reflect;
 
-import roj.util.Wrapped;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -35,20 +35,25 @@ import java.lang.reflect.Method;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/16 1:31
  */
-public class ClassDefiner extends ClassLoader {
+public final class ClassDefiner extends ClassLoader {
     private static final ClassLoader selfParent = getParentClassLoader(ClassDefiner.class);
     public static volatile ClassDefiner INSTANCE = new ClassDefiner(selfParent);
 
     private static volatile Method defineClassMethod, defineClass1Method;
 
     public static boolean debug;
+
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
 
     private ClassDefiner(ClassLoader parent) {
         super(parent);
@@ -63,7 +68,7 @@ public class ClassDefiner extends ClassLoader {
     }
 
     public Class<?> defineClassC(String name, byte[] bytes, int off, int len) throws ClassFormatError {
-        if (!debug) {
+        if (debug) {
             try (FileOutputStream fos = new FileOutputStream(new File(name + ".class"))) {
                 fos.write(bytes, off, len);
             } catch (IOException ignored) {}
@@ -99,7 +104,8 @@ public class ClassDefiner extends ClassLoader {
             return clazz;
         } catch (Exception e1) {
             e1.printStackTrace();
-            throw new Wrapped("", e);
+            Helpers.throwAny(e);
+            throw (RuntimeException) e1;
         }
     }
 

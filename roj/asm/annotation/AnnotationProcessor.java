@@ -29,7 +29,9 @@ package roj.asm.annotation;
 import roj.asm.transform.AccessTransformer;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.util.ByteWriter;
 
 import javax.annotation.Nullable;
 import javax.annotation.processing.*;
@@ -39,7 +41,6 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -52,109 +53,59 @@ import java.util.zip.ZipFile;
  * @since 2021/5/29 16:43
  */
 public class AnnotationProcessor extends AbstractProcessor implements Runnable {
-    static final List<ZipFile> openStreams = new ArrayList<>();
-    static final Map<String, Object> classMap = new MyHashMap<>();
+    protected static final List<ZipFile> openStreams = new ArrayList<>();
+    protected static final Map<String, Object> classData = new MyHashMap<>();
 
-    Messager errorReporter;
-    Filer filer;
-    final List<String> generatedFiles = new LinkedList<>();
-    String binPath;
-    final StringBuilder atOutput = new StringBuilder();
-    File atPath;
+    protected Messager reporter;
+    protected Filer filer;
+
+    List<String> generatedFiles = new ArrayList<>();
+    protected StringBuilder atData = new StringBuilder();
+    protected File atPath;
 
     public File getAtPath() {
         return atPath;
     }
 
-    public static void closeStreams() throws IOException {
-        classMap.clear();
+    public static void gc() throws IOException {
+        classData.clear();
         for (ZipFile zf : openStreams) {
             zf.close();
         }
         openStreams.clear();
     }
 
-    public void internalInit(String atPath, String cp, String binPath, boolean keepOriginal) {
-        this.binPath = binPath;
-        if (!binPath.endsWith("/"))
-            this.binPath = binPath + '/';
-
-        try {
-            this.atPath = new File(atPath);
-            File localFile = this.atPath.getParentFile();
-            if (!localFile.isDirectory() && !localFile.mkdirs()) {
-                throw new IOException("无法创建AT保存路径");
-            }
-
-            initZip(cp.replace("\r", "").replace("\n", "").split(";"));
-        } catch (IOException e) {
-            throw new IllegalArgumentException(e);
-        }
-
-        if (hook())
-            Runtime.getRuntime().addShutdownHook(new Thread(this, "PostCleaner"));
-
-        if (keepOriginal) {
-            try {
-                atOutput.append(IOUtil.readAsUTF(new FileInputStream(this.atPath)));
-            } catch (IOException e) {
-                throw new IllegalArgumentException(e);
-            }
-        }
-    }
-
     @Override
     public synchronized void init(ProcessingEnvironment env) {
-        filer = env.getFiler();
-        errorReporter = env.getMessager();
+        super.init(env);
 
-        if(binPath != null) {
-            super.init(env);
-            return;
-        }
+        filer = env.getFiler();
+        reporter = env.getMessager();
 
         Map<String, String> options = env.getOptions();
         String classPath = options.get("cp");
-        binPath = options.get("binPath");
         String atPath = options.get("tPath");
-        boolean keepOriginal = options.getOrDefault("keepOrig", "false").equalsIgnoreCase("true");
 
-        if (classPath == null || atPath == null || binPath == null)
-            throw new IllegalArgumentException("MI_ASM @OpenAny(s)注解处理程序 v1.5\n" +
-                    "请指定参数通过\n" +
-                    "   -Acp=<classpath>\n" +
-                    "   -AbinPath=<binary path>\n" +
-                    "   -AkeepOriginal=<true/false>\n" +
-                    "以及\n" +
+        if (classPath == null || atPath == null)
+            throw new IllegalArgumentException("RojASM @OpenAny注解处理程序 v2.0 beta\n" +
+                    "参数:\n" +
+                    "   -Acp=<what AT can transform>\n" +
                     "   -AtPath=<AT saving path>");
 
-        if (!binPath.endsWith("/"))
-            binPath = binPath + '/';
+        this.atPath = new File(atPath);
+        File dir = this.atPath.getParentFile();
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IllegalArgumentException("无法创建AT保存路径");
+        }
 
         try {
-            this.atPath = new File(atPath);
-            File localFile = this.atPath.getParentFile();
-            if (!localFile.isDirectory() && !localFile.mkdirs()) {
-                throw new IOException("无法创建AT保存路径");
-            }
-
-            initZip(classPath.replace("\r", "").replace("\n", "").split(";"));
+            initZip(classPath.split(File.pathSeparator));
         } catch (IOException e) {
             throw new IllegalArgumentException(e);
         }
 
-        super.init(env);
-
         if (hook())
             Runtime.getRuntime().addShutdownHook(new Thread(this, "PostCleaner"));
-
-        if (keepOriginal) {
-            try {
-                atOutput.append(IOUtil.readAsUTF(new FileInputStream(this.atPath)));
-            } catch (IOException e) {
-                throw new IllegalArgumentException(e);
-            }
-        }
     }
 
     @Override
@@ -177,15 +128,15 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
 
             if (!names.contains("$COMPILE_ONLY$")) {
                 for (String name : names) {
-                    atOutput.append("public-f ").append(className).append(' ').append(name).append('\n');
+                    atData.append("public-f ").append(className).append(' ').append(name).append('\n');
                 }
             }
-            generatedFiles.add(className + ".class");
 
             byte[] data = getBytesAndTransform(className, names);
             if (data != null) {
                 try {
                     JavaFileObject classFile = filer.createClassFile(className.replace('/', '.'));
+                    generatedFiles.add(classFile.toUri().getPath());
                     OutputStream writer = classFile.openOutputStream();
                     writer.write(data);
                     writer.flush();
@@ -199,9 +150,8 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
         }
 
         try (FileOutputStream fos = new FileOutputStream(atPath)) {
-            fos.write(atOutput.toString().getBytes(StandardCharsets.UTF_8));
-        } catch (IOException ignored) {
-        }
+            ByteWriter.encodeUTF(atData).writeToStream(fos);
+        } catch (IOException ignored) {}
         return true;
     }
 
@@ -220,11 +170,11 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
     }
 
     byte[] getBytesAndTransform(String fullClassName, Set<String> names) {
-        Object is = classMap.get(fullClassName + ".class");
+        Object is = classData.get(fullClassName + ".class");
         try {
             if (is instanceof InputStream) {
                 byte[] code = IOUtil.readFully((InputStream) is);
-                classMap.put(fullClassName + ".class", code);
+                classData.put(fullClassName + ".class", code);
                 return AccessTransformer.openSome(code, names);
             } else if (is instanceof byte[]) {
                 return AccessTransformer.openSome((byte[]) is, names);
@@ -235,12 +185,12 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
         return null;
     }
 
-    void initZip(String[] list) throws IOException {
-        if (classMap.isEmpty())
+    protected void initZip(String[] list) throws IOException {
+        if (classData.isEmpty())
             for (String s : list) initZip(new File(s));
     }
 
-    void initZip(File file) throws IOException {
+    protected void initZip(File file) throws IOException {
         if (!file.exists() || file.isDirectory() || file.length() == 0) return;
         if (file.getName().startsWith("[noread]") || !(file.getName().endsWith(".jar") || file.getName().endsWith(".zip")))
             return;
@@ -264,7 +214,7 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
             }
             if (zn.isDirectory()) continue;
             if (!zn.getName().endsWith(".class")) continue;
-            if (classMap.put(zn.getName(), zf.getInputStream(zn)) != null) {
+            if (classData.put(zn.getName(), zf.getInputStream(zn)) != null) {
                 on(Diagnostic.Kind.NOTE, "重复的类文件 " + zn.getName());
             }
         }
@@ -272,17 +222,17 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
 
     public void onError(@Nullable Element element, String text) {
         if (element == null) {
-            errorReporter.printMessage(Diagnostic.Kind.ERROR, text);
+            reporter.printMessage(Diagnostic.Kind.ERROR, text);
         } else {
-            errorReporter.printMessage(Diagnostic.Kind.ERROR, text, element);
+            reporter.printMessage(Diagnostic.Kind.ERROR, text, element);
         }
     }
 
     public void on(Diagnostic.Kind kind, String text) {
-        if(errorReporter == null) {
+        if(reporter == null) {
             System.out.println("!警告: " + text);
         } else {
-            errorReporter.printMessage(kind, text);
+            reporter.printMessage(kind, text);
         }
     }
 
@@ -312,28 +262,13 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
      */
     @Override
     public void run() {
-        for (String ss : generatedFiles) {
-            File ff = new File(binPath + ss);
-            if (!ff.delete())
-                System.err.println("无法删除文件 " + ff);
-        }
-        boolean atLeast1Deleted = true;
-        int i = 0;
-        while (atLeast1Deleted) {
-            atLeast1Deleted = false;
-            for (String ss : generatedFiles) {
-                File ff = new File(binPath + ss);
-                while ((ff = ff.getParentFile()) != null) {
-                    if (ff.isDirectory() && ff.listFiles().length == 0) {
-                        if (!ff.delete())
-                            System.err.println("无法删除目录 " + ff);
-                        atLeast1Deleted = true;
-                        i++;
-                    }
-                }
+        for (int i = 0; i < generatedFiles.size(); i++) {
+            File file = new File(generatedFiles.get(i));
+            if (file.isFile() && !file.delete()) {
+                System.err.println("无法删除文件 " + file);
             }
         }
-        System.out.println("删除了 " + i + " 个空目录");
+        FileUtil.removeEmptyPaths(generatedFiles);
     }
 
     public boolean hook() {

@@ -253,7 +253,7 @@ public class XMLParser {
                 except(wr, right_curly_bracket, ">");
             }
 
-            return new XElement(name, /*value, */attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children);
+            return new XElement(name, attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children, !needCloseTag);
         } else {
             unexpected(wr, w.val());
         }
@@ -271,9 +271,9 @@ public class XMLParser {
         switch (word.type()) {
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F:
-                return CDouble.valueOf(word.val());
+                return CDouble.valueOf(word.number().asDouble());
             case WordPresets.INTEGER:
-                return CInteger.valueOf(word.val());
+                return CInteger.valueOf(word.number().asInt());
             case WordPresets.STRING:
                 return CString.valueOf(word.val());
             case WordPresets.LITERAL:
@@ -290,7 +290,7 @@ public class XMLParser {
     }
 
     public static final class XMLexer extends Lexer {
-        static final LongBitSet XML_SPECIAL = LongBitSet.preFilled("+-<>/=?;!:");
+        static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
 
         public Set<String> noCloseTags = Collections.emptySet();
         public boolean keepAmp;
@@ -317,16 +317,14 @@ public class XMLParser {
 
             while (index < input.length()) {
                 char c = input.charAt(index++);
-                if (c == ':') {
-                    ns = true;
+                if ((!XML_SPECIAL.contains(c) || c == '-') && !WHITESPACE.contains(c)) {
+                    if (c == ':') {
+                        ns = true;
+                    }
                     temp.append(c);
                 } else {
-                    if (!XML_SPECIAL.contains(c) && !WHITESPACE.contains(c)) {
-                        temp.append(c);
-                    } else {
-                        index--;
-                        break;
-                    }
+                    index--;
+                    break;
                 }
             }
 
@@ -566,7 +564,7 @@ public class XMLParser {
         }
 
         public boolean checkCDATATag(Word w) {
-            return ((CharList) input).regionMatches(index, "![CDATA[", 0);
+            return TextUtil.regionMatches(input, index, "![CDATA[", 0);
         }
     }
 }

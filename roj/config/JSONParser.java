@@ -31,7 +31,13 @@ import roj.config.word.AbstLexer;
 import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.text.TextUtil;
+import roj.util.ByteList;
+import roj.util.ByteReader;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * JSON - JavaScript 对象表示法（JavaScript Object Notation）
@@ -53,12 +59,17 @@ public final class JSONParser {
             comma = 17,
             colon = 18;
 
-    public static void main(String[] args) throws ParseException {
-        String json = TextUtil.concat(args, ' ');
+    public static void main(String[] args) throws ParseException, IOException {
+        long t = System.currentTimeMillis();
+        String s = ByteReader.readUTF(new ByteList().readStreamArrayFully(new FileInputStream(args[0])));
+        System.out.println("读取T " + (System.currentTimeMillis() - t));
+        t = System.currentTimeMillis();
 
-        System.out.println("INPUT = " + json);
+        List<CEntry> e = parseMulti(s);
 
-        System.out.print("JSON = " + parse(json).toJSON());
+        System.out.println("解析T " + (System.currentTimeMillis() - t));
+
+        System.out.println(e);
     }
 
     public static CEntry parse(CharSequence string) throws ParseException {
@@ -70,15 +81,19 @@ public final class JSONParser {
     }
 
     public static CEntry parseIntern(CharSequence string) throws ParseException {
-        return parse(new JSONLexer() {
-            final MyHashSet<String> set = new MyHashSet<>();
+        return parse(new InternLexer().init(string), 0);
+    }
 
-            @Override
-            protected Word formClip(short id, CharSequence s) {
-                return super.formClip(id, set.intern(s.toString()));
-            }
+    public static List<CEntry> parseMulti(CharSequence string) throws ParseException {
+        return parseMulti(new InternLexer().init(string), 0);
+    }
 
-        }.init(string), 0);
+    public static List<CEntry> parseMulti(AbstLexer wr, int flag) throws ParseException {
+        List<CEntry> list = new ArrayList<>();
+        while (wr.hasNext()) {
+            list.add(jsonRead(wr, (byte) flag));
+        }
+        return list;
     }
 
     /**
@@ -191,9 +206,11 @@ public final class JSONParser {
                 return CString.valueOf(w.val());
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F:
-                return CDouble.valueOf(w.val());
+                return CDouble.valueOf(w.number().asDouble());
             case WordPresets.INTEGER:
-                return CInteger.valueOf(w.val());
+                return CInteger.valueOf(w.number().asInt());
+            case WordPresets.LONG:
+                return CLong.valueOf(w.number().asLong());
             case TRUE:
             case FALSE:
                 return CBoolean.valueOf(w.type() == TRUE);
@@ -283,5 +300,15 @@ public final class JSONParser {
 
             return formClip(id, v);
         }
+    }
+
+    private static class InternLexer extends JSONLexer {
+        final MyHashSet<String> set = new MyHashSet<>();
+
+        @Override
+        protected Word formClip(short id, CharSequence s) {
+            return super.formClip(id, set.intern(s.toString()));
+        }
+
     }
 }

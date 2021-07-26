@@ -26,8 +26,6 @@
 
 package roj.reflect;
 
-//import sun.reflect.FieldAccessor;
-
 import roj.collect.EmptyList;
 import roj.concurrent.Holder;
 import roj.concurrent.OperationDone;
@@ -42,7 +40,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -386,6 +385,31 @@ public final class ReflectionUtils {
         return classes;
     }
 
+    public static List<Class<?>> getFathersAndItfOrdered(Class<?> clazz) {
+        ArrayList<Class<?>> classes = new ArrayList<>();
+        MyList<Class<?>> pending = new MyList<>();
+        pending.add(clazz);
+
+        while (!pending.isEmpty()) {
+            int size = pending.size();
+            for (int i = 0; i < size; i++) {
+                Class<?> c = pending.get(i);
+                if(!classes.contains(c)) {
+                    classes.add(c);
+
+                    for (Class<?> itf : c.getInterfaces()) {
+                        pending.add(itf);
+                    }
+                    Class<?> s = c.getSuperclass();
+                    if(s != null)
+                        pending.add(s);
+                }
+            }
+            pending.removeRange(0, size);
+        }
+        return classes;
+    }
+
     private static final class FDA extends IFieldAccessor {
         public FDA(Field field) {
             super(field);
@@ -559,6 +583,15 @@ public final class ReflectionUtils {
             } catch (IllegalAccessException e) {
                 throw OperationDone.NEVER;
             }
+        }
+    }
+
+    private static class MyList<T> extends ArrayList<T> {
+        static final long serialVersionUID = 1;
+
+        @Override
+        public void removeRange(int fromIndex, int toIndex) {
+            super.removeRange(fromIndex, toIndex);
         }
     }
 }

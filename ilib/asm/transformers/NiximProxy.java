@@ -34,8 +34,8 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
 import roj.asm.nixim.NiximTransformer;
-import roj.asm.struct.Method;
-import roj.asm.struct.insn.*;
+import roj.asm.tree.Method;
+import roj.asm.tree.insn.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
@@ -49,7 +49,8 @@ import java.util.List;
 import java.util.Map;
 
 import static roj.asm.Opcodes.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

@@ -51,11 +51,12 @@ public enum OS {
     }
 
     private static OS getOS() {
-        if (System.getProperty("os.name").toLowerCase().startsWith("windows"))
+        String property = System.getProperty("os.name");
+        if (property.toLowerCase().startsWith("windows"))
             return WINDOWS;
-        if (System.getProperty("os.name").toLowerCase().startsWith("mac"))
+        if (property.toLowerCase().startsWith("mac"))
             return MAC_OS;
-        switch (System.getProperty("os.name")) {
+        switch (property) {
             case "Solaris":
             case "SunOS":
             case "MPC/iX":

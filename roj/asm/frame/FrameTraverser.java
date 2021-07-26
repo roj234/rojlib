@@ -29,7 +29,7 @@ package roj.asm.frame;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstType;
-import roj.asm.struct.insn.*;
+import roj.asm.tree.insn.*;
 import roj.asm.type.NativeType;
 import roj.asm.type.Type;
 import roj.asm.util.ExceptionEntry;

@@ -26,7 +26,7 @@
 package roj.kscript.parser.expr;
 
 import roj.asm.Opcodes;
-import roj.asm.struct.insn.*;
+import roj.asm.tree.insn.*;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.kscript.Arguments;

@@ -71,7 +71,7 @@ public abstract class CEntry {
         throw new ClassCastException(getType() + " unable cast to 'list'");
     }
 
-    public boolean asBoolean() {
+    public boolean asBool() {
         throw new ClassCastException(getType() + " unable cast to 'boolean'");
     }
 
@@ -100,6 +100,10 @@ public abstract class CEntry {
 
     public final String toShortJSON() {
         return toJSON(new StringBuilder(), -9999999).toString();
+    }
+
+    public boolean equalsTo(CEntry entry) {
+        return equals(entry);
     }
 
     protected static String addSlash(String key) {

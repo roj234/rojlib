@@ -70,17 +70,18 @@ class Helper1_16 {
             }
         } finally {
             ZipUtil.close(zos);
+            tmpFile.deleteOnExit();
         }
 
-        CmdUtil.info("开始启动SpecialSource");
-        CmdUtil.warning("由于未知原因, 一定会有补丁出错, 会影响你的开发，如果你觉得不爽请打forge");
-
         ZipFile zipFile = new ZipFile(mcpConfigFile);
-        ZipEntry ze = zipFile.getEntry("projectConfig/joined.tsrg");
+        ZipEntry ze = zipFile.getEntry("config/joined.tsrg");
         if (ze == null)
             throw new RuntimeException("MCP Config 文件有误");
 
         double start = System.currentTimeMillis();
+
+        CmdUtil.info("开始启动SpecialSource");
+        CmdUtil.warning("由于未知原因, 一定会有补丁出错, 会影响你的开发，如果你觉得不爽请打forge");
 
         JarMapping jarMapping = new JarMapping();
         BufferedReader reader = new BufferedReader(new InputStreamReader(zipFile.getInputStream(ze)));
@@ -100,9 +101,7 @@ class Helper1_16 {
         jarRemapper.remapJar(jar, serverDest);
 
         jar.close();
-        if(!tmpFile.delete()) {
-            tmpFile.deleteOnExit();
-        }
+        tmpFile.delete();
 
         double last = System.currentTimeMillis();
 

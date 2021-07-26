@@ -66,7 +66,7 @@ public final class NonblockingUtil {
             socketChFD = DirectFieldAccess.get(Class.forName("sun.nio.ch.SocketChannelImpl"), "fd");
             fileFD = DirectFieldAccess.get(FileChannelImpl.class, "fd");
 
-            blockConf = DirectMethodAccess.getStatic(AI1.class, "configureBlocking", IOUtil.class, "configureBlocking");
+            blockConf = DirectMethodAccess.getStatic(AI1.class, "configureBlocking", sun.nio.ch.IOUtil.class, "configureBlocking");
 
             String[] ss1 = new String[]{
                     "read", "readv", "write", "writev", "preClose", "close"
@@ -282,7 +282,7 @@ public final class NonblockingUtil {
 
     public static FileDescriptor fd(SocketChannel socket) {
         socketChFD.setInstance(socket);
-        FileDescriptor fd = (FileDescriptor) socketFD.getObject();
+        FileDescriptor fd = (FileDescriptor) socketChFD.getObject();
         socketChFD.clearInstance();
 
         return fd;
@@ -303,14 +303,18 @@ public final class NonblockingUtil {
         snd.close(fd);
     }
 
+    static boolean supportSF = true;
     public static long transferInto(FileChannel fc, long pos, long len, FileDescriptor target, boolean socket) throws IOException {
-        long got = NonblockingUtil.transferInto_sendfile(fc, pos, len, target);
-
-        if (got == UNSUPPORTED_CASE) {
-            // todo cache
-            return NonblockingUtil.transferInto_mmap(fc, pos, len, target, 4 | (socket ? 1 : 0));
+        long got;
+        if(supportSF) {
+            got = NonblockingUtil.transferInto_sendfile(fc, pos, len, target);
+            if (got == UNSUPPORTED_CASE) {
+                supportSF = false;
+            } else {
+                return got;
+            }
         }
-        return got;
+        return NonblockingUtil.transferInto_mmap(fc, pos, len, target, 4 | (socket ? 1 : 0));
     }
 
     public static long transferInto_mmap(FileChannel fc, long pos, long len, FileDescriptor target, int flag) throws IOException {

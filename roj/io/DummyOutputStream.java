@@ -38,11 +38,16 @@ import java.io.OutputStream;
 public final class DummyOutputStream extends OutputStream {
     public static final DummyOutputStream INSTANCE = new DummyOutputStream();
 
-    @Deprecated
+    public int wrote;
+
     public DummyOutputStream() {}
 
     @Override
-    public void write(int i) {}
+    public void write(int i) {
+        wrote++;
+    }
 
-    public void write(@Nonnull byte[] var1, int var2, int var3) {}
+    public void write(@Nonnull byte[] arr, int off, int len) {
+        wrote += len;
+    }
 }

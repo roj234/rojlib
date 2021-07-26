@@ -27,10 +27,8 @@ package roj.asm.mapper.util;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrBootstrapMethods;
+import roj.asm.tree.ConstantData;
 import roj.concurrent.Holder;
-import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -57,7 +55,6 @@ public class Context implements Holder<ByteList> {
     private ByteList result;
 
     private final ArrayList<Constant>[] typedTmp = Helpers.cast(new ArrayList<?>[4]);
-    public AttrBootstrapMethods bsmCache;
 
     public Context(String name, Object o) {
         this.name = name;
@@ -70,15 +67,16 @@ public class Context implements Holder<ByteList> {
             if(stream != null) {
                 bytes = read0(stream);
                 stream = null;
-            } else {
+            } else if(result != null) {
                 bytes = this.result;
                 this.result = null;
-            }
+            } else
+                throw new IllegalStateException(getName() + " 没有数据");
             ConstantData data;
             try {
                 data = Parser.parseConstants(bytes);
             } catch (Throwable e) {
-                final File file = new File("ctx_" + (hashCode() ^ System.currentTimeMillis()) + ".err");
+                final File file = new File("ctx_" + name);
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     bytes.writeToStream(fos);
                 } catch (IOException ignored) {}
@@ -93,12 +91,14 @@ public class Context implements Holder<ByteList> {
     private static ByteList read0(Object o) {
         if(o instanceof InputStream) {
             try (InputStream in = (InputStream) o) {
-                return new ByteList(IOUtil.readFully(in));
+                return new ByteList().readStreamArrayFully(in);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else if (o instanceof ByteList) {
             return (ByteList) o;
+        } else if (o instanceof byte[]) {
+            return new ByteList((byte[]) o);
         }
         throw new ClassCastException(o.getClass().getName());
     }
@@ -155,7 +155,12 @@ public class Context implements Holder<ByteList> {
     public ByteList get() {
         if(this.result == null) {
             if(this.data != null) {
-                this.result = data.getBytes();
+                try {
+                    data.verify();
+                    this.result = data.getBytes();
+                } catch (Throwable e) {
+                    throw new IllegalArgumentException(name + " 写入失败", e);
+                }
                 clearData();
             } else {
                 this.result = read0(stream);
@@ -176,11 +181,6 @@ public class Context implements Holder<ByteList> {
     @Override
     public void set(ByteList bytes) {
         this.result = bytes;
-        clearData();
-    }
-
-    public void reset() {
-        this.result = data.getBytes();
         clearData();
     }
 
@@ -214,8 +214,6 @@ public class Context implements Holder<ByteList> {
             }
         }
         getName();
-        //Util.ThreadBasedCache.remove();
-        //initCache();
     }
 
     public String getName() {
@@ -228,9 +226,17 @@ public class Context implements Holder<ByteList> {
     }
 
     public void validateSelf() {
-        getData();
-        Parser.parse(get(), 0);
-        getData();
-        get();
+        try {
+            getData();
+            Parser.parse(get(), 0).getBytes(new ByteList(), result);
+            getData();
+        } catch (Throwable e) {
+            try {
+                try (FileOutputStream fos = new FileOutputStream(getName().replace('/', '_'))) {
+                    get().writeToStream(fos);
+                }
+            } catch (Throwable ignored) {}
+            throw e;
+        }
     }
 }

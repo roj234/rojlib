@@ -257,11 +257,11 @@ public class SignatureHelper {
         if (!isSubClass) {
             switch (s.charAt(i)) {
                 case '+':
-                    subClass = Generic.TYPE_EXTENDS;
+                    subClass = Generic.EX_EXTENDS;
                     i++;
                     break;
                 case '-':
-                    subClass = Generic.TYPE_SUPERS;
+                    subClass = Generic.EX_SUPERS;
                     i++;
                     break;
                 case '[':
@@ -280,17 +280,17 @@ public class SignatureHelper {
 
             switch (c) {
                 case '*': {
-                    Generic value = new Generic(Generic.CLASS, "*", arrayLevel, subClass);
+                    Generic value = new Generic(Generic.TYPE_CLASS, "*", arrayLevel, subClass);
                     return new Object[]{value, i + 1};
                 }
                 case 'T':
-                    cat = Generic.TYPE_PARAM;
+                    cat = Generic.TYPE_TYPE_PARAM;
                     break;
                 case 'L':
-                    cat = Generic.CLASS;
+                    cat = Generic.TYPE_CLASS;
                     break;
                 case ':':
-                    cat = Generic.INTERFACE;
+                    cat = Generic.TYPE_INTERFACE;
                     if (checkItf) {
                         if (s.charAt(++i) == 'L')
                             break;
@@ -300,7 +300,7 @@ public class SignatureHelper {
             }
             i++;
         } else {
-            cat = Generic.SUB_CLASS;
+            cat = Generic.TYPE_SUB_CLASS;
         }
 
         boolean shouldFindNext = false;

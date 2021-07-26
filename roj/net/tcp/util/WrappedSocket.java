@@ -29,7 +29,7 @@ import roj.util.ByteList;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 
 /**
  * These methods may seem unnecessary but they are
@@ -39,7 +39,7 @@ import java.nio.channels.SocketChannel;
  * @since 2020/11/29 15:33
  */
 public interface WrappedSocket extends AutoCloseable {
-    SocketChannel socket();
+    Socket socket();
 
     /**
      * @return true if successful.

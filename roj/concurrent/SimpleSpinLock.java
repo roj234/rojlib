@@ -1,6 +1,7 @@
 package roj.concurrent;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * This file is a part of MI <br>
@@ -12,23 +13,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SimpleSpinLock {
     AtomicInteger lock = new AtomicInteger();
 
-    public int enqueueReadLock() throws InterruptedException {
+    public int enqueueReadLock() {
         if (lock.get() < 0) {
             Thread.yield();
             while (lock.get() < 0)
-                Thread.sleep(5);
-        }
-        return lock.getAndIncrement();
-    }
-
-    public int enqueueReadLockUI() {
-        if (lock.get() < 0) {
-            Thread.yield();
-            while (lock.get() < 0) {
-                try {
-                    Thread.sleep(5);
-                } catch (InterruptedException ignored) {}
-            }
+                LockSupport.parkNanos(10);
         }
         return lock.getAndIncrement();
     }
@@ -39,20 +28,12 @@ public class SimpleSpinLock {
         lock.getAndDecrement();
     }
 
-    public void enqueueWriteLock() throws InterruptedException {
+    public void enqueueWriteLock() {
         waitCas(lock, 0, -1);
     }
 
-    public void enqueueWriteLock(int lockId) throws InterruptedException {
+    public void enqueueWriteLock(int lockId) {
         waitCas(lock, 0, lockId);
-    }
-
-    public void enqueueWriteLockUI() {
-        waitCasUI(lock, 0, -1);
-    }
-
-    public void enqueueWriteLockUI(int lockId) {
-        waitCasUI(lock, 0, lockId);
     }
 
     public void releaseWriteLock() {
@@ -65,21 +46,15 @@ public class SimpleSpinLock {
             throw new IllegalStateException("Not locked");
     }
 
-    private static void waitCas(AtomicInteger lock, int from, int to) throws InterruptedException {
+    private static void waitCas(AtomicInteger lock, int from, int to) {
         while (!lock.compareAndSet(from, to)) {
             Thread.yield();
             if (lock.compareAndSet(from, to)) break;
-            Thread.sleep(5);
+            LockSupport.parkNanos(10);
         }
     }
 
-    private static void waitCasUI(AtomicInteger lock, int from, int to) {
-        while (!lock.compareAndSet(from, to)) {
-            Thread.yield();
-            if (lock.compareAndSet(from, to)) break;
-            try {
-                Thread.sleep(5);
-            } catch (InterruptedException ignored) {}
-        }
+    public void release() {
+        lock.set(0);
     }
 }

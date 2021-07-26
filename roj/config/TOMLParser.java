@@ -132,7 +132,7 @@ public class TOMLParser {
     }
 
     private static final class YAMLLexer extends Lexer {
-        static final IBitSet SPECIAL = LongBitSet.preFilled("+-\\/*()!~`#^&,<>.?\"':;|[]");
+        static final IBitSet SPECIAL = LongBitSet.from("+-\\/*()!~`#^&,<>.?\"':;|[]");
 
         boolean comment;
 

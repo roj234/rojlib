@@ -35,7 +35,8 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.function.UnaryOperator;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -43,13 +44,14 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public class Generic implements IType {
-    public static final byte TYPE_PARAM = 0,
-            INTERFACE = 1,
-            CLASS = 2,
-            SUB_CLASS = 3,
+    public static final byte TYPE_TYPE_PARAM = 0,
+            TYPE_INTERFACE = 1,
+            TYPE_CLASS = 2,
+            TYPE_SUB_CLASS = 3,
 
-    TYPE_SUPERS = 1,
-            TYPE_EXTENDS = -1;
+            EX_NONE = 0,
+            EX_SUPERS = 1,
+            EX_EXTENDS = -1;
 
     public final byte type;
     @Nonnull
@@ -103,26 +105,26 @@ public class Generic implements IType {
     }
 
     private char[] getCatDesc() {
-        if (type == SUB_CLASS)
+        if (type == TYPE_SUB_CLASS)
             return new char[]{'.'};
-        int arrLen = array + 1 + (this.type == INTERFACE ? 1 : 0) + (extendType != 0 ? 1 : 0);
+        int arrLen = array + 1 + (this.type == TYPE_INTERFACE ? 1 : 0) + (extendType != 0 ? 1 : 0);
         char[] chars = new char[arrLen];
 
         int i = 0;
         if (extendType != 0)
             chars[i++] = getClassMark();
-        if (type == INTERFACE)
+        if (type == TYPE_INTERFACE)
             chars[i++] = ':';
         for (; i < arrLen - 1; i++) {
             chars[i] = '[';
         }
 
         switch (type) {
-            case CLASS:
-            case INTERFACE:
+            case TYPE_CLASS:
+            case TYPE_INTERFACE:
                 chars[arrLen - 1] = 'L';
                 return chars;
-            case TYPE_PARAM:
+            case TYPE_TYPE_PARAM:
                 chars[arrLen - 1] = 'T';
                 return chars;
         }
@@ -131,16 +133,16 @@ public class Generic implements IType {
 
     private char getClassMark() {
         switch (extendType) {
-            case TYPE_SUPERS:
+            case EX_SUPERS:
                 return '-';
-            case TYPE_EXTENDS:
+            case EX_EXTENDS:
                 return '+';
         }
         throw new IllegalArgumentException("classType");
     }
 
     protected void rename(UnaryOperator<String> renameFunction) {
-        if (type != TYPE_PARAM & type != SUB_CLASS)
+        if (type != TYPE_TYPE_PARAM & type != TYPE_SUB_CLASS)
             owner = renameFunction.apply(owner);
         if (subClass != null) {
             String tmp = renameFunction.apply(owner + '$' + subClass.owner);
@@ -156,7 +158,7 @@ public class Generic implements IType {
     }
 
     @Override
-    public boolean isGeneric() {
+    public boolean isRootGeneric() {
         return false;
     }
 
@@ -167,10 +169,10 @@ public class Generic implements IType {
 
     public void appendString(CharList sb) {
         switch (extendType) {
-            case TYPE_SUPERS:
+            case EX_SUPERS:
                 sb.append("? supers ");
                 break;
-            case TYPE_EXTENDS:
+            case EX_EXTENDS:
                 sb.append("? extends ");
                 break;
         }

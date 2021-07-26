@@ -25,14 +25,14 @@
  */
 package roj.asm.util;
 
-import roj.collect.IBitSet;
+import roj.text.CharList;
 
 import javax.annotation.Nonnull;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
+ * Access flag list
  *
  * @author Roj234
  * @version 0.1
@@ -41,31 +41,27 @@ import java.util.PrimitiveIterator;
 public class FlagList implements Iterable<Integer> {
     public short flag;
 
+    public FlagList() {}
+
     public FlagList(int flag) {
         this.flag = (short) flag;
-    }
-
-    public FlagList(short... flags) {
-        for (short flag : flags) {
-            this.flag |= flag;
-        }
     }
 
     public boolean isEmpty() {
         return flag == 0;
     }
 
-    public boolean has(int o) {
+    public boolean hasAny(int o) {
         return (this.flag & o) != 0;
     }
 
-    public boolean contains(int o) {
+    public boolean hasAll(int o) {
         return (this.flag & o) == o;
     }
 
     @Nonnull
     public PrimitiveIterator.OfInt iterator() {
-        return new FlagIterator();
+        return new FlagIterator(this);
     }
 
     public void add(int flag) {
@@ -94,8 +90,13 @@ public class FlagList implements Iterable<Integer> {
         return sb.deleteCharAt(sb.length() - 1).toString();
     }
 
-    public class FlagIterator implements PrimitiveIterator.OfInt {
+    public static class FlagIterator implements PrimitiveIterator.OfInt {
         private byte pos;
+        private final FlagList fl;
+
+        public FlagIterator(FlagList fl) {
+            this.fl = fl;
+        }
 
         @Override
         public boolean hasNext() {
@@ -113,7 +114,7 @@ public class FlagList implements Iterable<Integer> {
         private boolean checkNext() {
             if (pos >= 16)
                 return false;
-            while (!IBitSet.isBitTrue(FlagList.this.flag, pos)) {
+            while ((fl.flag & (1 << pos)) == 0) {
                 if (++pos >= 16)
                     return false;
             }
@@ -122,20 +123,39 @@ public class FlagList implements Iterable<Integer> {
 
         @Override
         public void remove() {
-            FlagList.this.flag |= ~(1 << pos);
+            fl.flag |= ~(1 << pos);
         }
     }
 
     @Override
     public String toString() {
-        return "Flag{" + getFlag() + '}';
+        return "[" + getFlag() + ']';
+    }
+
+    public static final String[] ALL_ACC_STRING = new String[]{
+            "public", "private", "protected", "static", "final", "synchronized", "bridge", "varargs", "native", "interface", "abstract", "strictfp", "synthetic", "annotation", "enum", "module"
+    };
+
+    public static String get(int val, String[] strings) {
+        for (int i = 0; i < 16; i++) {
+            if (val == 1 << i) {
+                String s = strings[i];
+                if (s == null) {
+                    break;
+                }
+                return s;
+            }
+        }
+        return Integer.toString(val);
     }
 
     private String getFlag() {
-        StringBuilder sb = new StringBuilder();
+        CharList sb = new CharList();
         for (PrimitiveIterator.OfInt itr = this.iterator(); itr.hasNext(); ) {
-            sb.append(AccessFlag.byIdField(itr.nextInt())).append(' ');
+            sb.append(get(itr.nextInt(), ALL_ACC_STRING)).append(' ');
         }
+        if(sb.length() > 0)
+            sb.setIndex(sb.length() - 1);
         return sb.toString();
     }
 }

@@ -41,7 +41,7 @@ public final class CalculateTask<T> extends AbstractCalcTask<T> {
         try {
             this.out = supplier.call();
         } catch (Throwable e) {
-            exception = new ExecutionException(e);
+            exception = (ExecutionException) new ExecutionException(e).initCause(e);
         }
         executing = false;
 

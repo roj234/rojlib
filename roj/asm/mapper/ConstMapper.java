@@ -31,12 +31,12 @@ import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.FirstCollection;
 import roj.asm.mapper.util.FlDesc;
 import roj.asm.mapper.util.MtDesc;
-import roj.asm.struct.AccessData;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrBootstrapMethods;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.AccessData;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.AttrBootstrapMethods;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
@@ -49,13 +49,14 @@ import roj.io.ZipUtil;
 import roj.text.CharList;
 import roj.text.StringPool;
 import roj.ui.CmdUtil;
+import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.*;
+import java.nio.file.NotDirectoryException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -71,9 +72,6 @@ import java.util.function.IntFunction;
 public final class ConstMapper extends Mapping {
     public static final int FILE_HEADER = 0xf0E72cEb;
 
-    // todo 多线程
-    private static final boolean CONCURRENT = false;
-
     /**
      * 重新写入ConstantData
      * 刷新常量池
@@ -81,17 +79,16 @@ public final class ConstMapper extends Mapping {
      * Skip bin fields remap
      */
     public static final boolean
-            DEBUG = System.getProperty("fmd.debugRemap", "f").charAt(0) == 't',
-            REFRESH = false,
+            DEBUG = System.getProperty("roj.constMapper.debug", "f").charAt(0) == 't',
             SKIP_BIN_FIELDS = true,
-            NO_FIELD_INHERIT = System.getProperty("fmd.noFieldInherit", "f").charAt(0) == 't';
+            NO_FIELD_INHERIT = System.getProperty("roj.constMapper.noFieldInherit", "f").charAt(0) == 't';
     
     /**
      * Library data
      */
     MyHashSet<FlDesc> libSkipFields = new MyHashSet<>();
     MyHashSet<MtDesc> libSkipMethods = new MyHashSet<>();
-    MyHashMap<String, Collection<String>> libSupers;
+    MyHashMap<String, List<String>> libSupers;
 
     /**
      * Self(Input) data
@@ -99,7 +96,9 @@ public final class ConstMapper extends Mapping {
     FindMap<MtDesc, String> selfMethods;
     FindSet<FlDesc> selfSkipFields;
     FindSet<MtDesc> selfSkipMethods;
-    Map<String, Collection<String>> selfSupers;
+    Map<String, List<String>> selfSupers;
+
+    public boolean isMappingForLibraries = true;
 
     public ConstMapper() {
         libSupers = new MyHashMap<>(128);
@@ -141,16 +140,16 @@ public final class ConstMapper extends Mapping {
         MyHashMap<FlDesc, String> fieldMap1 = new MyHashMap<>(this.fieldMap.size());
         for (Map.Entry<FlDesc, String> entry : fieldMap.entrySet()) {
             FlDesc desc = entry.getKey();
-            FlDesc target = new FlDesc(entry.getValue(), desc.owner, desc.flags);
-            fieldMap1.put(target, entry.getValue());
+            FlDesc target = new FlDesc(desc.owner, entry.getValue(), desc.flags);
+            fieldMap1.put(target, desc.name);
         }
         this.fieldMap = fieldMap1;
 
         MyHashMap<MtDesc, String> methodMap1 = new MyHashMap<>(this.methodMap.size());
         for (Map.Entry<MtDesc, String> entry : methodMap.entrySet()) {
             MtDesc desc = entry.getKey();
-            MtDesc target = new MtDesc(entry.getValue(), desc.owner, Util.transformMethodParam(classMap, desc.param), desc.flags);
-            methodMap1.put(target, entry.getValue());
+            MtDesc target = new MtDesc(desc.owner, entry.getValue(), Util.transformMethodParam(classMap, desc.param), desc.flags);
+            methodMap1.put(target, desc.name);
         }
         this.methodMap = methodMap1;
     }
@@ -193,10 +192,10 @@ public final class ConstMapper extends Mapping {
         w.writeInt(FILE_HEADER);
 
         w.writeVarInt(libSupers.size(), false);
-        for (Map.Entry<String, Collection<String>> s : libSupers.entrySet()) {
+        for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
             pool.writeString(w, s.getKey());
 
-            Collection<String> list = s.getValue();
+            List<String> list = s.getValue();
             w.writeVarInt(list.size(), false);
             for (String c : list) {
                 pool.writeString(w, c);
@@ -217,7 +216,7 @@ public final class ConstMapper extends Mapping {
                     s.name), s.param);
         }
 
-        globalWriter.writeLong(hash);
+        globalWriter.writeInt(FILE_HEADER).writeLong(hash);
         pool.writePool(globalWriter);
         globalWriter.writeBytes(w);
 
@@ -227,17 +226,19 @@ public final class ConstMapper extends Mapping {
         }
     }
 
-    private void readCache(long hash, File cache) throws IOException {
+    private boolean readCache(long hash, File cache) throws IOException {
         if(cache.length() == 0) throw new FileNotFoundException();
         ByteReader r;
         try (FileInputStream fis = new FileInputStream(cache)) {
             r = new ByteReader(IOUtil.readFully(fis));
         }
 
-        IntMap<FlagList> flagCache = new IntMap<>();
+        CharMap<FlagList> flagCache = new CharMap<>();
 
-        if(r.readLong() != hash)
-            throw new IllegalArgumentException("缓存过期");
+        if(r.readInt() != FILE_HEADER)
+            throw new IllegalArgumentException("file header");
+
+        boolean readClassInheritanceMap = r.readLong() == hash;
 
         int len;
         StringPool pool = new StringPool(r);
@@ -253,7 +254,7 @@ public final class ConstMapper extends Mapping {
         len = r.readVarInt(false);
         fieldMap.ensureCapacity(len);
         for (int i = 0; i < len; i++) {
-            fieldMap.put(new FlDesc(pool.readString(r), pool.readString(r), flagCache.computeIfAbsent(r.readShort(), fl)), pool.readString(r));
+            fieldMap.put(new FlDesc(pool.readString(r), pool.readString(r), flagCache.computeIfAbsent((char) r.readShort(), fl)), pool.readString(r));
         }
         if(r.readInt() != FILE_HEADER)
             throw new IllegalArgumentException("field map");
@@ -261,10 +262,13 @@ public final class ConstMapper extends Mapping {
         len = r.readVarInt(false);
         methodMap.ensureCapacity(len);
         for (int i = 0; i < len; i++) {
-            methodMap.put(new MtDesc(pool.readString(r), pool.readString(r), pool.readString(r), flagCache.computeIfAbsent(r.readShort(), fl)), pool.readString(r));
+            methodMap.put(new MtDesc(pool.readString(r), pool.readString(r), pool.readString(r), flagCache.computeIfAbsent((char) r.readShort(), fl)), pool.readString(r));
         }
         if(r.readInt() != FILE_HEADER)
             throw new IllegalArgumentException("method map");
+
+        if(!readClassInheritanceMap)
+            return false;
 
         len = r.readVarInt(false);
         for (int i = 0; i < len; i++) {
@@ -293,6 +297,8 @@ public final class ConstMapper extends Mapping {
         for (int i = 0; i < len; i++) {
             libSkipMethods.add(new MtDesc(pool.readString(r), pool.readString(r), pool.readString(r)));
         }
+
+        return true;
     }
     static final IntFunction<FlagList> fl = FlagList::new;
 
@@ -301,14 +307,6 @@ public final class ConstMapper extends Mapping {
     /**
      * Remap
      */
-    public List<Context> remap(@Nonnull Map<String, InputStream> classes, boolean singleThread) {
-        List<Context> arr = Util.prepareContexts(classes);
-
-        remap(singleThread, arr);
-
-        return arr;
-    }
-
     public void remap(boolean singleThread, List<Context> arr) {
         if(selfSupers != null) {
             selfSkipFields.clear();
@@ -317,7 +315,7 @@ public final class ConstMapper extends Mapping {
             selfMethods.clear();
         }
 
-        if(singleThread || arr.size() < 50 * Util.CPU || !CONCURRENT) {
+        if(singleThread || arr.size() < 50 * Util.CPU) {
             selfSkipFields = new MyHashSet<>(libSkipFields);
             selfSkipMethods = new MyHashSet<>(libSkipMethods);
             selfSupers = new MyHashMap<>(arr.size());
@@ -342,7 +340,7 @@ public final class ConstMapper extends Mapping {
                 }
 
             } catch (Throwable e) {
-                throw new RuntimeException("At parsing " + curr.getName(), e);
+                throw new RuntimeException("At parsing " + curr, e);
             }
         } else {
             selfSkipFields = new ConcurrentFindHashSet<>(libSkipFields);
@@ -350,7 +348,7 @@ public final class ConstMapper extends Mapping {
             selfSupers = new ConcurrentHashMap<>(arr.size());
             selfMethods = new ConcurrentFindHashMap<>();
 
-            System.out.println("警告: ConcurrentFindSet/Map还处于试验阶段!");
+            System.out.println("[ConstMapper.Warn]: ConcurrentFindX正处于试验阶段, 有问题请及时报告!");
 
             List<List<Context>> splatted = new ArrayList<>();
             List<Context> tmp = new ArrayList<>();
@@ -374,13 +372,13 @@ public final class ConstMapper extends Mapping {
                 }
             }
 
-            Util.waitfor("RV2WorkerP", this::parse, splatted);
+            Util.concurrent("RV2WorkerP", this::parse, splatted);
 
             initSelfSuperMap();
 
-            Util.waitfor("RV2WorkerR", this::mapSelf, splatted);
+            Util.concurrent("RV2WorkerR", this::mapSelf, splatted);
 
-            Util.waitfor("RV2WorkerW", this::mapConstant, splatted);
+            Util.concurrent("RV2WorkerW", this::mapConstant, splatted);
         }
     }
 
@@ -410,7 +408,7 @@ public final class ConstMapper extends Mapping {
             }
 
         } catch (Throwable e) {
-            throw new RuntimeException("At parsing " + curr.getName(), e);
+            throw new RuntimeException("At parsing " + curr, e);
         }
     }
 
@@ -424,19 +422,46 @@ public final class ConstMapper extends Mapping {
     }
 
     public State snapshot() {
+        if(selfSupers == null)
+            throw new IllegalStateException();
         State state = new State();
-        state.selfSupers = state.selfSupers.getClass() == MyHashMap.class ? new MyHashMap<>(selfSupers) : new ConcurrentHashMap<>(selfSupers);
+        state.selfSupers.putAll(selfSupers);
+        return state;
+    }
+
+    public State snapshot(State state) {
+        if(state == null) {
+            state = new State();
+        }
+
+        if(selfSupers == null)
+            throw new IllegalStateException();
+        if(selfSupers.getClass() == MyHashMap.class) {
+            state.selfSupers.copyFrom((MyHashMap<String, List<String>>) this.selfSupers);
+        } else {
+            state.selfSupers.clear();
+            state.selfSupers.putAll(selfSupers);
+        }
         return state;
     }
 
     public void state(State state) {
-        selfSupers = state.selfSupers.getClass() == MyHashMap.class ? new MyHashMap<>(state.selfSupers) : new ConcurrentHashMap<>(state.selfSupers);
+        if(selfSupers != null) {
+            selfSupers.clear();
+            selfSupers.putAll(state.selfSupers);
+        } else {
+            selfSupers = new MyHashMap<>(state.selfSupers);
+        }
+    }
+
+    public void addPermanently(State state) {
+        libSupers.putAll(state.selfSupers);
     }
 
     /**
      * Step 1
      */
-    private void parse(Context c) {
+    void parse(Context c) {
         ConstantData data = c.getData();
 
         ArrayList<String> list = new ArrayList<>();
@@ -452,7 +477,8 @@ public final class ConstMapper extends Mapping {
                 int s = name.lastIndexOf('/') + 1;
                 int e = name.length() - "_NMR$FAKEIMPL".length();
                 name = new CharList(e - s + 1).append(name, s, e - s).replace('_', '/').toString();
-                System.out.println("[NMR继承] " + data.name + " <= " + name);
+                if(DEBUG)
+                    System.out.println("[NMR继承] " + data.name + " <= " + name);
             }
             list.add(name);
         }
@@ -467,7 +493,7 @@ public final class ConstMapper extends Mapping {
     /**
      * 这个一定要有严格的顺序
      */
-    private Collection<String> resolveParentShared(String name) {
+    Collection<String> resolveParentShared(String name) {
         return Util.shareFC(name, selfSupers.getOrDefault(name, Collections.emptyList()));
     }
 
@@ -510,7 +536,7 @@ public final class ConstMapper extends Mapping {
 
         for (int i = 0; i < methods.size(); i++) {
             MethodSimple method = methods.get(i);
-            if (method.accesses.has(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
+            if (method.accesses.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
                 if (!classMap.containsKey(data.name))
                     selfSkipMethods.add(new MtDesc(data.name, method.name.getString(), method.type.getString()));
                 continue;
@@ -527,13 +553,13 @@ public final class ConstMapper extends Mapping {
                 Map.Entry<MtDesc, String> entry = methodMap.find(sp);
                 if (entry != null) {
                     FlagList flags = entry.getKey().flags;
-                    if (flags.has(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
+                    if (flags.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
                         sp.owner = data.name;
                         selfSkipMethods.add(sp.copy());
                         if (DEBUG) {
                             System.out.println("[2M-" + data.name + "-ST/PR]: " + sp.name + sp.param);
                         }
-                    } else if (flags.has(AccessFlag.PUBLIC | AccessFlag.PROTECTED)) {
+                    } else if (flags.hasAny(AccessFlag.PUBLIC | AccessFlag.PROTECTED)) {
                         // can inherit
                         String newName = entry.getValue();
                         method.name = data.writer.getUtf(newName);
@@ -542,7 +568,7 @@ public final class ConstMapper extends Mapping {
                         if (DEBUG)
                             System.out.println("[2M-" + data.name + "]: " + sp.name + sp.param + " => " + newName);
                     } else { // may extend
-                        if (Util.isPackageSame(data.name, parent)) {
+                        if (Util.arePackagesSame(data.name, parent)) {
                             String newName = entry.getValue();
                             method.name = data.writer.getUtf(newName);
                             sp.owner = data.name;
@@ -575,7 +601,7 @@ public final class ConstMapper extends Mapping {
         out:
         for (int i = 0; i < fields.size(); i++) {
             FieldSimple field = fields.get(i);
-            if (field.accesses.has(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
+            if (field.accesses.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
                 selfSkipFields.add(new FlDesc(data.name, field.name.getString()));
                 // 自己覆盖别人的成了static，注：这个情况确实可以跳过，如果有继承的非static方法是不能通过编译的
                 continue;
@@ -620,8 +646,16 @@ public final class ConstMapper extends Mapping {
         }
 
         List<CstDynamic> lmd = ctx.getInvokeDynamic();
-        for (i = 0; i < lmd.size(); i++) {
-            mapLambda(ctx, data, lmd.get(i));
+        if(!lmd.isEmpty()) {
+            Attribute std = (Attribute) data.attributes.getByName("BootstrapMethods");
+            if (std == null)
+                throw new IllegalArgumentException("有lambda却无BootstrapMethod at " + data.name);
+            AttrBootstrapMethods bs = std instanceof AttrBootstrapMethods ? (AttrBootstrapMethods) std : new AttrBootstrapMethods(new ByteReader(std.getRawData()), data.cp);
+            data.attributes.putByName(bs);
+
+            for (i = 0; i < lmd.size(); i++) {
+                mapLambda(bs, data, lmd.get(i));
+            }
         }
 
         ctx.refresh();
@@ -630,15 +664,7 @@ public final class ConstMapper extends Mapping {
     /**
      * Map: lambda method name
      */
-    final void mapLambda(Context ctx, ConstantData data, CstDynamic dyn) {
-        AttrBootstrapMethods bs = ctx.bsmCache;
-        if(bs == null) {
-            Attribute std = (Attribute) data.attributes.getByName("BootstrapMethods");
-            if(std == null)
-                throw new IllegalArgumentException("有lambda却无BootstrapMethod at " + data.name);
-            ctx.bsmCache = bs = new AttrBootstrapMethods(new ByteReader(std.getRawData()), data.cp);
-        }
-
+    final void mapLambda(AttrBootstrapMethods bs, ConstantData data, CstDynamic dyn) {
         AttrBootstrapMethods.BootstrapMethod ibm = bs.methods.get(dyn.bootstrapTableIndex);
         if(ibm == null) {
             throw new IllegalArgumentException("BootstrapMethod id 不存在: " + dyn.bootstrapTableIndex + " at class " + data.name);
@@ -757,7 +783,7 @@ public final class ConstMapper extends Mapping {
 
     final void generateSuperMap(File folder) {
         if(!folder.isDirectory()) {
-            throw new IllegalArgumentException(new FileNotFoundException(folder.getAbsolutePath()));
+            Helpers.throwAny(new NotDirectoryException(folder.getAbsolutePath()));
         }
 
         generateSuperMap(FileUtil.findAllFiles(folder));
@@ -783,8 +809,9 @@ public final class ConstMapper extends Mapping {
             c2fMap.computeIfAbsent(descriptor.owner, Helpers.cast(nhm)).put(descriptor.name, descriptor);
         }
 
-        Set<String> poorClasses = new MyHashSet<>();
+        Set<String> noMFClasses = new MyHashSet<>();
         Set<AccessData> libClasses = new MyHashSet<>();
+        CharMap<FlagList> flagCache = new CharMap<>();
 
         ZipUtil.ICallback cb = (fileName, s) -> {
             byte[] bytes = IOUtil.readFully(s);
@@ -799,54 +826,6 @@ public final class ConstMapper extends Mapping {
                 return;
             }
 
-            // 标记：不存在于mapping中，即lib
-            boolean isLib = true;
-
-            // 更新FlagList的访问权限
-            Map<String, MtDesc> descriptors = c2mMap.remove(data.name);
-            if(descriptors != null) {
-                List<AccessData.D> methods = data.methods;
-                for (int i = 0; i < methods.size(); i++) {
-                    AccessData.D d = methods.get(i);
-                    MtDesc md = descriptors.get(d.name + '|' + d.desc);
-                    if (md != null)
-                        md.flags = data.getFlagFor(d);
-                }
-                isLib = false;
-            }
-
-            Map<String, FlDesc> descriptors2 = c2fMap.remove(data.name);
-            if(descriptors2 != null) {
-                List<AccessData.D> methods = data.methods;
-                for (int i = 0; i < methods.size(); i++) {
-                    AccessData.D d = methods.get(i);
-                    FlDesc fd = descriptors2.get(d.name);
-                    if (fd != null) {
-                        fd.flags = data.getFlagFor(d);
-                    }
-                }
-                isLib = false;
-            }
-
-            if(isLib) {
-                if(classMap.containsKey(data.name)) { // 有class，却没有method和field
-                    if(!data.fields.isEmpty() || !data.methods.isEmpty()) { // 空接口
-                        boolean isAllInit = true;
-                        List<AccessData.D> methods = data.methods;
-                        for (int i = 0; i < methods.size(); i++) {
-                            if (!methods.get(i).name.equals("<init>")) {
-                                isAllInit = false; // 只带有构造器的类
-                                break;
-                            }
-                        }
-                        if(!isAllInit)
-                            poorClasses.add(data.name);
-                    }
-                } else {
-                    libClasses.add(data);
-                }
-            }
-
             ArrayList<String> list = new ArrayList<>();
             if(!"java/lang/Object".equals(data.superName)) {
                 list.add(data.superName);
@@ -858,7 +837,8 @@ public final class ConstMapper extends Mapping {
                     int ss = name.lastIndexOf('/') + 1;
                     int e = name.length() - "_NMR$FAKEIMPL".length();
                     name = new CharList(e - ss + 1).append(name, ss, e - ss).replace('_', '/').toString();
-                    System.out.println("[NMR继承-Lib] " + data.name + " <= " + name);
+                    if(DEBUG)
+                        System.out.println("[NMR继承-Lib] " + data.name + " <= " + name);
                 }
                 list.add(name);
             }
@@ -866,6 +846,59 @@ public final class ConstMapper extends Mapping {
             // 构建lib一极继承表
             if(!list.isEmpty())
                 libSupers.put(data.name, list);
+
+            // 标记：不存在于mapping中，即lib
+            boolean isLib = true;
+
+            // 更新FlagList的访问权限
+            Map<String, MtDesc> mds = c2mMap.get(data.name);
+            if(mds != null) {
+                List<AccessData.MOF> methods = data.methods;
+                for (int i = 0; i < methods.size(); i++) {
+                    AccessData.MOF d = methods.get(i);
+                    MtDesc md = mds.remove(d.name + '|' + d.desc);
+                    if (md != null)
+                        md.flags = flagCache.computeIfAbsent((char) d.acc, fl);
+                }
+                if(mds.isEmpty()) {
+                    c2mMap.remove(data.name);
+                }
+                isLib = false;
+            }
+
+            Map<String, FlDesc> fds = c2fMap.get(data.name);
+            if(fds != null) {
+                List<AccessData.MOF> fields = data.fields;
+                for (int i = 0; i < fields.size(); i++) {
+                    AccessData.MOF d = fields.get(i);
+                    FlDesc fd = fds.remove(d.name);
+                    if (fd != null)
+                        fd.flags = flagCache.computeIfAbsent((char) d.acc, fl);
+                }
+                if(fds.isEmpty()) {
+                    c2fMap.remove(data.name);
+                }
+                return;
+            }
+
+            if(isLib) {
+                if(classMap.containsKey(data.name)) { // 有class，却没有method和field
+                    if(!data.fields.isEmpty() || !data.methods.isEmpty()) { // 空接口
+                        boolean onlyInit = true; // 只有 <init> / <clinit>
+                        List<AccessData.MOF> methods = data.methods;
+                        for (int i = 0; i < methods.size(); i++) {
+                            if (!methods.get(i).name.startsWith("<")) {
+                                onlyInit = false;
+                                break;
+                            }
+                        }
+                        if(!onlyInit)
+                            noMFClasses.add(data.name);
+                    }
+                } else {
+                    libClasses.add(data);
+                }
+            }
         };
 
         for (int i = 0; i < files.size(); i++) {
@@ -875,43 +908,39 @@ public final class ConstMapper extends Mapping {
                 ZipUtil.unzip(fi, cb, (ze) -> ze.getName().endsWith(".class"));
         }
 
-        makeInheritMap(libSupers, true);
+        makeInheritMap(libSupers, isMappingForLibraries);
 
         for(AccessData data : libClasses) {
-            Collection<String> parents = libSupers.get(data.name);
+            List<String> parents = libSupers.get(data.name);
             if(parents == null)
                 continue;
 
             // 根据下面的注释可以看到，这个的功能和fields的for一样
             MtDesc m = new MtDesc("", "", "");
 
-            List<AccessData.D> methods = data.methods;
+            List<AccessData.MOF> methods = data.methods;
             for (int i = 0; i < methods.size(); i++) {
-                AccessData.D method = methods.get(i);
+                AccessData.MOF method = methods.get(i);
                 m.name = method.name;
                 m.param = method.desc;
 
-                for (String parent : parents) {
+                for (int j = 0; j < parents.size(); j++) {
+                    String parent = parents.get(j);
+
                     m.owner = parent;
                     Map.Entry<MtDesc, String> entry = methodMap.find(m);
                     if (entry != null) {
-                        MtDesc methodDesc = entry.getKey();
-                        if (methodDesc.flags == null)
-                            throw new RuntimeException("缺少必须的文件: " + parent + " 的class");
-                        if (methodDesc.flags.has(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
-                            // 无法继承
+                        MtDesc md = entry.getKey();
+                        if (md.flags == null)
+                            throw new RuntimeException("[NullMdFlagError]缺少必须的 " + parent + ".class for  " + md);
+                        if (md.flags.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
+                            // static / private 无法继承
                             libSkipMethods.add(m);
 
                             m = new MtDesc("", "", "");
-                        } else if (methodDesc.flags.has(AccessFlag.PROTECTED | AccessFlag.PUBLIC)) {
-                            // 子类或者同一个package
-                            // or 公共
-
-                            // (A) methodMap.put(m, entry.getValue());
-                            // 上面这段代码没有任何作用，奇怪,这是不会替换key，value也没有修改，我傻了？
-                        } else {
+                        } else if (!md.flags.hasAny(AccessFlag.PROTECTED | AccessFlag.PUBLIC)) {
                             // only 同一个package
-                            if (!Util.isPackageSame(data.name, parent)) {
+                            if (!Util.arePackagesSame(data.name, parent)) {
                                 // 非同package不能调用
                                 libSkipMethods.add(m);
 
@@ -920,18 +949,25 @@ public final class ConstMapper extends Mapping {
                             // methodMap.put(m, entry.getValue());
                             // 同上 (A)
                             //}
+                            //} else {
+                            // 子类或者同一个package
+                            // or 公共
+
+                            // (A) methodMap.put(m, entry.getValue());
+                            // 上面这段代码没有任何作用，奇怪,这是不会替换key，value也没有修改，我傻了？
                         }
 
-                        // 那么就可以这样
+                        // 那么就可以继承
+                        // 找到继承后可以退出循环
                         break;
                     }
                 }
             }
 
             if(NO_FIELD_INHERIT) {
-                List<AccessData.D> fields = data.fields;// 只是为了减小文件体积
+                List<AccessData.MOF> fields = data.fields;// 只是为了减小文件体积
                 for (int i = 0; i < fields.size(); i++) {
-                    AccessData.D field = fields.get(i);
+                    AccessData.MOF field = fields.get(i);
                     FlDesc f = new FlDesc("", field.name);
                     for (String parent : parents) {
                         f.owner = parent;
@@ -947,8 +983,8 @@ public final class ConstMapper extends Mapping {
             }
         }
 
-        FlagList PUBLIC = new FlagList(AccessFlag.PUBLIC);
-        for(MtDesc descriptor : methodMap.keySet()) { // 将没有flag的全部填充为public// or private?
+        FlagList PUBLIC = flagCache.computeIfAbsent((char) AccessFlag.PUBLIC, fl);
+        for(MtDesc descriptor : methodMap.keySet()) { // 将没有flag的全部填充为public
             if(descriptor.flags == null)
                 descriptor.flags = PUBLIC;
         }
@@ -958,31 +994,53 @@ public final class ConstMapper extends Mapping {
         }
 
         if(!c2fMap.isEmpty() || !c2mMap.isEmpty()) {
-            Set<String> set = new MyHashSet<>(c2fMap.keySet());
-            set.addAll(c2mMap.keySet());
-            if(DEBUG || set.size() < 100) {
-                System.out.print("[ERROR] Missing Deps: ");
-                System.out.println(set);
+            System.out.print("[ConstMapper.Error] 一些class没有映射中指定的方法和字段");
+            if(DEBUG) {
+                CharList cl = new CharList();
+                for (Map.Entry<String, Map<String, MtDesc>> entry : c2mMap.entrySet()) {
+                    cl.append(entry.getKey()).append(":\n M:\n  ");
+                    for (MtDesc desc : entry.getValue().values()) {
+                        cl.append(desc.name).append(' ').append(desc.param).append("\n  ");
+                    }
+                    cl.setIndex(cl.length() - 2);
+                    Map<String, FlDesc> map2 = c2fMap.remove(entry.getKey());
+                    if(map2 != null) {
+                        cl.append(" F:\n  ");
+                        for (FlDesc desc : map2.values()) {
+                            cl.append(desc.name).append("\n  ");
+                        }
+                        cl.setIndex(cl.length() - 2);
+                    }
+                }
+                for (Map.Entry<String, Map<String, FlDesc>> entry : c2fMap.entrySet()) {
+                    cl.append(entry.getKey()).append(":\n F:\n  ");
+                    for (FlDesc desc : entry.getValue().values()) {
+                        cl.append(desc.name).append("\n  ");
+                    }
+                    cl.setIndex(cl.length() - 2);
+                }
+
+                System.out.println(cl);
             } else {
-                System.out.println(set.size() + " classes is missing!");
+                System.out.println("数量: " + (c2fMap.size() + c2mMap.size()) + ", 打开debug查看详细");
             }
         }
-        if(!poorClasses.isEmpty()) {
-            if(DEBUG || poorClasses.size() < 100) {
-                System.out.print("[ERROR] Class Only: ");
-                System.out.println(poorClasses);
+        if(!noMFClasses.isEmpty()) {
+            System.out.print("[ConstMapper.Error] 一些class没有方法和字段的映射");
+            if(DEBUG) {
+                System.out.println(noMFClasses);
             } else {
-                System.out.println(poorClasses.size() + " 个类只有C映射没有MF映射!");
+                System.out.println("数量: " + noMFClasses.size() + ", 打开debug查看详细");
             }
         }
     }
 
     @SuppressWarnings("unchecked")
-    public final void initEnv(@Nonnull Object map, @Nullable Object libPath, @Nullable File cacheFile, boolean reverse, boolean save) throws IOException {
+    public final void initEnv(@Nullable Object map, @Nullable Object libPath, @Nullable File cacheFile, boolean reverse) throws IOException {
         clear();
 
         long hash = FILE_HEADER;
-        if(libPath != null) {
+        if(cacheFile != null && libPath != null) {
             List<File> list;
             if(libPath instanceof File) {
                 File folder = (File) libPath;
@@ -997,21 +1055,20 @@ public final class ConstMapper extends Mapping {
         }
 
         if(cacheFile == null || !cacheFile.exists()) {
-            if(map instanceof File)
-                loadFromSrg((File) map, reverse);
-            else
-                loadFromSrg((InputStream) map, reverse);
+            if(map instanceof File) loadFrom((File) map, reverse);
+            else if(map instanceof InputStream) loadFrom((InputStream) map, reverse);
+            else if(map instanceof ByteList) loadFrom(((ByteList) map).asInputStream(), reverse);
+
             if(libPath != null) {
-                if(libPath instanceof File)
-                    generateSuperMap((File) libPath);
-                else
-                    generateSuperMap((List<File>) libPath);
+                if(libPath instanceof File) generateSuperMap((File) libPath);
+                else generateSuperMap((List<File>) libPath);
             }
-            if(save)
+            if(cacheFile != null)
                 saveCache(hash, cacheFile);
         } else {
+            Boolean result = null;
             try {
-                readCache(hash, cacheFile);
+                result = readCache(hash, cacheFile);
             } catch (Throwable e) {
                 if(!(e instanceof FileNotFoundException)) {
                     if(!(e instanceof IllegalArgumentException)) {
@@ -1022,23 +1079,22 @@ public final class ConstMapper extends Mapping {
                 }
 
                 clear();
-
-                if(map instanceof File)
-                    loadFromSrg((File) map, reverse);
-                else
-                    loadFromSrg((InputStream) map, reverse);
-                if(libPath != null) {
-                    if(libPath instanceof File)
-                        generateSuperMap((File) libPath);
-                    else
-                        generateSuperMap((List<File>) libPath);
+            } finally {
+                if(result == null) {
+                    if (map instanceof File) loadFrom((File) map, reverse);
+                    else if(map instanceof InputStream) loadFrom((InputStream) map, reverse);
+                    else if(map instanceof ByteList) loadFrom(((ByteList) map).asInputStream(), reverse);
+                }
+                if(libPath != null && result != Boolean.TRUE) {
+                    if (libPath instanceof File) generateSuperMap((File) libPath);
+                    else generateSuperMap((List<File>) libPath);
                 }
                 saveCache(hash, cacheFile);
             }
         }
     }
 
-    private static long libHash(List<File> list) {
+    public static long libHash(List<File> list) {
         long hash = 0;
         for (int i = 0; i < list.size(); i++) {
             File f = list.get(i);
@@ -1078,13 +1134,13 @@ public final class ConstMapper extends Mapping {
 
     // region 继承map
 
-    public final void makeInheritMap(Map<String, Collection<String>> superMap, boolean removeNonInClass) {
+    public final void makeInheritMap(Map<String, List<String>> superMap, boolean removeNonInClass) {
         FastSetList<String> l = new FastSetList<>();
 
         List<String> toRemove = new ArrayList<>();
 
         // 从一级继承构建所有继承, note: 是所有输入
-        for (Map.Entry<String, Collection<String>> entry : superMap.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : superMap.entrySet()) {
             if(entry.getValue().getClass() == FastSetList.class) continue; // done
 
             String name = entry.getKey();
@@ -1113,14 +1169,14 @@ public final class ConstMapper extends Mapping {
     }
 
     final void initSelfSuperMap() {
-        Map<String, Collection<String>> selfSuperMap = new MyHashMap<>(this.libSupers);
+        Map<String, List<String>> selfSuperMap = new MyHashMap<>(this.libSupers);
         selfSuperMap.putAll(this.selfSupers); // replace lib class
         this.selfSupers = selfSuperMap;
 
-        makeInheritMap(selfSuperMap, true);
+        makeInheritMap(selfSuperMap, isMappingForLibraries);
     }
 
-    static void recursionLibSupers(Map<String, Collection<String>> finder, FastSetList<String> target, Collection<String> currLevel) {
+    static void recursionLibSupers(Map<String, List<String>> finder, FastSetList<String> target, Collection<String> currLevel) {
         target.addAll(currLevel);
 
         /**
@@ -1145,7 +1201,7 @@ public final class ConstMapper extends Mapping {
     }
 
     public static final class State {
-        private Map<String, Collection<String>> selfSupers;
+        private final MyHashMap<String, List<String>> selfSupers = new MyHashMap<>();
     }
 
     // endregion

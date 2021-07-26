@@ -5,8 +5,8 @@ import roj.asm.cst.Constant;
 import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
 import roj.asm.mapper.ConstMapper;
-import roj.asm.struct.AccessData;
-import roj.asm.struct.ConstantData;
+import roj.asm.tree.AccessData;
+import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 import roj.io.FileUtil;
 import roj.io.ZipUtil;
@@ -18,7 +18,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipFile;
@@ -34,7 +33,7 @@ public class BugHelper {
     public static void main(String[] args) throws Exception {
         System.out.println("检测IMessage的子类");
 
-        MyHashMap<String, Collection<String>> librarySupers = new MyHashMap<>();
+        MyHashMap<String, List<String>> librarySupers = new MyHashMap<>();
         MyHashMap<String, String[]> toFile = new MyHashMap<>();
         ByteList bl = new ByteList();
         String[] currZip = new String[1];
@@ -92,7 +91,7 @@ public class BugHelper {
 
         MyHashMap<String, ZipFile> zfs = new MyHashMap<>();
 
-        for (Map.Entry<String, Collection<String>> key : librarySupers.entrySet()) {
+        for (Map.Entry<String, List<String>> key : librarySupers.entrySet()) {
             if(!key.getValue().contains("net/minecraftforge/fml/common/network/simpleimpl/IMessage")) {
                 String[] data = toFile.get(key.getKey());
                 ZipFile zf = zfs.get(data[0]);

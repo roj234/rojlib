@@ -39,11 +39,11 @@ import roj.asm.cst.Constant;
 import roj.asm.cst.CstLong;
 import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
-import roj.asm.struct.Clazz;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.Method;
-import roj.asm.struct.insn.*;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
+import roj.asm.tree.insn.*;
+import roj.asm.tree.simple.MethodSimple;
 import roj.asm.util.InsnList;
 import roj.collect.IntBiMap;
 import roj.collect.WeakHashSet;
@@ -54,7 +54,8 @@ import java.util.ListIterator;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

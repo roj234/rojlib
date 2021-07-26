@@ -53,6 +53,9 @@ public class Type implements IType {
         return type;
     }
 
+    /**
+     * Array正常不会出现
+     */
     public final char type;
     public String owner;
     public int array;
@@ -83,7 +86,7 @@ public class Type implements IType {
     }
 
     @Override
-    public boolean isGeneric() {
+    public boolean isRootGeneric() {
         return false;
     }
 
@@ -109,9 +112,8 @@ public class Type implements IType {
     public String nativeName() {
         switch (type) {
             case CLASS:
-            case ARRAY:
                 return "A";
-            case NativeType.VOID:
+            case VOID:
                 return "";//'V';
             case BOOLEAN:
             case BYTE:
@@ -140,5 +142,31 @@ public class Type implements IType {
         for (int i = 0; i < this.array; i++)
             sb.append("[]");
         return sb.toString();
+    }
+
+    public Class<?> toJavaClass() throws ClassNotFoundException {
+        switch (type) {
+            case CLASS:
+                return Class.forName(ParamHelper.normalize(owner, array));
+            case VOID:
+                return void.class;
+            case BOOLEAN:
+                return boolean.class;
+            case BYTE:
+                return byte.class;
+            case CHAR:
+                return char.class;
+            case SHORT:
+                return short.class;
+            case INT:
+                return int.class;
+            case FLOAT:
+                return float.class;
+            case DOUBLE:
+                return double.class;
+            case LONG:
+                return long.class;
+        }
+        throw new IllegalArgumentException("?");
     }
 }

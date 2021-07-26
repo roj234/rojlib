@@ -35,7 +35,6 @@ import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -112,7 +111,8 @@ public final class Request {
     private static Map<String, String> getQueries(String query) {
         Map<String, String> map = new MyHashMap<>();
         List<String> queries = TextUtil.splitStringF(new ArrayList<>(), query, '&');
-        for (String member : queries) {
+        for (int i = 0; i < queries.size(); i++) {
+            String member = queries.get(i);
             int po = member.indexOf('=');
             if (po == -1) {
                 map.put(member, "");
@@ -207,11 +207,7 @@ public final class Request {
         if(buffer != null)
             buffer.clear();
 
-        try {
-            return new Request(act, version, path, headers, postFields, (InetSocketAddress) socket.socket().getRemoteAddress());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return new Request(act, version, path, headers, postFields, (InetSocketAddress) socket.socket().getRemoteSocketAddress());
     }
 
     public static Request parseAsync(WrappedSocket socket, Router router, Object[] holder) throws IllegalRequestException {

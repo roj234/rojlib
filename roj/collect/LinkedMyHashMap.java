@@ -51,6 +51,18 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
         }
     }
 
+    public LinkedEntry<K, V> markEndEntry() {
+        return head;
+    }
+
+    public LinkedEntry<K, V> firstEntry() {
+        return tail == head ? null : head._next;
+    }
+
+    public LinkedEntry<K, V> lastEntry() {
+        return tail == head ? null : tail;
+    }
+
     public V lastValue() {
         return tail == head ? null : tail.v;
     }
@@ -157,7 +169,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
     }
 
     @Override
-    void afterAccess(K key, V original, V now, Entry<K, V> entry) {
+    void afterAccess(Entry<K, V> entry, V now) {
         if(accessOrder) {
             LinkedEntry<K, V> entry1 = (LinkedEntry<K, V>) entry;
             entry1.prev._next = entry1._next;

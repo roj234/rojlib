@@ -40,9 +40,6 @@ public interface SslConfig {
     String getCaPath();
     char[] getPasswd();
 
-    default boolean preferNetty() {
-        return false;
-    }
     default Object getAllocator() {
         return null;
     }

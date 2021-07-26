@@ -32,18 +32,18 @@ import roj.asm.SharedCache;
 import roj.asm.cst.*;
 import roj.asm.frame.Frame;
 import roj.asm.frame.Var;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.Field;
-import roj.asm.struct.Method;
-import roj.asm.struct.anno.AnnValArray;
-import roj.asm.struct.attr.*;
-import roj.asm.struct.insn.FieldInsnNode;
-import roj.asm.struct.insn.InsnNode;
-import roj.asm.struct.insn.InvokeDynInsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
-import roj.asm.struct.simple.MoFNode;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Field;
+import roj.asm.tree.Method;
+import roj.asm.tree.anno.AnnValArray;
+import roj.asm.tree.attr.*;
+import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.InvokeDynInsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
+import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
@@ -487,7 +487,7 @@ public class NiximTransformer {
                 copyField.add(new Field(data, field));
                 //copyMethodFind.add(field.name.getString() + '|' + field.type.getString());
             } else {
-                if (!field.accesses.contains(AccessFlag.STATIC)) {
+                if (!field.accesses.hasAll(AccessFlag.STATIC)) {
                     logger.warn("非static字段且没打@Copy / @Shadow, 可能会出错!");
                 } else {
                     if (debug)
@@ -652,7 +652,7 @@ public class NiximTransformer {
                 }
 
             } else {
-                if (!method.accesses.contains(AccessFlag.PUBLIC) || !method.accesses.contains(AccessFlag.STATIC)) {
+                if (!method.accesses.hasAll(AccessFlag.PUBLIC) || !method.accesses.hasAll(AccessFlag.STATIC)) {
                     if (!method.name.getString().equals("<init>") && !method.name.getString().startsWith("lambda$"))
                         logger.warn("非public static方法" + method.name.getString() + "且没打@Copy / @Shadow, 可能会出错!");
                     else {
@@ -965,18 +965,18 @@ public class NiximTransformer {
         List<String> list = null;
         String className = null;
 
-        for (roj.asm.struct.anno.Annotation ann : annotations.annotations) {
+        for (roj.asm.tree.anno.Annotation ann : annotations.annotations) {
             if (ann.rawDesc.equals(REMAP_CLASS_TYPE)) {
                 if (ann.values != null) {
-                    roj.asm.struct.anno.AnnVal annoValue = ann.values.get("value");
-                    if (annoValue.type == roj.asm.struct.anno.AnnotationType.STRING) {
-                        className = ((roj.asm.struct.anno.AnnValString) annoValue).value;
+                    roj.asm.tree.anno.AnnVal annoValue = ann.values.get("value");
+                    if (annoValue.type == roj.asm.tree.anno.AnnotationType.STRING) {
+                        className = ((roj.asm.tree.anno.AnnValString) annoValue).value;
                     }
                     annoValue = ann.values.get("copyItf");
-                    if (annoValue != null && annoValue.type == roj.asm.struct.anno.AnnotationType.BOOLEAN) {
+                    if (annoValue != null && annoValue.type == roj.asm.tree.anno.AnnotationType.BOOLEAN) {
                         if (list == null)
                             list = new ArrayList<>();
-                        if (((roj.asm.struct.anno.AnnValInt) annoValue).value == 1) {
+                        if (((roj.asm.tree.anno.AnnValInt) annoValue).value == 1) {
                             for (CstClass clz : data.interfaces) {
                                 list.add(clz.getValue().getString());
                             }
@@ -985,12 +985,12 @@ public class NiximTransformer {
                 }
             } else if (ann.rawDesc.equals(IMPL_INTERFACE_TYPE)) {
                 if (ann.values != null) {
-                    roj.asm.struct.anno.AnnVal annoValue = ann.values.get("value");
-                    if (annoValue.type == roj.asm.struct.anno.AnnotationType.ARRAY) {
+                    roj.asm.tree.anno.AnnVal annoValue = ann.values.get("value");
+                    if (annoValue.type == roj.asm.tree.anno.AnnotationType.ARRAY) {
                         if (list == null)
                             list = new ArrayList<>();
-                        for (roj.asm.struct.anno.AnnVal value : ((AnnValArray) annoValue).value) {
-                            roj.asm.struct.anno.AnnValClass clazz = (roj.asm.struct.anno.AnnValClass) value;
+                        for (roj.asm.tree.anno.AnnVal value : ((AnnValArray) annoValue).value) {
+                            roj.asm.tree.anno.AnnValClass clazz = (roj.asm.tree.anno.AnnValClass) value;
                             list.add(clazz.value.owner);
                         }
                     }
@@ -1005,12 +1005,12 @@ public class NiximTransformer {
             return null;
         AttrAnnotation annotations = attribute instanceof AttrAnnotation ? (AttrAnnotation) attribute : new AttrAnnotation(ANNO_TYPE, new ByteReader(attribute.getRawData()), pool);
 
-        for (roj.asm.struct.anno.Annotation ann : annotations.annotations) {
+        for (roj.asm.tree.anno.Annotation ann : annotations.annotations) {
             if (ann.rawDesc.equals(annoClass)) {
                 if (ann.values != null) {
-                    roj.asm.struct.anno.AnnVal annoValue = ann.values.get("value");
-                    if (annoValue.type == roj.asm.struct.anno.AnnotationType.STRING) {
-                        return ((roj.asm.struct.anno.AnnValString) annoValue).value;
+                    roj.asm.tree.anno.AnnVal annoValue = ann.values.get("value");
+                    if (annoValue.type == roj.asm.tree.anno.AnnotationType.STRING) {
+                        return ((roj.asm.tree.anno.AnnValString) annoValue).value;
                     }
                 }
             }
@@ -1025,37 +1025,37 @@ public class NiximTransformer {
 
         Data data = new Data();
 
-        for (roj.asm.struct.anno.Annotation ann : annotations.annotations) {
+        for (roj.asm.tree.anno.Annotation ann : annotations.annotations) {
             if (ann.rawDesc.equals(annoClass)) {
-                final Map<String, roj.asm.struct.anno.AnnVal> values = ann.values;
+                final Map<String, roj.asm.tree.anno.AnnVal> values = ann.values;
                 if (values != null) {
-                    roj.asm.struct.anno.AnnVal value = values.get("value");
-                    if (value.type == roj.asm.struct.anno.AnnotationType.STRING) {
-                        data.value = ((roj.asm.struct.anno.AnnValString) value).value;
+                    roj.asm.tree.anno.AnnVal value = values.get("value");
+                    if (value.type == roj.asm.tree.anno.AnnotationType.STRING) {
+                        data.value = ((roj.asm.tree.anno.AnnValString) value).value;
                     }
                     value = values.get("injectPos");
-                    if (value != null && value.type == roj.asm.struct.anno.AnnotationType.INT) {
-                        data.injectPos = ((roj.asm.struct.anno.AnnValInt) value).value;
+                    if (value != null && value.type == roj.asm.tree.anno.AnnotationType.INT) {
+                        data.injectPos = ((roj.asm.tree.anno.AnnValInt) value).value;
                     }
                     value = values.get("codeAtPos");
-                    if (value != null && value.type == roj.asm.struct.anno.AnnotationType.BYTE) {
-                        data.codeAtPos = (byte) ((roj.asm.struct.anno.AnnValInt) value).value;
+                    if (value != null && value.type == roj.asm.tree.anno.AnnotationType.BYTE) {
+                        data.codeAtPos = (byte) ((roj.asm.tree.anno.AnnValInt) value).value;
                     }
                     value = values.get("mustHit");
-                    if (value != null && value.type == roj.asm.struct.anno.AnnotationType.BOOLEAN) {
-                        data.mustHit = ((roj.asm.struct.anno.AnnValInt) value).value == 1;
+                    if (value != null && value.type == roj.asm.tree.anno.AnnotationType.BOOLEAN) {
+                        data.mustHit = ((roj.asm.tree.anno.AnnValInt) value).value == 1;
                     }
                     value = values.get("ignoreParam");
-                    if (value != null && value.type == roj.asm.struct.anno.AnnotationType.BOOLEAN) {
-                        data.ignoreParam = ((roj.asm.struct.anno.AnnValInt) value).value == 1;
+                    if (value != null && value.type == roj.asm.tree.anno.AnnotationType.BOOLEAN) {
+                        data.ignoreParam = ((roj.asm.tree.anno.AnnValInt) value).value == 1;
                     }
                     value = values.get("useSuperInject");
-                    if (value != null && value.type == roj.asm.struct.anno.AnnotationType.BOOLEAN) {
-                        data.useSuperInject = ((roj.asm.struct.anno.AnnValInt) value).value == 1;
+                    if (value != null && value.type == roj.asm.tree.anno.AnnotationType.BOOLEAN) {
+                        data.useSuperInject = ((roj.asm.tree.anno.AnnValInt) value).value == 1;
                     }
                     value = values.get("isRemapCopy");
-                    if (value != null && value.type == roj.asm.struct.anno.AnnotationType.BOOLEAN) {
-                        data.isRemapCopy = ((roj.asm.struct.anno.AnnValInt) value).value == 1;
+                    if (value != null && value.type == roj.asm.tree.anno.AnnotationType.BOOLEAN) {
+                        data.isRemapCopy = ((roj.asm.tree.anno.AnnValInt) value).value == 1;
                     }
                 }
                 break;
@@ -1068,7 +1068,7 @@ public class NiximTransformer {
         if (attribute == null)
             return false;
         AttrAnnotation annotations = attribute instanceof AttrAnnotation ? (AttrAnnotation) attribute : new AttrAnnotation(false, new ByteReader(attribute.getRawData()), pool);
-        for (roj.asm.struct.anno.Annotation ann : annotations.annotations) {
+        for (roj.asm.tree.anno.Annotation ann : annotations.annotations) {
             if (type.equals(ann.rawDesc)) {
                 return true;
             }

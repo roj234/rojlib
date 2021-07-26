@@ -35,8 +35,8 @@ package roj.config.word;
 public class Word_I extends NumberWord {
     public int number;
 
-    public Word_I(int index, String val, int i) {
-        reset(WordPresets.INTEGER, index, val);
+    public Word_I(int index, int i) {
+        reset(WordPresets.INTEGER, index, null);
         this.number = i;
     }
 
@@ -52,11 +52,11 @@ public class Word_I extends NumberWord {
 
     @Override
     public double asDouble() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return number;
     }
 
     @Override
     public long asLong() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return number;
     }
 }

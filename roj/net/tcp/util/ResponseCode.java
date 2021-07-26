@@ -51,17 +51,21 @@ public class ResponseCode {
 
     OK = new ResponseCode(200, "OK"),
 
+    MOVED_PERMANENTLY = new ResponseCode(301, "Moved Permanently"),
+    FOUND = new ResponseCode(302, "Found"),
+    NOT_MODIFIED = new ResponseCode(304, "Not Modified"),
+
     BAD_REQUEST = new ResponseCode(400, "Bad Request"),
-            FORBIDDEN = new ResponseCode(403, "Forbidden"),
-            NOT_FOUND = new ResponseCode(404, "Not Found"),
-            METHOD_NOT_ALLOWED = new ResponseCode(405, "Method Not Allowed"),
-            TIMEOUT = new ResponseCode(408, "Request Timeout"),
-            ENTITY_TOO_LARGE = new ResponseCode(413, "Request Entity Too Large"),
-            URI_TOO_LONG = new ResponseCode(414, "Request-URI Too Long"),
-            UPGRADE_REQUIRED = new ResponseCode(426, "Upgrade Required"),
+    FORBIDDEN = new ResponseCode(403, "Forbidden"),
+    NOT_FOUND = new ResponseCode(404, "Not Found"),
+    METHOD_NOT_ALLOWED = new ResponseCode(405, "Method Not Allowed"),
+    TIMEOUT = new ResponseCode(408, "Request Timeout"),
+    ENTITY_TOO_LARGE = new ResponseCode(413, "Request Entity Too Large"),
+    URI_TOO_LONG = new ResponseCode(414, "Request-URI Too Long"),
+    UPGRADE_REQUIRED = new ResponseCode(426, "Upgrade Required"),
 
     INTERNAL_ERROR = new ResponseCode(500, "Internal Server Error"),
-            UNAVAILABLE = new ResponseCode(503, "Service Unavailable");
+    UNAVAILABLE = new ResponseCode(503, "Service Unavailable");
 
     public String description() {
         return null;

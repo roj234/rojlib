@@ -29,7 +29,7 @@ import roj.asm.Parser;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstString;
 import roj.asm.cst.CstType;
-import roj.asm.struct.ConstantData;
+import roj.asm.tree.ConstantData;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;

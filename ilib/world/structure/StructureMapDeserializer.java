@@ -55,7 +55,7 @@ class StructureMapDeserializer implements ObjSerializer<StructureMap> {
     @Override
     public StructureMap deserialize(CObject<StructureMap> object) {
         String start = object.getString("start");
-        int maxItr = object.getNumber("maxIteration");
+        int maxItr = object.getInteger("maxIteration");
 
         Map<String, IStructure> structureMap = new MyHashMap<>();
         for (Map.Entry<String, CEntry> ce : object.get("structures").asMap().entrySet()) {

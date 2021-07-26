@@ -56,7 +56,7 @@ public final class CNull extends CEntry {
     }
 
     @Override
-    public boolean asBoolean() {
+    public boolean asBool() {
         return false;
     }
 

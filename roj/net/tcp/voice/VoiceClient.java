@@ -25,9 +25,6 @@
  */
 package roj.net.tcp.voice;
 
-import roj.concurrent.TaskHandler;
-import roj.concurrent.pool.TaskExecutor;
-import roj.concurrent.task.ExecutionTask;
 import roj.io.NonblockingUtil;
 import roj.net.tcp.client.ClientSocket;
 import roj.net.tcp.util.InsecureSocket;
@@ -62,8 +59,8 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
     }
 
     @Override
-    protected WrappedSocket getChannel() throws IOException {
-        return new InsecureSocket(server, NonblockingUtil.fd(server));
+    protected WrappedSocket getChannel() {
+        return new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
     }
 
     public void connect(String address, int port) throws IOException {
@@ -73,25 +70,18 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
         super.createSocket(address, port, true);
     }
 
-    public final void start() {
-        TaskExecutor executor = new TaskExecutor();
-        executor.setDaemon(false);
-        executor.start();
-        start(executor);
-        executor.interrupt();
-    }
-
-    public void start(TaskHandler handler) {
+    public void run() {
         if (started)
             throw new IllegalStateException();
-        started = true;
-        ended = false;
         try {
             recorder.start();
         } catch (LineUnavailableException e) {
             throw new UnsupportedOperationException("没有录音设备!", e);
         }
-        handler.pushTask(new ExecutionTask(recorder));
+        started = true;
+        ended = false;
+        recorder.run();
+        ended = true;
     }
 
     long t = System.currentTimeMillis();
@@ -121,11 +111,5 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
         // do sth
 
         //ai.set(0);
-    }
-
-    @Override
-    public void run() {
-        if (started && !ended)
-            recorder.run();
     }
 }

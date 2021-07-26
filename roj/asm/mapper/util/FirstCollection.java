@@ -29,7 +29,10 @@ import roj.collect.AbstractIterator;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * No description provided
@@ -39,10 +42,10 @@ import java.util.*;
  * @since  2020/8/12 13:41
  */
 public class FirstCollection<T> implements Collection<T> {
-    public Collection<T> target;
+    public List<T> target;
     public T first;
 
-    public FirstCollection(Collection<T> target, T first) {
+    public FirstCollection(List<T> target, T first) {
         this.target = target;
         this.first = first;
     }
@@ -97,8 +100,14 @@ public class FirstCollection<T> implements Collection<T> {
     @Nonnull
     @Override
     public Iterator<T> iterator() {
-        return target instanceof RandomAccess ? new FCItrLinear<>(first, (List<T>)target) : new FCItr<>(first, target);
+        if(cachedItr != null && !cachedItr.hasNext() && cachedItr.reset(this.target, this.first)) {
+            return cachedItr;
+        }
+
+        return cachedItr = new FCItrLinear<>(first, target);
     }
+
+    FCItrLinear<T> cachedItr;
 
     /**
      * Returns an array containing all of the elements in this list in proper
@@ -355,7 +364,7 @@ public class FirstCollection<T> implements Collection<T> {
     }
 
     private static class FCItrLinear<T> extends AbstractIterator<T> {
-        final List<T> list;
+        List<T> list;
         int i;
 
         public FCItrLinear(T first, List<T> list) {
@@ -372,24 +381,13 @@ public class FirstCollection<T> implements Collection<T> {
             }
             return false;
         }
-    }
 
-    private static class FCItr<T> extends AbstractIterator<T> {
-        final Iterator<T> itr;
-
-        public FCItr(T first, Collection<T> list) {
+        public boolean reset(List<T> target, T first) {
+            list = target;
             stage = CHECKED;
             result = first;
-            itr = list.iterator();
-        }
-
-        @Override
-        public boolean computeNext() {
-            if(itr.hasNext()) {
-                result = itr.next();
-                return true;
-            }
-            return false;
+            i = 0;
+            return true;
         }
     }
 }

@@ -33,6 +33,7 @@ import roj.util.ArrayUtil;
 
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 public class TaskPool implements ThreadStateMonitor, TaskHandler {
     protected final TaskExecutor[] thread;
@@ -115,6 +116,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
                 newWorker(task, ov);
                 return;
             } else if (minPending > maxThr) {
+                // maybe execution by caller
                 throw new RejectedExecutionException("Minimum tasks on thread (" + minPending + ") is larger than limit (" + maxThr + ")");
             }
         }
@@ -141,9 +143,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         while (!lock.compareAndSet(from, to)) {
             Thread.yield();
             if (lock.compareAndSet(from, to)) break;
-            try {
-                Thread.sleep(5);
-            } catch (InterruptedException ignored) {}
+            LockSupport.parkNanos(2);
         }
     }
 
@@ -157,9 +157,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
 
             ov = lock.get();
             if (ov < 0) {
-                try {
-                    Thread.sleep(5);
-                } catch (InterruptedException ignored) {}
+                LockSupport.parkNanos(2);
             } else {
                 untilCas(lock, ov, ov + 1);
                 break;
@@ -169,7 +167,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     }
 
     @Async.Schedule
-    public ExecutionTask pushTask(Runnable runnable) {
+    public ExecutionTask pushRunnable(Runnable runnable) {
         ExecutionTask task = new ExecutionTask(runnable);
         pushTask(task);
         return task;
@@ -252,20 +250,20 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         }
     }
 
-    public void waitUntilFinish() throws InterruptedException {
+    public void waitUntilFinish() {
         while (taskLength() > 0) {
-            Thread.sleep(10);
+            LockSupport.parkNanos(100);
         }
     }
 
-    public void waitUntilFinish(long timeout) throws InterruptedException {
+    public void waitUntilFinish(long timeout) {
         if(timeout <= 0) {
             waitUntilFinish();
             return;
         }
         long time = System.currentTimeMillis() + timeout;
         while (System.currentTimeMillis() < time && taskLength() > 0) {
-            Thread.sleep(10);
+            LockSupport.parkNanos(100);
         }
     }
 

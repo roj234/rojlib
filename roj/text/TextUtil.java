@@ -34,8 +34,11 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.math.MathUtils;
+import roj.util.ByteList;
+import roj.util.ByteReader;
 import roj.util.log.LogManager;
 
+import java.io.UTFDataFormatException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -131,7 +134,7 @@ public class TextUtil {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
     };
 
-    public static final IBitSet ASCII_CHARACTERS = LongBitSet.preFilled(digits).addAll("~!@#$^&*()_+-=`[]\\{}|;':\",./<>?");
+    public static final IBitSet ASCII_CHARACTERS = LongBitSet.from(digits).addAll("*@-_+./");
 
     public static StringBuilder escape(CharSequence src) {
         StringBuilder tmp = new StringBuilder(src.length() * 3);
@@ -149,6 +152,33 @@ public class TextUtil {
             }
         }
         return tmp;
+    }
+
+    public static String unescapeBytes(final CharSequence src) {
+        int len;
+        ByteList tmp = new ByteList((len = src.length()) >> 1);
+        int i = 0, pos;
+
+        while (i < len) {
+            pos = limitedIndexOf(src, '%', i, len);
+            if (pos == i) {
+                if (src.charAt(pos + 1) == 'u') {
+                    throw new IllegalStateException();
+                } else {
+                    byte ch = (byte) MathUtils.parseInt(src, pos + 1, pos + 3, 16);
+                    tmp.add(ch);
+                    i = pos + 3;
+                }
+            } else {
+                throw new IllegalStateException();
+            }
+        }
+        try {
+            return ByteReader.readUTF(tmp);
+        } catch (UTFDataFormatException e) {
+            e.printStackTrace();
+        }
+        return "-";
     }
 
     public static StringBuilder unescape(final CharSequence src) {
@@ -189,6 +219,16 @@ public class TextUtil {
         }
 
         return i;
+    }
+
+    public static boolean regionMatches(CharSequence a, int aIndex, CharSequence b, int bIndex) {
+        int min = Math.min(a.length() - aIndex, b.length() - bIndex);
+        for (; min > 0; min--) {
+            if (a.charAt(aIndex++) != b.charAt(bIndex++))
+                return false;
+        }
+
+        return true;
     }
 
     /**
@@ -311,6 +351,10 @@ public class TextUtil {
 
     public static final byte[] INT_MAXS = new byte[]{
             '2', '1', '4', '7', '4', '8', '3', '6', '4', '8'
+    };
+
+    public static final byte[] LONG_MAXS = new byte[]{
+            '9','2','2','3','3','7','2','0','3','6','8','5','4','7','7','5','8','0','8'
     };
 
     public static boolean checkInt(byte[] maxs, CharSequence s, int off, boolean negative) {

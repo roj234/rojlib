@@ -25,9 +25,8 @@
  */
 package roj.concurrent.task;
 
-public final class ExecutionTask implements ITask {
+public final class ExecutionTask extends AbstractExecutionTask {
     private final Runnable runnable;
-    private boolean done, canceled;
 
     public ExecutionTask(Runnable runnable) {
         runnable.getClass();
@@ -35,26 +34,7 @@ public final class ExecutionTask implements ITask {
     }
 
     @Override
-    public boolean isCancelled() {
-        return canceled;
-    }
-
-    @Override
-    public boolean cancel(boolean force) {
-        return canceled = true;
-    }
-
-    @Override
-    public void calculate(Thread thread) {
+    public void run() {
         runnable.run();
-        synchronized (this) {
-            done = true;
-            notifyAll();
-        }
-    }
-
-    @Override
-    public boolean isDone() {
-        return canceled || done;
     }
 }

@@ -25,7 +25,7 @@
  */
 package ilib.asm.fasterforge.anc;
 
-import roj.asm.struct.anno.Annotation;
+import roj.asm.tree.anno.Annotation;
 
 import java.util.List;
 import java.util.Map;

@@ -85,6 +85,11 @@ public final class CDouble extends CEntry {
     }
 
     @Override
+    public boolean equalsTo(CEntry entry) {
+        return entry.getType().fits(Type.DOUBLE) && entry.asDouble() == value;
+    }
+
+    @Override
     public int hashCode() {
         return Float.floatToIntBits((float) value);
     }

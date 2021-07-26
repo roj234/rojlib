@@ -27,7 +27,6 @@
 package roj.util;
 
 import roj.io.IOUtil;
-import roj.text.CharList;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -35,27 +34,19 @@ import java.awt.image.DataBufferInt;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UTFDataFormatException;
 import java.util.ArrayList;
 import java.util.List;
 
-/*function hexRGBA(hex) {
-    var a = hex >>> 24;
-    var r = hex >>> 16 ^ (a << 8);
-    var g = hex >>> 8 ^ (r << 8) ^ (a << 16);
-    var b = hex ^ (a << 24) ^ (r << 16) ^ g << 8;
-    return [r,g,b,a];
-}*/
-/**
- * No description provided
+/**
+ * GIF Image decoder
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class GIFDecoder {
-    public static final byte ARGB = 0;
-    public static final byte RGB = 1;
-    public static final byte RGBA = 2;
+    public static final byte ARGB = 0, RGB = 1, RGBA = 2;
 
     public static byte COLOR_TYPE = ARGB;
 
@@ -82,34 +73,28 @@ public class GIFDecoder {
         ByteReader r = new ByteReader(out);
         Gif gif = new Gif();
 
-        {
-            CharList cl = new CharList(10);
-            ByteReader.decodeUTF(6, cl, r.readBytesDelegated(6));
-            if (!cl.equals("GIF87a") && !cl.equals("GIF89a"))
-                throw new IOException("Illegal header " + cl);
-        }
+        String cl = r.readUTF0(6);
+        if (!cl.equals("GIF87a") && !cl.equals("GIF89a"))
+            throw new IOException("Illegal header " + cl);
 
         int colorTableSize = 0;
 
-        {
-            //r.index++;
-            // Block LSD
-            gif.width = r.readUShortR();
-            gif.height = r.readUShortR();
-            gif.wh = gif.width * gif.height;
-            byte flag = r.readByte();
-            gif.sorted = isBitTrue(flag, 3);
-            //int exceptedColorResolution = getSpecifyBit(flag, 4, 6);
-            // 期待的显示器色深
-            if (isBitTrue(flag, 7)) { // globalColorTable flag
-                colorTableSize = getSpecifyBit(flag, 0, 2);
-                colorTableSize = 1 << colorTableSize + 1;
-            }
-            gif.bgColorIndex = r.readUByte();
-            short whPercent0 = r.readUByte();
-            if (whPercent0 != 0)
-                gif.whPercent = (((double) whPercent0) + 15.0d) / 64.0d;
+        // Block LSD
+        gif.width = r.readUShortR();
+        gif.height = r.readUShortR();
+        gif.wh = gif.width * gif.height;
+        byte flag = r.readByte();
+        gif.sorted = isBitTrue(flag, 3);
+        //int exceptedColorResolution = getSpecifyBit(flag, 4, 6);
+        // 期待的显示器色深
+        if (isBitTrue(flag, 7)) { // globalColorTable flag
+            colorTableSize = getSpecifyBit(flag, 0, 2);
+            colorTableSize = 1 << colorTableSize + 1;
         }
+        gif.bgColorIndex = r.readUByte();
+        short whPercent0 = r.readUByte();
+        if (whPercent0 != 0)
+            gif.whPercent = (((double) whPercent0) + 15.0d) / 64.0d;
 
         if (colorTableSize != 0) {
             // Block GCT
@@ -225,8 +210,10 @@ public class GIFDecoder {
 
     public static void readAppExtensions(Gif gif, ByteReader r) {
         short len = r.readUByte();
-        gif.appName = new String(r.readBytes(8));
-        gif.appCode = new String(r.readBytes(3));
+        try {
+            gif.appName = r.readUTF0(8);
+            gif.appCode = r.readUTF0(3);
+        } catch (UTFDataFormatException ignored) {}
         //if(len > 11)
         skipSubBlock(r);
     }

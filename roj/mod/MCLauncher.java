@@ -184,7 +184,7 @@ public class MCLauncher extends JFrame {
             }
             mcJson = versions.get(i);
 
-            /*if(!launcher_conf.getBoolean("我看过提示二了") && mcJson.getName().contains("forge")) {
+            /*if(!launcher_conf.getBool("我看过提示二了") && mcJson.getName().contains("forge")) {
                 info("若您【选择】forge版本之前并未【选择】过对应原版\n请先【选择】原版再【选择】forge，否则可能导致MC无法启动\n是的，大部分启动器都是启动的时候检查native等，但是FMD不是\n本消息只显示一次");
                 launcher_conf.put("我看过提示二了", true);
                 save();
@@ -239,7 +239,7 @@ public class MCLauncher extends JFrame {
                 waitFin(str);
             }
         } else {
-            int once = MAIN_CONFIG.get("通用").asMap().getNumber("最大线程数");
+            int once = MAIN_CONFIG.get("通用").asMap().getInteger("最大线程数");
             int remain = tasks.size();
 
             waiter.pushTask(new Waiter(waitOut));
@@ -277,9 +277,7 @@ public class MCLauncher extends JFrame {
     private static void waitFin(long str) {
         boolean skip = false;
         do {
-            try {
-                parallel.waitUntilFinish(TIMEOUT_TIME - (System.currentTimeMillis() - str));
-            } catch (InterruptedException ignored) {}
+            parallel.waitUntilFinish(TIMEOUT_TIME - (System.currentTimeMillis() - str));
             if (parallel.taskLength() <= 0) return;
 
             if(!skip) {
@@ -445,7 +443,7 @@ public class MCLauncher extends JFrame {
             String url = tmp.append(hash, 0, 2).append('/').append(hash).toString();
             tmp.clear();
             File asset = new File(assets, url);
-            if(!asset.isFile() || asset.length() != val.getNumber("size")) {
+            if(!asset.isFile() || asset.length() != val.getInteger("size")) {
                 if(asset.isFile() && ! asset.delete()) {
                     CmdUtil.error("无法删除错误文件 " + asset);
                     continue;
@@ -521,7 +519,7 @@ public class MCLauncher extends JFrame {
         if (!cfgLan.getString("assets地址").isEmpty()) {
             CmdUtil.info("补全assets...");
             try {
-                int count = completeAssets(cfgGen.getBoolean("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, cfgLan.getString("assets地址"), mc_conf, jsonDesc);
+                int count = completeAssets(cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, cfgLan.getString("assets地址"), mc_conf, jsonDesc);
                 CmdUtil.success("assets补全完毕, " + count);
             } catch (IOException e) {
                 error("asset补全出了点错...\n请查看控制台");
@@ -542,7 +540,7 @@ public class MCLauncher extends JFrame {
                 return;
             }
             String url = map.getString("url");
-            if (cfgGen.getBoolean("下载MC相关文件使用镜像")) {
+            if (cfgGen.getBool("下载MC相关文件使用镜像")) {
                 url = url.replace("launchermeta.mojang.com", cfgGen.getString("镜像地址"));
             }
             File json = new File(versionPath, name + ".json");
@@ -562,7 +560,7 @@ public class MCLauncher extends JFrame {
             File mcFile = new File(versionPath, name + ".jar");
 
             try {
-                downloadMinecraftFile(download, mcFile, cfgGen.getBoolean("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, true);
+                downloadMinecraftFile(download, mcFile, cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, true);
             } catch (IOException e) {
                 error("下载版本jar出了点错...\n请查看控制台");
                 e.printStackTrace();
@@ -616,7 +614,7 @@ public class MCLauncher extends JFrame {
                 info("Forge由广告链接支持,若自动化了它的下载及安装\n请考虑点这里赞助 https://www.patreon.com/LexManos/\n点击确定继续安装");
 
             try {
-                if (installForge(tmpFile, map.getString("version"), config.getBoolean("high_ver"))) {
+                if (installForge(tmpFile, map.getString("version"), config.getBool("high_ver"))) {
                     waitFor(null);
                     if(activeWindow instanceof MCLauncher)
                         info("安装成功,您可以手动删除tmp目录下的\nfg-xxx-tmp-lib目录和xxx-fgInst-tmp.jar");
@@ -1031,7 +1029,7 @@ public class MCLauncher extends JFrame {
 
     // endregion
     // endregion
-    // region projectConfig
+    // region config
 
     static CMapping config;
 
@@ -1081,7 +1079,7 @@ public class MCLauncher extends JFrame {
         if(!config.containsKey("mc_conf", roj.config.data.Type.MAP)) {
             error("请选择版本!");
         } else {
-            if(!config.getBoolean("tip1")) {
+            if(!config.getBool("tip1")) {
                 error("这里的修改在重新选择版本后会被通用配置覆盖");
                 error("启动配置保存在launcher.json\n通用配置保存在config.json");
                 config.put("tip1", true);
@@ -1249,7 +1247,7 @@ public class MCLauncher extends JFrame {
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, CMapping general) throws IOException {
-        return getRunConf(mcRoot, mcJson, nativePath, skipped, cleanNatives, general.getBoolean("版本隔离"), general.getString("libraries地址"), general.getString("附加JVM参数"), general.getString("附加MC参数"));
+        return getRunConf(mcRoot, mcJson, nativePath, skipped, cleanNatives, general.getBool("版本隔离"), general.getString("libraries地址"), general.getString("附加JVM参数"), general.getString("附加MC参数"));
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, boolean insulation, String mirror, String jvmArg, String mcArg) throws IOException {
@@ -1433,7 +1431,7 @@ public class MCLauncher extends JFrame {
             jar = new File(version, jarName + '/' + jarName + ".jar");
         }
 
-        int ver1 = mapping.getNumber("minimumLauncherVersion");
+        int ver1 = mapping.getInteger("minimumLauncherVersion");
         if(ver1 > ver) {
             ver = ver1;
         }

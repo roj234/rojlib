@@ -29,7 +29,6 @@ import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
-import roj.collect.MyHashMap;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.OperationDone;
 import roj.concurrent.task.CalculateTask;
@@ -156,7 +155,7 @@ public final class Proc1_16 extends Processor {
             }
         }
 
-        parallel.pushTask(this);
+        parallel.pushRunnable(this);
     }
 
     public static void handleMCPConfig(File mcpConfigFile) {
@@ -164,50 +163,20 @@ public final class Proc1_16 extends Processor {
     }
 
     public int run0() {
-        InputStream serverLzmaInput;
+        InputStream server_lzma;
         try {
-            ZipFile zf = new ZipFile(mcServer);
-            zf.close();
-
-            zf = new ZipFile(forgeInstallerPath); // 顺便read一下
+            ZipFile zf = new ZipFile(forgeInstallerPath); // 顺便read一下
             ZipEntry ze = zf.getEntry("data/server.lzma");
 
             if (ze == null)
                 throw OperationDone.INSTANCE;
-            serverLzmaInput = new ByteList().readStreamArrayFully(zf.getInputStream(ze)).asInputStream();
-            zf.close();
-
-            zf = new ZipFile(mcJar);
+            server_lzma = new ByteList().readStreamArrayFully(zf.getInputStream(ze)).asInputStream();
             zf.close();
         } catch (IOException e) {
-            StackTraceElement[] elements = e.getStackTrace();
-            for(StackTraceElement ste : elements) {
-                if(ste.getClassName().equals("roj.mod.processor.Proc1_16")) {
-                    switch (ste.getLineNumber()) {
-                        case 170:
-                        case 171:
-                            CmdUtil.error("服务端文件 '" + mcServer.getAbsolutePath() + "' 不是zip");
-                            break;
-                        case 173:
-                        case 177:
-                        case 178:
-                        case 179:
-                            CmdUtil.error("forge安装器 '" + forgeInstallerPath.getAbsolutePath() + "' 不是zip");
-                            break;
-                        case 181:
-                        case 182:
-                            CmdUtil.error("客户端文件 '" + mcJar.getAbsolutePath() + "' 不是zip");
-                            break;
-                        default:
-                            CmdUtil.error("未知错误 (老A你是不是又忘了更新行号？", e);
-                    }
-                    return -1;
-                }
-            }
-            CmdUtil.error("未知错误", e);
+            CmdUtil.error("forge安装器 '" + forgeInstallerPath.getAbsolutePath() + "'", e);
             return -1;
         } catch (OperationDone e) {
-            CmdUtil.error("安装器文件中没有找到 data/server.lzma!!!!");
+            CmdUtil.error("forge安装器 '" + forgeInstallerPath.getAbsolutePath() + "' 中没有找到 data/server.lzma");
             return -1;
         }
 
@@ -220,61 +189,40 @@ public final class Proc1_16 extends Processor {
         try {
             Helper1_16.remap116_SC(tmp, mcServer, mcpConfigFile, set);
         } catch (Throwable e) {
-            CmdUtil.error("SpecialSource 错误", e);
+            if(e instanceof IOException)
+                CmdUtil.warning("读取失败, " + mcServer.getAbsolutePath() + " or " + mcpConfigFile.getAbsolutePath(), e);
+            else
+                CmdUtil.error("SpecialSource 错误", e);
             return -1;
         }
 
-        final List<File> libPath = Arrays.asList(mcJar, tmp);
+        List<File> libPath = Arrays.asList(mcJar, tmp);
 
         Patcher patcher = new Patcher();
+        patcher.setup113(server_lzma, Collections.emptyMap()); // 读取服务端补丁，客户端打了
+        CmdUtil.info("补丁已加载");
 
         CalculateTask<ConstMapper> prepRmp = new CalculateTask<>(() -> {
-            try {
-                ConstMapper s2mRemapper = new ConstMapper();
-                s2mRemapper.initEnv(new File(BASE, "/util/mcp-srg.srg"), libPath, null, true, false); // srg 转换为 mcp
-
-                // s2mRemapper.clearLibs(); // 这个忘了干啥的，先注释掉
-
-                CmdUtil.info("映射表已加载");
-
-                patcher.setup113(serverLzmaInput, Collections.emptyMap()); // 读取服务端补丁，客户端打了
-
-                CmdUtil.info("补丁已加载");
-
-                if (ConstMapper.DEBUG) {
-                    CmdUtil.warning("检测到DEBUG开启, 转接STDOUT到remap.log");
-                    System.setOut(new PrintStream(new FileOutputStream(new File(BASE, "remap.log"))));
-                }
-
-                return s2mRemapper;
-            } catch (IOException e) {
-                CmdUtil.error("[异步操作] IO异常: 映射准备失败!", e);
+            if (ConstMapper.DEBUG) {
+                CmdUtil.warning("检测到DEBUG开启, 转接STDOUT到remap.log");
+                System.setOut(new PrintStream(new FileOutputStream(new File(BASE, "remap.log"))));
             }
-            return null;
+
+            ConstMapper s2mRemapper = new ConstMapper();
+            s2mRemapper.initEnv(new File(BASE, "/util/mcp-srg.srg"), libPath, null, true); // srg 转换为 mcp
+            // s2mRemapper.clearLibs(); // 这个忘了干啥的，先注释掉
+            CmdUtil.info("映射表已加载");
+            return s2mRemapper;
         });
 
         CalculateTask<List<Context>[]> prepCtx = Helpers.cast(new CalculateTask<>(() -> {
-            List<Context> clientCtxs = Util.prepareContextFromZip(mcJar, StandardCharsets.UTF_8);
+            List<Context> servCtxs = Util.ctxFromZip(tmp, StandardCharsets.UTF_8);
 
-            if (DEBUG)
-                CmdUtil.info("客户端文件数量: " + clientCtxs.size());
-
-
-            MyHashMap<String, InputStream> streams = new MyHashMap<>(1000);
-
-            ZipFile zf = Util.prepareInputFromZip(tmp, StandardCharsets.UTF_8, streams);
-
-            if (DEBUG)
-                CmdUtil.info("服务端文件数量: " + streams.size());
-
-            List<Context> servCtxs = Util.prepareContexts(streams);
-            for (Context ctx : servCtxs) {
+            for (int i = 0; i < servCtxs.size(); i++) {
+                Context ctx = servCtxs.get(i);
                 ByteList result = patcher.patchServer(ctx.getName(), ctx.get()); // 服务端的文件已经映射，接下来是打补丁
-                if (result != null)
-                    ctx.set(result);
+                if (result != null) ctx.set(result);
             }
-
-            zf.close();
 
             if(patcher.errorCount != 0)
                 CmdUtil.warning("补丁失败数量: " + patcher.errorCount);
@@ -282,13 +230,18 @@ public final class Proc1_16 extends Processor {
                 CmdUtil.success("补丁全部成功!");
             patcher.reset();
 
-            //if (DEBUG)
-            //    CmdUtil.info("服务端应用了: " + Patcher.serverSuccessCount);
-
-            List<Context> fgCtxs = Util.prepareContextFromZip(forgeJar, StandardCharsets.UTF_8);
+            List<Context> fgCtxs = Util.ctxFromZip(forgeJar, StandardCharsets.UTF_8);
 
             if(forgeUniv != null) { // forge-universal
-                fgCtxs.addAll(Util.prepareContextFromZip(forgeUniv, StandardCharsets.UTF_8)); // 理论上不会有重复
+                fgCtxs.addAll(Util.ctxFromZip(forgeUniv, StandardCharsets.UTF_8)); // 理论上不会有重复
+            }
+
+            List<Context> clientCtxs = Util.ctxFromZip(mcJar, StandardCharsets.UTF_8);
+
+            if (DEBUG) {
+                CmdUtil.info("客户端文件数量: " + clientCtxs.size());
+                CmdUtil.info("服务端文件数量: " + servCtxs.size());
+                CmdUtil.info("Forge文件数量: " + fgCtxs.size());
             }
 
             // 客户端/forge 高版本都是 srg
@@ -298,22 +251,22 @@ public final class Proc1_16 extends Processor {
         threadWait(prepRmp, prepCtx);
 
         List<Context>[] ctxs;
-        ConstMapper clientRmp;
+        ConstMapper rmp;
         try {
             ctxs = prepCtx.get();
-            clientRmp = prepRmp.get();
+            rmp = prepRmp.get();
         } catch (InterruptedException | ExecutionException e) {
             CmdUtil.error("出现致命错误 " + e.getClass().getSimpleName(), e.getCause());
             return -1;
         }
 
-        CodeMapper nameRmp = new CodeMapper(clientRmp);
+        CodeMapper nameRmp = new CodeMapper(rmp);
         nameRmp.setParamRemappingV2(paramMap);
         nameRmp.rewrite = true;
 
-        ExecutionTask remapClient = new ExecutionTask(reuseLambda(clientRmp, nameRmp, 0, ctxs));
-        ExecutionTask remapServer = new ExecutionTask(reuseLambda(new ConstMapper(clientRmp), nameRmp, 1, ctxs));
-        ExecutionTask remapForge = new ExecutionTask(reuseLambda(new ConstMapper(clientRmp), nameRmp, 2, ctxs));
+        ExecutionTask remapClient = new ExecutionTask(com(rmp, nameRmp, 0, ctxs));
+        ExecutionTask remapServer = new ExecutionTask(com(new ConstMapper(rmp), nameRmp, 1, ctxs));
+        ExecutionTask remapForge = new ExecutionTask(com(new ConstMapper(rmp), nameRmp, 2, ctxs));
 
         threadWait(remapClient, remapServer, remapForge);
 
@@ -325,27 +278,20 @@ public final class Proc1_16 extends Processor {
 
         if(DEBUG) {
             CmdUtil.info("验证class完整性");
-            int err = 0;
-            for (Context ctx : mergedCtx) {
-                try {
-                    ctx.validateSelf();
-                } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
-                    err++;
-                }
+        }
+        for (Context ctx : mergedCtx) {
+            try {
+                ctx.validateSelf();
+            } catch (Throwable e) {
+                CmdUtil.warning(ctx.getName() + " 验证失败", e);
             }
-            for (Context ctx : ctxs[2]) {
-                try {
-                    ctx.validateSelf();
-                } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
-                    err++;
-                }
+        }
+        for (Context ctx : ctxs[2]) {
+            try {
+                ctx.validateSelf();
+            } catch (Throwable e) {
+                CmdUtil.warning(ctx.getName() + " 验证失败", e);
             }
-            if (err != 0)
-                CmdUtil.warning("验证失败数量: " + err);
-            else
-                CmdUtil.success("class全部正常!");
         }
 
         File merged = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
@@ -353,8 +299,8 @@ public final class Proc1_16 extends Processor {
             Util.write(mergedCtx, zos, false);
             Util.write(ctxs[2], zos, true); // forge
 
-            CmdUtil.success("文件写入完毕");
-
+            if(DEBUG)
+                CmdUtil.success("文件写入完毕");
         } catch (IOException e) {
             CmdUtil.error("文件写入失败", e);
             return -1;
@@ -363,7 +309,7 @@ public final class Proc1_16 extends Processor {
         return 0;
     }
 
-    private static Runnable reuseLambda(ConstMapper mainRmp, CodeMapper nameRmp, int i, List<Context>[] arr) {
+    private static Runnable com(ConstMapper mainRmp, CodeMapper nameRmp, int i, List<Context>[] arr) {
         List<Context> ctxs = arr[i];
         return () -> {
             mainRmp.remap(true, ctxs);

@@ -35,14 +35,14 @@ package roj.config.word;
 public class Word_D extends NumberWord {
     public double number;
 
-    public Word_D(short type, int index, String val, double i) {
-        reset(type, index, val);
+    public Word_D(short type, int index, double i) {
+        reset(type, index, null);
         this.number = i;
     }
 
     @Override
     public int asInt() {
-        throw new UnsupportedOperationException();
+        return (int) number;
     }
 
     @Override
@@ -52,7 +52,7 @@ public class Word_D extends NumberWord {
 
     @Override
     public long asLong() {
-        throw new UnsupportedOperationException();
+        return (long) number;
     }
 
     @Override

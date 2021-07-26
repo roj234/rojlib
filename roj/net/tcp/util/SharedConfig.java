@@ -61,7 +61,6 @@ public final class SharedConfig {
             new StreamLikeSequence(STREAM_SEQ_INITIAL_CAPACITY, false),
             new HTTPHeaderLexer(),
             new CharList(),
-            null, // nonnull
             null
     });
 

@@ -35,9 +35,9 @@ import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureWriter;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.simple.MethodSimple;
 import roj.util.ByteList;
 
 import java.nio.charset.StandardCharsets;

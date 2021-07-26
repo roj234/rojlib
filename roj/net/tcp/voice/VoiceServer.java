@@ -47,7 +47,7 @@ import roj.util.Helpers;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.Map;
@@ -103,7 +103,7 @@ public final class VoiceServer extends TCPServer {
     }
 
     @Override
-    protected ITask getTaskFor(SocketChannel client) throws IOException {
+    protected ITask getTaskFor(Socket client) throws IOException {
         FileDescriptor fd = NonblockingUtil.fd(client);
 
         WrappedSocket cio = (

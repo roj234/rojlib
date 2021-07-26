@@ -41,7 +41,7 @@ import roj.util.log.LogManager;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ChannelRouterSync implements ITaskNaCl {
@@ -59,10 +59,10 @@ public class ChannelRouterSync implements ITaskNaCl {
         Response reply = null;
         Request request = null;
         try {
-            final SocketChannel socket = this.channel.socket();
-            //socket.setSoTimeout(router.readTimeout());
+            Socket socket = this.channel.socket();
+            socket.setSoTimeout(router.readTimeout());
 
-            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteAddress();
+            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
             int visited;
             if(SharedConfig.THROTTLING_CHECK_ENABLED) {
                 final TimedHashMap<String, AtomicInteger> addresses = SharedConfig.CONNECTING_ADDRESSES;

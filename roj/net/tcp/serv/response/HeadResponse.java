@@ -68,7 +68,8 @@ public final class HeadResponse implements HTTPResponse {
     @Override
     public void writeHeader(CharList list) {
         for (Map.Entry<CharSequence, CharSequence> entry : header.entrySet()) {
-            list.append(entry.getKey()).append(": ").append(TextUtil.escape(entry.getValue())).append(CRLF);
+            assert TextUtil.lastIndexOf(entry.getValue(), '\n') == -1;
+            list.append(entry.getKey()).append(": ").append(entry.getValue()).append(CRLF);
         }
         if (delegation != null)
             delegation.writeHeader(list);

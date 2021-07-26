@@ -47,12 +47,8 @@ public final class XText extends AbstXML {
         return value;
     }
 
-    public CMapping toJSON() {
-        CMapping map = new CMapping();
-        map.put("_type_", "XML.Text");
-        map.put("text", value);
-
-        return map;
+    public CString toJSON() {
+        return new CString(value);
     }
 
     @Override
@@ -63,9 +59,5 @@ public final class XText extends AbstXML {
     @Override
     protected StringBuilder toCompatXML(StringBuilder sb) {
         return !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ? sb.append("<![CDATA[").append(value).append("]]>") : sb.append(value);
-    }
-
-    public static XText fromJSON(CMapping mapping) {
-        return new XText(mapping.getString("text"));
     }
 }

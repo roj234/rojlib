@@ -27,23 +27,18 @@ package roj.asm.mapper;
 
 import roj.asm.mapper.util.FlDesc;
 import roj.asm.mapper.util.MtDesc;
-import roj.collect.FindMap;
-import roj.collect.Flippable;
-import roj.collect.HashBiMap;
-import roj.collect.MyHashMap;
+import roj.collect.*;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
+import roj.util.ByteWriter;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Map;
 
 /**
- * No description provided
+ * Class Mapping
  *
  * @author Roj234
  * @version 0.1
@@ -53,19 +48,20 @@ public class Mapping {
     Flippable<String, String> classMap = new HashBiMap<>(1000);
     MyHashMap<FlDesc, String> fieldMap = new MyHashMap<>(1000);
     MyHashMap<MtDesc, String> methodMap = new MyHashMap<>(1000);
+    TrieTree<String> packageMap = new TrieTree<>();
 
     /**
      * Data parse
      */
-    public final void loadFromSrg(File path, boolean reverse) {
+    public final void loadFrom(File path, boolean reverse) {
         try {
-            loadFromSrg(new FileInputStream(path), reverse);
+            loadFrom(new FileInputStream(path), reverse);
         } catch (IOException e) {
             throw new RuntimeException("Unable to read srg file", e);
         }
     }
 
-    public final void loadFromSrg(InputStream is, boolean reverse) {
+    public final void loadFrom(InputStream is, boolean reverse) {
         try(SimpleLineReader slr = new SimpleLineReader(is)) {
             CharList cl = new CharList(100);
             ArrayList<String> q = new ArrayList<>();
@@ -82,6 +78,14 @@ public class Mapping {
                 int id, id2;
                 switch(dlm0) {
                     case "PK": // package
+                        if(!q.get(0).equals(q.get(1))) {
+                            if (reverse) {
+                                packageMap.put(q.get(1), q.get(0));
+                            } else {
+                                packageMap.put(q.get(0), q.get(1));
+                            }
+                            System.err.println("PK tag暂时不支持, 建议使用class tag, 即使会支持也是在另一个class里而不是 ConstMapper");
+                        }
                         break;
                     case "CL": // class
                         if(reverse) {
@@ -142,6 +146,47 @@ public class Mapping {
             }
         } catch(Exception e) {
             throw new RuntimeException("Unable to read srg file", e);
+        }
+    }
+
+    public void saveToSrg(File target) throws IOException {
+        CharList ob = new CharList(1024 * 1024);
+
+        MyHashMap<String, CharList> classFos = new MyHashMap<>(classMap.size());
+
+        for(Map.Entry<FlDesc, String> entry : fieldMap.entrySet()) {
+            String cn = entry.getKey().owner;
+
+            CharList cl = classFos.get(cn);
+            if(cl == null) {
+                classFos.put(cn, cl = new CharList(100));
+            }
+
+            cl.append("FL: ").append(entry.getKey().name).append(' ').append(entry.getValue()).append('\n');
+        }
+
+        for(Map.Entry<MtDesc, String> entry : methodMap.entrySet()) {
+            MtDesc desc = entry.getKey();
+
+            String cn = desc.owner;
+            CharList cl = classFos.get(cn);
+            if(cl == null) {
+                classFos.put(cn, cl = new CharList(100));
+            }
+            String param = Util.transformMethodParam(classMap, desc.param);
+
+            cl.append("ML: ").append(desc.name).append(' ').append(desc.param).append(' ').append(entry.getValue()).append(' ').append(param.equals(desc.param) ? "~" : param).append('\n');
+        }
+
+        for(Map.Entry<String, String> entry : classMap.entrySet()) {
+            ob.append("CL: ").append(entry.getKey()).append(' ').append(entry.getValue()).append('\n');
+            CharList list = classFos.get(entry.getKey());
+            if(list != null)
+                ob.append(list);
+        }
+
+        try (FileOutputStream fos = new FileOutputStream(target)) {
+            ByteWriter.encodeUTF(ob).writeToStream(fos);
         }
     }
 

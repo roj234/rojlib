@@ -193,34 +193,40 @@ public class FMDGui extends JFrame {
         } catch (IOException ignored) {}
 
         JOptionPane.showMessageDialog(frame,
-                "Fast Mod Development 快速mod开发环境\n" +
+                "FMD - 快速mod开发环境 - 作者 Roj234\n" +
+                        VERSION + "\n" +
                         "\n" +
-                        VERSION +
-                        "此大版本更新主要修复了这种问题：偶尔FMD有小问题，我是做它的人，知道如何解决，然而你们就觉得它(实际上也是)有BUG\n" +
-                        "class缓存会自动更新了\n" +
-                        "去除了dep文件缓存，因为没有必要\n" +
-                        "Config替换为Project, String[] => 状态缓存\n" +
-                        "加快反向映射表加载速度\n" +
-                        "MutableZipFile 懂的都懂 可就是没人做...\n" +
-                        "修复了一些BUG\n" +
+                        "此版本修复了以下问题：\n" +
+                        "  影响操作的小问题:\n" +
+                        "    class缓存需要手动更新\n" +
+                        "    dep文件缓存对IDE不友好\n" +
+                        "    没有Mapper状态缓存导致速度不够快\n" +
+                        "    cmd界面配置文件不能自动更新\n" +
+                        "    只支持线性依赖\n" +
                         "\n" +
-                        "自我开始写mod,我就在抱怨gradle是如此之差, 速度慢, 要联网(这个倒能解决), 不能增量等等...\n" +
-                        "后来, 她就来了.\n" +
+                        "  加快反向映射表加载速度\n" +
+                        "  MutableZipFile\n" +
+                        "  支持监控文件修改,自动重载\n" +
+                        "  输出jar体积过大\n" +
+                        "  ASM的几个陈年bug\n" +
+                        "  YAMLParser\n" +
+                        "  TOMLParser\n" +
+                        "  重用Word\n" +
+                        "  Mapper多线程\n" +
+                        "  SimpleObfuscator\n" +
+                        "  一些BUG\n" +
                         "\n" +
-                        "如今, 她已经支持了多重映射表, 你还可以手动制作, 或者修改, 你觉得这个方法名字不好? 盘它!\n" +
-                        "如今, 她已经支持了下载MC并补Lib, 还能安装Forge, 在一些不会下载挖矿与合成和安装锻造锤与国防部的玩家看来, 这无疑是个福音.\n" +
-                        "如今, 她绝大部分cmd界面都有了对应的GUI, 某人终于不会吐槽我用的是叫[windows]的linux了. @_@\n" +
-                        "如今, 她还可以有事没事启动个MC, 抢了启动器的一点点饭碗, 让你不调试也可以玩MC (我真的觉得没啥用 orz).\n" +
+                        "Gradle速度慢, 要联网(这个倒能解决), 不能增量编译等等...\n" +
+                        "后来, FMD来了.\n" +
                         "\n" +
-                        "我(嗯, 就我一个呢, 虽然觉得这里放'我们'更带感的说), 仍在前行\n" +
-                        "\n" +
-                        "\n有空的话, (也不)会修复1.16版本补丁问题的(啊)", "关于FMD", INFORMATION_MESSAGE, icon);
+                        "* 可以下载安装启动【挖矿与合成】和【锻造锤】\n" +
+                        "*    并不能装国防部", "关于FMD", INFORMATION_MESSAGE, icon);
     }
 
     private static void gc(ActionEvent event) {
         long free = Runtime.getRuntime().freeMemory();
         try {
-            AnnotationProcessor.closeStreams();
+            AnnotationProcessor.gc();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -347,7 +353,7 @@ public class FMDGui extends JFrame {
         final String[] args = files.toArray(new String[files.size()]);
         ArrayUtil.inverse(args);
 
-        asyncRun(() -> FMDMain.transform(args));
+        asyncRun(() -> FMDMain.deobf(args));
     }
 
     static final TaskExecutor asyncExecutor = new TaskExecutor();
@@ -375,7 +381,7 @@ public class FMDGui extends JFrame {
         Map<String, String> map = getCompileSetting();
         if(map == null)
             return;
-        asyncRun(() -> FMDMain.runClient(map));
+        asyncRun(() -> FMDMain.run(map));
     }
 
     private static void build(ActionEvent event) {

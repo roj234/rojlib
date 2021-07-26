@@ -29,11 +29,11 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.anno.Annotation;
-import roj.asm.struct.attr.AttrAnnotation;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.AttrAnnotation;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.simple.MethodSimple;
 import roj.util.ByteReader;
 
 import java.lang.reflect.Modifier;

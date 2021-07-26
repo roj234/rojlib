@@ -39,16 +39,17 @@ import roj.io.down.STDProgress;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
+import roj.util.Helpers;
 import roj.util.Operation;
 
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.UnknownHostException;
-import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -82,7 +83,7 @@ public final class FileUtil {
         SHA1 = SH;
     }
 
-    public static String USER_AGENT = "FileUtil-2.3.2";
+    public static String USER_AGENT = "FileUtil-2.4.0";
     public static int MIN_ASYNC_SIZE = 1024 * 512;
     public static boolean ENABLE_ENDPOINT_RECOVERY = true;
     public static int BUFFER_SIZE = 1024 * 4;
@@ -96,44 +97,14 @@ public final class FileUtil {
         }
     }
 
-    public static final Predicate<File> TRUE_PREDICT = (f) -> true;
+    public static final Predicate<File> TRUE_PREDICT = Helpers.alwaysTrue();
 
     public static List<File> findAllFiles(File file) {
-        return findAllFiles(file, new ArrayList<>(), (s) -> true);
+        return findAllFiles(file, new ArrayList<>(), TRUE_PREDICT);
     }
 
     public static List<File> findAllFiles(File file, Predicate<File> predicate) {
         return findAllFiles(file, new ArrayList<>(), predicate);
-    }
-
-    public static Map<String, InputStream> findAndOpenStream(File path) throws FileNotFoundException {
-        return findAndOpenStream(path, new MyHashMap<>(), new CharList(), TRUE_PREDICT);
-    }
-
-    public static Map<String, InputStream> findAndOpenStream(File path, Predicate<File> predicate) throws FileNotFoundException {
-        return findAndOpenStream(path, new MyHashMap<>(), new CharList(), predicate);
-    }
-
-    public static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, Predicate<File> predicate) throws FileNotFoundException {
-        return findAndOpenStream(file, map, new CharList(), predicate);
-    }
-
-    private static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, CharList relative, Predicate<File> predicate) throws FileNotFoundException {
-        File[] files1 = file.listFiles();
-        if (files1 != null) {
-            int fl = relative.length();
-            for (File file1 : files1) {
-                if (file1.isDirectory()) {
-                    findAndOpenStream(file1, map, relative.append(file1.getName()).append(File.separatorChar), predicate);
-                } else {
-                    if (predicate.test(file1)) {
-                        map.put(relative.append(file1.getName()).toString(), new FileInputStream(file1));
-                    }
-                }
-                relative.setIndex(fl);
-            }
-        }
-        return map;
     }
 
     private static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
@@ -150,6 +121,36 @@ public final class FileUtil {
             }
         }
         return files;
+    }
+
+    public static Map<String, InputStream> findAndOpenStream(File path, Predicate<File> predicate) {
+        return findAndOpenStream(path, new MyHashMap<>(), new CharList(), predicate);
+    }
+
+    public static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, Predicate<File> predicate) {
+        return findAndOpenStream(file, map, new CharList(), predicate);
+    }
+
+    private static Map<String, InputStream> findAndOpenStream(File file, Map<String, InputStream> map, CharList relative, Predicate<File> predicate) {
+        File[] files1 = file.listFiles();
+        if (files1 != null) {
+            int fl = relative.length();
+            for (File file1 : files1) {
+                if (file1.isDirectory()) {
+                    findAndOpenStream(file1, map, relative.append(file1.getName()).append(File.separatorChar), predicate);
+                } else {
+                    if (predicate.test(file1)) {
+                        try {
+                            map.put(relative.append(file1.getName()).toString(), new FileInputStream(file1));
+                        } catch (FileNotFoundException e) {
+                            throw new IllegalArgumentException("Not permission to read " + relative, e);
+                        }
+                    }
+                }
+                relative.setIndex(fl);
+            }
+        }
+        return map;
     }
 
     public static boolean deletePath(File file) {
@@ -170,59 +171,6 @@ public final class FileUtil {
 
     public static boolean deleteFile(File file) {
         return !file.exists() || file.delete();
-    }
-
-    public static void prepareInputFromTxt(File input, String workPath, Charset charset, Map<String, InputStream> streams) throws IOException {
-        StringBuilder sb = new StringBuilder(new String(IOUtil.readFully(new FileInputStream(input)), charset).replace(workPath, ""));
-        CharList charList = new CharList(40);
-
-        boolean flag = false;
-        for (int i = 0; i < sb.length(); i++) {
-            char c = sb.charAt(i);
-            switch (c) {
-                case '\r':
-                case '\n':
-                    flag = true;
-                    break;
-                default:
-                    if (flag) {
-                        // only 1 \r or \n
-                        handleFileList(streams, replaceFileDesc(charList));
-                        charList.clear();
-                    }
-                    charList.append(c);
-                    flag = false;
-            }
-        }
-        if (charList.length() != 0) {
-            handleFileList(streams, replaceFileDesc(charList));
-        }
-    }
-
-    private static void handleFileList(Map<String, InputStream> streams, String name) {
-        if (name.endsWith("/") || name.endsWith("\\")) return;
-        try {
-            streams.put(name, new FileInputStream(new File(name)));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static String replaceFileDesc(CharList charList) {
-        int flag = 0;
-        for (int i = 0; i < charList.length(); i++) {
-            char c = charList.charAt(i);
-            if (c == '\\') {
-                if (++flag > 1) {
-                    charList.delete(i);
-                } else {
-                    charList.set(i, '/');
-                }
-            } else {
-                flag = 0;
-            }
-        }
-        return charList.toString();
     }
 
     public static byte[] downloadFileToMemory(String url) throws IOException {
@@ -523,6 +471,38 @@ public final class FileUtil {
                 throw new FileNotFoundException("远程返回状态码: " + code);
             }
         } while (true);
+    }
+
+    public static boolean checkTotalWritePermission(File file) {
+        try(RandomAccessFile f = new RandomAccessFile(file, "rw")) {
+            f.setLength(f.length() + 1);
+            f.seek(f.length());
+            f.writeByte(1);
+            f.setLength(f.length() - 1);
+        } catch (IOException e) {
+            return false;
+        }
+        return true;
+    }
+
+    public static int removeEmptyPaths(Collection<String> files) {
+        boolean oneRemoved = true;
+        int i = 0;
+        while (oneRemoved) {
+            oneRemoved = false;
+            for (String path : files) {
+                File file = new File(path);
+                while ((file = file.getParentFile()) != null) {
+                    if (file.isDirectory() && file.list().length == 0) {
+                        if (!file.delete())
+                            System.err.println("无法删除目录 " + file);
+                        oneRemoved = true;
+                        i++;
+                    }
+                }
+            }
+        }
+        return i;
     }
 
     private static class MTD implements WaitingIOFuture {

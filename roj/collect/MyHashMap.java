@@ -51,6 +51,84 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         size++;
     }
 
+    /**
+     * Both Add and Remove
+     */
+    @SuppressWarnings("unchecked")
+    public void copyFrom(MyHashMap<K, V> otherMap) {
+        Entry<?, ?>[] entries = otherMap.entries;
+        if (entries == null || otherMap.size == 0) {
+            clear();
+            return;
+        }
+        if(this.entries == null || size == 0) {
+            putAll(otherMap);
+            return;
+        }
+
+        IBitSet ibs = new LongBitSet(length);
+        for (int i = 0; i < otherMap.length; i++) {
+            Entry<K, V> entry = (Entry<K, V>) entries[i];
+            if (entry == null)
+                continue;
+            while (entry != null) {
+                if (size > length * loadFactor) {
+                    length <<= 1;
+                    resize();
+                }
+
+                Entry<K, V> entry1 = getEntryFirst(entry.k, true);
+                sec:
+                if (entry1.v != NOT_USING) {
+                    int j = 1;
+                    while (true) {
+                        if (Objects.equals(entry.k, entry1.k))
+                            break sec;
+                        if(j++ > 31)
+                            throw new IllegalStateException("What fucking hashCode() you write for " + entry.k.getClass());
+                        if (entry1.next == null) break;
+                        entry1 = entry1.next;
+                    }
+
+                    ibs.add(indexFor(entry.k) << j);
+                    Entry<K, V> cre = getCachedEntry(entry.k);
+                    entry1.next = cre;
+                    entry1 = cre;
+                } else {
+                    ibs.add(indexFor(entry.k));
+                }
+
+                if (entry1.v == NOT_USING) {
+                    afterPut(entry);
+                    size++;
+                } else {
+                    afterAccess(entry1, entry1.v = entry.v);
+                }
+                entry = entry.next;
+            }
+        }
+
+        entries = this.entries;
+        for (int i = 0; i < length; i++) {
+            Entry<K, V> entry = (Entry<K, V>) entries[i];
+            if (entry == null)
+                continue;
+            if(!ibs.contains(i)) {
+                remove(entry.k);
+                size--;
+                i--;
+            } else {
+                while (entry != null) {
+                    i <<= 1;
+                    if (!ibs.contains(i)) {
+                        remove(entry.k);
+                        entry = entry.next;
+                    }
+                }
+            }
+        }
+    }
+
     public static class Entry<K, V> implements Map.Entry<K, V>, EntryIterable<Entry<K, V>> {
         public K k;
         public V v;
@@ -206,7 +284,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             entry.v = e;
             return null;
         } else {
-            afterAccess(key, old, entry.v = e, entry);
+            afterAccess(entry, entry.v = e);
         }
         return old;
     }
@@ -224,7 +302,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         }
     }
 
-    void afterAccess(K key, V original, V now, Entry<K, V> entry) {
+    void afterAccess(Entry<K, V> entry, V now) {
     }
 
     void afterRemove(Entry<K, V> entry) {

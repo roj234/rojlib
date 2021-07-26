@@ -28,12 +28,12 @@ package roj.reflect;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Field;
-import roj.asm.struct.Method;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.insn.ClassInsnNode;
-import roj.asm.struct.insn.FieldInsnNode;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.Field;
+import roj.asm.tree.Method;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.ClassInsnNode;
+import roj.asm.tree.insn.FieldInsnNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
@@ -202,12 +202,11 @@ public class DirectFieldAccess {
             len++;
         } else {
             types.clear();
-            m.setReturnType(p/*(p.type == CLASS || p.type == NativeType.ARRAY) ? (g_sClass == DirectFieldAccessor.class ? OBJ : p) : new Type(p.type, 0)*/);
+            m.setReturnType(p.owner != null ? new Type("java/lang/Object") : p/*(p.type == CLASS || p.type == NativeType.ARRAY) ? (g_sClass == DirectFieldAccessor.class ? OBJ : p) : new Type(p.type, 0)*/);
         }
         String t = null;
         switch (p.type) {
             case CLASS:
-            case ARRAY:
                 t = "Object";
                 break;
             case BOOLEAN:

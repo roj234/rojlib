@@ -25,13 +25,14 @@
  */
 package roj.mod;
 
+import roj.asm.annotation.AnnotationProcessor;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.ResWriter;
-import roj.asm.struct.ConstantData;
 import roj.asm.transform.AccessTransformer;
+import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -67,7 +68,6 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.IntSupplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -93,56 +93,52 @@ public final class FMDMain {
             }
 
             Shared.loadConfig(true);
+            if(args.length == 0) {
+                if(!CmdUtil.ENABLE) {
+                    System.out.print("FMD   更快的MOD开发环境 Ver ");
+                    System.out.println(VERSION);
+                    System.out.println("    Powered by Roj234");
+                } else {
+                    //System.out.print("\u001B[;\u005BmF\u001B[;\u005CmM\u001B[;\u0022mD\u001B[;\u0061m   更快的MOD开发环境\u001B[0m Ver \u001B[;\u005Cm");
+                    //System.out.println(VERSION);
+                    //System.out.print("\u001B[;\u0061m\u001B[;\u0068m    \u001B[;\u0025m by \u001B[;\u005DmRoj234");
+                    CmdUtil.reset();
+                }
+                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload");
+                System.out.println();
+            }
         }
 
         if(args.length == 0) {
-            CmdUtil.error("F", false);
-            CmdUtil.success("M", false);
-            CmdUtil.fg(CmdUtil.Color.BLUE, true);
-            System.out.print("D");
-            CmdUtil.fg(CmdUtil.Color.WHITE, true);
-            System.out.print("   更快的MOD开发环境 ");
-            CmdUtil.reset();
-            System.out.print("Ver ");
-            CmdUtil.fg(CmdUtil.Color.GREEN, true);
-            System.out.println(VERSION);
-            CmdUtil.fg(CmdUtil.Color.WHITE, true);
-            CmdUtil.bg(CmdUtil.Color.BLUE, true);
-            System.out.print("    Powered");
-            CmdUtil.fg(CmdUtil.Color.WHITE, false);
-            System.out.print(" by ");
-            CmdUtil.fg(CmdUtil.Color.YELLOW, true);
-            System.out.println("Roj234");
-            CmdUtil.reset();
-            CmdUtil.info("指令: build, runClient, changeVersion, f2m, config, reflect, transform, download");
-            System.out.println();
-            String input;
+            if(isMain) {
+                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload");
+                System.out.println();
+                return;
+            }
 
             isMain = true;
             Tokenizer tokenizer = new Tokenizer();
             ArrayList<String> tmp = new ArrayList<>(48);
 
-            boolean b = true;
             o:
-            while (b) {
+            while (true) {
                 tokenizer.init(UIUtil.userInput("> "));
                 tmp.clear();
-                while (tokenizer.hasNext()) {
-                    Word w = tokenizer.readWord();
-                    if(w.type() == WordPresets.EOF) {
-                        CmdUtil.error("指令有误 " + tmp);
-                        continue o;
-                    }
-                    tmp.add(w.val());
-                    tokenizer.recycle(w);
-                }
                 try {
+                    while (tokenizer.hasNext()) {
+                        Word w = tokenizer.readWord();
+                        if(w.type() == WordPresets.EOF) {
+                            CmdUtil.error("指令有误 " + tmp);
+                            continue o;
+                        }
+                        tmp.add(w.val());
+                        tokenizer.recycle(w);
+                    }
                     main(tmp.toArray(new String[tmp.size()]));
                 } catch (Throwable e) {
                     e.printStackTrace();
                 }
             }
-            System.exit(0);
         }
 
         int exitCode = 0;
@@ -151,8 +147,8 @@ public final class FMDMain {
             case "build":
                 exitCode = build(buildArgs(args));
                 break;
-            case "runClient":
-                exitCode = runClient(buildArgs(args));
+            case "run":
+                exitCode = run(buildArgs(args));
                 break;
             case "changeVersion":
                 exitCode = changeVersion();
@@ -163,14 +159,22 @@ public final class FMDMain {
             case "config":
                 exitCode = config(args, currentProject);
                 break;
-            case "transform":
-                exitCode = transform(args);
+            case "deobf":
+                exitCode = deobf(args);
                 break;
             case "reflect":
                 ReflectTool.start(!isMain);
                 break;
             case "preAT":
                 exitCode = preAT(new UIWarp());
+                break;
+            case "reload":
+                if(isMain) {
+                    CmdUtil.warning("重新加载映射表...");
+                    mapperFwd.clear();
+                    initForwardMapper();
+                    mapperRev = null;
+                }
                 break;
             case "download": {
                 File downloadPath;
@@ -203,6 +207,14 @@ public final class FMDMain {
                     exitCode = -1;
                 }
             }
+            break;
+            case "gc":
+                AnnotationProcessor.gc();
+                System.runFinalization();
+                System.gc();
+                System.runFinalization();
+                System.gc();
+                //Runtime.getRuntime().traceMethodCalls(true);
             break;
             default:
                 CmdUtil.warning("参数错误");
@@ -285,7 +297,7 @@ public final class FMDMain {
         return forgeToMcp(mcpConfig, mcpFile, null, new File(BASE, "Mcp2Srg.srg"));
     }
 
-    public static int transform(String[] args) throws IOException, InterruptedException {
+    public static int deobf(String[] args) throws IOException, InterruptedException {
         List<File> files = new ArrayList<>();
 
         if(args.length > 1) {
@@ -296,36 +308,40 @@ public final class FMDMain {
             files = Collections.singletonList(UIUtil.readFile("文件"));
         }
 
-        ConstMapper remapper = getReverseMapper();
+        ConstMapper rev = getReverseMapper();
 
-        Map<String, InputStream> streams = new HashMap<>(400);
-        Map<String, InputStream> classes = new HashMap<>(200);
+        MyHashMap<String, byte[]> res = new MyHashMap<>(400);
 
-        for (int i = 0; i < files.size(); i++) {
+        ConstMapper.State state = new ConstMapper.State();
+
+        for (int i = files.size() - 1; i >= 0; i--) {
             File file = files.get(i);
-            ZipFile zf = Util.prepareInputFromZip(file, StandardCharsets.UTF_8, streams);
-            Helpers.filter(streams, classes, (s) -> s.endsWith(".class"));
+            List<Context> list = Util.ctxFromZip(file, StandardCharsets.UTF_8, res);
 
             String path = file.getAbsolutePath();
             int index = path.lastIndexOf('.');
             File out = index == -1 ? new File(path + "-结果") : new File(path.substring(0, index) + "-结果.jar");
             ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(out));
-            Thread thread = Util.createResourceWriter(zos, streams);
 
-            List<Context> list = remapper.remap(classes, DEBUG);
+            CalculateTask<Void> task = new CalculateTask<>(new ResWriter(zos, res));
+            parallel.pushTask(task);
+
+            rev.remap(DEBUG, list);
+            rev.addPermanently(rev.snapshot(state));
 
             if (!isForgeMap) {
-                new CodeMapper(remapper).remap(DEBUG, list);
+                new CodeMapper(rev).remap(DEBUG, list);
             }
 
-            thread.join();
+            try {
+                task.get();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
 
             Util.write(list, zos, true);
 
-            zf.close();
-
-            streams.clear();
-            classes.clear();
+            res.clear();
         }
 
         CmdUtil.success("操作成功完成!");
@@ -338,11 +354,11 @@ public final class FMDMain {
         map.clear();
 
         readTextList((s) -> {
-                String[] tmp = s.split(" ", 2);
-                if (tmp.length < 2) {
-                    CmdUtil.warning("Unknown entry " + s);
-                }
-                AccessTransformer.add(tmp[0], tmp[1]);
+            String[] tmp = s.split(" ", 2);
+            if (tmp.length < 2) {
+                CmdUtil.warning("Unknown entry " + s);
+            }
+            AccessTransformer.add(tmp[0], tmp[1]);
         }, "预AT.编译期");
         loadPreAT(null);
 
@@ -393,7 +409,7 @@ public final class FMDMain {
                 continue;
             ZipEntry cpEntry = new ZipEntry(ze.getName());
             zos.putNextEntry(cpEntry);
-            
+
             String name = className.remove(ze.getName());
             if(name != null) {
                 byte[] code = AccessTransformer.transform(name, IOUtil.readFully(origZip.getInputStream(ze)));
@@ -489,7 +505,7 @@ public final class FMDMain {
     public static int config(String[] args, Project project) throws IOException {
         List<File> files = FileUtil.findAllFiles(PROJ_CONF_DIR, (f) -> !f.getName().equalsIgnoreCase("index.json"));
         if(args.length > 2) {
-            File path = new File(args[2]);
+            File path = new File(args[2] + ".json");
             if(!path.isFile()) {
                 path = new File(BASE, "config/" + args[2] + ".json");
                 if(!path.isFile()) {
@@ -517,8 +533,6 @@ public final class FMDMain {
                 }
 
                 File selected = files.get(UIUtil.selectOneFile(files, "配置文件"));
-
-                System.out.println(selected.getName());
 
                 Shared.setConfig(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
                 CmdUtil.success("配置文件已选择: " + selected);
@@ -596,7 +610,7 @@ public final class FMDMain {
 
     // endregion
 
-    public static int runClient(Map<String, String> args) throws IOException, InterruptedException {
+    public static int run(Map<String, String> args) throws IOException, InterruptedException {
         MCLauncher.load();
 
         CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
@@ -613,7 +627,7 @@ public final class FMDMain {
                 return -1;
             }
 
-            if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBoolean()) {
+            if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBool()) {
                 File hrTmp = new File(TMP_DIR, "hr");
                 if(!hrTmp.isDirectory() && !hrTmp.mkdirs()) {
                     CmdUtil.error("tmp/hr 目录创建失败");
@@ -634,7 +648,7 @@ public final class FMDMain {
     }
 
     public static int build(Map<String, String> args) throws IOException, InterruptedException {
-        if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBoolean())
+        if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBool())
             args.put("_HOT_RELOAD_ENABLE_", Helpers.cast(new ArrayList<>()));
 
         if(compile(args, currentProject, BASE, 0)) {
@@ -644,12 +658,12 @@ public final class FMDMain {
                     CmdUtil.error("tmp/hr 目录创建失败");
                 }
 
-                List<ConstantData> modifiedHrs = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
+                List<ConstantData> modified = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
                 AppendOnlyCache aoc = new AppendOnlyCache(new File(hrTmp, "modified.bin"));
                 aoc.clear();
 
-                for (int i = 0; i < modifiedHrs.size(); i++) {
-                    ConstantData data = modifiedHrs.get(i);
+                for (int i = 0; i < modified.size(); i++) {
+                    ConstantData data = modified.get(i);
                     aoc.append(data.name, data.getBytes());
                 }
 
@@ -669,11 +683,13 @@ public final class FMDMain {
     }
 
     /**
-     * @param flag Bit 1 : runClient (NoVersion) , Bit 2 : dependency mode
+     * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
      */
     public static boolean compile(Map<String, ?> args, Project project, File jarDest, int flag) throws IOException, InterruptedException {
         // 前置
         if((flag & 2) == 0) {
+            if(args.containsKey("zl") && !isMain)
+                CmdUtil.info("增量编译! ", false);
             for (Project proj : project.getAllDependencies()) {
                 if(!compile(args, proj, jarDest, flag | 2)) {
                     CmdUtil.info("前置编译失败");
@@ -685,8 +701,7 @@ public final class FMDMain {
         // 输出目录存在性
         File binary = project.binary;
         if(args.containsKey("clearBin")) {
-            if(!FileUtil.deletePath(binary))
-                CmdUtil.warning("无法清除编译目录");
+            CmdUtil.warning("清除bin目录已被弃用,此功能已能够自动在build时执行");
         }
         if(!binary.isDirectory()) {
             if(!binary.mkdirs() && !binary.delete() && !binary.mkdirs()) {
@@ -701,14 +716,6 @@ public final class FMDMain {
         boolean increment = args.containsKey("zl");
         long stamp = binary.lastModified();
 
-        // region 更新资源文件
-
-        CalculateTask<Void> task = new CalculateTask<>(project.getResourceTask);
-        FileFilter.INST.reset(stamp, FileFilter.F_TIME);
-        // todo 这里FileFilter要多线程
-        parallel.pushTask(task);
-
-        // endregion
         // region 获取所有源文件并(可选的)检测AT
 
         File source = project.source;
@@ -717,17 +724,12 @@ public final class FMDMain {
             return false;
         }
 
-        List<File> files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_CLASS : FileFilter.F_CLASS_OA));
+        List<File> files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_SRC : FileFilter.F_JAVA_OA));
 
         // endregion
 
         incr:
         if(increment) {
-            if((flag & 2) == 0 && !isMain) {
-                CmdUtil.info("增量编译! ", false);
-                CmdUtil.warning("注: 若删除了方法或类,更改了方法签名等, 请使用全量编译!");
-            }
-
             List<File> tmp = new ArrayList<>();
 
             for (int i = 0; i < files.size(); i++) {
@@ -757,20 +759,14 @@ public final class FMDMain {
             return false;
         }
 
-        String binaryStr = project.binaryPathStr;
-
-        // 库文件
-        String libraries;
-        if(args.containsKey("_COMPILE_OUTPUT_SINCE_"))
-            libraries = args.get("_COMPILE_OUTPUT_SINCE_").toString() + getLibClasses();
-        else
-            libraries = getLibClasses();
-
-        SimpleList<String> options = MAIN_CONFIG.get("编译参数").asList().asStringList();
-        options.addAll("-d", binaryStr, "-cp", binaryStr + File.pathSeparatorChar + libraries, "-encoding", project.charset.name());
-
+        // OpenAny
         FMDOAProc md = null;
         if(FileFilter.state != 0) {
+            if(project.atName.isEmpty()) {
+                CmdUtil.error("项目代码使用了OpenAny,但是没有设置atConfig");
+                return false;
+            }
+
             md = new FMDOAProc();
 
             Map<String, Collection<String>> atMap = AccessTransformer.getTransforms();
@@ -779,18 +775,16 @@ public final class FMDMain {
 
             String atPath = project.atConfigPathStr;
 
+            StringBuilder sb = null;
             if (!atMap.isEmpty()) {
-                StringBuilder sb = new StringBuilder();
+                sb = new StringBuilder();
                 for (Map.Entry<String, Collection<String>> entry : atMap.entrySet()) {
                     for (String val : entry.getValue()) {
                         sb.append("public-f ").append(entry.getKey()).append(' ').append(val).append('\n');
                     }
                 }
-                try (FileOutputStream fos = new FileOutputStream(new File(atPath))) {
-                    ByteWriter.encodeUTF(sb).writeToStream(fos);
-                }
             }
-            md.internalInit(atPath, libraries, binaryStr, !atMap.isEmpty());
+            md.internalInit(atPath, new File(BASE, "/class/"), sb);
         }
 
         Set<String> ignores = new MyHashSet<>();
@@ -798,19 +792,41 @@ public final class FMDMain {
 
         long time = System.currentTimeMillis();
 
+        // 放到这里, 因为会删除文件...
+        String jarName = project.name + ((flag & 1) == 0 ? '-' + project.version : "") + ".jar";
+        File jarFile = new File(jarDest, jarName);
+
+        while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile)) {
+            jarFile = new File(jarDest, System.currentTimeMillis() + jarName);
+            CmdUtil.warning("输出jar已被锁定... 改为 " + jarFile.getName());
+        }
+
+        // 反正compile时间绝对够
+        // region 更新资源文件
+
+        CalculateTask<Void> task = new CalculateTask<>(project.getResourceTask);
+        Project.resourceFilter.reset(stamp, increment && jarFile.isFile() ? FileFilter.F_TIME : FileFilter.F_ALL);
+        parallel.pushTask(task);
+
+        // endregion
+
+        String binaryStr = project.binaryPathStr;
+
+        // 库文件
+        CharList libBuf = new CharList(200).append(binaryStr).append(File.pathSeparatorChar);
+        if(args.containsKey("_COMPILE_OUTPUT_SINCE_"))
+            libBuf.append((CharSequence) args.get("_COMPILE_OUTPUT_SINCE_")).append(getLibClasses());
+        else
+            libBuf.append(getLibClasses());
+
+        SimpleList<String> options = MAIN_CONFIG.get("编译参数").asList().asStringList();
+        options.addAll("-d", binaryStr, "-cp", libBuf.toString(), "-encoding", project.charset.name());
+
         if(Compiler.compile(options, files, System.out, ignores, args.containsKey("showErrorCode"), md)) {
             if(DEBUG)
                 System.out.println("编译完成 " + (System.currentTimeMillis() - time));
 
             runHook();
-
-            String jarName = project.name + ((flag & 1) == 0 ? '-' + project.version : "") + ".jar";
-            File jarFile = new File(jarDest, jarName);
-
-            while (jarFile.isFile() && !jarFile.delete()) {
-                jarFile = new File(jarDest, System.currentTimeMillis() + jarName);
-                CmdUtil.warning("输出jar已被锁定... 改名 " + jarFile.getName());
-            }
 
             try {
                 task.get();
@@ -820,27 +836,35 @@ public final class FMDMain {
 
             MyHashMap<String, InputStream> classes = new MyHashMap<>(100);
 
-            increment &= project.state != null & jarFile.isFile();
-            FileUtil.findAndOpenStream(project.binary, classes, FileFilter.INST.reset(stamp, increment ? FileFilter.F_CLASS_TIME : FileFilter.F_CLASS));
+            boolean canIncrementWrite = increment & project.state != null & jarFile.isFile();
 
-            // 增量写入，list读取继承表就OK了
+            // 自动删除被删除的文件
+            // build之后，修改时间没有更新，就是被删除的文件了, 所以增量不支持
+            FileUtil.findAndOpenStream(project.binary, classes, FileFilter.INST.reset(stamp, canIncrementWrite ? FileFilter.F_CLASS_TIME : increment ? FileFilter.F_CLASS : FileFilter.F_CLASS_TIME_REMOVE));
+
+            if(FileFilter.state > 0) {
+                int i = FileUtil.removeEmptyPaths(FileFilter.modified);
+                if(DEBUG)
+                    CmdUtil.info("删除了" + FileFilter.state + "个已删除的文件 " + i);
+            }
+
             // 想办法减少ZIP写入的I/O
             MyHashMap<String, byte[]> resources = project.resourceCache;
 
             if (md != null) {
                 try {
-                    resources.put(project.atConfigPathStr, IOUtil.readFile(md.getAtPath()));
+                    resources.put("META-INF" + File.separatorChar + project.atName + ".cfg" , IOUtil.readFile(md.getAtPath()));
                 } catch (IOException e) {
                     CmdUtil.warning("更新AT失败", e);
                 }
             }
 
-            List<Context> list = Util.prepareContexts(classes);
+            List<Context> list = Util.ctxFromStream(classes);
 
             if(DEBUG)
                 System.out.println("资源处理完成 " + (System.currentTimeMillis() - time));
 
-            if(increment) {
+            if(canIncrementWrite) {
                 mapperFwd.state(project.state);
                 mapperFwd.remap(DEBUG, list);
                 project.state = mapperFwd.snapshot();
@@ -865,9 +889,12 @@ public final class FMDMain {
                     }
                 }
 
-                MutableZipFile mz = new MutableZipFile(jarFile);
-                mz.setFileDataMore(entries);
-                mz.close();
+                try (MutableZipFile mz = new MutableZipFile(jarFile)) {
+                    mz.setFileDataMore(entries);
+                    mz.store();
+                } catch (IOException e) {
+                    CmdUtil.warning("MutableZipFile 遇到了一些问题, 您可以尝试关闭配置文件中的MutableZipFile ", e);
+                }
 
                 if(args.containsKey("_HOT_RELOAD_ENABLE_")) {
                     List<ConstantData> dst = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
@@ -885,11 +912,11 @@ public final class FMDMain {
                 }
 
                 ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jarFile));
-                CalculateTask<Void> rw = CalculateTask.fromVoid(new ResWriter(zos, resources));
+                CalculateTask<Void> rw = new CalculateTask<>(new ResWriter(zos, resources));
                 parallel.pushTask(rw);
 
                 mapperFwd.remap(DEBUG, list);
-                project.state = mapperFwd.snapshot();
+                project.state = mapperFwd.snapshot(project.state);
 
                 if(!isForgeMap) {
                     new CodeMapper(mapperFwd).remap(DEBUG, list);
@@ -932,9 +959,50 @@ public final class FMDMain {
 
     // region Build.util
 
+    static long lastLibHash;
+    static CharList libClasses;
+
+    private static CharList getLibClasses() {
+        File lib = new File(BASE, "/class/");
+        if(!lib.isDirectory())
+            return new CharList();
+
+        List<File> fs = Arrays.asList(lib.listFiles());
+
+        CharList sb = libClasses;
+        if(sb == null)
+            sb = new CharList();
+        else if(ConstMapper.libHash(fs) == lastLibHash)
+            return sb;
+        sb.clear();
+
+        for (int i = 0; i < fs.size(); i++) {
+            File file = fs.get(i);
+            if (!(file.getName().endsWith(".zip") || file.getName().endsWith(".jar")) || file.length() == 0) {
+                continue;
+            }
+            try (ZipFile zf = new ZipFile(file)) {
+                if (zf.size() == 0)
+                    CmdUtil.warning(file.getPath() + " 是空的");
+            } catch (Throwable e) {
+                CmdUtil.error(file.getPath() + " 不是ZIP压缩文件");
+                if (!file.renameTo(new File(file.getAbsolutePath() + ".err"))) {
+                    throw new RuntimeException("未指定的I/O错误");
+                } else {
+                    CmdUtil.info("文件已被自动重命名为.err");
+                }
+            }
+
+            sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
+        }
+        lastLibHash = ConstMapper.libHash(fs);
+        sb.setIndex(sb.length() - 1);
+        return sb;
+    }
+
     static List<Runnable> hook = new ArrayList<>(2);
 
-    public static void annotationHook(Runnable runnable) {
+    public static void runAtMainThread(Runnable runnable) {
         hook.add(runnable);
     }
 
@@ -952,20 +1020,15 @@ public final class FMDMain {
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
         CMapping cfgFMD = MAIN_CONFIG.get("FMD配置").asMap();
 
-        File mcRoot;
-        {
-            File file = new File(cfgGen.getString("MC目录"));
-            if (file.isDirectory())
-                mcRoot = file;
-            else
-                mcRoot = UIUtil.readFile("MC目录(.minecraft)");
-        }
+        File mcRoot = new File(cfgGen.getString("MC目录"));
+        if (!mcRoot.isDirectory())
+            mcRoot = UIUtil.readFile("MC目录(.minecraft)");
 
         List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
 
         File mcJson = null;
-        if(versions.size() < 1) {
-            CmdUtil.error("没有找到任何MC版本！！！", true);
+        if(versions.isEmpty()) {
+            CmdUtil.error("没有找到任何MC版本！请确认目录名是.minecraft", true);
             return -1;
         } else {
             String versionJson = cfgFMD.getString("MC版本JSON");
@@ -985,7 +1048,10 @@ public final class FMDMain {
     }
 
     @SuppressWarnings("unchecked")
-    static <T extends IntSupplier & BiConsumer<Integer, File>> int changeVersion(File mcRoot, File mcJson, UIWarp gui) throws IOException {
+    static int changeVersion(File mcRoot, File mcJson, UIWarp gui) throws IOException {
+        if(watcher != null)
+            watcher.interrupt();
+
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
         CMapping cfgFMD = MAIN_CONFIG.get("FMD配置").asMap();
 
@@ -1010,280 +1076,265 @@ public final class FMDMain {
         boolean is113andAbove = (boolean) result[4];
         File mcJar = (File) result[1];
 
-        File mcServer = null;
-        File mcpPackFile = null;
-
-        {
-            File file = new File(cfgFMD.getString("MC未反混淆的服务器端"));
-            if (file.isFile())
-                mcServer = file;
-        }
-
-
         File mcpSrgPath = new File(BASE, "/util/mcp-srg.srg");
         if(mcpSrgPath.isFile() && !mcpSrgPath.delete()) {
             CmdUtil.error("无法删除旧的映射数据: " + mcpSrgPath.getPath());
             return -1;
         }
 
-        Map<String, Map<String, List<String>>> paramMap = null;
-        {
-            String version = "";
-            if(is113andAbove) {
-                version = jsonDesc.get("clientVersion").asString();
+        String mcVersion = "";
+        if(is113andAbove) {
+            mcVersion = jsonDesc.get("clientVersion").asString();
+        }
+        if(mcVersion.isEmpty()) {
+            final String name = mcJar.getName();
+            mcVersion = name.substring(0, name.lastIndexOf('.'));
+            int i = name.lastIndexOf('-');
+            if(i != -1)
+                mcVersion = mcVersion.substring(0, i);
+            mcVersion = mcVersion.replace("-forge", "");
+        }
+
+        String mcpVersion = detectVersion(mcVersion);
+
+        gui.stageInfo(0);
+        String newMcp = gui.userInput("自动检测的MCP版本号为: " + mcpVersion + " 无需修改请按回车: ", true).trim();
+        if(newMcp.length() > 0)
+            mcpVersion = newMcp;
+
+        CMapping downloads = jsonDesc.get("downloads").asMap();
+
+        boolean canDownloadOfficial = downloads.containsKey("client_mappings");
+        boolean canDownloadYarn = new Version(mcVersion).compareTo(new Version("1.12")) >= 0;
+
+        if(gui.isConsole()) {
+            System.out.println();
+            CmdUtil.info("需要提供一个映射表! ");
+            CmdUtil.info(" 0: MCP");
+            if (canDownloadOfficial) {
+                CmdUtil.info(" 1: MC官方");
             }
-            if(version.isEmpty()) {
-                final String name = mcJar.getName();
-                version = name.substring(0, name.lastIndexOf('.'));
-                int i = name.lastIndexOf('-');
-                if(i != -1)
-                    version = version.substring(0, i);
-                version = version.replace("-forge", "");
+            if (canDownloadYarn) {
+                CmdUtil.info(" 2: YARN (WIP)");
             }
+            CmdUtil.info(" 3: 自己提供");
+            CmdUtil.info(" 4: 手动下载");
+            System.out.println();
+        }
 
-            String mcpVersion = detectVersion(version);
+        String mcpConfUrl = cfgGen.getString("协议") + cfgGen.getString("forge地址") + "/de/oceanlabs/mcp/mcp_config/" + mcVersion + "/mcp_config-" + mcVersion + ".zip";
+        String mirror = cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null;
+        boolean mapUseMirror = cfgFMD.getBool("映射表也使用镜像");
 
-            gui.stageInfo(0);
-            String changeVersion = gui.userInput("自动检测的MCP版本号为: " + mcpVersion + " 若出错请修改, 否则直接按回车: ", true).trim();
-            if(changeVersion.length() > 0)
-                mcpVersion = changeVersion;
-
-            Version comparableVersion = new Version(version);
-
-            CMapping downloads = jsonDesc.get("downloads").asMap();
-
-            boolean canDownloadOfficial = downloads.containsKey("client_mappings");
-            boolean canDownloadYarn = comparableVersion.compareTo(new Version("1.12")) >= 0;
-
-            if(gui.isConsole()) {
-                System.out.println();
-                CmdUtil.info("需要提供一个映射表! ");
-                CmdUtil.info(" 0: 下载MCP映射表");
-                if (canDownloadOfficial) {
-                    CmdUtil.info(" 1: 下载MC官方的映射表");
-                }
-                if (canDownloadYarn) {
-                    CmdUtil.info(" 2: 使用YARN映射表 (WIP)");
-                }
-                CmdUtil.info(" 3: 使用自己的");
-                CmdUtil.info(" 4: 手动下载(比如, 使用镜像)");
-                System.out.println();
-            }
-
-            String mcpConfUrl = cfgGen.getString("协议") + cfgGen.getString("forge地址") + "/de/oceanlabs/mcp/mcp_config/" + version + "/mcp_config-" + version + ".zip";
-            String mirror = cfgGen.getBoolean("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null;
-            boolean mapUseMirror = cfgFMD.getBoolean("映射表也使用镜像");
-
-            gui.stageInfo(1, canDownloadOfficial, canDownloadYarn);
-            int select = gui.getNumberInRange(0, 5);
-            switch (select) {
-                case 1: {
-                    if(!canDownloadOfficial) {
-                        CmdUtil.error("此版本不支持下载MC官方的映射表");
-                        return -1;
-                    }
-                }
-                break;
-                case 2: {
-                    if(!canDownloadYarn) {
-                        CmdUtil.error("此版本不支持使用Yarn映射表");
-                        return -1;
-                    }
-                }
-                break;
-                case 4: {
-                    CmdUtil.warning("请手动下载下面几个文件: ");
-                    CmdUtil.info("第一个文件: 映射表");
-
-                    if(canDownloadOfficial && gui.isConsole()) {
-                        CmdUtil.info(" 0: 下载MCP");
-                        CmdUtil.info(" 1: 下载MC官方");
-                    }
-
-                    CMapping tmp;
-
-                    if(canDownloadOfficial)
-                        gui.stageInfo(2);
-                    int num = canDownloadOfficial ? gui.getNumberInRange(0, 2) : 0;
-                    switch (num) {
-                        case 0: {
-                            if(!is113andAbove) {
-                                CmdUtil.info("  '官方'");
-                                CmdUtil.info("    " + cfgGen.getString("协议") + cfgGen.getString("forge地址") + "/de/oceanlabs/mcp/mcp_stable/");
-                                CmdUtil.info("    " + cfgGen.getString("协议") + cfgGen.getString("forge地址") + "/de/oceanlabs/mcp/mcp_snapshot/");
-                                CmdUtil.info("  '非官方' (速度快)");
-                            }
-
-                            CmdUtil.info("    " + cfgFMD.getString("MCP下载根路径"));
-                            System.out.println();
-                            CmdUtil.warning("来自ForgeGradle? 打开build.gradle");
-                            CmdUtil.info("  搜索'// stable_#, 下面就是版本");
-                        }
-                        break;
-                        case 1: {
-                            showFileDetail(downloads, "client_mappings", mapUseMirror ? mirror : null);
-                        }
-                        break;
-                    }
-
-                    System.out.println();
-                    CmdUtil.warning("不清楚？ https://neutrino.v2mcdev.com/devenvironment/folderintro.html");
-                    if(is113andAbove) {
-                        System.out.println();
-                        CmdUtil.info("第二个文件: MCP Config");
-                        CmdUtil.info("    " + mcpConfUrl);
-                    }
-
-                    System.out.println();
-                    CmdUtil.info("第三个文件: MC服务端");
-                    showFileDetail(downloads, "server", mirror);
-                    if(is113andAbove)
-                        showFileDetail(downloads, "server_mappings", mapUseMirror ? mirror : null);
-
-                    System.out.println();
-                    CmdUtil.info("所有的文件放到tmp文件夹里, 然后重新安装");
-                    gui.stageInfo(3);
+        gui.stageInfo(1, canDownloadOfficial, canDownloadYarn);
+        int select = gui.getNumberInRange(0, 5);
+        isForgeMap = select == 0;
+        switch (select) {
+            case 1: {
+                if(!canDownloadOfficial) {
+                    CmdUtil.error("此版本不支持下载MC官方的映射表");
                     return -1;
                 }
             }
+            break;
+            case 2: {
+                if(!canDownloadYarn) {
+                    CmdUtil.error("此版本不支持使用Yarn映射表");
+                    return -1;
+                }
+            }
+            break;
+            case 4: {
+                CmdUtil.warning("请手动下载下面几个文件: ");
+                CmdUtil.info("第一个文件: 映射表");
 
-            File mcpConfigFile;
-            if(is113andAbove) {
-                mcpConfigFile = new File(TMP_DIR, "mcp_config-" + version + ".zip");
+                if(canDownloadOfficial && gui.isConsole()) {
+                    CmdUtil.info(" 0: 下载MCP");
+                    CmdUtil.info(" 1: 下载MC官方");
+                }
+
+                CMapping tmp;
+
+                if(canDownloadOfficial)
+                    gui.stageInfo(2);
+                int num = canDownloadOfficial ? gui.getNumberInRange(0, 2) : 0;
+                switch (num) {
+                    case 0: {
+                        if(!is113andAbove) {
+                            CmdUtil.info("  '官方'");
+                            CmdUtil.info("    " + cfgGen.getString("协议") + cfgGen.getString("forge地址") + "/de/oceanlabs/mcp/mcp_stable/");
+                            CmdUtil.info("    " + cfgGen.getString("协议") + cfgGen.getString("forge地址") + "/de/oceanlabs/mcp/mcp_snapshot/");
+                            CmdUtil.info("  '非官方' (速度快)");
+                        }
+
+                        CmdUtil.info("    " + cfgFMD.getString("MCP下载根路径"));
+                        System.out.println();
+                        CmdUtil.warning("来自ForgeGradle? 打开build.gradle");
+                        CmdUtil.info("  搜索'// stable_#, 下面就是版本");
+                    }
+                    break;
+                    case 1: {
+                        showFileDetail(downloads, "client_mappings", mapUseMirror ? mirror : null);
+                    }
+                    break;
+                }
+
+                System.out.println();
+                CmdUtil.warning("不清楚？ https://neutrino.v2mcdev.com/devenvironment/folderintro.html");
+                if(is113andAbove) {
+                    System.out.println();
+                    CmdUtil.info("第二个文件: MCP Config");
+                    CmdUtil.info("    " + mcpConfUrl);
+                }
+
+                System.out.println();
+                CmdUtil.info("第三个文件: MC服务端");
+                showFileDetail(downloads, "server", mirror);
+                if(is113andAbove)
+                    showFileDetail(downloads, "server_mappings", mapUseMirror ? mirror : null);
+
+                System.out.println();
+                CmdUtil.info("所有的文件放到tmp文件夹里, 然后重新安装");
+                gui.stageInfo(3);
+                return -1;
+            }
+        }
+
+        File mcpConfigFile;
+        if(is113andAbove) {
+            mcpConfigFile = new File(TMP_DIR, "mcp_config-" + mcVersion + ".zip");
+
+            try {
+                MCLauncher.downloadAndVerifyMD5(mcpConfUrl, mcpConfigFile, true);
+            } catch (FileNotFoundException e) {
+                CmdUtil.warning("错误: 404  MCP-Config不存在! 请检查镜像地址, 或者手动下载");
+                return -1;
+            } catch (IOException e) {
+                CmdUtil.warning("MCP-Config下载失败 " + mcpConfUrl);
+                return -1;
+            }
+            Proc1_16.handleMCPConfig(mcpConfigFile);
+        } else {
+            mcpConfigFile = null;
+        }
+
+        Map<String, Map<String, List<String>>> paramMap = null;
+        File mcpPackFile = null;
+
+        switch (select) {
+            case 0: {
+                String mcpPackUrl = cfgFMD.getString("MCP下载根路径");
+
+                boolean autoDownloadStable = cfgFMD.getBool("自动下载稳定版的MCP");
+
+                String a = getStableMCPVersion(mcpVersion);
+                if(!autoDownloadStable || a == null) {
+                    if(a == null) {
+                        CmdUtil.warning("不幸的是目前你的版本没有稳定的MCP");
+                    }
+
+                    CmdUtil.info("提示: stable-123 => s-123 (稳定版)  snapshot-20201221 => 20201221 (快照版) ");
+                    CmdUtil.warning("上面的是示例!! 版本要你自己找!! 不会找的上面按5");
+                    gui.stageInfo(4);
+                    String subVersion = gui.userInput("请输入使用的MCP版本并按回车: ", false);
+
+                    if (subVersion.startsWith("s-")) {
+                        a = subVersion.substring(2) + '-' + mcpVersion;
+                        mcpPackUrl += "mcp_stable/" + a + "/mcp_stable-" + a + ".zip";
+                    } else {
+                        a = subVersion + '-' + mcpVersion;
+                        mcpPackUrl += "mcp_snapshot/" + a + "/mcp_snapshot-" + a + ".zip";
+                    }
+
+                    mcpPackFile = new File(TMP_DIR, "mcp_" + (subVersion.startsWith("s-") ? "stable" : "snapshot") + '-' + a + ".zip");
+                } else {
+                    String tmp = "mcp_stable-" + a + '-' + mcpVersion + ".zip";
+                    mcpPackUrl += "mcp_stable/" + a  + '-' + mcpVersion + '/' + tmp;
+                    mcpPackFile = new File(TMP_DIR, tmp);
+                }
 
                 try {
-                    MCLauncher.downloadAndVerifyMD5(mcpConfUrl, mcpConfigFile, true);
+                    MCLauncher.downloadAndVerifyMD5(mcpPackUrl, mcpPackFile, true);
                 } catch (FileNotFoundException e) {
-                    CmdUtil.warning("错误: 404  MCP-Config不存在! 请检查镜像地址, 或者手动下载");
+                    CmdUtil.warning("错误: 404 MCP不存在! 请检查你输入的MCP版本, 或者手动下载");
                     return -1;
                 } catch (IOException e) {
-                    CmdUtil.warning("MCP-Config下载失败 " + mcpConfUrl);
+                    CmdUtil.warning("MCP下载失败 " + mcpPackUrl);
                     return -1;
                 }
-                Proc1_16.handleMCPConfig(mcpConfigFile);
-            } else {
-                mcpConfigFile = null;
+
+                if(is113andAbove) {
+                    CmdUtil.info("生成MCP-SRG映射表...");
+                    paramMap = new MyHashMap<>();
+                    forgeToMcp(mcpConfigFile, mcpPackFile, paramMap, mcpSrgPath);
+                    CmdUtil.info("生成完毕...");
+                }  // 1.12.2 delayed read forge data
+
             }
-
-            isForgeMap = false;
-
-            switch (select) {
-                case 0: {
-                    String mcpPackUrl = cfgFMD.getString("MCP下载根路径");
-
-                    boolean autoDownloadStable = cfgFMD.getBoolean("自动下载稳定版的MCP");
-
-                    String a = getStableMCPVersion(mcpVersion);
-                    if(!autoDownloadStable || a == null) {
-                        if(a == null) {
-                            CmdUtil.warning("不幸的是目前你的版本没有稳定的MCP");
-                        }
-
-                        CmdUtil.info("方便你输入: stable-123 => s-123 (稳定版)  snapshot-20201221 => 20201221 (快照版) ");
-                        CmdUtil.warning("上面的是示例!! 版本要你自己找!! 不会找的上面按5");
-                        gui.stageInfo(4);
-                        String subVersion = gui.userInput("请输入使用的MCP版本并按回车: ", false);
-
-                        if (subVersion.startsWith("s-")) {
-                            a = subVersion.substring(2) + '-' + mcpVersion;
-                            mcpPackUrl += "mcp_stable/" + a + "/mcp_stable-" + a + ".zip";
-                        } else {
-                            a = subVersion + '-' + mcpVersion;
-                            mcpPackUrl += "mcp_snapshot/" + a + "/mcp_snapshot-" + a + ".zip";
-                        }
-
-                        mcpPackFile = new File(TMP_DIR, "mcp_" + (subVersion.startsWith("s-") ? "stable" : "snapshot") + '-' + a + ".zip");
-                    } else {
-                        String tmp = "mcp_stable-" + a + '-' + mcpVersion + ".zip";
-                        mcpPackUrl += "mcp_stable/" + a  + '-' + mcpVersion + '/' + tmp;
-                        mcpPackFile = new File(TMP_DIR, tmp);
-                    }
-
-                    try {
-                        MCLauncher.downloadAndVerifyMD5(mcpPackUrl, mcpPackFile, true);
-                    } catch (FileNotFoundException e) {
-                        CmdUtil.warning("错误: 404 MCP不存在! 请检查你输入的MCP版本, 或者手动下载");
-                        return -1;
-                    } catch (IOException e) {
-                        CmdUtil.warning("MCP下载失败 " + mcpPackUrl);
-                        return -1;
-                    }
-
-                    isForgeMap = true;
-
-                    if(is113andAbove) {
-                        CmdUtil.info("生成MCP-SRG映射表...");
-                        paramMap = new MyHashMap<>();
-                        forgeToMcp(mcpConfigFile, mcpPackFile, paramMap, mcpSrgPath);
-                        CmdUtil.info("生成完毕...");
-                    }  // 1.12.2 delayed read forge data
-
-                }
-                break;
-                case 1: {
-                    try {
-                        File clientMap = MCLauncher.downloadMinecraftFile(downloads, "client_mappings", mapUseMirror ? mirror : null);
-                        File serverMap = MCLauncher.downloadMinecraftFile(downloads, "server_mappings", mapUseMirror ? mirror : null);
-
-                        CmdUtil.info("生成MCP-SRG映射表...");
-                        if(generateMinecraftMapping(mcpConfigFile, clientMap, serverMap) == null) {
-                            return -1;
-                        }
-                        CmdUtil.info("生成完毕...");
-                    } catch (FileNotFoundException e) {
-                        CmdUtil.warning("错误: 404  Mapping不存在! 请检查你的版本json文件或者手动下载");
-                        return -1;
-                    } catch (SocketException e) {
-                        CmdUtil.warning("错误: " + e.getMessage() + " 请多次尝试，或手动下载...");
-                        CmdUtil.success("提示： 支持断点续传!");
-                        return -1;
-                    }
-
-                    break;
-                }
-                case 2: {
-                    CmdUtil.warning("若raw.githubusercontent.com无法访问 请自己加hosts avatar.githubusercontent.com -> raw.githubusercontent.com");
-                    // todo Yarn
-                    File intermediary = new File(TMP_DIR, "/yarn_" + version + "_intermediary.txt");
-                    MCLauncher.downloadAndVerifyMD5("https://github.com/FabricMC/intermediary/raw/master/mappings/" + version + ".tiny", null, intermediary, true);
-
-                    File map = new File(TMP_DIR, "/yarn_" + version + "_map.zip");
-                    MCLauncher.downloadAndVerifyMD5("https://github.com/FabricMC/yarn/archive/" + version + ".zip", null, map, true);
+            break;
+            case 1: {
+                try {
+                    File clientMap = MCLauncher.downloadMinecraftFile(downloads, "client_mappings", mapUseMirror ? mirror : null);
+                    File serverMap = MCLauncher.downloadMinecraftFile(downloads, "server_mappings", mapUseMirror ? mirror : null);
 
                     CmdUtil.info("生成MCP-SRG映射表...");
-
-                    MappingHelper mh = new MappingHelper(false);
-                    MappingHelper.Yarn yarn = mh.new Yarn();
-                    yarn.parse(intermediary, map, version);
-                    yarn.extract(mcpSrgPath);
-
-                    CmdUtil.info("生成完毕...");
-                }
-                break;
-                case 3:
-                    File rmcpSrgPath = new File(BASE, "Mcp2Srg.srg");
-                    if(!rmcpSrgPath.isFile()) {
-                        CmdUtil.warning("请将Mcp -> Srg 映射表重命名为Mcp2Srg.srg放到当前目录");
+                    if(generateMinecraftMapping(mcpConfigFile, clientMap, serverMap) == null) {
                         return -1;
                     }
-                    FileUtil.copyFile(rmcpSrgPath, mcpSrgPath);
-                    break;
-                default:
-                    throw new RuntimeException("Impossible!");
-            }
+                    CmdUtil.info("生成完毕...");
+                } catch (FileNotFoundException e) {
+                    CmdUtil.warning("错误: 404  Mapping不存在! 请检查你的版本json文件或者手动下载");
+                    return -1;
+                } catch (SocketException e) {
+                    CmdUtil.warning("错误: " + e.getMessage() + " 请多次尝试，或手动下载...");
+                    CmdUtil.success("提示： 支持断点续传!");
+                    return -1;
+                }
 
-            if(mcServer == null)
-                mcServer = MCLauncher.downloadMinecraftFile(downloads, "server", mirror);
+                break;
+            }
+            case 2: {
+                CmdUtil.warning("若raw.githubusercontent.com无法访问 请自己加hosts avatar.githubusercontent.com -> raw.githubusercontent.com");
+                // todo Yarn
+                File intermediary = new File(TMP_DIR, "/yarn_" + mcVersion + "_intermediary.txt");
+                MCLauncher.downloadAndVerifyMD5("https://github.com/FabricMC/intermediary/raw/master/mappings/" + mcVersion + ".tiny", null, intermediary, true);
+
+                File map = new File(TMP_DIR, "/yarn_" + mcVersion + "_map.zip");
+                MCLauncher.downloadAndVerifyMD5("https://github.com/FabricMC/yarn/archive/" + mcVersion + ".zip", null, map, true);
+
+                CmdUtil.info("生成MCP-SRG映射表...");
+
+                MappingHelper mh = new MappingHelper(false);
+                MappingHelper.Yarn yarn = mh.new Yarn();
+                yarn.parse(intermediary, map, mcVersion);
+                yarn.extract(mcpSrgPath);
+
+                CmdUtil.info("生成完毕...");
+            }
+            break;
+            case 3:
+                File rmcpSrgPath = new File(BASE, "Mcp2Srg.srg");
+                if(!rmcpSrgPath.isFile()) {
+                    CmdUtil.warning("请将Mcp -> Srg 映射表重命名为Mcp2Srg.srg放到当前目录");
+                    return -1;
+                }
+                FileUtil.copyFile(rmcpSrgPath, mcpSrgPath);
+                break;
+            default:
+                throw new RuntimeException("Impossible!");
         }
+
+        File mcServer = new File(cfgFMD.getString("MC未反混淆的服务器端"));
+        if (!mcServer.isFile())
+            mcServer = MCLauncher.downloadMinecraftFile(downloads, "server", mirror);
 
         CmdUtil.info("合并libraries中...请稍后");
 
-        {
-            File cache0 = new File(BASE, "/util/remapCache.bin");
 
-            if (cache0.isFile() && !cache0.delete())
-                CmdUtil.error("无法删除映射缓存 util/remapCache.bin!", true);
-        }
+        File cache0 = new File(BASE, "/util/remapCache.bin");
+
+        if (cache0.isFile() && !cache0.delete())
+            CmdUtil.error("无法删除映射缓存 util/remapCache.bin!", true);
 
         File librariesPath = new File(mcRoot, "/libraries/");
 
@@ -1312,7 +1363,7 @@ public final class FMDMain {
         int code = proc.getAsInt();
         if(code != 0)
             return code;
-        
+
         File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
         if(backupFile.isFile() && !backupFile.delete()) {
             CmdUtil.warning("备份删除失败");
@@ -1331,36 +1382,6 @@ public final class FMDMain {
     }
 
     // region ChangeVersion.Util
-
-    private static String getLibClasses() {
-        File lib = new File(BASE, "/class/");
-
-        StringBuilder sb = new StringBuilder();
-        List<File> fs = FileUtil.findAllFiles(lib);
-        for (int i = 0; i < fs.size(); i++) {
-            File file = fs.get(i);
-            if (!(file.getName().endsWith(".zip") || file.getName().endsWith(".jar")) || file.length() == 0) {
-                //boolean result = file.delete();
-                //CmdUtil.warning("文件 " + file.getAbsolutePath() + " 大小为0, 会影响程序运行, " + (result ? "已被自动删除" : "请手动删除"));
-                //if(result)
-                continue;
-            }
-            try (ZipFile zipFile = new ZipFile(file)) {
-                if (zipFile.size() == 0)
-                    CmdUtil.warning("文件 " + file.getAbsolutePath() + " 是空的, 可以删除");
-            } catch (Throwable e) {
-                CmdUtil.warning("文件 " + file.getAbsolutePath() + " 无法作为压缩文件读取!");
-                if (!file.renameTo(new File(file.getAbsolutePath() + ".error"))) {
-                    throw new RuntimeException("文件无法重命名");
-                } else {
-                    CmdUtil.info("文件已被自动重命名为<原文件名>.error");
-                }
-            }
-
-            sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
-        }
-        return sb.deleteCharAt(sb.length() - 1).toString();
-    }
 
     private static String detectVersion(String version) {
         switch (version) {
@@ -1441,7 +1462,7 @@ public final class FMDMain {
         }
 
         CmdUtil.info("    " + url);
-        CmdUtil.info("        文件大小: " + TextUtil.getScaledNumber(tmp.getNumber("size")).toUpperCase() + 'B');
+        CmdUtil.info("        文件大小: " + TextUtil.getScaledNumber(tmp.getInteger("size")).toUpperCase() + 'B');
         CmdUtil.info("        文件SHA1效验码: " + tmp.getString("sha1"));
         CmdUtil.warning("         注意：这个文件名字要改成 '" + tmp.getString("sha1") + '.' + id +'\'');
     }
@@ -1490,7 +1511,8 @@ public final class FMDMain {
                 biConsumer.accept(1, file);
             } else {
                 if(pkg.startsWith("com/mojang/patchy") && !_USE_PATCHY) {
-                    CmdUtil.info("跳过Patchy");
+                    if(DEBUG)
+                        CmdUtil.info("跳过Patchy " + pkg);
                     continue;
                 }
 

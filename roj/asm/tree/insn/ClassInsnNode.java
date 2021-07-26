@@ -1,0 +1,111 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+package roj.asm.tree.insn;
+
+import roj.asm.Opcodes;
+import roj.asm.cst.CstClass;
+import roj.asm.util.ConstantWriter;
+import roj.asm.util.InsnList;
+import roj.util.ByteWriter;
+
+// new / instanceof
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/29 17:16
+ */
+public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
+    public ClassInsnNode(byte code) {
+        super(code);
+    }
+
+    public ClassInsnNode(byte code, String name) {
+        super(code);
+        this.name = name;
+    }
+
+    public ClassInsnNode(byte code, CstClass clazz) {
+        super(code);
+        this.name = clazz.getValue().getString();
+    }
+
+    @Override
+    protected boolean validate() {
+        switch (code) {
+            case Opcodes.NEW:
+            case Opcodes.CHECKCAST:
+            case Opcodes.INSTANCEOF:
+            case Opcodes.ANEWARRAY:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public String name;
+
+    public String owner() {
+        return name;
+    }
+
+    @Override
+    public void owner(String clazz) {
+        this.name = clazz;
+    }
+
+    private int cid;
+
+    @Override
+    public void toByteArray(ByteWriter w) {
+        super.toByteArray(w);
+        w.writeShort(cid);
+    }
+
+    @Override
+    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
+        super.toByteArray(w);
+
+        if(code == Opcodes.NEW) {
+            if(name.startsWith("[")) {
+                throw new IllegalArgumentException("The new instruction cannot be used to create an array.");
+            }
+        }
+
+        w.writeShort(this.cid = pool.getClassId(name));
+    }
+
+    @Override
+    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+
+    }
+
+    public String toString() {
+        return Opcodes.toString0(code, name.substring(name.lastIndexOf('/') + 1));
+    }
+}

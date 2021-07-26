@@ -34,7 +34,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -143,6 +144,10 @@ public class ByteList {
         if (index > pointer)
             throw new ArrayIndexOutOfBoundsException("Required " + index + " Current " + pointer);
         return list[index]; // 2
+    }
+
+    byte get0(int index) {
+        return index >= list.length ? 0 : list[index];
     }
 
     public void pos(int id) {
@@ -442,6 +447,11 @@ public class ByteList {
         }
 
         @Override
+        public void ensureCapacity(int required) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void pos(int pos) {
             this.pointer = pos;
         }
@@ -449,21 +459,6 @@ public class ByteList {
         @Override
         public final void add(byte e) {
             pointer++;
-        }
-
-        @Override
-        public final void set(int index, byte e) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public byte get(int index) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int getU(int index) {
-            throw new UnsupportedOperationException();
         }
 
 
@@ -526,6 +521,10 @@ public class ByteList {
         @Override
         public byte get(int index) {
             return super.get(index + offset);
+        }
+
+        byte get0(int index) {
+            return (index += offset) >= list.length ? 0 : list[index];
         }
 
         @Override

@@ -1000,6 +1000,6 @@ public abstract class MathUtils {
         if (result > 4294967295L || result < Integer.MIN_VALUE)
             throw new NumberFormatException("Value overflow " + result + " : " + s);
 
-        return negative ? (int) -result : (int) result;
+        return (int) (negative ? -result : result);
     }
 }

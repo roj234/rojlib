@@ -27,10 +27,10 @@ package roj.kscript.func.gen;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.struct.Clazz;
-import roj.asm.struct.Field;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.insn.*;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.Field;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.*;
 import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
@@ -69,7 +69,7 @@ public final class JavaBridge {
         Clazz clz = holder = new Clazz();
         clz.version = 52 << 16;
         clz.interfaces.add("roj/kscript/func/gen/KFuncJava");
-        clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC, AccessFlag.PUBLIC);
+        clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC | AccessFlag.PUBLIC);
 
         Field id = new Field(new FlagList(), "id", Type.std(NativeType.INT));
         clz.fields.add(id);
@@ -77,7 +77,7 @@ public final class JavaBridge {
         Field obj = new Field(new FlagList(), "obj", (Type) null);
         clz.fields.add(obj);
 
-        roj.asm.struct.Method call = new roj.asm.struct.Method(AccessFlag.PUBLIC, clz, "invoke", "(Lroj/kscript/data/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;");
+        roj.asm.tree.Method call = new roj.asm.tree.Method(AccessFlag.PUBLIC, clz, "invoke", "(Lroj/kscript/data/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;");
         clz.methods.add(call);
         (call.code = new AttrCode(call)).computeFrames = true;
         InsnList insn = call.code.instructions;
@@ -90,7 +90,7 @@ public final class JavaBridge {
         insn.add(def);
         insn.add(NodeHelper.cached(Opcodes.ARETURN));
 
-        roj.asm.struct.Method copyAs = new roj.asm.struct.Method(0, clz, "copyAs", "(I)Lroj/kscript/func/gen/KFuncJava;");
+        roj.asm.tree.Method copyAs = new roj.asm.tree.Method(0, clz, "copyAs", "(I)Lroj/kscript/func/gen/KFuncJava;");
         clz.methods.add(copyAs);
         (copyAs.code = new AttrCode(copyAs)).computeFrames = true;
         insn = copyAs.code.instructions;
@@ -102,7 +102,7 @@ public final class JavaBridge {
 
         insn.add(AttrCode.METHOD_END_MARK);
 
-        roj.asm.struct.Method __init__ = new roj.asm.struct.Method(0, clz, "<init>", "(I)V");
+        roj.asm.tree.Method __init__ = new roj.asm.tree.Method(0, clz, "<init>", "(I)V");
         clz.methods.add(__init__);
         AttrCode code = __init__.code = new AttrCode(__init__);
         code.stackSize = 2;
@@ -118,7 +118,7 @@ public final class JavaBridge {
 
         insn.add(AttrCode.METHOD_END_MARK);
 
-        roj.asm.struct.Method gsObject = new roj.asm.struct.Method(0, clz, "get_set_Object", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        roj.asm.tree.Method gsObject = new roj.asm.tree.Method(0, clz, "get_set_Object", "(Ljava/lang/Object;)Ljava/lang/Object;");
         clz.methods.add(gsObject);
         code = gsObject.code = new AttrCode(gsObject);
         code.stackSize = 3;
@@ -137,7 +137,7 @@ public final class JavaBridge {
 
         insn.add(AttrCode.METHOD_END_MARK);
 
-        roj.asm.struct.Method __init_def__ = new roj.asm.struct.Method(0, clz, "<init>", "()V");
+        roj.asm.tree.Method __init_def__ = new roj.asm.tree.Method(0, clz, "<init>", "()V");
         clz.methods.add(__init_def__);
         code = __init_def__.code = new AttrCode(__init_def__);
         code.stackSize = 1;
@@ -202,7 +202,7 @@ public final class JavaBridge {
         }
 
         Clazz clz = holder;
-        roj.asm.struct.Method call = clz.methods.get(0);
+        roj.asm.tree.Method call = clz.methods.get(0);
 
         int i = 0;
         Set<Map.Entry<String, Object>> set = Helpers.cast(map.entrySet());

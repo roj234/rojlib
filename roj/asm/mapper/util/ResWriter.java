@@ -31,6 +31,7 @@ import roj.util.ByteList;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -41,7 +42,7 @@ import java.util.zip.ZipOutputStream;
  * @version 0.1
  * @since 2021/5/29 16:43
  */
-public class ResWriter implements Runnable {
+public class ResWriter implements Runnable, Callable<Void> {
     public ResWriter(ZipOutputStream zos, Map<String, ?> resources) {
         this.zos = zos;
         this.resources = resources;
@@ -56,25 +57,31 @@ public class ResWriter implements Runnable {
     @Override
     public void run() {
         try {
-            for (Map.Entry<String, ?> entry : resources.entrySet()) {
-                ZipEntry ze = new ZipEntry(entry.getKey().replace('\\', '/'));
-                zos.putNextEntry(ze);
-                Object obj = entry.getValue();
-                if(obj instanceof InputStream) {
-                    try (InputStream is = (InputStream) entry.getValue()) {
-                        zos.write(IOUtil.readFully(is));
-                    }
-                } else if(obj instanceof byte[]) {
-                    zos.write((byte[]) obj);
-                } else if(obj instanceof ByteList) {
-                    ((ByteList) obj).writeToStream(zos);
-                } else {
-                    throw new ClassCastException(obj.getClass().getName());
-                }
-                zos.closeEntry();
-            }
+            call();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public Void call() throws IOException {
+        for (Map.Entry<String, ?> entry : resources.entrySet()) {
+            ZipEntry ze = new ZipEntry(entry.getKey().replace('\\', '/'));
+            zos.putNextEntry(ze);
+            Object obj = entry.getValue();
+            if(obj instanceof InputStream) {
+                try (InputStream is = (InputStream) entry.getValue()) {
+                    zos.write(IOUtil.readFully(is));
+                }
+            } else if(obj instanceof byte[]) {
+                zos.write((byte[]) obj);
+            } else if(obj instanceof ByteList) {
+                ((ByteList) obj).writeToStream(zos);
+            } else {
+                throw new ClassCastException(obj.getClass().getName());
+            }
+            zos.closeEntry();
+        }
+        return null;
     }
 }

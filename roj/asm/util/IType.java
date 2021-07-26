@@ -35,7 +35,7 @@ import roj.text.CharList;
  * @since 2021/5/11 23:46
  */
 public interface IType {
-    boolean isGeneric();
+    boolean isRootGeneric();
 
     String toGeneric();
 

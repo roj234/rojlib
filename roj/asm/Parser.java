@@ -28,12 +28,12 @@ package roj.asm;
 
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
-import roj.asm.struct.*;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.attr.AttrUnknown;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.*;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
@@ -66,12 +66,13 @@ import java.util.List;
  *
  */
 /**
- * No description provided
+ * Roj ASM parser <br>
+ * 基于Java 8 构造 <br>
+ *     现已支持 Java 15 (需要测试)
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
- * 基于Java SE Binary 8 构造
  */
 public final class Parser {
     public static final int SKIP_DEBUG = 0x01;
@@ -129,7 +130,7 @@ public final class Parser {
         } catch (ArrayIndexOutOfBoundsException e) {
             result.name = "ERROR: Unknown cpi";
         }
-        boolean module = result.accesses.contains(AccessFlag.MODULE);
+        boolean module = result.accesses.hasAll(AccessFlag.MODULE);
         if(module && result.accesses.flag != AccessFlag.MODULE)
             throw new IllegalArgumentException("Module should only have 'module' flag");
 
@@ -351,14 +352,14 @@ public final class Parser {
         List<?>[] arr = new List<?>[2];
         for (int k = 0; k < 2; k++) {
             len = r.readUnsignedShort();
-            List<AccessData.D> com = new ArrayList<>(len);
+            List<AccessData.MOF> com = new ArrayList<>(len);
             for (int i = 0; i < len; i++) {
                 int offset = r.index;
 
                 short acc = r.readShort();
 
-                AccessData.D d = new AccessData.D(((CstUTF) pool.get(r)).getString(),
-                        ((CstUTF) pool.get(r)).getString(), offset);
+                AccessData.MOF d = new AccessData.MOF(((CstUTF) pool.get(r)).getString(),
+                                                      ((CstUTF) pool.get(r)).getString(), offset);
                 d.acc = acc;
                 com.add(d);
 
@@ -424,7 +425,7 @@ public final class Parser {
         Attribute attribute = method.attrByName("Code");
 
         if (attribute == null) {
-            if (!method.accesses.contains(AccessFlag.ABSTRACT)) {
+            if (!method.accesses.hasAll(AccessFlag.ABSTRACT)) {
                 throw new IllegalArgumentException("Non-abstract method " + clazz.name + '.' + method.name.getString() + ':' + method.type.getString() + " did not contains a Code attribute.");
             }
             return null;

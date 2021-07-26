@@ -345,19 +345,17 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     public String toString() {
         StringBuilder sb = new StringBuilder("Unioner[");
         for (int i = 0; i < arrSize; i++) {
-            Point d = data[i].node;
-            sb.append(data[i].value).append('{');
+            Unioner.Point d = data[i].node;
+            sb.append("\n  Values: ").append(data[i].value).append("\n  Points: {\n   ");
             if(d != null) {
                 while (d != null) {
-                    sb.append(d.owner).append(d.end ? ":e:" : ":s:").append(d.pos()).append(',');
+                    sb.append(d.owner).append('-').append(d.pos()).append(d.end ? ",E\n   " : ",S\n   ");
                     d = d.next;
                 }
-                sb.setLength(sb.length() - 1);
+                sb.setLength(sb.length() - 4);
             }
-            sb.append("},");
+            sb.append("}");
         }
-        if(arrSize > 0)
-            sb.setLength(sb.length() - 1);
         return sb.append(']').toString();
     }
 
@@ -431,6 +429,11 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
 
         public boolean end() {
             return end;
+        }
+
+        @Override
+        public String toString() {
+            return "At(" + pos() + ")";
         }
 
         @SuppressWarnings("unchecked")

@@ -26,7 +26,7 @@
 package roj.kscript.ast;
 
 import org.jetbrains.annotations.Range;
-import roj.asm.struct.Clazz;
+import roj.asm.tree.Clazz;
 import roj.collect.*;
 import roj.config.word.LineHandler;
 import roj.kscript.type.KType;

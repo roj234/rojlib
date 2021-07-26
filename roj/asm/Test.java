@@ -26,11 +26,12 @@
 
 package roj.asm;
 
-import roj.asm.struct.Clazz;
+import roj.asm.tree.Clazz;
 import roj.io.IOUtil;
 
 import java.io.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

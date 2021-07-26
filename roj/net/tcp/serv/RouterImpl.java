@@ -31,7 +31,7 @@ import roj.net.tcp.util.ResponseCode;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.util.Map;
 
 /**
@@ -51,7 +51,7 @@ public class RouterImpl implements Router {
     }
 
     @Override
-    public Response response(SocketChannel socket, Request request) throws IOException {
+    public Response response(Socket socket, Request request) throws IOException {
         String conn = request.headers().getOrDefault("Connection", "");
         switch (conn) {
             case "close":
@@ -70,7 +70,7 @@ public class RouterImpl implements Router {
      * Connection: upgrade
      * Upgrade: protocol-name[/protocol-version]
      */
-    protected Response tryUpgrade(SocketChannel socket, Request request) {
+    protected Response tryUpgrade(Socket socket, Request request) {
         String newRequest = request.headers("Upgrade");
         if ("h2c".equals(newRequest)) {
             HeadResponse response = new HeadResponse();

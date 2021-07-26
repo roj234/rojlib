@@ -34,18 +34,18 @@ import roj.asm.Parser;
 import roj.asm.SharedCache;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstString;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.Method;
-import roj.asm.struct.anno.AnnValEnum;
-import roj.asm.struct.attr.AttrAnnotation;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.attr.AttrLocalVars;
-import roj.asm.struct.attr.Attribute;
-import roj.asm.struct.insn.InvokeInsnNode;
-import roj.asm.struct.insn.LoadConstInsnNode;
-import roj.asm.struct.simple.FieldSimple;
-import roj.asm.struct.simple.MethodSimple;
-import roj.asm.struct.simple.MoFNode;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
+import roj.asm.tree.anno.AnnValEnum;
+import roj.asm.tree.attr.AttrAnnotation;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.AttrLocalVars;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.insn.LoadConstInsnNode;
+import roj.asm.tree.simple.FieldSimple;
+import roj.asm.tree.simple.MethodSimple;
+import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.LocalVariable;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
@@ -65,7 +65,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import static roj.asm.struct.anno.AnnotationType.*;
+import static roj.asm.tree.anno.AnnotationType.*;
 
 /**
  * No description provided
@@ -140,14 +140,14 @@ public class AutoRegisterTransformer implements IClassTransformer {
         Attribute attribute = data.attrByName(ANNOTATION_TYPE);
         if (attribute != null) {
             AttrAnnotation annotations = new AttrAnnotation(true, new ByteReader(attribute.getRawData()), data.cp);
-            for (roj.asm.struct.anno.Annotation annotation : annotations.annotations) {
+            for (roj.asm.tree.anno.Annotation annotation : annotations.annotations) {
                 switch (annotation.type.owner) {
                     case "ilib/autoreg/AutoRegItem":
                         return transformItem(data, annotation.values);
                     case "ilib/autoreg/AutoRegBlock":
                         return transformBlock(data, annotation.values);
                     case "ilib/autoreg/AutoRegTile":
-                        return transformTileEntity(data, (roj.asm.struct.anno.AnnValString) annotation.values.get("value"));
+                        return transformTileEntity(data, (roj.asm.tree.anno.AnnValString) annotation.values.get("value"));
                 }
             }
         }
@@ -160,10 +160,10 @@ public class AutoRegisterTransformer implements IClassTransformer {
             if (attribute == null)
                 continue;
             AttrAnnotation annotations = new AttrAnnotation(true, new ByteReader(attribute.getRawData()), data.cp);
-            for (roj.asm.struct.anno.Annotation annotation : annotations.annotations) {
+            for (roj.asm.tree.anno.Annotation annotation : annotations.annotations) {
                 switch (annotation.type.owner) {
                     case "ilib/autoreg/RegHolder":
-                        transformRegHolder(data, (roj.asm.struct.anno.AnnValString) annotation.values.get("value"), fs);
+                        transformRegHolder(data, (roj.asm.tree.anno.AnnValString) annotation.values.get("value"), fs);
                         modified = true;
                         continue outer;
                 }
@@ -173,44 +173,44 @@ public class AutoRegisterTransformer implements IClassTransformer {
         return modified ? data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray() : basicClass;
     }
 
-    private static void transformRegHolder(ConstantData data, roj.asm.struct.anno.AnnValString value, FieldSimple field) {
+    private static void transformRegHolder(ConstantData data, roj.asm.tree.anno.AnnValString value, FieldSimple field) {
         AttrCode code = getOrCreateClInit(data);
 
         final InsnList insn = code.instructions;
 
-        roj.asm.struct.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
+        roj.asm.tree.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
 
         if (code.stackSize < 3)
             code.stackSize = 3;
 
         // value = null : error
 
-        insn.add(new roj.asm.struct.insn.LoadConstInsnNode(Opcodes.LDC, new CstString(':' + value.value)));
+        insn.add(new roj.asm.tree.insn.LoadConstInsnNode(Opcodes.LDC, new CstString(':' + value.value)));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/autoreg/AutoRegHandler.get:(Ljava/lang/String;)Ljava/lang/Object;"));
 
         Type desc = roj.asm.type.ParamHelper.parseField(field.type.getString());
 
         // desc.className = null : not reference type
 
-        insn.add(new roj.asm.struct.insn.ClassInsnNode(Opcodes.CHECKCAST, desc.owner));
-        insn.add(new roj.asm.struct.insn.FieldInsnNode(Opcodes.PUTSTATIC, data.name, field.name.getString(), desc));
+        insn.add(new roj.asm.tree.insn.ClassInsnNode(Opcodes.CHECKCAST, desc.owner));
+        insn.add(new roj.asm.tree.insn.FieldInsnNode(Opcodes.PUTSTATIC, data.name, field.name.getString(), desc));
 
         insn.add(returnNode);
 
         insn.add(AttrCode.METHOD_END_MARK);
     }
 
-    private static byte[] transformTileEntity(ConstantData data, roj.asm.struct.anno.AnnValString value) {
+    private static byte[] transformTileEntity(ConstantData data, roj.asm.tree.anno.AnnValString value) {
         AttrCode code = getOrCreateClInit(data);
 
         final InsnList insn = code.instructions;
 
-        roj.asm.struct.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
+        roj.asm.tree.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
 
         if (code.stackSize < 3)
             code.stackSize = 3;
 
-        insn.add(new roj.asm.struct.insn.LoadConstInsnNode(Opcodes.LDC, data.nameCst));
+        insn.add(new roj.asm.tree.insn.LoadConstInsnNode(Opcodes.LDC, data.nameCst));
         insn.add(loadParam(value, null));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/autoreg/AutoRegHandler.registerTileEntity:(Ljava/lang/Class;Ljava/lang/String;)V"));
 
@@ -221,12 +221,12 @@ public class AutoRegisterTransformer implements IClassTransformer {
         return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray();
     }
 
-    private static byte[] transformBlock(ConstantData data, Map<String, roj.asm.struct.anno.AnnVal> mapping) {
+    private static byte[] transformBlock(ConstantData data, Map<String, roj.asm.tree.anno.AnnVal> mapping) {
         AttrCode code = getOrCreateClInit(data);
 
         final InsnList insn = code.instructions;
 
-        roj.asm.struct.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
+        roj.asm.tree.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
 
         if (code.stackSize < 6)
             code.stackSize = 6;
@@ -238,12 +238,12 @@ public class AutoRegisterTransformer implements IClassTransformer {
 
         int nextVariableId = code.localSize++;
 
-        roj.asm.struct.insn.InsnNode startNode, endNode;
+        roj.asm.tree.insn.InsnNode startNode, endNode;
 
-        insn.add(new roj.asm.struct.insn.ClassInsnNode(Opcodes.NEW, data.nameCst));
-        insn.add(new roj.asm.struct.insn.NPInsnNode(Opcodes.DUP));
+        insn.add(new roj.asm.tree.insn.ClassInsnNode(Opcodes.NEW, data.nameCst));
+        insn.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.DUP));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, data.name, "<init>", "()V"));
-        insn.add(startNode = new roj.asm.struct.insn.NPInsnNode(Opcodes.DUP));
+        insn.add(startNode = new roj.asm.tree.insn.NPInsnNode(Opcodes.DUP));
 
         NodeHelper.compress(insn, Opcodes.ASTORE, nextVariableId);
 
@@ -266,11 +266,11 @@ public class AutoRegisterTransformer implements IClassTransformer {
         }
 
         if (className == null) {
-            insn.add(new roj.asm.struct.insn.NPInsnNode(Opcodes.ACONST_NULL));
+            insn.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.ACONST_NULL));
         } else {
             CstClass clz = data.writer.getClazz(className);
-            insn.add(new roj.asm.struct.insn.ClassInsnNode(Opcodes.NEW, clz));
-            insn.add(new roj.asm.struct.insn.NPInsnNode(Opcodes.DUP));
+            insn.add(new roj.asm.tree.insn.ClassInsnNode(Opcodes.NEW, clz));
+            insn.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.DUP));
 
             NodeHelper.compress(insn, Opcodes.ALOAD, nextVariableId);
 
@@ -296,18 +296,18 @@ public class AutoRegisterTransformer implements IClassTransformer {
         return bytes;
     }
 
-    private static byte[] transformItem(ConstantData data, Map<String, roj.asm.struct.anno.AnnVal> mapping) {
+    private static byte[] transformItem(ConstantData data, Map<String, roj.asm.tree.anno.AnnVal> mapping) {
         AttrCode code = getOrCreateClInit(data);
 
         final InsnList insn = code.instructions;
 
-        roj.asm.struct.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
+        roj.asm.tree.insn.InsnNode returnNode = insn.remove(insn.size() - 1);
 
         if (code.stackSize < 5)
             code.stackSize = 5;
 
-        insn.add(new roj.asm.struct.insn.ClassInsnNode(Opcodes.NEW, data.nameCst));
-        insn.add(new roj.asm.struct.insn.NPInsnNode(Opcodes.DUP));
+        insn.add(new roj.asm.tree.insn.ClassInsnNode(Opcodes.NEW, data.nameCst));
+        insn.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.DUP));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, data.name, "<init>", "()V"));
         insn.add(loadParam(mapping.get("value"), null));
 
@@ -316,7 +316,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
         if (mapping.get("modelPath") != null) {
             insn.add(loadParam(mapping.get("modelPath"), ""));
         } else {
-            insn.add(new roj.asm.struct.insn.NPInsnNode(Opcodes.ACONST_NULL));
+            insn.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.ACONST_NULL));
         }
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/autoreg/AutoRegHandler.registerItem:(Lnet/minecraft/item/Item;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"));
 
@@ -327,18 +327,18 @@ public class AutoRegisterTransformer implements IClassTransformer {
         return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray();
     }
 
-    private static roj.asm.struct.insn.LoadConstInsnNode loadParam(roj.asm.struct.anno.AnnVal value, String defaultValue) {
+    private static roj.asm.tree.insn.LoadConstInsnNode loadParam(roj.asm.tree.anno.AnnVal value, String defaultValue) {
         return new LoadConstInsnNode(Opcodes.LDC, new CstString(value == null ? defaultValue : asString(value)));
     }
 
-    private static String asString(roj.asm.struct.anno.AnnVal value) {
+    private static String asString(roj.asm.tree.anno.AnnVal value) {
         switch (value.type) {
             case ENUM:
                 return ((AnnValEnum) value).value;
             case CLASS:
-                return ParamHelper.getField(((roj.asm.struct.anno.AnnValClass) value).value);
+                return ParamHelper.getField(((roj.asm.tree.anno.AnnValClass) value).value);
             case STRING:
-                return ((roj.asm.struct.anno.AnnValString) value).value;
+                return ((roj.asm.tree.anno.AnnValString) value).value;
         }
         throw new RuntimeException();
     }
@@ -364,7 +364,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
             clInit = new Method(AccessFlag.PUBLIC | AccessFlag.STATIC, data, "<clinit>", "()V");
             ((List<MoFNode>) Helpers.cast(data.methods)).add(clInit);
             code = clInit.code = new AttrCode(clInit);
-            code.instructions.add(new roj.asm.struct.insn.NPInsnNode(Opcodes.RETURN));
+            code.instructions.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.RETURN));
             code.instructions.add(AttrCode.METHOD_END_MARK);
         } else {
             code = clInit.code;

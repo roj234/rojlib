@@ -46,7 +46,8 @@ public enum Type {
             case INTEGER:
             case BOOL:
             case STRING:
-                return type == DOUBLE || type == INTEGER || type == BOOL || type == STRING;
+            case LONG:
+                return type == DOUBLE || type == INTEGER || type == BOOL || type == STRING || type == LONG;
             case NULL:
                 return false;
             default:

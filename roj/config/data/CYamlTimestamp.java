@@ -36,51 +36,15 @@ import javax.annotation.Nonnull;
  * @version 0.1
  * @since 2021/7/7 0:43
  */
-public final class CYamlTimestamp extends CEntry {
-    public long value;
-
+public final class CYamlTimestamp extends CLong {
     public CYamlTimestamp(long number) {
-        this.value = number;
+        super(number);
     }
 
     @Nonnull
     @Override
     public Type getType() {
         return Type.YAML_TIMESTAMP;
-    }
-
-    @Override
-    public double asDouble() {
-        return value;
-    }
-
-    @Override
-    public int asInteger() {
-        return (int) value;
-    }
-
-    @Override
-    public long asLong() {
-        return value;
-    }
-
-    @Nonnull
-    @Override
-    public String asString() {
-        return String.valueOf(value);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CYamlTimestamp that = (CYamlTimestamp) o;
-        return that.value == value;
-    }
-
-    @Override
-    public int hashCode() {
-        return (int) value;
     }
 
     @Override
@@ -91,6 +55,6 @@ public final class CYamlTimestamp extends CEntry {
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append("\"<YAML timestamp ").append(value).append(">\"");
+        return sb.append("new Date(").append(value).append(")");
     }
 }

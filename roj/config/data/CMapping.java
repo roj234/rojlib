@@ -127,9 +127,14 @@ public class CMapping extends CEntry {
         return put(key, CBoolean.valueOf(entry));
     }
 
-    public boolean getBoolean(String key) {
+    public long getLong(String key) {
         CEntry entry = getDottedEntry(key);
-        return entry.getType().fits(Type.BOOL) && entry.asBoolean();
+        return entry.getType().fits(Type.LONG) ? entry.asLong() : 0L;
+    }
+
+    public boolean getBool(String key) {
+        CEntry entry = getDottedEntry(key);
+        return entry.getType().fits(Type.BOOL) && entry.asBool();
     }
 
     public String getString(String key) {
@@ -163,7 +168,7 @@ public class CMapping extends CEntry {
         return entry;
     }
 
-    public int getNumber(String key) {
+    public int getInteger(String key) {
         CEntry entry = getDottedEntry(key);
         return entry.getType().isNumber() ? entry.asInteger() : 0;
     }
@@ -241,7 +246,7 @@ public class CMapping extends CEntry {
     }
 
     public boolean putIfAbsent(@Nonnull String key, boolean entry) {
-        return GOC(key, CBoolean.valueOf(entry), false).asBoolean();
+        return GOC(key, CBoolean.valueOf(entry), false).asBool();
     }
 
     public boolean containsKey(@Nullable String key) {

@@ -26,9 +26,9 @@
 package roj.kscript.parser.expr;
 
 import roj.asm.Opcodes;
-import roj.asm.struct.insn.IfInsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
-import roj.asm.struct.insn.LabelInsnNode;
+import roj.asm.tree.insn.IfInsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.config.word.NotStatementException;

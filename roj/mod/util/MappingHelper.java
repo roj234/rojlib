@@ -42,7 +42,6 @@ import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
-import roj.util.ByteList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
 
@@ -66,10 +65,10 @@ public class MappingHelper {
 
     public final Map<String, String> classes;
 
-    public final Map<String, Collection<MtDesc>> methods = new MyHashMap<>(2000);
-    public final Map<String, Collection<FlDesc>> fields = new MyHashMap<>(2000);
+    public final Map<String, List<MtDesc>> methods = new MyHashMap<>(2000);
+    public final Map<String, List<FlDesc>> fields = new MyHashMap<>(2000);
 
-    public Map<String, Collection<Object[]>> revAll;
+    public Map<String, List<Object[]>> revAll;
 
     /**
      * No TRansform
@@ -124,11 +123,12 @@ public class MappingHelper {
             if(TextUtil.splitStringF(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("methods.csv:" + i + ": 未知标记: " + line);
             }
-            Collection<MtDesc> descriptors = methods.get(tmp.get(0));
+            List<MtDesc> descriptors = methods.get(tmp.get(0));
             if(descriptors == null)
                 System.out.println("methods.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
             else {
-                for(MtDesc descriptor : descriptors) {
+                for (int j = 0; j < descriptors.size(); j++) {
+                    MtDesc descriptor = descriptors.get(j);
                     descriptor.name = tmp.get(1);
                     descriptor.flags = NONNULL;
                 }
@@ -153,11 +153,12 @@ public class MappingHelper {
             if(TextUtil.splitStringF(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("fields.csv:" + i + ": 未知标记: " + line);
             }
-            Collection<FlDesc> descriptors = fields.get(tmp.get(0));
+            List<FlDesc> descriptors = fields.get(tmp.get(0));
             if (descriptors == null)
                 System.out.println("fields.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
             else {
-                for(FlDesc descriptor : descriptors) {
+                for (int j = 0; j < descriptors.size(); j++) {
+                    FlDesc descriptor = descriptors.get(j);
                     descriptor.name = tmp.get(1);
                     descriptor.flags = NONNULL;
                 }
@@ -235,20 +236,21 @@ public class MappingHelper {
         ob.ensureCapacity(MINIMUM_CAPACITY);
 
         Map<String, CharList> classFos = new MyHashMap<>(classes.size());
-        for(Map.Entry<String, Collection<FlDesc>> entry : fields.entrySet()) {
-            for(FlDesc descriptor : entry.getValue()) {
+        for(Map.Entry<String, List<FlDesc>> entry : fields.entrySet()) {
+            List<FlDesc> value = entry.getValue();
+            for (int i = 0; i < value.size(); i++) {
+                FlDesc descriptor = value.get(i);
                 String cn = classes.get(descriptor.owner);
                 String k = entry.getKey();
 
                 if (descriptor.flags == null) {
-                    if(!NTR.contains(descriptor.owner)) // forge 自己搞的
-                        if(k.startsWith("field_") && failed.add(k))
-                            System.out.println("缺少 " + k + " 的MCP名");
+                    if (!NTR.contains(descriptor.owner)) // forge 自己搞的
+                        if (k.startsWith("field_") && failed.add(k)) System.out.println("缺少 " + k + " 的MCP名");
                     continue;
                 }
 
                 CharList cl = classFos.get(cn);
-                if(cl == null) {
+                if (cl == null) {
                     classFos.put(cn, cl = new CharList(100));
                 }
 
@@ -256,25 +258,27 @@ public class MappingHelper {
             }
         }
 
-        for(Map.Entry<String, Collection<MtDesc>> entry : methods.entrySet()) {
-            for (MtDesc descriptor : entry.getValue()) {
+        for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
+            List<MtDesc> value = entry.getValue();
+            for (int i = 0; i < value.size(); i++) {
+                MtDesc descriptor = value.get(i);
                 String cn = classes.get(descriptor.owner);
                 String k = entry.getKey();
 
                 if (descriptor.flags == null) {
-                    if(!NTR.contains(descriptor.owner)) // forge 自己搞的
-                        if(k.startsWith("field_") && failed.add(k))
-                            System.out.println("缺少 " + k + " 的MCP名");
+                    if (!NTR.contains(descriptor.owner)) // forge 自己搞的
+                        if (k.startsWith("field_") && failed.add(k)) System.out.println("缺少 " + k + " 的MCP名");
                     continue;
                 }
 
                 String param = Util.transformMethodParam(classes, descriptor.param);
                 CharList cl = classFos.get(cn);
-                if(cl == null) {
+                if (cl == null) {
                     classFos.put(cn, cl = new CharList(100));
                 }
 
-                cl.append("ML: ").append(descriptor.name).append(' ').append(param).append(' ').append(k).append(" ~\n");
+                cl.append("ML: ").append(descriptor.name).append(' ').append(param).append(' ').append(k).append(" " +
+                        "~\n");
             }
         }
 
@@ -286,11 +290,9 @@ public class MappingHelper {
         }
 
         try (FileOutputStream fos = new FileOutputStream(result)) {
-            ByteList out = new ByteList(ByteWriter.byteCountUTF8(ob));
-            ByteWriter.writeUTF(out, ob, -1);
-            out.writeToStream(fos);
+            ByteWriter.encodeUTF(ob).writeToStream(fos);
         }
-        CmdUtil.success("成功: 文件已保存为 " + result.getAbsolutePath());
+        //CmdUtil.success("成功: 文件已保存为 " + result.getAbsolutePath());
         ob.clear();
     }
 
@@ -393,7 +395,9 @@ public class MappingHelper {
 
         for(Map.Entry<String, String> e : classes.entrySet()) {
             ob.append("CL: ").append(e.getKey()).append(' ').append(e.getValue()).append('\n');
-            for (Object[] descriptor : revAll.getOrDefault(e.getKey(), Collections.emptySet())) {
+            List<Object[]> orDefault = revAll.getOrDefault(e.getKey(), Collections.emptyList());
+            for (int i = 0; i < orDefault.size(); i++) {
+                Object[] descriptor = orDefault.get(i);
                 if (descriptor.length == 2) {
                     ob.append("FL: ").append(descriptor[0]).append(' ').append(descriptor[1]).append('\n');
                 } else {
@@ -406,11 +410,9 @@ public class MappingHelper {
         }
 
         try (FileOutputStream fos = new FileOutputStream(output)) {
-            ByteList out = new ByteList(ByteWriter.byteCountUTF8(ob));
-            ByteWriter.writeUTF(out, ob, -1);
-            out.writeToStream(fos);
+            ByteWriter.encodeUTF(ob).writeToStream(fos);
         }
-        CmdUtil.success("成功: 文件已保存为 " + output.getAbsolutePath());
+        //CmdUtil.success("成功: 文件已保存为 " + output.getAbsolutePath());
         ob.clear();
     }
 
@@ -425,29 +427,32 @@ public class MappingHelper {
         ob.ensureCapacity(MINIMUM_CAPACITY);
 
         Map<String, CharList> classFos = new MyHashMap<>(forge2dest.size());
-        for(Map.Entry<String, Collection<FlDesc>> entry : fields.entrySet()) {
-            for(FlDesc descriptor : entry.getValue()) {
+        for(Map.Entry<String, List<FlDesc>> entry : fields.entrySet()) {
+            List<FlDesc> value = entry.getValue();
+            for (int i = 0; i < value.size(); i++) {
+                FlDesc descriptor = value.get(i);
                 final String key = forge2dest.get(descriptor.owner);
                 CharList cl = classFos.get(key);
-                if(cl == null) {
+                if (cl == null) {
                     classFos.put(key, cl = new CharList(100));
                 }
                 cl.append("FL: ").append(descriptor.name).append(' ').append(entry.getKey()).append('\n');
             }
         }
-        for(Map.Entry<String, Collection<MtDesc>> entry : methods.entrySet()) {
-            for (MtDesc descriptor : entry.getValue()) {
+        for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
+            List<MtDesc> value = entry.getValue();
+            for (int i = 0; i < value.size(); i++) {
+                MtDesc descriptor = value.get(i);
                 final String key = forge2dest.get(descriptor.owner);
                 CharList cl = classFos.get(key);
-                if(cl == null) {
+                if (cl == null) {
                     classFos.put(key, cl = new CharList(100));
                 }
 
                 String mcParam = Util.transformMethodParam(mcClz, descriptor.param);
                 String forgeParam = Util.transformMethodParam(classes, descriptor.param);
 
-                cl.append("ML: ").append(descriptor.name).append(' ').append(mcParam).append(' ').append(entry.getKey())
-                        .append(' ').append(forgeParam).append('\n');
+                cl.append("ML: ").append(descriptor.name).append(' ').append(mcParam).append(' ').append(entry.getKey()).append(' ').append(forgeParam).append('\n');
             }
         }
 
@@ -459,12 +464,10 @@ public class MappingHelper {
         }
 
         try (FileOutputStream fos = new FileOutputStream(result)) {
-            ByteList out = new ByteList(ByteWriter.byteCountUTF8(ob));
-            ByteWriter.writeUTF(out, ob, -1);
-            out.writeToStream(fos);
+            ByteWriter.encodeUTF(ob).writeToStream(fos);
         }
 
-        CmdUtil.success("成功: 文件已保存为 " + result.getAbsolutePath());
+        //CmdUtil.success("成功: 文件已保存为 " + result.getAbsolutePath());
         ob.clear();
 
         flag |= flagId;
@@ -481,7 +484,7 @@ public class MappingHelper {
         Map<String, String[]> ds = new MyHashMap<>(1000);
 
         // func_76663_a=[MD{axx.isEmpty ()Z, flags=Flag{}}]  func 理论不会重复
-        for(Map.Entry<String, Collection<MtDesc>> entry : methods.entrySet()) {
+        for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
             final String key = entry.getKey();
             if(!key.startsWith("func_"))
                 continue;
@@ -783,22 +786,22 @@ public class MappingHelper {
             if (!readMojangMap(clientMap, elementMap)) return false;
             if (serverMap != null && !readMojangMap(serverMap, elementMap)) return false;
 
-            for(Map.Entry<String, Collection<MtDesc>> entry : methods.entrySet()) {
-                for(MtDesc desc : entry.getValue()) {
-                    if(NTR.contains(desc.owner))
-                        continue;
+            for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
+                List<MtDesc> value = entry.getValue();
+                for (int i = 0; i < value.size(); i++) {
+                    MtDesc desc = value.get(i);
+                    if (NTR.contains(desc.owner)) continue;
                     Map<String, String> methodNameMap = elementMap.get(desc.owner);
 
                     if (methodNameMap == null) {
-                        if(isMCFunction(desc))
-                            CmdUtil.error("无法定位类 " + desc);
+                        if (isMCFunction(desc)) CmdUtil.error("无法定位类 " + desc);
                         desc.owner = classes.getOrDefault(desc.owner, desc.owner);
                         continue;
                     }
                     String tName = methodNameMap.get(desc.name + '|' + desc.param);
 
                     if (tName == null) {
-                        if(isMCFunction(desc)) {
+                        if (isMCFunction(desc)) {
                             CmdUtil.error("MCP与MC版本不匹配! 无法定位方法 " + desc.name + '|' + desc.param);
                             System.out.println(methodNameMap);
                         }
@@ -809,10 +812,11 @@ public class MappingHelper {
                 }
             }
 
-            for(Map.Entry<String, Collection<FlDesc>> entry : fields.entrySet()) {
-                for(FlDesc desc : entry.getValue()) {
-                    if(NTR.contains(desc.owner))
-                        continue;
+            for(Map.Entry<String, List<FlDesc>> entry : fields.entrySet()) {
+                List<FlDesc> value = entry.getValue();
+                for (int i = 0; i < value.size(); i++) {
+                    FlDesc desc = value.get(i);
+                    if (NTR.contains(desc.owner)) continue;
                     Map<String, String> fieldNameMap = elementMap.get(desc.owner);
 
 

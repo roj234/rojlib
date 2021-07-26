@@ -49,8 +49,8 @@ import java.util.function.IntFunction;
 public class RegistryStored<T extends Indexable> extends Registry<T> {
     static final MyHashMap<String, RegistryStored<?>> syncSystem = new MyHashMap<>();
 
-    private final String id;
-    private S<T> local;
+    private final String  id;
+    private       Snap<T> local;
 
     public RegistryStored(String id, IntFunction<T[]> arrayGet) {
         super(arrayGet);
@@ -58,10 +58,10 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
         syncSystem.put(id, this);
     }
 
-    public static final class S<T extends Indexable> {
-        private S() {}
+    public static final class Snap<T extends Indexable> {
+        private Snap() {}
 
-        private S(T[] v) {
+        private Snap(T[] v) {
             v.getClass();
             arr = v;
         }
@@ -69,11 +69,11 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
         private T[] arr;
     }
 
-    public S<T> snapshot() {
-        return new S<>(values());
+    public Snap<T> snapshot() {
+        return new Snap<>(values());
     }
 
-    public void restore(S<T> snapshot) {
+    public void restore(Snap<T> snapshot) {
         arr = snapshot.arr;
         for (int i = 0; i < arr.length; i++) {
             values.putByValue(i, arr[i]);

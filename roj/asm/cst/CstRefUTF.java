@@ -37,22 +37,13 @@ import roj.util.ByteWriter;
  */
 public abstract class CstRefUTF extends Constant {
     private short valueIndex;
-    private final byte type;
     private CstUTF value;
 
-    CstRefUTF(byte type, int valueIndex) {
-        this(type);
+    CstRefUTF(int valueIndex) {
         this.valueIndex = (short) valueIndex;
     }
 
-    CstRefUTF(byte type) {
-        this.type = type;
-    }
-
-    @Override
-    public byte type() {
-        return type;
-    }
+    CstRefUTF() {}
 
     public CstUTF getValue() {
         return value;
@@ -72,7 +63,7 @@ public abstract class CstRefUTF extends Constant {
     }
 
     public final String toString() {
-        return super.toString() + " : " + (value == null ? valueIndex & 0xFFFF : value.getString());
+        return super.toString() + " : " + (value == null ? valueIndex & 0xFFFF : value.getString() + " (" + value.getIndex() + ")");
     }
 
     public final int hashCode() {

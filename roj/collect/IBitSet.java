@@ -58,11 +58,6 @@ public interface IBitSet extends Iterable<Integer> {
 
     IBitSet copy();
 
-    @Deprecated
-    static boolean isBitTrue(long i, int bit) {
-        return (i & (1L << bit)) != 0;
-    }
-
     default IBitSet addAll(CharSequence s) {
         for (int i = 0; i < s.length(); i++)
             add(s.charAt(i));

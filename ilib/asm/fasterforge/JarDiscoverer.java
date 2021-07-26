@@ -39,7 +39,7 @@ import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
-import roj.asm.struct.anno.Annotation;
+import roj.asm.tree.anno.Annotation;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
 import roj.collect.SingleBitSet;

@@ -33,7 +33,7 @@ import org.objectweb.asm.Type;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
-import roj.asm.struct.anno.Annotation;
+import roj.asm.tree.anno.Annotation;
 import roj.asm.type.ParamHelper;
 import roj.util.Helpers;
 

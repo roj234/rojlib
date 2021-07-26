@@ -28,7 +28,7 @@ package ilib.util;
 import net.minecraft.item.ItemStack;
 import roj.asm.Parser;
 import roj.asm.annotation.OpenAny;
-import roj.asm.struct.ConstantData;
+import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectConstructorAccess;

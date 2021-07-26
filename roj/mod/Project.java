@@ -21,6 +21,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.initForwardMapper;
@@ -34,11 +36,14 @@ import static roj.mod.Shared.initForwardMapper;
  */
 public final class Project extends JSONConfiguration {
     static final MyHashMap<String, Project> projects = new MyHashMap<>();
+    static final Matcher matcher = Pattern.compile("^[a-z_][a-z0-9_]*$").matcher("");
 
-    public static Project load(String file) {
-        Project project = projects.get(file);
+    public static Project load(String name) {
+        if(!matcher.reset(name).matches())
+            throw new IllegalArgumentException("名称必须为全小写,不能以数字开头,可以包含下划线 ^[a-z_][a-z0-9_]*$");
+        Project project = projects.get(name);
         if(project == null)
-            projects.put(file, project = new Project(file));
+            projects.put(name, project = new Project(name));
         else
             project.reload();
         return project;
@@ -53,7 +58,7 @@ public final class Project extends JSONConfiguration {
     String binaryPathStr, atConfigPathStr;
     File source, resource, binary;
 
-    static FileFilter resourceFilter;
+    static FileFilter resourceFilter = new FileFilter();
     Callable<Void> getResourceTask;
     MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
 
@@ -98,10 +103,12 @@ public final class Project extends JSONConfiguration {
 
     public String dependencyString() {
         CharList cl = new CharList();
-        for (int i = 0; i < dependencies.size(); i++) {
-            cl.append(dependencies.get(i).name).append('|');
+        if(!dependencies.isEmpty()) {
+            for (int i = 0; i < dependencies.size(); i++) {
+                cl.append(dependencies.get(i).name).append('|');
+            }
+            cl.setIndex(cl.length() - 1);
         }
-        cl.setIndex(cl.length() - 1);
         return cl.toString();
     }
 
@@ -123,7 +130,7 @@ public final class Project extends JSONConfiguration {
             CmdUtil.warning(name + " 的字符集不存在");
         }
 
-        String atName = this.atName = map.putIfAbsent("atName", "");
+        String atName = this.atName = map.putIfAbsent("atConfig", "");
 
         atConfigPathStr = atName.length() > 0 ? resource.getPath() + File.separatorChar + "META-INF" + File.separatorChar + atName + ".cfg" : null;
 
@@ -145,15 +152,14 @@ public final class Project extends JSONConfiguration {
         getResourceTask = () -> {
             initForwardMapper();
 
-            Map<String, InputStream> map1 = Helpers.cast(resourceCache);
+            resourceCache.clear();
 
-            FileUtil.findAndOpenStream(resource, map1, resourceFilter);
+            FileUtil.findAndOpenStream(resource, Helpers.cast(resourceCache), resourceFilter);
 
-            Set<Map.Entry<String, Object>> entrySet = Helpers.cast(map1.entrySet());
+            Set<Map.Entry<String, Object>> entrySet = Helpers.cast(resourceCache.entrySet());
 
             for (Map.Entry<String, Object> entry : entrySet) {
-                if(entry.getValue() instanceof InputStream)
-                    entry.setValue(IOUtil.readFully((InputStream) entry.getValue()));
+                entry.setValue(IOUtil.readFully((InputStream) entry.getValue()));
             }
 
             return null;
@@ -163,7 +169,6 @@ public final class Project extends JSONConfiguration {
     @Override
     protected void saveConfig(CMapping map) {
         map.put("charset", charset == null ? "UTF-8" : charset.name());
-        map.put("project", name);
         map.put("version", version);
         map.put("atConfig", atName);
 

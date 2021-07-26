@@ -1,11 +1,11 @@
 package roj;
 
 import roj.asm.Parser;
-import roj.asm.struct.Clazz;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.Method;
-import roj.asm.struct.simple.MethodSimple;
-import roj.asm.struct.simple.MoFNode;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
+import roj.asm.tree.simple.MethodSimple;
+import roj.asm.tree.simple.MoFNode;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;

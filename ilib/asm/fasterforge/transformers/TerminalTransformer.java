@@ -30,11 +30,11 @@ import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.struct.ConstantData;
-import roj.asm.struct.attr.AttrCode;
-import roj.asm.struct.insn.InsnNode;
-import roj.asm.struct.insn.InvokeInsnNode;
-import roj.asm.struct.simple.MethodSimple;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.ParamHelper;
 
 public class TerminalTransformer implements IClassTransformer {

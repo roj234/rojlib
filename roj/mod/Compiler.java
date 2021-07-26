@@ -27,6 +27,7 @@ package roj.mod;
 
 import roj.io.IOUtil;
 import roj.math.MutableInt;
+import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.ui.CmdUtil;
 
@@ -38,6 +39,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * No description provided
@@ -47,6 +49,8 @@ import java.util.*;
  * @since 2021/6/1 1:54
  */
 public class Compiler {
+    public static String BASE_PATH = null;
+
     public static boolean compile(List<String> optionList, List<File> fileList, @Nullable PrintStream errorOutput, @Nullable Set<String> skipErrors, boolean showErrorCode, @Nullable Processor processor) {
         if(fileList.isEmpty()) {
             CmdUtil.warning("没有源文件!", true);
@@ -99,10 +103,13 @@ public class Compiler {
     }
 
     private static String buildErrorMessage(Diagnostic<? extends JavaFileObject> diag, EnumMap<Diagnostic.Kind, MutableInt> map) {
-        StringBuilder sb = new StringBuilder();
+        CharList sb = new CharList();
         if(diag.getSource() != null) {
-            String file = diag.getSource().toUri().toString();
-            sb.append(file, 6, file.length()).append(':');
+            String file = diag.getSource().toUri().getPath();
+            sb.append(file, 1, file.length() - 1).append(':');
+            if(BASE_PATH != null) {
+                sb.replace(BASE_PATH, "");
+            }
             if(diag.getLineNumber() >= 0)
                 sb.append(diag.getLineNumber()).append(':');
             sb.append(' ');
@@ -113,7 +120,7 @@ public class Compiler {
             for (int i = 0; i < diag.getColumnNumber(); i++) {
                 sb.append(' ');
             }
-            sb.setCharAt(sb.length() - 1, '^');
+            sb.set(sb.length() - 1, '^');
             sb.append('\n');
         }
 
@@ -132,23 +139,24 @@ public class Compiler {
         }
     }
 
+    static final Function<Diagnostic.Kind, MutableInt> mutator = (kind1) -> new MutableInt(0);
     private static String getErrorMsg(Diagnostic.Kind kind, EnumMap<Diagnostic.Kind, MutableInt> kinds) {
         switch (kind) {
             case NOTE:
                 return "注";
             case ERROR:
                 if(kinds != null)
-                    kinds.computeIfAbsent(kind, (kind1) -> new MutableInt(0)).increment();
+                    kinds.computeIfAbsent(Diagnostic.Kind.ERROR, mutator).increment();
                 return "错误";
             case OTHER:
                 return "其他";
             case WARNING:
                 if(kinds != null)
-                    kinds.computeIfAbsent(Diagnostic.Kind.WARNING, (kind1) -> new MutableInt(0)).increment();
+                    kinds.computeIfAbsent(Diagnostic.Kind.WARNING, mutator).increment();
                 return "警告";
             case MANDATORY_WARNING:
                 if(kinds != null)
-                    kinds.computeIfAbsent(Diagnostic.Kind.WARNING, (kind1) -> new MutableInt(0)).increment();
+                    kinds.computeIfAbsent(Diagnostic.Kind.WARNING, mutator).increment();
                 return "强警告";
         }
         throw new IllegalArgumentException();

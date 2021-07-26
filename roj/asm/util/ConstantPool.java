@@ -27,16 +27,16 @@
 package roj.asm.util;
 
 import roj.asm.cst.*;
-import roj.collect.FindSet;
+import roj.collect.IntIterator;
 import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
+import roj.text.TextUtil;
 import roj.util.ByteReader;
 import roj.util.Idx;
 
 import java.io.UTFDataFormatException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.PrimitiveIterator;
 
 import static roj.asm.cst.CstType.*;
 
@@ -51,13 +51,12 @@ public class ConstantPool {
     Constant[] cst;
     int index = 1;
 
-    boolean validated = false;
+    MyHashSet<Constant> uniquer;
     CstUTF empty;
-
-    ConstantPool() {}
 
     public ConstantPool(int len) {
         this.cst = new Constant[len];
+        this.uniquer = new MyHashSet<>(len);
     }
 
     public int index() {
@@ -70,7 +69,7 @@ public class ConstantPool {
         switch (c.type()) {
             case LONG:
             case DOUBLE:
-                cst[index++] = CstDoLHolder.HOLDER;
+                cst[index++] = CstTop.TOP;
         }
     }
 
@@ -88,43 +87,35 @@ public class ConstantPool {
         return true;
     }
 
+    @SuppressWarnings("fallthrough")
     public void valid() {
-        if (validated)
-            throw new IllegalStateException("ConstantPool is marked unmodifiable.");
-        int len = cst.length;
+        if (uniquer == null)
+            throw new IllegalStateException("Already validated.");
 
-        FindSet<Constant> uniquer = new MyHashSet<>(cst.length);
+        MyHashSet<Constant> uniquer = new MyHashSet<>(cst.length);
 
-        final Constant[] cst = this.cst;
+        Constant[] cst = this.cst;
         Idx idx = new Idx(cst.length);
         idx.add(0); // remove 0
 
+        IntIterator itr = idx.remains();
         for (int pass = 0; pass < 3; pass++) {
-            PrimitiveIterator.OfInt itr = idx.remains();
             while (itr.hasNext()) {
                 int i = itr.nextInt();
                 Constant c = cst[i];
-                if (c == CstDoLHolder.HOLDER/* null */) { // and there will be not any null class
-                    idx.add(i);
-                    continue;
-                }
 
                 try {
-                    boolean flag = validate(c, pass);
-                    if (flag) {
-                        if(c != (c = uniquer.find(c))) {
-                            cst[pass] = c;
-                        } else {
-                            uniquer.add(c);
-                        }
+                    boolean thisLv = validate(c, pass);
+                    if (thisLv) {
+                        cst[i] = uniquer.intern(c);
                         idx.add(i);
                     }
                 } catch (ClassCastException e) {
-                    Constant refers = getReferTo(c, pass);
-                    throw new IllegalArgumentException("Constant " + c + " is referencing to invalid index " + refers.getIndex() + " ( " + refers + " )", e);
+                    Constant err = getReferTo(c, pass);
+                    throw new IllegalArgumentException("Constant " + c + " is referencing to invalid index " + err.getIndex() + " ( " + err + " )", e);
                 } catch (NullPointerException e) {
                     if (fixNPE(c)) {
-                        System.err.println("NPE found at id" + i + ", probably error occurred.");
+                        System.err.println("NPE at " + i + ", probably a coding error.");
                         validate(c, pass);
                         idx.add(i);
                     } else {
@@ -132,9 +123,11 @@ public class ConstantPool {
                     }
                 }
             }
+            itr.reset();
         }
 
-        validated = true;
+        uniquer.clear();
+        this.uniquer = null;
     }
 
     private Constant getReferTo(Constant c, int level) {
@@ -155,11 +148,6 @@ public class ConstantPool {
                         }
                         return this.cst[cz.getTypeIndex()];
                     }
-                    case UTF:
-                    case DOUBLE:
-                    case INT:
-                    case LONG:
-                    case FLOAT:
                 }
             }
             break;
@@ -190,15 +178,15 @@ public class ConstantPool {
             }
             break;
         }
-        throw new UnsupportedOperationException("It can't happen!");
+        return new CstUTF("Impossible error at " + level + " of " + c);
     }
 
     private boolean validate(Constant c, int level) throws ClassCastException {
-        //if (c == null)
-        //    return true;
         switch (level) {
             case 0: {
                 switch (c.type()) {
+                    case MODULE:
+                    case PACKAGE:
                     case METHOD_TYPE:
                     case STRING:
                     case CLASS: {
@@ -217,6 +205,7 @@ public class ConstantPool {
                     case INT:
                     case LONG:
                     case FLOAT:
+                    case _TOP_:
                         return true;
                 }
             }
@@ -253,7 +242,7 @@ public class ConstantPool {
 
     private static Constant readConstant(ByteReader r) {
         short b = r.readUByte();
-        if (byId(b) == null)
+        if (CstType.toString(b) == null)
             throw new IllegalArgumentException("Illegal constant type " + b);
         switch (b) {
             case UTF:
@@ -301,15 +290,15 @@ public class ConstantPool {
     }
 
     public void readNames(ByteReader r) {
-        if (validated)
-            throw new IllegalStateException("ConstantPool is marked unmodifiable.");
+        if (uniquer == null)
+            throw new IllegalStateException("Already validated.");
 
         int len = cst.length;
         while (index < len) {
             Constant c = null;
 
             int b = r.readUnsignedByte();
-            if (byId(b) == null)
+            if (CstType.toString(b) == null)
                 throw new IllegalArgumentException("Illegal constant type " + b);
             switch (b) {
                 case UTF:
@@ -372,11 +361,23 @@ public class ConstantPool {
     }
 
     public void read(ByteReader r) {
-        if (validated)
-            throw new IllegalStateException("ConstantPool is marked unmodifiable.");
+        if (uniquer == null)
+            throw new IllegalStateException("Already validated.");
+
         int len = cst.length;
         while (index < len) {
-            addConstant(readConstant(r));
+            Constant c = readConstant(r);
+
+            switch (c.type()) {
+                case UTF:
+                case DOUBLE:
+                case INT:
+                case LONG:
+                case FLOAT:
+                    c = uniquer.intern(c);
+            }
+
+            addConstant(c);
         }
     }
 
@@ -387,18 +388,19 @@ public class ConstantPool {
     public String getName(ByteReader r) {
         int id = r.readUnsignedShort();
 
-        return id == 0 ? null : (validated ?
+        return id == 0 ? null : (uniquer == null ?
                 ((CstClass) (cst[id])).getValue() :
                 ((CstUTF) cst[((CstClass) cst[id]).getValueIndex()])).getString();
     }
 
     @Override
     public String toString() {
-        return "ConstantPool{" + "cp=" + Arrays.toString(cst) + ", cpi=" + index + '}';
+        return "ConstantPool[" + index + "]= " + TextUtil.prettyPrint(Arrays.asList(cst));
     }
 
     public void reload(ConstantWriter writer) {
-        cst = new Constant[writer.getIndex()];
+        if(cst.length != writer.getIndex())
+            cst = new Constant[writer.getIndex()];
         int i = 1;
 
         List<Constant> csts = writer.getConstants();
@@ -406,7 +408,7 @@ public class ConstantPool {
             Constant c = csts.get(j);
             cst[i++] = c;
             if(c.type() == DOUBLE || c.type() == LONG)
-                cst[i++] = CstDoLHolder.HOLDER;
+                cst[i++] = CstTop.TOP;
         }
     }
 }

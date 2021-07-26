@@ -37,7 +37,8 @@ import java.util.Map;
  * @since 2021/5/31 21:17
  */
 public final class XElement extends AbstXML {
-    public String namespace, tag;
+    public String tag;
+    public boolean likeClose;
 
     public XElement(String tag) {
         super(Collections.emptyMap(), Collections.emptyList());
@@ -48,6 +49,11 @@ public final class XElement extends AbstXML {
         super(attributes, children);
         this.tag = tag;
     }
+    public XElement(String tag, Map<String, CEntry> attributes, List<AbstXML> children, boolean likeClose) {
+        super(attributes, children);
+        this.tag = tag;
+        this.likeClose = likeClose;
+    }
 
     @Override
     public XElement asElement() {
@@ -55,15 +61,12 @@ public final class XElement extends AbstXML {
     }
 
     public String namespace() {
-        if(namespace == null) {
-            int i = tag.indexOf(':');
-            if (i == -1) {
-                namespace = "";
-            } else {
-                namespace = tag.substring(0, i);
-            }
+        int i = tag.indexOf(':');
+        if (i == -1) {
+            return "";
+        } else {
+            return tag.substring(0, i);
         }
-        return namespace;
     }
 
     @Override
@@ -79,21 +82,24 @@ public final class XElement extends AbstXML {
                 entry.getValue().toJSON(sb, 0);
             }
         }
+
+        if(likeClose && children.isEmpty()) {
+            return sb.append(" />");
+        }
+
         sb.append('>');
 
         int depth1 = depth + 4;
         if (!children.isEmpty()) {
-            int i = 0, s = children.size();
-            for (AbstXML entry : children) {
+            for (int i = 0; i < children.size(); i++) {
+                AbstXML entry = children.get(i);
                 if (!entry.isString() && (i == 0 || !children.get(i - 1).isString())) {
-                    System.out.println("Adding " + entry.toCompatXML(new StringBuilder()));
                     sb.append('\n');
                     for (int j = 0; j < depth1; j++) {
                         sb.append(' ');
                     }
                 }
                 entry.toXML(sb, depth1);
-                i++;
             }
             if (!children.get(children.size() - 1).isString()) {
                 sb.append('\n');
@@ -114,17 +120,17 @@ public final class XElement extends AbstXML {
                 entry.getValue().toJSON(sb, 0);
             }
         }
-        if (children.isEmpty()/* && value == null*/)
-            sb.append('/');
-        sb.append('>');
+
+        if(likeClose && children.isEmpty()) {
+            return sb.append("/>");
+        }
 
         if (!children.isEmpty()) {
-            for (AbstXML entry : children) {
+            for (int i = 0; i < children.size(); i++) {
+                AbstXML entry = children.get(i);
                 entry.toCompatXML(sb);
             }
             sb.delete(sb.length() - 1, sb.length()).append('\n');
-        } else {
-            return sb;
         }
         return sb.append('<').append('/').append(tag).append('>');
     }
@@ -134,20 +140,17 @@ public final class XElement extends AbstXML {
         this.children.addAll(list.children);
         initMap();
         this.attributes.putAll(list.attributes);
-        //this.value = list.value;
     }
 
     public CMapping toJSON() {
-        CMapping map = super.toJSON();
-        map.put("_type_", "XML.Elem");
-        map.put("tag", tag);
-
+        CMapping map = super.toJSON().asMap();
+        map.put("I", tag);
         return map;
     }
 
     public static XElement fromJSON(CMapping map) {
-        XElement element = new XElement(map.getString("tag"));
-        element.read(map);
-        return element;
+        XElement el = new XElement(map.getString("I"));
+        el.read(map);
+        return el;
     }
 }

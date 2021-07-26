@@ -35,7 +35,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -52,7 +53,7 @@ public class Signature implements IType {
     /**
      * Contract: values[0] is class, other is interface
      */
-    public final List<IType> values;
+    public List<IType> values;
     public IType returns;
     public final byte type;
     public List<IType> throwsException;
@@ -82,7 +83,7 @@ public class Signature implements IType {
 
                 boolean flag = false;
                 for (Generic value : list) {
-                    if (value.type == Generic.CLASS) {
+                    if (value.type == Generic.TYPE_CLASS) {
                         if (flag) {
                             throw new IllegalArgumentException("At most one class extend!");
                         }
@@ -96,7 +97,8 @@ public class Signature implements IType {
         if (type != FIELD_OR_CLASS) {
             if (type == METHOD)
                 sb.append('(');
-            for (IType value : values) {
+            for (int i = 0; i < values.size(); i++) {
+                IType value = values.get(i);
                 value.appendGeneric(sb);
             }
             if (type == METHOD)
@@ -151,14 +153,16 @@ public class Signature implements IType {
             if (type == METHOD) {
                 returns.appendString(sb);
                 sb.append(' ').append('(');
-                for (IType value : values) {
+                for (int i = 0; i < values.size(); i++) {
+                    IType value = values.get(i);
                     value.appendString(sb);
                     sb.append(", ");
                 }
                 sb.setIndex(sb.length() - 2);
                 sb.append(')');
             } else {
-                for (IType value : values) {
+                for (int i = 0; i < values.size(); i++) {
+                    IType value = values.get(i);
                     value.appendString(sb);
                 }
                 returns.appendString(sb);
@@ -174,7 +178,8 @@ public class Signature implements IType {
             }
         }
         if (values != null) {
-            for (IType value : values) {
+            for (int i = 0; i < values.size(); i++) {
+                IType value = values.get(i);
                 rename0(fn, value);
             }
         }
@@ -192,7 +197,7 @@ public class Signature implements IType {
     }
 
     @Override
-    public boolean isGeneric() {
+    public boolean isRootGeneric() {
         return true;
     }
 }
