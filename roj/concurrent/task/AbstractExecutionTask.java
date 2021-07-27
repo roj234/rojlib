@@ -60,7 +60,7 @@ public abstract class AbstractExecutionTask implements ITask, Future<Void>, Runn
         try {
             run();
         } catch (Throwable e) {
-            exception = (ExecutionException) new ExecutionException(e).initCause(e);
+            exception = new ExecutionException(e);
         }
         synchronized (this) {
             done = true;
