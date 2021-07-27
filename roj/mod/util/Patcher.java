@@ -26,6 +26,9 @@
 package roj.mod.util;
 
 import LZMA.LzmaInputStream;
+import roj.asm.tree.Clazz;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
 import roj.io.JarReaderStream;
 import roj.repackage.com_nothome_delta.ByteBufferSeekableSource;
@@ -40,8 +43,6 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarOutputStream;
@@ -114,11 +115,13 @@ public final class Patcher {
                 }
             }
             if(patch.patch.length == 0) {
-                CmdUtil.warning("按照Forge的设计要清空" + patch);
-                CmdUtil.warning("但是清空了我的映射器没法处理, 毕竟OB的文件");
-                CmdUtil.warning("如果你说我不行, 帮我找到Forge咋处理这些该死的violent的");
-                return null;
-                //return new ByteList(EMPTY);
+                CmdUtil.warning("按照Forge的设计要清空: " + patch);
+                CmdUtil.warning("但是清空？ 什么垃圾玩意");
+                Clazz clazz = new Clazz();
+                clazz.parent = "java/lang/Object";
+                clazz.name = patch.source;
+                clazz.accesses = new FlagList(AccessFlag.PUBLIC | AccessFlag.SUPER_OR_SYNC);
+                return clazz.getBytes();
             }
             try {
                 ByteList out = new ByteList(input.pos());
@@ -163,15 +166,15 @@ public final class Patcher {
     public void setup112(InputStream stream) {
         try {
             try (LzmaInputStream decompressed = new LzmaInputStream(stream)) {
-                clientPatches = new HashMap<>();
-                serverPatches = new HashMap<>();
+                clientPatches = new MyHashMap<>();
+                serverPatches = new MyHashMap<>();
                 JarOutputStream jos = new JarReaderStream(((entry, byteList) -> {
                     try {
                         Patch cp = readPatch(new ByteReader(byteList));
                         if(entry.getName().startsWith("binpatch/client")) {
-                            clientPatches.computeIfAbsent(cp.source + ".class", (s) -> new LinkedList<>()).add(cp);
+                            clientPatches.computeIfAbsent(cp.source + ".class", Helpers.fnArrayList()).add(cp);
                         } else if(entry.getName().startsWith("binpatch/server")) {
-                            serverPatches.computeIfAbsent(cp.source + ".class", (s) -> new LinkedList<>()).add(cp);
+                            serverPatches.computeIfAbsent(cp.source + ".class", Helpers.fnArrayList()).add(cp);
                         } else {
                             CmdUtil.warning("未知名字 " + entry.getName());
                         }
@@ -242,7 +245,7 @@ public final class Patcher {
         }
 
         public String toString() {
-            return "For " + source + " len=" + patch.length + ", Tlen=" + (exist ? " > 0" : " = 0");
+            return "Src: " + source + " Patch.length: " + patch.length + ", Target.length: " + (exist ? " > 0" : " = 0");
         }
     }
 

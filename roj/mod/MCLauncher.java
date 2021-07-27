@@ -26,6 +26,7 @@
 package roj.mod;
 
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskHandler;
@@ -50,12 +51,14 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
-import roj.util.*;
+import roj.util.ByteList;
+import roj.util.ByteReader;
+import roj.util.ByteWriter;
+import roj.util.OS;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
-import java.awt.Color;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
@@ -129,10 +132,22 @@ public class MCLauncher extends JFrame {
         button.setToolTipText("配置<当前版本>的玩家名等");
         add(button);
 
+        button = new JButton("终止");
+        button.addActionListener((e) -> {
+            if (task != null && !task.isDone()) {
+                task.cancel(true);
+                info("已结束");
+            } else {
+                error("MC没有启动");
+            }
+        });
+        button.setToolTipText("终止MC进程");
+        add(button);
+
         pack();
         setLayout(new FlowLayout());
         setResizable(true);
-        setBounds(700, 500, 300, 100);
+        setBounds(700, 500, 320, 100);
         setVisible(true);
 
         validate();
@@ -436,10 +451,17 @@ public class MCLauncher extends JFrame {
 
         assets = new File(assets, "/objects/");
         CharList tmp = new CharList();
-        ArrayList<Object[]> missingEntries = new ArrayList<>();
+
+        STDProgress.DECR_LOGS = true;
+        STDProgress.DECR_LOGS_2 = true;
+
+        MyHashSet<String> hashes = new MyHashSet<>();
+        ArrayList<ITask> missingEntries = new ArrayList<>();
         for (Map.Entry<String, CEntry> entry : objects.entrySet()) {
             CMapping val = entry.getValue().asMap();
             String hash = val.getString("hash");
+            if(!hashes.add(hash)) // 跳过重复的文件
+                continue;
             String url = tmp.append(hash, 0, 2).append('/').append(hash).toString();
             tmp.clear();
             File asset = new File(assets, url);
@@ -454,31 +476,16 @@ public class MCLauncher extends JFrame {
                     continue;
                 }
 
-                missingEntries.add(new Object[] {
-                        val, asset, url
-                });
+                val.put("sha1", val.getString("hash"));
+                val.remove("size");
+                val.remove("hash");
+                val.put("url", mirrorB + url);
+                missingEntries.add(downMcFileAsTask(val, asset, mirrorB));
             }
         }
 
-        if(missingEntries.isEmpty())
-            return 0;
-
-        STDProgress.DECR_LOGS = true;
-        STDProgress.DECR_LOGS_2 = true;
-
-        List<ITask> tasks = Helpers.cast(missingEntries);
-
-        for (int i = 0; i < missingEntries.size(); i++) {
-            Object[] arr = missingEntries.get(i);
-            CMapping map = (CMapping) arr[0];
-            File file = (File) arr[1];
-
-            map.put("sha1", map.getString("hash"));
-            map.put("url", mirrorB + arr[2]);
-            tasks.set(i, downMcFileAsTask(map, file, mirrorB));
-        }
-
-        waitFor(tasks);
+        if(!missingEntries.isEmpty())
+            waitFor(missingEntries);
 
         STDProgress.DECR_LOGS_2 = false;
         STDProgress.DECR_LOGS = false;
@@ -496,7 +503,7 @@ public class MCLauncher extends JFrame {
             File mcNative = new File(mcJson.getParentFile(), "/$natives/");
             result = getRunConf(mcRoot, mcJson, mcNative, cfgGen);
             config.put("mc_conf", mc_conf = (CMapping) result[0]);
-            config.put("native_path", mcNative.getAbsolutePath());
+            mc_conf.put("native_path", mcNative.getAbsolutePath());
             jsonDesc = (CMapping) result[3];
             config.put("mc_version", jsonDesc.getString("id"));
 
@@ -626,7 +633,7 @@ public class MCLauncher extends JFrame {
         }
     }
 
-    private static boolean installForge(File tmpFile, String fgVersion, boolean highVersion) throws IOException {
+    private static boolean installForge(File fgInstaller, String fgVersion, boolean highVersion) throws IOException {
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
 
         File mcRoot = new File(cfgGen.getString("MC目录"));
@@ -645,7 +652,7 @@ public class MCLauncher extends JFrame {
             return false;
         }
 
-        ZipFile zf = new ZipFile(tmpFile);
+        ZipFile zf = new ZipFile(fgInstaller);
 
         ZipEntry instProf = zf.getEntry("install_profile.json");
         if(instProf == null) {
@@ -713,7 +720,7 @@ public class MCLauncher extends JFrame {
                 }
                 int cpLen = cpTmp.length();
 
-                Set<String> forced = MAIN_CONFIG.get("启动器配置").asMap().get("作为MC自身lib的key").asList().asStringSet();
+                Set<String> forced = MAIN_CONFIG.get("启动器配置.作为MC自身lib的key").asList().asStringSet();
                 CMapping data = instConf.get("data").asMap();
                 MyHashMap<String, String> map = new MyHashMap<>(data.size());
                 for (Map.Entry<String, CEntry> entry : data.entrySet()) {
@@ -751,6 +758,9 @@ public class MCLauncher extends JFrame {
                 }
 
                 map.put("MINECRAFT_JAR", config.get("mc_conf").asMap().getString("jar"));
+                map.put("SIDE", "client");
+                map.put("ROOT", libraryPath.getAbsolutePath());
+                map.put("INSTALLER", fgInstaller.getAbsolutePath());
 
                 CmdUtil.info("Parallel: 导出安装器maven");
                 Enumeration<? extends ZipEntry> e = zf.entries();
@@ -777,10 +787,28 @@ public class MCLauncher extends JFrame {
 
                 waitFor(null);
                 CmdUtil.info("开始安装Forge...");
+                if(instConf.getInteger("spec") == 1)
+                    CmdUtil.error("太妙了！forge正在把我要下载的东西单线程重新下一遍！失败了别找我哦\n 按确定继续");
+
+                new File(BASE, "forge_install.log").delete();
 
                 List<String> keys = new ArrayList<>();
-                for (CEntry process : instConf.get("processors").asList()) {
-                    CMapping op = process.asMap();
+                CList processors = instConf.get("processors").asList();
+                for (int i = 0; i < processors.size(); i++) {
+                    CMapping op = processors.get(i).asMap();
+                    CList sides = op.getOrCreateList("sides");
+                    if(sides.size() != 0) {
+                        boolean cl = false;
+                        for (int j = 0; j < sides.size(); j++) {
+                            if(sides.get(j).asString().equals("client")) {
+                                cl = true;
+                                break;
+                            }
+                        }
+                        if(!cl) {
+                            CmdUtil.info("服务端处理器: " + i + ", 跳过");
+                        }
+                    }
                     File path = new File(libraryPath, mavenPath(op.getString("jar")).toString());
                     if (!path.isFile()) {
                         CmdUtil.error("无法找到文件 " + path.getAbsolutePath());
@@ -807,21 +835,34 @@ public class MCLauncher extends JFrame {
 
                     for (CEntry entry : op.get("args").asList()) {
                         String s = entry.asString();
-
-                        if (s.startsWith("{")) {
-                            s = map.get(s.substring(1, s.length() - 1));
-                        } else if (s.startsWith("[")) {
+                        if (s.startsWith("[")) {
                             s = new File(libraryPath, mavenPath(s.substring(1, s.length() - 1)).toString()).getAbsolutePath();
+                        } else {
+                            int j = s.indexOf('{');
+                            if (j != -1) {
+                                CharList cl = new CharList(s.length()).append(s, 0, j);
+                                for (; j < s.length(); j++) {
+                                    char c = s.charAt(j);
+                                    if (c == '{') {
+                                        int k = j;
+                                        while (s.charAt(k) != '}')
+                                            k++;
+                                        cl.append(map.get(s.substring(j + 1, k)));
+                                        j = k;
+                                    } else {
+                                        cl.append(c);
+                                    }
+                                }
+                                s = cl.toString();
+                            }
                         }
 
                         keys.add(s);
                     }
 
                     CmdUtil.info("运行: " + mainCls);
-                    if(DEBUG)
-                        System.out.println(keys);
 
-                    if(runProcess(keys, TMP_DIR, 5, new File(BASE, "forge_install.log")) != 0) {
+                    if(runProcess(keys, TMP_DIR, 6, new File(BASE, "forge_install.log")) != 0) {
                         CmdUtil.error("尝试清空tmp/fg-xx-xxx-tmp-lib文件夹");
                         return false;
                     }
@@ -1054,12 +1095,13 @@ public class MCLauncher extends JFrame {
                 }
 
                 config = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding())).asMap();
-                if(config.containsKey("native_path")) {
-                    File native_path = new File(config.getString("native_path"));
+                config.dotMode(true);
+                CEntry path = config.getOrNull("mc_conf.native_path");
+                if(path != null) {
+                    File native_path = new File(path.asString());
                     if (!native_path.isDirectory()) {
-                        error("你移动或修改了MC目录,请重新选择版本!");
+                        error("你移动或修改了MC目录,请重新选择核心!");
                         config.remove("mc_conf");
-                        config.remove("native_path");
                         config.remove("mc_version");
                         save();
                     }
@@ -1080,8 +1122,9 @@ public class MCLauncher extends JFrame {
             error("请选择版本!");
         } else {
             if(!config.getBool("tip1")) {
-                error("这里的修改在重新选择版本后会被通用配置覆盖");
-                error("启动配置保存在launcher.json\n通用配置保存在config.json");
+                error("这里的修改在重新选择版本后会被通用配置覆盖\n" +
+                              "启动配置保存在launcher.json\n" +
+                              "通用配置保存在config.json");
                 config.put("tip1", true);
                 save();
             }
@@ -1113,15 +1156,15 @@ public class MCLauncher extends JFrame {
             final CMapping mc_conf = config.get("mc_conf").asMap();
 
             nameInput = new JTextField(mc_conf.getString("player_name"), 0);
-            nameInput.setBounds(80,10,200,25);
+            nameInput.setBounds(80,10,500,25);
             add(nameInput);
 
             jvmInput = new JTextField(mc_conf.getString("jvmArg"), 0);
-            jvmInput.setBounds(80,40,200,25);
+            jvmInput.setBounds(80,40,500,25);
             add(jvmInput);
 
             mcInput = new JTextField(mc_conf.getString("mcArg"), 0);
-            mcInput.setBounds(80,70,200,25);
+            mcInput.setBounds(80,70,500,25);
             add(mcInput);
 
             JPanel panel = new JPanel();
@@ -1135,10 +1178,10 @@ public class MCLauncher extends JFrame {
 
             setLayout(null);
             setVisible(true);
-            setResizable(false);
+            setResizable(true);
 
             pack();
-            setBounds(400, 200, 300, 140);
+            setBounds(600, 400, 600, 160);
             validate();
         }
 
@@ -1182,6 +1225,14 @@ public class MCLauncher extends JFrame {
         env.put("classpath", '"' + AbstLexer.addSlashes(new StringBuilder(mc_conf.getString("libraries")).append(mc_conf.getString("jar"))) + '"');
         env.put("launcher_name", "FMD");
         env.put("launcher_version", VERSION);
+        env.put("classpath_separator", File.pathSeparator);
+        try {
+            File p = nativePath;
+            while (!(p = p.getParentFile()).getName().equals(".minecraft")) ;
+            env.put("library_directory", new File(p, "libraries").getAbsolutePath());
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
 
         Map<String, String> mcEnv = new MyHashMap<>();
 
@@ -1760,7 +1811,7 @@ public class MCLauncher extends JFrame {
 
         @Override
         public void calculate(Thread thread) throws Exception {
-            runClient(config.get("mc_conf").asMap(), new File(config.getString("native_path")), log ? 1 : 0, this);
+            runClient(config.get("mc_conf").asMap(), new File(config.getString("mc_conf.native_path")), log ? 1 : 0, this);
             run = true;
         }
 
@@ -1817,7 +1868,8 @@ public class MCLauncher extends JFrame {
         String url = replaceMirror(map, mirror);
 
         if (!targetFile.exists()) {
-            CmdUtil.info("下载 " + url);
+            //if(DEBUG)
+            //    CmdUtil.info("下载 " + url);
 
             BigInteger sha1 = map.containsKey("sha1") ? new BigInteger(map.get("sha1").asString(), 16) : null;
 
@@ -2026,7 +2078,7 @@ public class MCLauncher extends JFrame {
             if (sha1 == null || sha1.equals(sha1Resl)) {
                 out = null;
                 executing = false;
-                CmdUtil.success(url + " 完毕.");
+                CmdUtil.success(url.substring(url.lastIndexOf('/') + 1) + " 完毕.");
                 if(callback != null)
                     callback.run();
             } else {
@@ -2039,7 +2091,8 @@ public class MCLauncher extends JFrame {
                     return;
                 }
 
-                CmdUtil.warning("SHA1效验失败! 预计: " + sha1.toString(16) + " 实际: " + sha1Resl.toString(16) +", 重新下载...");
+                if(DEBUG)
+                    CmdUtil.warning("SHA1 For " + url + " Got: " + sha1Resl.toString(16));
                 if (!target.delete()) {
                     CmdUtil.warning("文件" + target.getName() + "删除失败!");
                 }
@@ -2071,14 +2124,14 @@ public class MCLauncher extends JFrame {
                 return;
             }
 
-            CmdUtil.error(url + "下载失败");
-
             if(!e.getMessage().equals("Read timed out")) {
                 if(e instanceof FileNotFoundException) {
-                    CmdUtil.error("网络连接异常, abort " + e.toString());
+                    CmdUtil.error("网络连接异常: " + e.toString());
                     out = null;
                     return;
                 }
+
+                CmdUtil.error(url.substring(url.lastIndexOf('/') + 1) + " 下载失败.");
 
                 if (err == null) {
                     try {
@@ -2101,7 +2154,7 @@ public class MCLauncher extends JFrame {
                     out = null;
                 }
             } else {
-                CmdUtil.warning("原因: 网络超时");
+                CmdUtil.warning("下载失败: 网络超时");
             }
         }
 
@@ -2140,7 +2193,7 @@ public class MCLauncher extends JFrame {
                 e.printStackTrace();
             }
 
-            CmdUtil.info("客户端已关闭");
+            CmdUtil.info("进程终止");
             return process.exitValue();
         }
         return 0;

@@ -254,7 +254,7 @@ public final class FileUtil {
 
         final Downloader downloader = new Downloader(pid, tempFile, fInfoFile, httpConn.getURL(), 0, length, handler);
         handler.onInitial(1);
-        downloader.run();
+        downloader.waitFor();
         handler.onReturn();
 
         StringBuilder err = new StringBuilder();
@@ -361,10 +361,16 @@ public final class FileUtil {
 
                 if(/*conn.getResponseCode() != 206*/conn.getHeaderField("ETag") == null) { // Partial content
                     singleThread0(file, handler, 0, deleteInfo, tempFile, fInfoFile, conn);
+                    if(!fInfoFile.delete()) {
+                        fInfoFile.deleteOnExit();
+                        //throw new IOException("fInfoFile文件已被占用");
+                    }
+                    System.out.println("不支持多线程！");
                     return;
                 }
 
-                AppendOnlyCache aoc = new AppendOnlyCache(new File(fInfoFile.getAbsolutePath() + ".tag"));
+                File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
+                AppendOnlyCache aoc = new AppendOnlyCache(tagFile);
                 aoc.read();
                 if(!aoc.contains("ETag")) {
                     aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
@@ -373,13 +379,13 @@ public final class FileUtil {
                     String ck = conn.getHeaderField("ETag");
                     if (!aoc.getUTF("ETag").equals(ck)) {
                         if(!fInfoFile.delete()) {
-                            throw new IOException("文件已被占用");
+                            throw new IOException("fInfoFile文件已被占用");
                         }
                     } else {
                         ck = conn.getHeaderField("Last-Modified");
                         if (!aoc.getUTF("Last-Modified").equals(ck)) {
                             if(!fInfoFile.delete()) {
-                                throw new IOException("文件已被占用");
+                                throw new IOException("fInfoFile文件已被占用");
                             }
                         }
                     }
@@ -451,6 +457,7 @@ public final class FileUtil {
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod(headOnly ? "HEAD" : "GET");
             conn.setConnectTimeout(TIMEOUT);
+            conn.setReadTimeout(TIMEOUT);
             conn.setRequestProperty("User-Agent", USER_AGENT);
             conn.setRequestProperty("Range", "bytes=0-");
             int code = conn.getResponseCode();
@@ -550,11 +557,24 @@ public final class FileUtil {
 
             StringBuilder err = new StringBuilder();
 
-            if (!tempFile.renameTo(file)) {
-                err.append("文件重命名失败, 请手动把 ").append(tempFile.getName()).append(" 重命名为 ").append(file.getName());
+            if(fInfoFile != null) {
+                File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
+                if(tagFile.isFile() && !tagFile.delete()) {
+                    tagFile.deleteOnExit();
+                    err.append("; ETag缓存删除失败 ").append(tagFile.getAbsolutePath());
+                }
             }
-            if (deleteInfo && (fInfoFile != null && !fInfoFile.delete())) {
-                err.append("; 下载进度删除失败 ").append(fInfoFile.getName());
+
+            if (!tempFile.renameTo(file)) {
+                if(file.isFile()) {
+                    err.append("; 文件已被另一个线程完成.");
+                } else {
+                    err.append("; 文件重命名失败, 请手动把 ").append(tempFile.getAbsolutePath()).append(" 重命名为 ").append(file.getAbsolutePath());
+                }
+            }
+            if (deleteInfo && (fInfoFile != null && fInfoFile.isFile() && !fInfoFile.delete())) {
+                err.append("; 下载进度删除失败 ").append(fInfoFile.getAbsolutePath());
+                fInfoFile.deleteOnExit();
             }
             //if (lockFile.isFile() && !lockFile.delete()) {
             //    err.append("; 文件锁删除失败 ").append(lockFile.getName());

@@ -246,7 +246,7 @@ public class FMDInstall extends JFrame {
             if (versions == null) return;
         }
         for (i = 0; i < obj.length; i++) {
-            if(s == obj[i])
+            if(obj[i].equals(s))
                 break;
         }
 

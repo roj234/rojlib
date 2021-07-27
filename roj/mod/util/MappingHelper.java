@@ -317,10 +317,11 @@ public class MappingHelper {
         int same = 0;
         boolean maybeSame = false;
 
-        int i = 1;
+        int i = 1, fuckedArgs = 0, fuckingTsrg2 = 0;
 
         CharList tmp = new CharList();
         final ArrayList<String> list = new ArrayList<>();
+
         for (String line : slr) {
             if (line.length() == 0 || line.startsWith("#")) continue;
             char c = line.charAt(0);
@@ -329,8 +330,16 @@ public class MappingHelper {
                     CmdUtil.error(path + "#!config/joined.tsrg:" + i + ": 无效的元素开始.");
                     return false;
                 }
+                if(line.charAt(1) == '\t') { // 1.17.sbformat
+                    if(!line.equals("\t\tstatic"))
+                        fuckedArgs++;
+                    continue;
+                }
                 list.clear();
-                List<String> arr = TextUtil.splitStringF(list, tmp, line.substring(1), ' ', 3);
+                List<String> arr = TextUtil.splitStringF(list, tmp, line.substring(1), ' ', 3 + fuckingTsrg2);
+                if(fuckingTsrg2 == 1)
+                    arr.remove(arr.size() - 1);
+
                 if (arr.size() == 2) {
                     if(maybeSame) {
                         if(!arr.get(1).equals(arr.get(0))) {
@@ -358,10 +367,14 @@ public class MappingHelper {
                     if(revAll != null)
                         revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(arr.toArray());
                 } else {
-                    CmdUtil.error(path + "#!config/joined.tsrg:" + i + ": 未知标记类型.");
+                    CmdUtil.error(path + "#!config/joined.tsrg:" + i + ": 未知标记类型: " + line);
                     return false;
                 }
             } else {
+                if(line.startsWith("tsrg2")) {
+                    CmdUtil.warning("FUCKING TSRG2 FORMAT !!!");
+                    fuckingTsrg2 = 1;
+                }
                 if(maybeSame) {
                     same++;
                     classes.remove(ctx[0]);
@@ -378,6 +391,8 @@ public class MappingHelper {
 
         if(same > 0)
             CmdUtil.info("忽略了 " + same + " 个相同的映射");
+        if(fuckedArgs > 0)
+            CmdUtil.info("忽略了 " + fuckedArgs + " 个Fucked的参数映射");
 
         flag |= 32768;
 

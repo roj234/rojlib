@@ -114,6 +114,8 @@ public final class Shared {
 
             MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 2).asMap();
 
+            MAIN_CONFIG.dotMode(true);
+
             DEBUG = MAIN_CONFIG.getBool("调试模式");
 
             CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
@@ -121,6 +123,7 @@ public final class Shared {
             FileUtil.MIN_ASYNC_SIZE = cfgGen.getBool("使用多线程下载") ? 1024 * 4 : Integer.MAX_VALUE;
             FileUtil.ENABLE_ENDPOINT_RECOVERY = cfgGen.getBool("开启断点续传");
             FileUtil.USER_AGENT = cfgGen.getString("UserAgent");
+            FileUtil.TIMEOUT = cfgGen.getInteger("下载超时");
 
         } catch (ParseException | ClassCastException e) {
             CmdUtil.error(file.getAbsolutePath() + " 有语法错误! 请修正!", e);
@@ -248,7 +251,8 @@ public final class Shared {
     public static void saveForgeMapping() {
         try(FileOutputStream fos = new FileOutputStream(CONF_INDEX)) {
             CMapping map = new CMapping();
-            map.put("config", currentProject.name);
+            if(currentProject != null)
+                map.put("config", currentProject.name);
             map.put("forgeMapping", isForgeMap);
             ByteWriter.encodeUTF(map.toJSON()).writeToStream(fos);
         } catch (IOException e) {

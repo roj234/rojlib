@@ -204,20 +204,22 @@ public class FMDGui extends JFrame {
                         "    cmd界面配置文件不能自动更新\n" +
                         "    只支持线性依赖\n" +
                         "\n" +
+                        "  一些下载文件的线程安全问题\n" +
+                        "  支持安装1.17的forge, 只有安装！\n"+
                         "  加快反向映射表加载速度\n" +
-                        "  MutableZipFile\n" +
                         "  支持监控文件修改,自动重载\n" +
                         "  输出jar体积过大\n" +
-                        "  ASM的几个陈年bug\n" +
-                        "  YAMLParser\n" +
-                        "  TOMLParser\n" +
-                        "  重用Word\n" +
-                        "  Mapper多线程\n" +
-                        "  SimpleObfuscator\n" +
-                        "  一些BUG\n" +
+                        "  1.12以上版本的严重问题\n" +
+                        "  部分兼容1.17, 还有问题！！\n" +
+                        "  一些其他问题\n" +
                         "\n" +
                         "Gradle速度慢, 要联网(这个倒能解决), 不能增量编译等等...\n" +
                         "后来, FMD来了.\n" +
+                        "\n" +
+                        "下一个版本更新: \b" +
+                        "  可能会支持1.17的开发, 开发！\n" +
+                        "  提高速度，MutableZipFile\n" +
+                        "  混淆mod代码 （可选功能）" +
                         "\n" +
                         "* 可以下载安装启动【挖矿与合成】和【锻造锤】\n" +
                         "*    并不能装国防部", "关于FMD", INFORMATION_MESSAGE, icon);

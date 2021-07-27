@@ -23,44 +23,39 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.concurrent.task;
+package roj.asm.cst;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
+import roj.util.ByteWriter;
 
-public final class CalculateTask<T> extends AbstractCalcTask<T> {
-    private final Callable<T> supplier;
+/**
+ * No description provided
+ *
+ * @author Roj234
+ * @version 0.1
+ * @since  2021/5/24 22:50
+ */
+public final class CstTop extends Constant {
+    public static final Constant TOP = new CstTop();
 
-    public CalculateTask(Callable<T> supplier) {
-        this.supplier = supplier;
+    private CstTop() {}
+
+    @Override
+    protected void write0(ByteWriter writer) {
+        throw new IllegalArgumentException("CstTop is a placeholder class.");
     }
 
     @Override
-    public void calculate(Thread thread) {
-        executing = true;
-        try {
-            this.out = supplier.call();
-        } catch (Throwable e) {
-            exception = new ExecutionException(e);
-        }
-        executing = false;
-
-        synchronized (this) {
-            notifyAll();
-        }
-    }
-
-    public static CalculateTask<Void> fromVoid(Runnable runnable) {
-        return new CalculateTask<>(() -> {
-            runnable.run();
-            return null;
-        });
+    public boolean equals(Object o) {
+        return o == TOP;
     }
 
     @Override
-    public String toString() {
-        return "Task{executing=" + executing +
-                ", canceled=" + canceled +
-                '}';
+    public int hashCode() {
+        return 88888;
+    }
+
+    @Override
+    public byte type() {
+        return CstType._TOP_;
     }
 }

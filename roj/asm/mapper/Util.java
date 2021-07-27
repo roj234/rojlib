@@ -288,9 +288,8 @@ public final class Util {
         return ctx;
     }
 
-    public static final Predicate<String> alwaysTrue = s -> true;
     public static List<Context> ctxFromZip(File input, Charset charset) throws IOException {
-        return ctxFromZip(input, charset, alwaysTrue);
+        return ctxFromZip(input, charset, Helpers.alwaysTrue());
     }
 
     public static List<Context> ctxFromZip(File input, Charset charset, Predicate<String> filter) throws IOException {

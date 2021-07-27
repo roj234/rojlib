@@ -932,7 +932,7 @@ public final class ConstMapper extends Mapping {
                     if (entry != null) {
                         MtDesc md = entry.getKey();
                         if (md.flags == null)
-                            throw new RuntimeException("[NullMdFlagError]缺少必须的 " + parent + ".class for  " + md);
+                            throw new RuntimeException("[ConstMapper.Error]缺少必须的class: " + md);
                         if (md.flags.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
                             // static / private 无法继承
                             libSkipMethods.add(m);

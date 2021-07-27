@@ -802,10 +802,14 @@ public final class FMDMain {
         }
 
         // 反正compile时间绝对够
+
+        // todo
+        boolean canIncrementWrite = false && increment & project.state != null & jarFile.isFile();
+
         // region 更新资源文件
 
         CalculateTask<Void> task = new CalculateTask<>(project.getResourceTask);
-        Project.resourceFilter.reset(stamp, increment && jarFile.isFile() ? FileFilter.F_TIME : FileFilter.F_ALL);
+        Project.resourceFilter.reset(stamp, canIncrementWrite ? FileFilter.F_TIME : FileFilter.F_ALL);
         parallel.pushTask(task);
 
         // endregion
@@ -835,8 +839,6 @@ public final class FMDMain {
             }
 
             MyHashMap<String, InputStream> classes = new MyHashMap<>(100);
-
-            boolean canIncrementWrite = increment & project.state != null & jarFile.isFile();
 
             // 自动删除被删除的文件
             // build之后，修改时间没有更新，就是被删除的文件了, 所以增量不支持
@@ -1087,13 +1089,18 @@ public final class FMDMain {
             mcVersion = jsonDesc.get("clientVersion").asString();
         }
         if(mcVersion.isEmpty()) {
-            final String name = mcJar.getName();
+            String name = mcJar.getName();
             mcVersion = name.substring(0, name.lastIndexOf('.'));
             int i = name.lastIndexOf('-');
             if(i != -1)
                 mcVersion = mcVersion.substring(0, i);
             mcVersion = mcVersion.replace("-forge", "");
         }
+
+        MCLauncher.load();
+        MCLauncher.config.put("mc_conf", mc_conf);
+        String x = mcJar.getName();
+        MCLauncher.config.put("mc_version", x.substring(0, x.lastIndexOf('.')));
 
         String mcpVersion = detectVersion(mcVersion);
 
@@ -1128,7 +1135,10 @@ public final class FMDMain {
 
         gui.stageInfo(1, canDownloadOfficial, canDownloadYarn);
         int select = gui.getNumberInRange(0, 5);
-        isForgeMap = select == 0;
+
+        isForgeMap = select == 0/* && mcVersion < 1.17*/;
+        Shared.saveForgeMapping();
+
         switch (select) {
             case 1: {
                 if(!canDownloadOfficial) {
@@ -1351,12 +1361,7 @@ public final class FMDMain {
 
         mergeLibraries(librariesPath, libraries, proc, is113andAbove);
 
-        // region 保存配置
-        Shared.saveForgeMapping();
-        MCLauncher.load();
-        MCLauncher.config.put("mc_conf", mc_conf);
         MCLauncher.save();
-        // endregion
 
         CmdUtil.success("合并libraries完毕", true);
 

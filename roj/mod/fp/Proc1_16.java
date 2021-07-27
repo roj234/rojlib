@@ -29,10 +29,14 @@ import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
+import roj.collect.MyHashSet;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.OperationDone;
 import roj.concurrent.task.CalculateTask;
 import roj.concurrent.task.ExecutionTask;
+import roj.config.JSONParser;
+import roj.config.ParseException;
+import roj.config.data.CMapping;
 import roj.io.FileUtil;
 import roj.mod.FMDMain;
 import roj.mod.MCLauncher;
@@ -41,11 +45,13 @@ import roj.mod.util.Patcher;
 import roj.text.CharList;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
+import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.*;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -65,7 +71,8 @@ import static roj.mod.Shared.*;
 public final class Proc1_16 extends Processor {
     private static File mcpConfigFile;
 
-    File forgeInstallerPath, forgeUniv;
+    File forgeInstallerPath, forgeUniv, mcClearSrg;
+    InputStream serverLzmaInput;
 
     Map<String, Map<String, List<String>>> paramMap;
 
@@ -97,19 +104,71 @@ public final class Proc1_16 extends Processor {
 
         srgCli = new File(librariesPath, forge.append("-client.jar").toString());
 
+        File forgeInstaller;
+        try {
+            forge.setIndex(len);
+            String forgeInst = forge.append("-installer.jar").toString();
+            String instUrl = MAIN_CONFIG.get("FMD配置").asMap().getString("ForgeMaven仓库地址") + forgeInst;
+            MCLauncher.downloadAndVerifyMD5(instUrl, forgeInstaller = new File(TMP_DIR, forgeInst.substring(
+                    forgeInst.lastIndexOf('/') + 1)), true);
+        } catch (IOException e) {
+            CmdUtil.warning("文件下载失败, 请检查网络", e);
+            System.exit(-4);
+            return null;
+        }
+
         forge.setIndex(len);
         File forgeNormal = new File(librariesPath, forge.append(".jar").toString());
         forge.setIndex(len);
-        String forgeInstPath = forge.append("-installer.jar").toString();
-        forge.setIndex(len);
         File forgeUniversal = new File(librariesPath, forge.append("-universal.jar").toString());
+
+        InputStream server_lzma;
+        File mcClear;
+        try {
+            ZipFile zf = new ZipFile(forgeInstaller); // 顺便read一下
+            ZipEntry ze = zf.getEntry("data/server.lzma");
+            if (ze == null)
+                throw OperationDone.INSTANCE;
+            server_lzma = new ByteList().readStreamArrayFully(zf.getInputStream(ze)).asInputStream();
+
+            ze = zf.getEntry("install_profile.json");
+            if (ze == null)
+                throw OperationDone.INSTANCE;
+            CMapping installconf = JSONParser.parse(ByteReader.readUTF(new ByteList().readStreamArrayFully(zf.getInputStream(ze)))).asMap();
+
+            zf.close();
+
+            String mcSrgClient = installconf.getDot("data.MC_SRG.client").asString();
+            mcClear = new File(librariesPath, MCLauncher.mavenPath(mcSrgClient.substring(1, mcSrgClient.length() - 1)).toString());
+        } catch (IOException e) {
+            throw new IllegalArgumentException("IO eror, forge安装器 '" + forgeInstaller.getAbsolutePath() + "'", e);
+        } catch (OperationDone | ParseException e) {
+            throw new IllegalArgumentException("forge安装器 '" + forgeInstaller.getAbsolutePath() + "' 有错误", e);
+        }
+
+
+        try {
+            Class.forName("net.md_5.specialsource.SpecialSource");
+        } catch (Throwable ignored) {
+            try {
+                ClassLoader ldr = Proc1_16.class.getClassLoader();
+                for(File lib : files) {
+                    addURL.invoke(ldr, lib.toURI().toURL());
+                }
+                Class.forName("net.md_5.specialsource.SpecialSource");
+            } catch (Throwable e) {
+                CmdUtil.error("SpecialSource的依赖加载失败...", e);
+                CmdUtil.error("您可以手动将SpecialSource的文件加入classpath");
+                System.exit(-1);
+            }
+        }
 
         return new Object[]{
                 srgCli,
-                files,
                 forgeNormal,
-                forgeInstPath,
-                forgeUniversal
+                forgeUniversal,
+                server_lzma,
+                mcClear
         };
     }
 
@@ -125,35 +184,11 @@ public final class Proc1_16 extends Processor {
     @SuppressWarnings("unchecked")
     public Proc1_16(File mcServer, @Nullable Map<String, Map<String, List<String>>> paramMap, Object[] files) {
         super((File) files[0], mcServer);
-        this.forgeJar = (File) files[2]; // normal
-        this.forgeUniv = (File) files[4]; // univer
+        this.forgeJar = (File) files[1]; // normal
+        this.forgeUniv = (File) files[2]; // univer
         this.paramMap = paramMap;
-
-        try {
-            final String f3 = files[3].toString();
-            String instUrl = MAIN_CONFIG.get("FMD配置").asMap().getString("ForgeMaven仓库地址") + f3;
-            MCLauncher.downloadAndVerifyMD5(instUrl, this.forgeInstallerPath = new File(TMP_DIR, f3.substring(f3.lastIndexOf('/') + 1)), true);
-        } catch (IOException e) {
-            CmdUtil.warning("文件下载失败, 请重试，断点已保存", e);
-            System.exit(-4);
-        }
-
-        try {
-            Class.forName("net.md_5.specialsource.SpecialSource");
-        } catch (Throwable ignored) {
-            try {
-                List<File> libs = (List<File>)files[1];
-                ClassLoader ldr = getClass().getClassLoader();
-                for(File lib : libs) {
-                    addURL.invoke(ldr, lib.toURI().toURL());
-                }
-                Class.forName("net.md_5.specialsource.SpecialSource");
-            } catch (Throwable e) {
-                CmdUtil.error("SpecialSource的依赖加载失败...", e);
-                CmdUtil.error("您可以手动将SpecialSource的文件加入classpath");
-                System.exit(-1);
-            }
-        }
+        this.serverLzmaInput = (InputStream) files[3];
+        this.mcClearSrg = (File) files[4];
 
         parallel.pushRunnable(this);
     }
@@ -163,23 +198,6 @@ public final class Proc1_16 extends Processor {
     }
 
     public int run0() {
-        InputStream server_lzma;
-        try {
-            ZipFile zf = new ZipFile(forgeInstallerPath); // 顺便read一下
-            ZipEntry ze = zf.getEntry("data/server.lzma");
-
-            if (ze == null)
-                throw OperationDone.INSTANCE;
-            server_lzma = new ByteList().readStreamArrayFully(zf.getInputStream(ze)).asInputStream();
-            zf.close();
-        } catch (IOException e) {
-            CmdUtil.error("forge安装器 '" + forgeInstallerPath.getAbsolutePath() + "'", e);
-            return -1;
-        } catch (OperationDone e) {
-            CmdUtil.error("forge安装器 '" + forgeInstallerPath.getAbsolutePath() + "' 中没有找到 data/server.lzma");
-            return -1;
-        }
-
         File tmp = new File(TMP_DIR, mcServer.getName() + "_Rmp.server");
         tmp.deleteOnExit();
 
@@ -199,7 +217,7 @@ public final class Proc1_16 extends Processor {
         List<File> libPath = Arrays.asList(mcJar, tmp);
 
         Patcher patcher = new Patcher();
-        patcher.setup113(server_lzma, Collections.emptyMap()); // 读取服务端补丁，客户端打了
+        patcher.setup113(serverLzmaInput, Collections.emptyMap()); // 读取服务端补丁，客户端打了
         CmdUtil.info("补丁已加载");
 
         CalculateTask<ConstMapper> prepRmp = new CalculateTask<>(() -> {
@@ -236,7 +254,7 @@ public final class Proc1_16 extends Processor {
                 fgCtxs.addAll(Util.ctxFromZip(forgeUniv, StandardCharsets.UTF_8)); // 理论上不会有重复
             }
 
-            List<Context> clientCtxs = Util.ctxFromZip(mcJar, StandardCharsets.UTF_8);
+            List<Context> clientCtxs = readZipReplaced(StandardCharsets.UTF_8, mcJar, mcClearSrg);
 
             if (DEBUG) {
                 CmdUtil.info("客户端文件数量: " + clientCtxs.size());
@@ -249,6 +267,8 @@ public final class Proc1_16 extends Processor {
         }));
 
         threadWait(prepRmp, prepCtx);
+
+        tmp.delete();
 
         List<Context>[] ctxs;
         ConstMapper rmp;
@@ -307,6 +327,58 @@ public final class Proc1_16 extends Processor {
         }
 
         return 0;
+    }
+
+    private static List<Context> readZipReplaced(Charset charset, File mcJar, File forgeReplaced) throws IOException {
+        MyHashSet<String> map = new MyHashSet<>();
+        List<Context> ctx = new ArrayList<>();
+        ByteList bl = new ByteList();
+
+        ZipFile zf = new ZipFile(forgeReplaced, charset);
+        Enumeration<? extends ZipEntry> en = zf.entries();
+        while (en.hasMoreElements()) {
+            ZipEntry zn;
+            try {
+                zn = en.nextElement();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
+            }
+            if (zn.isDirectory()) continue;
+            if (zn.getName().endsWith(".class")) {
+                map.add(zn.getName());
+                InputStream in = zf.getInputStream(zn);
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
+                in.close();
+                c.getData();
+                bl.clear();
+                ctx.add(c);
+            }
+        }
+
+        zf.close();
+        zf = new ZipFile(mcJar, charset);
+        en = zf.entries();
+        while (en.hasMoreElements()) {
+            ZipEntry zn;
+            try {
+                zn = en.nextElement();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
+            }
+            if (zn.isDirectory()) continue;
+            if (zn.getName().endsWith(".class") && map.add(zn.getName())) {
+                InputStream in = zf.getInputStream(zn);
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
+                in.close();
+                c.getData();
+                bl.clear();
+                ctx.add(c);
+            }
+        }
+
+        zf.close();
+
+        return ctx;
     }
 
     private static Runnable com(ConstMapper mainRmp, CodeMapper nameRmp, int i, List<Context>[] arr) {
