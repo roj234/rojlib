@@ -46,7 +46,7 @@ public final class NativeType {
 
     static {
         final String s = "[LVZBCSIFDJ";
-        final List<String> s1 = TextUtil.splitStringF(new ArrayList<>(), "array class void boolean byte char short int float double long", ' ');
+        final List<String> s1 = TextUtil.split(new ArrayList<>(), "array class void boolean byte char short int float double long", ' ');
         for (int i = 0; i < s.length(); i++) {
             toNameMap.put(s.charAt(i), s1.get(i));
             toDescMap.put(s.charAt(i), String.valueOf(s.charAt(i)));

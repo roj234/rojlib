@@ -39,8 +39,7 @@ import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
 import roj.util.ByteReader;
 import roj.util.Helpers;
-import roj.util.log.ILogger;
-import roj.util.log.LogManager;
+import roj.util.log.Logger;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -56,7 +55,7 @@ import java.util.*;
  * @since 2021/5/29 16:43
  */
 public class AccessTransformer {
-    public static final ILogger logger = LogManager.getLogger("AccessTransformer");
+    public static final Logger logger = Logger.getLogger("AccessTransformer");
 
     private static final Map<String, Collection<String>> transforms = new MyHashMap<>();
 
@@ -86,7 +85,7 @@ public class AccessTransformer {
             if (conf.startsWith("public-f "))
                 conf = conf.substring(9);
             lst.clear();
-            TextUtil.splitStringF(lst, conf, ' ');
+            TextUtil.split(lst, conf, ' ');
             if (lst.size() < 2) {
                 System.err.println("Unknown entry " + conf);
                 continue;

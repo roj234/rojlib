@@ -26,7 +26,7 @@ public final class StringList extends SimpleNamer {
 
     public static StringList newJavaKeyword() {
         StringList mix = new StringList();
-        mix.chars = TextUtil.splitString("for,while,do,continue,break,case,if,else,goto," +
+        mix.chars = TextUtil.split("for,while,do,continue,break,case,if,else,goto," +
                 "return,this,new,switch,true,false,null,try,catch,finally," +
                 "throw,default,public,private,protected,int,float,double,long,boolean,throws,char,short,class" +
                 ",enum,extends,implements,static,synchronized,transient,strictfp,interface,byte", ',');
@@ -36,7 +36,7 @@ public final class StringList extends SimpleNamer {
 
     public static StringList newJavaKeywordExtended() {
         StringList mix = new StringList();
-        mix.chars = TextUtil.splitString("for,while,do,continue,break,case,if,else,goto," +
+        mix.chars = TextUtil.split("for,while,do,continue,break,case,if,else,goto," +
                 "return,this,new,switch,true,false,null,try,catch,finally," +
                 "throw,default,public,private,protected,int,float,double,long,boolean,throws,char,short,class" +
                 ",enum,extends,implements,static,synchronized,transient,strictfp,interface,byte," +

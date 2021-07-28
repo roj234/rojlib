@@ -53,8 +53,7 @@ import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
-import roj.util.log.ILogger;
-import roj.util.log.LogManager;
+import roj.util.log.Logger;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -81,7 +80,7 @@ public class NiximTransformer {
     public static final String COPY_TYPE = ParamHelper.classDescriptor(Copy.class);
     public static final String ANNO_TYPE = "RuntimeInvisibleAnnotations";
 
-    protected static final ILogger logger = LogManager.getLogger("Nixim");
+    protected static final Logger logger = Logger.getLogger("Nixim");
 
     public static boolean debug = false;
 
@@ -319,7 +318,7 @@ public class NiximTransformer {
     }
 
     private static Method doInjectAt(ConstantData data, MethodSimple method, Method replacement, String bytePos) {
-        List<String> arr = TextUtil.splitStringF(new ArrayList<>(2), bytePos, '|');
+        List<String> arr = TextUtil.split(new ArrayList<>(2), bytePos, '|');
         int pos = Integer.parseInt(arr.get(0));
         byte opcode = Byte.parseByte(arr.get(1));
         int par2 = arr.size() > 2 ? Integer.parseInt(arr.get(2)) : -1;

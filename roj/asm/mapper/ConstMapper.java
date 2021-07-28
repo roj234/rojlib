@@ -425,7 +425,7 @@ public final class ConstMapper extends Mapping {
         if(selfSupers == null)
             throw new IllegalStateException();
         State state = new State();
-        state.selfSupers.putAll(selfSupers);
+        state.map.putAll(selfSupers);
         return state;
     }
 
@@ -437,10 +437,10 @@ public final class ConstMapper extends Mapping {
         if(selfSupers == null)
             throw new IllegalStateException();
         if(selfSupers.getClass() == MyHashMap.class) {
-            state.selfSupers.copyFrom((MyHashMap<String, List<String>>) this.selfSupers);
+            state.map.copyFrom((MyHashMap<String, List<String>>) this.selfSupers);
         } else {
-            state.selfSupers.clear();
-            state.selfSupers.putAll(selfSupers);
+            state.map.clear();
+            state.map.putAll(selfSupers);
         }
         return state;
     }
@@ -448,14 +448,32 @@ public final class ConstMapper extends Mapping {
     public void state(State state) {
         if(selfSupers != null) {
             selfSupers.clear();
-            selfSupers.putAll(state.selfSupers);
+            selfSupers.putAll(state.map);
         } else {
-            selfSupers = new MyHashMap<>(state.selfSupers);
+            selfSupers = new MyHashMap<>(state.map);
         }
     }
 
+    State backupLibSupers;
+
+    public State backupLibSupers() {
+        State state = backupLibSupers = new State();
+        state.map.putAll(libSupers);
+        return state;
+    }
+
+    public void restoreLibSupers() {
+        backupLibSupers.getClass();
+        libSupers.clear();
+        libSupers.putAll(backupLibSupers.map);
+    }
+
+    public void addPermanently(MyHashMap<String, List<String>> inheritanceMap) {
+        libSupers.putAll(inheritanceMap);
+    }
+
     public void addPermanently(State state) {
-        libSupers.putAll(state.selfSupers);
+        libSupers.putAll(state.map);
     }
 
     /**
@@ -1201,7 +1219,7 @@ public final class ConstMapper extends Mapping {
     }
 
     public static final class State {
-        private final MyHashMap<String, List<String>> selfSupers = new MyHashMap<>();
+        final MyHashMap<String, List<String>> map = new MyHashMap<>();
     }
 
     // endregion

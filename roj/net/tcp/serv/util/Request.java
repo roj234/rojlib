@@ -110,7 +110,7 @@ public final class Request {
 
     private static Map<String, String> getQueries(String query) {
         Map<String, String> map = new MyHashMap<>();
-        List<String> queries = TextUtil.splitStringF(new ArrayList<>(), query, '&');
+        List<String> queries = TextUtil.split(new ArrayList<>(), query, '&');
         for (int i = 0; i < queries.size(); i++) {
             String member = queries.get(i);
             int po = member.indexOf('=');

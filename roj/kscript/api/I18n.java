@@ -54,7 +54,7 @@ public class I18n {
             return v;
         // a:b:c
         CharList cl = new CharList();
-        List<String> tmp = TextUtil.splitStringF(new ArrayList<>(), cl, s, ':');
+        List<String> tmp = TextUtil.split(new ArrayList<>(), cl, s, ':');
         if(tmp.size() <= 1)
             return s;
         cl.clear();

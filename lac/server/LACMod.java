@@ -44,7 +44,7 @@ import roj.io.IOUtil;
  * @author Roj234
  * @since 2021/7/8 18:53
  */
-@Mod(modid = LACMod.MODID, name = LACMod.NAME, version = LACMod.VERSION, dependencies = "required:forge@[14.23.4.2768,); required-after:implib@[0.3.6,0.4.0);")
+@Mod(modid = LACMod.MODID, name = LACMod.NAME, version = LACMod.VERSION, dependencies = "required:forge@[14.23.4.2768,); required-after:ilib@[0.4.0,);")
 @Mod.EventBusSubscriber
 public class LACMod {
     public static final String MODID = "lac";

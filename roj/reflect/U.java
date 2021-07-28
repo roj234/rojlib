@@ -52,7 +52,7 @@ final class U {
     }
 
     static final class UFA extends IFieldAccessor {
-        static final List<String> arr = TextUtil.splitStringF(new ArrayList<>(9), "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT", ',');
+        static final List<String> arr = TextUtil.split(new ArrayList<>(9), "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT", ',');
         /**
          * 内存地址相对instance起始偏移量
          */

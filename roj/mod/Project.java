@@ -116,7 +116,7 @@ public final class Project extends JSONConfiguration {
     }
 
     public void setDependencyString(String text) {
-        List<String> depend = TextUtil.splitStringF(new ArrayList<>(), text, '|');
+        List<String> depend = TextUtil.split(new ArrayList<>(), text, '|');
         for (int i = 0; i < depend.size(); i++) {
             dependencies.add(Project.load(depend.get(i)));
         }

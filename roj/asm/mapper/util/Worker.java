@@ -25,10 +25,9 @@
  */
 package roj.asm.mapper.util;
 
-import roj.concurrent.task.AbstractCalcTask;
+import roj.concurrent.task.AbstractExecutionTask;
 
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 /**
@@ -38,7 +37,7 @@ import java.util.function.Consumer;
  * @version 0.1
  * @since 2021/5/30 19:59
  */
-public final class Worker extends AbstractCalcTask<Void> {
+public final class Worker extends AbstractExecutionTask {
     private final List<Context> files;
     private final Consumer<Context> consumer;
 
@@ -47,23 +46,11 @@ public final class Worker extends AbstractCalcTask<Void> {
         this.consumer = consumer;
     }
 
-    @Override
-    public void calculate(Thread thread) throws Exception {
-        executing = true;
+    public void run() {
         List<Context> f = this.files;
         Consumer<Context> c = this.consumer;
-        try {
-            for (int i = 0; i < f.size(); i++) {
-                c.accept(f.get(i));
-            }
-            this.out = null;
-        } catch (Throwable e) {
-            exception = new ExecutionException(e);
-        }
-        executing = false;
-
-        synchronized (this) {
-            notifyAll();
+        for (int i = 0; i < f.size(); i++) {
+            c.accept(f.get(i));
         }
     }
 }

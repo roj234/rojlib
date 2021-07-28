@@ -168,7 +168,7 @@ public class TextHelperM {
 
     public static void shiftLore(List<String> lores, String shifts) {
         if (Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)) {
-            TextUtil.splitStringF(lores, shifts, '*');
+            TextUtil.split(lores, shifts, '*');
         } else
             lores.add(translate("tooltip.ilib.shift"));
     }

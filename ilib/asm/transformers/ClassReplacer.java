@@ -33,8 +33,7 @@ import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
-import roj.util.log.ILogger;
-import roj.util.log.LogManager;
+import roj.util.log.Logger;
 
 /**
  * No description provided
@@ -44,7 +43,7 @@ import roj.util.log.LogManager;
  * @since 2021/5/29 17:16
  */
 public class ClassReplacer implements IClassTransformer {
-    static final ILogger logger = LogManager.getLogger("ClassReplacer");
+    static final Logger logger = Logger.getLogger("ClassReplacer");
 
     public static final ClassReplacer INSTANCE = new ClassReplacer();
     private static MyHashMap<String, byte[]> list = new MyHashMap<>();

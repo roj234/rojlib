@@ -53,7 +53,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -599,8 +600,8 @@ public final class BlockHelper {
                 ArrayList<String> tmp = new ArrayList<>();
                 CharList cl = new CharList();
 
-                for (String one : TextUtil.splitStringF(new ArrayList<>(), cl, desc, ',')) {
-                    TextUtil.splitStringF(tmp, cl, desc, '=', 2);
+                for (String one : TextUtil.split(new ArrayList<>(), cl, desc, ',')) {
+                    TextUtil.split(tmp, cl, desc, '=', 2);
                     if (tmp.size() < 2) return null;
 
                     IProperty prop = container.getProperty(tmp.get(0));

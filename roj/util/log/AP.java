@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -26,20 +26,41 @@
 package roj.util.log;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since 2021/4/21 22:51
+ * @since 2021/7/28 16:06
  */
-public interface ILogger {
-    void info(Object text);
+class AP implements Logger {
+    private final org.apache.logging.log4j.Logger x;
 
-    void debug(Object text);
+    public AP(org.apache.logging.log4j.Logger x) {
+        this.x = x;
+    }
 
-    void warn(Object text);
+    @Override
+    public void info(Object text) {
+        x.info(text);
+    }
 
-    void error(Object text);
+    @Override
+    public void debug(Object text) {
+        x.debug(text);
+    }
 
-    void catching(Throwable throwable);
+    @Override
+    public void warn(Object text) {
+        x.warn(text);
+    }
+
+    @Override
+    public void error(Object text) {
+        x.error(text);
+    }
+
+    @Override
+    public void catching(Throwable throwable) {
+        x.catching(throwable);
+    }
 }

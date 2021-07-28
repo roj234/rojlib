@@ -35,8 +35,7 @@ package roj.config;
 
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.util.log.ILogger;
-import roj.util.log.LogManager;
+import roj.util.log.Logger;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -45,7 +44,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public abstract class JSONConfiguration {
-    static ILogger logger = LogManager.getLogger("JSONConf");
+    static Logger logger = Logger.getLogger("JSONConf");
 
     final File config;
 

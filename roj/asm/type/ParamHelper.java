@@ -309,7 +309,7 @@ public final class ParamHelper {
         sb.ensureCapacity(in.length() + out.length() + 4);
         sb.append('(');
 
-        List<String> list = TextUtil.splitStringF(new ArrayList<>(), in, ',');
+        List<String> list = TextUtil.split(new ArrayList<>(), in, ',');
         for (int i = 0; i < list.size(); i++) {
             String s = list.get(i);
             dehumanize0(s, sb);

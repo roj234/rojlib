@@ -940,7 +940,7 @@ public class MCLauncher extends JFrame {
     public static CharList mavenPath(final String name) {
         int i = TextUtil.limitedIndexOf(name, ':', 100);
         CharList cl = new CharList().append(name).replace('.', '/', 0, i);
-        List<String> parts = TextUtil.splitStringF(new ArrayList<>(4), cl, ':');
+        List<String> parts = TextUtil.split(new ArrayList<>(4), cl, ':');
 
         String ext = "jar";
         final String s = parts.get(parts.size() - 1);
@@ -1541,7 +1541,7 @@ public class MCLauncher extends JFrame {
         String t1 = data.getString("name");
         int i = TextUtil.limitedIndexOf(t1, ':', 100);
         CharList sb = new CharList().append(t1).replace('.', '/', 0, i);
-        List<String> parts = TextUtil.splitStringF(new ArrayList<>(4), sb, ':');
+        List<String> parts = TextUtil.split(new ArrayList<>(4), sb, ':');
 
         String ext = "jar";
         final String s = parts.get(parts.size() - 1);

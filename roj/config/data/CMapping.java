@@ -151,7 +151,7 @@ public class CMapping extends CEntry {
             return defaultValue;
         }
         if (!dot && !force) return map.getOrDefault(keys, defaultValue);
-        String[] arr = TextUtil.splitString(keys, '.');
+        String[] arr = TextUtil.split(keys, '.');
         CEntry entry = this;
         for (int i = 0; i < arr.length; i++) {
             StringBuilder key = new StringBuilder(arr[i]);
@@ -198,7 +198,7 @@ public class CMapping extends CEntry {
             if (force || !containsKey(keys, value)) map.put(keys, value);
             return map.getOrDefault(keys, value);
         }
-        List<String> arr = TextUtil.splitStringF(new ArrayList<>(), keys, '.');
+        List<String> arr = TextUtil.split(new ArrayList<>(), keys, '.');
         CEntry entry = this;
 
         for (int i = 0; i < arr.size(); i++) {

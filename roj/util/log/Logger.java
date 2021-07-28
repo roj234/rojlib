@@ -23,43 +23,32 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-package roj.asm.tree.anno;
-
-import roj.collect.CharMap;
-import roj.text.TextUtil;
-
-import java.util.ArrayList;
-import java.util.List;
+package roj.util.log;
 
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/1/3 15:59
+ * @since 2021/4/21 22:51
  */
-public final class AnnotationType {
-    public static final char BYTE = 'B', CHAR = 'C', DOUBLE = 'D', FLOAT = 'F', INT = 'I', LONG = 'J', SHORT = 'S', BOOLEAN = 'Z', STRING = 's',
-            ENUM = 'e', CLASS = 'c', ANNOTATION = '@', ARRAY = '[';
-
-    public static final CharMap<String> toStringMap = new CharMap<>(16);
-
-    static {
-        final String s = "BCDFIJSZsec@[";
-        final List<String> s1 = TextUtil.split(new ArrayList<>(), "byte char double float int long short boolean string enum class annotation array", ' ');
-        for (int i = 0; i < s.length(); i++) {
-            toStringMap.put(s.charAt(i), s1.get(i));
+public interface Logger {
+    static Logger getLogger(String name) {
+        try {
+            org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(name);
+            return new AP(log);
+        } catch (Throwable e) {
+            return STD.instance;
         }
     }
 
-    public static char verify(short c) {
-        if (!toStringMap.containsKey((char) c))
-            throw new IllegalArgumentException("Unknown annotation type '" + c + '\'');
-        return (char) c;
-    }
+    void info(Object text);
 
-    public static String toString(char c) {
-        return toStringMap.get(c);
-    }
+    void debug(Object text);
+
+    void warn(Object text);
+
+    void error(Object text);
+
+    void catching(Throwable throwable);
 }

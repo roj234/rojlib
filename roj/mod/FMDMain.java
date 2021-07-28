@@ -354,11 +354,11 @@ public final class FMDMain {
         map.clear();
 
         readTextList((s) -> {
-            String[] tmp = s.split(" ", 2);
-            if (tmp.length < 2) {
+            List<String> tmp = TextUtil.split(new ArrayList<>(), s, ' ', 2);
+            if (tmp.size() < 2) {
                 CmdUtil.warning("Unknown entry " + s);
             }
-            AccessTransformer.add(tmp[0], tmp[1]);
+            AccessTransformer.add(tmp.get(0), tmp.get(1));
         }, "预AT.编译期");
         loadPreAT(null);
 
@@ -486,7 +486,7 @@ public final class FMDMain {
     }
 
     private static String translateSeg(CEntry ce1) {
-        String s = TextUtil.splitStringF(new ArrayList<>(2), new CharList(), ce1.asString(), ' ').get(0);
+        String s = TextUtil.split(new ArrayList<>(2), new CharList(), ce1.asString(), ' ').get(0);
         if(DEBUG)
             System.out.println("AT Name " + s);
 
@@ -871,9 +871,14 @@ public final class FMDMain {
             if(DEBUG)
                 System.out.println("资源处理完成 " + (System.currentTimeMillis() - time));
 
+            for (int i = 0; i < project.dependencies.size(); i++) {
+                mapperFwd.addPermanently(project.dependencies.get(i).state);
+            }
+
             if(canIncrementWrite) {
                 mapperFwd.state(project.state);
-                mapperFwd.remap(DEBUG, list);
+                mapperFwd.remapIncrement(list);
+                mapperFwd.restoreLibSupers();
                 project.state = mapperFwd.snapshot();
 
                 if(!isForgeMap) {
@@ -936,6 +941,7 @@ public final class FMDMain {
                 parallel.pushTask(rw);
 
                 mapperFwd.remap(DEBUG, list);
+                mapperFwd.restoreLibSupers();
                 project.state = mapperFwd.snapshot(project.state);
 
                 if(!isForgeMap) {

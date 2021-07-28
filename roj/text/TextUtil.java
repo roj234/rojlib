@@ -36,7 +36,7 @@ import roj.config.word.WordPresets;
 import roj.math.MathUtils;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.log.LogManager;
+import roj.util.log.Logger;
 
 import java.io.UTFDataFormatException;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ public class TextUtil {
     public static String translate(int type, String key) {
         Map<String, String> map = langs.get(type);
         if (map == null) {
-            LogManager.getLogger("TextUtil").warn("LangId " + type + " not found");
+            Logger.getLogger("TextUtil").warn("LangId " + type + " not found");
             return key;
         }
         return map.getOrDefault(key, key);
@@ -81,7 +81,7 @@ public class TextUtil {
                 if(entry.startsWith("#") || entry.isEmpty()) continue;
                 if (!block) {
                     k_v.clear();
-                    splitStringF(k_v, sb, entry, '=', 2);
+                    split(k_v, sb, entry, '=', 2);
                     if (k_v.get(1).startsWith("#strl")) {
                         block = true;
                         sb.clear();
@@ -229,14 +229,6 @@ public class TextUtil {
         }
 
         return true;
-    }
-
-    /**
-     * @implNote 忽略空字符
-     */
-    public static String[] splitString(String keys, char c) {
-        List<String> list = new ArrayList<>();
-        return splitStringF(list, keys, c).toArray(new String[list.size()]);
     }
 
     /**
@@ -430,33 +422,6 @@ public class TextUtil {
         return sb.deleteCharAt(sb.length() - 1).toString();
     }
 
-    /**
-     * @implNote 忽略空字符
-     */
-    public static String[] splitString(CharSequence keys, char c, int max) {
-        List<String> list = new ArrayList<>();
-        CharList chars = new CharList();
-        for (int i = 0; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
-            if (c == c1) {
-                if (chars.length() > 0) {
-                    list.add(chars.toString());
-                    chars.clear();
-                    if (--max == 0) return list.toArray(new String[list.size()]);
-                }
-            } else {
-                chars.append(c1);
-            }
-        }
-
-        if (chars.length() > 0) {
-            list.add(chars.toString());
-            chars.clear();
-        }
-
-        return list.toArray(new String[list.size()]);
-    }
-
     public static void replaceVariable(Map<String, String> env, String tag, List<String> list) {
         try {
             Tokenizer lexer = new Tokenizer().init(tag);
@@ -521,106 +486,99 @@ public class TextUtil {
         return -1;
     }
 
-    private static int sizeFor(CharSequence s) {
-        int k = 0;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            k += (c > 255) ? 2 : 1;
-        }
-        return k;
+    /**
+     * @implNote 忽略空字符
+     */
+    public static String[] split(String keys, char c) {
+        List<String> list = new ArrayList<>();
+        return split(list, keys, c).toArray(new String[list.size()]);
     }
 
-    public static String clear(CharSequence s) {
-        return clear(sizeFor(s));
+    public static List<String> split(List<String> dest, CharSequence str, char delim) {
+        return split(dest, new CharList(), str, delim, Integer.MAX_VALUE, false);
     }
 
-    private static String clear(int length) {
-        return repeat(length, '\b').toString();
+    public static List<String> split(List<String> dest, CharSequence str, char delim, int max) {
+        return split(dest, new CharList(), str, delim, max, false);
     }
 
-    public static List<String> splitStringF(List<String> list, CharSequence keys, char c) {
-        return splitStringF(list, new CharList(), keys, c, Integer.MAX_VALUE, false);
+    public static List<String> split(List<String> dest, CharList tmp, CharSequence str, char delim) {
+        return split(dest, tmp, str, delim, Integer.MAX_VALUE, false);
     }
 
-    public static List<String> splitStringF(List<String> list, CharList chars, CharSequence keys, char c) {
-        return splitStringF(list, chars, keys, c, Integer.MAX_VALUE, false);
+    public static List<String> split(List<String> dest, CharList tmp, CharSequence str, char delim, int max) {
+        return split(dest, tmp, str, delim, max, false);
     }
 
-    public static List<String> splitStringF(List<String> list, CharList chars, CharSequence keys, char c, int max) {
-        return splitStringF(list, chars, keys, c, max, false);
-    }
+    public static List<String> split(List<String> dest, CharList tmp, CharSequence str, char c, int max, boolean keepEmpty) {
+        tmp.clear();
 
-    public static List<String> splitStringF(List<String> list, CharList chars, CharSequence keys, char c, int max, boolean keepEmpty) {
-        chars.clear();
-
-        for (int i = 0; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
+        for (int i = 0; i < str.length(); i++) {
+            char c1 = str.charAt(i);
             if (c == c1) {
-                if (chars.length() > 0 || keepEmpty) {
+                if (tmp.length() > 0 || keepEmpty) {
                     if (--max == 0) {
-                        chars.append(keys, i, keys.length() - i);
-                        list.add(chars.toString());
-                        chars.clear();
-                        return list;
+                        tmp.append(str, i, str.length() - i);
+                        dest.add(tmp.toString());
+                        tmp.clear();
+                        return dest;
                     } else {
-                        list.add(chars.toString());
-                        chars.clear();
+                        dest.add(tmp.toString());
+                        tmp.clear();
                     }
                 }
             } else {
-                chars.append(c1);
+                tmp.append(c1);
             }
         }
 
-        if (chars.length() > 0) {
-            list.add(chars.toString());
-            chars.clear();
+        if (tmp.length() > 0) {
+            dest.add(tmp.toString());
+            tmp.clear();
         }
 
-        return list;
+        return dest;
     }
 
-    public static List<String> splitCStringF(List<String> list, CharList chars, CharSequence keys, CharSequence c) {
-        return splitCStringF(list, chars, keys, c, Integer.MAX_VALUE, false);
+    public static List<String> splitPlus(List<String> dest, CharList tmp, CharSequence str, CharSequence delim) {
+        return splitPlus(dest, tmp, str, delim, Integer.MAX_VALUE, false);
     }
 
-    public static List<String> splitCStringF(List<String> list, CharList chars, CharSequence keys, CharSequence find, int max, boolean keepEmpty) {
-        chars.clear();
+    public static List<String> splitPlus(List<String> dest, CharList tmp, CharSequence str, CharSequence find, int max, boolean keepEmpty) {
+        tmp.clear();
         if(find.length() == 0) {
-            for (int i = 0; i < keys.length(); i++) {
-                chars.append(keys.charAt(i));
-                list.add(chars.toString());
-                chars.clear();
+            for (int i = 0; i < str.length(); i++) {
+                dest.add(String.valueOf(str.charAt(i)));
             }
-            return list;
+            return dest;
         }
 
-        char kw = find.charAt(0);
+        char first = find.charAt(0);
 
-        for (int i = 0; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
-            if (kw == c1 && lastMatches(keys, i, find, 0, find.length()) == find.length()) {
-                if (chars.length() > 0 || keepEmpty) {
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (first == c && lastMatches(str, i, find, 0, find.length()) == find.length()) {
+                if (tmp.length() > 0 || keepEmpty) {
                     if (--max == 0) {
-                        chars.append(keys, i, keys.length() - i);
-                        list.add(chars.toString());
-                        chars.clear();
-                        return list;
+                        tmp.append(str, i, str.length() - i);
+                        dest.add(tmp.toString());
+                        tmp.clear();
+                        return dest;
                     } else {
-                        list.add(chars.toString());
-                        chars.clear();
+                        dest.add(tmp.toString());
+                        tmp.clear();
                     }
                 }
             } else {
-                chars.append(c1);
+                tmp.append(c);
             }
         }
 
-        if (chars.length() > 0) {
-            list.add(chars.toString());
-            chars.clear();
+        if (tmp.length() > 0) {
+            dest.add(tmp.toString());
+            tmp.clear();
         }
 
-        return list;
+        return dest;
     }
 }

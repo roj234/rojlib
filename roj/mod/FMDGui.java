@@ -197,25 +197,13 @@ public class FMDGui extends JFrame {
                         VERSION + "\n" +
                         "\n" +
                         "此版本修复了以下问题：\n" +
-                        "  MutableZipFile\n" +
-                        "    大家都用过压缩软件吧, 应该没有什么软件\n" +
-                        "    在你修改压缩文件的时候要全部解压再压缩回去的吧\n" +
-                        "    然而java这煞笔玩意, 只能这样, 万幸的是, 我做了\n" +
-                        "    MutableZipFile 只修改ZIP文件修改的部分\n" +
-                        "    此功能可能含有BUG, 出现错误可以在配置中关闭\n" +
                         "  混淆mod代码\n" +
                         "    详情查看config.json中相应配置项\n" +
                         "    此功能可能含有BUG, 出现错误可以在配置中关闭\n" +
-                        "  其他小问题" +
-                        "\n" +
-                        "Gradle速度慢, 要联网(这个倒能解决), 不能增量编译等等...\n" +
-                        "后来, FMD来了.\n" +
+                        "  其他小问题\n" +
                         "\n" +
                         "下一个版本更新: \b" +
-                        "  可能会支持1.17的开发, 开发！\n" +
-                        "\n" +
-                        "* 可以下载安装启动【挖矿与合成】和【锻造锤】\n" +
-                        "*    并不能装国防部", "关于FMD", INFORMATION_MESSAGE, icon);
+                        "  可能会支持1.17的开发, 开发！\n", "关于FMD", INFORMATION_MESSAGE, icon);
     }
 
     private static void gc(ActionEvent event) {

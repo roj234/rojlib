@@ -206,6 +206,7 @@ public final class Shared {
                 if(mapperFwd.getClassMap().isEmpty()) {
                     try {
                         mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
+                        mapperFwd.backupLibSupers();
                         if (DEBUG)
                             CmdUtil.success("正向映射表已加载");
                     } catch (Exception e) {

@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,43 +23,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-package roj.asm.tree.anno;
-
-import roj.collect.CharMap;
-import roj.text.TextUtil;
-
-import java.util.ArrayList;
-import java.util.List;
+package roj.util.log;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since 2021/1/3 15:59
+ * @since 2021/7/28 16:06
  */
-public final class AnnotationType {
-    public static final char BYTE = 'B', CHAR = 'C', DOUBLE = 'D', FLOAT = 'F', INT = 'I', LONG = 'J', SHORT = 'S', BOOLEAN = 'Z', STRING = 's',
-            ENUM = 'e', CLASS = 'c', ANNOTATION = '@', ARRAY = '[';
+class STD implements Logger {
+    static final STD instance = new STD();
 
-    public static final CharMap<String> toStringMap = new CharMap<>(16);
-
-    static {
-        final String s = "BCDFIJSZsec@[";
-        final List<String> s1 = TextUtil.split(new ArrayList<>(), "byte char double float int long short boolean string enum class annotation array", ' ');
-        for (int i = 0; i < s.length(); i++) {
-            toStringMap.put(s.charAt(i), s1.get(i));
-        }
+    @Override
+    public void info(Object text) {
+        System.out.println(text);
     }
 
-    public static char verify(short c) {
-        if (!toStringMap.containsKey((char) c))
-            throw new IllegalArgumentException("Unknown annotation type '" + c + '\'');
-        return (char) c;
+    @Override
+    public void debug(Object text) {}
+
+    @Override
+    public void warn(Object text) {
+        System.err.println(text);
     }
 
-    public static String toString(char c) {
-        return toStringMap.get(c);
+    @Override
+    public void error(Object text) {
+        System.err.println(text);
+    }
+
+    @Override
+    public void catching(Throwable throwable) {
+        throwable.printStackTrace(System.err);
     }
 }

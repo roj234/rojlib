@@ -120,7 +120,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
 
             tmp.clear();
-            if(TextUtil.splitStringF(tmp, cl, line, ',').size() < 2) {
+            if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("methods.csv:" + i + ": 未知标记: " + line);
             }
             List<MtDesc> descriptors = methods.get(tmp.get(0));
@@ -150,7 +150,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
 
             tmp.clear();
-            if(TextUtil.splitStringF(tmp, cl, line, ',').size() < 2) {
+            if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("fields.csv:" + i + ": 未知标记: " + line);
             }
             List<FlDesc> descriptors = fields.get(tmp.get(0));
@@ -180,7 +180,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
 
             tmp.clear();
-            if(TextUtil.splitStringF(tmp, cl, line, ',').size() < 2) {
+            if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("params.csv:" + i + ": 未知标记: " + line);
             }
             paramMap.put(tmp.get(0), tmp.get(1));
@@ -312,7 +312,7 @@ public class MappingHelper {
         }
         SimpleLineReader slr = new SimpleLineReader(IOUtil.readAsUTF(zipFile.getInputStream(entry)));
 
-        String[] ctx = null;
+        String[] ctx = new String[2];
 
         int same = 0;
         boolean maybeSame = false;
@@ -326,7 +326,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
             char c = line.charAt(0);
             if (c == '\t') {
-                if (ctx == null) {
+                if (ctx[0] == null) {
                     CmdUtil.error(path + "#!config/joined.tsrg:" + i + ": 无效的元素开始.");
                     return false;
                 }
@@ -336,7 +336,7 @@ public class MappingHelper {
                     continue;
                 }
                 list.clear();
-                List<String> arr = TextUtil.splitStringF(list, tmp, line.substring(1), ' ', 3 + fuckingTsrg2);
+                List<String> arr = TextUtil.split(list, tmp, line.substring(1), ' ', 3 + fuckingTsrg2);
                 if(fuckingTsrg2 == 1)
                     arr.remove(arr.size() - 1);
 
@@ -380,7 +380,11 @@ public class MappingHelper {
                     classes.remove(ctx[0]);
                 }
 
-                ctx = TextUtil.splitString(line, ' ', 2);
+                list.clear();
+                TextUtil.split(list, tmp, line, ' ', 2);
+                ctx[0] = list.get(0);
+                ctx[1] = list.get(1);
+
                 maybeSame = ctx[0].equals(ctx[1]);
                 classes.put(ctx[0], ctx[1]);
             }
@@ -504,7 +508,7 @@ public class MappingHelper {
             if(!key.startsWith("func_"))
                 continue;
             tmp.clear();
-            TextUtil.splitStringF(tmp, cl, key, '_');
+            TextUtil.split(tmp, cl, key, '_');
 
             if(tmp.size() < 3) {
                 System.err.println("[Warn]Src参数不符合 " + key);
@@ -527,7 +531,7 @@ public class MappingHelper {
         final Function<String, List<String>> fnL = Helpers.fnArrayList();
         for (Map.Entry<String, String> entry : paramNameMap.entrySet()) {
             tmp.clear();
-            TextUtil.splitStringF(tmp, cl, entry.getKey(), '_');
+            TextUtil.split(tmp, cl, entry.getKey(), '_');
             String[] data = ds.remove(tmp.get(1));
             if(data == null) {
                 if(!tmp.get(1).startsWith("i"))
@@ -901,7 +905,7 @@ public class MappingHelper {
                     }
 
                     MutableBoolean mb = new MutableBoolean();
-                    FilterList<String> arr1 = (FilterList<String>) TextUtil.splitStringF(new FilterList<>((s, t1) -> {
+                    FilterList<String> arr1 = (FilterList<String>) TextUtil.split(new FilterList<>((s, t1) -> {
                         if(s != null)
                             mb.set(true);
                         return true;
@@ -915,7 +919,7 @@ public class MappingHelper {
                         } else {
                             // field type: arr[0]
                             list.clear();
-                            final String s = TextUtil.splitStringF(list, tmp0, val, ' ', 2).get(1);
+                            final String s = TextUtil.split(list, tmp0, val, ' ', 2).get(1);
                             int index = s.indexOf(" -> ");
 
                             elementMap.computeIfAbsent(currentClass[1], Helpers.fnMyHashMap()).put(s.substring(index + 4), s.substring(0, index));
@@ -927,7 +931,7 @@ public class MappingHelper {
                     List<String> arr;
                     if (mb.get()) {
                         list.clear();
-                        arr = TextUtil.splitStringF(list, tmp0, val, ' ', 2);
+                        arr = TextUtil.split(list, tmp0, val, ' ', 2);
                         final String s = arr.get(1);
                         int index = s.indexOf(" -> ");
 

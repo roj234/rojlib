@@ -36,8 +36,7 @@ import roj.net.tcp.util.IllegalRequestException;
 import roj.net.tcp.util.ResponseCode;
 import roj.net.tcp.util.SharedConfig;
 import roj.net.tcp.util.WrappedSocket;
-import roj.util.log.ILogger;
-import roj.util.log.LogManager;
+import roj.util.log.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -48,7 +47,7 @@ public class ChannelRouterSync implements ITaskNaCl {
     protected WrappedSocket channel;
     protected final Router router;
 
-    protected static ILogger logger = LogManager.getLogger("ChannelRouter");
+    protected static Logger logger = Logger.getLogger("ChannelRouter");
 
     public ChannelRouterSync(WrappedSocket channel, Router router) {
         this.channel = channel;

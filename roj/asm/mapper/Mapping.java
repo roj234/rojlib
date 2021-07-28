@@ -69,11 +69,11 @@ public class Mapping {
 
             for(String s : slr) {
                 q.clear();
-                String dlm0 = TextUtil.splitStringF(q, cl, s, ':', 2).get(0);
+                String dlm0 = TextUtil.split(q, cl, s, ':', 2).get(0);
                 String dlm1 = q.get(1);
 
                 q.clear();
-                TextUtil.splitStringF(q, cl, dlm1, ' ');
+                TextUtil.split(q, cl, dlm1, ' ');
 
                 int id, id2;
                 switch(dlm0) {

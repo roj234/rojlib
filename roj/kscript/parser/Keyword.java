@@ -38,7 +38,7 @@ import roj.text.TextUtil;
  * @since  2020/9/27 12:31
  */
 public final class Keyword {
-    public static final String[] keywords = TextUtil.splitString("for,while,do,continue,break,case,if,else,goto,function," +
+    public static final String[] keywords = TextUtil.split("for,while,do,continue,break,case,if,else,goto,function," +
             "return,this,new,var,const,switch,delete,true,false,null,undefined,try,catch,finally," +
             "NaN,Infinity,throw,default,let,arguments", ',');
 

@@ -50,7 +50,7 @@ public final class Proxy implements IClassTransformer, ILegacyClassTransformer {
         }
         selfProxyLast = this;
 
-        //LogManager.getLogger("mixin").debug("Adding new mixin transformer proxy #{}", new Object[]{proxies.size()});
+        //Logger.getLogger("mixin").debug("Adding new mixin transformer proxy #{}", new Object[]{proxies.size()});
     }
 
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
