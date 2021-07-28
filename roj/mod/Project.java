@@ -9,6 +9,7 @@ import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.io.MutableZipFile;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
@@ -61,6 +62,8 @@ public final class Project extends JSONConfiguration {
     static FileFilter resourceFilter = new FileFilter();
     Callable<Void> getResourceTask;
     MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
+
+    MutableZipFile mz;
 
     private Project(String name) {
         super(new File(BASE, "config/" + name + ".json"), false);

@@ -96,7 +96,7 @@ public class YAMLParser {
     public static CMapping parse(YAMLLexer wr, int flag) throws ParseException {
         wr.flag = (short) flag;
         CMapping ce = yamlObject(wr, (byte) flag & 8);
-        if (wr.hasNext()) {
+        if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
         return ce;

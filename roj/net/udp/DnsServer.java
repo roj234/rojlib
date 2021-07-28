@@ -1398,15 +1398,20 @@ public class DnsServer implements Router {
                 sb.append("欢迎您,").append(System.getProperty("user.name", "用户"))
                   .append("! <br/><a href='/stat' style='color:red;'>点我列出缓存的DNS解析</a><br/>" +
                           "<a href='/save'>点我<span style='color:green'>保存</span>缓存的DNS解析</a><br/>" +
+                          "<a href='/stop'>点我关闭服务器</a><br/>" +
                           "<h2> 设置或者删除DNS解析: </h2>")
                   .append("<form action='/set' method='post' >Url: <input type='text' name='url' /><br/>" +
                           "Type: <input type='number' name='type' /><br/>" +
                           "Content: <input type='text' name='cnt' /><input type='submit' value='提交' /></form>")
-                  .append("<pre>Type: -1 删除, \nA(IPV4): " + Q_A + ", \nAAAA(IPV6): " + Q_AAAA + " \nCNAME: " + Q_CNAME + ", \n其他看rfc" + "</pre>")
+                  .append("<pre>Type: -2 屏蔽\n, -1 删除, \nA(IPV4): " + Q_A + ", \nAAAA(IPV6): " + Q_AAAA + " \nCNAME: " + Q_CNAME + ", \n其他看rfc" + "</pre>")
                   .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by Asyncorized_MC's HTTPServer v1.2.0</h2>Allocated Memory: ")
                   .append(TextUtil.getScaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
                 return new Reply(ResponseCode.OK, new StringResponse(sb, "text/html"), request.action());
+            }
+            case "/stop": {
+                System.exit(0);
+                return null;
             }
             case "/stat":
                 return new Reply(ResponseCode.OK, new StringResponse(dumpIpAddress(), "text/plain"));
@@ -1432,8 +1437,11 @@ public class DnsServer implements Router {
                     key.url = url;
                     key.qClass = C_IN;
 
-                    if (type.equals("-1")) {
-                        msg = (resolvedCache.remove(key) == null) ? "不存在" : "已清除";
+                    if (type.startsWith("-")) {
+                        if(type.equals("-1"))
+                            msg = (resolvedCache.remove(key) == null) ? "不存在" : "已清除";
+                        else
+                            msg = blocked.add(url) ? "屏蔽完成" : "已存在";
                     } else {
                         Record e = new Record();
                         e.TTL = Integer.MAX_VALUE;

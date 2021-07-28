@@ -28,7 +28,6 @@ package roj.asm.mapper.util;
 import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.tree.ConstantData;
-import roj.concurrent.Holder;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -41,7 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class Context implements Holder<ByteList> {
+public class Context {
     public static final int ID_METHOD = 0;
     public static final int ID_FIELD = 1;
     public static final int ID_CLASS = 2;
@@ -151,7 +150,6 @@ public class Context implements Holder<ByteList> {
         return Helpers.cast(typedTmp[ID_CLASS]);
     }
 
-    @Override
     public ByteList get() {
         if(this.result == null) {
             if(this.data != null) {
@@ -178,7 +176,6 @@ public class Context implements Holder<ByteList> {
         }
     }
 
-    @Override
     public void set(ByteList bytes) {
         this.result = bytes;
         clearData();

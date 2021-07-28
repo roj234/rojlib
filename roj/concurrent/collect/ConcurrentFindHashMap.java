@@ -27,13 +27,13 @@ package roj.concurrent.collect;
 
 import roj.collect.FindMap;
 import roj.collect.MyHashMap;
+import roj.concurrent.SimpleSpinLock;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * No description provided
@@ -43,36 +43,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since  2020/8/20 14:03
  */
 public class ConcurrentFindHashMap<K, V> implements FindMap<K, V> {
-    private final AtomicInteger lock = new AtomicInteger();
+    private final SimpleSpinLock lock = new SimpleSpinLock();
 
     private final MyHashMap<K, V> map = new MyHashMap<>();
-
-    /**
-     * 只要没人修改即可
-     */
-    private void waitForGet() {
-        if (lock.get() == 2)
-            return;
-        while (!lock.compareAndSet(0, 2))
-            Thread.yield();
-    }
-
-    /**
-     * 而这个只能一个人修改
-     */
-    private void waitForUpdate() {
-        while (!lock.compareAndSet(0, 1))
-            Thread.yield();
-    }
 
     public ConcurrentFindHashMap() {
     }
 
     @Override
     public Entry<K, V> find(K k) {
-        waitForGet();
+        lock.enqueueReadLock();
         Entry<K, V> entry = map.find(k);
-        lock.set(0);
+        lock.releaseReadLock();
         return entry;
     }
 
@@ -88,56 +70,56 @@ public class ConcurrentFindHashMap<K, V> implements FindMap<K, V> {
 
     @Override
     public boolean containsKey(Object key) {
-        waitForGet();
+        lock.enqueueReadLock();
         boolean c = map.containsKey(key);
-        lock.set(0);
+        lock.releaseReadLock();
         return c;
     }
 
     @Override
     public boolean containsValue(Object value) {
-        waitForGet();
+        lock.enqueueReadLock();
         boolean c = map.containsValue(value);
-        lock.set(0);
+        lock.releaseReadLock();
         return c;
     }
 
     @Override
     public V get(Object key) {
-        waitForGet();
+        lock.enqueueReadLock();
         V v = map.get(key);
-        lock.set(0);
+        lock.releaseReadLock();
         return v;
     }
 
     @Override
     public V put(K key, V value) {
-        waitForUpdate();
+        lock.enqueueWriteLock(-1);
         V v = map.put(key, value);
-        lock.set(0);
+        lock.releaseWriteLock(-1);
         return v;
     }
 
     @Override
     public V remove(Object key) {
-        waitForUpdate();
+        lock.enqueueWriteLock(-2);
         V v = map.remove(key);
-        lock.set(0);
+        lock.releaseWriteLock(-2);
         return v;
     }
 
     @Override
     public void putAll(@Nonnull Map<? extends K, ? extends V> m) {
-        waitForUpdate();
+        lock.enqueueWriteLock(-3);
         map.putAll(m);
-        lock.set(0);
+        lock.releaseWriteLock(-3);
     }
 
     @Override
     public void clear() {
-        waitForUpdate();
+        lock.enqueueWriteLock(-4);
         map.clear();
-        lock.set(0);
+        lock.releaseWriteLock(-4);
     }
 
     @Nonnull

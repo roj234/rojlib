@@ -27,8 +27,8 @@
 package roj.reflect;
 
 import roj.collect.EmptyList;
-import roj.concurrent.Holder;
 import roj.concurrent.OperationDone;
+import roj.concurrent.Ref;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -176,7 +176,7 @@ public final class ReflectionUtils {
 
         Class<?>[] finalParam = param;
 
-        Holder<Method> holder = Holder.from(null);
+        Ref<Method> ref = Ref.from();
         try {
             consumeMethods(clazz, method -> {
                 if (method.getName().equals(name) && method.getParameterCount() == finalParam.length) {
@@ -185,13 +185,13 @@ public final class ReflectionUtils {
                         if (arr[i] != finalParam[i])
                             return;
                     }
-                    holder.set(method);
+                    ref.set(method);
                     throw OperationDone.INSTANCE;
                 }
             });
         } catch (OperationDone ex) {
-            holder.get().setAccessible(true);
-            return holder.get();
+            ref.get().setAccessible(true);
+            return ref.get();
         }
 
         throw new NoSuchMethodException(clazz.getName() + '.' + name);
@@ -215,18 +215,18 @@ public final class ReflectionUtils {
      * 获取字段
      */
     public static Field getField(Class<?> clazz, String name) throws NoSuchFieldException {
-        Holder<Field> holder = Holder.from(null);
+        Ref<Field> ref = Ref.from();
         try {
             //Class<?> type = null;
             consumeFields(clazz, field -> {
                 if (field.getName().equals(name) /*&& (type == null || field.getType() == type)*/) {
-                    holder.set(field);
+                    ref.set(field);
                     throw OperationDone.INSTANCE;
                 }
             });
         } catch (OperationDone ex) {
-            holder.get().setAccessible(true);
-            return holder.get();
+            ref.get().setAccessible(true);
+            return ref.get();
         }
 
         throw new NoSuchFieldException(clazz.getName() + '.' + name);

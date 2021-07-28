@@ -25,42 +25,32 @@
  */
 package roj.concurrent;
 
-import roj.reflect.Instanced;
-import roj.reflect.PackagePrivateProxy;
-import roj.reflect.SunReflection;
-import roj.util.Wrapped;
-
-import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
-import java.lang.reflect.InvocationTargetException;
-
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since  2021/5/16 14:23
+ * @since 2021/4/21 22:51
  */
-public class InstantEnqueuer {
-    @SuppressWarnings("rawtypes")
-    static Class<ReferenceQueue> enqueuer = PackagePrivateProxy.proxyIt(ReferenceQueue.class, Proxy.class, "java.lang.ref", "enqueue");
+public class Ref<T> {
+    T t;
 
-    @SuppressWarnings("unchecked")
-    public static <T> ReferenceQueue<T> set(Proxy<T> impl) {
-        try {
-            Instanced iproxy = (Instanced) SunReflection.createClass(enqueuer);
-            iproxy.setInstance(impl);
-            return (ReferenceQueue<T>) iproxy;
-        } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
-            throw new Wrapped("", e);
-        }
+    public Ref(T t) {
+        this.t = t;
     }
 
+    public T get() {
+        return t;
+    }
 
-    public interface Proxy<T> {
-        /**
-         * Proxy method to {@link ReferenceQueue#enqueue(Reference)}
-         */
-        boolean enqueue(Reference<?> r);
+    public void set(T t) {
+        this.t = t;
+    }
+
+    public static <X> Ref<X> from() {
+        return new Ref<>(null);
+    }
+    public static <X> Ref<X> from(X x) {
+        return new Ref<>(x);
     }
 }

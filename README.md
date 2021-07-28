@@ -57,14 +57,14 @@ roj.io
 	多线程下载器
 	缓存格式
 	BOMInputStream
-	非阻塞Util (用于Oracle java)
+	非阻塞Util (用于Oracle JVM)
 	StreamingCharSequence (UTF-8, from InputStream)
 roj.kscript
 	原创js解释器
 		编译执行 (wip)
 		并没有完全支持ECMAScript
 		基本类型还没加函数: charAt之类的
-		尾调用优化 (wip)
+		尾调用优化
 roj.math
 	向量，矩阵，多边形，回归（wip）
 	XXTea算法
@@ -74,7 +74,7 @@ roj.math
 roj.mod (依赖: md_5.SpecialSource, 垃圾forge)
 	FMD的源代码
 roj.net
-	NIO Http Server / Client
+	Http Server / Client
 	UDP Server / Client
 roj.reflect
 	EnumHelper: add remove modify Enum class
@@ -106,10 +106,6 @@ roj.util
 	Idx (计数器)
 	OS, Pid
 	TCO 递归优化
-roj
-	下载器
-	进程安全狗
-	给我自己用的工具
 
 # TODO
 class混淆器

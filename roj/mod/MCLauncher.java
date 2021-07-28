@@ -1219,17 +1219,21 @@ public class MCLauncher extends JFrame {
     }
     // endregion
 
-    public static int runClient(CMapping mc_conf, File nativePath, int doLog, Consumer<Process> consumer) throws IOException {
+    public static int runClient(CMapping mc_conf, File nativePath, int processFlags, Consumer<Process> consumer) throws IOException {
         Map<String, String> env = new MyHashMap<>(4);
         env.put("natives_directory", '"' + AbstLexer.addSlashes(nativePath.getAbsolutePath()) + '"');
         env.put("classpath", '"' + AbstLexer.addSlashes(new StringBuilder(mc_conf.getString("libraries")).append(mc_conf.getString("jar"))) + '"');
         env.put("launcher_name", "FMD");
         env.put("launcher_version", VERSION);
         env.put("classpath_separator", File.pathSeparator);
+        x:
         try {
-            File p = nativePath;
-            while (!(p = p.getParentFile()).getName().equals(".minecraft")) ;
-            env.put("library_directory", new File(p, "libraries").getAbsolutePath());
+            do {
+                nativePath = nativePath.getParentFile();
+                if(nativePath == null)
+                    break x;
+            } while (!nativePath.getName().equals(".minecraft"));
+            env.put("library_directory", new File(nativePath, "libraries").getAbsolutePath());
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -1263,7 +1267,7 @@ public class MCLauncher extends JFrame {
         list.add(mc_conf.getString("mainClass"));
         TextUtil.replaceVariable(mcEnv, mc_conf.getString("mcArg"), list);
 
-        return runProcess(list, new File(mc_conf.getString("root")), doLog, consumer);
+        return runProcess(list, new File(mc_conf.getString("root")), processFlags, consumer);
     }
 
     // region UI
@@ -1811,7 +1815,7 @@ public class MCLauncher extends JFrame {
 
         @Override
         public void calculate(Thread thread) throws Exception {
-            runClient(config.get("mc_conf").asMap(), new File(config.getString("mc_conf.native_path")), log ? 1 : 0, this);
+            runClient(config.get("mc_conf").asMap(), new File(config.getString("mc_conf.native_path")), log ? 3 : 2, this);
             run = true;
         }
 

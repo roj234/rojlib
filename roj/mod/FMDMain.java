@@ -803,8 +803,13 @@ public final class FMDMain {
 
         // 反正compile时间绝对够
 
-        // todo
-        boolean canIncrementWrite = false && increment & project.state != null & jarFile.isFile();
+        boolean canIncrementWrite = MAIN_CONFIG.getBool("FMD配置.启用MutableZipFile") && increment & project.state != null & jarFile.isFile();
+        if(!canIncrementWrite) {
+            if(project.mz != null) {
+                project.mz.close();
+                project.mz = null;
+            }
+        }
 
         // region 更新资源文件
 
@@ -891,11 +896,24 @@ public final class FMDMain {
                     }
                 }
 
-                try (MutableZipFile mz = new MutableZipFile(jarFile)) {
+                MutableZipFile mz = project.mz;
+                try {
+                    if(mz == null) {
+                        mz = project.mz = new MutableZipFile(jarFile);
+                    } else {
+                        mz.open();
+                    }
+                } catch (Throwable e) {
+                    CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
+                    return false;
+                }
+
+                try {
                     mz.setFileDataMore(entries);
                     mz.store();
-                } catch (IOException e) {
-                    CmdUtil.warning("MutableZipFile 遇到了一些问题, 您可以尝试关闭配置文件中的MutableZipFile ", e);
+                    mz.tClose();
+                } catch (Throwable e) {
+                    CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
                 }
 
                 if(args.containsKey("_HOT_RELOAD_ENABLE_")) {
@@ -973,7 +991,7 @@ public final class FMDMain {
 
         CharList sb = libClasses;
         if(sb == null)
-            sb = new CharList();
+            libClasses = sb = new CharList();
         else if(ConstMapper.libHash(fs) == lastLibHash)
             return sb;
         sb.clear();
@@ -1334,12 +1352,9 @@ public final class FMDMain {
                 throw new RuntimeException("Impossible!");
         }
 
-        File mcServer = new File(cfgFMD.getString("MC未反混淆的服务器端"));
-        if (!mcServer.isFile())
-            mcServer = MCLauncher.downloadMinecraftFile(downloads, "server", mirror);
+        File mcServer = MCLauncher.downloadMinecraftFile(downloads, "server", mirror);
 
         CmdUtil.info("合并libraries中...请稍后");
-
 
         File cache0 = new File(BASE, "/util/remapCache.bin");
 
@@ -1592,9 +1607,8 @@ public final class FMDMain {
             for (int i = 0; i < rl.size(); i++) {
                 CEntry entry = rl.get(i);
                 if (entry.getType().fits(Type.STRING)) {
-                    String s = entry.asString();
-                    s = s.trim();
-                    if (!s.startsWith("#") && s.length() > 0)
+                    String s = entry.asString().trim();
+                    if (s.length() > 0)
                         set.accept(s);
                 }
             }

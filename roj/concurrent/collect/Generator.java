@@ -28,6 +28,7 @@ package roj.concurrent.collect;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 /**
@@ -37,13 +38,12 @@ import java.util.function.Consumer;
  * @version 0.1
  * @since  2021/2/1 15:40
  */
-public final class ForEachIterator<K> implements Iterator<K>, Consumer<K>, Runnable {
-    boolean hasNext;
+public final class Generator<K> implements Iterator<K>, Consumer<K>, Runnable {
     K next;
     final AtomicInteger lock = new AtomicInteger();
     final Iterable<K> iterable;
 
-    public ForEachIterator(Iterable<K> iterable) {
+    public Generator(Iterable<K> iterable) {
         this.iterable = iterable;
     }
 
@@ -56,9 +56,8 @@ public final class ForEachIterator<K> implements Iterator<K>, Consumer<K>, Runna
      */
     @Override
     public boolean hasNext() {
-        while (lock.get() != 0)
-            Thread.yield();
-        return hasNext;
+        checkNext();
+        return lock.get() == 1;
     }
 
     /**
@@ -69,18 +68,23 @@ public final class ForEachIterator<K> implements Iterator<K>, Consumer<K>, Runna
      */
     @Override
     public K next() {
-        while (lock.get() != 0)
-            Thread.yield();
-        if (!hasNext)
+        checkNext();
+        if (1 != lock.getAndSet(0))
             throw new NoSuchElementException();
-        K next = this.next;
-        hasNext = false;
+        return this.next;
+    }
+
+    private void checkNext() {
+        if(lock.get() != 0)
+            return;
         synchronized (lock) {
-            lock.notifyAll();
+            lock.notify();
         }
-        while (!lock.compareAndSet(2, 0))
+        if (lock.get() == 0) {
             Thread.yield();
-        return next;
+            while (lock.get() == 0)
+                LockSupport.parkNanos(20);
+        }
     }
 
     /**
@@ -90,16 +94,13 @@ public final class ForEachIterator<K> implements Iterator<K>, Consumer<K>, Runna
      */
     @Override
     public void accept(K k) {
-        hasNext = true;
         next = k;
-        lock.set(2);
+        lock.set(1);
         try {
             synchronized (lock) {
                 lock.wait();
             }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        } catch (InterruptedException ignored) {}
     }
 
     /**
@@ -116,5 +117,6 @@ public final class ForEachIterator<K> implements Iterator<K>, Consumer<K>, Runna
     @Override
     public void run() {
         iterable.forEach(this);
+        lock.set(-1);
     }
 }

@@ -33,6 +33,7 @@ import roj.util.Wrapped;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
 /**
@@ -49,8 +50,8 @@ public class StreamingChars implements CharSequence {
     int bufOff, max = -1;
 
     public StreamingChars() {
-        this.cl = new CharList();
-        this.buffer = new ByteList();
+        this.cl = new CharList(128);
+        this.buffer = new ByteList(256);
     }
 
     public StreamingChars(int initialCapacity) {
@@ -68,6 +69,7 @@ public class StreamingChars implements CharSequence {
         cl.clear();
         bufOff = 0;
         this.in = in;
+        this.max = Integer.MAX_VALUE;
         return this;
     }
 
@@ -96,12 +98,10 @@ public class StreamingChars implements CharSequence {
                         start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);
                     }
 
-                    try {
-                        Thread.sleep(5);
-                    } catch (InterruptedException ignored) {}
+                    LockSupport.parkNanos(50);
                 } else {
                     if(read == -1) {
-                        bufOff = -1;
+                        start = -1;
                         return;
                     }
                     throw new IOException("in.read() got " + read);

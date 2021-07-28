@@ -26,7 +26,7 @@
 package roj.reflect;
 
 /**
- * JavaLangAccess Holder
+ * JavaLangAccess Ref
  *
  * @author solo6975
  * @version 0.1

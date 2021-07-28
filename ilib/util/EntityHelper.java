@@ -51,8 +51,8 @@ import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
-import roj.concurrent.Holder;
 import roj.concurrent.OperationDone;
+import roj.concurrent.Ref;
 import roj.math.MathUtils;
 import roj.math.Vec2d;
 import roj.reflect.DirectConstructorAccess;
@@ -62,7 +62,8 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.function.Function;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -614,7 +615,7 @@ public class EntityHelper {
 
         BlockPos.PooledMutableBlockPos mutable = BlockPos.PooledMutableBlockPos.retain();
 
-        Holder<Vec3d> holder = Holder.from(null);
+        Ref<Vec3d> ref = Ref.from();
 
         try {
             acceptOffsets(facing, (a, b) -> {
@@ -630,7 +631,7 @@ public class EntityHelper {
                     if (isValidY(y)) {
                         Vec3d v = new Vec3d(mutable.getX() + 0.5D, mutable.getY() + y, mutable.getZ() + 0.5D);
                         if (!rider.world.checkBlockCollision(rider.getEntityBoundingBox().offset(v))) {
-                            holder.set(v);
+                            ref.set(v);
                             throw OperationDone.INSTANCE;
                         }
                     }
@@ -641,7 +642,7 @@ public class EntityHelper {
 
         mutable.release();
 
-        return holder.get();
+        return ref.get();
     }
 
     public static Vec3d dismountPig(EntityLivingBase rider, EntityPig pig) {
@@ -653,7 +654,7 @@ public class EntityHelper {
 
         BlockPos.PooledMutableBlockPos mutable = BlockPos.PooledMutableBlockPos.retain();
 
-        Holder<Vec3d> holder = Holder.from(null);
+        Ref<Vec3d> ref = Ref.from();
 
         try {
             acceptOffsets(facing, (a, b) -> {
@@ -661,7 +662,7 @@ public class EntityHelper {
                 if (isValidY(y)) {
                     Vec3d v = new Vec3d(mutable.getX() + 0.5D, mutable.getY() + y, mutable.getZ() + 0.5D);
                     if (!rider.world.checkBlockCollision(rider.getEntityBoundingBox().offset(v))) {
-                        holder.set(v);
+                        ref.set(v);
                         throw OperationDone.INSTANCE;
                     }
                 }
@@ -671,7 +672,7 @@ public class EntityHelper {
 
         mutable.release();
 
-        return holder.get();
+        return ref.get();
     }
 
     public static Vec2d xzOffset(double ridingWidth, double riderWidth, float ridingYaw) {

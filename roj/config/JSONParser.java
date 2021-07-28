@@ -103,7 +103,7 @@ public final class JSONParser {
      */
     public static CEntry parse(AbstLexer wr, int flag) throws ParseException {
         CEntry ce = jsonRead(wr, (byte) flag);
-        if (wr.hasNext()) {
+        if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
         return ce;

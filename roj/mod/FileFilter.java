@@ -43,15 +43,15 @@ class FileFilter implements Predicate<File> {
             case F_TIME:
                 return file.lastModified() > stamp;
             case F_CLASS_TIME: {
-                boolean is = file.getName().endsWith(".class");
-                if (is && file.lastModified() > stamp) {
+                if (file.getName().endsWith(".class") && file.lastModified() > stamp) {
                     try {
                         modified.add(Parser.simpleData(IOUtil.readFile(file)).get(0));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+                    return true;
                 }
-                return is;
+                return false;
             }
             case F_CLASS_TIME_REMOVE: {
                 boolean is = file.getName().endsWith(".class");
@@ -104,6 +104,8 @@ class FileFilter implements Predicate<File> {
     // region OpenAny Finder
 
     public static boolean isOAMarked(File file) {
+        if(buffer.length == 0)
+            return false;
         try(FileInputStream fis = new FileInputStream(file)) {
             int len = fis.read(buffer, 0, Math.min((int) file.length() >> 1, buffer.length));
             for (int i = 0; i < len; i++) {

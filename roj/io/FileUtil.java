@@ -27,7 +27,7 @@ package roj.io;
 
 import org.jetbrains.annotations.Async;
 import roj.collect.MyHashMap;
-import roj.concurrent.Holder;
+import roj.concurrent.Ref;
 import roj.concurrent.WaitingIOFuture;
 import roj.concurrent.pool.PrefixFactory;
 import roj.concurrent.pool.TaskPool;
@@ -174,21 +174,21 @@ public final class FileUtil {
     }
 
     public static byte[] downloadFileToMemory(String url) throws IOException {
-        Holder<byte[]> holder = Holder.from(null);
+        Ref<byte[]> ref = Ref.from();
 
         try {
             process302(new URL(url), (httpConn) -> {
                 try (InputStream is = httpConn.getInputStream()) {
                     int length = httpConn.getContentLength();
 
-                    holder.set(new ByteList(length).readStreamArrayFully(is).toByteArray());
+                    ref.set(new ByteList(length).readStreamArrayFully(is).toByteArray());
                 }
             }, false);
         } catch (UnknownHostException e) {
             throw new FileNotFoundException("网址不存在: " + url);
         }
 
-        return holder.get();
+        return ref.get();
     }
 
     /**
@@ -324,7 +324,7 @@ public final class FileUtil {
     @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler, int startPid, boolean deleteInfo, final int threadMax) throws IOException {
         if(file.isFile()) {
-            throw new IOException("文件已存在");
+            return new ImmediateFuture("done");
         }
 
         final File parent = file.getParentFile();
@@ -346,9 +346,9 @@ public final class FileUtil {
         }
 
         if(infoFile != null && infoFile.isFile()) {
-            File lockTest = new File(infoFile.getAbsolutePath() + System.currentTimeMillis());
-            if(!infoFile.renameTo(lockTest) || !lockTest.renameTo(infoFile))
+            if(!checkTotalWritePermission(infoFile)) {
                 throw new IOException("文件已被占用");
+            }
         }
 
         File fInfoFile = infoFile;
@@ -426,20 +426,7 @@ public final class FileUtil {
         }
 
         if(tasks.isEmpty()) {
-            return new WaitingIOFuture() {
-                @Override
-                public void waitFor() {}
-
-                @Override
-                public boolean isDone() {
-                    return true;
-                }
-
-                @Override
-                public String flag() {
-                    return "unsupported";
-                }
-            };
+            return new ImmediateFuture("unsupported");
         }
 
         handler.onInitial(tasks.size());
@@ -597,6 +584,27 @@ public final class FileUtil {
         @Override
         public String toString() {
             return tasks.toString();
+        }
+    }
+
+    private static class ImmediateFuture implements WaitingIOFuture {
+        final String r;
+
+        public ImmediateFuture(String reason) {
+            this.r = reason;
+        }
+
+        @Override
+        public void waitFor() {}
+
+        @Override
+        public boolean isDone() {
+            return true;
+        }
+
+        @Override
+        public String flag() {
+            return r;
         }
     }
 }

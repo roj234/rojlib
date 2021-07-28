@@ -348,7 +348,7 @@ public final class ConstMapper extends Mapping {
             selfSupers = new ConcurrentHashMap<>(arr.size());
             selfMethods = new ConcurrentFindHashMap<>();
 
-            System.out.println("[ConstMapper.Warn]: ConcurrentFindX正处于试验阶段, 有问题请及时报告!");
+            //System.out.println("[ConstMapper.Warn]: ConcurrentFindX正处于试验阶段, 有问题请及时报告!");
 
             List<List<Context>> splatted = new ArrayList<>();
             List<Context> tmp = new ArrayList<>();

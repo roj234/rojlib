@@ -40,7 +40,8 @@ import java.util.function.Predicate;
 
 import static roj.collect.TrieTree.COMPRESS_START_DEPTH;
 import static roj.collect.TrieTree.MIN_REMOVE_ARRAY_SIZE;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -131,7 +132,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
     }
 
     /**
-     * Holder for ""
+     * Ref for ""
      */
     Entry root = new Entry((char) 0);
     int size = 0;
