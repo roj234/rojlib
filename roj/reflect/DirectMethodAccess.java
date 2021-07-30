@@ -159,11 +159,9 @@ public final class DirectMethodAccess {
         try {
 
             final byte[] code = compile(opcode, "roj/reflect/DMA$" + i, invoker.getName(), invokeMethodName, tClass.getName(), targetMethods, nci);
-            ClassDefiner.INSTANCE.defineClass(newClassName, code);
-
-            Class<?> clz = Class.forName(newClassName);
+            Class<?> clz = ClassDefiner.INSTANCE.defineClass(newClassName, code);
             return (T) SunReflection.createClass(clz);
-        } catch (ClassFormatError | IllegalAccessException | ClassNotFoundException | InstantiationException | InvocationTargetException e) {
+        } catch (ClassFormatError | IllegalAccessException | InstantiationException | InvocationTargetException e) {
             throw new RuntimeException("DMA Internal error!", e);
         }
     }

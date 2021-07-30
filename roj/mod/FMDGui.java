@@ -381,17 +381,13 @@ public class FMDGui extends JFrame {
 
         String[] availableValue = new String [] {
                 "增量编译",
-                "全量编译",
-                "全量且清空编译缓存"
+                "全量编译"
         };
-        switch (JOptionPane.showOptionDialog(frame, "请选择 ", "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, availableValue, availableValue[0])) {
+        switch (JOptionPane.showOptionDialog(frame, "请选择 ", "询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, availableValue, availableValue[0])) {
             case YES_OPTION:
                 map.put("zl", null);
                 break;
             case NO_OPTION:
-                break;
-            case CANCEL_OPTION:
-                map.put("clearBin", null);
                 break;
             case CLOSED_OPTION:
                 return null;

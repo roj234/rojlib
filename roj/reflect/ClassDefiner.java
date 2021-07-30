@@ -44,16 +44,16 @@ import java.security.cert.Certificate;
  * @since 2021/6/16 1:31
  */
 public final class ClassDefiner extends ClassLoader {
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
     private static final ClassLoader selfParent = getParentClassLoader(ClassDefiner.class);
     public static volatile ClassDefiner INSTANCE = new ClassDefiner(selfParent);
 
     private static volatile Method defineClassMethod, defineClass1Method;
 
     public static boolean debug;
-
-    static {
-        ClassLoader.registerAsParallelCapable();
-    }
 
     private ClassDefiner(ClassLoader parent) {
         super(parent);

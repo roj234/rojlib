@@ -76,6 +76,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
                     length <<= 1;
                     resize();
                 }
+                if(entry.v == NOT_USING) continue;
 
                 Entry<K, V> entry1 = getEntryFirst(entry.k, true);
                 sec:
@@ -99,7 +100,8 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
                 }
 
                 if (entry1.v == NOT_USING) {
-                    afterPut(entry);
+                    entry1.v = entry.v;
+                    afterPut(entry1);
                     size++;
                 } else {
                     afterAccess(entry1, entry1.v = entry.v);

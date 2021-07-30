@@ -46,6 +46,8 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -90,11 +92,16 @@ public final class FileUtil {
     public static int TIMEOUT = 10 * 1000;
 
     public static void copyFile(File source, File target) throws IOException {
-        try (FileInputStream fis = new FileInputStream(source)) {
+        FileChannel src = FileChannel.open(source.toPath(), StandardOpenOption.READ);
+        FileChannel dst = FileChannel.open(target.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        src.transferTo(0, source.length(), dst);
+        src.close();
+        dst.close();
+        /*try (FileInputStream fis = new FileInputStream(source)) {
             try (FileOutputStream fos = new FileOutputStream(target)) {
                 IOUtil.readFully0(fis, IOUtil.BYTE_BUFFER.get()).writeToStream(fos);
             }
-        }
+        }*/
     }
 
     public static final Predicate<File> TRUE_PREDICT = Helpers.alwaysTrue();
@@ -469,10 +476,11 @@ public final class FileUtil {
 
     public static boolean checkTotalWritePermission(File file) {
         try(RandomAccessFile f = new RandomAccessFile(file, "rw")) {
-            f.setLength(f.length() + 1);
-            f.seek(f.length());
+            long l = f.length();
+            f.setLength(l + 1);
+            f.seek(l);
             f.writeByte(1);
-            f.setLength(f.length() - 1);
+            f.setLength(l);
         } catch (IOException e) {
             return false;
         }

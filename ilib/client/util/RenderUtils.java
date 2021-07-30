@@ -396,7 +396,7 @@ public class RenderUtils {
                 if (j == timesW)
                     cutW = maxWidth % 16;
                 if (level >= 16) {
-                    double times = Math.floor(level / 16);
+                    double times = Math.floor(level / 16f);
                     for (int i = 1; i <= times; i++) {
                         drawIconWithCut(icon, x + j * 16, y - 16 * i, cutW, 16, 0);
                     }
@@ -418,29 +418,23 @@ public class RenderUtils {
     static FloatBuffer matrixBuffer = mb0.asFloatBuffer();
 
     public static void loadMatrix(Mat4f transform) {
-        // todo TEST
-        //if(NativeMemcpy.instance != null) {
-        //    NativeMemcpy.instance.copyFromArray(transform, Runtime.OBJECT_HEADER_SIZE, 0, NonblockingUtil.addr(mb0), 16 * 4);
-        //    matrixBuffer.position(16);
-        //} else {
-            matrixBuffer.put(transform.m00)
-                        .put(transform.m01)
-                        .put(transform.m02)
-                        .put(transform.m03)
-                        .put(transform.m10)
-                        .put(transform.m11)
-                        .put(transform.m12)
-                        .put(transform.m13)
-                        .put(transform.m20)
-                        .put(transform.m21)
-                        .put(transform.m22)
-                        .put(transform.m23)
-                        .put(transform.m30)
-                        .put(transform.m31)
-                        .put(transform.m32)
-                        .put(transform.m33)
-                        .flip();
-        //}
+        matrixBuffer.put(transform.m00)
+                    .put(transform.m01)
+                    .put(transform.m02)
+                    .put(transform.m03)
+                    .put(transform.m10)
+                    .put(transform.m11)
+                    .put(transform.m12)
+                    .put(transform.m13)
+                    .put(transform.m20)
+                    .put(transform.m21)
+                    .put(transform.m22)
+                    .put(transform.m23)
+                    .put(transform.m30)
+                    .put(transform.m31)
+                    .put(transform.m32)
+                    .put(transform.m33)
+                    .flip();
         GL11.glMultMatrix(matrixBuffer);
     }
 

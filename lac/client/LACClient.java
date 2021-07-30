@@ -44,7 +44,7 @@ import java.util.Random;
  * @author Roj234
  * @since 2021/7/9 2:02
  */
-@Mod(modid = "cs5", name = "CustomStuff 5", version = "5.0.3")
+//@Mod(modid = "cs5", name = "CustomStuff 5", version = "5.0.3")
 @DefaultObfuscatePolicy(onlyHaveStatic = false)
 @RandomInject(ids = "b64char_rnd", value = 888888L, type = 'J')
 public class LACClient {

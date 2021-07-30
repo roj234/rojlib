@@ -81,9 +81,7 @@ public class DirectFieldAccess {
         try {
             ClassDefiner loader = ClassDefiner.INSTANCE;
             byte[] code = getClassCode("roj/reflect/DFA$" + i, className, field.getName(), par, getter_setter_class);
-            loader.defineClass(newClassName, code);
-
-            Class<?> clz = Class.forName(newClassName);
+            Class<?> clz = loader.defineClass(newClassName, code);
 
             return (T) SunReflection.createClass(clz);
         } catch (Exception e) {
@@ -189,20 +187,16 @@ public class DirectFieldAccess {
         if ("set".equals(prefix)) {
             m.setReturnType(Type.std(VOID));
             types.clear();
-            /*if (p.type == CLASS || p.type == NativeType.ARRAY) {
-                if (g_sClass == DirectFieldAccessor.class) {
-                    p = OBJI;
-                } else {
-                    p = p;
-                }
-            } else {
-                p = new Type(p.type, 0);
-            }*/
+            if (p.type == CLASS && g_sClass == DirectFieldAccessor.class) {
+                p = new Type("java/lang/Object");
+            }
             types.add(p);
             len++;
         } else {
             types.clear();
-            m.setReturnType(p.owner != null ? new Type("java/lang/Object") : p/*(p.type == CLASS || p.type == NativeType.ARRAY) ? (g_sClass == DirectFieldAccessor.class ? OBJ : p) : new Type(p.type, 0)*/);
+            if (p.type == CLASS && g_sClass == DirectFieldAccessor.class) {
+                m.setReturnType(new Type("java/lang/Object"));
+            }
         }
         String t = null;
         switch (p.type) {

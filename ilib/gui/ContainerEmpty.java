@@ -29,7 +29,6 @@ package ilib.gui;
 import ilib.ImpLib;
 import ilib.util.InventoryUtil;
 import invtweaks.api.container.ChestContainer;
-import invtweaks.api.container.ChestContainer.RowSizeCallback;
 import invtweaks.api.container.ContainerSection;
 import invtweaks.api.container.ContainerSectionCallback;
 import net.minecraft.entity.player.EntityPlayer;
@@ -466,7 +465,7 @@ public class ContainerEmpty extends Container {
         return map;
     }
 
-    @RowSizeCallback
-    @Method(modid = "inventorytweaks")
-    public int getRowSize() { return this.rowSize; }
+    //@RowSizeCallback
+    //@Method(modid = "inventorytweaks")
+    //public int getRowSize() { return this.rowSize; }
 }

@@ -348,8 +348,6 @@ public final class ConstMapper extends Mapping {
             selfSupers = new ConcurrentHashMap<>(arr.size());
             selfMethods = new ConcurrentFindHashMap<>();
 
-            //System.out.println("[ConstMapper.Warn]: ConcurrentFindX正处于试验阶段, 有问题请及时报告!");
-
             List<List<Context>> splatted = new ArrayList<>();
             List<Context> tmp = new ArrayList<>();
 
@@ -922,7 +920,7 @@ public final class ConstMapper extends Mapping {
         for (int i = 0; i < files.size(); i++) {
             File fi = files.get(i);
             String f = fi.getName();
-            if (!f.startsWith("[noread]"))
+            if (!f.startsWith("[noread]") && (f.endsWith(".zip") || f.endsWith(".jar")))
                 ZipUtil.unzip(fi, cb, (ze) -> ze.getName().endsWith(".class"));
         }
 

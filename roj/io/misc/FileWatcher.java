@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.mod;
+package roj.io.misc;
 
 import roj.collect.MyHashMap;
 
@@ -43,7 +43,7 @@ public class FileWatcher extends Thread {
     final WatchService watcher;
 
     public FileWatcher() throws IOException {
-        setName("File Action Watcher");
+        setName("Filesystem Watcher");
         setDaemon(true);
         this.watcher = FileSystems.getDefault().newWatchService();
         runnable = true;

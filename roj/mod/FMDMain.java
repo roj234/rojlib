@@ -36,6 +36,7 @@ import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.concurrent.task.AbstractExecutionTask;
 import roj.concurrent.task.CalculateTask;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
@@ -363,7 +364,7 @@ public final class FMDMain {
         loadPreAT(null);
 
         if(map.isEmpty()) {
-            CmdUtil.warning("没有找到AT");
+            CmdUtil.info("没有找到AT");
             return 0;
         }
 
@@ -388,27 +389,30 @@ public final class FMDMain {
 
         File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
         File jarFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
-        File tmpFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.tmp");
-
-        ByteList bl = new ByteList(10000);
+        File tmpFile;
+        if(FileUtil.checkTotalWritePermission(jarFile)) {
+            tmpFile = jarFile;
+        } else {
+            FileUtil.copyFile(jarFile, tmpFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.tmp"));
+        }
 
         if(!backupFile.isFile()) {
             FileUtil.copyFile(jarFile, backupFile);
         }
 
-        //Map<String, ByteList> modified = new MyHashMap<>();
-
-        // todo mutable zip file
+        MutableZipFile mz = new MutableZipFile(tmpFile);
         ZipFile origZip = new ZipFile(backupFile);
 
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tmpFile));
         Enumeration<? extends ZipEntry> en = origZip.entries();
         while (en.hasMoreElements()) {
             ZipEntry ze = en.nextElement();
-            if(ze.isDirectory() || (ze.getName().endsWith("package-info.class") && clearPkgInfo))
+            if(ze.isDirectory())
                 continue;
-            ZipEntry cpEntry = new ZipEntry(ze.getName());
-            zos.putNextEntry(cpEntry);
+
+            if(clearPkgInfo && ze.getName().endsWith("package-info.class")) {
+                mz.setFileData(ze.getName(), null);
+                continue;
+            }
 
             String name = className.remove(ze.getName());
             if(name != null) {
@@ -417,27 +421,22 @@ public final class FMDMain {
                 if(subs != null)
                     code = AccessTransformer.openSubClass(code, subs);
 
-                zos.write(code);
-                CmdUtil.success("已转换 " + ze.getName());
-            } else {
-                bl.clear();
-                bl.readStreamArrayFully(origZip.getInputStream(ze));
-                zos.write(bl.list, 0, bl.pos());
+                mz.setFileData(ze.getName(), new ByteList(code), true);
+
+                CmdUtil.success("转换 " + ze.getName());
             }
-            zos.closeEntry();
         }
-        ZipUtil.close(zos);
         origZip.close();
+        mz.store();
 
         if(!className.isEmpty()) {
-            CmdUtil.warning("没有找到 " + className.keySet());
+            CmdUtil.warning("这些class没有找到: " + className.keySet());
         }
 
-        if((jarFile.isFile() && !jarFile.delete()) || !tmpFile.renameTo(jarFile)) {
+        if(jarFile != tmpFile && ((jarFile.isFile() && !jarFile.delete()) || !tmpFile.renameTo(jarFile)))
             CmdUtil.warning("请手动重命名 " + MERGED_FILE_NAME + ".jar.tmp为.jar");
-        }
-
-        CmdUtil.success("完毕");
+        else
+            CmdUtil.success("完毕");
 
         return 0;
     }
@@ -686,6 +685,7 @@ public final class FMDMain {
      * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
      */
     public static boolean compile(Map<String, ?> args, Project project, File jarDest, int flag) throws IOException, InterruptedException {
+        watcher.pause(!args.containsKey("zl"));
         // 前置
         if((flag & 2) == 0) {
             if(args.containsKey("zl") && !isMain)
@@ -695,6 +695,7 @@ public final class FMDMain {
                     CmdUtil.info("前置编译失败");
                     return false;
                 }
+                proj.registerWatcher();
             }
         }
 
@@ -724,7 +725,19 @@ public final class FMDMain {
             return false;
         }
 
-        List<File> files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_SRC : FileFilter.F_JAVA_OA));
+        List<File> files = null;
+        if(increment) {
+            MyHashSet<String> set = watcher.getModified(project, ProjectWatcher.ID_SRC);
+            if(!set.contains(null)) {
+                files = new ArrayList<>(set.size());
+                for (String s : set) {
+                    files.add(new File(s));
+                }
+            }
+        }
+        if(files == null) {
+            files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_SRC : FileFilter.F_JAVA_OA));
+        }
 
         // endregion
 
@@ -763,7 +776,7 @@ public final class FMDMain {
         FMDOAProc md = null;
         if(FileFilter.state != 0) {
             if(project.atName.isEmpty()) {
-                CmdUtil.error("项目代码使用了OpenAny,但是没有设置atConfig");
+                CmdUtil.error(project.name + ": 使用了OpenAny,却没有设置atConfig");
                 return false;
             }
 
@@ -813,7 +826,7 @@ public final class FMDMain {
 
         // region 更新资源文件
 
-        CalculateTask<Void> task = new CalculateTask<>(project.getResourceTask);
+        AbstractExecutionTask task = project.getResourceTask();
         Project.resourceFilter.reset(stamp, canIncrementWrite ? FileFilter.F_TIME : FileFilter.F_ALL);
         parallel.pushTask(task);
 
@@ -845,14 +858,25 @@ public final class FMDMain {
 
             MyHashMap<String, InputStream> classes = new MyHashMap<>(100);
 
-            // 自动删除被删除的文件
-            // build之后，修改时间没有更新，就是被删除的文件了, 所以增量不支持
-            FileUtil.findAndOpenStream(project.binary, classes, FileFilter.INST.reset(stamp, canIncrementWrite ? FileFilter.F_CLASS_TIME : increment ? FileFilter.F_CLASS : FileFilter.F_CLASS_TIME_REMOVE));
+            if(canIncrementWrite) {
+                MyHashSet<String> set = watcher.getModified(project, ProjectWatcher.ID_BIN);
+                if(!set.contains(null)) {
+                    for (String s : set) {
+                        classes.put(s.substring(project.binaryPathStr.length()).replace('\\', '/'), new FileInputStream(s));
+                    }
+                } else {
+                    FileUtil.findAndOpenStream(project.binary, classes, FileFilter.INST.reset(stamp, FileFilter.F_CLASS_TIME));
+                }
+            } else {
+                // 自动删除被删除的文件
+                // build之后，修改时间没有更新，就是被删除的文件了, 所以增量不支持
+                FileUtil.findAndOpenStream(project.binary, classes, FileFilter.INST.reset(stamp, increment ? FileFilter.F_CLASS : FileFilter.F_CLASS_TIME_REMOVE));
 
-            if(FileFilter.state > 0) {
-                int i = FileUtil.removeEmptyPaths(FileFilter.modified);
-                if(DEBUG)
-                    CmdUtil.info("删除了" + FileFilter.state + "个已删除的文件 " + i);
+                if(FileFilter.state > 0) {
+                    int i = FileUtil.removeEmptyPaths(FileFilter.modified);
+                    if(DEBUG)
+                        CmdUtil.info("删除了" + FileFilter.state + "个已删除的文件 " + i);
+                }
             }
 
             // 想办法减少ZIP写入的I/O
@@ -871,8 +895,9 @@ public final class FMDMain {
             if(DEBUG)
                 System.out.println("资源处理完成 " + (System.currentTimeMillis() - time));
 
-            for (int i = 0; i < project.dependencies.size(); i++) {
-                mapperFwd.addPermanently(project.dependencies.get(i).state);
+            List<Project> ad = project.getAllDependencies();
+            for (int i = 0; i < ad.size(); i++) {
+                mapperFwd.addPermanently(ad.get(i).state);
             }
 
             if(canIncrementWrite) {
@@ -975,6 +1000,7 @@ public final class FMDMain {
                 throw new IOException("设置时间戳失败!");
             }
 
+            project.registerWatcher();
             return true;
         }
 
@@ -1011,7 +1037,7 @@ public final class FMDMain {
                 if (zf.size() == 0)
                     CmdUtil.warning(file.getPath() + " 是空的");
             } catch (Throwable e) {
-                CmdUtil.error(file.getPath() + " 不是ZIP压缩文件");
+                CmdUtil.error(file.getPath() + " 不是ZIP压缩文件", e);
                 if (!file.renameTo(new File(file.getAbsolutePath() + ".err"))) {
                     throw new RuntimeException("未指定的I/O错误");
                 } else {
@@ -1075,8 +1101,7 @@ public final class FMDMain {
 
     @SuppressWarnings("unchecked")
     static int changeVersion(File mcRoot, File mcJson, UIWarp gui) throws IOException {
-        if(watcher != null)
-            watcher.interrupt();
+        watcher.terminate();
 
         CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
         CMapping cfgFMD = MAIN_CONFIG.get("FMD配置").asMap();
@@ -1123,8 +1148,7 @@ public final class FMDMain {
 
         MCLauncher.load();
         MCLauncher.config.put("mc_conf", mc_conf);
-        String x = mcJar.getName();
-        MCLauncher.config.put("mc_version", x.substring(0, x.lastIndexOf('.')));
+        MCLauncher.config.put("mc_version", jsonDesc.getString("id"));
 
         String mcpVersion = detectVersion(mcVersion);
 
@@ -1390,12 +1414,13 @@ public final class FMDMain {
         if(code != 0)
             return code;
 
-        File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
-        if(backupFile.isFile() && !backupFile.delete()) {
-            CmdUtil.warning("备份删除失败");
-        }
-
         File merged = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
+        File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
+        try {
+            FileUtil.copyFile(merged, backupFile);
+        } catch (IOException e) {
+            CmdUtil.warning("备份失败", e);
+        }
 
         // clear close() hook
         System.gc();

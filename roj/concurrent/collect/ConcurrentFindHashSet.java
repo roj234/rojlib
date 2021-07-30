@@ -26,13 +26,12 @@
 package roj.concurrent.collect;
 
 import roj.collect.FindSet;
-import roj.collect.MyHashSet;
-import roj.concurrent.SimpleSpinLock;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * No description provided
@@ -42,9 +41,7 @@ import java.util.Iterator;
  * @since  2020/8/20 14:03
  */
 public class ConcurrentFindHashSet<T> implements FindSet<T> {
-    private final SimpleSpinLock lock = new SimpleSpinLock();
-
-    private final MyHashSet<T> set = new MyHashSet<>();
+    private final ConcurrentHashMap<T, T> set = new ConcurrentHashMap<>();
 
     public ConcurrentFindHashSet(Collection<T> list) {
         addAll(list);
@@ -52,10 +49,7 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
 
     @Override
     public T find(T t) {
-        lock.enqueueReadLock();
-        t = set.find(t);
-        lock.releaseReadLock();
-        return t;
+        return set.getOrDefault(t, t);
     }
 
     @Override
@@ -70,10 +64,7 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
 
     @Override
     public boolean contains(Object key) {
-        lock.enqueueReadLock();
-        boolean c = set.contains(key);
-        lock.releaseReadLock();
-        return c;
+        return set.containsKey(key);
     }
 
     @Nonnull
@@ -85,73 +76,57 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
     @Nonnull
     @Override
     public Object[] toArray() {
-        lock.enqueueReadLock();
-        Object[] o = set.toArray();
-        lock.releaseReadLock();
-        return o;
+        throw new UnsupportedOperationException();
     }
 
     @Nonnull
     @Override
     public <T1> T1[] toArray(@Nonnull T1[] a) {
-        lock.enqueueReadLock();
-        T1[] t1 = set.toArray(a);
-        lock.releaseReadLock();
-        return t1;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean add(T key) {
-        lock.enqueueWriteLock(-1);
-        boolean b = set.add(key);
-        lock.releaseWriteLock(-1);
-        return b;
+        if(set.containsKey(key))
+            return false;
+        set.put(key, key);
+        return true;
     }
 
     @Override
     public boolean remove(Object key) {
-        lock.enqueueWriteLock(-2);
-        boolean b = set.remove(key);
-        lock.releaseWriteLock(-2);
-        return b;
+        return set.remove(key) != null;
     }
 
     @Override
     public boolean containsAll(@Nonnull Collection<?> c) {
-        lock.enqueueReadLock();
-        boolean b = set.containsAll(c);
-        lock.releaseReadLock();
-        return b;
+        for (Object o : c)
+            if(!set.containsKey(o))
+                return false;
+        return true;
     }
 
     @Override
     public boolean addAll(@Nonnull Collection<? extends T> m) {
-        lock.enqueueWriteLock(-3);
-        boolean b = set.addAll(m);
-        lock.releaseWriteLock(-3);
-        return b;
+        for (T t : m)
+            set.put(t, t);
+        return true;
     }
 
     @Override
     public boolean retainAll(@Nonnull Collection<?> c) {
-        lock.enqueueWriteLock(-4);
-        boolean b = set.retainAll(c);
-        lock.releaseWriteLock(-4);
-        return b;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean removeAll(@Nonnull Collection<?> c) {
-        lock.enqueueWriteLock(-5);
-        boolean b = set.removeAll(c);
-        lock.releaseWriteLock(-5);
-        return b;
+        for(Object o : c)
+            set.remove(o);
+        return true;
     }
 
     @Override
     public void clear() {
-        lock.enqueueWriteLock(-6);
         set.clear();
-        lock.releaseWriteLock(-6);
     }
 }

@@ -46,7 +46,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.nio.file.StandardWatchEventKinds;
 import java.util.Map;
 
 /**
@@ -71,7 +70,7 @@ public final class Shared {
     static final ConstMapper mapperFwd = new ConstMapper();
     static ConstMapper mapperRev;
 
-    static FileWatcher watcher;
+    static IProjectWatcher watcher;
 
     public static TaskPool parallel = new TaskPool(1, Runtime.getRuntime().availableProcessors() * 2, 16, 1024, new PrefixFactory("AsyncTasker", 5000));
 
@@ -137,19 +136,19 @@ public final class Shared {
 
         if(MAIN_CONFIG.getDot("FMD配置.文件修改监控").asBool()) {
             try {
-                watcher = new FileWatcher();
-
-                watcher.register(new File(BASE, "/class/").toPath(), path -> {
+                watcher = new ProjectWatcher(new File(BASE, "/class/").toPath(), () -> {
                     CmdUtil.warning("库文件已被修改,重新加载映射表...");
                     mapperFwd.clear();
                     initForwardMapper();
                     mapperRev = null;
-                }, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
-                watcher.start();
+                });
             } catch (IOException e) {
-                e.printStackTrace();
+                CmdUtil.warning("无法启动文件监控", e);
             }
         }
+
+        if(watcher == null)
+            watcher = new IProjectWatcher();
     }
 
     public static final File CONF_INDEX = new File(BASE, "config/index.json");
@@ -206,12 +205,12 @@ public final class Shared {
                 if(mapperFwd.getClassMap().isEmpty()) {
                     try {
                         mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
-                        mapperFwd.backupLibSupers();
                         if (DEBUG)
                             CmdUtil.success("正向映射表已加载");
                     } catch (Exception e) {
                         CmdUtil.error("正向映射表加载失败", e);
                     }
+                    mapperFwd.backupLibSupers();
                 }
             }
         }

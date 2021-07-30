@@ -2191,11 +2191,14 @@ public class MCLauncher extends JFrame {
 
         // 会导致无法窗口化, 可能是缓冲区满了....
         if((flag & 2) != 0) {
-            try {
-                process.waitFor();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            boolean x = false;
+            while (process.isAlive()) {
+                try {
+                    process.waitFor();
+                } catch (InterruptedException ignored) { x = true; }
             }
+            if(x)
+                Thread.currentThread().interrupt();
 
             CmdUtil.info("进程终止");
             return process.exitValue();

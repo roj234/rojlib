@@ -328,11 +328,25 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
     }
 
+    // content == null : 删除
     public void setFileData(String entry, ByteList content) {
         ModFile file = new ModFile();
         file.name = entry;
         if(file == (file = modified.find(file))) {
             file.file = entries.get(entry);
+            modified.add(file);
+        }
+        file.compress = true;
+        file.data = content;
+    }
+
+    public void setFileData(String entry, ByteList content, boolean requiredExistence) {
+        ModFile file = new ModFile();
+        file.name = entry;
+        if(file == (file = modified.find(file))) {
+            if(((file.file = entries.get(entry)) == null) == requiredExistence) {
+                throw new AssertionError("(entries.get(entry) == null) == requiredExistence");
+            }
             modified.add(file);
         }
         file.compress = true;
@@ -361,13 +375,15 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         for(ModFile file : modified) {
             EFile o = entries.get(file.name);
-            if(o != null) {
+            if (o != null) {
                 if (minFile == null || minFile.offset > o.offset) {
                     minFile = o;
                 }
                 uFile.add(o);
             }
             file.file = o;
+            if(file.data == null)
+                entries.remove(file.name);
         }
 
         File tmpFile = new File(file.getAbsolutePath() + System.currentTimeMillis() +  ".tmp");
@@ -403,7 +419,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     EFile file1 = point.owner();
                     file1.attr.fileHeader += delta;
                     file1.offset += delta;
-                    //System.out.println("M " + file1.name + " => " + file1.offset);
 
                     continue; // find intersection regions
                 }
@@ -414,8 +429,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     begin = file1.startPos();
 
                     delta += (len - begin);
-                    //System.out.println("Δ=" + delta);
-                    //System.out.println("F " + file1.name + " " + begin);
 
                     file1.attr.fileHeader += delta;
                     file1.offset += delta;
@@ -426,7 +439,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                         throw new IllegalStateException("Unexpected value");
 
                     len = file1.endPos() - begin - delta;
-                    //System.out.println("E: " + file1.name + ": [" + begin + "," + (begin + len) + "]L=" + len + " => " + tmpFile.length());
                     cf.transferTo(begin, len, ct);
 
                     len += begin;
@@ -445,6 +457,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         // write modified EFile header
         for(ModFile file : modified) {
+            if(file.data == null) continue;
             if(file.file == null) {
                 EFile ef = file.file = new EFile();
                 ef.attr = new Attr();

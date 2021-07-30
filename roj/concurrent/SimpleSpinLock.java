@@ -23,8 +23,8 @@ public class SimpleSpinLock {
     }
 
     public void releaseReadLock() {
-        if(lock.get() < 0)
-            throw new IllegalStateException("Not locked");
+        if(lock.get() <= 0)
+            throw new IllegalStateException("Not locked: " + lock.get());
         lock.getAndDecrement();
     }
 
@@ -38,12 +38,12 @@ public class SimpleSpinLock {
 
     public void releaseWriteLock() {
         if(!lock.compareAndSet(-1, 0))
-            throw new IllegalStateException("Not locked");
+            throw new IllegalStateException("Not locked: " + lock.get());
     }
 
     public void releaseWriteLock(int lockId) {
         if(!lock.compareAndSet(lockId, 0))
-            throw new IllegalStateException("Not locked");
+            throw new IllegalStateException("Not locked: " + lock.get());
     }
 
     private static void waitCas(AtomicInteger lock, int from, int to) {

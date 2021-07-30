@@ -90,11 +90,9 @@ public class DirectConstructorAccess {
 
         try {
             final byte[] code = getClazz("roj/reflect/DCA$" + i, invoker.getName(), invokeMethodName, target.getName(), invoke);
-            ClassDefiner.INSTANCE.defineClass(clsName, code);
-
-            Class<?> clz = Class.forName(clsName);
+            Class<?> clz = ClassDefiner.INSTANCE.defineClass(clsName, code);
             return (T) SunReflection.createClass(clz);
-        } catch (ClassFormatError | ClassNotFoundException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
+        } catch (ClassFormatError | IllegalAccessException | InstantiationException | InvocationTargetException e) {
             throw new RuntimeException("DCA Internal error!", e);
         }
     }

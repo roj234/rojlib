@@ -3,6 +3,8 @@ package roj.mod;
 import roj.asm.mapper.ConstMapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.concurrent.task.AbstractExecutionTask;
 import roj.config.JSONConfiguration;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
@@ -16,17 +18,17 @@ import roj.ui.CmdUtil;
 import roj.util.Helpers;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static roj.mod.Shared.BASE;
-import static roj.mod.Shared.initForwardMapper;
+import static roj.mod.Shared.*;
 
 /**
  * This file is a part of MI <br>
@@ -60,7 +62,6 @@ public final class Project extends JSONConfiguration {
     File source, resource, binary;
 
     static FileFilter resourceFilter = new FileFilter();
-    Callable<Void> getResourceTask;
     MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
 
     MutableZipFile mz;
@@ -151,22 +152,49 @@ public final class Project extends JSONConfiguration {
         } else {
             dependencies = Collections.emptyList();
         }
+    }
 
-        getResourceTask = () -> {
-            initForwardMapper();
+    public AbstractExecutionTask getResourceTask() {
+        return new AbstractExecutionTask() {
+            @Override
+            public void run() {
+                initForwardMapper();
 
-            resourceCache.clear();
+                MyHashSet<String> set = watcher.getModified(Project.this, ProjectWatcher.ID_RES);
+                if(!resourceCache.isEmpty() && !set.contains(null)) {
+                    int len = resource.getAbsolutePath().length();
+                    for (String s : set) {
+                        try {
+                            resourceCache.put(s.substring(len).replace('\\', '/'), IOUtil.readFully(new FileInputStream(s)));
+                        } catch (IOException e) {
+                            Helpers.throwAny(e);
+                        }
+                    }
+                } else {
+                    resourceCache.clear();
 
-            FileUtil.findAndOpenStream(resource, Helpers.cast(resourceCache), resourceFilter);
+                    FileUtil.findAndOpenStream(resource, Helpers.cast(resourceCache), resourceFilter);
 
-            Set<Map.Entry<String, Object>> entrySet = Helpers.cast(resourceCache.entrySet());
+                    Set<Map.Entry<String, Object>> entrySet = Helpers.cast(resourceCache.entrySet());
 
-            for (Map.Entry<String, Object> entry : entrySet) {
-                entry.setValue(IOUtil.readFully((InputStream) entry.getValue()));
+                    for (Map.Entry<String, Object> entry : entrySet) {
+                        try {
+                            entry.setValue(IOUtil.readFully((InputStream) entry.getValue()));
+                        } catch (IOException e) {
+                            Helpers.throwAny(e);
+                        }
+                    }
+                }
             }
-
-            return null;
         };
+    }
+
+    public void registerWatcher() {
+        try {
+            Shared.watcher.register(this);
+        } catch (IOException e) {
+            CmdUtil.warning("无法启动文件监控", e);
+        }
     }
 
     @Override
