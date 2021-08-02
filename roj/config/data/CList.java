@@ -157,7 +157,7 @@ public final class CList extends CEntry implements Iterable<CEntry> {
                     sb.append(' ');
                 }
                 sb.append('-').append(' ');
-                entry.toYAML(sb, depth + 4).append('\n');
+                entry.toYAML(sb, depth + 2).append('\n');
             }
             return sb.delete(sb.length() - 1, sb.length());
         }

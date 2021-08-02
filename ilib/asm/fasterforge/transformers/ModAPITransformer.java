@@ -58,7 +58,7 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
             lookupName = name.substring(0, name.length() - 6);
         if (this.optionals == null || !this.optionals.containsKey(lookupName))
             return basicClass;
-        ConstantData classNode = Parser.parseConstants(basicClass, true);
+        ConstantData classNode = Parser.parseConstants(basicClass);
         if (logDebugInfo)
             log("Optional removal - found optionals for class {} - processing", name);
         for (ASMDataTable.ASMData optional : this.optionals.get(lookupName)) {
@@ -81,7 +81,7 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
         }
         if (logDebugInfo)
             log("Optional removal - class {} processed", name);
-        return Parser.toByteArray(classNode, true);
+        return Parser.toByteArray(classNode);
     }
 
     private void stripMethod(ConstantData classNode, String methodDescriptor) {

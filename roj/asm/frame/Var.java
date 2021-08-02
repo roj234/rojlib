@@ -44,8 +44,7 @@ public final class Var {
             FLOAT = new Var(VarType.FLOAT),
             DOUBLE = new Var(VarType.DOUBLE),
             LONG = new Var(VarType.LONG),
-            NULL = new Var(VarType.NULL),
-            UNINITIAL_THIS = new Var(VarType.UNINITIAL_THIS);
+            NULL = new Var(VarType.NULL);
 
     public static Var std(int type) {
         switch (type) {
@@ -61,8 +60,6 @@ public final class Var {
                 return LONG;
             case 5:
                 return NULL;
-            case 6:
-                return UNINITIAL_THIS;
         }
         throw new ArrayIndexOutOfBoundsException(type);
     }

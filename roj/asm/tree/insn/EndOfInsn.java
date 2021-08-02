@@ -26,7 +26,6 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
 /**
@@ -44,11 +43,21 @@ public final class EndOfInsn extends InsnNode {
     }
 
     @Override
-    public void onRemove(InsnList insnList, int pos) {}
+    public void _i_replace(InsnNode now) {}
 
     @Override
     public void toByteArray(ByteWriter w) {
         throw new InternalError("方法结束标识 should not be written");
+    }
+
+    @Override
+    public int hashCode() {
+        return 342385479;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj == INSTANCE;
     }
 
     public String toString() {

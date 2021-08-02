@@ -32,6 +32,7 @@ import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
+import roj.util.Helpers;
 
 import java.util.function.ToIntFunction;
 
@@ -45,7 +46,7 @@ import java.util.function.ToIntFunction;
  * @version 0.1
  * @since 2021/5/27 1:12
  */
-public abstract class InsnNode {
+public abstract class InsnNode implements Helpers.Node {
     protected InsnNode(byte code) {
         setOpcode(code);
     }
@@ -61,6 +62,10 @@ public abstract class InsnNode {
 
     public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {}
 
+    public final Helpers.Node next() {
+        return next;
+    }
+
     /**
      * 保证这是一个连接在表内的节点
      */
@@ -69,10 +74,12 @@ public abstract class InsnNode {
         while (node.next != null) {
             node = node.next;
 
-            if(i++ > 100) {
-                System.err.println(node);
-                if(i > 120)
-                    throw new StackOverflowError("Node circular reference, dumped upper: " + node);
+            if(i++ > 32) {
+                if(Helpers.hasCircle(node)) {
+                    throw new IllegalStateException("Circular reference: " + node);
+                } else {
+                    i = Integer.MIN_VALUE;
+                }
             }
         }
         return node;
@@ -88,18 +95,9 @@ public abstract class InsnNode {
      * 替换
      */
     @Internal
-    public void onReplace(InsnNode now) {
+    public void _i_replace(InsnNode now) {
         if(now != this)
             this.next = now;
-    }
-
-    /**
-     * 移除
-     */
-    @Internal
-    public void onRemove(InsnList insnList, int pos) {
-        if(next == null && insnList.size() > pos)
-            next = insnList.get(pos);
     }
 
     public final byte getOpcode() {

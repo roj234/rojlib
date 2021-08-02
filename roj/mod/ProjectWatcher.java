@@ -26,6 +26,7 @@
 package roj.mod;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
+import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.ui.CmdUtil;
@@ -35,6 +36,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Project file change watcher
@@ -52,7 +54,7 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         }
     }
 
-    MyHashMap<WatchKey, X> actions;
+    HashBiMap<WatchKey, X> actions;
     final WatchService watcher;
     Thread t;
     Runnable cb;
@@ -61,7 +63,7 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
 
     public ProjectWatcher(Path libPath, Runnable callback) throws IOException {
         watcher = FileSystems.getDefault().newWatchService();
-        actions = new MyHashMap<>();
+        actions = new HashBiMap<>();
         registeredProjects = new MyHashMap<>();
 
         libPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE,
@@ -72,12 +74,6 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         t.setName("Filesystem Watcher");
         t.setDaemon(true);
         t.start();
-    }
-
-    public boolean paused() {
-        synchronized (this) {
-            return paused;
-        }
     }
 
     @Override
@@ -97,9 +93,8 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                     String name = event.kind().name();
                     switch (name) {
                         case "OVERFLOW": {
-                            s.clear();
-                            s.add(null);
-                            CmdUtil.warning("Filesystem event overflow");
+                            CmdUtil.error("[PW]Event overflow " + key.watchable());
+                            key.cancel();
                             break x;
                         }
                         case "ENTRY_MODIFY":
@@ -140,6 +135,7 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
 
                 // exit loop if the key is not valid (if the directory was deleted
                 if (!key.reset()) {
+                    key.cancel();
                     X csm = actions.remove(key);
                     if(csm == null)
                         continue;
@@ -148,6 +144,10 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                         Map.Entry<String, X[]> entry = itr.next();
                         for (X set : entry.getValue()) {
                             if (set == csm) {
+                                for (X set1 : entry.getValue()) {
+                                    if(set1 != csm)
+                                        actions.removeByValue(set1).cancel();
+                                }
                                 itr.remove();
                                 break x;
                             }
@@ -156,53 +156,42 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                 }
             } catch (InterruptedException e) {
                 synchronized (this) {
-                    paused = true;
                     try {
                         wait();
                     } catch (InterruptedException ignored) {}
-                    paused = false;
                 }
             }
         }
 
-        /*try {
+        try {
             watcher.close();
-        } catch (IOException ignored) {}*/
+        } catch (IOException ignored) {}
     }
 
     @Override
     public MyHashSet<String> getModified(Project proj, int id) {
-        return registeredProjects.containsKey(proj.name) ? registeredProjects.get(proj.name)[id].s : super.getModified(proj, id);
+        if(registeredProjects == null || !registeredProjects.containsKey(proj.name))
+            return super.getModified(proj, id);
+        return registeredProjects.get(proj.name)[id].s;
     }
 
     public void reset() {
         synchronized (this) {
-            if(!paused)
-                throw new IllegalStateException("Should be paused");
-            for(X x : actions.values()) {
-                MyHashSet<String> s = x.s;
-                s.clear();
-                s.add(null);
-            }
-        }
-    }
-
-    public void pause(boolean paused) {
-        synchronized (this) {
-            if (this.paused != paused)
-                t.interrupt();
+            t.interrupt();
+            LockSupport.parkNanos(100);
+            for (WatchKey key : actions.keySet())
+                key.cancel();
+            actions.clear();
+            registeredProjects.clear();
         }
     }
 
     @Override
     public void terminate() {
-        pause(true);
-        for (WatchKey key : actions.keySet())
-            key.cancel();
-        actions.clear();
-        registeredProjects.clear();
+        if(registeredProjects == null)
+            return;
+        reset();
         registeredProjects = null;
-        pause(false);
     }
 
     static final int ID_BIN = 0, ID_RES = 1, ID_SRC = 2;
@@ -237,5 +226,10 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                                             ExtendedWatchEventModifier.FILE_TREE);
         actions.put(key, arr[2] = new X(2));
         registeredProjects.put(proj.name, arr);
+        if(registeredProjects.size() == 1) {
+            synchronized (this) {
+                notify();
+            }
+        }
     }
 }

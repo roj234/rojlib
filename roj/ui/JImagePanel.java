@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,37 +23,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm;
+package roj.ui;
 
-import roj.asm.tree.Clazz;
-import roj.asm.tree.ConstantData;
-import roj.util.ByteList;
+import javax.swing.*;
+import java.awt.*;
 
 /**
- * No description provided
+ * Image panel
  *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since  2020/10/28 23:14
+ * @since 2021/7/30 20:40
  */
-public final class SharedCache {
-    private static final ThreadLocal<ByteList[]> BUFFERS = new ThreadLocal<ByteList[]>() {
-        @Override
-        protected ByteList[] initialValue() {
-            return new ByteList[]{
-                    new ByteList(4096), // MAIN
-                    new ByteList(4096), // POOL
-            };
-        }
-    };
-
-    public static ByteList store(ConstantData data) {
-        ByteList[] arr = BUFFERS.get();
-        return data.getBytes(arr[1], arr[0]);
+public class JImagePanel extends JComponent {
+    public Image img;
+    public JImagePanel(Image img) {
+        this.img = img;
+        setOpaque(true);
     }
 
-    public static ByteList store(Clazz clazz) {
-        ByteList[] arr = BUFFERS.get();
-        return clazz.getBytes(arr[1], arr[0]);
+    public void paintComponent(Graphics g) {
+        super.paintComponents(g);
+        g.drawImage(img, 0, 0, this.getWidth(), this.getHeight(), this);
     }
 }

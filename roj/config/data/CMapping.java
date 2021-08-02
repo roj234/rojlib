@@ -314,8 +314,8 @@ public class CMapping extends CEntry {
                 for (int i = 0; i < depth; i++) {
                     sb.append(' ');
                 }
-                sb.append(addSlash(entry.getKey())).append(':').append(' ');
-                entry.getValue().toYAML(sb, depth + 4).append('\n');
+                sb.append((CString.YAMLADDITIONALCHECK && CString.yamlAdditionalCheck(entry.getKey())) ? entry.getKey() : addSlash(entry.getKey())).append(':').append(' ');
+                entry.getValue().toYAML(sb, depth + 2).append('\n');
             }
             return sb.delete(sb.length() - 1, sb.length());
         }
@@ -327,11 +327,8 @@ public class CMapping extends CEntry {
         sb.append('{');
         if (!map.isEmpty()) {
             if (depth < 0) {
-                //int i = 0;
                 for (Map.Entry<String, CEntry> entry : map.entrySet()) {
                     sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':');
-                    //if(i++ > map.size())
-                    //    System.out.println(entry.getKey());
                     entry.getValue().toJSON(sb, -9999999).append(',');
                 }
                 sb.delete(sb.length() - 1, sb.length());

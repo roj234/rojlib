@@ -155,7 +155,7 @@ public class Context {
             if(this.data != null) {
                 try {
                     data.verify();
-                    this.result = data.getBytes();
+                    this.result = new ByteList(Parser.toByteArrayShared(data).toByteArray());
                 } catch (Throwable e) {
                     throw new IllegalArgumentException(name + " 写入失败", e);
                 }
@@ -225,7 +225,7 @@ public class Context {
     public void validateSelf() {
         try {
             getData();
-            Parser.parse(get(), 0).getBytes(new ByteList(), result);
+            result.setValue(Parser.toByteArray(Parser.parse(get())));
             getData();
         } catch (Throwable e) {
             try {

@@ -31,7 +31,8 @@ import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
 import java.util.Iterator;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -87,10 +88,6 @@ public final class VarList implements Iterable<Var> {
     public void pop(int index) {
         if (size < index) throw new IllegalArgumentException("Size will < 0 after pop.");
 
-        /*for (int i = size - index; i < size; i++) {
-            list[i] = null;
-        }*/
-
         size -= index;
     }
 
@@ -98,10 +95,6 @@ public final class VarList implements Iterable<Var> {
         if (index < 0) throw new IllegalArgumentException("Size will < 0 after pop.");
 
         ensureCapacity(index);
-
-        /*for (int i = index; i < size; i++) {
-            list[i] = null;
-        }*/
 
         size = index;
     }
@@ -125,8 +118,7 @@ public final class VarList implements Iterable<Var> {
     }
 
     public void clear() {
-        size = 0;/*
-        Arrays.fill(list, null);*/
+        size = 0;
     }
 
     @Nonnull

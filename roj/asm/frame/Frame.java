@@ -51,26 +51,22 @@ public final class Frame {
     }
 
     public String toString() {
-        StringBuilder sb = new StringBuilder("            ").append(type).append(" #").append(target);
-        //if (type != FrameType.same && type != FrameType.same_ex) {
-            //if (type != FrameType.same_local_1_stack && type != FrameType.same_local_1_stack_ex) {
-                if (locals.size > 0) {
-                    sb.append("\n              Local: ");
-                    for (int i = 0; i < locals.size; i++) {
-                        sb.append(locals.get(i)).append(", ");
-                    }
-                    sb.delete(sb.length() - 2, sb.length());
-                }
-            //}
-            sb.append('\n');
-            if (stacks.size > 0) {
-                sb.append("\n              Stack: ");
-                for (int i = 0; i < stacks.size; i++) {
-                    sb.append(stacks.get(i)).append(", ");
-                }
-                sb.delete(sb.length() - 2, sb.length());
+        StringBuilder sb = new StringBuilder("        ").append(FrameType.toString(type)).append(" #").append(target);
+        if (locals.size > 0) {
+            sb.append("\n            Local: ");
+            for (int i = 0; i < locals.size; i++) {
+                sb.append(locals.get(i)).append(", ");
             }
-        //}
+            sb.delete(sb.length() - 2, sb.length());
+        }
+        sb.append('\n');
+        if (stacks.size > 0) {
+            sb.append("\n            Stack: ");
+            for (int i = 0; i < stacks.size; i++) {
+                sb.append(stacks.get(i)).append(", ");
+            }
+            sb.delete(sb.length() - 2, sb.length());
+        }
         return sb.append('\n').toString();
     }
 }

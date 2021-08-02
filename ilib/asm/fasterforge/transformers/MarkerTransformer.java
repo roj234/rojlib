@@ -89,7 +89,7 @@ public class MarkerTransformer implements IClassTransformer {
         for (String marker : this.markers.get(name)) {
             data.interfaces.add(data.writer.getClazz(marker));
         }
-        return Parser.toByteArray(data, true);
+        return Parser.toByteArray(data);
     }
 
     public static void main(String[] args) {

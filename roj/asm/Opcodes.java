@@ -28,9 +28,8 @@ package roj.asm;
 
 import roj.text.TextUtil;
 
-// https://my.oschina.net/xionghui/blog/325563
-// Office 2010 csv/**
- * No description provided
+/**
+ * @see //my.oschina.net/xionghui/blog/325563
  *
  * @author Roj234
  * @version 0.1
@@ -38,67 +37,67 @@ import roj.text.TextUtil;
  */
 public final class Opcodes {
     public static final byte
-            NOP = (byte) 0x00,
+            NOP = 0x00,
 
     // Variable Construct
-    ACONST_NULL = (byte) 0x01,
-            ICONST_M1 = (byte) 0x02,
-            ICONST_0 = (byte) 0x03,
-            ICONST_1 = (byte) 0x04,
-            ICONST_2 = (byte) 0x05,
-            ICONST_3 = (byte) 0x06,
-            ICONST_4 = (byte) 0x07,
-            ICONST_5 = (byte) 0x08,
-            LCONST_0 = (byte) 0x09,
-            LCONST_1 = (byte) 0x0a,
-            FCONST_0 = (byte) 0x0b,
-            FCONST_1 = (byte) 0x0c,
-            FCONST_2 = (byte) 0x0d,
-            DCONST_0 = (byte) 0x0e,
-            DCONST_1 = (byte) 0x0f,
+    ACONST_NULL = 0x01,
+            ICONST_M1 = 0x02,
+            ICONST_0 = 0x03,
+            ICONST_1 = 0x04,
+            ICONST_2 = 0x05,
+            ICONST_3 = 0x06,
+            ICONST_4 = 0x07,
+            ICONST_5 = 0x08,
+            LCONST_0 = 0x09,
+            LCONST_1 = 0x0a,
+            FCONST_0 = 0x0b,
+            FCONST_1 = 0x0c,
+            FCONST_2 = 0x0d,
+            DCONST_0 = 0x0e,
+            DCONST_1 = 0x0f,
 
-    BIPUSH = (byte) 0x10,
-            SIPUSH = (byte) 0x11,
-            LDC = (byte) 0x12,
-            LDC_W = (byte) 0x13,
-            LDC2_W = (byte) 0x14,
+    BIPUSH = 0x10,
+            SIPUSH = 0x11,
+            LDC = 0x12,
+            LDC_W = 0x13,
+            LDC2_W = 0x14,
 
     // Variable Load
-    ILOAD = (byte) 0x15,
-            LLOAD = (byte) 0x16,
-            FLOAD = (byte) 0x17,
-            DLOAD = (byte) 0x18,
-            ALOAD = (byte) 0x19,
-            ILOAD_0 = (byte) 0x1a,
-            ILOAD_1 = (byte) 0x1b,
-            ILOAD_2 = (byte) 0x1c,
-            ILOAD_3 = (byte) 0x1d,
-            LLOAD_0 = (byte) 0x1e,
-            LLOAD_1 = (byte) 0x1f,
-            LLOAD_2 = (byte) 0x20,
-            LLOAD_3 = (byte) 0x21,
-            FLOAD_0 = (byte) 0x22,
-            FLOAD_1 = (byte) 0x23,
-            FLOAD_2 = (byte) 0x24,
-            FLOAD_3 = (byte) 0x25,
-            DLOAD_0 = (byte) 0x26,
-            DLOAD_1 = (byte) 0x27,
-            DLOAD_2 = (byte) 0x28,
-            DLOAD_3 = (byte) 0x29,
-            ALOAD_0 = (byte) 0x2a,
-            ALOAD_1 = (byte) 0x2b,
-            ALOAD_2 = (byte) 0x2c,
-            ALOAD_3 = (byte) 0x2d,
+    ILOAD = 0x15,
+            LLOAD = 0x16,
+            FLOAD = 0x17,
+            DLOAD = 0x18,
+            ALOAD = 0x19,
+            ILOAD_0 = 0x1a,
+            ILOAD_1 = 0x1b,
+            ILOAD_2 = 0x1c,
+            ILOAD_3 = 0x1d,
+            LLOAD_0 = 0x1e,
+            LLOAD_1 = 0x1f,
+            LLOAD_2 = 0x20,
+            LLOAD_3 = 0x21,
+            FLOAD_0 = 0x22,
+            FLOAD_1 = 0x23,
+            FLOAD_2 = 0x24,
+            FLOAD_3 = 0x25,
+            DLOAD_0 = 0x26,
+            DLOAD_1 = 0x27,
+            DLOAD_2 = 0x28,
+            DLOAD_3 = 0x29,
+            ALOAD_0 = 0x2a,
+            ALOAD_1 = 0x2b,
+            ALOAD_2 = 0x2c,
+            ALOAD_3 = 0x2d,
 
     // ArrayGet LOAD
-    IALOAD = (byte) 0x2e,
-            LALOAD = (byte) 0x2f,
-            FALOAD = (byte) 0x30,
-            DALOAD = (byte) 0x31,
-            AALOAD = (byte) 0x32,
-            BALOAD = (byte) 0x33,
-            CALOAD = (byte) 0x34,
-            SALOAD = (byte) 0x35, 
+    IALOAD = 0x2e,
+            LALOAD = 0x2f,
+            FALOAD = 0x30,
+            DALOAD = 0x31,
+            AALOAD = 0x32,
+            BALOAD = 0x33,
+            CALOAD = 0x34,
+            SALOAD = 0x35, 
 /*
 指令格式：aALOAD
 
@@ -120,11 +119,11 @@ arrayref   ：  数组的引用
 */
 
     // Variable Store
-    ISTORE = (byte) 0x36,
-            LSTORE = (byte) 0x37,
-            FSTORE = (byte) 0x38,
-            DSTORE = (byte) 0x39,
-            ASTORE = (byte) 0x3a, 
+    ISTORE = 0x36,
+            LSTORE = 0x37,
+            FSTORE = 0x38,
+            DSTORE = 0x39,
+            ASTORE = 0x3a, 
 /*
 指令格式：ASTORE index
 
@@ -139,80 +138,80 @@ arrayref   ：  数组的引用
 index：无符号一byte整数。该指令和wide联用,index可以为无符号两byte整数。
 */
 
-    ISTORE_0 = (byte) 0x3b,
-            ISTORE_1 = (byte) 0x3c,
-            ISTORE_2 = (byte) 0x3d,
-            ISTORE_3 = (byte) 0x3e,
-            LSTORE_0 = (byte) 0x3f,
-            LSTORE_1 = (byte) 0x40,
-            LSTORE_2 = (byte) 0x41,
-            LSTORE_3 = (byte) 0x42,
-            FSTORE_0 = (byte) 0x43,
-            FSTORE_1 = (byte) 0x44,
-            FSTORE_2 = (byte) 0x45,
-            FSTORE_3 = (byte) 0x46,
-            DSTORE_0 = (byte) 0x47,
-            DSTORE_1 = (byte) 0x48,
-            DSTORE_2 = (byte) 0x49,
-            DSTORE_3 = (byte) 0x4a,
-            ASTORE_0 = (byte) 0x4b,
-            ASTORE_1 = (byte) 0x4c,
-            ASTORE_2 = (byte) 0x4d,
-            ASTORE_3 = (byte) 0x4e,
+    ISTORE_0 = 0x3b,
+            ISTORE_1 = 0x3c,
+            ISTORE_2 = 0x3d,
+            ISTORE_3 = 0x3e,
+            LSTORE_0 = 0x3f,
+            LSTORE_1 = 0x40,
+            LSTORE_2 = 0x41,
+            LSTORE_3 = 0x42,
+            FSTORE_0 = 0x43,
+            FSTORE_1 = 0x44,
+            FSTORE_2 = 0x45,
+            FSTORE_3 = 0x46,
+            DSTORE_0 = 0x47,
+            DSTORE_1 = 0x48,
+            DSTORE_2 = 0x49,
+            DSTORE_3 = 0x4a,
+            ASTORE_0 = 0x4b,
+            ASTORE_1 = 0x4c,
+            ASTORE_2 = 0x4d,
+            ASTORE_3 = 0x4e,
 
-    IASTORE = (byte) 0x4f,
-            LASTORE = (byte) 0x50,
-            FASTORE = (byte) 0x51,
-            DASTORE = (byte) 0x52,
-            AASTORE = (byte) 0x53,
-            BASTORE = (byte) 0x54,
-            CASTORE = (byte) 0x55,
-            SASTORE = (byte) 0x56,
+    IASTORE = 0x4f,
+            LASTORE = 0x50,
+            FASTORE = 0x51,
+            DASTORE = 0x52,
+            AASTORE = 0x53,
+            BASTORE = 0x54,
+            CASTORE = 0x55,
+            SASTORE = 0x56,
 
     // Stack
-    POP = (byte) 0X57,
-            POP2 = (byte) 0X58,
-            DUP = (byte) 0X59,
-            DUP_X1 = (byte) 0X5A,
-            DUP_X2 = (byte) 0X5B,
-            DUP2 = (byte) 0X5C,
-            DUP2_X1 = (byte) 0X5D,
-            DUP2_X2 = (byte) 0X5E,
-            SWAP = (byte) 0X5F,
+    POP = 0X57,
+            POP2 = 0X58,
+            DUP = 0X59,
+            DUP_X1 = 0X5A,
+            DUP_X2 = 0X5B,
+            DUP2 = 0X5C,
+            DUP2_X1 = 0X5D,
+            DUP2_X2 = 0X5E,
+            SWAP = 0X5F,
 
     // Math
-    IADD = (byte) 0X60,
-            LADD = (byte) 0X61,
-            FADD = (byte) 0X62,
-            DADD = (byte) 0X63,
-            ISUB = (byte) 0X64,
-            LSUB = (byte) 0X65,
-            FSUB = (byte) 0X66,
-            DSUB = (byte) 0X67,
-            IMUL = (byte) 0X68,
-            LMUL = (byte) 0X69,
-            FMUL = (byte) 0X6A,
-            DMUL = (byte) 0X6B,
-            IDIV = (byte) 0X6C,
-            LDIV = (byte) 0X6D,
-            FDIV = (byte) 0X6E,
-            DDIV = (byte) 0X6F,
-            IREM = (byte) 0X70,
-            LREM = (byte) 0X71,
-            FREM = (byte) 0X72,
-            DREM = (byte) 0X73,
-            INEG = (byte) 0X74,
-            LNEG = (byte) 0X75,
-            FNEG = (byte) 0X76,
-            DNEG = (byte) 0X77,
-            ISHL = (byte) 0X78,
-            LSHL = (byte) 0X79,
-            ISHR = (byte) 0X7A,
-            LSHR = (byte) 0X7B,
-            IUSHR = (byte) 0X7C,
-            LUSHR = (byte) 0X7D,
-            IAND = (byte) 0X7E,
-            LAND = (byte) 0X7F,
+    IADD = 0X60,
+            LADD = 0X61,
+            FADD = 0X62,
+            DADD = 0X63,
+            ISUB = 0X64,
+            LSUB = 0X65,
+            FSUB = 0X66,
+            DSUB = 0X67,
+            IMUL = 0X68,
+            LMUL = 0X69,
+            FMUL = 0X6A,
+            DMUL = 0X6B,
+            IDIV = 0X6C,
+            LDIV = 0X6D,
+            FDIV = 0X6E,
+            DDIV = 0X6F,
+            IREM = 0X70,
+            LREM = 0X71,
+            FREM = 0X72,
+            DREM = 0X73,
+            INEG = 0X74,
+            LNEG = 0X75,
+            FNEG = 0X76,
+            DNEG = 0X77,
+            ISHL = 0X78,
+            LSHL = 0X79,
+            ISHR = 0X7A,
+            LSHR = 0X7B,
+            IUSHR = 0X7C,
+            LUSHR = 0X7D,
+            IAND = 0X7E,
+            LAND = 0X7F,
             IOR = (byte) 0X80,
             LOR = (byte) 0X81,
             IXOR = (byte) 0X82,
@@ -541,10 +540,13 @@ index：无符号一byte整数。该指令和wide联用,index可以为无符号�
         return b;
     }
 
-
     public static String toString0(byte code, Object... x) {
-        StringBuilder s = new StringBuilder(toString0(code));
-        for (int i = 0; i < s.length(); i++) {
+        String sx = toString0(code);
+        int i = sx.indexOf('$');
+        if(i == -1)
+            return sx;
+        StringBuilder s = new StringBuilder(sx);
+        for (; i < s.length(); i++) {
             char c = s.charAt(i);
             if (c == '$') {
                 int o = TextUtil.getNumber(s.charAt(i + 1));
@@ -561,11 +563,9 @@ index：无符号一byte整数。该指令和wide联用,index可以为无符号�
     }
 
     public static String toString0(byte code) {
-        return byId[byId(code) & 0xFF];
-    }
-
-    @Deprecated
-    public static byte valueOf(String name) {
-        return 0;
+        String x = byId[code & 0xFF];
+        if(x == null)
+            throw new IllegalStateException("Unknown bytecode 0x" + Integer.toHexString(code));
+        return x;
     }
 }

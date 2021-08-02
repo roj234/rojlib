@@ -107,7 +107,7 @@ public class MCLauncher extends JFrame {
 
     public MCLauncher() {
         super("Roj234的启动器 " + VERSION);
-        UIUtil.setLogo(this, "FMD_logo.png");
+        UIUtil.setLogo(this, "MCL_logo.png");
 
         JButton button = new JButton("启动");
         button.addActionListener(MCLauncher::runClient);
@@ -144,13 +144,12 @@ public class MCLauncher extends JFrame {
         button.setToolTipText("终止MC进程");
         add(button);
 
+        setMinimumSize(new Dimension(240, 100));
         pack();
         setLayout(new FlowLayout());
         setResizable(true);
         setBounds(700, 500, 320, 100);
         setVisible(true);
-
-        validate();
     }
 
     // region Select version

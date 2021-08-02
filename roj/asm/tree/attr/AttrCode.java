@@ -31,7 +31,6 @@ import roj.asm.cst.*;
 import roj.asm.frame.*;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.insn.*;
-import roj.asm.type.Type;
 import roj.asm.util.*;
 import roj.collect.*;
 import roj.util.ByteList;
@@ -178,7 +177,10 @@ public class AttrCode extends Attribute {
         ArrayList<ExceptionEntry> exs = this.exceptions;
         for (int i = 0; i < exs.size(); i++) {
             ExceptionEntry ex = exs.get(i);
-            w.writeShort(pcRev.getInt(InsnNode.validate(ex.start))).writeShort(pcRev.getInt(InsnNode.validate(ex.end))).writeShort(pcRev.getInt(InsnNode.validate(ex.handler))).writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : pool.getClassId(ex.type));
+            w.writeShort(pcRev.getInt(InsnNode.validate(ex.start)))
+             .writeShort(pcRev.getInt(InsnNode.validate(ex.end)))
+             .writeShort(pcRev.getInt(InsnNode.validate(ex.handler)))
+             .writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : pool.getClassId(ex.type));
         }
 
         int index = list.pos();
@@ -282,7 +284,7 @@ public class AttrCode extends Attribute {
                 node.preToByteArray(pool, w);
             }
 
-            if(j++ > 5) {
+            if(j++ > 2) {
                 throw new IllegalArgumentException("Unable to correct bytecode order for " + (owner == null ? "<unknown>" : owner.ownerClass() + '.' + owner.name()));
             }
         } while (reccIdx != -1 && insn.get(reccIdx + 1).handlePCRev(pcRev));
@@ -302,42 +304,19 @@ public class AttrCode extends Attribute {
     private void recalculateFrames(ToIntMap<InsnNode> pcRev) {
         this.frames.clear();
 
-        FrameTraverser calculator;
-        {
-            List<Type> list = new SimpleList<>();
-            boolean isStatic = owner.access().hasAll(AccessFlag.STATIC);
-            if (!isStatic) // this
-                list.add(new Type(owner.ownerClass(), 0));
-            List<Type> types = owner.parameters();
-            list.addAll(types);
-
-            calculator = new FrameTraverser(owner.ownerClass(), owner.parentClass());
-            calculator.init(list, isStatic, owner.name().equals("<init>"), getFirstFrame());
-        }
+        FrameTraverser ft = new FrameTraverser();
+        ft.init(owner);
 
         try {
-            frames.addAll(calculator.collect(instructions, getFirstFrame().target, exceptions, true, pcRev));
+            frames.addAll(ft.collect(instructions, exceptions, true, pcRev));
         } catch (Throwable e) {
-
-            List<Type> list = new SimpleList<>();
-            boolean isStatic = owner.access().hasAll(AccessFlag.STATIC);
-            if (!isStatic) // this
-                list.add(new Type(owner.ownerClass(), 0));
-            List<Type> types = owner.parameters();
-            list.addAll(types);
-
-            calculator = new FrameTraverser(owner.ownerClass(), owner.parentClass());
-            calculator.init(list, isStatic, owner.name().equals("<init>"), getFirstFrame());
-
-            frames.addAll(calculator.collect(instructions, getFirstFrame().target, exceptions, true, pcRev));
-
+            e.printStackTrace();
+            //ft.init(owner);
+            //ft.collect(instructions, exceptions, true, pcRev);
         }
-        System.out.println("====Method " + owner.name());
-        System.out.println(getFirstFrame());
-        System.out.println("======================");
+        System.out.println("===================================");
         System.out.println(frames);
         System.out.println("===================================");
-
     }
 
     protected IntBiMap<InsnNode> parseCode(ConstantPool pool, ByteList data) {
@@ -439,57 +418,27 @@ public class AttrCode extends Attribute {
             }
         }
 
-        FrameTraverser fc;
-        {
-            List<Type> list = new SimpleList<>();
-            boolean isStatic = owner.access().hasAll(AccessFlag.STATIC);
-            if (!isStatic) // this
-                list.add(new Type(owner.ownerClass(), 0));
-            List<Type> types = owner.parameters();
-            list.addAll(types);
-
-            fc = new FrameTraverser(owner.ownerClass(), owner.parentClass());
-            fc.init(list, isStatic, owner.name().equals("<init>"), null);
-        }
+        FrameTraverser ft = new FrameTraverser();
+        ft.init(owner);
 
         try {
             o:
             for (int i = 0; i < insn.size();) {
-                InsnNode node = insn.get(i++);
-                int flag = fc.visitNode(node, false);
-                switch (flag) {
+                switch (ft.visitNode(insn.get(i++), false)) {
                     case 1: // return
                     case 2: // goto
                     case 3: // if
-                        this.firstFrame = fc.build(null);
+                        this.firstFrame = ft.build(null);
                         break o;
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            ft.init(owner);
 
-            {
-                List<Type> list = new SimpleList<>();
-                boolean isStatic = owner.access().hasAll(AccessFlag.STATIC);
-                if (!isStatic) // this
-                    list.add(new Type(owner.ownerClass(), 0));
-                List<Type> types = owner.parameters();
-                list.addAll(types);
-
-                fc.init(list, isStatic, owner.name().equals("<init>"), null);
-            }
-
-            o:
             for (int i = 0; i < insn.size();) {
-                InsnNode node = insn.get(i++);
-                int flag = fc.visitNode(node, true);
-                switch (flag) {
-                    case 2: // goto
-                    case 3: // if
-                        //node = i >= insn.size() ? null : insn.get(i);
-                    case 1: // return
-                        this.firstFrame = fc.build(null);
-                        break o;
+                switch (ft.visitNode(insn.get(i++), true)) {
+                    case 1: case 2: case 3:
+                        ft.build(null);
                 }
             }
         }
@@ -846,14 +795,15 @@ public class AttrCode extends Attribute {
                 break;
                 case FrameType.full: {
                     offset = r.readUnsignedShort();
-                    int count = r.readUnsignedShort();
 
                     curr.locals.clear();
                     curr.stacks.clear();
 
+                    int count = r.readUnsignedShort();
                     if (count > localSize)
                         throw new IllegalStateException(owner.ownerClass() + '.' + owner.name() + ": Frame local (" + count + ") > maximum local variable size (" + localSize + ")");
 
+                    curr.locals.ensureCapacity(count);
                     while (count > 0) {
                         count--;
                         curr.locals.add(getVType(pool, r, pcCounter));
@@ -862,6 +812,8 @@ public class AttrCode extends Attribute {
                     count = r.readUnsignedShort();
                     if (count > stackSize)
                         throw new IllegalStateException(owner.ownerClass() + '.' + owner.name() + ": Frame stack (" + count + ") > maximum operand stack size (" + stackSize + ")");
+
+                    curr.locals.ensureCapacity(count);
                     while (count > 0) {
                         count--;
                         curr.stacks.add(getVType(pool, r, pcCounter));
@@ -902,26 +854,27 @@ public class AttrCode extends Attribute {
 
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        for (InsnNode node : instructions) {
-            sb.append("    ").append(node).append('\n');
+        for (int i = 0; i < instructions.size(); i++) {
+            sb.append("    ").append(i).append(' ').append(instructions.get(i)).append('\n');
         }
         if (!exceptions.isEmpty()) {
-            sb.append("Exception Handlers: \n");
+            sb.append("    Exception Handlers: \n");
             for (ExceptionEntry ex : exceptions) {
-                sb.append("    ").append(ex).append('\n');
+                sb.append("        ").append(ex).append('\n');
             }
         } else if (attributes.getByName("LocalVariableTable") != null)
-            sb.append("LVT: ").append(((AttrLocalVars) attributes.getByName("LocalVariableTable")).toString((AttrLocalVars) attributes.getByName("LocalVariableTypeTable")));
+            sb.append("    LVT: ").append(((AttrLocalVars) attributes.getByName("LocalVariableTable")).toString((AttrLocalVars) attributes.getByName("LocalVariableTypeTable")));
         if (frames != null) {
-            sb.append("         StackMapTable: \n");
-            for (Frame frame : frames) {
-                sb.append(frame);
+            sb.append("    StackMapTable: \n");
+            for (int i = 0; i < frames.size(); i++) {
+                sb.append(frames.get(i));
             }
         }
         if (attributes.getByName("Exceptions") != null) {
-            sb.append("         Throws: \n");
-            for (String str : ((AttrStringList) attributes.getByName("Exceptions")).classes) {
-                sb.append("            ").append(str).append('\n');
+            sb.append("    Throws: \n");
+            List<String> classes = ((AttrStringList) attributes.getByName("Exceptions")).classes;
+            for (int i = 0; i < classes.size(); i++) {
+                sb.append("        ").append(classes.get(i)).append('\n');
             }
         }
         return sb.toString();

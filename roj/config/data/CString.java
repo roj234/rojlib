@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.YAMLParser;
 import roj.config.word.AbstLexer;
 import roj.math.MathUtils;
 
@@ -101,7 +102,44 @@ public final class CString extends CEntry {
 
     @Override
     public StringBuilder toYAML(StringBuilder sb, int depth) {
-        return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
+        if(!YAMLADDITIONALCHECK || !yamlAdditionalCheck(value))
+            return toJSON(sb, depth);
+        return sb.append(value);
+    }
+
+    static final boolean YAMLADDITIONALCHECK = System.getProperty("roj.config.noYamlAddChk") == null;
+    static boolean yamlAdditionalCheck(CharSequence value) {
+        if(value.length() == 0)
+            return false;
+        if(value.length() >= 4 && value.length() <= 5) {
+            switch (value.toString()) {
+                case "null":
+                case "Null":
+                case "NULL":
+                case "true":
+                case "True":
+                case "TRUE":
+                case "false":
+                case "False":
+                case "FALSE":
+                    return false;
+            }
+        }
+        if((value.length() == 1 ? YAMLParser.YAML_SPEC_CHARS_NOT_SINGLE : YAMLParser.YAML_SPEC_CHARS_NOT_BEGIN).indexOf(value.charAt(0)) != -1)
+            return false;
+
+        char last = value.charAt(value.length() - 1);
+        if (AbstLexer.WHITESPACE.contains(last)) {
+            return false;
+        }
+
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '\r' || c == '\n') {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

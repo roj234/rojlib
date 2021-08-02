@@ -42,7 +42,7 @@ public class EventSubscriberTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
-        ConstantData classNode = Parser.parseConstants(basicClass, true);
+        ConstantData classNode = Parser.parseConstants(basicClass);
         boolean isSubscriber = false;
         for (MethodSimple methodNode : classNode.methods) {
             Attribute attr = methodNode.attrByName("RuntimeVisibleAnnotations");

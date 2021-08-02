@@ -57,7 +57,7 @@ public class PFClassMerger {
                 if (s.containsKey(ms.name.getString())) orig.methods.remove(i--);
             }
             orig.methods.addAll(Helpers.cast(s.values()));
-            Clazz compress = Parser.parse(orig.getBytes(), 0);
+            Clazz compress = Parser.parse(orig.getBytes());
             modified.put(ze.getName(), compress.getBytes());
         }
 

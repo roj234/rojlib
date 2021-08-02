@@ -137,7 +137,7 @@ public class Transformer implements IFasterClassTransformer {
     }
 
     private byte[] transformEntityDataManager(byte[] basicClass) {
-        Clazz clazz = Parser.parse(basicClass, 0);
+        Clazz clazz = Parser.parse(basicClass);
         /*for(Method method : clazz.methods) {
             if(method.name.equals("")) {
 
@@ -303,7 +303,7 @@ public class Transformer implements IFasterClassTransformer {
 
     private static ByteList transformMinecart(ByteList basicClass) {
         logger.debug("Changing class net.minecraft.entity.item.EntityMinecart");
-        Clazz cn = Parser.parse(basicClass, 0);
+        Clazz cn = Parser.parse(basicClass);
 
         for (Method mn : cn.methods) {
             // find srg
@@ -339,7 +339,7 @@ public class Transformer implements IFasterClassTransformer {
      */
     private static ByteList transformWC(ByteList basicClass) {
         logger.debug("Changing class net/minecraft/client/multiplayer/WorldClient");
-        Clazz cn = Parser.parse(basicClass, 0);
+        Clazz cn = Parser.parse(basicClass);
 
         for (Method mn : cn.methods) {
             if (mn.name.equals("<init>")) {

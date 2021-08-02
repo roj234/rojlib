@@ -25,6 +25,7 @@
  */
 package roj.mod;
 
+import roj.asm.Parser;
 import roj.asm.annotation.AnnotationProcessor;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
@@ -146,12 +147,15 @@ public final class FMDMain {
 
         switch (args[0]) {
             case "build":
+            case "b":
                 exitCode = build(buildArgs(args));
                 break;
             case "run":
+            case "r":
                 exitCode = run(buildArgs(args));
                 break;
             case "changeVersion":
+            case "cv":
                 exitCode = changeVersion();
                 break;
             case "f2m":
@@ -663,7 +667,7 @@ public final class FMDMain {
 
                 for (int i = 0; i < modified.size(); i++) {
                     ConstantData data = modified.get(i);
-                    aoc.append(data.name, data.getBytes());
+                    aoc.append(data.name, Parser.toByteArrayShared(data));
                 }
 
                 File lck = new File(hrTmp, "mod.lck");
@@ -685,9 +689,11 @@ public final class FMDMain {
      * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
      */
     public static boolean compile(Map<String, ?> args, Project project, File jarDest, int flag) throws IOException, InterruptedException {
-        watcher.pause(!args.containsKey("zl"));
         // 前置
         if((flag & 2) == 0) {
+            if(!args.containsKey("zl"))
+                watcher.reset();
+
             if(args.containsKey("zl") && !isMain)
                 CmdUtil.info("增量编译! ", false);
             for (Project proj : project.getAllDependencies()) {
@@ -701,9 +707,6 @@ public final class FMDMain {
 
         // 输出目录存在性
         File binary = project.binary;
-        if(args.containsKey("clearBin")) {
-            CmdUtil.warning("清除bin目录已被弃用,此功能已能够自动在build时执行");
-        }
         if(!binary.isDirectory()) {
             if(!binary.mkdirs() && !binary.delete() && !binary.mkdirs()) {
                 CmdUtil.error("无法创建编译目录");
@@ -916,7 +919,8 @@ public final class FMDMain {
                 Map<String, ByteList> entries = Helpers.cast(resources);
 
                 for (Map.Entry<String, ?> entry : entries.entrySet()) {
-                    entry.setValue(Helpers.cast(new ByteList((byte[]) entry.getValue())));
+                    if((Object)entry.getValue() instanceof byte[])
+                        entry.setValue(Helpers.cast(new ByteList((byte[]) entry.getValue())));
                 }
 
                 for (int i = 0; i < list.size(); i++) {
@@ -946,6 +950,10 @@ public final class FMDMain {
                     CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
                 }
 
+                for (int i = 0; i < list.size(); i++) {
+                    entries.remove(list.get(i).getName());
+                }
+
                 if(args.containsKey("_HOT_RELOAD_ENABLE_")) {
                     List<ConstantData> dst = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
                     for (Context data : list) {
@@ -955,9 +963,9 @@ public final class FMDMain {
                     }
                 }
             } else {
-                for (String s : classes.keySet()) {
-                    if (resources.remove(s) != null) {
-                        CmdUtil.warning("发现重复的文件 " + s);
+                for (int i = 0; i < list.size(); i++) {
+                    if (resources.remove(list.get(i).getName()) != null) {
+                        CmdUtil.warning("发现重复的文件 " + list.get(i).getName());
                     }
                 }
 

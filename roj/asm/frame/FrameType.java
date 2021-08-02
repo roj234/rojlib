@@ -66,4 +66,29 @@ public class FrameType {
         }
         throw new IllegalArgumentException("Undefined frame type" + b1);
     }
+
+    public static String toString(int type) {
+        if((type & 128) == 0) {
+            // 64 - 127
+            return (type & 64) == 0 ? "same" : "same_local_1_stack";
+            // 0 - 63
+        }
+        switch (type) {
+            case 247:
+                return "same_local_1_stack_ex";
+            case 248:
+            case 249:
+            case 250:
+                return "chop " + (type - 247);
+            case 251:
+                return "same_ex";
+            case 252:
+            case 253:
+            case 254:
+                return "append " + (type - 251);
+            case 255:
+                return "full";
+        }
+        throw new IllegalArgumentException("Undefined frame type" + type);
+    }
 }

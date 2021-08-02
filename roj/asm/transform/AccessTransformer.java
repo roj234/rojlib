@@ -113,22 +113,18 @@ public class AccessTransformer {
 
 
     public static byte[] openSubClass(final byte[] bytecode, Collection<String> names) {
-        ConstantData data = Parser.parseConstants(bytecode, true);
+        ConstantData data = Parser.parseConstants(bytecode);
         Attribute attribute = data.attrByName("InnerClasses");
         AttrInnerClasses ic = new AttrInnerClasses(new ByteReader(attribute.getRawData()), data.cp);
         data.addAttribute(ic);
-        //System.out.println(names);
         for (AttrInnerClasses.InnerClass innerClass : ic.classes) {
-            //System.out.println(innerClass);
             if (names.contains(innerClass.self)) {
                 FlagList list = new FlagList(innerClass.flags);
                 list.remove(AccessFlag.FINAL | AccessFlag.PRIVATE | AccessFlag.PROTECTED);
                 list.add(AccessFlag.PUBLIC);
                 innerClass.flags = list.flag;
-                //System.out.println("InnerClass: " + innerClass);
             }
         }
-        //System.out.println(data.attrByName("InnerClasses"));
         return Parser.toByteArray(data);
     }
 

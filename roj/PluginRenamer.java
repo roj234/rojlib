@@ -67,7 +67,7 @@ public class PluginRenamer {
                     cl.clear();
                     ByteReader.decodeUTF(-1, cl, bl);
 
-                    CMapping map = YAMLParser.parse(cl);
+                    CMapping map = YAMLParser.parse(cl).asMap();
 
                     String newFileName = map.getString("name") + '-' + map.getString("version") + name.substring(name.lastIndexOf('.'));
 

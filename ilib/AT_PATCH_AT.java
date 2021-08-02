@@ -116,7 +116,7 @@ public class AT_PATCH_AT implements IClassTransformer {
             return bytes;
         if (DEBUG)
             FMLLog.log.debug("Considering all methods and fields on {} ({})", transformedName, name);
-        ConstantData data = Parser.parseConstants(bytes, true);
+        ConstantData data = Parser.parseConstants(bytes);
         Collection<Modifier> mods = this.modifiers.get(transformedName);
         for (Modifier m : mods) {
             if (m.modifyClassVisibility) {
@@ -165,7 +165,7 @@ public class AT_PATCH_AT implements IClassTransformer {
             if (!nowOverrideable.isEmpty())
                 replaceInvokeSpecial(data, nowOverrideable);
         }
-        return Parser.toByteArray(data, true);
+        return Parser.toByteArray(data);
     }
 
     private void replaceInvokeSpecial(ConstantData clazz, List<MethodSimple> toReplace) {

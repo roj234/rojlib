@@ -207,7 +207,7 @@ public final class UnverifiedCompiler {
 
     private static void createUnsafe(String arg) throws IOException {
         final File file = new File(arg + "/roj/reflect/misc/Unsafe.class");
-        Clazz clz = Parser.parse(IOUtil.readFile(file), 0);
+        Clazz clz = Parser.parse(IOUtil.readFile(file));
 
         if (clz.methods.size() < 4) return;
 

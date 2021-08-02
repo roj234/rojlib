@@ -553,8 +553,12 @@ public final class ConstMapper extends Mapping {
         for (int i = 0; i < methods.size(); i++) {
             MethodSimple method = methods.get(i);
             if (method.accesses.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
-                if (!classMap.containsKey(data.name))
+                if (!classMap.containsKey(data.name)) {
+                    if (DEBUG) {
+                        System.out.println("[2M-" + data.name + "-SF]: " + method.name.getString() + method.type.getString());
+                    }
                     selfSkipMethods.add(new MtDesc(data.name, method.name.getString(), method.type.getString()));
+                }
                 continue;
             }
 
@@ -951,6 +955,7 @@ public final class ConstMapper extends Mapping {
                             throw new RuntimeException("[ConstMapper.Error]缺少必须的class: " + md);
                         if (md.flags.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
                             // static / private 无法继承
+                            m.owner = data.name;
                             libSkipMethods.add(m);
 
                             m = new MtDesc("", "", "");
@@ -958,6 +963,7 @@ public final class ConstMapper extends Mapping {
                             // only 同一个package
                             if (!Util.arePackagesSame(data.name, parent)) {
                                 // 非同package不能调用
+                                m.owner = data.name;
                                 libSkipMethods.add(m);
 
                                 m = new MtDesc("", "", "");
@@ -1114,9 +1120,11 @@ public final class ConstMapper extends Mapping {
         long hash = 0;
         for (int i = 0; i < list.size(); i++) {
             File f = list.get(i);
-            hash = 31 * hash + f.getName().hashCode();
-            hash = 31 * hash + (f.length() & 262143);
-            hash ^= f.lastModified();
+            if(f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
+                hash = 31 * hash + f.getName().hashCode();
+                hash = 31 * hash + (f.length() & 262143);
+                hash ^= f.lastModified();
+            }
         }
 
         return hash;

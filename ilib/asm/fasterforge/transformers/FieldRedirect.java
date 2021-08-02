@@ -61,7 +61,7 @@ public class FieldRedirect implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (!this.clsName.equals(transformedName))
             return basicClass;
-        ConstantData classNode = Parser.parseConstants(basicClass, true);
+        ConstantData classNode = Parser.parseConstants(basicClass);
         FieldSimple fieldRef = null;
         for (FieldSimple f : classNode.fields) {
             if (this.fieldType.equals(f.type.getString()) && fieldRef == null) {
@@ -109,7 +109,7 @@ public class FieldRedirect implements IClassTransformer {
                 }
             }
         }
-        return Parser.toByteArray(classNode, true);
+        return Parser.toByteArray(classNode);
     }
 
 }

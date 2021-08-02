@@ -55,6 +55,9 @@ import static roj.config.JSONParser.unexpected;
  * @since 2021/7/7 2:03
  */
 public class YAMLParser {
+    public static final String YAML_SPEC_CHARS = "~+-[]{},;?<>&*:|!";
+    public static final String YAML_SPEC_CHARS_NOT_BEGIN = "[]{},>&*|!'\"\r\n\t";
+    public static final String YAML_SPEC_CHARS_NOT_SINGLE = "~-[]{},>&*|!'\"\r\n\t";
     static final short
             TRUE = 10,
             FALSE = 11,
@@ -73,7 +76,8 @@ public class YAMLParser {
     multiline = 24,
     multiline_clump = 25,
     multiline_keep = 26,
-    multiline_trim = 27;
+    multiline_trim = 27,
+    force_cast = 28;
 
     public static void main(String[] args) throws ParseException, IOException {
         CharList yaml = new CharList();
@@ -82,7 +86,7 @@ public class YAMLParser {
         System.out.print("YML = " + parse(yaml).toYAML());
     }
 
-    public static CMapping parse(CharSequence string) throws ParseException {
+    public static CEntry parse(CharSequence string) throws ParseException {
         return parse(new YAMLLexer().init(string), 0);
     }
 
@@ -90,12 +94,12 @@ public class YAMLParser {
      * @param flag <BR>
      *             1: 解析注释 <BR>
      *             2: 仁慈模式 <BR>
-     *             4: 去除空格 <BR>
+     *             4: null <BR>
      *             8: 复k报错 <BR>
      */
-    public static CMapping parse(YAMLLexer wr, int flag) throws ParseException {
+    public static CEntry parse(YAMLLexer wr, int flag) throws ParseException {
         wr.flag = (short) flag;
-        CMapping ce = yamlObject(wr, (byte) flag & 8);
+        CEntry ce = yamlRead(wr, (byte) (flag & 10));
         if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
@@ -105,7 +109,7 @@ public class YAMLParser {
     /**
      * 解析流式数组定义
      */
-    static CList yamlFlowArray(YAMLLexer wr, int flag) throws ParseException {
+    static CList yamlFlowArray(YAMLLexer wr, byte flag) throws ParseException {
         CList list = new CList();
 
         boolean more = false;
@@ -137,7 +141,7 @@ public class YAMLParser {
      * 解析流式对象定义
      */
     @SuppressWarnings("fallthrough")
-    static CMapping yamlFlowObject(YAMLLexer wr, int flag) throws ParseException {
+    static CMapping yamlFlowObject(YAMLLexer wr, byte flag) throws ParseException {
         CMapping map = new CMapping();
 
         boolean more = false;
@@ -163,7 +167,7 @@ public class YAMLParser {
                     unexpected(wr, name.val(), "字符串");
             }
 
-            if((flag & 2) != 0 && map.containsKey(name.val()))
+            if((flag & 8) != 0 && map.containsKey(name.val()))
                 throw wr.err("重复的key: " + name.val());
 
             more = false;
@@ -179,9 +183,7 @@ public class YAMLParser {
             ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
             if (deserializer != null) {
                 return new CObject<>(map, deserializer);
-            }/* else {
-                // warning
-            }*/
+            }
         }
 
         return map;
@@ -193,11 +195,10 @@ public class YAMLParser {
      *    - cmw :
      *       - xyz
      */
-    static CList yamlLineArray(YAMLLexer wr, int flag) throws ParseException {
+    static CList yamlLineArray(YAMLLexer wr, byte flag) throws ParseException {
         CList list = new CList();
 
-        wr.checkLine();
-        int selfOff = wr.off;
+        int selfOff = wr.getLineOffset();
 
         while (true) {
             Word w = wr.nextWord();
@@ -209,20 +210,29 @@ public class YAMLParser {
                  *
                  * def: ...
                  */
-                //if(wr.line == 0) {
-                    wr.retractWord();
-                    break;
-                //}
-                //unexpected(wr, w.val(), "-");
+                wr.retractWord();
+                break;
             }
 
-            list.add(yamlRead(wr, flag | 4));
+            wr.nextWord();
+            int off = wr.getLineOffset(wr.index);
+            wr.retractWord();
+            if(off < selfOff) {
+                list.add(CNull.NULL);
+            } else {
+                wr.flag |= YAMLLexer.TEXT_MODE;
+                list.add(yamlRead(wr, flag));
+            }
 
-            String v = wr.checkLine().val();
-            if (wr.off < selfOff) {
+            off = wr.getLineOffset();
+            if (off < selfOff) {
                 break;
-            } else if(wr.off != selfOff || wr.line == wr.lastLine) {
-                unexpected(wr, v, "\\n");
+            } else if(off != selfOff) {
+                w = wr.nextWord();
+                if(w.type() == WordPresets.EOF)
+                    return list;
+                wr.retractWord();
+                throw wr.err("缩进有误: " + w);
             }
         }
 
@@ -235,11 +245,10 @@ public class YAMLParser {
      * c : x
      */
     @SuppressWarnings("fallthrough")
-    static CMapping yamlObject(YAMLLexer wr, int flag) throws ParseException {
+    static CEntry yamlObject(YAMLLexer wr, byte flag) throws ParseException {
         CMapping map = new CMapping();
 
-        wr.checkLine();
-        int selfOff = wr.off;
+        int selfOff = wr.getLineOffset();
 
         while (true) {
             Word name = wr.nextWord().copy();
@@ -253,17 +262,14 @@ public class YAMLParser {
                     name = wr.nextWord();
                     if (name.type() != ref)
                         unexpected(wr, name.val(), "*");
-                    name = wr.nextWord();
-                    if (name.type() != WordPresets.LITERAL && name.type() != WordPresets.STRING)
-                        unexpected(wr, name.val(), "字符串");
                     // <<: *xxx
                     // 固定搭配
                     CEntry entry = wr.anchors.get(name.val());
                     if(entry == null)
                         throw wr.err("不存在的锚点 " + name.val());
+                    if(!entry.getType().fits(Type.MAP))
+                        throw wr.err("锚点 " + name.val() + " 无法转换为map");
                     map.raw().putAll(entry.asMap().raw());
-                    //wr.checkLine();
-
                     break;
                 case WordPresets.LITERAL:
                 case WordPresets.STRING:
@@ -274,26 +280,24 @@ public class YAMLParser {
                     if (w.type() != colon)
                         unexpected(wr, w.val(), ":");
 
-                    map.put(name.val(), yamlRead(wr, flag | 3));
+                    wr.flag |= YAMLLexer.TEXT_MODE;
+                    map.put(name.val(), yamlRead(wr, flag));
                     break;
                 case WordPresets.EOF:
-                    if((flag & 1) == 0)
-                        return map;
+                    return map;
                 default:
                     unexpected(wr, name.val(), "字符串");
             }
 
-            String v = wr.checkLine().val();
-            if (wr.off < selfOff) {
+            int off = wr.getLineOffset();
+            if (off < selfOff) {
                 break;
-            } else if(wr.off != selfOff || wr.line == wr.lastLine) {
-                if(!wr.hasNext() && (flag & 1) == 0)
+            } else if(off != selfOff) {
+                Word w = wr.nextWord();
+                if(w.type() == WordPresets.EOF)
                     return map;
-                System.out.println(wr.off);
-                System.out.println(selfOff);
-                System.out.println(wr.line);
-                System.out.println(wr.lastLine);
-                unexpected(wr, v, "\\n");
+                wr.retractWord();
+                throw wr.err("缩进有误: " + w);
             }
         }
 
@@ -301,20 +305,43 @@ public class YAMLParser {
             ObjSerializer<?> ser = ObjSerializer.REGISTRY.get(map.getString("=="));
             if (ser != null) {
                 return new CObject<>(map, ser);
-            }/* else {
-                // warning
-            }*/
+            }
         }
 
         return map;
     }
 
-    // flag 2: is map
-    // flag 4: is list
-    private static CEntry yamlRead(YAMLLexer wr, int flag) throws ParseException {
+    private static CEntry yamlRead(YAMLLexer wr, byte flag) throws ParseException {
         Word w = wr.nextWord();
         String cnt = w.val();
         switch (w.type()) {
+            case force_cast: {
+                if(cnt == null)
+                    throw wr.err("!![null] 怎么会呢?");
+                CEntry entry = yamlRead(wr, flag);
+                assert entry != null;
+                switch (cnt) {
+                    case "str":
+                        return CString.valueOf(entry.asString());
+                    case "float":
+                        return CDouble.valueOf(entry.asDouble());
+                    case "int":
+                        return CInteger.valueOf(entry.asInteger());
+                    case "bool":
+                        return CBoolean.valueOf(entry.asBool());
+                    case "map":
+                        return entry.asMap();
+                    case "set":
+                        CMapping map = entry.asMap();
+                        for (CEntry entry1 : map.values()) {
+                            if(entry1 != CNull.NULL)
+                                throw wr.err("无法转换为set: 值不是null: " + entry1.toShortJSON());
+                        }
+                        return map;
+                    default:
+                        throw wr.err("我不知道你要转换成啥, 支持 str float int bool map set: " + cnt);
+                }
+            }
             case WordPresets.COMMENT:
                 return new CComment(cnt);
             case left_m_bracket:
@@ -325,17 +352,22 @@ public class YAMLParser {
             case WordPresets.LITERAL: {
                 int i = wr.lastWord;
                 if(wr.nextWord().type() == colon) {
-                    w = wr.checkLineOnce();
-                    if(w.getIndex() == wr.off) {
-                        System.out.println("SameLevelInterrupt");
-                        return null;
+                    if(i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
+                        throw wr.err("映射没有换行");
                     }
                     wr.index = i;
-                    // todo
-                    System.out.println("NextLevelOfMapCheck");
+                    if(wr.checkLine(i)) {
+                        return CNull.NULL;
+                    }
+
                     return yamlObject(wr, flag);
                 } else {
                     wr.retractWord();
+                    int i1 = cnt.indexOf(':');
+                    if(i1 > 0 && i1 < cnt.length() - 1 && wr.checkLine(i)) {
+                        throw wr.err("可能有误判... 无效的map: 缺少空格");
+                    }
+
                     return CString.valueOf(cnt);
                 }
             }
@@ -353,71 +385,48 @@ public class YAMLParser {
                 return CNull.NULL;
             case delim: {
                 int i = wr.lastWord;
-
-                wr.checkLine();
-
+                if(wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
+                    throw wr.err("列表没有换行");
+                }
+                if(wr.checkLine(i)) {
+                    wr.index = i;
+                    return CNull.NULL;
+                }
                 wr.index = i;
-                if (wr.line > wr.lastLine) {
-                    return yamlLineArray(wr, flag);
-                }
-                unexpected(wr, cnt);
-                return null;
+                return yamlLineArray(wr, flag);
             }
-            // only for YamlList
             case anchor: {
-                int i = wr.lastWord;
-                w = wr.nextWord();
-                if (w.type() != WordPresets.LITERAL && w.type() != WordPresets.STRING)
-                    unexpected(wr, w.val(), "字符串");
-                switch (wr.charAt(i - 1)) {
-                    case '-':
-                        // list entry
-                        String v = w.val();
-                        CEntry val = yamlRead(wr, flag);
-                        wr.anchors.put(v, val);
-                        //System.out.println("CreateListAnchor '" + v + "' : " + val);
-                        return val;
-                    case ':':
-                        // list or map itself
-                        // todo
-                        System.out.println("ListOrMapItself " + w.val());
-                        wr.state = w.val();
-                        return null;
-                    default:
-                        throw wr.err("未预料的情况! 如果你知道这符合语法, 请报告给作者 c=" + wr.charAt(i - 1));
-                }
+                CEntry val = yamlRead(wr, flag);
+                wr.anchors.put(cnt, val);
+                return val;
             }
             case ref: {
-                w = wr.nextWord();
-                if (w.type() != WordPresets.LITERAL && w.type() != WordPresets.STRING)
-                    unexpected(wr, w.val(), "字符串");
-                // <<: *xxx
-                // 固定搭配
-                CEntry entry = wr.anchors.get(w.val());
+                CEntry entry = wr.anchors.get(cnt);
                 if(entry == null)
-                    throw wr.err("不存在的锚点 " + w.val());
+                    throw wr.err("不存在的锚点 " + cnt);
                 return entry;
             }
             case multiline:      // shorten last \n to one
             case multiline_clump:// not keep \n between content line
             case multiline_keep: // keep all last \n
             case multiline_trim: // remove last \n
-                return CString.valueOf(wr.readMultiLine(w.type()).val());
+                return CString.valueOf(wr.readMultiLine(w.type()));
             default:
                 unexpected(wr, cnt);
                 return null;
         }
     }
 
-    private static final class YAMLLexer extends Lexer {
-        static final IBitSet SPECIAL = LongBitSet.from("+-\\/*()!~`#^&,<>.?\"':;|[]"),
+    public static final class YAMLLexer extends Lexer {
+        public static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
+                                SPECIAL_0 = LongBitSet.from(YAML_SPEC_CHARS_NOT_BEGIN),
+                                SPECIAL_1 = LongBitSet.from(YAML_SPEC_CHARS_NOT_SINGLE),
                                 DATE1 = LongBitSet.from("-Tt\r\n"),
                                 DATE2 = LongBitSet.from(":.\r\n");
 
-        static final int COMMENT = 1, LENIENT = 2, TRIM_BEGIN_SPACE = 4;
+        static final int COMMENT = 1, LENIENT = 2, TEXT_MODE = 4;
 
         short flag;
-        Object state;
         int[] dateBuffer = new int[3];
         MyHashMap<String, CEntry> anchors = new MyHashMap<>();
 
@@ -458,7 +467,7 @@ public class YAMLParser {
                         }
                     case '"':
                         this.index = i;
-                        return formClip(WordPresets.STRING, readSlashString('"', false));
+                        return formClip(WordPresets.STRING, readSlashString((char) c, c == '"'));
                     case '#': {
                         int s = i, e = s;
                         while (i < in.length()) { // 单行注释
@@ -480,20 +489,81 @@ public class YAMLParser {
                     default: {
                         if (!WHITESPACE.contains(c)) {
                             this.index = --i;
-                            if (SPECIAL.contains(c)) {
-                                switch (c) {
-                                    case '-':
-                                    case '+':
-                                        if(in.length() > i && NUMBER.contains(in.charAt(i))) {
-                                            return readDigit(true);
-                                        }
-                                        break;
+                            if((flag & TEXT_MODE) != 0) {
+                                flag &= ~TEXT_MODE;
+                                Word w = null;
+                                x:
+                                if (SPECIAL.contains(c)) {
+                                    switch (c) {
+                                        case '~':
+                                        case '-':
+                                            if(in.length() > i && !WHITESPACE.contains(in.charAt(i + 1))) {
+                                                break x;
+                                            }
+                                            if(c == '~')
+                                                break;
+                                        case '+':
+                                            if (in.length() > i && NUMBER.contains(in.charAt(i + 1))) {
+                                                w = readDigit(true);
+                                                i = this.index;
+                                                break x;
+                                            }
+                                            break;
+                                        default:
+                                            if(!SPECIAL_0.contains(c))
+                                                break x;
+                                    }
+                                    return readSymbol();
+                                } else if (NUMBER.contains(c)) {
+                                    w = readDigit(false);
+                                    i = this.index;
                                 }
-                                return readSymbol();
-                            } else if (NUMBER.contains(c)) {
-                                return readDigit(false);
+                                CharList temp = this.found;
+                                temp.clear();
+
+                                while (i < in.length()) {
+                                    c = in.charAt(i++);
+                                    if (c != '\r' && c != '\n') {
+                                        if(c == ':' && i < in.length() && WHITESPACE.contains(in.charAt(i))) {
+                                            i--;
+                                            break;
+                                        }
+                                        temp.append((char) c);
+                                    } else {
+                                        i--;
+                                        break;
+                                    }
+                                }
+
+                                while (temp.length() > 0 && WHITESPACE.contains(temp.charAt(temp.length() - 1))) {
+                                    temp.setIndex(temp.length() - 1);
+                                    i--;
+                                }
+
+                                this.index = i;
+                                if (temp.length() == 0) {
+                                    return w == null ? eof() : w;
+                                }
+                                if(w != null)
+                                    temp.insert(0, w.val());
+
+                                return checkSpec(temp);
                             } else {
-                                return readLiteral();
+                                if (SPECIAL.contains(c)) {
+                                    switch (c) {
+                                        case '-':
+                                        case '+':
+                                            if (in.length() > i && NUMBER.contains(in.charAt(i + 1))) {
+                                                return readDigit(true);
+                                            }
+                                            break;
+                                    }
+                                    return readSymbol();
+                                } else if (NUMBER.contains(c)) {
+                                    return readDigit(false);
+                                } else {
+                                    return readLiteral();
+                                }
                             }
                         }
                     }
@@ -515,7 +585,7 @@ public class YAMLParser {
 
             while (i < in.length()) {
                 int c = in.charAt(i++);
-                if (/*(!SPECIAL.contains(c) || c == '-') && */!WHITESPACE.contains(c)) {
+                if ((!SPECIAL.contains(c) || c == '-') && c != '\r' && c != '\n') {
                     temp.append((char) c);
                 } else {
                     i--;
@@ -523,7 +593,7 @@ public class YAMLParser {
                 }
             }
 
-            while (SPECIAL.contains(temp.charAt(temp.length() - 1))) {
+            while (WHITESPACE.contains(temp.charAt(temp.length() - 1))) {
                 temp.setIndex(temp.length() - 1);
                 i--;
             }
@@ -534,59 +604,61 @@ public class YAMLParser {
                 return eof();
             }
 
+            return checkSpec(temp);
+        }
+
+        private Word checkSpec(CharList temp) {
             String s = temp.toString();
             short id = WordPresets.LITERAL;
-            if(s.length() > 1 && s.length() <= 5) {
-                if((flag & LENIENT) != 0) {
-                    switch (s) {
-                        case "null":
-                        case "Null":
-                        case "NULL":
-                            id = NULL;
-                            break;
-                        case "true":
-                        case "yes":
-                        case "on":
-                        case "True":
-                        case "Yes":
-                        case "On":
-                        case "TRUE":
-                        case "YES":
-                        case "ON":
-                            id = TRUE;
-                            break;
-                        case "false":
-                        case "no":
-                        case "off":
-                        case "False":
-                        case "No":
-                        case "Off":
-                        case "FALSE":
-                        case "NO":
-                        case "OFF":
-                            id = FALSE;
-                            break;
-                    }
-                } else {
-                    switch (s) {
-                        case "true":
-                        case "yes":
-                        case "on":
-                            id = TRUE;
-                            break;
-                        case "false":
-                        case "no":
-                        case "off":
-                            id = FALSE;
-                            break;
-                    }
+            if(s.length() >= 4 && s.length() <= 5) {
+                switch (s) {
+                    case "null":
+                    case "Null":
+                    case "NULL":
+                        id = NULL;
+                        break;
+                    case "true":
+                    case "True":
+                    case "TRUE":
+                        id = TRUE;
+                        break;
+                    case "false":
+                    case "False":
+                    case "FALSE":
+                        id = FALSE;
+                        break;
                 }
             }
 
             return formClip(id, s);
         }
 
-        public Word readMultiLine(short type) throws ParseException {
+        private String readLiteral1() {
+            final CharSequence in = this.input;
+            int i = this.index;
+
+            CharList temp = this.found;
+            temp.clear();
+
+            while (i < in.length()) {
+                int c = in.charAt(i++);
+                if (!WHITESPACE.contains(c) && !SPECIAL.contains(c)) {
+                    temp.append((char) c);
+                } else {
+                    i--;
+                    break;
+                }
+            }
+
+            this.index = i;
+
+            if (temp.length() == 0) {
+                return null;
+            }
+            return temp.toString();
+        }
+
+        public String readMultiLine(short type) throws ParseException {
             CharSequence in = this.input;
             int i = this.index;
 
@@ -601,23 +673,31 @@ public class YAMLParser {
             CharList v = this.found;
             v.clear();
 
-            while (i < in.length()) {
-                c = in.charAt(i++);
-                if(c != ' ') {
-                    break;
-                }
-                // trim begin ' '
-                if((flag & TRIM_BEGIN_SPACE) != 0)
-                    while (i < in.length() && in.charAt(i) == ' ')
-                        i++;
-                while (i < in.length()) {
-                    c = in.charAt(i++);
-                    if (c == '\n' || (c == '\r' && in.charAt(i++) == '\n')) {
-                        // 多行字符串可以使用|(null)保留换行符，也可以使用>(clump)折叠换行
-                        v.append(type == multiline_clump ? ' ' : '\n');
+            int line = 0, j = i;
+            while (j < in.length()) {
+                c = in.charAt(j++);
+                if (c != ' ') {
+                    if ((c != '\r' && c != '\n') || line != 0) {
                         break;
                     }
-                    v.append(c);
+                } else {
+                    line++;
+                }
+            }
+            j = 0;
+            while (i < in.length()) {
+                c = in.charAt(i++);
+                if (c == '\n' || (c == '\r' && in.charAt(i++) == '\n')) {
+                    // 多行字符串可以使用|(null)保留换行符，也可以使用>(clump)折叠换行
+                    v.append(type == multiline_clump ? ' ' : '\n');
+                    j = 0;
+                } else {
+                    if(j++ >= line)
+                        v.append(c);
+                    else if (c != ' ') {
+                        i--;
+                        break;
+                    }
                 }
             }
 
@@ -625,14 +705,15 @@ public class YAMLParser {
                 throw err("多行表示后没有字符串");
             switch (type) {
                 case multiline_clump:
-                    // todo 这里空行的空格要去了么
                     v.set(v.length() - 1, '\n');
                     break;
                 // +(keep)保留末尾的换行，-(trim)删除字末尾的换行
                 case multiline: // 缩成一个
                 case multiline_trim: // 全部去掉
-                    while (v.length() > 0 && v.charAt(v.length() - 1) == '\n')
+                    while (v.length() > 0 && v.charAt(v.length() - 1) == '\n') {
                         v.setIndex(v.length() - 1);
+                        i--;
+                    }
                     if(v.length() == 0)
                         throw err("多行表示后没有字符串");
                     if(type == multiline)
@@ -640,13 +721,14 @@ public class YAMLParser {
                     break;
             }
 
-            this.index = i - 1;
+            this.index = i;
 
-            return formClip(WordPresets.STRING, v);
+            return v.toString();
         }
 
         @Override
         protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
+            yyyy:
             if(temp.length() == 4) { // yyyy
                 // check timestamp
                 CharSequence val = input;
@@ -659,7 +741,8 @@ public class YAMLParser {
                         try {
                             buf[k++] = MathUtils.parseInt(val, off, j - 1, 10);
                         } catch (NumberFormatException e) {
-                            throw err("[YMLTS] not a number: " + val.subSequence(off, j - 1), index = j);
+                            break yyyy;
+                            //throw err("[YMLTS] not a number: " + val.subSequence(off, j - 1), index = j);
                         }
                         if(k == 3) {
                             if(buf[1] > 12)
@@ -710,7 +793,7 @@ public class YAMLParser {
                                                 if(c1 == 'Z' || c1 == 'z') {
                                                     index = ++j;
                                                     // 2021-7-8[Tt](\t)1:49:23.111Z
-                                                    return new Word_L(-2, ts);
+                                                    return new Word_L(-2, ts, null);
                                                 } else if(c1 == '+' || c1 == '-') {
                                                     off = ++j;
                                                     k = 0;
@@ -730,7 +813,7 @@ public class YAMLParser {
                                                                 if(buf[1] > 59)
                                                                     throw err("[YMLTS] dMinute > 59: " + buf[1], j);
                                                                 j = buf[0] * 3600000 + buf[1] * 60000;
-                                                                return new Word_L(-2,  c1 == '+' ? ts + j : ts - j);
+                                                                return new Word_L(-2, c1 == '+' ? ts + j : ts - j, null);
                                                             }
                                                             off = j;
                                                         } else if(WHITESPACE.contains(c2)) {
@@ -739,7 +822,8 @@ public class YAMLParser {
                                                                 if(buf[0] > 23)
                                                                     throw err("[YMLTS] dHour > 23: " + buf[0], j);
                                                                 // 2021-7-8[Tt](\t)1:49:23.111[+-]xx:xx
-                                                                return new Word_L(-2, c1 == '+' ? ts + buf[0] * 3600000 : ts - buf[0] * 3600000);
+                                                                return new Word_L(-2, c1 == '+' ? ts + buf[0] * 3600000 : ts - buf[0] * 3600000,
+                                                                                  null);
                                                             } else {
                                                                 throw err("[YMLTS] unexpected end of YMLTimestamp", j);
                                                             }
@@ -751,7 +835,7 @@ public class YAMLParser {
                                             } else {
                                                 // 2021-7-8[Tt](\t)1:49:23
                                                 index = j;
-                                                return new Word_L(-2, ts);
+                                                return new Word_L(-2, ts, null);
                                             }
                                         }
                                         off = j;
@@ -760,7 +844,7 @@ public class YAMLParser {
                             } else {
                                 // 2021-7-8
                                 index = j;
-                                return new Word_L(-1, ts);
+                                return new Word_L(-1, ts, null);
                             }
                         }
                         off = j;
@@ -810,11 +894,11 @@ public class YAMLParser {
                     id = right_l_bracket;
                     break;
                 case '&':
-                    v = "&";
+                    v = readLiteral1();
                     id = anchor;
                     break;
                 case '*':
-                    v = "*";
+                    v = readLiteral1();
                     id = ref;
                     break;
                 case '?':
@@ -822,30 +906,18 @@ public class YAMLParser {
                     id = ask;
                     break;
                 case '~':
-                    //if((flag & LENIENT) == 0) {
-                    //    throw err("无效字符 '~' (开启lenientNull模式)");
-                    //}
                     v = "~";
                     id = NULL;
                     break;
                 case '!':
                     // YAML 允许使用两个感叹号强制转换数据类型
                     if(hasNext() && next() == '!') {
-                        if((flag & LENIENT) == 0) {
-                            throw err("嗯？这不是人写的么？机器写的？ \n" +
-                                    "请使用那个啥来着，长的像两个短竖线的...\n" +
-                                    "哦，双引号啊.. 或者啊，你也可以打开LENIENT模式");
-                        } else {
-                            String type = readLiteral().val();
-                            Word w = readWord();
-                            switch (type) {
-                                case "str":
-                                    w.reset(WordPresets.LITERAL, w.getIndex(), w.val());
-                                    return w;
-                            }
-                        }
+                        v = readLiteral1();
+                        id = force_cast;
+                    } else {
+                        throw err("无效字符 '!'");
                     }
-                    throw err("无效字符 '!'");
+                    break;
                 case '<':
                     if(hasNext() && next() == '<') {
                         v = "<<";
@@ -897,87 +969,87 @@ public class YAMLParser {
             return cached.reset(id, index, s.toString());
         }
 
-        public Word checkLine() throws ParseException {
+        public boolean checkLine(int prevOff) throws ParseException {
             int og = this.index;
-            cached = nextWord();
+            readWord();
             int len = this.index;
             this.index = og;
 
             int i = this.lineIdx;
-            if(i >= len) return cached;
+            if(i >= og) {
+                return false;
+            }
 
             CharSequence in = this.input;
-
-            this.lastLine = this.line;
-            int off = this.off;
-            boolean space = true;
             while (i < len) {
                 char c = in.charAt(i++);
                 if (c == '\r' || c == '\n') {
-                    if (c == '\r' && i < len && in.charAt(i) == '\n')
-                        i++;
-                    line++;
-                    off = 0;
-                    space = true;
-                } else {
-                    if(c == ' ') {
-                        if(space)
-                            off++;
-                    } else {
-                        space = false;
-                    }
+                    this.lineIdx = len;
+                    return prevOff == -1 || getLineOffset(len) == getLineOffset(prevOff);
                 }
             }
 
-            this.off = off;
-
-            this.lineIdx = this.index;
-
-            return cached;
-        }
-
-        public Word checkLineOnce() throws ParseException {
-            int og = this.index;
-            cached = nextWord();
-            int len = this.index;
-            this.index = og;
-
-            int i = this.lineIdx;
-            if(i >= len) return cached;
-
-            CharSequence in = this.input;
-
-            int off = this.off;
-            int line = this.line;
-
-            boolean space = true;
-            while (i < len) {
-                char c = in.charAt(i++);
-                if (c == '\r' || c == '\n') {
-                    if (c == '\r' && i < len && in.charAt(i) == '\n')
-                        i++;
-                    line++;
-                    off = 0;
-                    space = true;
-                } else {
-                    if(c == ' ') {
-                        if(space)
-                            off++;
-                    } else {
-                        space = false;
-                    }
-                }
-            }
-
-            return cached.reset(line, off, cached.val());
+            this.lineIdx = len;
+            return false;
         }
 
         int lineIdx;
-        int line = 1, lastLine;
-        int off;
 
         char charAt(int i) {
             return input.charAt(i);
+        }
+
+        public int getLineOffset(int i) throws ParseException {
+            CharSequence in = this.input;
+            boolean flg = false;
+            int count = 0;
+            while (i > 0) {
+                char c = in.charAt(--i);
+                switch (c) {
+                    case '\r':
+                    case '\n':
+                        return count;
+                    case '-':
+                        if(flg)
+                            throw err("重复的 '-'", i);
+                        flg = true;
+                        count++;
+                        break;
+                    case ' ':
+                        count++;
+                        break;
+                    default:
+                        flg = false;
+                        count = 0;
+                        break;
+                }
+            }
+            return 0;
+        }
+
+        public int getLineOffset() throws ParseException {
+            int off = this.index;
+            readWord();
+            int lineOffset = getLineOffset(this.index);
+            this.index = off;
+            return lineOffset;
+        }
+
+        public boolean lineNonEmpty(int i) {
+            CharSequence in = this.input;
+            while (i < in.length()) {
+                char c = in.charAt(i++);
+                switch (c) {
+                    default:
+                        return true;
+                    case ' ':
+                        break;
+                    case '\r':
+                    case '\n':
+                        return false;
+                }
+            }
+            return false;
         }
     }
 }

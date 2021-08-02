@@ -78,7 +78,7 @@ public class NiximASMModParser extends ASMModParser {
         named = new HashMap<>();
         try {
             byte[] bytes = IOUtil.readFully(stream);
-            ConstantData data = Parser.parseConstants(bytes, true);
+            ConstantData data = Parser.parseConstants(bytes);
 
             this.asmType = TypeHelper.asmType(data.name);
             this.asmSuperType = TypeHelper.asmType(data.parent);

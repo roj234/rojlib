@@ -162,9 +162,10 @@ public class FMDGui extends JFrame {
 
         getContentPane().add(scrollPane);
 
+        setMinimumSize(new Dimension(534, 400));
         pack();
         setResizable(true);
-        setBounds(600, 300, 534, 400);
+        setBounds(600, 300, 540, 400);
 
         setHeight();
 

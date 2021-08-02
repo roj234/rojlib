@@ -783,7 +783,7 @@ public abstract class AbstLexer {
     }
 
     public ParseException err(String reason, Throwable cause) {
-        return new ParseException(input, reason, this.index, cause);
+        return new ParseException(input, reason, this.index - 1, cause);
     }
 
     // endregion

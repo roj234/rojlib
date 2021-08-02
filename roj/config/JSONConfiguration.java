@@ -35,6 +35,7 @@ package roj.config;
 
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
+import roj.util.ByteWriter;
 import roj.util.log.Logger;
 
 import java.io.File;
@@ -60,7 +61,7 @@ public abstract class JSONConfiguration {
     }
 
     public final void init() {
-        if (!config.exists()) {
+        if (!config.isFile()) {
             resetConfig(new CMapping(), config);
         } else {
             reload();
@@ -70,7 +71,6 @@ public abstract class JSONConfiguration {
     public void reload() {
         try (FileInputStream fis = new FileInputStream(config)) {
             CMapping map = JSONParser.parse(new String(IOUtil.readFully(fis), StandardCharsets.UTF_8), 2).asMap();
-            //resetConfig(map, config);
             readConfig(map);
         } catch (IOException | ParseException | ClassCastException e) {
             logger.catching(e);
@@ -84,13 +84,11 @@ public abstract class JSONConfiguration {
 
     private void resetConfig(CMapping map, File config) {
         readConfig(map);
-        //if(map.isModified()) {
         try (FileOutputStream fos = new FileOutputStream(config)) {
-            fos.write(map.toJSON().getBytes(StandardCharsets.UTF_8));
+            ByteWriter.encodeUTF(map.toJSON()).writeToStream(fos);
         } catch (IOException e) {
             logger.catching(e);
         }
-        //}
     }
 
     public final void save() {

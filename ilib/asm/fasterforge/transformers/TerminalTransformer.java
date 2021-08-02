@@ -41,10 +41,10 @@ public class TerminalTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
-        ConstantData data = Parser.parseConstants(basicClass, true);
+        ConstantData data = Parser.parseConstants(basicClass);
         ExitVisitor visitor = new ExitVisitor();
         visitor.visit(data);
-        return visitor.dirty ? Parser.toByteArray(data, true) : basicClass;
+        return visitor.dirty ? Parser.toByteArray(data) : basicClass;
     }
 
     public static class ExitVisitor {

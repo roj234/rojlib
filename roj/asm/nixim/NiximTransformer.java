@@ -92,7 +92,7 @@ public class NiximTransformer {
         boolean first = true;
 
         for (NiximData niximData : niximDatas) {
-            data = Parser.parseConstants(bytes, true);
+            data = Parser.parseConstants(bytes);
 
             /*if (first) {
                 for (MethodSimple method : data.methods) {
@@ -290,7 +290,7 @@ public class NiximTransformer {
                 throw new RuntimeException("Fatal error during verifying " + data.name, e);
             }
 
-            bytes = data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal());
+            bytes = SharedCache.store(data);
         }
 
         if (debug) {
@@ -440,7 +440,7 @@ public class NiximTransformer {
     }
 
     public static boolean read(@Nonnull final byte[] basicClass) {
-        ConstantData data = Parser.parseConstants(basicClass, true);
+        ConstantData data = Parser.parseConstants(basicClass);
 
 
         Object[] a = getClassArray(data, data.attrByName(ANNO_TYPE));

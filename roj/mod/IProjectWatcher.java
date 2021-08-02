@@ -37,13 +37,7 @@ import java.io.IOException;
  * @since 2021/7/28 20:34
  */
 public class IProjectWatcher {
-    volatile boolean paused;
-
-    public boolean paused() { return paused; }
-
     public void reset() {}
-
-    public void pause(boolean paused) { this.paused = paused; }
 
     public static final int ID_BIN = 0, ID_RES = 1, ID_SRC = 2;
 

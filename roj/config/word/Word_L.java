@@ -35,8 +35,8 @@ package roj.config.word;
 public class Word_L extends NumberWord {
     public long number;
 
-    public Word_L(int index, long i) {
-        reset(WordPresets.LONG, index, null);
+    public Word_L(int index, long i, String val) {
+        reset(WordPresets.LONG, index, val);
         this.number = i;
     }
 

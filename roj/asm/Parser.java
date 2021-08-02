@@ -47,54 +47,24 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/*
- *
- * method returns Object => only use areturn && value instanceof 'return type'
- * (§4.3.3).
- *
- * <init>(), and any method returns void, can only use 'return'.
- *
- * Execution never falls off the bottom of the code array.
- *
- * Once verify jsr/jsr_w:
- *  stack.stream().plus(localVars.stream()).anyMatch(type == uninitialized).then(throw Error)
- *
- * Once verify any node:
- *  stack.equals(lastExecutionPath.stack) || throw Error
- *
- * No local variable (or pair, type == long or double) can be accessed before assign.
- *
- */
 /**
- * Roj ASM parser <br>
+ * Roj ASM parser (字节码解析器) <br>
  * 基于Java 8 构造 <br>
  *     现已支持 Java 15 (需要测试)
  *
  * @author Roj234
- * @version 0.1
+ * @version 2.0
  * @since 2021/5/29 17:16
  */
 public final class Parser {
-    public static final int SKIP_DEBUG = 0x01;
+    // region CLAZZ parse LOD 2
 
-    /**
-     * 解析一个格式良好的字节码
-     *
-     * @see #parse(ByteList, int)
-     */
-    public static Clazz parse(byte[] buf, int flags) {
-        return parse(new ByteList(buf), flags);
+    public static Clazz parse(byte[] buf) {
+        return parse(new ByteList(buf));
     }
 
-    /**
-     * 解析一个格式良好的字节码
-     *
-     * @param buf   byte code
-     * @param flags 参数, WIP
-     * @see #parseConstants(byte[])
-     */
     @SuppressWarnings("fallthrough")
-    public static Clazz parse(ByteList buf, int flags) {
+    public static Clazz parse(ByteList buf) {
         if (buf == null) throw new NullPointerException("Bytecode is null!");
 
         Clazz result = new Clazz();
@@ -112,7 +82,6 @@ public final class Parser {
         } catch (Exception e) {
             throw new RuntimeException("Corrupted constant pool: ", e);
         }
-
 
         /**
          * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
@@ -180,57 +149,27 @@ public final class Parser {
         return result;
     }
 
-    /**
-     * "编译"IClass为字节码
-     *
-     * @param c The Clazz
-     * @return 一个格式良好的字节码缓冲区
-     * @throws RuntimeException 当出问题的时候...
-     */
     public static byte[] toByteArray(Clazz c) {
-        return c.getBytes().getByteArray();
+        return SharedCache.store(c).getByteArray();
     }
 
-    public static ByteList toByteArrayShared(Clazz data) {
-        return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal());
+    public static ByteList toByteArrayShared(Clazz c) {
+        return SharedCache.store(c);
     }
 
-    /**
-     * 解析一个格式良好的字节码
-     * 与{@link #parse(byte[], int)}不同的是, 这个速度更快
-     *
-     * @param buf byte code
-     */
+    // endregion
+    // region CONSTANT DATA parse LOD 1
+
     public static ConstantData parseConstants(byte[] buf) {
-        return parseConstants(buf, false);
+        return parseConst0(new ByteReader(buf));
     }
 
     public static ConstantData parseConstants(ByteList buf) {
-        return parseConstants(buf, false);
-    }
-
-    /**
-     * 解析一个格式良好的字节码
-     * 与{@link #parse(byte[], int)}不同的是, 这个速度更快
-     *
-     * @param buf byte code
-     */
-    public static ConstantData parseConstants(byte[] buf, boolean enableByName) {
-        return parse1(new ByteReader(buf));
-    }
-
-    /**
-     * 解析一个格式良好的字节码
-     * 与{@link #parse(byte[], int)}不同的是, 这个速度更快
-     *
-     * @param buf byte code
-     */
-    public static ConstantData parseConstants(ByteList buf, boolean enableByName) {
-        return parse1(new ByteReader(buf));
+        return parseConst0(new ByteReader(buf));
     }
 
     @Nonnull
-    private static ConstantData parse1(ByteReader r) {
+    public static ConstantData parseConst0(ByteReader r) {
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
@@ -302,32 +241,26 @@ public final class Parser {
     }
 
     public static byte[] toByteArray(ConstantData c) {
-        return c.getBytes().getByteArray();
+        return SharedCache.store(c).getByteArray();
     }
 
-    @Deprecated
-    public static byte[] toByteArray(ConstantData c, boolean cpAddOnWrite) {
-        return c.getBytes().getByteArray();
+    public static ByteList toByteArrayShared(ConstantData c) {
+        return SharedCache.store(c);
     }
 
-    public static ByteList toByteArrayShared(ConstantData data) {
-        return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal());
-    }
+    // endregion
+    // region ACCESS parse LOD 0
 
     public static AccessData parseAccess(byte[] buf) {
-        return parse2(buf.clone(), new ByteReader(buf));
+        return parseAcc0(buf.clone(), new ByteReader(buf));
     }
 
     public static AccessData parseAccessDirect(byte[] buf) {
-        return parse2(buf, new ByteReader(buf));
-    }
-
-    public static AccessData parseAccessImmutable(ByteList buf) {
-        return parse2(null, new ByteReader(buf));
+        return parseAcc0(buf, new ByteReader(buf));
     }
 
     @Nonnull
-    private static AccessData parse2(byte[] buf, ByteReader r) {
+    public static AccessData parseAcc0(byte[] buf, ByteReader r) {
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
@@ -376,6 +309,9 @@ public final class Parser {
         return new AccessData(buf, Helpers.cast(arr[0]), Helpers.cast(arr[1]), cfo, self, parent, itf);
     }
 
+    // endregion
+    // SIMPLE parse LOD -1
+
     public static List<String> simpleData(byte[] buf) {
         if (buf == null)
             return null;
@@ -413,6 +349,9 @@ public final class Parser {
         return list;
     }
 
+    // endregion
+    // region MISC
+
     /**
      * Used to create AttrCode
      *
@@ -440,4 +379,5 @@ public final class Parser {
         }
         return code;
     }
+    // endregion
 }

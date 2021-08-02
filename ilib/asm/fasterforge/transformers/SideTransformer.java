@@ -45,9 +45,6 @@ import roj.asm.type.ParamHelper;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteReader;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -60,14 +57,7 @@ public class SideTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         if (bytes == null)
             return null;
-        ConstantData classNode = Parser.parseConstants(bytes, true);
-        if (name.equals("net.minecraft.client.gui.FontRenderer")) {
-            try (FileOutputStream fos = new FileOutputStream(new File("fr.in.class"))) {
-                fos.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        ConstantData classNode = Parser.parseConstants(bytes);
 
         ConstantPool pool = classNode.cp;
 
@@ -107,16 +97,7 @@ public class SideTransformer implements IClassTransformer {
             }
         }
 
-        bytes = Parser.toByteArray(classNode, true);
-
-        if (name.equals("net.minecraft.client.gui.FontRenderer")) {
-            try (FileOutputStream fos = new FileOutputStream(new File("fr.out.class"))) {
-                fos.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        return bytes;
+        return Parser.toByteArray(classNode);
     }
 
     public static final String SIDEONLY_TYPE = ParamHelper.classDescriptor(SideOnly.class);

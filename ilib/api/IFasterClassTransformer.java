@@ -26,7 +26,6 @@
 package ilib.api;
 
 import net.minecraft.launchwrapper.IClassTransformer;
-import roj.asm.SharedCache;
 import roj.util.ByteList;
 
 /**
@@ -41,7 +40,7 @@ public interface IFasterClassTransformer extends IClassTransformer {
     default byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
-        ByteList list = transform(name, transformedName, SharedCache.bufRead().setValue(basicClass));
+        ByteList list = transform(name, transformedName, new ByteList(basicClass));
         return list.getByteArray();
     }
 

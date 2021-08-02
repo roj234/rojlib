@@ -194,9 +194,7 @@ public class DirectFieldAccess {
             len++;
         } else {
             types.clear();
-            if (p.type == CLASS && g_sClass == DirectFieldAccessor.class) {
-                m.setReturnType(new Type("java/lang/Object"));
-            }
+            m.setReturnType(p.type == CLASS && g_sClass == DirectFieldAccessor.class ? new Type("java/lang/Object") : p);
         }
         String t = null;
         switch (p.type) {

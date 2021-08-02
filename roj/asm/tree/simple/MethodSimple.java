@@ -74,6 +74,11 @@ public final class MethodSimple extends SimpleComponent implements MethodNode {
     }
 
     @Override
+    public Type getReturnType() {
+        return ParamHelper.getReturn(type.getString());
+    }
+
+    @Override
     public FlagList access() {
         return this.accesses;
     }

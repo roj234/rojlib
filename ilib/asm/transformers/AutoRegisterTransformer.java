@@ -31,7 +31,6 @@ import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.fml.common.discovery.ASMDataTable;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.SharedCache;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstString;
 import roj.asm.tree.ConstantData;
@@ -136,7 +135,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
             return basicClass;
         }
 
-        ConstantData data = Parser.parseConstants(SharedCache.bufRead().setValue(basicClass), true);
+        ConstantData data = Parser.parseConstants(basicClass);
         Attribute attribute = data.attrByName(ANNOTATION_TYPE);
         if (attribute != null) {
             AttrAnnotation annotations = new AttrAnnotation(true, new ByteReader(attribute.getRawData()), data.cp);
@@ -170,7 +169,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
             }
         }
 
-        return modified ? data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray() : basicClass;
+        return modified ? Parser.toByteArray(data) : basicClass;
     }
 
     private static void transformRegHolder(ConstantData data, roj.asm.tree.anno.AnnValString value, FieldSimple field) {
@@ -218,7 +217,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
 
         insn.add(AttrCode.METHOD_END_MARK);
 
-        return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray();
+        return Parser.toByteArray(data);
     }
 
     private static byte[] transformBlock(ConstantData data, Map<String, roj.asm.tree.anno.AnnVal> mapping) {
@@ -287,7 +286,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
 
         insn.add(AttrCode.METHOD_END_MARK);
 
-        byte[] bytes = data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray();
+        byte[] bytes = Parser.toByteArray(data);
         try (FileOutputStream fos = new FileOutputStream(new File(data.name.replace('/', '.') + ".class"))) {
             fos.write(bytes);
         } catch (IOException e) {
@@ -324,7 +323,7 @@ public class AutoRegisterTransformer implements IClassTransformer {
 
         insn.add(AttrCode.METHOD_END_MARK);
 
-        return data.getBytes(SharedCache.bufCstPool(), SharedCache.bufGlobal()).toByteArray();
+        return Parser.toByteArray(data);
     }
 
     private static roj.asm.tree.insn.LoadConstInsnNode loadParam(roj.asm.tree.anno.AnnVal value, String defaultValue) {

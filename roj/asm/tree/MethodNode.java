@@ -47,6 +47,8 @@ public interface MethodNode extends MoFNode {
 
     List<Type> parameters();
 
+    Type getReturnType();
+
     FlagList access();
 
     String rawDesc();

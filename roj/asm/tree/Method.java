@@ -305,6 +305,7 @@ public final class Method implements MethodNode, MoFNode {
         return parameters;
     }
 
+    @Override
     public Type getReturnType() {
         par();
         return returnType;

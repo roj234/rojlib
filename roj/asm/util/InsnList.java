@@ -54,7 +54,7 @@ public final class InsnList extends ArrayList<InsnNode> {
             return false;
         } else {
             for (int i = 0; i < labels.size(); i++) {
-                labels.get(i).onReplace(node);
+                labels.get(i)._i_replace(node);
             }
             labels.clear();
             return super.add(node);
@@ -63,13 +63,13 @@ public final class InsnList extends ArrayList<InsnNode> {
 
     public InsnNode set(int pos, InsnNode node) {
         InsnNode node1 = get(pos);
-        node1.onReplace(node);
+        node1._i_replace(node);
         return super.set(pos, node);
     }
 
     public InsnNode remove(int pos) {
         InsnNode node = super.remove(pos);
-        node.onRemove(this, pos);
+        node._i_replace(pos != size() ? get(pos) : METHOD_END_MARK);
         return node;
     }
 
@@ -79,7 +79,7 @@ public final class InsnList extends ArrayList<InsnNode> {
 
         InsnNode last = insn.remove(insn.size() - 1);
         if (last != METHOD_END_MARK)
-            throw new IllegalArgumentException("Endpoint must be METHOD_END_MARK");
+            throw new IllegalArgumentException("End must be a METHOD_END_MARK");
 
         ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
         IntBiMap<InsnNode> pcRev = new IntBiMap<>(size());

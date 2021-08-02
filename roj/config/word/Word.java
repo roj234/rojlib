@@ -86,23 +86,23 @@ public class Word {
             case WordPresets.INTEGER:
                 if(!TextUtil.checkInt(TextUtil.INT_MAXS, val, 0, negative)) {
                     if(TextUtil.checkInt(TextUtil.LONG_MAXS, val, 0, negative)) {
-                        return new Word_L(index, Long.parseLong(val));
+                        return new Word_L(index, Long.parseLong(val), val);
                     }
                     // too large
-                    return new Word_D(WordPresets.DECIMAL_D, index, Double.parseDouble(val));
+                    return new Word_D(WordPresets.DECIMAL_D, index, Double.parseDouble(val), val);
                 }
 
                 v = MathUtils.parseIntChecked(val, 10, negative);
                 break;
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F:
-                return new Word_D(type, index, Double.parseDouble(val));
+                return new Word_D(type, index, Double.parseDouble(val), val);
             case WordPresets.LONG:
-                return new Word_L(index, Long.parseLong(val));
+                return new Word_L(index, Long.parseLong(val), val);
             default:
                 return null;
         }
-        return new Word_I(index, v);
+        return new Word_I(index, v, val);
     }
 
     public NumberWord number() {
