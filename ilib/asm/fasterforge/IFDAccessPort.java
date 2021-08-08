@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,37 +23,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.asm.util;
+package ilib.asm.fasterforge;
 
-import roj.asm.Parser;
-import roj.asm.cst.Constant;
-import roj.asm.cst.CstType;
-import roj.asm.cst.CstUTF;
-import roj.asm.tree.ConstantData;
-import roj.io.IOUtil;
+import roj.asm.mapper.ConstMapper;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2020/9/30 15:45
+ * @since 2021/8/5 22:42
  */
-public class FxMixin {
-    public static byte[] code = getCode();
-
-    private static byte[] getCode() {
-        ConstantData data = Parser.parseConstants(IOUtil.getBytesS(FxMixin.class, "ilib/asm/util/mixin/Proxy.class"));
-        for (Constant constant : data.cp.array()) {
-            if (constant != null && constant.type() == CstType.UTF) {
-                CstUTF u = (CstUTF) constant;
-                final String s = u.getString();
-                if (s.length() >= 25) {
-                    u.setString(s.replace("ilib/asm/util/mixin/NVE_1", "org/spongepowered/asm/mixin/transformer/MixinTransformer"));
-                    u.setString(u.getString().replace("ilib/asm/util/mixin/Proxy", "org/spongepowered/asm/mixin/transformer/Proxy"));
-                }
-            }
-        }
-        return Parser.toByteArray(data);
-    }
+public interface IFDAccessPort {
+    ConstMapper getMapper();
 }

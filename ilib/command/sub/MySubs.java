@@ -53,9 +53,9 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
 import roj.collect.LongMap;
+import roj.collect.MyHashSet;
 import roj.text.TextUtil;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -135,7 +135,7 @@ public abstract class MySubs extends AbstractSubCommand {
             switch (args[0]) {
                 case "clear": {
                     int i = 0;
-                    Set<String> set = new HashSet<>();
+                    Set<String> set = new MyHashSet<>();
                     for (WorldServer w : DimensionManager.getWorlds()) {
                         if (w.playerEntities.isEmpty()) {
                             DimensionManager.unloadWorld(DimensionHelper.idFor(w));

@@ -55,7 +55,7 @@ public class LACMod {
         PktLogin.register();
         MinecraftForge.EVENT_BUS.register(LACMod.class);
         EncodeUtil.initBase64Chars();
-        NiximTransformer.read(IOUtil.getBytesSilent(LACMod.class, "lac/server/util/ModListServer.class"));
+        NiximTransformer.read(IOUtil.getBytesS(LACMod.class, "lac/server/util/ModListServer.class"));
     }
 
     @Mod.EventHandler

@@ -25,8 +25,6 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
 import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
@@ -42,38 +40,31 @@ public class EventSubscriberTransformer implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
-        ConstantData classNode = Parser.parseConstants(basicClass);
+        ConstantData cz = Parser.parseConstants(basicClass);
         boolean isSubscriber = false;
-        for (MethodSimple methodNode : classNode.methods) {
-            Attribute attr = methodNode.attrByName("RuntimeVisibleAnnotations");
+        for (MethodSimple mn : cz.methods) {
+            Attribute attr = mn.attrByName("RuntimeVisibleAnnotations");
             if (attr == null) continue;
-            AttrAnnotation anno = new AttrAnnotation(true, new ByteReader(attr.getRawData()), classNode.cp);
-            if (Iterables.any(anno.annotations, SubscribeEventPredicate.INSTANCE)) {
-                //System.out.println("Found");
-                if (Modifier.isPrivate(methodNode.accesses.flag)) {
-                    String msg = "Cannot apply @SubscribeEvent to private method %s/%s%s";
-                    throw new RuntimeException(String.format(msg, classNode.name, methodNode.name.getString(), methodNode.type.getString()));
+            AttrAnnotation annos = new AttrAnnotation(true, new ByteReader(attr.getRawData()), cz.cp);
+            for (Annotation anno : annos.annotations) {
+                if("Lnet/minecraftforge/fml/common/eventhandler/SubscribeEvent;".equals(anno.rawDesc)) {
+                    if (Modifier.isPrivate(mn.accesses.flag)) {
+                        String msg = "Cannot apply @SubscribeEvent to private method %s/%s%s";
+                        throw new RuntimeException(String.format(msg, cz.name, mn.name.getString(), mn.type.getString()));
+                    }
+                    mn.accesses.flag = (short) toPublic(mn.accesses.flag);
+                    isSubscriber = true;
                 }
-                methodNode.accesses.flag = (short) toPublic(methodNode.accesses.flag);
-                isSubscriber = true;
             }
         }
         if (isSubscriber) {
-            classNode.accesses.flag = (short) toPublic(classNode.accesses.flag);
-            return Parser.toByteArray(classNode);
+            cz.accesses.flag = (short) toPublic(cz.accesses.flag);
+            return Parser.toByteArray(cz);
         }
         return basicClass;
     }
 
     private static int toPublic(int access) {
         return access & 0xFFFFFFF9 | 1;
-    }
-
-    private static class SubscribeEventPredicate implements Predicate<Annotation> {
-        static final SubscribeEventPredicate INSTANCE = new SubscribeEventPredicate();
-
-        public boolean apply(Annotation input) {
-            return "Lnet/minecraftforge/fml/common/eventhandler/SubscribeEvent;".equals(input.rawDesc);
-        }
     }
 }

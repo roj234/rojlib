@@ -55,6 +55,8 @@ public class TOMLParser {
             NULL = 12,
             left_m_bracket = 13,
             right_m_bracket = 14,
+            left_l_bracket = 19,
+            right_l_bracket = 20,
             comma = 15, // ,
             colon = 16, // :
             delim = 17, // -
@@ -68,7 +70,7 @@ public class TOMLParser {
     }
 
     public static CMapping parse(CharSequence string) throws ParseException {
-        return parse((YAMLLexer) new YAMLLexer().init(string), 0);
+        return parse((TOMLLexer) new TOMLLexer().init(string), 0);
     }
 
     /**
@@ -76,7 +78,7 @@ public class TOMLParser {
      *             2: 对重复的key报错 <BR>
      *             4: 解析注释
      */
-    public static CMapping parse(YAMLLexer wr, int flag) throws ParseException {
+    public static CMapping parse(TOMLLexer wr, int flag) throws ParseException {
         wr.comment = (flag & 4) != 0;
         CMapping ce = tomlObject(wr, (byte) flag & ~1);
         if (wr.hasNext()) {
@@ -85,19 +87,105 @@ public class TOMLParser {
         return ce;
     }
 
+
+    /**
+     * 解析数组定义 <BR>
+     * [xxx, yyy, zzz] or []
+     */
+    static CList tomlFlowArray(TOMLLexer wr, byte flag) throws ParseException {
+        CList list = new CList();
+
+        boolean more = false;
+
+        o:
+        while (true) {
+            Word w = wr.nextWord();
+            switch (w.type()) {
+                case right_m_bracket:
+                    break o;
+                case comma:
+                    if (more) {
+                        unexpected(wr, ",");
+                    }
+                    more = true;
+                    break;
+                default:
+                    wr.retractWord();
+                    more = false;
+                    list.add(tomlRead(wr, flag));
+                    break;
+            }
+        }
+
+        return list;
+    }
+
+    /**
+     * 解析对象定义 <BR>
+     * {xxx: yyy, zzz: uuu}
+     */
+    @SuppressWarnings("fallthrough")
+    static CMapping tomlFlowObject(TOMLLexer wr, byte flag) throws ParseException {
+        CMapping map = new CMapping();
+
+        boolean more = false;
+
+        o:
+        while (true) {
+            Word name = wr.nextWord().copy();
+            switch (name.type()) {
+                case right_l_bracket:
+                    break o;
+                case comma:
+                    if (more) {
+                        unexpected(wr, ",");
+                    }
+                    more = true;
+                    continue;
+                case WordPresets.STRING:
+                    break;
+                case WordPresets.LITERAL:
+                    if((flag & 2) != 0)
+                        break;
+                default:
+                    unexpected(wr, name.val(), "字符串");
+            }
+
+            if((flag & 1) != 0 && map.containsKey(name.val()))
+                throw wr.err("重复的key: " + name.val());
+
+            more = false;
+
+            Word w = wr.nextWord();
+            if (w.type() != colon)
+                unexpected(wr, w.val(), ":");
+
+            map.put(name.val(), tomlRead(wr, flag));
+        }
+
+        if (map.containsKey("==", Type.STRING)) {
+            ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
+            if (deserializer != null) {
+                return new CObject<>(map, deserializer);
+            }
+        }
+
+        return map;
+    }
+
     /**
      * 解析对象定义 <BR>
      * a : r \r\n
      * c : x
      */
     @SuppressWarnings("fallthrough")
-    static CMapping tomlObject(YAMLLexer wr, int flag) throws ParseException {
+    static CMapping tomlObject(TOMLLexer wr, int flag) throws ParseException {
         CMapping map = new CMapping();
 
         return map;
     }
 
-    private static CEntry tomlRead(YAMLLexer wr, int flag) throws ParseException {
+    private static CEntry tomlRead(TOMLLexer wr, int flag) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case WordPresets.COMMENT:
@@ -131,8 +219,8 @@ public class TOMLParser {
         }
     }
 
-    private static final class YAMLLexer extends Lexer {
-        static final IBitSet SPECIAL = LongBitSet.from("+-\\/*()!~`#^&,<>.?\"':;|[]");
+    private static final class TOMLLexer extends Lexer {
+        static final IBitSet SPECIAL = LongBitSet.from("+-()#.=?\"'[]");
 
         boolean comment;
 
@@ -143,24 +231,6 @@ public class TOMLParser {
             while (i < in.length()) {
                 int c = in.charAt(i++);
                 switch (c) {
-                    case '\'':
-                        if(i + 1 < in.length() && in.charAt(i) == '\'' && in.charAt(i + 1) == '\'') {
-                            // 多行注释
-                            i += 2;
-                            int s = i;
-                            while (i + 2 < in.length()) {
-                                if(in.charAt(i++) == '\'' && in.charAt(i++) == '\'' && in.charAt(i++) == '\'') {
-                                    break;
-                                }
-                            }
-
-                            if(comment) {
-                                this.index = i;
-                                return formClip(WordPresets.COMMENT, in.subSequence(s, i - 3));
-                            }
-
-                            break;
-                        }
                     case '"':
                         this.index = i;
                         return readConstString((char) c);

@@ -350,6 +350,7 @@ public class YAMLParser {
                 return yamlFlowObject(wr, flag);
             case WordPresets.STRING:
             case WordPresets.LITERAL: {
+                boolean k = w.type() == WordPresets.LITERAL;
                 int i = wr.lastWord;
                 if(wr.nextWord().type() == colon) {
                     if(i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
@@ -363,9 +364,11 @@ public class YAMLParser {
                     return yamlObject(wr, flag);
                 } else {
                     wr.retractWord();
-                    int i1 = cnt.indexOf(':');
-                    if(i1 > 0 && i1 < cnt.length() - 1 && wr.checkLine(i)) {
-                        throw wr.err("可能有误判... 无效的map: 缺少空格");
+                    if(k) {
+                        int i1 = cnt.indexOf(':');
+                        if (i1 > 0 && i1 < cnt.length() - 1 && wr.checkLine(i)) {
+                            throw wr.err("可能有误判... 无效的map: 缺少空格");
+                        }
                     }
 
                     return CString.valueOf(cnt);
@@ -496,12 +499,14 @@ public class YAMLParser {
                                 if (SPECIAL.contains(c)) {
                                     switch (c) {
                                         case '~':
-                                        case '-':
                                             if(in.length() > i && !WHITESPACE.contains(in.charAt(i + 1))) {
                                                 break x;
                                             }
-                                            if(c == '~')
-                                                break;
+                                            break;
+                                        case '-':
+                                            if(in.length() > i && !WHITESPACE.contains(in.charAt(i + 1)) && !NUMBER.contains(in.charAt(i + 1))) {
+                                                break x;
+                                            }
                                         case '+':
                                             if (in.length() > i && NUMBER.contains(in.charAt(i + 1))) {
                                                 w = readDigit(true);
@@ -542,7 +547,7 @@ public class YAMLParser {
 
                                 this.index = i;
                                 if (temp.length() == 0) {
-                                    return w == null ? eof() : w;
+                                    return w == null ? (c == ':' ? readSymbol() : eof()) : w;
                                 }
                                 if(w != null)
                                     temp.insert(0, w.val());
@@ -729,12 +734,12 @@ public class YAMLParser {
         @Override
         protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
             yyyy:
-            if(temp.length() == 4) { // yyyy
+            if(temp.length() == 4) { // yyyyx
                 // check timestamp
                 CharSequence val = input;
                 int[] buf = dateBuffer;
                 int k = 0, j = index - 4, off = j;
-                int end = j + 30; // "0000-00-00Z\t00:00:00.000+00:00".length()
+                int end = Math.min(j + 30, val.length()); // "0000-00-00Z\t00:00:00.000+00:00".length()
                 while (j < end) {
                     char c0 = val.charAt(j++);
                     if(DATE1.contains(c0)) {
@@ -849,12 +854,6 @@ public class YAMLParser {
                         }
                         off = j;
                     }
-                }
-
-                if(val.length() <= j) {
-                    // Unexpected EOF
-                    index = j;
-                    throw err("[YMLTS] 在日期解析结束前遇到了EOF");
                 }
             }
             return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
@@ -999,7 +998,7 @@ public class YAMLParser {
             return input.charAt(i);
         }
 
-        public int getLineOffset(int i) throws ParseException {
+        public int getLineOffset(int i) {
             CharSequence in = this.input;
             boolean flg = false;
             int count = 0;
@@ -1010,10 +1009,13 @@ public class YAMLParser {
                     case '\n':
                         return count;
                     case '-':
-                        if(flg)
-                            throw err("重复的 '-'", i);
-                        flg = true;
-                        count++;
+                        if(flg) {
+                            flg = false;
+                            count = 0;
+                        } else {
+                            flg = true;
+                            count++;
+                        }
                         break;
                     case ' ':
                         count++;

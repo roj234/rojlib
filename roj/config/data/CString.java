@@ -135,8 +135,13 @@ public final class CString extends CEntry {
 
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (c == '\r' || c == '\n') {
-                return false;
+            switch (c) {
+                case '\r':
+                case '\n':
+                    return false;
+                case ':':
+                    if(i != 0)
+                        return false;
             }
         }
         return true;

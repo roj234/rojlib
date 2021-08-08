@@ -48,6 +48,7 @@ public abstract class JSONConfiguration {
     static Logger logger = Logger.getLogger("JSONConf");
 
     final File config;
+    CMapping map;
 
     public JSONConfiguration(File config, boolean instantInit) {
         this.config = config;
@@ -62,7 +63,7 @@ public abstract class JSONConfiguration {
 
     public final void init() {
         if (!config.isFile()) {
-            resetConfig(new CMapping(), config);
+            resetConfig(this.map = new CMapping(), config);
         } else {
             reload();
         }
@@ -70,13 +71,13 @@ public abstract class JSONConfiguration {
 
     public void reload() {
         try (FileInputStream fis = new FileInputStream(config)) {
-            CMapping map = JSONParser.parse(new String(IOUtil.readFully(fis), StandardCharsets.UTF_8), 2).asMap();
+            CMapping map = this.map = JSONParser.parse(new String(IOUtil.readFully(fis), StandardCharsets.UTF_8), 2).asMap();
             readConfig(map);
         } catch (IOException | ParseException | ClassCastException e) {
             logger.catching(e);
             config.renameTo(new File(config.getPath() + ".broken." + System.currentTimeMillis()));
             logger.warn("配置文件读取失败! 重新生成配置!");
-            resetConfig(new CMapping(), config);
+            resetConfig(this.map = new CMapping(), config);
         }
     }
 
@@ -92,8 +93,7 @@ public abstract class JSONConfiguration {
     }
 
     public final void save() {
-        CMapping map = new CMapping();
-        saveConfig(map);
+        saveConfig(getConfig());
         try (FileOutputStream fos = new FileOutputStream(config)) {
             fos.write(map.toJSON().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
@@ -103,6 +103,13 @@ public abstract class JSONConfiguration {
 
     protected void saveConfig(CMapping map) {
         readConfig(map);
+    }
+
+    public final CMapping getConfig() {
+        CMapping map = this.map;
+        if(map == null)
+            map = this.map = new CMapping();
+        return map;
     }
 
     public final File getFile() {

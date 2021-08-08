@@ -29,122 +29,114 @@ import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.InsnNode;
-import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.simple.MethodSimple;
+import roj.asm.cst.CstRef;
 import roj.asm.type.ParamHelper;
+import roj.asm.visitor.ClassVisitor;
+import roj.util.ByteList;
+import roj.util.ByteReader;
 
-public class TerminalTransformer implements IClassTransformer {
+public class TerminalTransformer extends ClassVisitor implements IClassTransformer {
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
-        ConstantData data = Parser.parseConstants(basicClass);
-        ExitVisitor visitor = new ExitVisitor();
-        visitor.visit(data);
-        return visitor.dirty ? Parser.toByteArray(data) : basicClass;
+        visit(name);
+        ByteList out = visit(clsName = name, new ByteReader(basicClass));
+
+        return dirty ? out.toByteArray() : basicClass;
     }
 
-    public static class ExitVisitor {
-        private String clsName = null;
+    @Override
+    protected void visitMethod(int acc, String name, String desc) {
+        super.visitMethod(acc, name, desc);
+        this.mName = name;
+        this.mDesc = desc;
+    }
 
-        private boolean dirty;
+    String clsName, mName, mDesc;
 
-        private static final String callbackOwner = ParamHelper.classDescriptor(ExitVisitor.class);
-        private String mName;
-        private String mDesc;
-        private boolean warn;
-
-        private ExitVisitor() {
+    @Override
+    protected void invoke(byte code, CstRef method) {
+        String owner = method.getClassName();
+        if(owner.length() < 16 || owner.length() > 17 || !owner.startsWith("java/lang/")) {
+            super.invoke(code, method);
+            return;
         }
-
-        public void visit(ConstantData data) {
-            this.clsName = data.name;
-            warn = (!this.clsName.equals("net/minecraft/client/Minecraft") && !this.clsName.equals("net/minecraft/server/dedicated/DedicatedServer") && !this.clsName.equals("net/minecraft/server/dedicated/ServerHangWatchdog") && !this.clsName.equals("net/minecraft/server/dedicated/ServerHangWatchdog$1") && !this.clsName.equals("net/minecraftforge/fml/common/FMLCommonHandler") && !this.clsName.startsWith("com/jcraft/jogg/") && !this.clsName.startsWith("scala/sys/") && !this.clsName.startsWith("net/minecraft/server/gui/MinecraftServerGui") && !this.clsName.startsWith("com/sun/jna/"));
-            for (MethodSimple method : data.methods) {
-                this.mName = method.name.getString();
-                this.mDesc = method.type.getString();
-
-                AttrCode code = Parser.getOrCreateCode(data, method);
-
-                if (code == null) {
-                    continue;
+        String name = method.desc().getName().getString();
+        String desc = method.desc().getType().getString();
+        switch (owner) {
+            case "java/lang/System":
+                if (code == Opcodes.INVOKESTATIC && name.equals("exit") && desc.equals("(I)V")) {
+                    if (warn) {
+                        FMLLog.log.warn("=============================================================");
+                        FMLLog.log.warn("MOD HAS DIRECT REFERENCE System.exit() THIS IS NOT ALLOWED REROUTING TO FML!");
+                        FMLLog.log.warn("Offender: {}.{}{}", clsName, mName, mDesc);
+                        FMLLog.log.warn("Use FMLCommonHandler.exitJava instead");
+                        FMLLog.log.warn("=============================================================");
+                    }
+                    bw.writeByte(code).writeShort(cw.getMethodRefId(callbackOwner, "systemExitCalled", desc));
+                    dirty = true;
+                    return;
                 }
-                for (InsnNode node : code.instructions) {
-                    if (node instanceof InvokeInsnNode)
-                        visitMethodInsn((InvokeInsnNode) node);
+                break;
+            case "java/lang/Runtime":
+                if (code != Opcodes.INVOKEVIRTUAL && desc.equals("(I)V") && name.length() == 4) {
+                    switch (name) {
+                        case "exit":
+                        case "halt":
+                            warn();
+                            bw.writeByte(code).writeShort(cw.getMethodRefId(callbackOwner, "runtimeExitCalled", desc));
+                            dirty = true;
+                            return;
+                    }
+
                 }
-            }
+                break;
         }
+        super.invoke(code, method);
+    }
 
-        public void visitMethodInsn(InvokeInsnNode node) {
-            int opcode = node.code & 0xff;
-            String owner = node.owner();
-            String name = node.name();
-            String desc = node.rawTypes();
-            if (opcode == 184 && owner.equals("java/lang/System") && name.equals("exit") && desc.equals("(I)V")) {
-                if (warn) {
-                    FMLLog.log.warn("=============================================================");
-                    FMLLog.log.warn("MOD HAS DIRECT REFERENCE System.exit() THIS IS NOT ALLOWED REROUTING TO FML!");
-                    FMLLog.log.warn("Offender: {}.{}{}", TerminalTransformer.ExitVisitor.this.clsName, mName, mDesc);
-                    FMLLog.log.warn("Use FMLCommonHandler.exitJava instead");
-                    FMLLog.log.warn("=============================================================");
-                }
-                node.owner(callbackOwner);
-                node.name("systemExitCalled");
-                TerminalTransformer.ExitVisitor.this.dirty = true;
-            } else if (opcode == 182 && owner.equals("java/lang/Runtime") && name.equals("exit") && desc.equals("(I)V")) {
-                if (warn) {
-                    FMLLog.log.warn("=============================================================");
-                    FMLLog.log.warn("MOD HAS DIRECT REFERENCE Runtime.exit() THIS IS NOT ALLOWED REROUTING TO FML!");
-                    FMLLog.log.warn("Offender: {}.{}{}", TerminalTransformer.ExitVisitor.this.clsName, mName, mDesc);
-                    FMLLog.log.warn("Use FMLCommonHandler.exitJava instead");
-                    FMLLog.log.warn("=============================================================");
-                }
-                node.setOpcode(Opcodes.INVOKESTATIC);
-                node.owner(callbackOwner);
-                node.name("runtimeExitCalled");
-                node.rawTypes("(Ljava/lang/Runtime;I)V");
-                TerminalTransformer.ExitVisitor.this.dirty = true;
-            } else if (opcode == 182 && owner.equals("java/lang/Runtime") && name.equals("halt") && desc.equals("(I)V")) {
-                if (warn) {
-                    FMLLog.log.warn("=============================================================");
-                    FMLLog.log.warn("MOD HAS DIRECT REFERENCE Runtime.halt() THIS IS NOT ALLOWED REROUTING TO FML!");
-                    FMLLog.log.warn("Offendor: {}.{}{}", TerminalTransformer.ExitVisitor.this.clsName, mName, mDesc);
-                    FMLLog.log.warn("Use FMLCommonHandler.exitJava instead");
-                    FMLLog.log.warn("=============================================================");
-                }
-                node.setOpcode(Opcodes.INVOKESTATIC);
-                node.owner(callbackOwner);
-                node.name("runtimeExitCalled");
-                node.rawTypes("(Ljava/lang/Runtime;I)V");
-                TerminalTransformer.ExitVisitor.this.dirty = true;
-            }
+    private void warn() {
+        if (warn) {
+            FMLLog.log.warn("=============================================================");
+            FMLLog.log.warn("MOD直接退出JAVA, 这是不允许的!");
+            FMLLog.log.warn("来自: {}.{}{}", clsName, mName, mDesc);
+            FMLLog.log.warn("请使用 FMLCommonHandler.exitJava();");
+            FMLLog.log.warn("=============================================================");
         }
+    }
 
-        public static void systemExitCalled(int status) {
-            checkAccess();
-            System.exit(status);
-        }
+    private boolean dirty, warn;
 
-        public static void runtimeExitCalled(Runtime runtime, int status) {
-            checkAccess();
-            runtime.exit(status);
-        }
+    private static final String callbackOwner = ParamHelper.classDescriptor(TerminalTransformer.class);
 
-        public static void runtimeHaltCalled(Runtime runtime, int status) {
-            checkAccess();
-            runtime.halt(status);
-        }
+    public void visit(String clsName) {
+        warn = (!clsName.equals("net/minecraft/client/Minecraft") && !clsName.equals("net/minecraft/server/dedicated/DedicatedServer") && !clsName
+                .equals("net/minecraft/server/dedicated/ServerHangWatchdog") && !clsName.equals("net/minecraft/server/dedicated/ServerHangWatchdog$1") && !clsName
+                .equals("net/minecraftforge/fml/common/FMLCommonHandler") && !clsName.startsWith("com/jcraft/jogg/") && !clsName
+                .startsWith("scala/sys/") && !clsName.startsWith("net/minecraft/server/gui/MinecraftServerGui") && !clsName
+                .startsWith("com/sun/jna/"));
+    }
 
-        private static void checkAccess() {
-            StackTraceElement[] cause = Thread.currentThread().getStackTrace();
-            String callingClass = (cause.length > 2) ? cause[3].getClassName() : "none";
-            String callingParent = (cause.length > 3) ? cause[4].getClassName() : "none";
-            if (!(callingClass.startsWith("net.minecraftforge.fml.") || (callingClass.equals("net.minecraft.client.Minecraft") && callingParent.equals("net.minecraft.client.Minecraft")) || (callingClass.equals("net.minecraft.server.gui.MinecraftServerGui$1") && callingParent.equals("java.awt.AWTEventMulticaster")) || (callingClass.equals("net.minecraft.server.dedicated.DedicatedServer") && callingParent.equals("net.minecraft.server.MinecraftServer")) || callingClass.equals("net.minecraft.server.dedicated.ServerHangWatchdog") || callingClass.equals("net.minecraft.server.dedicated.ServerHangWatchdog$1")))
-                throw new FMLSecurityManager.ExitTrappedException();
-        }
+    public static void systemExitCalled(int status) {
+        checkAccess();
+        System.exit(status);
+    }
+
+    public static void runtimeExitCalled(Runtime runtime, int status) {
+        checkAccess();
+        runtime.exit(status);
+    }
+
+    public static void runtimeHaltCalled(Runtime runtime, int status) {
+        checkAccess();
+        runtime.halt(status);
+    }
+
+    private static void checkAccess() {
+        StackTraceElement[] cause = Thread.currentThread().getStackTrace();
+        String callingClass = (cause.length > 2) ? cause[3].getClassName() : "none";
+        String callingParent = (cause.length > 3) ? cause[4].getClassName() : "none";
+        if (!(callingClass.startsWith("net.minecraftforge.fml.") || (callingClass.equals("net.minecraft.client.Minecraft") && callingParent.equals("net.minecraft.client.Minecraft")) || (callingClass.equals("net.minecraft.server.gui.MinecraftServerGui$1") && callingParent.equals("java.awt.AWTEventMulticaster")) || (callingClass.equals("net.minecraft.server.dedicated.DedicatedServer") && callingParent.equals("net.minecraft.server.MinecraftServer")) || callingClass.equals("net.minecraft.server.dedicated.ServerHangWatchdog") || callingClass.equals("net.minecraft.server.dedicated.ServerHangWatchdog$1")))
+            throw new FMLSecurityManager.ExitTrappedException();
     }
 }

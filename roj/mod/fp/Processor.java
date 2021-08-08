@@ -73,6 +73,9 @@ public abstract class Processor implements Runnable, IntSupplier, BiConsumer<Int
 
     public int getAsInt() {
         Shared.parallel.waitUntilFinish();
+        if(exitCode == 0x23232323) {
+            CmdUtil.error("程序遇到了无法处理的异常，即将退出");
+        }
         return exitCode;
     }
 

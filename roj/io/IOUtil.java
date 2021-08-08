@@ -70,7 +70,7 @@ public class IOUtil {
         return clazz.getName().replace('.', '/') + ".class";
     }
 
-    public static byte[] getBytesSilent(Class<?> provider, String pathName) {
+    public static byte[] getBytesS(Class<?> provider, String pathName) {
         try {
             return getBytes(provider, pathName);
         } catch (FileNotFoundException e) {

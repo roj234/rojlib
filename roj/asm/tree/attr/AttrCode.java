@@ -847,6 +847,8 @@ public class AttrCode extends Attribute {
             case VarType.UNINITIAL:
                 InsnNode node = pcCounter.get(r.readUnsignedShort());
                 return new Var(node);
+            case VarType.UNINITIAL_THIS:
+                return new Var(VarType.UNINITIAL_THIS);
             default:
                 return Var.std(type);
         }

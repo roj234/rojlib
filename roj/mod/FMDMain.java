@@ -86,6 +86,7 @@ import static roj.mod.Shared.*;
 public final class FMDMain {
     static boolean isMain;
 
+    @SuppressWarnings("fallthrough")
     public static void main(String[] args) throws IOException, InterruptedException, ParseException {
         long startTime = System.currentTimeMillis();
 
@@ -161,6 +162,8 @@ public final class FMDMain {
             case "f2m":
                 exitCode = forgeToMcp(args);
                 break;
+            case "cs":
+                args = new String[] {"config", "select", args[1]};
             case "config":
                 exitCode = config(args, currentProject);
                 break;
@@ -355,6 +358,8 @@ public final class FMDMain {
     }
 
     public static int preAT(UIWarp helper) throws IOException {
+        watcher.terminate();
+
         Map<String, Collection<String>> map = AccessTransformer.getTransforms();
         map.clear();
 
@@ -887,7 +892,7 @@ public final class FMDMain {
 
             if (md != null) {
                 try {
-                    resources.put("META-INF" + File.separatorChar + project.atName + ".cfg" , IOUtil.readFile(md.getAtPath()));
+                    resources.put("META-INF/" + project.atName + ".cfg" , IOUtil.readFile(md.getAtPath()));
                 } catch (IOException e) {
                     CmdUtil.warning("更新AT失败", e);
                 }
@@ -919,7 +924,7 @@ public final class FMDMain {
                 Map<String, ByteList> entries = Helpers.cast(resources);
 
                 for (Map.Entry<String, ?> entry : entries.entrySet()) {
-                    if((Object)entry.getValue() instanceof byte[])
+                    if(entry.getValue() instanceof byte[])
                         entry.setValue(Helpers.cast(new ByteList((byte[]) entry.getValue())));
                 }
 

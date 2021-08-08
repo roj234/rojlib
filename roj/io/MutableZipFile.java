@@ -375,15 +375,17 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         for(ModFile file : modified) {
             EFile o = entries.get(file.name);
-            if (o != null) {
-                if (minFile == null || minFile.offset > o.offset) {
-                    minFile = o;
-                }
-                uFile.add(o);
-            }
-            file.file = o;
-            if(file.data == null)
+            if(o != null && file.data == null)
                 entries.remove(file.name);
+            else {
+                if (o != null) {
+                    if (minFile == null || minFile.offset > o.offset) {
+                        minFile = o;
+                    }
+                    uFile.add(o);
+                }
+                file.file = o;
+            }
         }
 
         File tmpFile = new File(file.getAbsolutePath() + System.currentTimeMillis() +  ".tmp");

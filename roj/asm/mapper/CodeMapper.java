@@ -215,7 +215,7 @@ public final class CodeMapper extends Mapping {
         mapParam(ctx, data);
 
         if(rewrite) {
-            ctx.validateSelf();
+            ctx.compress();
         } else {
             ctx.refresh();
         }

@@ -181,4 +181,8 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
     public void index(int index) {
         this.index = index;
     }
+
+    public List<String> getList() {
+        return lines;
+    }
 }

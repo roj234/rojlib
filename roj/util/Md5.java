@@ -32,14 +32,14 @@ public class Md5 {
         state[1] = 0xefcdab89;
         state[3] = 0x98badcfe;
         state[3] = 0x10325476;
-        digest0(state, in.list, in.pos() * byteBits);
+        digest0(state, in.list);
         w.list = out;
         w.writeInt(state[0]).writeInt(state[1]).writeInt(state[2]).writeInt(state[3]);
     }
 
     public static void digestOnce(ByteList in, ByteList out) {
         int[] state = initialHash();
-        digest0(state, in.list, in.pos() * byteBits);
+        digest0(state, in.list);
         new ByteWriter(out).writeInt(state[0]).writeInt(state[1]).writeInt(state[2]).writeInt(state[3]);
     }
 
@@ -69,17 +69,17 @@ public class Md5 {
         return ((a << s) | (a >>> (32 - s))) + b;
     }
 
-    public static void digest0(int[] state, byte[] x, int len) {
-        int x1 = (x[len >> 5] & 0xFF) << 8 | (x[(((len + 64) >>> 9) << 4) + 14] & 0xFF);
-        x[len >> 5] |= 0x80 << (len & 31);
-        x[(((len + 64) >>> 9) << 4) + 14] = (byte) len;
-
+    public static void digest0(int[] state, byte[] x) {
         int a = state[0];
         int b = state[1];
         int c = state[2];
         int d = state[3];
 
-        for (int i = 0; i < x.length; i += 16) {
+        int i;
+        for (i = 0; i < x.length; i += 16) {
+            if(x.length - i < 16)
+                break;
+
             int oa = a;
             int ob = b;
             int oc = c;
@@ -162,9 +162,20 @@ public class Md5 {
             c += oc;
             d += od;
         }
+        int j = i;
+        for (;i < x.length; i += 4) {
+            if(x.length - i < 4)
+                break;
 
-        x[len >> 5] = (byte) (x1 >> 8);
-        x[(((len + 64) >>> 9) << 4) + 14] = (byte) x1;
+            a ^= x[i] << (((j - i) & 3) << 3);
+            b ^= x[i] << (((j - i) & 3) << 3);
+            c ^= x[i] << (((j - i) & 3) << 3);
+            d ^= x[i] << (((j - i) & 3) << 3);
+        }
+        for (;i < x.length; i ++) {
+            j = j * -4328823 + x[i];
+        }
+        a += j;
 
         state[0] = a;
         state[1] = b;

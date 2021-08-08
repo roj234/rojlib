@@ -30,7 +30,6 @@ import roj.text.CharList;
 
 import javax.annotation.Nonnull;
 import java.io.DataInput;
-import java.io.IOException;
 import java.io.UTFDataFormatException;
 
 /**
@@ -308,8 +307,21 @@ public final class ByteReader implements DataInput {
     }
 
     @Override
-    public String readLine() throws IOException {
-        throw new IOException("懒得做");
+    public String readLine() {
+        CharList cl = new CharList();
+        int start = index;
+        ByteList bytes = this.bytes;
+        while (start < bytes.pos()) {
+            byte b = bytes.get(start++);
+            if(b == '\r' || b == '\n') {
+                if(b == '\r' && start < bytes.pos() && bytes.get(start) == '\n')
+                    start++;
+                break;
+            }
+            cl.append((char) b);
+        }
+        index = start;
+        return cl.toString();
     }
 
     @Override

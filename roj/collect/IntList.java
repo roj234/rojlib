@@ -30,7 +30,8 @@ import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.ListIterator;
 import java.util.PrimitiveIterator;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -48,6 +49,15 @@ public class IntList implements Iterable<Integer> {
     public IntList() {
         list = EMPTY;
         length = -1;
+    }
+
+    public IntList(IntMap.KeySet<?> set) {
+        list = new int[set.size()];
+        int j = 0;
+        for (PrimitiveIterator.OfInt itr = set.iterator(); itr.hasNext(); ) {
+            list[j++] = itr.nextInt();
+        }
+        this.length = size - 1;
     }
 
     public IntList(int size) {

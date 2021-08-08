@@ -22,16 +22,26 @@ public abstract class ClassVisitor {
     ByteList tmp = new ByteList();
     protected ByteList out = new ByteList();
 
-    protected void visitBegin(int version) {
-
+    protected void visitBegin(int major, int minor) {
+        bw.writeShort(major).writeShort(minor);
     }
 
     protected void visitConstants(ConstantPool pool) {
 
     }
 
-    protected void visitClassName() {
+    protected void visitClass(int acc, String name, String parent, String[] interfaces) {
+        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(parent)).writeShort(interfaces.length);
+        for(String s : interfaces)
+            bw.writeShort(cw.getUtfId(s));
+    }
 
+    protected void visitField(int acc, String name, String desc) {
+        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(desc));
+    }
+
+    protected void visitMethod(int acc, String name, String desc) {
+        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(desc));
     }
 
     protected void visitEnd() {
@@ -44,9 +54,9 @@ public abstract class ClassVisitor {
         out1.ensureCapacity(r.length());
         out1.clear();
 
-        out1.addAll(r.getBytes(), 0, 8);
+        out1.addAll(r.getBytes(), 0, 4);
         r.index = 4;
-        visitBegin(r.readUnsignedShort());
+        visitBegin(r.readUnsignedShort(), r.readUnsignedShort());
 
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         pool.read(r);
@@ -59,18 +69,26 @@ public abstract class ClassVisitor {
         ByteList out2 = this.out;
         bw.list = out2;
         out2.clear();
-        out2.addAll(r.getBytes(), r.index, 6);
-        r.index += 6;
+        int acc = r.readUnsignedShort();
+        String ccc = ((CstUTF) pool.get(r)).getString();
+        int t = r.readUnsignedShort();
+        String parent = t == 0 ? null : ((CstUTF) pool.array(t)).getString();
 
         int len0 = r.readUnsignedShort();
-        out2.addAll(r.getBytes(), r.index - 2,  (len0 + 1) << 1);
-        r.index += len0 << 1;
+        String[] arr = new String[len0];
+        for (int i = 0; i < arr.length; i++) {
+            arr[i] = ((CstUTF) pool.get(r)).getString();
+        }
+        visitClass(acc, ccc, parent, arr);
 
         int cur = r.index;
 
         len0 = r.readUnsignedShort();
         for (int i = 0; i < len0; i++) {
-            r.index += 6;
+            int access = r.readUnsignedShort();
+            String name = ((CstUTF) pool.get(r)).getString();
+            String desc = ((CstUTF) pool.get(r)).getString();
+            visitField(access, name, desc);
 
             int attr = r.readUnsignedShort();
 
@@ -85,10 +103,10 @@ public abstract class ClassVisitor {
 
         len0 = r.readUnsignedShort();
         for (int i = 0; i < len0; i++) {
-            out2.addAll(r.getBytes(), r.index, 8); // acc, name, desc, attrLen
-            r.index += 2;
+            int access = r.readUnsignedShort();
             String name = ((CstUTF) pool.get(r)).getString();
             String desc = ((CstUTF) pool.get(r)).getString();
+            visitMethod(access, name, desc);
 
             int attrLen = r.readUnsignedShort();
 

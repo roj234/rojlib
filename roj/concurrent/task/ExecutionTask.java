@@ -35,6 +35,11 @@ public final class ExecutionTask extends AbstractExecutionTask {
 
     @Override
     public void run() {
-        runnable.run();
+        try {
+            runnable.run();
+        } catch (Throwable e) {
+            e.printStackTrace();
+            throw e;
+        }
     }
 }

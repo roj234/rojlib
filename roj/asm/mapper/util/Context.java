@@ -224,8 +224,7 @@ public class Context {
 
     public void validateSelf() {
         try {
-            getData();
-            result.setValue(Parser.toByteArray(Parser.parse(get())));
+            compress();
             getData();
         } catch (Throwable e) {
             try {
@@ -235,5 +234,14 @@ public class Context {
             } catch (Throwable ignored) {}
             throw e;
         }
+    }
+
+    public void compress() {
+        getData();
+        byte[] array = Parser.toByteArray(Parser.parse(get()));
+        if(result == null)
+            result = new ByteList(array);
+        else
+            result.setValue(array);
     }
 }

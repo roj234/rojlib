@@ -69,7 +69,7 @@ public final class FrameTraverser {
         code.toByteArray(new ConstantWriter(), new ByteWriter());
     }
 
-    public static boolean PERFORM_ADDITIONAL_CHECK = true;
+    public static final boolean PERFORM_ADDITIONAL_CHECK = false;
 
     public FrameTraverser() {}
 

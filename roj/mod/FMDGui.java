@@ -74,9 +74,9 @@ public class FMDGui extends JFrame {
     static {
         Pattern pattern;
         try {
-            pattern = Pattern.compile("^(?!_)(?!.*?_$)[a-zA-Z0-9\\-_\\p{Script=Han}.]{2,20}$");
+            pattern = Pattern.compile("^(?!_)(?!.*?_$)[a-zA-Z0-9\\-_\\p{Script=Han}.]{1,20}$");
         } catch (PatternSyntaxException e1) {
-            pattern = Pattern.compile("^(?!_)(?!.*?_$)[a-zA-Z0-9\\-_\\u4e00-\\u9fa5.]{2,20}$");
+            pattern = Pattern.compile("^(?!_)(?!.*?_$)[a-zA-Z0-9\\-_\\u4e00-\\u9fa5.]{1,20}$");
         }
 
         FILE_NAME = pattern.matcher("");
@@ -499,11 +499,7 @@ public class FMDGui extends JFrame {
                 project.version = verInp.getText();
             }
 
-            if(dependInp.getText().length() > 0) {
-                error.add("前置不合法");
-            } else {
-                project.setDependencyString(dependInp.getText());
-            }
+            project.setDependencyString(dependInp.getText());
 
             if(error.isEmpty()) {
                 project.save();

@@ -144,7 +144,7 @@ public final class FileUtil {
             int fl = relative.length();
             for (File file1 : files1) {
                 if (file1.isDirectory()) {
-                    findAndOpenStream(file1, map, relative.append(file1.getName()).append(File.separatorChar), predicate);
+                    findAndOpenStream(file1, map, relative.append(file1.getName()).append('/'), predicate);
                 } else {
                     if (predicate.test(file1)) {
                         try {
@@ -167,6 +167,7 @@ public final class FileUtil {
             for (File file1 : files) {
                 if (file1.isDirectory()) {
                     result &= deletePath(file1);
+                    result &= file1.delete();
                 }
                 result &= deleteFile(file1);
             }

@@ -188,9 +188,7 @@ public final class JSONParser {
             ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
             if (deserializer != null) {
                 return new CObject<>(map, deserializer);
-            }/* else {
-                // warning
-            }*/
+            }
         }
 
         return map;

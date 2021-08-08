@@ -410,6 +410,36 @@ public final class ConstMapper extends Mapping {
         }
     }
 
+    public void remapStream(List<Context> arr) {
+        if(selfSupers == null) {
+            selfSupers = new MyHashMap<>();
+            selfSkipFields = new MyHashSet<>(libSkipFields);
+            selfSkipMethods = new MyHashSet<>(libSkipMethods);
+            selfMethods = new MyHashMap<>();
+        }
+
+        Context curr = null;
+
+        try {
+            for (int i = 0; i < arr.size(); i++) {
+                parse(curr = arr.get(i));
+            }
+
+            initSelfSuperMap();
+
+            for (int i = 0; i < arr.size(); i++) {
+                mapSelf(curr = arr.get(i));
+            }
+
+            for (int i = 0; i < arr.size(); i++) {
+                mapConstant(curr = arr.get(i));
+            }
+
+        } catch (Throwable e) {
+            throw new RuntimeException("At parsing " + curr, e);
+        }
+    }
+
     public void clear() {
         classMap.clear();
         fieldMap.clear();
