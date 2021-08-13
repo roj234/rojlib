@@ -26,19 +26,7 @@
 
 package roj.reflect;
 
-import roj.asm.Opcodes;
-import roj.asm.Parser;
-import roj.asm.tree.Clazz;
-import roj.asm.tree.Method;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.ClassInsnNode;
-import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.type.ParamHelper;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
-import roj.asm.util.NodeHelper;
-
-import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 
 /**
  * No description provided
@@ -47,6 +35,7 @@ import java.lang.reflect.InvocationTargetException;
  * @version 0.1
  * @since 2021/6/18 9:51
  */
+@Deprecated
 public class DirectConstructorAccess {
     /**
      * 获取实例化器
@@ -56,7 +45,7 @@ public class DirectConstructorAccess {
      * @return constructor
      */
     public static <T> T get(Class<T> invoker, Class<?> target) {
-        return get(invoker, "invoke", target);
+        return DirectAccessor.builder(invoker).construct(target, "invoke").build();
     }
 
     /**
@@ -66,88 +55,18 @@ public class DirectConstructorAccess {
      * @param target  target class to create constructor
      * @return constructor
      */
-    @SuppressWarnings("unchecked")
     public static <T> T get(Class<T> invoker, String invokeMethodName, Class<?> target) {
-        java.lang.reflect.Method invoke = null;
-
-        for (java.lang.reflect.Method method : invoker.getMethods()) {
-            if (method.getName().equals(invokeMethodName)) {
-                invoke = method;
-                break;
-            }
-        }
-
-        if (invoke == null)
-            throw new IllegalArgumentException("No " + invoker.getName() + ".invoke(?) found.");
-
-        Class<?>[] param = invoke.getParameterTypes();
-        if (!invoke.getReturnType().isAssignableFrom(target))
-            throw new IllegalArgumentException("targetClass not instanceof invoke.getReturnType()");
-
-        int i = DirectMethodAccess.nextId.getAndIncrement();
-
-        String clsName = "roj.reflect.DCA$" + i;
-
-        try {
-            final byte[] code = getClazz("roj/reflect/DCA$" + i, invoker.getName(), invokeMethodName, target.getName(), invoke);
-            Class<?> clz = ClassDefiner.INSTANCE.defineClass(clsName, code);
-            return (T) SunReflection.createClass(clz);
-        } catch (ClassFormatError | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-            throw new RuntimeException("DCA Internal error!", e);
-        }
+        return DirectAccessor.builder(invoker).construct(target, invokeMethodName).build();
     }
 
-    static byte[] getClazz(String selfName, String invokerName, String invokeMethodName, String targetClass, java.lang.reflect.Method method) {
-        Clazz clz = new Clazz();
-
-        DirectMethodAccess.makeClassHeader(selfName, invokerName, clz);
-
-        /**
-         * Some data
-         */
-
-        FlagList publicAccess = new FlagList(AccessFlag.PUBLIC);
-
-        /**
-         * R construct(R)
-         */
-        Class<?>[] params = method.getParameterTypes();
-
-        String rawParamInit = ParamHelper.classDescriptors(params, void.class);
-        String rawParam = ParamHelper.classDescriptors(params, method.getReturnType());
-
-        String nName = targetClass.replace('.', '/');
-
-        Method invoke = new Method(publicAccess, clz, invokeMethodName, rawParam);
-        AttrCode code;
-        invoke.code = code = new AttrCode(invoke);
-
-        int size = method.getParameterCount();
-
-        code.instructions.add(new ClassInsnNode(Opcodes.NEW, nName));
-        code.instructions.add(NodeHelper.cached(Opcodes.DUP));
-
-        for (int i = 0; i < params.length; ) {
-            String tag = ParamHelper.XPrefix(params[i]);
-            switch (tag) {
-                case "D":
-                case "L":
-                    size++;
-            }
-            NodeHelper.compress(code.instructions, NodeHelper.X_LOAD(tag.charAt(0)), ++i);
-        }
-
-        code.stackSize = size + 1;
-        code.localSize = size + 1;
-
-        code.instructions.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, nName, "<init>", rawParamInit));
-        code.instructions.add(NodeHelper.cached(Opcodes.ARETURN));
-        code.instructions.add(AttrCode.METHOD_END_MARK);
-
-        clz.methods.add(invoke);
-
-        DirectMethodAccess.makeClassInit(clz, publicAccess);
-
-        return Parser.toByteArray(clz);
+    /**
+     * 获取实例化器
+     *
+     * @param invoker IInvoker invoker class
+     * @param target  target class to create constructor
+     * @return constructor
+     */
+    public static <T> T get(Class<T> invoker, String[] invokeMethodNames, Class<?> target, List<Class<?>[]> theMethodsYouGotForObjectIO) {
+        return DirectAccessor.builder(invoker).construct(target, theMethodsYouGotForObjectIO, invokeMethodNames).build();
     }
 }

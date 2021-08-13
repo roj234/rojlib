@@ -395,6 +395,10 @@ public class CharList implements CharSequence {
         return append(Character.highSurrogate(cp)).append(Character.lowSurrogate(cp));
     }
 
+    public boolean contains(CharSequence s) {
+        return indexOf(s, 0) != -1;
+    }
+
     static final class CharArraySpliterator implements Spliterator.OfInt {
         private final char[] array;
         private int index;        // current index, modified on advance/split

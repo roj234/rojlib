@@ -223,6 +223,7 @@ public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>,
         this.entries = newEntries;
     }
 
+    @Deprecated
     public Integer put(K key, Integer e) {
         return putInt(key, e);
     }
@@ -408,6 +409,7 @@ public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>,
     }
 
     @SuppressWarnings("unchecked")
+    @Deprecated
     public Integer get(Object id) {
         Entry<K> entry = getEntry((K) id);
         return entry == null ? null : entry.v;

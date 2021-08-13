@@ -97,10 +97,10 @@ public final class Config extends JSONConfiguration {
 
     private static void hackSubThreadPriority() {
         try {
-            IFieldAccessor accessor = ReflectionUtils.unsafeAccIfPresent(Thread.class.getDeclaredField("group"));
+            IFieldAccessor accessor = ReflectionUtils.accessField(Thread.class.getDeclaredField("group"));
             accessor.setInstance(Thread.currentThread());
             ThreadGroup tg = (ThreadGroup) accessor.getObject();
-            accessor = ReflectionUtils.unsafeAccIfPresent(ThreadGroup.class.getDeclaredField("threads"));
+            accessor = ReflectionUtils.accessField(ThreadGroup.class.getDeclaredField("threads"));
             accessor.setInstance(tg);
 
 
@@ -225,7 +225,7 @@ public final class Config extends JSONConfiguration {
         if (debug != 0)
             shrinkLog = false;
         dumpAnnotationInfo = (debug & 64) != 0;
-        DirectMethodAccess.DEBUG = (debug & 1024) != 0;
+        DirectAccessor.DEBUG = (debug & 1024) != 0;
 
 
 

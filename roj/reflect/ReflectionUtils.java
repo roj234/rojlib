@@ -26,19 +26,16 @@
 
 package roj.reflect;
 
-import roj.collect.EmptyList;
 import roj.concurrent.OperationDone;
 import roj.concurrent.Ref;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.WeakHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -49,22 +46,6 @@ import java.util.function.Consumer;
  * @since 2021/6/17 19:51
  */
 public final class ReflectionUtils {
-
-    //private static final J8Util.UFA modifiersField;
-    /*private static final Method ACCESSOR_GETTER;
-
-    static {
-        //final String MODIFIERS_FIELD = "modifiers";
-        try {
-            //Field modifiers = Field.class.getDeclaredField(MODIFIERS_FIELD);
-            //modifiers.setAccessible(true);
-            //modifiersField = J8Util.getUnsafeFieldAccessor(modifiers);
-            ACCESSOR_GETTER = getMethod(Field.class, "getFieldAccessor", false, Object.class);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }*/
-
     /**
      * 将old的field复制到now
      *
@@ -86,15 +67,6 @@ public final class ReflectionUtils {
                 setFinal(now, getField(now.getClass(), name), value);
             }
         }
-    }
-
-    /**
-     * 获取构造器
-     */
-    public static Constructor<?> getConstructor(Class<?> clazz, boolean isPublic, Class<?>... param) throws NoSuchMethodException {
-        Constructor<?> var3 = isPublic ? clazz.getConstructor(param) : clazz.getDeclaredConstructor(param);
-        var3.setAccessible(true);
-        return var3;
     }
 
     /**
@@ -148,67 +120,6 @@ public final class ReflectionUtils {
             clazz = clazz.getSuperclass();
         }
         return methods;
-    }
-
-    public static void consumeMethods(Class<?> clazz, Consumer<Method> consumer) {
-        while (clazz != null) {
-            for (Method method : clazz.getDeclaredMethods())
-                consumer.accept(method);
-            clazz = clazz.getSuperclass();
-        }
-    }
-
-    /**
-     * 实例化对象
-     */
-    public static Object instantiateObject(Class<?> clazz, boolean isPublic, Class<?>[] classes, Object[] paramValues) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
-        return getConstructor(clazz, isPublic, classes).newInstance(paramValues);
-    }
-
-
-    /**
-     * 获取方法
-     */
-    @Nonnull
-    public static Method getMethod(@Nonnull Class<?> clazz, @Nonnull String name, @Nullable Class<?>... param) throws NoSuchMethodException {
-        if (param == null)
-            param = EmptyList.EMPTY_C;
-
-        Class<?>[] finalParam = param;
-
-        Ref<Method> ref = Ref.from();
-        try {
-            consumeMethods(clazz, method -> {
-                if (method.getName().equals(name) && method.getParameterCount() == finalParam.length) {
-                    Class<?>[] arr = method.getParameterTypes();
-                    for (int i = 0; i < finalParam.length; i++) {
-                        if (arr[i] != finalParam[i])
-                            return;
-                    }
-                    ref.set(method);
-                    throw OperationDone.INSTANCE;
-                }
-            });
-        } catch (OperationDone ex) {
-            ref.get().setAccessible(true);
-            return ref.get();
-        }
-
-        throw new NoSuchMethodException(clazz.getName() + '.' + name);
-    }
-
-    /**
-     * 调用无参私有方法
-     */
-    public static Object invokeMethod(@Nonnull Object obj, @Nonnull String name) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        return getMethod(obj.getClass(), name, (Class<?>) null).invoke(obj, EmptyList.EMPTY);
-    }
-
-    /**
-     * 调用有参私有方法
-     */
-    public static Object invokeMethod(Object obj, String name, @Nullable Class<?>[] param, @Nullable Object[] paramValue) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        return getMethod(obj.getClass(), name, param).invoke(obj, paramValue == null ? EmptyList.EMPTY : paramValue);
     }
 
     /**
@@ -272,21 +183,6 @@ public final class ReflectionUtils {
     }
 
     /**
-     * 设置本类字段值
-     *
-     * @param instance 实例or class
-     * @param name     name
-     * @param value    new value
-     */
-    public static void setValue(@Nonnull Object instance, String name, Object value) throws NoSuchFieldException, IllegalAccessException {
-        if (instance.getClass() == Class.class) {
-            setValue(null, (Class<?>) instance, name, value);
-        } else {
-            setValue(instance, instance.getClass(), name, value);
-        }
-    }
-
-    /**
      * 设置static final字段值
      *
      * @param clazz     class
@@ -331,43 +227,27 @@ public final class ReflectionUtils {
         setFinal(null, field, value);
     }
 
-    /**
-     * 警告: 需要事先知道类型
-     * 警告：直接调用native代码
-     * 警告：不能在java9使用
-     *
-     * @see DirectFieldAccess
-     */
-    @Deprecated
-    public static IFieldAccessor fasterField(Field field) {
-        return unsafeAccIfPresent(field);
-    }
-
     public static void setFinal(Object o, Field field, Object value) {
-        // 获得 public 权限(绕过权限检测)
-        //field.setAccessible(true);
-
-        // 将modifiers域设为非final,这样就可以修改了
-
-        //modifiersField.setInstance(field);
-        //int modifiers = modifiersField.getInt();
-        // 去掉 final 标志位
-        //modifiers &= ~Modifier.FINAL;
-        //modifiersField.setInt(modifiers);
-
-        //FieldAccessor fa = ;
-        //fastField(field, o).set(o, value);
-
-        IFieldAccessor acc = unsafeAccIfPresent(field);
+        IFieldAccessor acc = accessField(field);
         acc.setInstance(o);
         acc.setObject(value);
     }
 
-    public static IFieldAccessor unsafeAccIfPresent(@Nonnull Field field) {
+    static WeakHashMap<Field, IFieldAccessor> accessorWeakHashMap = new WeakHashMap<>();
+    public static IFieldAccessor accessField(@Nonnull Field field) {
+        IFieldAccessor accessor = accessorWeakHashMap.get(field);
+        if(accessor != null)
+            return accessor;
         try {
             return new U.UFA(field);
         } catch (Throwable e) {
-            return new FDA(field);
+            accessor = DirectAccessor
+                    .builder(IFieldAccessor.class)
+                    .makeCache(field.getDeclaringClass())
+                    .access(field.getDeclaringClass(), new String[]{ field.getName() }, new String[]{ "get" + DirectFieldAccess.accessorName(field) }, new String[]{"set" + DirectFieldAccess.accessorName(field) }, true)
+                    .build();
+            accessorWeakHashMap.put(field, accessor);
+            return accessor;
         }
     }
 
@@ -397,9 +277,7 @@ public final class ReflectionUtils {
                 if(!classes.contains(c)) {
                     classes.add(c);
 
-                    for (Class<?> itf : c.getInterfaces()) {
-                        pending.add(itf);
-                    }
+                    Collections.addAll(pending, c.getInterfaces());
                     Class<?> s = c.getSuperclass();
                     if(s != null)
                         pending.add(s);
@@ -408,182 +286,6 @@ public final class ReflectionUtils {
             pending.removeRange(0, size);
         }
         return classes;
-    }
-
-    private static final class FDA extends IFieldAccessor {
-        public FDA(Field field) {
-            super(field);
-            field.setAccessible(true);
-        }
-
-        @Override
-        public Object getObject() {
-            try {
-                return field.get(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public boolean getBoolean() {
-            try {
-                return field.getBoolean(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public byte getByte() {
-            try {
-                return field.getByte(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public char getChar() {
-            try {
-                return field.getChar(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public short getShort() {
-            try {
-                return field.getShort(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public int getInt() {
-            try {
-                return field.getInt(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public long getLong() {
-            try {
-                return field.getLong(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public float getFloat() {
-            try {
-                return field.getFloat(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public double getDouble() {
-            try {
-                return field.getDouble(instance);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setObject(Object obj) {
-            try {
-                field.set(instance, obj);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setBoolean(boolean value) {
-            try {
-                field.setBoolean(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setByte(byte value) {
-
-            try {
-                field.setByte(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setChar(char value) {
-
-            try {
-                field.setChar(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setShort(short value) {
-
-            try {
-                field.setShort(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setInt(int value) {
-
-            try {
-                field.setInt(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setLong(long value) {
-
-            try {
-                field.setLong(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setFloat(float value) {
-
-            try {
-                field.setFloat(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
-
-        @Override
-        public void setDouble(double value) {
-
-            try {
-                field.setDouble(instance, value);
-            } catch (IllegalAccessException e) {
-                throw OperationDone.NEVER;
-            }
-        }
     }
 
     private static class MyList<T> extends ArrayList<T> {

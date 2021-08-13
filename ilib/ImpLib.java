@@ -428,11 +428,11 @@ public class ImpLib {
     public static void cleanTrash() {
         IFieldAccessor accessor;
         try {
-            accessor = ReflectionUtils.unsafeAccIfPresent(ReflectionUtils.getField(Launch.class, "classLoader"));
+            accessor = ReflectionUtils.accessField(ReflectionUtils.getField(Launch.class, "classLoader"));
 
             LaunchClassLoader loader = (LaunchClassLoader) accessor.getObject();
 
-            accessor = ReflectionUtils.unsafeAccIfPresent(ReflectionUtils.getField(AccessTransformer.class, "modifiers"));
+            accessor = ReflectionUtils.accessField(ReflectionUtils.getField(AccessTransformer.class, "modifiers"));
             //accessor.checkCast = false;
 
             for (IClassTransformer transformer : loader.getTransformers()) {
@@ -450,12 +450,12 @@ public class ImpLib {
                 }
             }
 
-            accessor = ReflectionUtils.unsafeAccIfPresent(ReflectionUtils.getField(loader.getClass(), "resourceCache"));
+            accessor = ReflectionUtils.accessField(ReflectionUtils.getField(loader.getClass(), "resourceCache"));
             accessor.setInstance(loader);
 
             Map<String, byte[]> classCache = (Map<String, byte[]>) accessor.getObject();
 
-            accessor = ReflectionUtils.unsafeAccIfPresent(ReflectionUtils.getField(loader.getClass(), "packageManifests"));
+            accessor = ReflectionUtils.accessField(ReflectionUtils.getField(loader.getClass(), "packageManifests"));
             accessor.setInstance(loader);
 
             Map<Package, Manifest> manifestCache = (Map<Package, Manifest>) accessor.getObject();
@@ -474,11 +474,11 @@ public class ImpLib {
         try {
             Class<?> mixinClz = Class.forName("org.spongepowered.asm.mixin.injection.struct.InjectorGroupInfo$Map");
 
-            accessor = ReflectionUtils.unsafeAccIfPresent(ReflectionUtils.getField(mixinClz, "NO_GROUP"));
+            accessor = ReflectionUtils.accessField(ReflectionUtils.getField(mixinClz, "NO_GROUP"));
 
             Object loader = accessor.getObject();
 
-            accessor = ReflectionUtils.unsafeAccIfPresent(ReflectionUtils.getField(loader.getClass(), "members"));
+            accessor = ReflectionUtils.accessField(ReflectionUtils.getField(loader.getClass(), "members"));
             accessor.setInstance(loader);
 
             List<?> injectCache = (List<?>) accessor.getObject();

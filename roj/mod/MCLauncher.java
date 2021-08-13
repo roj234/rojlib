@@ -101,6 +101,8 @@ public class MCLauncher extends JFrame {
             return;
         }
 
+        Shared.watcher.terminate();
+
         activeWindow = new MCLauncher();
         activeWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }

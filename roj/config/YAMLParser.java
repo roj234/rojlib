@@ -273,6 +273,10 @@ public class YAMLParser {
                     break;
                 case WordPresets.LITERAL:
                 case WordPresets.STRING:
+                case WordPresets.INTEGER:
+                case WordPresets.LONG:
+                case WordPresets.DECIMAL_D:
+                case NULL:
                     if((flag & 8) != 0 && map.containsKey(name.val()))
                         throw wr.err("重复的key: " + name.val());
 
@@ -352,40 +356,40 @@ public class YAMLParser {
             case WordPresets.LITERAL: {
                 boolean k = w.type() == WordPresets.LITERAL;
                 int i = wr.lastWord;
-                if(wr.nextWord().type() == colon) {
-                    if(i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
-                        throw wr.err("映射没有换行");
+                CEntry entry1 = isMappingKey(wr, flag);
+                if(entry1 != null) return entry1;
+                if(k) {
+                    int i1 = cnt.indexOf(':');
+                    if (i1 > 0 && i1 < cnt.length() - 1 && wr.checkLine(i)) {
+                        throw wr.err("[可能误判] 无效的map: 缺少空格");
                     }
-                    wr.index = i;
-                    if(wr.checkLine(i)) {
-                        return CNull.NULL;
-                    }
-
-                    return yamlObject(wr, flag);
-                } else {
-                    wr.retractWord();
-                    if(k) {
-                        int i1 = cnt.indexOf(':');
-                        if (i1 > 0 && i1 < cnt.length() - 1 && wr.checkLine(i)) {
-                            throw wr.err("可能有误判... 无效的map: 缺少空格");
-                        }
-                    }
-
-                    return CString.valueOf(cnt);
                 }
+
+                return CString.valueOf(cnt);
             }
             case WordPresets.DECIMAL_D:
-            case WordPresets.DECIMAL_F:
-                return CDouble.valueOf(w.number().asDouble());
-            case WordPresets.INTEGER:
-                return CInteger.valueOf(w.number().asInt());
+            case WordPresets.DECIMAL_F: {
+                double number = w.number().asDouble();
+                CEntry entry1 = isMappingKey(wr, flag);
+                return entry1 != null ? entry1 : CDouble.valueOf(number);
+            }
+            case WordPresets.INTEGER: {
+                int number = w.number().asInt();
+                CEntry entry1 = isMappingKey(wr, flag);
+                return entry1 != null ? entry1 : CInteger.valueOf(number);
+            }
             case WordPresets.LONG:
                 return w.getIndex() == -1 ? new CYamlDate(w.number().asLong()) : w.getIndex() == -2 ? new CYamlTimestamp(w.number().asLong()) : CLong.valueOf(w.number().asLong());
             case TRUE:
-            case FALSE:
-                return CBoolean.valueOf(w.type() == TRUE);
-            case NULL:
-                return CNull.NULL;
+            case FALSE: {
+                boolean b = w.type() == TRUE;
+                CEntry entry1 = isMappingKey(wr, flag);
+                return entry1 != null ? entry1 : CBoolean.valueOf(b);
+            }
+            case NULL:{
+                CEntry entry1 = isMappingKey(wr, flag);
+                return entry1 != null ? entry1 : CNull.NULL;
+            }
             case delim: {
                 int i = wr.lastWord;
                 if(wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
@@ -417,6 +421,24 @@ public class YAMLParser {
             default:
                 unexpected(wr, cnt);
                 return null;
+        }
+    }
+
+    private static CEntry isMappingKey(YAMLLexer wr, byte flag) throws ParseException {
+        int i = wr.lastWord;
+        if(wr.nextWord().type() == colon) {
+            if(i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
+                throw wr.err("映射没有换行");
+            }
+            wr.index = i;
+            if(wr.checkLine(i)) {
+                return CNull.NULL;
+            }
+
+            return yamlObject(wr, flag);
+        } else {
+            wr.retractWord();
+            return null;
         }
     }
 
@@ -547,7 +569,10 @@ public class YAMLParser {
 
                                 this.index = i;
                                 if (temp.length() == 0) {
-                                    return w == null ? (c == ':' ? readSymbol() : eof()) : w;
+                                    if (w == null) {
+                                        return c == ':' ? readSymbol() : eof();
+                                    }
+                                    return w;
                                 }
                                 if(w != null)
                                     temp.insert(0, w.val());

@@ -322,7 +322,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return remove(s, i, len, NOT_USING);
     }
 
-    private V remove(CharSequence s, int i, int len, Object tc) {
+    V remove(CharSequence s, int i, int len, Object tc) {
         if(len - i < 0)
             throw new IllegalArgumentException("delta length < 0");
 

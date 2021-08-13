@@ -53,7 +53,7 @@ public final class ClassDefiner extends ClassLoader {
 
     private static volatile Method defineClassMethod, defineClass1Method;
 
-    public static boolean debug;
+    public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
 
     private ClassDefiner(ClassLoader parent) {
         super(parent);

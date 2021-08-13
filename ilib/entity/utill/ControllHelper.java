@@ -274,7 +274,7 @@ public class ControllHelper {
         }
         if(IGNITED == null) {
             try {
-                IGNITED = (DataParameter<Boolean>) ReflectionUtils.unsafeAccIfPresent(EntityCreeper.class.getDeclaredField("field_184715_c")).getObject();
+                IGNITED = (DataParameter<Boolean>) ReflectionUtils.accessField(EntityCreeper.class.getDeclaredField("field_184715_c")).getObject();
             } catch (NoSuchFieldException e) {
                 e.printStackTrace();
             }

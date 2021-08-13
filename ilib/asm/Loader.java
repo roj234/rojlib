@@ -307,7 +307,7 @@ public class Loader implements IFMLLoadingPlugin {
     public static void tryPatch(IClassTransformer transformer) {
         if (transformers == null) {
             try {
-                IFieldAccessor accessor = ReflectionUtils.unsafeAccIfPresent(LaunchClassLoader.class.getDeclaredField("transformers"));
+                IFieldAccessor accessor = ReflectionUtils.accessField(LaunchClassLoader.class.getDeclaredField("transformers"));
 
                 accessor.setInstance(Launch.classLoader);
 

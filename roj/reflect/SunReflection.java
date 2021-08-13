@@ -52,7 +52,6 @@ public final class SunReflection {
     };
 
     private static java.lang.reflect.Method newInstance0;
-    //private static java.lang.reflect.Method invoke0;
     private static java.lang.reflect.Method getDeclaredConstructors0;
 
     public static void doSunReflectCache() throws Exception {
@@ -61,10 +60,6 @@ public final class SunReflection {
             java.lang.reflect.Method method = clazz.getDeclaredMethod("newInstance0", Constructor.class, Object[].class);
             method.setAccessible(true);
             newInstance0 = method;
-            //clazz = Class.forName("sun.reflect.NativeMethodAccessorImpl");
-            //method = clazz.getDeclaredMethod("invoke0", java.lang.reflect.Method.class, Object.class, Object[].class);
-            //method.setAccessible(true);
-            //invoke0 = method;
             clazz = Class.class;
             method = clazz.getDeclaredMethod("getDeclaredConstructors0", boolean.class);
             method.setAccessible(true);

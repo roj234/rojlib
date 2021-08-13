@@ -32,6 +32,7 @@ package roj.reflect;
  * @version 0.1
  * @since 2021/4/21 22:51
  */
+@Deprecated
 public interface Instanced {
     void setInstance(Object o);
 

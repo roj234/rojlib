@@ -26,6 +26,7 @@
 package roj.config.data;
 
 import roj.collect.LinkedMyHashMap;
+import roj.collect.MyHashMap;
 import roj.config.word.AbstLexer;
 import roj.text.TextUtil;
 
@@ -266,30 +267,29 @@ public class CMapping extends CEntry {
             if (!selfBetter) {
                 this.map.putAll(anotherMapping.map);
             } else {
-                Map<String, CEntry> map1 = new HashMap<>(this.map);
-                this.map.clear();
+                Map<String, CEntry> map1 = new MyHashMap<>(this.map);
                 this.map.putAll(anotherMapping.map);
                 this.map.putAll(map1);
             }
         } else {
-            Map<String, CEntry> map = new HashMap<>(anotherMapping.map);
-            for (Map.Entry<String, CEntry> entryEntry : this.map.entrySet()) {
-                CEntry entry = entryEntry.getValue();
-                CEntry entry1 = map.remove(entryEntry.getKey());
-                if (entry1 != null) {
-                    if (entry.getType().fits(entry1.getType())) {
-                        switch (entry.getType()) {
+            Map<String, CEntry> map = new MyHashMap<>(anotherMapping.map);
+            for (Map.Entry<String, CEntry> entry : this.map.entrySet()) {
+                CEntry s_val = entry.getValue();
+                CEntry t_val = map.remove(entry.getKey());
+                if (t_val != null) {
+                    if (s_val.getType().fits(t_val.getType())) {
+                        switch (s_val.getType()) {
                             case MAP:
-                                if (!selfBetter) entry1.asMap().merge(entry.asMap(), false, true);
-                                else entry.asMap().merge(entry1.asMap(), true, true);
+                                if (!selfBetter) t_val.asMap().merge(s_val.asMap(), false, true);
+                                else s_val.asMap().merge(t_val.asMap(), true, true);
                                 break;
                             case LIST:
-                                if (!selfBetter) entry1.asList().addAll(entry.asList());
-                                else entry.asList().addAll(entry1.asList());
+                                if (!selfBetter) t_val.asList().addAll(s_val.asList());
+                                else s_val.asList().addAll(t_val.asList());
                                 break;
                         }
                     }
-                    if (!selfBetter) entryEntry.setValue(entry1);
+                    if (!selfBetter) entry.setValue(t_val);
                 }
             }
             this.map.putAll(map);

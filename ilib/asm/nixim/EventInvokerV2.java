@@ -53,6 +53,7 @@ import roj.asm.util.NodeHelper;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
+import roj.reflect.DirectAccessor;
 import roj.reflect.DirectMethodAccess;
 import roj.reflect.SunReflection;
 import roj.util.ByteList;
@@ -109,7 +110,7 @@ public final class EventInvokerV2 implements IEventListener {
 
         Clazz data = new Clazz();
 
-        DirectMethodAccess.makeClassHeader("EH2/merged_" + id.getAndIncrement(), HANDLER_DESC, data);
+        DirectAccessor.makeHeader("EH2/merged_" + id.getAndIncrement(), HANDLER_DESC, data);
         data.attributes.add(new AttrSourceFile(".merged_dynamic"));
 
         final FlagList flags = new FlagList(AccessFlag.PUBLIC);
@@ -233,7 +234,7 @@ public final class EventInvokerV2 implements IEventListener {
 
         {
             Clazz clazz = new Clazz();
-            DirectMethodAccess.makeClassHeader("u", HANDLER_DESC, clazz);
+            DirectMethodAccess.makeHeader("u", HANDLER_DESC, clazz);
             clazz.attributes.add(new AttrSourceFile(".dynamic"));
 
             final FlagList flags = new FlagList(AccessFlag.PUBLIC);
@@ -279,7 +280,7 @@ public final class EventInvokerV2 implements IEventListener {
         }
 
         Clazz clazz = new Clazz();
-        DirectMethodAccess.makeClassHeader("u", HANDLER_DESC, clazz);
+        DirectMethodAccess.makeHeader("u", HANDLER_DESC, clazz);
         clazz.attributes.add(new AttrSourceFile(".dynamic"));
 
         final FlagList flags = new FlagList(AccessFlag.PUBLIC);

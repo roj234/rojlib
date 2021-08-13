@@ -70,7 +70,11 @@ public class ConstantData implements IClass {
 
     public int exceptedBufferLength;
 
+    static final boolean NOVERIFY = System.getProperty("roj.asm.cst.NoVerify") != null;
+
     public void verify() {
+        if(NOVERIFY) return;
+
         String tmp = nameCst.getValue().getString();
         if (tmp.contains(".") || tmp.contains("\\")) {
             throw new IllegalArgumentException("Illegal ClassName " + tmp);

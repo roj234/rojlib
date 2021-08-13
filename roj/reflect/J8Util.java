@@ -28,6 +28,7 @@ package roj.reflect;
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * 警告: 请小心使用
@@ -59,10 +60,7 @@ public final class J8Util {
      * @param thread The thread to run
      */
     public static void unfreezeThread(@Nonnull Thread thread) {
-        if(uav)
-            U.U.unpark(thread);
-        else
-            throw new UnsupportedOperationException("Unsafe is not exist!");
+        LockSupport.unpark(thread);
     }
 
     public static long getFieldOffset(Field field) {
@@ -72,18 +70,6 @@ public final class J8Util {
             } else {
                 return U.U.objectFieldOffset(field);
             }
-        return -1;
-    }
-
-    public static long getObjectHeaderSize() {
-        // java.lang.Integer's sole instance field is:
-        //   private int value
-        // So we can make an educated guess that its offset equals to
-        // the size of object header.
-        if(uav)
-            try {
-                return getFieldOffset(Integer.class.getDeclaredField("value"));
-            } catch (NoSuchFieldException ignored) {}
         return -1;
     }
 
