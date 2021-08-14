@@ -26,6 +26,7 @@
 
 package roj.reflect;
 
+import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
 import roj.concurrent.Ref;
 
@@ -94,12 +95,12 @@ public final class ReflectionUtils {
      * 获取current + 父类 所有Field
      */
     public static List<Field> getFields(Class<?> clazz) {
-        List<Field> fields = new ArrayList<>();
+        MyHashSet<Field> fields = new MyHashSet<>();
         while (clazz != null) {
             Collections.addAll(fields, clazz.getDeclaredFields());
             clazz = clazz.getSuperclass();
         }
-        return fields;
+        return new ArrayList<>(fields);
     }
 
     public static void consumeFields(Class<?> clazz, Consumer<Field> consumer) {
@@ -114,12 +115,12 @@ public final class ReflectionUtils {
      * 获取current + 父类 所有Method
      */
     public static List<Method> getMethods(Class<?> clazz) {
-        List<Method> methods = new ArrayList<>();
+        MyHashSet<Method> methods = new MyHashSet<>();
         while (clazz != null) {
-            Collections.addAll(methods, clazz.getDeclaredMethods());
+            methods.addAll(clazz.getDeclaredMethods());
             clazz = clazz.getSuperclass();
         }
-        return methods;
+        return new ArrayList<>(methods);
     }
 
     /**
@@ -244,7 +245,8 @@ public final class ReflectionUtils {
             accessor = DirectAccessor
                     .builder(IFieldAccessor.class)
                     .makeCache(field.getDeclaringClass())
-                    .access(field.getDeclaringClass(), new String[]{ field.getName() }, new String[]{ "get" + DirectFieldAccess.accessorName(field) }, new String[]{"set" + DirectFieldAccess.accessorName(field) }, true)
+                    .useCache()
+                    .access(field.getDeclaringClass(), new String[]{ field.getName() }, new String[]{ "get" + DirectFieldAccess.accessorName(field) }, new String[]{"set" + DirectFieldAccess.accessorName(field) })
                     .build();
             accessorWeakHashMap.put(field, accessor);
             return accessor;

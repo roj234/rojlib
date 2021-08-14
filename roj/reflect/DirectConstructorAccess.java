@@ -67,6 +67,6 @@ public class DirectConstructorAccess {
      * @return constructor
      */
     public static <T> T get(Class<T> invoker, String[] invokeMethodNames, Class<?> target, List<Class<?>[]> theMethodsYouGotForObjectIO) {
-        return DirectAccessor.builder(invoker).construct(target, theMethodsYouGotForObjectIO, invokeMethodNames).build();
+        return DirectAccessor.builder(invoker).construct(target, invokeMethodNames, theMethodsYouGotForObjectIO).build();
     }
 }

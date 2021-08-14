@@ -43,7 +43,7 @@ import static roj.asm.type.NativeType.*;
  * @since 2021/6/18 9:51
  */
 public final class ParamHelper {
-    static final ThreadLocal<CharList> sharedBuffer = ThreadLocal.withInitial(CharList::new);
+    public static final ThreadLocal<CharList> sharedBuffer = ThreadLocal.withInitial(CharList::new);
 
     /**
      * Method descriptor

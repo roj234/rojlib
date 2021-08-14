@@ -59,9 +59,9 @@ public class DirectFieldAccess {
         Class<?> cache = obj.getClass() == Class.class ? ((Class<?>) obj) : obj.getClass();
         return DirectAccessor
                 .builder(getter_setter_class)
-                .makeCache(cache)
+                .makeCache(cache).useCache()
                 .access(cache,
-                        new String[]{ field.getName() }, new String[]{ "get" + accessorName(field) }, new String[]{"set" + accessorName(field) }, true)
+                        new String[]{ field.getName() }, new String[]{ "get" + accessorName(field) }, new String[]{"set" + accessorName(field) })
                 .build();
     }
 

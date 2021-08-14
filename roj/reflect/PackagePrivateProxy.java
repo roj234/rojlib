@@ -32,6 +32,7 @@ import roj.asm.tree.Clazz;
 import roj.asm.tree.Field;
 import roj.asm.tree.Method;
 import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.ClassInsnNode;
 import roj.asm.tree.insn.FieldInsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.type.ParamHelper;
@@ -41,6 +42,7 @@ import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -55,25 +57,37 @@ import java.util.List;
  */
 public final class PackagePrivateProxy {
     @SuppressWarnings("unchecked")
-    public static <T> Class<T> proxyIt(Class<T> source_class, Class<?> proxy_class, String custom_package, String... proxy_method) {
+    public static <T> Class<T> proxyIt(Class<T> source_class, Class<?> proxy_class, String... proxy_method) {
         java.lang.reflect.Method[] targetMethods = new java.lang.reflect.Method[proxy_method.length];
 
-        java.lang.reflect.Method[] invokeMethods = proxy_class.getMethods();
         List<java.lang.reflect.Method> targetMethods1 = ReflectionUtils.getMethods(source_class);
         for (int i = 0, len = targetMethods.length; i < len; i++) {
-            targetMethods[i] = DirectMethodAccess.findTargetMethod(invokeMethods, targetMethods1, proxy_method[i], proxy_method[i], false);
+            java.lang.reflect.Method m, m1 = null;
+            try {
+                m = source_class.getMethod(proxy_method[i]);
+            } catch (NoSuchMethodException e) {
+                throw new IllegalArgumentException("Unable to find " + source_class.getName() + '.' + proxy_method[i]);
+            }
+            Class<?>[] cs = m.getParameterTypes();
+            for (int j = 0; j < targetMethods1.size(); j++) {
+                java.lang.reflect.Method cmp = targetMethods1.get(j);
+                if(cmp.getParameterCount() == m.getParameterCount() && Arrays.equals(cs, cmp.getParameterTypes())) {
+                    m1 = cmp;
+                    break;
+                }
+            }
+            if(m1 == null)
+                throw new IllegalArgumentException("Unable to find " + proxy_class.getName() + '.' + proxy_method[i]);
+            targetMethods[i] = m1;
         }
 
-        int i = DirectMethodAccess.nextId.getAndIncrement();
-        String newClassName = "_" + custom_package + ".Proxy$" + i;
+        int i = DirectAccessor.NEXT_ID.getAndIncrement();
+        String pkg = proxy_class.getName().substring(0, proxy_class.getName().lastIndexOf('/') + 1);
 
         try {
-
-            final byte[] code = compile("_"+custom_package.replace('.', '/') + "/Proxy$" + i, proxy_class.getName(), source_class.getName(), targetMethods);
-            ClassDefiner.INSTANCE.defineClass(newClassName, code);
-
-            return (Class<T>) Class.forName(newClassName);
-        } catch (ClassFormatError | ClassNotFoundException e) {
+            byte[] code = compile(pkg.replace('.', '/') + "/Proxy$" + i, proxy_class.getName(), source_class.getName(), targetMethods);
+            return (Class<T>) ClassDefiner.INSTANCE.defineClass(pkg + ".Proxy$" + i, code);
+        } catch (ClassFormatError e) {
             throw new RuntimeException("3P Internal error!", e);
         }
     }
@@ -87,17 +101,45 @@ public final class PackagePrivateProxy {
 
         Type field = new Type(proxy = proxy.replace('.', '/'), 0);
 
-        /**
-         * target self.obj
-         * (instance)
-         */
-        final String INSTANCE_FIELD_NAME = "obj";
+        out.fields.add(new Field(pubFlags, "obj", field));
 
-        out.fields.add(new Field(pubFlags, INSTANCE_FIELD_NAME, field));
+        FieldInsnNode getInst = new FieldInsnNode(Opcodes.GETFIELD, self, "obj", field);
 
-        FieldInsnNode getInst = new FieldInsnNode(Opcodes.GETFIELD, self, INSTANCE_FIELD_NAME, field);
+        FieldInsnNode _set = new FieldInsnNode(Opcodes.PUTFIELD, out, 0);
+        FieldInsnNode _get = new FieldInsnNode(Opcodes.GETFIELD, out, 0);
 
-        DirectMethodAccess.makeClassInstanced(parent, out, new FieldInsnNode(Opcodes.PUTFIELD, self, INSTANCE_FIELD_NAME, field), pubFlags);
+        AttrCode code;
+        InsnList insn;
+
+        Method set = new Method(pubFlags, out, "setInstance", "(Ljava/lang/Object;)V");
+        set.code = code = new AttrCode(set);
+
+        code.stackSize = 2;
+        code.localSize = 2;
+        insn = code.instructions;
+        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+        insn.add(new ClassInsnNode(Opcodes.CHECKCAST, proxy));
+        insn.add(_set);
+        insn.add(NodeHelper.cached(Opcodes.RETURN));
+        insn.add(AttrCode.METHOD_END_MARK);
+
+        out.methods.add(set);
+
+        Method clear = new Method(pubFlags, out, "clearInstance", "()V");
+        clear.code = code = new AttrCode(clear);
+
+        code.stackSize = 2;
+        code.localSize = 1;
+
+        insn = code.instructions;
+        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.cached(Opcodes.ACONST_NULL));
+        insn.add(_set);
+        insn.add(NodeHelper.cached(Opcodes.RETURN));
+        insn.add(AttrCode.METHOD_END_MARK);
+
+        out.methods.add(clear);
 
         for (java.lang.reflect.Method method : methods) {
             Class<?>[] params = method.getParameterTypes();
@@ -105,10 +147,10 @@ public final class PackagePrivateProxy {
             String desc = ParamHelper.classDescriptors(params, method.getReturnType());
 
             Method invoke = new Method(pubFlags, out, method.getName(), desc);
-            AttrCode code = invoke.code = new AttrCode(invoke);
+            code = invoke.code = new AttrCode(invoke);
             out.methods.add(invoke);
 
-            final InsnList insn = code.instructions;
+            insn = code.instructions;
 
             insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
             insn.add(getInst);

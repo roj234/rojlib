@@ -54,7 +54,6 @@ import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.DirectMethodAccess;
 import roj.reflect.SunReflection;
 import roj.util.ByteList;
 
@@ -125,7 +124,7 @@ public final class EventInvokerV2 implements IEventListener {
         InsnList insns = code.instructions;
 
         insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
-        insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectMethodAccess.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
+        insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectAccessor.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
 
         insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
         insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
