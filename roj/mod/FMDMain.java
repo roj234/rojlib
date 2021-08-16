@@ -84,13 +84,13 @@ import static roj.mod.Shared.*;
  * @since 2021/6/18 10:51
  */
 public final class FMDMain {
-    static boolean isMain;
+    static boolean isCLI;
 
     @SuppressWarnings("fallthrough")
     public static void main(String[] args) throws IOException, InterruptedException, ParseException {
         long startTime = System.currentTimeMillis();
 
-        if(!isMain) {
+        if(!isCLI) {
             if (!CONF_INDEX.exists()) {
                 config(new String[]{"config", "select"}, null);
             }
@@ -113,13 +113,13 @@ public final class FMDMain {
         }
 
         if(args.length == 0) {
-            if(isMain) {
+            if(isCLI) {
                 CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload");
                 System.out.println();
                 return;
             }
 
-            isMain = true;
+            isCLI = true;
             Tokenizer tokenizer = new Tokenizer();
             ArrayList<String> tmp = new ArrayList<>(48);
 
@@ -171,13 +171,13 @@ public final class FMDMain {
                 exitCode = deobf(args);
                 break;
             case "reflect":
-                ReflectTool.start(!isMain);
+                ReflectTool.start(!isCLI);
                 break;
             case "preAT":
                 exitCode = preAT(new UIWarp());
                 break;
             case "reload":
-                if(isMain) {
+                if(isCLI) {
                     CmdUtil.warning("重新加载映射表...");
                     mapperFwd.clear();
                     initForwardMapper();
@@ -228,7 +228,7 @@ public final class FMDMain {
                 CmdUtil.warning("参数错误");
         }
 
-        if(isMain) return;
+        if(isCLI) return;
 
         long costTime = System.currentTimeMillis() - startTime;
         CmdUtil.info("主线程运行时长" + ((double)costTime / 1000d));
@@ -358,7 +358,7 @@ public final class FMDMain {
     }
 
     public static int preAT(UIWarp helper) throws IOException {
-        watcher.terminate();
+        watcher.reset();
 
         Map<String, Collection<String>> map = AccessTransformer.getTransforms();
         map.clear();
@@ -699,8 +699,8 @@ public final class FMDMain {
             if(!args.containsKey("zl"))
                 watcher.reset();
 
-            if(args.containsKey("zl") && !isMain)
-                CmdUtil.info("增量编译! ", false);
+            //if(args.containsKey("zl") && !isCLI)
+            //    CmdUtil.info("增量编译! ", false);
             for (Project proj : project.getAllDependencies()) {
                 if(!compile(args, proj, jarDest, flag | 2)) {
                     CmdUtil.info("前置编译失败");
@@ -742,6 +742,7 @@ public final class FMDMain {
                     files.add(new File(s));
                 }
             }
+            FileFilter.state = 0;
         }
         if(files == null) {
             files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_SRC : FileFilter.F_JAVA_OA));
@@ -818,8 +819,10 @@ public final class FMDMain {
         File jarFile = new File(jarDest, jarName);
 
         while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile)) {
-            jarFile = new File(jarDest, System.currentTimeMillis() + jarName);
-            CmdUtil.warning("输出jar已被锁定... 改为 " + jarFile.getName());
+            if(!isCLI || !UIUtil.readBoolean("输出jar已被锁定, 是否能解决? ")) {
+                jarFile = new File(jarDest, System.currentTimeMillis() + jarName);
+                CmdUtil.warning("输出jar已被锁定... 改为 " + jarFile.getName());
+            }
         }
 
         // 反正compile时间绝对够
@@ -883,7 +886,7 @@ public final class FMDMain {
                 if(FileFilter.state > 0) {
                     int i = FileUtil.removeEmptyPaths(FileFilter.modified);
                     if(DEBUG)
-                        CmdUtil.info("删除了" + FileFilter.state + "个已删除的文件 " + i);
+                        CmdUtil.info("删除了" + FileFilter.state + "个已删除的文件, folder: " + i);
                 }
             }
 
@@ -955,6 +958,7 @@ public final class FMDMain {
                     CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
                 }
 
+                System.out.println("Bytelist entries " + entries);
                 for (int i = 0; i < list.size(); i++) {
                     entries.remove(list.get(i).getName());
                 }

@@ -69,7 +69,7 @@ public final class DirectAccessor<T> {
     public static boolean       DEBUG;
     public static final IBitSet EMPTY_BITS           = new SingleBitSet();
 
-    static final boolean        CHECK_CLASS_CAST = System.getProperty("roj.reflect.dac.checkCast") != null;
+    static final boolean        CHECK_CLASS_CAST = System.getProperty("roj.reflect.dac.checkCast") == null;
     static final AtomicInteger  NEXT_ID          = new AtomicInteger();
     static final FlagList       PUBLIC_ACCESS    = new FlagList(AccessFlag.PUBLIC);
 
@@ -225,7 +225,8 @@ public final class DirectAccessor<T> {
             insn = code.instructions;
             insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
             insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-            insn.add(new ClassInsnNode(Opcodes.CHECKCAST, type));
+            if(CHECK_CLASS_CAST)
+                insn.add(new ClassInsnNode(Opcodes.CHECKCAST, type));
             insn.add(_set);
             insn.add(NodeHelper.cached(Opcodes.RETURN));
             insn.add(AttrCode.METHOD_END_MARK);
@@ -426,7 +427,7 @@ public final class DirectAccessor<T> {
             Class<?>[] params = method.getParameterTypes();
 
             String initParam = ParamHelper.classDescriptors(params, void.class);
-            String methodParam = objectDescriptors(params, invokerReturns[i], objectModes != null);
+            String methodParam = objectDescriptors(params, invokerReturns[i], objectModes == null);
 
             roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, methodNames[i], methodParam);
 
@@ -441,7 +442,7 @@ public final class DirectAccessor<T> {
             for (Class<?> param : params) {
                 String tag = ParamHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), size++);
-                if (!param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
+                if (CHECK_CLASS_CAST && !param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, param.getName().replace('.', '/')));
                 switch (tag) {
                     case "D":
@@ -498,6 +499,13 @@ public final class DirectAccessor<T> {
     public DirectAccessor<T> delegate_o(Class<?> target, String methodName) {
         String[] arr = new String[] {methodName};
         return delegate(target, arr, EMPTY_BITS, arr, Collections.emptyList());
+    }
+
+    /**
+     * @see #delegate(Class, String[], IBitSet, String[], List)
+     */
+    public DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames) {
+        return delegate(target, methodNames, EMPTY_BITS, methodNames, Collections.emptyList());
     }
 
     /**
@@ -655,7 +663,7 @@ public final class DirectAccessor<T> {
 
             String desc = ParamHelper.classDescriptors(params, method.getReturnType());
 
-            String selfDesc = objectModes == null ? desc : objectDescriptors(params, method.getReturnType(), true);
+            String selfDesc = objectModes == null ? desc : objectDescriptors(params, method.getReturnType(), false);
             roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, selfMethodNames[i], selfDesc);
             AttrCode code;
             invoke.code = code = new AttrCode(invoke);
@@ -670,6 +678,8 @@ public final class DirectAccessor<T> {
                     insn.add(cache.node);
                 } else {
                     insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                    if (CHECK_CLASS_CAST)
+                        insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     invoke.parameters().add(0, new Type("java/lang/Object"));
                 }
             }
@@ -678,7 +688,7 @@ public final class DirectAccessor<T> {
             for (Class<?> param : params) {
                 String tag = ParamHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), ++size);
-                if (!param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
+                if (CHECK_CLASS_CAST && !param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, param.getName().replace('.', '/')));
                 switch (tag) {
                     case "D":
@@ -714,8 +724,15 @@ public final class DirectAccessor<T> {
     /**
      * @see #access(Class, String[], String[], String[])
      */
-    public DirectAccessor<T> access(Class<?> target, String... fieldNames) {
+    public DirectAccessor<T> access(Class<?> target, String[] fieldNames) {
         return access(target, fieldNames, capitalize(fieldNames, "get"), capitalize(fieldNames, "set"));
+    }
+
+    /**
+     * @see #access(Class, String[], String[], String[])
+     */
+    public DirectAccessor<T> access(Class<?> target, String fieldName, String getterName, String setterName) {
+        return access(target, new String[] { fieldName }, new String[] { getterName }, new String[]{ setterName });
     }
 
     /**
@@ -823,6 +840,8 @@ public final class DirectAccessor<T> {
                         insn.add(cache.node);
                     } else {
                         insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                        if (CHECK_CLASS_CAST)
+                            insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     }
                     insn.add(new FieldInsnNode(Opcodes.GETFIELD, targetName, field.getName(), fieldType));
                 } else {
@@ -841,7 +860,7 @@ public final class DirectAccessor<T> {
                 AttrCode code = set.code = new AttrCode(set);
 
                 char type = set.getReturnType().type;
-                code.stackSize = type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1;
+                code.stackSize = type == NativeType.DOUBLE || type == NativeType.LONG ? 3 : 2;
 
                 InsnList insn = code.instructions;
                 if(!isStatic) {
@@ -851,12 +870,14 @@ public final class DirectAccessor<T> {
                         insn.add(cache.node);
                     } else {
                         insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                        if (CHECK_CLASS_CAST)
+                            insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     }
                 } else {
-                    code.localSize = code.stackSize;
+                    code.localSize = --code.stackSize;
                 }
                 insn.add(NodeHelper.X_LOAD_I(fieldType.nativeName().charAt(0), isStatic || useCache ? 1 : 2));
-                if (fieldType.type == CLASS && !field.getType().isAssignableFrom(setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
+                if (CHECK_CLASS_CAST && fieldType.type == CLASS && !field.getType().isAssignableFrom(setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fieldType.owner));
                 insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, targetName, field.getName(), fieldType));
                 insn.add(NodeHelper.cached(Opcodes.RETURN));
@@ -885,16 +906,32 @@ public final class DirectAccessor<T> {
         insn.add(new ClassInsnNode(Opcodes.NEW, targetName));
         insn.add(NodeHelper.cached(Opcodes.DUP));
 
-        int size = method.getParameterCount();
+        int size = 1;
         List<Type> params = ParamHelper.parseMethod(initParam);
         params.remove(params.size() - 1);
         for (int j = 0; j < params.size(); j++) {
+            char pf;
             switch (params.get(j).type) {
-                case 'D':
-                case 'L':
+                case NativeType.CLASS:
+                    pf = 'A';
+                    break;
+                case NativeType.BOOLEAN:
+                case NativeType.BYTE:
+                case NativeType.CHAR:
+                case NativeType.SHORT:
+                    pf = 'I';
+                    break;
+                case NativeType.LONG:
+                    pf = 'L';
+                default:
+                    pf = params.get(j).type;
+            }
+            NodeHelper.compress(insn, NodeHelper.X_LOAD(pf), size++);
+            switch (params.get(j).type) {
+                case NativeType.DOUBLE:
+                case NativeType.LONG:
                     size++;
             }
-            NodeHelper.compress(insn, NodeHelper.X_LOAD(params.get(j).type), ++j);
         }
 
         code.stackSize = code.localSize = size + 1;
@@ -1010,8 +1047,10 @@ public final class DirectAccessor<T> {
 
             InsnList insn = code.instructions;
             insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            if (CHECK_CLASS_CAST)
+                insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
             insn.add(NodeHelper.X_LOAD_I(targetType.nativeName().charAt(0), 2));
-            if (targetType.type == CLASS)
+            if (CHECK_CLASS_CAST && targetType.type == CLASS)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetType.owner));
             insn.add(new FieldInsnNode(Opcodes.PUTFIELD, targetName, targetFieldName, targetType));
             insn.add(NodeHelper.cached(Opcodes.RETURN));
@@ -1096,15 +1135,15 @@ public final class DirectAccessor<T> {
         return params;
     }
 
-    static String objectDescriptors(Class<?>[] classes, Class<?> returns, boolean ok) {
+    static String objectDescriptors(Class<?>[] classes, Class<?> returns, boolean no_obj) {
         CharList sb = ParamHelper.sharedBuffer.get();
         sb.clear();
         sb.append('(');
 
         for (Class<?> clazz : classes) {
-            ParamHelper.classDescriptor(sb, ok & clazz.isPrimitive() ? clazz : Object.class);
+            ParamHelper.classDescriptor(sb, no_obj | clazz.isPrimitive() ? clazz : Object.class);
         }
         sb.append(')');
-        return ParamHelper.classDescriptor(sb, ok & returns.isPrimitive() ? returns : Object.class).toString();
+        return ParamHelper.classDescriptor(sb, no_obj | returns.isPrimitive() ? returns : Object.class).toString();
     }
 }

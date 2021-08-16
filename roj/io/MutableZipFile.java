@@ -509,19 +509,43 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             appender.write(t.list, 0, t.pos());
         }
 
-        modified.clear();
         buffer.clear();
 
         // write ALL CDir header
         eof.cDirOffset = tmpFile.length();
         ByteList bl = writer.list;
-        for (EFile file : entries.values()) {
-            writeAttr(writer, file);
+
+        // Unsorted_CD ...
+        // 排序CDir属性
+        if(minFile != null) {
+            for (UnionerL.Region region : uFile) {
+                if (region.node().next() != null) {
+                    // 不用再做验证，做过一次了
+                    UnionerL.Point point = region.node();
+                    if (point.end())
+                        point = point.next(); // 找到Start
+
+                    writeAttr(writer, point.owner());
+                } else if(!region.node().end())
+                    writeAttr(writer, region.node().owner());
+
+                if(bl.pos() > 1024) {
+                    bl.writeToStream(appender);
+                    bl.clear();
+                }
+            }
+        }
+
+        for (ModFile file : modified) {
+            writeAttr(writer, file.file);
             if(bl.pos() > 1024) {
                 bl.writeToStream(appender);
                 bl.clear();
             }
         }
+
+        modified.clear();
+
         if(bl.pos() > 0) {
             bl.writeToStream(appender);
         }

@@ -26,6 +26,7 @@
 
 package roj.reflect;
 
+import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
 import roj.concurrent.Ref;
@@ -242,12 +243,18 @@ public final class ReflectionUtils {
         try {
             return new U.UFA(field);
         } catch (Throwable e) {
-            accessor = DirectAccessor
-                    .builder(IFieldAccessor.class)
-                    .makeCache(field.getDeclaringClass())
-                    .useCache()
-                    .access(field.getDeclaringClass(), new String[]{ field.getName() }, new String[]{ "get" + DirectFieldAccess.accessorName(field) }, new String[]{"set" + DirectFieldAccess.accessorName(field) })
-                    .build();
+            if((field.getModifiers() & AccessFlag.FINAL) == 0) {
+                accessor = DirectAccessor
+                        .builder(IFieldAccessor.class)
+                        .makeCache(field.getDeclaringClass())
+                        .useCache()
+                        .access(field.getDeclaringClass(), new String[]{field.getName()},
+                                new String[]{"get" + DirectFieldAccess.accessorName(field)},
+                                new String[]{"set" + DirectFieldAccess.accessorName(field)})
+                        .build();
+            } else {
+                accessor = new VarHandleAccessor(field);
+            }
             accessorWeakHashMap.put(field, accessor);
             return accessor;
         }

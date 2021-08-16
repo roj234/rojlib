@@ -427,7 +427,7 @@ public class YAMLParser {
     private static CEntry isMappingKey(YAMLLexer wr, byte flag) throws ParseException {
         int i = wr.lastWord;
         if(wr.nextWord().type() == colon) {
-            if(i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
+            if(wr.getLineOffset(i) == wr.getLineOffset(wr.index) && i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
                 throw wr.err("映射没有换行");
             }
             wr.index = i;
@@ -1025,7 +1025,7 @@ public class YAMLParser {
 
         public int getLineOffset(int i) {
             CharSequence in = this.input;
-            boolean flg = false;
+            boolean flg = true;
             int count = 0;
             while (i > 0) {
                 char c = in.charAt(--i);
@@ -1033,7 +1033,7 @@ public class YAMLParser {
                     case '\r':
                     case '\n':
                         return count;
-                    case '-':
+                    case '-': // 要这行后面有东西才算数
                         if(flg) {
                             flg = false;
                             count = 0;

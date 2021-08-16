@@ -237,8 +237,7 @@ public class AttrCode extends Attribute {
 
         InsnNode last = insn.remove(insn.size() - 1);
         if (last != METHOD_END_MARK) {
-            System.err.println(this.toString());
-            throw new IllegalArgumentException("Endpoint must be METHOD_END_MARK");
+            insn.add(last);
         }
 
         ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());

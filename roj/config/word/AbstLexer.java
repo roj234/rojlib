@@ -281,7 +281,7 @@ public abstract class AbstLexer {
         while (i < in.length()) {
             char c = in.charAt(i++);
             if (slash) {
-                i = slashHandler(c, v, i);
+                i = slashHandler(input, c, v, i);
                 slash = false;
             } else {
                 if(end == c) {
@@ -313,7 +313,7 @@ public abstract class AbstLexer {
     /**
      * 转义符处理
      */
-    protected final int slashHandler(char c, CharList temp, int index) throws ParseException {
+    protected static int slashHandler(CharSequence input, char c, CharList temp, int index) throws ParseException {
         switch (c) {
             case '\'':
             case '"':
@@ -336,14 +336,14 @@ public abstract class AbstLexer {
                 temp.append('\f');
                 break;
             case 'U': // UXXXXXXXX
-                int UIndex = MathUtils.parseInt(input.subSequence(index, index + 8), 16);
+                int UIndex = MathUtils.parseInt(input, index, index + 8, 16);
 
                 index += 8;
 
                 temp.append((char) UIndex);
                 break;
             case 'u': // uXXXX
-                int uIndex = MathUtils.parseInt(input.subSequence(index, index + 4), 16);
+                int uIndex = MathUtils.parseInt(input, index, index + 4, 16);
 
                 index += 4;
 
@@ -353,6 +353,31 @@ public abstract class AbstLexer {
                 throw new ParseException(input, "Unexpected \\" + c, index - 1, null);
         }
         return index;
+    }
+
+    public static CharList deSlashes(CharSequence in, CharList output) throws ParseException {
+        int i = 0;
+
+        boolean slash = false;
+
+        while (i < in.length()) {
+            char c = in.charAt(i++);
+            if (slash) {
+                i = slashHandler(in, c, output, i);
+                slash = false;
+            } else {
+                if(c == '\\') {
+                    slash = true;
+                } else {
+                    output.append(c);
+                }
+            }
+        }
+
+        if (slash) {
+            throw new ParseException(in, "未终止的 SLASH (\\)", i, null);
+        }
+        return output;
     }
 
     // region lexer function
