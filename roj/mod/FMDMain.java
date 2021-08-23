@@ -958,7 +958,6 @@ public final class FMDMain {
                     CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
                 }
 
-                System.out.println("Bytelist entries " + entries);
                 for (int i = 0; i < list.size(); i++) {
                     entries.remove(list.get(i).getName());
                 }

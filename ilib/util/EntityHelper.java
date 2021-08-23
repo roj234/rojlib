@@ -28,6 +28,13 @@ package ilib.util;
 
 import com.google.common.base.Predicate;
 import ilib.entity.EntityLightningBoltMI;
+import roj.concurrent.OperationDone;
+import roj.concurrent.Ref;
+import roj.math.MathUtils;
+import roj.math.Vec2d;
+import roj.reflect.DirectAccessor;
+import roj.util.Helpers;
+
 import net.minecraft.block.BlockTrapDoor;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -47,16 +54,11 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
+
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
-import roj.concurrent.OperationDone;
-import roj.concurrent.Ref;
-import roj.math.MathUtils;
-import roj.math.Vec2d;
-import roj.reflect.DirectConstructorAccess;
-import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -550,7 +552,7 @@ public class EntityHelper {
     }
 
     public static Function<World, ? extends Entity> createEntityFactory(Class<? extends Entity> cls) {
-        return Helpers.cast(DirectConstructorAccess.get(Constructor.class, "apply0", cls));
+        return Helpers.cast(DirectAccessor.builder(Function.class).construct(cls, "apply", World.class).build());
     }
 
     public static void dismountEntity(EntityLivingBase rider, Entity riding) {
@@ -724,15 +726,6 @@ public class EntityHelper {
                 a.getZOffset() + c.getZOffset());
         consumer.accept(d.getXOffset(), d.getZOffset());
         consumer.accept(a.getXOffset(), a.getZOffset());
-    }
-
-    public interface Constructor extends Function<Object, Object> {
-        @Override
-        default Object apply(Object o) {
-            return apply0((World) o);
-        }
-
-        Entity apply0(World world);
     }
 
     private interface BiIntConsumer {

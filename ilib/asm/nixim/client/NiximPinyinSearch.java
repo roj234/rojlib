@@ -26,7 +26,13 @@
 package ilib.asm.nixim.client;
 
 import ilib.asm.nixim.FastSearchTree;
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+import roj.collect.FilterList;
+import roj.collect.MyHashSet;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.recipebook.RecipeList;
 import net.minecraft.client.main.GameConfiguration;
@@ -39,11 +45,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.FilterList;
-import roj.collect.MyHashSet;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,7 +70,7 @@ public class NiximPinyinSearch extends Minecraft {
     @Override
     @RemapTo("func_193986_ar")
     public void populateSearchTreeManager() {
-        SearchTree<ItemStack> stackTree = new FastSearchTree<>(MethodEntryPoint::getItemInformation, (stack) -> Collections.singleton(Item.REGISTRY.getNameForObject(stack.getItem())));
+        SearchTree<ItemStack> stackTree = new FastSearchTree<>(MCHooks::getItemInformation, (stack) -> Collections.singleton(Item.REGISTRY.getNameForObject(stack.getItem())));
 
         NonNullList<ItemStack> items = new NonNullList<>(new FilterList<>((old, latest) -> {
             stackTree.add(latest);
@@ -84,7 +85,7 @@ public class NiximPinyinSearch extends Minecraft {
             final List<IRecipe> list = recipes.getRecipes();
             List<String> list1 = new ArrayList<>(list.size() * 5);
             for (IRecipe recipe : list) {
-                list1.addAll(MethodEntryPoint.getItemInformation(recipe.getRecipeOutput()));
+                list1.addAll(MCHooks.getItemInformation(recipe.getRecipeOutput()));
             }
             return list1;
         }, (recipes) -> {

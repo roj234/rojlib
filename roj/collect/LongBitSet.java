@@ -222,7 +222,8 @@ public class LongBitSet implements IBitSet {
     }
 
     public void fillAll(int len) {
-        int x = Math.min(len >> 6, set.length);
+        expand(len);
+        int x = len >> 6;
         for (int i = 0; i < x; i++)
             set[i] = 0xffffffffffffffffL;
         int o = len & 63;
@@ -240,6 +241,7 @@ public class LongBitSet implements IBitSet {
         LongBitSet copied = new LongBitSet(cap);
         System.arraycopy(set, 0, copied.set, 0, set.length);
         copied.max = this.max;
+        copied.size = this.size;
         return copied;
     }
 

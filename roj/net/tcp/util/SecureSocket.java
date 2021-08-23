@@ -84,7 +84,8 @@ public class SecureSocket extends InsecureSocket {
      * We use our superclass' requestBB for our application input buffer.
      * Outbound application data is supplied to us by our callers.
      */
-    private ByteBuffer networkIn, networkOut;
+    private ByteBuffer networkIn;
+    public ByteBuffer networkOut;
 
     /*
      * An empty ByteBuffer for use when one isn't available, say
@@ -169,6 +170,7 @@ public class SecureSocket extends InsecureSocket {
                 bb.position(bb.position() + wrote);
             }
             System.out.println("ByteWrote " + wrote);
+            new Throwable().printStackTrace();
         }
         return !bb.hasRemaining();
     }
@@ -180,6 +182,7 @@ public class SecureSocket extends InsecureSocket {
      *          true when handshake is done.
      *          false while handshake is in progress
      */
+    @SuppressWarnings("fallthrough")
     public boolean handShake() throws IOException {
         SSLEngineResult result;
 
@@ -431,9 +434,10 @@ public class SecureSocket extends InsecureSocket {
 
         SSLEngineResult result = engine.wrap(tmp, 0, 1, networkOut);
         retValue = result.bytesConsumed();
+        networkOut.flip();
+        System.out.println(networkOut);
 
         tmp[0] = null;
-        networkOut.flip();
 
         if (result.getStatus() == Status.OK) {
             if (result.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {

@@ -26,6 +26,8 @@
 
 package roj.collect;
 
+import roj.util.EmptyArrays;
+
 import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.ListIterator;
@@ -39,7 +41,6 @@ import java.util.PrimitiveIterator;
  * @since 2021/5/27 13:37索引不变)
  */
 public class IntList implements Iterable<Integer> {
-    public static final int[] EMPTY = new int[0];
     public static final int DEFAULT_VALUE = -1;
 
     protected int[] list;
@@ -47,7 +48,7 @@ public class IntList implements Iterable<Integer> {
     protected int length;
 
     public IntList() {
-        list = EMPTY;
+        list = EmptyArrays.INTS;
         length = -1;
     }
 
@@ -96,7 +97,7 @@ public class IntList implements Iterable<Integer> {
     @Nonnull
     public int[] toArray() {
         if(size == 0)
-            return EMPTY;
+            return EmptyArrays.INTS;
         int[] arr = new int[size];
         System.arraycopy(list, 0, arr, 0, size);
         return arr;

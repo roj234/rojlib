@@ -25,6 +25,8 @@
  */
 package roj.net.tcp.ssl;
 
+import java.io.InputStream;
+
 /**
  * No description provided
  *
@@ -36,8 +38,8 @@ public interface SslConfig {
     boolean isServerSide();
     boolean isNeedClientAuth();
 
-    String getPkPath();
-    String getCaPath();
+    InputStream getPkPath();
+    InputStream getCaPath();
     char[] getPasswd();
 
     default Object getAllocator() {

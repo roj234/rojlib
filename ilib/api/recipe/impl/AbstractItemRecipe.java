@@ -29,10 +29,11 @@ import ilib.api.recipe.BaseRecipe;
 import ilib.api.recipe.IRecipe;
 import ilib.fluid.handler.IFluidProvider;
 import ilib.util.InventoryUtil;
-import net.minecraft.item.ItemStack;
-import roj.collect.LongBitSet;
+import roj.collect.IBitSet;
 import roj.util.Helpers;
 import roj.util.Idx;
+
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -48,7 +49,7 @@ import java.util.PrimitiveIterator;
  */
 public abstract class AbstractItemRecipe extends BaseRecipe implements IRecipe {
     public final List<ItemStack> output;
-    protected LongBitSet keepInputIds;
+    protected IBitSet keepInputIds;
 
     public AbstractItemRecipe(String name, int mePerTick, int tickCost, boolean shaped) {
         super(name, mePerTick, tickCost, shaped);
@@ -58,6 +59,11 @@ public abstract class AbstractItemRecipe extends BaseRecipe implements IRecipe {
     public AbstractItemRecipe(String name, int me, int tick, boolean shaped, List<ItemStack> output) {
         super(name, me, tick, shaped);
         this.output = output;
+    }
+
+    @Override
+    public boolean isStandard() {
+        return true;
     }
 
     @Nonnull

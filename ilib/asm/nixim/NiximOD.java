@@ -25,15 +25,6 @@
  */
 package ilib.asm.nixim;
 
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.NonNullList;
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.oredict.OreDictionary;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
@@ -42,6 +33,17 @@ import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.IntSet;
 import roj.collect.ToIntMap;
+
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.NonNullList;
+import net.minecraft.util.ResourceLocation;
+
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.oredict.OreDictionary;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -81,7 +83,7 @@ public class NiximOD extends OreDictionary {
                 if (registryName == null) {
                     ModContainer modContainer = Loader.instance().activeModContainer();
                     String modContainerName = modContainer == null ? null : modContainer.getName();
-                    FMLLog.bigWarning("A broken ore dictionary registration with name {} has occurred. It adds an item (type: {}) which is currently unknown to the game registry. This dictionary item can only support a single value when registered with ores like this, and NO I am not going to turn this spam off. Just register your ore dictionary entries after the GameRegistry.\nTO USERS: YES this is a BUG in the mod " + modContainerName + " report it to them!", name, ore.getItem().getClass());
+                    FMLLog.bigWarning("矿物词典 {} 的物品 ({}) 没有被注册\n是的，这是 " + modContainerName + " 的bug!", name, ore.getItem().getClass());
                     hash = -1;
                 } else {
                     hash = Item.REGISTRY.getIDForObject(ore.getItem().delegate.get());
@@ -170,7 +172,7 @@ public class NiximOD extends OreDictionary {
 
             ResourceLocation registryName = stack.getItem().delegate.name();
             if (registryName == null) {
-                FMLLog.log.debug("Attempted to find the oreIDs for an unregistered object ({}). This won't work very well.", stack);
+                FMLLog.log.warn("对象 {} 没有注册.", stack);
                 return new int[0];
             } else {
                 int id = Item.REGISTRY.getIDForObject(stack.getItem().delegate.get());

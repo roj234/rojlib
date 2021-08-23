@@ -25,14 +25,14 @@
  */
 package ilib.util;
 
-import net.minecraft.item.ItemStack;
 import roj.asm.Parser;
 import roj.asm.annotation.OpenAny;
 import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
-import roj.reflect.DirectConstructorAccess;
-import roj.reflect.Instanced;
+import roj.reflect.DirectAccessor;
+
+import net.minecraft.item.ItemStack;
 
 import java.io.IOException;
 
@@ -45,10 +45,10 @@ import java.io.IOException;
  */
 @OpenAny(value = "net.minecraft.item.ItemStack", names = {"<$extend>"})
 public class StackCompareHelper {
-    static ComparableItemStackInvoker comparableItemStack;
+    static Initializator maker;
 
     public static ItemStack toComparable(ItemStack stack, boolean checkCount, boolean checkNBT, boolean checkDamage) {
-        if (comparableItemStack == null) {
+        if (maker == null) {
             try {
                 byte[] bytes = IOUtil.getBytes(StackCompareHelper.class, "META-INF/nixim/ComparableItemStack.class");
                 ConstantData data = Parser.parseConstants(bytes);
@@ -57,15 +57,17 @@ public class StackCompareHelper {
                 // because of compress on, all done
                 bytes = Parser.toByteArray(data);
                 Class<?> clz = ClassDefiner.INSTANCE.defineClass("ilrt.ComparableItemStack", bytes);
-                comparableItemStack = DirectConstructorAccess.get(ComparableItemStackInvoker.class, clz);
+                maker = DirectAccessor.builder(Initializator.class)
+                                      .i_construct("ilrt/ComparableItemStack", "(Lnet/minecraft/item/ItemStack;ZZZ)V", "make")
+                                      .build();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
-        return comparableItemStack.invoke(stack, checkCount, checkNBT, checkDamage);
+        return maker.make(stack, checkCount, checkNBT, checkDamage);
     }
 
-    public interface ComparableItemStackInvoker extends Instanced {
-        ItemStack invoke(ItemStack otherStack, boolean checkCount, boolean checkNBT, boolean checkDamage);
+    public interface Initializator {
+        ItemStack make(ItemStack otherStack, boolean checkCount, boolean checkNBT, boolean checkDamage);
     }
 }

@@ -102,9 +102,13 @@ public class FastSetList<T> extends SimpleList<T> implements Set<T> {
 
     @SuppressWarnings("unchecked")
     private boolean initFastChk() {
-        if((enable & 3) == 1) {
-            for (int i = 0; i < size; i++) {
-                indexer.putInt((T) list[i], i);
+        if((enable & 1) == 1) {
+            if((enable & 2) == 0) {
+                indexer.clear();
+                for (int i = 0; i < size; i++) {
+                    indexer.putInt((T) list[i], i);
+                }
+                enable |= 2;
             }
             return true;
         }

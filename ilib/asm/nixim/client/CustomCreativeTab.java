@@ -26,7 +26,7 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
 import ilib.client.CreativeTabsDynamic;
 import ilib.client.api.IContainerCreative;
 import ilib.client.api.ISearchHandler;
@@ -34,6 +34,14 @@ import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
 import ilib.util.PinyinUtil;
+import org.lwjgl.input.Mouse;
+import roj.asm.annotation.OpenAny;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+import roj.collect.FilterList;
+
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainerCreative;
@@ -47,13 +55,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.input.Mouse;
-import roj.asm.annotation.OpenAny;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.FilterList;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -272,7 +273,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
                     NonNullList<ItemStack> checker = new NonNullList<>(new FilterList<>((old, latest) -> {
                         boolean matches = false;
 
-                        for (String line : MethodEntryPoint.makeBetterInformation(latest)) {
+                        for (String line : MCHooks.makeBetterInformation(latest)) {
                             if (containsPinyin(line.toLowerCase(), text)) {
                                 matches = true;
                                 break;

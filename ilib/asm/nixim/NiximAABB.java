@@ -29,6 +29,10 @@ import com.google.common.base.Predicate;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import ilib.Config;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -36,9 +40,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -72,24 +73,8 @@ public abstract class NiximAABB extends World {
      */
     protected NiximAABB(ISaveHandler p_i45749_1_, WorldInfo p_i45749_2_, WorldProvider p_i45749_3_, Profiler p_i45749_4_, boolean p_i45749_5_) {
         super(p_i45749_1_, p_i45749_2_, p_i45749_3_, p_i45749_4_, p_i45749_5_);
-        this.boxCache = CacheBuilder.newBuilder().expireAfterAccess(Config.aabbCache, TimeUnit.MILLISECONDS).initialCapacity(1500).maximumSize(50000).softValues().concurrencyLevel(2)/*.recordStats()*/.build();
-        this.eeCache = CacheBuilder.newBuilder().expireAfterAccess(Config.aabbCache, TimeUnit.MILLISECONDS).initialCapacity(1500).maximumSize(50000).softValues().concurrencyLevel(2)/*.recordStats()*/.build();
-    }
-
-    //@Copy
-    //byte abc;
-
-    @Override
-    @RemapTo("func_72835_b")
-    public void tick() {
-        super.tick();
-
-        //if((Config.debug & 256) != 0) {
-            /*if (abc++ == 0) {
-                PlayerUtil.broadcastAll(boxCache.stats().toString());
-                PlayerUtil.broadcastAll(eeCache.stats().toString());
-            }*/
-        //}
+        this.boxCache = CacheBuilder.newBuilder().expireAfterAccess(Config.aabbCache, TimeUnit.MILLISECONDS).initialCapacity(512).maximumSize(8192).weakValues().concurrencyLevel(1).build();
+        this.eeCache = CacheBuilder.newBuilder().expireAfterAccess(Config.aabbCache, TimeUnit.MILLISECONDS).initialCapacity(512).maximumSize(8192).weakValues().concurrencyLevel(1).build();
     }
 
     @Copy
@@ -138,7 +123,6 @@ public abstract class NiximAABB extends World {
                 if (filter != null)
                     for (T entity : entities) {
                         if (!clazz.isInstance(entity)) {
-                            //System.out.println("Target class : " + clazz.getName() + " real found " + entities);
                             break;
                         }
                         if (!filter.apply(entity)) {

@@ -28,13 +28,16 @@ package ilib.api.recipe;
 
 import ilib.fluid.handler.IFluidProvider;
 import ilib.util.InventoryUtil;
+
 import net.minecraft.item.ItemStack;
+
 import net.minecraftforge.fluids.FluidStack;
 
 import javax.annotation.Nonnull;
 import java.util.Collections;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -43,6 +46,10 @@ import java.util.List;
  */
 public interface IRecipe {
     boolean isShaped();
+
+    default boolean isStandard() {
+        return false;
+    }
 
     default boolean isRandomized() {
         return false;

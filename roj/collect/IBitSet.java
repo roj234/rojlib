@@ -71,4 +71,8 @@ public interface IBitSet extends Iterable<Integer> {
     }
 
     IBitSet addAll(IBitSet ibs);
+
+    default boolean isEmpty() {
+        return size() == 0;
+    }
 }

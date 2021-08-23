@@ -31,12 +31,13 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTSizeTracker;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -60,7 +61,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         int i = this.readVarInt();
         if (i > maxLength) {
             final DecoderException o = new DecoderException("ByteArray with size " + i + " is bigger than allowed " + maxLength);
-            if(Config.packetBufferInfinity) {
+            if(!Config.packetBufferInfinity) {
                 throw o;
             } else {
                 ImpLib.logger().error(o);
@@ -78,7 +79,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         int i = this.readVarInt();
         if (i > maxLength) {
             final DecoderException o = new DecoderException("VarIntArray with size " + i + " is bigger than allowed " + maxLength);
-            if(Config.packetBufferInfinity) {
+            if(!Config.packetBufferInfinity) {
                 throw o;
             } else {
                 ImpLib.logger().error(o);
@@ -101,7 +102,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         if (array == null || array.length != i) {
             if (i > maxLength) {
                 final DecoderException o = new DecoderException("LongArray with size " + i + " is bigger than allowed " + maxLength);
-                if(Config.packetBufferInfinity) {
+                if(!Config.packetBufferInfinity) {
                     throw o;
                 } else {
                     ImpLib.logger().error(o);
@@ -124,7 +125,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         int i = this.readVarInt();
         if (i > maxLength * 4) {
             final DecoderException o = new DecoderException("The received encoded string buffer length is longer than maximum allowed (" + i + " > " + maxLength * 4 + ")");
-            if(Config.packetBufferInfinity) {
+            if(!Config.packetBufferInfinity) {
                 throw o;
             } else {
                 ImpLib.logger().error(o);
@@ -132,7 +133,7 @@ public class NiximPacketBuffer extends PacketBuffer {
             return "";
         } else if (i < 0) {
             final DecoderException o = new DecoderException("The received encoded string buffer length is less than zero! Weird string!");
-            if(Config.packetBufferInfinity) {
+            if(!Config.packetBufferInfinity) {
                 throw o;
             } else {
                 ImpLib.logger().error(o);
@@ -143,7 +144,7 @@ public class NiximPacketBuffer extends PacketBuffer {
             this.readerIndex(this.readerIndex() + i);
             if (s.length() > maxLength) {
                 final DecoderException o = new DecoderException("The received string length is longer than maximum allowed (" + i + " > " + maxLength + ")");
-                if(Config.packetBufferInfinity) {
+                if(!Config.packetBufferInfinity) {
                     throw o;
                 } else {
                     ImpLib.logger().error(o);

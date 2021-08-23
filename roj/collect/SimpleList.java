@@ -27,6 +27,7 @@
 package roj.collect;
 
 import roj.util.ArrayUtil;
+import roj.util.EmptyArrays;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -49,7 +50,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     public int capacityType;
 
     public SimpleList() {
-        list = EmptyList.EMPTY;
+        list = EmptyArrays.OBJECTS;
         length = -1;
     }
 

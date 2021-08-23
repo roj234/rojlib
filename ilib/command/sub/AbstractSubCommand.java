@@ -28,6 +28,9 @@ package ilib.command.sub;
 
 import com.google.common.collect.ImmutableList;
 import ilib.command.MasterCommand;
+import roj.collect.EmptyList;
+import roj.util.EmptyArrays;
+
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommand;
@@ -35,11 +38,11 @@ import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
-import roj.collect.EmptyList;
 
 import javax.annotation.Nullable;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -48,7 +51,7 @@ import java.util.List;
  */
 public abstract class AbstractSubCommand implements ISubCommand {
     private ICommand parent;
-    static final Object[] NULL = new Object[0];
+    static final Object[] NULL = EmptyArrays.OBJECTS;
     public static final List<String> empty_list = EmptyList.getInstance();
 
     public List<String> getTabCompletionOptions(MinecraftServer server, ICommandSender sender, String[] args, @Nullable BlockPos pos) {

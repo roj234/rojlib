@@ -34,6 +34,7 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.math.MathUtils;
+import roj.net.NetworkUtil;
 import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
@@ -183,7 +184,7 @@ public class DnsServer implements Router {
                 key.qClass = C_IN;
 
                 Record record = new Record();
-                byte[] value = ip2bytes(line.substring(i + 1));
+                byte[] value = NetworkUtil.ip2bytes(line.substring(i + 1));
                 record.qType = value.length == 4 ? Q_A : Q_AAAA;
                 record.data = value;
                 record.TTL = Integer.MAX_VALUE;
@@ -208,97 +209,6 @@ public class DnsServer implements Router {
 
     public String dumpIpAddress() {
         return TextUtil.prettyPrint(resolvedCache.entrySet());
-    }
-
-    // IP Conservation
-
-    private static byte[] IPv42int(CharSequence ip) {
-        byte[] arr = new byte[4];
-
-        int found = 0;
-        CharList fl = new CharList(5);
-        for (int i = 0; i < ip.length(); i++) {
-            char c = ip.charAt(i);
-            if(c == '.') {
-                arr[found++] = (byte) MathUtils.parseInt(fl);
-                if(found == 4)
-                    throw new RuntimeException("IP format error " + ip);
-                fl.clear();
-            } else {
-                fl.append(c);
-            }
-        }
-
-        if(fl.length() == 0 || found != 3)
-            throw new RuntimeException("IP format error " + ip);
-        arr[3] = (byte) MathUtils.parseInt(fl);
-        return arr;
-    }
-
-    //todo support ::
-    private static byte[] IPv62int(CharSequence ip) {
-        byte[] arr = new byte[16];
-
-        int found = 0;
-        CharList fl = new CharList(5);
-        for (int i = 0; i < ip.length(); i++) {
-            char c = ip.charAt(i);
-            if(c == ':') {
-                int st = MathUtils.parseInt(fl);
-                arr[found++] = (byte) (st >> 8);
-                arr[found++] = (byte) st;
-
-                if(found == 16)
-                    throw new RuntimeException("IP format error " + ip);
-                fl.clear();
-            } else {
-                fl.append(c);
-            }
-        }
-
-        if(fl.length() == 0 || found != 14)
-            throw new RuntimeException("IP format error " + ip);
-        int st = MathUtils.parseInt(fl);
-        arr[14] = (byte) (st >> 8);
-        arr[15] = (byte) st;
-        return arr;
-    }
-
-    private static byte[] ip2bytes(CharSequence ip) {
-        return TextUtil.lastIndexOf(ip, '.') != -1 ? IPv42int(ip) : IPv62int(ip);
-    }
-
-    private static String bytes2ip(byte[] bytes) {
-        if(bytes.length == 4) {
-            // IPv4
-            return bytes2ipv4(bytes, 0);
-        } else {
-            // IPv6
-            assert bytes.length == 16;
-
-            return bytes2ipv6(bytes, 0);
-        }
-    }
-
-    private static String bytes2ipv6(byte[] bytes, int off) {
-        // xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
-        CharList sb = new CharList();
-        for (int i = 0; i < 8; i ++) {
-            sb.append(Integer.toHexString((0xFF & bytes[off++]) << 8 | (bytes[off++] & 0xFF))).append(':');
-        }
-        sb.setIndex(sb.length() - 1);
-
-        return sb.toString();
-    }
-
-    private static String bytes2ipv4(byte[] bytes, int off) {
-        return String.valueOf(bytes[off++] & 0xFF) +
-                '.' +
-                (bytes[off++] & 0xFF) +
-                '.' +
-                (bytes[off++] & 0xFF) +
-                '.' +
-                (bytes[off] & 0xFF);
     }
 
     // Utility classes
@@ -619,7 +529,7 @@ public class DnsServer implements Router {
             switch (qType) {
                 case Q_A:
                 case Q_AAAA:
-                    return bytes2ip(data);
+                    return NetworkUtil.bytes2ip(data);
                 case Q_CNAME:
                 case Q_MB:
                 case Q_MD:
@@ -688,7 +598,7 @@ public class DnsServer implements Router {
                     return sb.toString();
                 }
                 case Q_WKS: {
-                    CharList sb = new CharList(32).append("Address: ").append(bytes2ipv4(data, 0));
+                    CharList sb = new CharList(32).append("Address: ").append(NetworkUtil.bytes2ipv4(data, 0));
                     r.index = 4;
                     return sb.append(", Proto: ").append(Integer.toString(r.readUnsignedByte()))
                              .append(", BitMap: <HIDDEN>, len = ").append(r.remain()).toString();
@@ -1448,7 +1358,7 @@ public class DnsServer implements Router {
                         short qType = (short) MathUtils.parseInt(type);
                         e.qType = qType;
                         if (qType == Q_A || qType == Q_AAAA) {
-                            e.data = ip2bytes(cnt);
+                            e.data = NetworkUtil.ip2bytes(cnt);
                         } else {
                             switch (qType) {
                                 case Q_CNAME:
@@ -1533,7 +1443,7 @@ public class DnsServer implements Router {
             }
         }
 
-        InetAddress addr = controlIp == null ? null : InetAddress.getByAddress(ip2bytes(controlIp));
+        InetAddress addr = controlIp == null ? null : InetAddress.getByAddress(NetworkUtil.ip2bytes(controlIp));
 
         /**
          * Init DNS Server

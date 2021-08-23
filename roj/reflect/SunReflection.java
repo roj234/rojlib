@@ -25,7 +25,7 @@
  */
 package roj.reflect;
 
-import roj.collect.EmptyList;
+import roj.util.EmptyArrays;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -48,7 +48,7 @@ public final class SunReflection {
 
     private static final Object[] CONST = new Object[]{
             null,
-            new Object[0]
+            EmptyArrays.OBJECTS
     };
 
     private static java.lang.reflect.Method newInstance0;
@@ -70,7 +70,7 @@ public final class SunReflection {
     }
 
     public static Object createClass(Class<?> clazz) throws IllegalAccessException, InvocationTargetException, InstantiationException {
-        Constructor<?> constructor = findConstructor(clazz, EmptyList.EMPTY_C);
+        Constructor<?> constructor = findConstructor(clazz, EmptyArrays.CLASSES);
         if (newInstance0 == null) {
             constructor.setAccessible(true);
             return constructor.newInstance();

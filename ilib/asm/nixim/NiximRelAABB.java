@@ -25,7 +25,12 @@
  */
 package ilib.asm.nixim;
 
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.command.CommandResultStats;
 import net.minecraft.crash.CrashReport;
 import net.minecraft.entity.Entity;
@@ -35,11 +40,8 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagString;
 import net.minecraft.util.ReportedException;
 import net.minecraft.world.World;
+
 import net.minecraftforge.common.capabilities.CapabilityDispatcher;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 import java.util.List;
 import java.util.Set;
@@ -85,7 +87,7 @@ public abstract class NiximRelAABB extends Entity {
     @RemapTo("func_189511_e")
     public NBTTagCompound writeToNBT(NBTTagCompound tag) {
         try {
-            MethodEntryPoint.writeAABB(this, tag);
+            MCHooks.writeAABB(this, tag);
             tag.setTag("Pos", newDoubleNBTList1(this.posX, this.posY, this.posZ));
             tag.setTag("Motion", newDoubleNBTList1(this.motionX, this.motionY, this.motionZ));
             tag.setTag("Rotation", this.newFloatNBTList(this.rotationYaw, this.rotationPitch));
@@ -247,7 +249,7 @@ public abstract class NiximRelAABB extends Entity {
             if (this.shouldSetPosAfterLoading()) {
                 this.setPosition(this.posX, this.posY, this.posZ);
             }
-            MethodEntryPoint.readAABB(this, tag);
+            MCHooks.readAABB(this, tag);
 
         } catch (Throwable var8) {
             CrashReport rpt = CrashReport.makeCrashReport(var8, "Loading entity NBT");

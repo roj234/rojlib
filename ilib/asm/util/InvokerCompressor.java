@@ -27,15 +27,18 @@ package ilib.asm.util;
 
 import ilib.Config;
 import ilib.asm.nixim.EventInvokerV2;
+import roj.collect.IntMap;
+import roj.reflect.ClassDefiner;
+
 import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.IEventListener;
 import net.minecraftforge.fml.common.eventhandler.ListenerList;
-import roj.collect.IntMap;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.function.Supplier;
 
 /**
  * No description provided
@@ -55,10 +58,11 @@ public final class InvokerCompressor implements IEventListener {
         this.busID = busID;
     }
 
+    static final EventPriority[] priorities = EventPriority.values();
+    static final Supplier<List<EventInvokerV2>> aNew = ArrayList::new;
+
     @Override
     public void invoke(Event event) {
-        EventPriority[] priorities = EventPriority.values();
-
         if (allListeners.remove(0) != this)
             throw new IllegalStateException("Unexpected error : first is not self!!!");
 
@@ -76,6 +80,7 @@ public final class InvokerCompressor implements IEventListener {
                 }
             }
         } else {
+            ClassDefiner.debug = true;
             IntMap<List<EventInvokerV2>> nocancel = new IntMap<>(), cancel = new IntMap<>();
 
             for (ListIterator<IEventListener> iterator = allListeners.listIterator(); iterator.hasNext(); ) {
@@ -83,7 +88,7 @@ public final class InvokerCompressor implements IEventListener {
                 if (listener instanceof EventInvokerV2) {
                     final EventInvokerV2 v2 = (EventInvokerV2) listener;
                     if (v2.canCompress()) {
-                        (v2.receiveCanceled() ? cancel : nocancel).computeIfAbsentSp(v2.getPriority(), ArrayList::new).add(v2);
+                        (v2.receiveCanceled() ? cancel : nocancel).computeIfAbsentSp(v2.getPriority(), aNew).add(v2);
                         iterator.remove();
                     }
                 }
@@ -96,12 +101,14 @@ public final class InvokerCompressor implements IEventListener {
                         for (EventInvokerV2 v2 : list)
                             target.unregister(busID, v2);
 
-                        IEventListener asmListener = EventInvokerV2.compressAll(list, false);
+                        IEventListener asmListener = EventInvokerV2.compressAll(list, true);
                         target.register(busID, priorities[entry.getKey()], (event1) -> {
                             if (!event1.isCanceled()) {
                                 asmListener.invoke(event1);
                             }
                         });
+                    } else {
+                        allListeners.add(list.get(0));
                     }
                 }
             }
@@ -113,8 +120,10 @@ public final class InvokerCompressor implements IEventListener {
                         for (EventInvokerV2 v2 : list)
                             target.unregister(busID, v2);
 
-                        IEventListener asmListener = EventInvokerV2.compressAll(entry.getValue(), true);
+                        IEventListener asmListener = EventInvokerV2.compressAll(entry.getValue(), false);
                         target.register(busID, priorities[entry.getKey()], asmListener);
+                    } else {
+                        allListeners.add(list.get(0));
                     }
                 }
             }

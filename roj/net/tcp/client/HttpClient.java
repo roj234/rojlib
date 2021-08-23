@@ -30,6 +30,8 @@ import roj.concurrent.task.CalculateTask;
 import roj.config.ParseException;
 import roj.io.NonblockingUtil;
 import roj.net.tcp.ssl.EngineAllocator;
+import roj.net.tcp.ssl.SslConfig;
+import roj.net.tcp.ssl.SslEngineFactory;
 import roj.net.tcp.util.Action;
 import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.SecureSocket;
@@ -38,12 +40,13 @@ import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.net.URL;
-import java.security.NoSuchAlgorithmException;
+import java.security.GeneralSecurityException;
 import java.util.Map;
 
 /**
@@ -54,16 +57,49 @@ import java.util.Map;
  * @since  2020/12/5 14:34
  */
 public class HttpClient extends ClientSocket {
-    private static final EngineAllocator CLIENT_ALLOCATOR = new EngineAllocator(null) {
-        @Override
-        public SSLEngine allocate() {
-            try {
-                return SSLContext.getDefault().createSSLEngine();
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException(e);
-            }
+    public static EngineAllocator CLIENT_ALLOCATOR;
+
+    static {
+        try {
+            CLIENT_ALLOCATOR = SslEngineFactory.getSslFactory(new SslConfig() {
+                @Override
+                public boolean isServerSide() {
+                    return false;
+                }
+
+                @Override
+                public boolean isNeedClientAuth() {
+                    return false;
+                }
+
+                @Override
+                public InputStream getPkPath() {
+                    try {
+                        return new FileInputStream("server.keystore");
+                    } catch (FileNotFoundException e) {
+                        return null;
+                    }
+                }
+
+                @Override
+                public InputStream getCaPath() {
+                    try {
+                        return new FileInputStream("server.keystore");
+                    } catch (FileNotFoundException e) {
+                        return null;
+                    }
+                }
+
+                @Override
+                public char[] getPasswd() {
+                    return "123456".toCharArray();
+                }
+            });
+        } catch (IOException | GeneralSecurityException e) {
+            System.err.println("Failed to initialize SelEngine");
+            e.printStackTrace();
         }
-    };
+    }
 
     private CharSequence action, path, body;
     private final MyHashMap<CharSequence, CharSequence> header = new MyHashMap<>();

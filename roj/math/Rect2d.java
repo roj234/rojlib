@@ -27,6 +27,8 @@ package roj.math;
 
 import roj.util.Hasher;
 
+import java.util.List;
+
 
 /**
  * An axis-aligned (two-dimensional) {@code double}-based rectangle.
@@ -166,6 +168,10 @@ public class Rect2d {
         return xmin <= p.x && p.x <= xmax && ymin <= p.y && p.y <= ymax;
     }
 
+    public boolean contains(double x, double y) {
+        return xmin <= x && x <= xmax && ymin <= y && y <= ymax;
+    }
+
     public boolean intersects(Rect2d other) {
         return !(xmax < other.xmin || xmin > other.xmax || ymax < other.ymin || ymin > other.ymax);
     }
@@ -219,6 +225,19 @@ public class Rect2d {
 
     public Rect2d expandIf(Vec2d... points) {
         for (Vec2d v : points) {
+            if (xmin > v.x) xmin = v.x;
+            if (xmax < v.x) xmax = v.x;
+
+            if (ymin > v.y) ymin = v.y;
+            if (ymax < v.y) ymax = v.y;
+        }
+
+        return this;
+    }
+
+    public Rect2d expandIf(List<Vec2d> points) {
+        for (int i = 0; i < points.size(); i++) {
+            Vec2d v = points.get(i);
             if (xmin > v.x) xmin = v.x;
             if (xmax < v.x) xmax = v.x;
 

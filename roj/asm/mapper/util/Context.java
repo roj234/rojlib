@@ -190,7 +190,6 @@ public class Context {
         for (List<?> list : typedTmp) {
             list.clear();
         }
-        getData().writer.clump();
         List<Constant> csts = getData().writer.getConstants();
         for (int i = 0; i < csts.size(); i++) {
             Constant cst = csts.get(i);

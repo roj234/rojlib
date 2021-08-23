@@ -33,7 +33,7 @@ import roj.util.Hasher;
  *
  * @author Maximilian Luz
  */
-public class Vec4d {
+public class Vec4d implements Vector {
     public double x, y, z, w;
 
 
@@ -477,5 +477,50 @@ public class Vec4d {
     @Override
     public String toString() {
         return this.getClass().getName() + " {" + x + ", " + y + ", " + z + ", " + w + "}";
+    }
+
+    @Override
+    public double x() {
+        return x;
+    }
+
+    @Override
+    public double y() {
+        return y;
+    }
+
+    @Override
+    public double z() {
+        return z;
+    }
+
+    @Override
+    public double w() {
+        return w;
+    }
+
+    @Override
+    public void x(double x) {
+        this.x = x;
+    }
+
+    @Override
+    public void y(double y) {
+        this.y = y;
+    }
+
+    @Override
+    public void z(double z) {
+        this.z = z;
+    }
+
+    @Override
+    public void w(double w) {
+        this.w = w;
+    }
+
+    @Override
+    public int axis() {
+        return 4;
     }
 }

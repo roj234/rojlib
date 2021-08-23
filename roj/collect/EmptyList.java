@@ -26,10 +26,13 @@
 
 package roj.collect;
 
+import roj.util.EmptyArrays;
+
 import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.UnaryOperator;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -37,9 +40,6 @@ import java.util.function.UnaryOperator;
  * @since 2021/5/4 14:19索引不变)
  */
 public final class EmptyList<E> implements List<E>, Set<E> {
-    public static final Object[] EMPTY = new Object[0];
-    public static final Class<?>[] EMPTY_C = new Class<?>[0];
-
     private static final EmptyList<?> instance = new EmptyList<>();
 
     private EmptyList() {
@@ -78,7 +78,7 @@ public final class EmptyList<E> implements List<E>, Set<E> {
     @Nonnull
     @Override
     public Object[] toArray() {
-        return new Object[0];
+        return EmptyArrays.OBJECTS;
     }
 
     @Nonnull

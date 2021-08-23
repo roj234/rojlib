@@ -26,6 +26,7 @@
 package ilib.capabilities;
 
 import net.minecraft.util.EnumFacing;
+
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 
@@ -63,6 +64,7 @@ public class SingletonProvider implements ICapabilityProvider {
 
     @Nullable
     @Override
+    @SuppressWarnings("unchecked")
     public <T1> T1 getCapability(@Nonnull Capability<T1> capability, @Nullable EnumFacing enumFacing) {
         return capability == cap && enumFacing == face ? (T1) inst : null;
     }

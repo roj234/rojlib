@@ -33,7 +33,7 @@ import roj.util.Hasher;
  *
  * @author Maximilian Luz
  */
-public class Vec2f {
+public class Vec2f implements Vector {
     public float x, y;
 
 
@@ -129,6 +129,24 @@ public class Vec2f {
         this.x = (float) xy.x;
         this.y = (float) xy.y;
         return this;
+    }
+
+    /**
+     * Distance to other vector
+     */
+    public float distance(Vec2f vec) {
+        return (float) Math.sqrt(distanceSq(vec));
+    }
+
+    /**
+     * Distance^2 to other vector
+     */
+    public float distanceSq(Vec2f vec) {
+        float t = vec.x - this.x;
+        float v = t * t;
+        t = vec.y - this.y;
+        v += t * t;
+        return v + t * t;
     }
 
     /**
@@ -302,5 +320,30 @@ public class Vec2f {
     @Override
     public String toString() {
         return this.getClass().getName() + " {" + x + ", " + y + "}";
+    }
+
+    @Override
+    public double x() {
+        return x;
+    }
+
+    @Override
+    public double y() {
+        return y;
+    }
+
+    @Override
+    public void x(double x) {
+        this.x = (float) x;
+    }
+
+    @Override
+    public void y(double y) {
+        this.y = (float) y;
+    }
+
+    @Override
+    public int axis() {
+        return 2;
     }
 }

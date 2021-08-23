@@ -40,9 +40,13 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
-import roj.collect.*;
+import roj.collect.IBitSet;
+import roj.collect.IntMap;
+import roj.collect.MyHashMap;
+import roj.collect.SingleBitSet;
 import roj.text.CharList;
 import roj.util.ByteList;
+import roj.util.EmptyArrays;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
@@ -826,7 +830,7 @@ public final class DirectAccessor<T> {
 
             Method getter = getterMethods[i];
             if(getter != null) {
-                roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, getter.getName(), ParamHelper.classDescriptors(isStatic || useCache ? EmptyList.EMPTY_C : getter.getParameterTypes(), getter.getReturnType()));
+                roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, getter.getName(), ParamHelper.classDescriptors(isStatic || useCache ? EmptyArrays.CLASSES : getter.getParameterTypes(), getter.getReturnType()));
                 AttrCode code = get.code = new AttrCode(get);
 
                 char type = get.getReturnType().type;
@@ -889,7 +893,7 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> internal_construct(String targetName, String initParam, String selfMethodName) {
+    public DirectAccessor<T> i_construct(String targetName, String initParam, String selfMethodName) {
         Method method = methodByName.remove(selfMethodName);
         if (method == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + selfMethodName + " 不存在或已被占用!");
@@ -923,6 +927,7 @@ public final class DirectAccessor<T> {
                     break;
                 case NativeType.LONG:
                     pf = 'L';
+                    break;
                 default:
                     pf = params.get(j).type;
             }
@@ -950,7 +955,7 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> internal_delegate(String targetName, String targetMethodName, String targetMethodDesc, String selfMethodName, boolean isStatic, boolean isDirect) {
+    public DirectAccessor<T> i_delegate(String targetName, String targetMethodName, String targetMethodDesc, String selfMethodName, boolean isStatic, boolean isDirect) {
         Method method = methodByName.remove(selfMethodName);
         if (method == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + selfMethodName + " 不存在或已被占用!");
@@ -999,7 +1004,7 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> internal_access(String targetName, String targetFieldName, Type targetType, String setterName, String getterName) {
+    public DirectAccessor<T> i_access(String targetName, String targetFieldName, Type targetType, String setterName, String getterName) {
         targetName = targetName.replace('.', '/');
 
         if(getterName != null) {

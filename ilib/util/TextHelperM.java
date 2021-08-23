@@ -34,14 +34,16 @@
 package ilib.util;
 
 import ilib.ImpLib;
+import org.lwjgl.input.Keyboard;
+import roj.text.TextUtil;
+import roj.util.EmptyArrays;
+
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.resources.I18n;
+
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.lwjgl.input.Keyboard;
-import roj.collect.EmptyList;
-import roj.text.TextUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,11 +64,11 @@ public class TextHelperM {
     }
 
     public static String translate(String text) {
-        return translate(text, EmptyList.EMPTY);
+        return translate(text, EmptyArrays.OBJECTS);
     }
 
     public static String translate(boolean flag) {
-        return translate(flag ? "tooltip.true" : "tooltip.false", EmptyList.EMPTY);
+        return translate(flag ? "tooltip.true" : "tooltip.false", EmptyArrays.OBJECTS);
     }
 
 

@@ -26,8 +26,8 @@
 
 package roj.reflect;
 
-import roj.collect.EmptyList;
 import roj.collect.MyHashMap;
+import roj.util.EmptyArrays;
 import roj.util.Helpers;
 
 import java.lang.reflect.Constructor;
@@ -37,7 +37,8 @@ import java.util.*;
 /**
  * 动态修改Enum <BR>
  *     推荐preload
- *//**
+ */
+/**
  * No description provided
  *
  * @author Roj234
@@ -91,7 +92,7 @@ public final class EnumHelper<E extends Enum<E>> {
     }
 
     public E make(String value, int ordinal) {
-        return make(value, ordinal, EmptyList.EMPTY_C, EmptyList.EMPTY);
+        return make(value, ordinal, EmptyArrays.CLASSES, EmptyArrays.OBJECTS);
     }
 
     public E make(String value, int ordinal, Class<?>[] additionalTypes, Object[] additional) {

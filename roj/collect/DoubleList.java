@@ -26,11 +26,16 @@
 
 package roj.collect;
 
+import roj.util.EmptyArrays;
+
 import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.ListIterator;
 import java.util.PrimitiveIterator;
-/**
+
+import static roj.collect.IntList.DEFAULT_VALUE;
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -38,15 +43,12 @@ import java.util.PrimitiveIterator;
  * @since 2021/5/27 23:23索引不变)
  */
 public class DoubleList implements Iterable<Double> {
-    public static final double[] EMPTY = new double[0];
-    public static final int DEFAULT_VALUE = -1;
-
     protected double[] list;
     protected int size = 0;
     protected int length;
 
     public DoubleList() {
-        list = EMPTY;
+        list = EmptyArrays.DOUBLES;
         length = -1;
     }
 
@@ -86,7 +88,7 @@ public class DoubleList implements Iterable<Double> {
     @Nonnull
     public double[] toArray() {
         if(size == 0)
-            return EMPTY;
+            return EmptyArrays.DOUBLES;
         double[] arr = new double[size];
         System.arraycopy(list, 0, arr, 0, size);
         return arr;

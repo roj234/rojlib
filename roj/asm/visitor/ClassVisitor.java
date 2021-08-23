@@ -1,14 +1,11 @@
 package roj.asm.visitor;
 
-import roj.asm.Opcodes;
-import roj.asm.cst.*;
+import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
-
-import static roj.asm.Opcodes.*;
 
 /**
  * This file is a part of MI <br>
@@ -17,58 +14,36 @@ import static roj.asm.Opcodes.*;
  * @author Roj233
  * @since 2021/7/21 2:28
  */
-public abstract class ClassVisitor {
+public class ClassVisitor {
+    protected ConstantWriter cw = new ConstantWriter();
+    protected ByteWriter bw = new ByteWriter();
 
-    ByteList tmp = new ByteList();
-    protected ByteList out = new ByteList();
+    protected ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
 
-    protected void visitBegin(int major, int minor) {
-        bw.writeShort(major).writeShort(minor);
-    }
+    public IVisitor fieldVisitor;
+    public IVisitor methodVisitor;
 
-    protected void visitConstants(ConstantPool pool) {
+    protected int attrAmountIndex, attrAmount;
 
-    }
-
-    protected void visitClass(int acc, String name, String parent, String[] interfaces) {
-        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(parent)).writeShort(interfaces.length);
-        for(String s : interfaces)
-            bw.writeShort(cw.getUtfId(s));
-    }
-
-    protected void visitField(int acc, String name, String desc) {
-        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(desc));
-    }
-
-    protected void visitMethod(int acc, String name, String desc) {
-        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(desc));
-    }
-
-    protected void visitEnd() {
-
-    }
-
-    @SuppressWarnings("fallthrough")
     public ByteList visit(String clazz, ByteReader r) {
-        ByteList out1 = this.tmp;
-        out1.ensureCapacity(r.length());
-        out1.clear();
+        ByteList pb = bw.list = this.poolBuf;
+        pb.ensureCapacity(r.length());
+        pb.clear();
 
-        out1.addAll(r.getBytes(), 0, 4);
-        r.index = 4;
         visitBegin(r.readUnsignedShort(), r.readUnsignedShort());
 
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         pool.read(r);
         pool.valid();
 
-        cw = new ConstantWriter(pool);
+        cw.init(pool);
 
         visitConstants(pool);
 
-        ByteList out2 = this.out;
-        bw.list = out2;
-        out2.clear();
+        ByteList kb = bw.list = this.klassBuf;
+        kb.ensureCapacity(r.length());
+        kb.clear();
+
         int acc = r.readUnsignedShort();
         String ccc = ((CstUTF) pool.get(r)).getString();
         int t = r.readUnsignedShort();
@@ -81,339 +56,74 @@ public abstract class ClassVisitor {
         }
         visitClass(acc, ccc, parent, arr);
 
-        int cur = r.index;
-
-        len0 = r.readUnsignedShort();
-        for (int i = 0; i < len0; i++) {
-            int access = r.readUnsignedShort();
-            String name = ((CstUTF) pool.get(r)).getString();
-            String desc = ((CstUTF) pool.get(r)).getString();
-            visitField(access, name, desc);
-
-            int attr = r.readUnsignedShort();
-
-            for (int j = 0; j < attr; j++) {
-                r.index += 2;
-                int len1 = r.readInt();
-                r.index += len1;
-            }
+        try {
+            fieldVisitor.visit(r, pool, bw, cw);
+        } catch (Throwable e) {
+            fieldVisitor.visitEndError(e);
+        }
+        try {
+            methodVisitor.visit(r, pool, bw, cw);
+        } catch (Throwable e) {
+            methodVisitor.visitEndError(e);
         }
 
-        out2.addAll(r.getBytes(), cur, r.index - cur + 2);
+        int attrLen = r.readUnsignedShort();
 
-        len0 = r.readUnsignedShort();
-        for (int i = 0; i < len0; i++) {
-            int access = r.readUnsignedShort();
-            String name = ((CstUTF) pool.get(r)).getString();
-            String desc = ((CstUTF) pool.get(r)).getString();
-            visitMethod(access, name, desc);
-
-            int attrLen = r.readUnsignedShort();
-
-            for (int j = 0; j < attrLen; j++) {
-                String name0 = ((CstUTF) pool.get(r)).getString();
-                int len1 = r.readInt();
-                if(!name0.equals("Code")) {
-                    out2.addAll(r.getBytes(), r.index - 6, len1 + 6);
-                } else {
-                    out2.addAll(r.getBytes(), r.index - 6, 10);
-                    r.index += 4;
-                    code = r.readBytesDelegated(r.readInt());
-
-                    int len2 = r.readUnsignedShort(); // exception
-                    out2.addAll(r.getBytes(), r.index - 2, 2 + (len2 << 3));
-                    r.index += len2 << 3;
-
-                    len2 = r.readUnsignedShort();
-                    for (int k = 0; k < len2; k++) {
-                        r.index += 2;
-                        int len3 = r.readInt();
-                        out2.addAll(r.getBytes(), r.index - 6, len3 + 6);
-                    }
-
-                    pre_filter();
-                    filter(pool);
-                }
-            }
+        for (int j = 0; j < attrLen; j++) {
+            String name0 = ((CstUTF) pool.get(r)).getString();
+            int len1 = r.readInt();
+            visitAttribute(name0, r.readBytesDelegated(len1));
         }
 
-        out2.addAll(r.getBytes(), r.index, r.remain());
-        bw.list = out1;
+        kb.addAll(r.getBytes(), r.index, r.remain());
+        bw.list = pb;
         cw.write(bw);
-        out1.addAll(out2, 0, out2.pos());
-        return out1;
+        pb.addAll(kb, 0, kb.pos());
+        return pb;
     }
 
-    protected ConstantWriter cw;
-    protected ByteList code;
-    protected ByteWriter bw = new ByteWriter();
-    protected int bci;
-
-    protected void pre_filter() {}
-
-    protected void filter(ConstantPool pool) {
-        ByteReader r = new ByteReader(code);
-
-        byte prev = 0, code;
-        while (r.remain() > 0) {
-            bci = r.index;
-            code = Opcodes.byId(r.readByte());
-
-            boolean widen = prev == Opcodes.WIDE;
-            if (widen) {
-                switch (code) {
-                    case RET:
-                    case IINC:
-                    case ISTORE:
-                    case LSTORE:
-                    case FSTORE:
-                    case DSTORE:
-                    case ASTORE:
-                    case ILOAD:
-                    case LLOAD:
-                    case FLOAD:
-                    case DLOAD:
-                    case ALOAD:
-                        break;
-                    default:
-                        throw new IllegalStateException("Unable to wide " + Opcodes.toString0(code));
-                }
-            }
-
-            switch (code) {
-                case PUTFIELD:
-                case GETFIELD:
-                case PUTSTATIC:
-                case GETSTATIC:
-                    field(code, (CstRefField) pool.get(r));
-                    break;
-
-                case INVOKEVIRTUAL:
-                case INVOKESPECIAL:
-                case INVOKESTATIC:
-                    invoke(code, (CstRef) pool.get(r));
-                    break;
-                case INVOKEINTERFACE:
-                    invoke_interface((CstRefItf) pool.get(r), r.readShort());
-                    break;
-                case INVOKEDYNAMIC:
-                    invoke_dynamic((CstDynamic) pool.get(r), r.readUnsignedShort());
-                    break;
-
-                case GOTO:
-                case IFEQ:
-                case IFNE:
-                case IFLT:
-                case IFGE:
-                case IFGT:
-                case IFLE:
-                case IF_icmpeq:
-                case IF_icmpne:
-                case IF_icmplt:
-                case IF_icmpge:
-                case IF_icmpgt:
-                case IF_icmple:
-                case IF_acmpeq:
-                case IF_acmpne:
-                case IFNULL:
-                case IFNONNULL:
-                    jump(code, r.readShort());
-                    break;
-                case GOTO_W:
-                    jump_4(code, r.readInt());
-                    break;
-
-                case JSR:
-                case SIPUSH:
-                    std_u2(code, r.readShort());
-                    break;
-                case JSR_W:
-                    std_u4(code, r.readInt());
-                    break;
-                case RET:
-                    if(widen) {
-                        std_u2(code, r.readShort());
-                    } else {
-                        std_u1(code, r.readByte());
-                    }
-                    break;
-
-                case BIPUSH:
-                case NEWARRAY:
-                    std_u1(code, r.readByte());
-                    break;
-
-                case LDC:
-                    ldc(code, pool.array(r.readUByte()));
-                    break;
-                case LDC_W:
-                case LDC2_W:
-                    ldc(code, pool.get(r));
-                    break;
-
-                case IINC:
-                    increase(widen, widen ? r.readUnsignedShort() : r.readUByte(), widen ? r.readShort() : r.readByte());
-                    break;
-
-                case NEW:
-                case ANEWARRAY:
-                case INSTANCEOF:
-                case CHECKCAST:
-                    clazz(code, (CstClass) pool.get(r));
-                    break;
-
-                case MULTIANEWARRAY:
-                    multi_dimension_array((CstClass) pool.get(r), r.readUByte());
-                    break;
-
-                case ISTORE:
-                case LSTORE:
-                case FSTORE:
-                case DSTORE:
-                case ASTORE:
-                case ILOAD:
-                case LLOAD:
-                case FLOAD:
-                case DLOAD:
-                case ALOAD:
-                    if(widen) {
-                        std_u2(code, r.readUnsignedShort());
-                    } else {
-                        std_u1(code, r.readUByte());
-                    }
-                    break;
-                case TABLESWITCH:
-                    parse_table_switch(r);
-                    break;
-                case LOOKUPSWITCH:
-                    parse_lookup_switch(r);
-                    break;
-                default:
-                    std(code);
-            }
-
-            prev = code;
-        }
+    /**
+     * 开始读取一个class
+     * @param major 主版本号
+     * @param minor 次版本号
+     */
+    protected void visitBegin(int major, int minor) {
+        bw.writeInt(0xCAFEBABE).writeShort(major).writeShort(minor);
     }
 
-    protected void multi_dimension_array(CstClass clz, int dimension) {
-        bw.writeByte(MULTIANEWARRAY).writeShort(clz.getIndex()).writeByte((byte) dimension);
+    /**
+     * 读取完了常量池
+     * @param pool 常量池
+     */
+    protected void visitConstants(ConstantPool pool) {}
+
+    /**
+     *
+     * @param acc 访问权限
+     * @param name 名字
+     * @param parent 父类
+     * @param interfaces 接口
+     */
+    protected void visitClass(int acc, String name, String parent, String[] interfaces) {
+        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(parent)).writeShort(interfaces.length);
+        for(String s : interfaces)
+            bw.writeShort(cw.getUtfId(s));
     }
 
-    protected void clazz(byte code, CstClass clz) {
-        bw.writeByte(code).writeShort(clz.getIndex());
+    protected void visitAttributes() {
+        attrAmountIndex = bw.list.pos();
+        attrAmount = 0;
+        bw.writeShort(0);
     }
 
-    protected void increase(boolean widen, int var_id, int count) {
-        bw.writeByte(IINC);
-        if(widen) {
-            bw.writeByte((byte) var_id).writeByte((byte) count);
-        } else {
-            bw.writeShort(var_id).writeShort(count);
-        }
+    protected void visitAttribute(String name, ByteList data) {
+        bw.writeShort(cw.getUtfId(name)).writeInt(data.pos()).writeBytes(data);
     }
 
-    protected void ldc(byte code, Constant c) {
-        bw.writeByte(code);
-        if(code == LDC) {
-            bw.writeByte((byte) c.getIndex());
-        } else {
-            bw.writeShort(c.getIndex());
-        }
-    }
-
-    protected void invoke_dynamic(CstDynamic dyn, int type) {
-        bw.writeByte(INVOKEDYNAMIC).writeShort(dyn.getIndex()).writeShort(type);
-    }
-
-    protected void invoke_interface(CstRefItf itf, short argc) {
-        bw.writeByte(INVOKEINTERFACE).writeShort(itf.getIndex()).writeShort(argc);
-    }
-
-    protected void invoke(byte code, CstRef method) {
-        bw.writeByte(code).writeShort(method.getIndex());
-    }
-
-    protected void field(byte code, CstRefField field) {
-        bw.writeByte(code).writeShort(field.getIndex());
-    }
-
-    protected void jump(byte code, int offset) {
-        std_u2(code, offset);
-    }
-
-    protected void jump_4(byte code, int offset) {
-        std_u4(code, offset);
-    }
-
-    protected void std(byte code) {
-        bw.writeByte(code);
-    }
-
-    protected void std_u1(byte code, int value) {
-        bw.writeByte(code).writeByte((byte) value);
-    }
-
-    protected void std_u2(byte code, int value) {
-        bw.writeByte(code).writeShort(value);
-    }
-
-    protected void std_u4(byte code, int value) {
-        bw.writeByte(code).writeInt(value);
-    }
-
-    protected void parse_table_switch(ByteReader r) {
-        while ((r.index & 3) != 0) {
-            r.index++;
-        }
-        align_out();
-
-        int def = r.readInt();
-        int low = r.readInt();
-        int hig = r.readInt();
-        int count = hig - low + 1;
-
-        bw.writeInt(def).writeInt(low).writeInt(hig);
-
-        if(count > 100000)
-            throw new IllegalArgumentException("length > 100000");
-
-        int i = 0;
-        while (count > i) {
-            int key = i++ + low;
-            int offset = r.readInt();
-
-            bw.writeInt(offset);
-        }
-    }
-
-    protected void align_out() {
-        while ((out.pos() & 3) != 0) {
-            out.pos(out.pos() + 1);
-        }
-    }
-
-    protected void parse_lookup_switch(ByteReader r) {
-        while ((r.index & 3) != 0) {
-            r.index++;
-        }
-        align_out();
-
-        int def = r.readInt();
-        int count = r.readInt();
-
-        bw.writeInt(def).writeInt(count);
-
-        if(count > 100000)
-            throw new IllegalArgumentException("length > 100000");
-
-
-        while (count > 0) {
-            int key = r.readInt();
-            int offset = r.readInt();
-            count--;
-
-            bw.writeInt(key).writeInt(offset);
-        }
+    protected void visitEnd() {
+        int pos = bw.list.pos();
+        bw.list.pos(attrAmountIndex);
+        bw.writeShort(attrAmount);
+        bw.list.pos(pos);
     }
 }

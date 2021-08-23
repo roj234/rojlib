@@ -70,10 +70,17 @@ public class ByteList {
                 }
             }
         };
-        bl.list = buf.array();
-        bl.writePtr = buf.position();
-        bl.pointer = buf.limit();
-        bl.length = buf.limit();
+        if(buf.hasArray()) {
+            bl.writePtr = buf.position();
+            bl.pointer = bl.length = buf.limit();
+            bl.list = buf.array();
+        } else {
+            bl.writePtr = 0;
+            bl.list = new byte[bl.length = bl.pointer = buf.remaining()];
+            int pos = buf.position();
+            buf.get(bl.list, 0, bl.list.length);
+            buf.position(pos);
+        }
 
         if (buf.arrayOffset() != 0)
             return bl.subList(buf.arrayOffset(), buf.limit());
@@ -349,10 +356,10 @@ public class ByteList {
 
     public void putInto(ByteBuffer buffer, int max) {
         int v = Math.min(pointer - writePtr, max);
-        if (v == 0)
+        if (v <= 0)
             return;
         buffer.put(list, offset() + writePtr, v);
-        writePtr += max;
+        writePtr += v;
     }
 
     public void putInto(ByteBuffer buffer) {

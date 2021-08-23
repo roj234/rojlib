@@ -25,6 +25,8 @@
  */
 package roj.net;
 
+import roj.math.MathUtils;
+import roj.text.CharList;
 import roj.text.TextUtil;
 
 import javax.net.ssl.*;
@@ -65,6 +67,97 @@ public final class NetworkUtil {
         buf[pos] = digits[i & 15];
 
         return pos;
+    }
+
+    // IP Conservation
+
+    public static byte[] IPv42int(CharSequence ip) {
+        byte[] arr = new byte[4];
+
+        int found = 0;
+        CharList fl = new CharList(5);
+        for (int i = 0; i < ip.length(); i++) {
+            char c = ip.charAt(i);
+            if(c == '.') {
+                arr[found++] = (byte) MathUtils.parseInt(fl);
+                if(found == 4)
+                    throw new RuntimeException("IP format error " + ip);
+                fl.clear();
+            } else {
+                fl.append(c);
+            }
+        }
+
+        if(fl.length() == 0 || found != 3)
+            throw new RuntimeException("IP format error " + ip);
+        arr[3] = (byte) MathUtils.parseInt(fl);
+        return arr;
+    }
+
+    //todo support ::
+    public static byte[] IPv62int(CharSequence ip) {
+        byte[] arr = new byte[16];
+
+        int found = 0;
+        CharList fl = new CharList(5);
+        for (int i = 0; i < ip.length(); i++) {
+            char c = ip.charAt(i);
+            if(c == ':') {
+                int st = MathUtils.parseInt(fl);
+                arr[found++] = (byte) (st >> 8);
+                arr[found++] = (byte) st;
+
+                if(found == 16)
+                    throw new RuntimeException("IP format error " + ip);
+                fl.clear();
+            } else {
+                fl.append(c);
+            }
+        }
+
+        if(fl.length() == 0 || found != 14)
+            throw new RuntimeException("IP format error " + ip);
+        int st = MathUtils.parseInt(fl);
+        arr[14] = (byte) (st >> 8);
+        arr[15] = (byte) st;
+        return arr;
+    }
+
+    public static byte[] ip2bytes(CharSequence ip) {
+        return TextUtil.lastIndexOf(ip, '.') != -1 ? IPv42int(ip) : IPv62int(ip);
+    }
+
+    public static String bytes2ip(byte[] bytes) {
+        if(bytes.length == 4) {
+            // IPv4
+            return bytes2ipv4(bytes, 0);
+        } else {
+            // IPv6
+            assert bytes.length == 16;
+
+            return bytes2ipv6(bytes, 0);
+        }
+    }
+
+    public static String bytes2ipv6(byte[] bytes, int off) {
+        // xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
+        CharList sb = new CharList();
+        for (int i = 0; i < 8; i ++) {
+            sb.append(Integer.toHexString((0xFF & bytes[off++]) << 8 | (bytes[off++] & 0xFF))).append(':');
+        }
+        sb.setIndex(sb.length() - 1);
+
+        return sb.toString();
+    }
+
+    public static String bytes2ipv4(byte[] bytes, int off) {
+        return String.valueOf(bytes[off++] & 0xFF) +
+                '.' +
+                (bytes[off++] & 0xFF) +
+                '.' +
+                (bytes[off++] & 0xFF) +
+                '.' +
+                (bytes[off] & 0xFF);
     }
 
     // javax.net.ssl.X509TrustManager

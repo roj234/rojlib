@@ -3,10 +3,13 @@ package roj.io;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.UnionerL;
+import roj.collect.UnionerL.Point;
+import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+import roj.util.EmptyArrays;
 
 import java.io.*;
 import java.nio.channels.FileChannel;
@@ -54,6 +57,10 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
     public MutableZipFile(File file) throws IOException {
         this.file = file;
+        if(!file.isFile() && !file.createNewFile())
+            throw new IOException("Unable to create a new file");
+        eof = new EEOF();
+        eof.comment = "";
         zip = new RandomAccessFile(file, "r");
         zip.seek(0);
         try {
@@ -68,19 +75,18 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         for (EFile file : entries.values()) {
             if(file.attr == null)
                 throw new IllegalArgumentException(file.name + " doesnt have a CDir definition!");
-            if(file.attr.fileHeader != file.startPos()) {
-                throw new IllegalArgumentException(file.name + " offset mismatch: req " + file.attr.fileHeader + " computed " + (file.offset - 30 - file.name.length() - file.extra.length));
+        }
+        if(eof.cDirLen != 0) {
+            zip.seek(eof.cDirOffset + eof.cDirLen);
+            int v = zip.readInt();
+            if(v != HEADER_EOF) {
+                throw new IllegalArgumentException("Dir length error: got " + eof.cDirLen + " val " + Integer.toHexString(v));
             }
-        }
-        zip.seek(eof.cDirOffset + eof.cDirLen);
-        int v = zip.readInt();
-        if(v != HEADER_EOF) {
-            throw new IllegalArgumentException("Dir length error: got " + eof.cDirLen + " val " + Integer.toHexString(v));
-        }
-        zip.seek(eof.cDirOffset);
-        v = zip.readInt();
-        if(v != HEADER_ATTRIBUTE) {
-            throw new IllegalArgumentException("Dir offset error: got " + eof.cDirOffset + " val " + Integer.toHexString(v));
+            zip.seek(eof.cDirOffset);
+            v = zip.readInt();
+            if (v != HEADER_ATTRIBUTE) {
+                throw new IllegalArgumentException("Dir offset error: got " + eof.cDirOffset + " val " + Integer.toHexString(v));
+            }
         }
     }
 
@@ -110,15 +116,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
     }
 
-    static final byte[] EMPTY = new byte[0];
-
     private void readFile(CharList out) throws IOException {
         byte[] buf = buffer.list;
         zip.read(buf, 0, 26);
         EFile entry = new EFile();
 
         //entry.minExtractVer = buf[0] | buf[1] << 8;
-        //entry.flags = buf[2] | buf[3] << 8;
+        int flags = (buf[2] & 0xFF) | (buf[3] & 0xFF) << 8;
+        entry.flags = (char) flags;
         int cp = /*entry.compressMethod =*/ (buf[4] & 0xFF) | (buf[5] & 0xFF) << 8;
         //entry.lastModify = _date(buf[6] | buf[7] << 8, buf[8] | buf[9] << 8);
         //entry.CRC32 = buf[10] | buf[11] << 8 | buf[12] << 16 | buf[13] << 24;
@@ -143,7 +148,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             buffer.pos(extraLen);
             entry.extra = buffer.toByteArray();
         } else {
-            entry.extra = EMPTY;
+            entry.extra = EmptyArrays.BYTES;
         }
 
         long off = zip.getFilePointer();
@@ -154,7 +159,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         entry.offset = off;
 
         // ... skip method, really
-        if(cSize == 0 && (cp & 8) != 0) {
+        if((flags & 8) != 0) {
             Inflater inflater = this.inflater;
             ByteList b = buffer;
             b.ensureCapacity(1024);
@@ -203,8 +208,8 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         //entry.ver = buf[0] | buf[1] << 8;
         //entry.minExtractVer = buf[2] | buf[3] << 8;
         //entry.flags = buf[4] | buf[5] << 8;
-        entry.compressMethod = (buf[6] & 0xFF) | (buf[7] & 0xFF) << 8;
-        //entry.lastModify = _date(buf[8] | buf[9] << 8, buf[10] | buf[11] << 8);
+        entry.compressMethod = (char) ((buf[6] & 0xFF) | (buf[7] & 0xFF) << 8);
+        entry.modTime = (buf[8] & 0xFF) | (buf[9] & 0xFF) << 8 | (buf[10] & 0xFF) << 16 | (buf[11] & 0xFF) << 24;
         entry.CRC32 = (buf[12] & 0xFF) | (buf[13] & 0xFF) << 8 | (buf[14] & 0xFF) << 16 | (buf[15] & 0xFF) << 24;
         entry.cSize = (buf[16] & 0xFF) | (buf[17] & 0xFF) << 8 | (buf[18] & 0xFF) << 16 | (buf[19] & 0xFF) << 24;
         entry.uSize = (buf[20] & 0xFF) | (buf[21] & 0xFF) << 8 | (buf[22] & 0xFF) << 16 | (buf[23] & 0xFF) << 24;
@@ -212,7 +217,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         //entry.diskId = buf[30] | buf[31] << 8;
         //entry.attrIn = buf[32] | buf[33] << 8;
         //entry.attrEx = buf[34] | buf[35] << 8 | buf[36] << 16 | buf[37] << 24;
-        entry.fileHeader = (buf[38] & 0xFF) | (buf[39] & 0xFF) << 8 | (buf[40] & 0xFF) << 16 | (buf[41] & 0xFF) << 24;
+        int fileHeader = /*entry.fileHeader =*/ (buf[38] & 0xFF) | (buf[39] & 0xFF) << 8 | (buf[40] & 0xFF) << 16 | (buf[41] & 0xFF) << 24;
 
         int nameLen = (buf[24] & 0xFF) | (buf[25] & 0xFF) << 8;
         int extraLen = (buf[26] & 0xFF) | (buf[27] & 0xFF) << 8;
@@ -240,9 +245,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         file.attr = entry;
 
         if(extraLen > 0) {
-            zip.read(buf, 0, extraLen);
+            zip.skipBytes(extraLen);
+            //zip.read(buf, 0, extraLen);
             //buffer.pos(extraLen);
             //entry.extra = buffer.toByteArray();
+        }
+
+        if(fileHeader != file.startPos()) {
+            throw new IllegalArgumentException(file.name + " offset mismatch: req " + fileHeader + " computed " + file.startPos());
         }
 
         long off = zip.getFilePointer();
@@ -259,7 +269,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         byte[] buf = buffer.list;
         if(zip.read(buf, 0, 18) < 18)
             throw new EOFException();
-        EEOF entry = new EEOF();
+        EEOF entry = this.eof;
 
         //entry.diskId = buf[0] | buf[1] << 8;
         //entry.cDirBegin = buf[2] | buf[3] << 8;
@@ -375,17 +385,16 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         for(ModFile file : modified) {
             EFile o = entries.get(file.name);
-            if(o != null && file.data == null)
-                entries.remove(file.name);
-            else {
-                if (o != null) {
-                    if (minFile == null || minFile.offset > o.offset) {
-                        minFile = o;
-                    }
-                    uFile.add(o);
+            if (o != null) {
+                if (minFile == null || minFile.offset > o.offset) {
+                    minFile = o;
                 }
-                file.file = o;
+                if(file.data == null)
+                    entries.remove(file.name);
+                else
+                    uFile.add(o);
             }
+            file.file = o;
         }
 
         File tmpFile = new File(file.getAbsolutePath() + System.currentTimeMillis() +  ".tmp");
@@ -419,7 +428,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                         point = point.next(); // 找到Start
 
                     EFile file1 = point.owner();
-                    file1.attr.fileHeader += delta;
                     file1.offset += delta;
 
                     continue; // find intersection regions
@@ -432,7 +440,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
                     delta += (len - begin);
 
-                    file1.attr.fileHeader += delta;
                     file1.offset += delta;
                 } else { // node k + 1
                     EFile file1 = region.node().owner();
@@ -469,11 +476,12 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             }
 
             EFile file1 = file.file;
+            // flag 8: 后面包含 EXT_SIGN (stream)
+            file1.flags = (char) ((file1.flags & ~8) | 2048);
             file1.offset = tmpFile.length() + 30 + file1.name.length() + file1.extra.length;
 
             Attr attr = file1.attr;
-            attr.fileHeader = (int) tmpFile.length();
-            attr.compressMethod = file.compress ? ZipEntry.DEFLATED : ZipEntry.STORED;
+            attr.compressMethod = (char) (file.compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 
             crc.reset();
             crc.update(file.data.list, 0, file.data.pos());
@@ -509,42 +517,34 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             appender.write(t.list, 0, t.pos());
         }
 
+        modified.clear();
         buffer.clear();
 
         // write ALL CDir header
         eof.cDirOffset = tmpFile.length();
         ByteList bl = writer.list;
 
-        // Unsorted_CD ...
         // 排序CDir属性
-        if(minFile != null) {
-            for (UnionerL.Region region : uFile) {
-                if (region.node().next() != null) {
-                    // 不用再做验证，做过一次了
-                    UnionerL.Point point = region.node();
-                    if (point.end())
-                        point = point.next(); // 找到Start
-
-                    writeAttr(writer, point.owner());
-                } else if(!region.node().end())
-                    writeAttr(writer, region.node().owner());
-
-                if(bl.pos() > 1024) {
-                    bl.writeToStream(appender);
-                    bl.clear();
-                }
-            }
+        uFile.reuseClear();
+        for (EFile file : entries.values()) {
+            uFile.add(file);
         }
+        for (UnionerL.Region region : uFile) {
+            Point node = region.node();
+            if (node.next() != null) {
+                // 不用再做验证，做过一次了
+                if (node.end())
+                    node = node.next(); // 找到Start
 
-        for (ModFile file : modified) {
-            writeAttr(writer, file.file);
+                writeAttr(writer, node.owner());
+            } else if(!node.end())
+                writeAttr(writer, node.owner());
+
             if(bl.pos() > 1024) {
                 bl.writeToStream(appender);
                 bl.clear();
             }
         }
-
-        modified.clear();
 
         if(bl.pos() > 0) {
             bl.writeToStream(appender);
@@ -563,7 +563,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         zip.close();
         if(!file.delete() || !tmpFile.renameTo(file)) {
-            FileChannel t = FileChannel.open(file.toPath(), StandardOpenOption.WRITE);
+            FileChannel t = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE).truncate(0);
             FileChannel f = FileChannel.open(tmpFile.toPath(), StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE);
             f.transferTo(0, tmpFile.length(), t);
 
@@ -599,32 +599,61 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         buffer.list = null;
     }
 
-    private static void writeFile(FileOutputStream appender, ByteWriter util, EFile file) throws IOException {
+    static void writeFile(FileOutputStream appender, ByteWriter util, EFile file) throws IOException {
+        /*int elen = 0;
+        int elenEXTT = 0;
+        int flagEXTT = 0;
+        if (e.mtime != null) {
+            elenEXTT += 4;
+            flagEXTT |= EXTT_FLAG_LMT;
+        }
+        if (e.atime != null) {
+            elenEXTT += 4;
+            flagEXTT |= EXTT_FLAG_LAT;
+        }
+        if (e.ctime != null) {
+            elenEXTT += 4;
+            flagEXTT |= EXTT_FLAT_CT;
+        }
+        if (flagEXTT != 0)
+            elen += (elenEXTT + 5);    // headid(2) + size(2) + flag(1) + data*/
+
         Attr attr = file.attr;
         util.writeInt(HEADER_FILE)
             .writeShortR(20)
-            .writeShortR(attr.compressMethod | 2048)
+            .writeShortR(file.flags)
             .writeShortR(attr.compressMethod)
-            .writeIntR(0)
+            .writeIntR(attr.modTime)
             .writeIntR(attr.CRC32)
             .writeIntR(attr.cSize)
             .writeIntR(attr.uSize)
             .writeShortR(ByteWriter.byteCountUTF8(file.name))
-            .writeShortR(0);
-        util.writeAllUTF(file.name);
+            .writeShortR(/*elen*/0)
+            .writeAllUTF(file.name);
+        /*if (flagEXTT != 0) {
+            util.writeShortR(EXTID_EXTT)
+            .writeShortR(elenEXTT + 1)      // flag + data
+            .writeByteR(flagEXTT);
+            if (e.mtime > 0)
+                util.writeInt(e.mtime / 1000);
+            if (e.atime > 0)
+                util.writeIntR(e.atime / 1000);
+            if (e.ctime > 0)
+                util.writeIntR(e.ctime / 1000);
+        }*/
         util.list.writeToStream(appender);
         util.list.clear();
     }
 
-    private static void writeAttr(ByteWriter util, EFile file) {
+    static void writeAttr(ByteWriter util, EFile file) {
         Attr attr = file.attr;
 
         util.writeInt(HEADER_ATTRIBUTE)
             .writeShortR(20)
             .writeShortR(20)
-            .writeShortR(attr.compressMethod | 2048)
+            .writeShortR(file.flags)
             .writeShortR(attr.compressMethod)
-            .writeIntR(0)
+            .writeIntR(attr.modTime)
             .writeIntR(attr.CRC32)
             .writeIntR(attr.cSize)
             .writeIntR(attr.uSize)
@@ -634,11 +663,11 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             .writeShortR(0) // disk
             .writeShortR(0) // attrIn
             .writeIntR(0) // attrEx
-            .writeIntR(attr.fileHeader);
-        util.writeAllUTF(file.name);
+            .writeIntR((int) file.startPos())
+            .writeAllUTF(file.name);
     }
 
-    private void writeEOF(ByteWriter util) {
+    void writeEOF(ByteWriter util) {
         EEOF eof = this.eof;
 
         util.writeInt(HEADER_EOF)
@@ -652,18 +681,43 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             .writeAllUTF(eof.comment);
     }
 
+    /**
+     * Converts DOS time to Java time (number of milliseconds since epoch).
+     */
+    public static long dos2JavaTime(int dtime) {
+        long day = ACalendar.daySinceAD(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f) - 1, (dtime >> 16) & 0x1f, null);
+        return 86400000L * (day + 24L * (((dtime >> 11) & 0x1f) + 60L * (((dtime >> 5) & 0x3f) + 60L * ((dtime << 1) & 0x3e))));
+    }
+
+    /**
+     * Converts Java time to DOS time.
+     */
+    public static long java2DosTime(int time) {
+        int[] arr = ACalendar.get1(time);
+        int year = arr[ACalendar.YEAR] + 1900;
+        if (year < 1980) {
+            return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;
+        }
+        return (year - 1980) << 25 | (arr[ACalendar.MONTH] + 1) << 21 |
+                arr[ACalendar.DAY] << 16 | arr[ACalendar.HOUR] << 11 | arr[ACalendar.MINUTE] << 5 |
+                arr[ACalendar.SECOND] >> 1;
+    }
+
     public static class EFile implements UnionerL.Section {
         //int minExtractVer;
-        //int flags;
+        char flags;
         //int compressMethod;
         //long lastModify;
         //int CRC32;
         //int cSize, uSize;
         String name;
-        byte[] extra = EMPTY;
+        byte[] extra = EmptyArrays.BYTES;
 
         byte[] data;
 
+        /**
+         * 文件数据的offset 不要再记错了！
+         */
         long offset;
         byte ext;
 
@@ -685,18 +739,18 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
     }
 
-    public static class Attr {
+    public static final class Attr {
         //int ver;
         //int minExtractVer;
         //int flags;
-        int compressMethod;
-        //long lastModify;
+        char compressMethod;
+        int modTime;
         int CRC32;
         int cSize, uSize;
         //String name, comment;
         //int diskId;
         //int attrIn, attrEx;
-        int fileHeader;
+        //int fileHeader;
 
         //long offset;
 
@@ -709,14 +763,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
     }
 
-    public static class EEOF {
+    public static final class EEOF {
         //int diskId;
         //int cDirBegin;
         //int cDirOnDisk;
         //int cDirTotal;
         long cDirLen, cDirOffset;
         //long offset;
-        String comment;
+        public String comment;
 
         @Override
         public String toString() {
@@ -724,11 +778,11 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
     }
 
-    public static class ModFile {
+    public static final class ModFile {
         EFile file;
-        boolean compress;
-        String name;
-        ByteList data;
+        public boolean compress;
+        public String name;
+        public ByteList data;
 
         @Override
         public boolean equals(Object o) {

@@ -25,6 +25,10 @@
  */
 package roj.net.tcp.ssl;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+
 /**
  * No description provided
  *
@@ -52,13 +56,17 @@ public class ServerSslConf implements SslConfig {
     }
 
     @Override
-    public String getPkPath() {
-        return keyStore;
+    public InputStream getPkPath() {
+        try {
+            return new FileInputStream(keyStore);
+        } catch (FileNotFoundException e) {
+            return null;
+        }
     }
 
     @Override
-    public String getCaPath() {
-        return keyStore;
+    public InputStream getCaPath() {
+        return getPkPath();
     }
 
     @Override

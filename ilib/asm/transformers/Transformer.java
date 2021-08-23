@@ -30,8 +30,6 @@ import ilib.Config;
 import ilib.api.IFasterClassTransformer;
 import ilib.asm.Loader;
 import ilib.client.api.ChangeWorldEvent;
-import net.minecraft.entity.Entity;
-import net.minecraftforge.common.MinecraftForge;
 import org.apache.logging.log4j.Logger;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -49,6 +47,10 @@ import roj.collect.IntBiMap;
 import roj.collect.WeakHashSet;
 import roj.util.ByteList;
 import roj.util.Helpers;
+
+import net.minecraft.entity.Entity;
+
+import net.minecraftforge.common.MinecraftForge;
 
 import java.util.ListIterator;
 import java.util.Set;
@@ -76,13 +78,11 @@ public class Transformer implements IFasterClassTransformer {
             case "net.minecraft.client.Minecraft":
                 return transformMc(data);
             case "ilib.AT_PATCH_AT":
-                return transformAT(data);/*
-            case "net.minecraft.item.crafting.FurnaceRecipes":
-                return Config.fastRecipe ? transformFR(data) : data;*/
+                return transformAT(data);
+            case "net.minecraft.inventory.ContainerRepair$2":
+                return Config.noAnvilTax ? transformAnvilSlot(data) : data;
             case "net.minecraft.server.MinecraftServer":
                 return Config.enableTPSChange ? transformServer(data) : data;
-            //case "net.minecraft.client.particle.ParticleManager":
-            //    return Config.maxParticleCountPerLayer == 16384 ? data : transformParticleManager(data);
             case "net.minecraft.server.management":
                 return transformPlayerChunkMap(data);
         }
@@ -93,23 +93,39 @@ public class Transformer implements IFasterClassTransformer {
         return data;
     }
 
-    private ByteList transformPlayerChunkMap(ByteList basicClass) {
+    private static ByteList transformAnvilSlot(ByteList basicClass) {
         ConstantData data = Parser.parseConstants(basicClass);
-        for (ListIterator<MethodSimple> iterator = data.methods.listIterator(); iterator.hasNext(); ) {
-            MethodSimple method = iterator.next();
-            if (method.name.getString().equals("func_72693_b")) {
-                iterator.set(Helpers.cast(replaceMethodTick(new Method(data, method))));
-                break;
+        int index = data.getMethodByName("func_190901_a");
+        Method mn = new Method(data, data.methods.get(index));
+        data.methods.set(index, Helpers.cast(mn));
+
+        InsnList insn = mn.code.instructions;
+        for (int i = 0; i < insn.size(); i++) {
+            InsnNode node = insn.get(i);
+            if (node.getOpcode() == Opcodes.INVOKEVIRTUAL) {
+                InvokeInsnNode node1 = (InvokeInsnNode) node;
+                if (node1.name.equals("func_82242_a")) {
+                    node1.code = Opcodes.INVOKESTATIC;
+                    node1.owner = "ilib/asm/util/MCHooks";
+                    node1.name = "playerAnvilClick";
+                    node1.rawTypes("(Lnet/minecraft/entity/player/EntityPlayer;I)V");
+                    break;
+                }
             }
         }
+
         return Parser.toByteArrayShared(data);
     }
 
-    private Method replaceMethodTick(Method method) {
+    private static ByteList transformPlayerChunkMap(ByteList basicClass) {
+        ConstantData data = Parser.parseConstants(basicClass);
+        int index = data.getMethodByName("func_72693_b");
+        Method mn = new Method(data, data.methods.get(index));
+        data.methods.set(index, Helpers.cast(mn));
         int i = 0;
-        for (ListIterator<InsnNode> itr = method.code.instructions.listIterator(); itr.hasNext(); ) {
+        for (ListIterator<InsnNode> itr = mn.code.instructions.listIterator(); itr.hasNext(); ) {
             if (i == 2)
-                return method;
+                break;
 
             InsnNode node = itr.next();
             switch (node.getOpcode()) {
@@ -132,46 +148,30 @@ public class Transformer implements IFasterClassTransformer {
                 break;
             }
         }
-        logger.error("Node not found!");
-        return method;
-    }
-
-    private byte[] transformEntityDataManager(byte[] basicClass) {
-        Clazz clazz = Parser.parse(basicClass);
-        /*for(Method method : clazz.methods) {
-            if(method.name.equals("")) {
-
-            }
-        }*/
-        return basicClass;
-    }
-
-    private ByteList transformServer(ByteList basicClass) {
-        ConstantData data = Parser.parseConstants(basicClass);
-        for (ListIterator<MethodSimple> iterator = data.methods.listIterator(); iterator.hasNext(); ) {
-            MethodSimple method = iterator.next();
-            if (method.name.getString().equals("run")) {
-                iterator.set(Helpers.cast(replaceServerSleep(new Method(data, method))));
-                break;
-            }
-        }
+        if(i != 2)
+            logger.error("[PlayerChunkMap.Transform] Node not found!");
         return Parser.toByteArrayShared(data);
     }
 
-    private Method replaceServerSleep(Method method) {
+    private static ByteList transformServer(ByteList basicClass) {
+        ConstantData data = Parser.parseConstants(basicClass);
+        int index = data.getMethodByName("run");
+        Method mn = new Method(data, data.methods.get(index));
+        data.methods.set(index, Helpers.cast(mn));
         int i = 0;
-        for (ListIterator<InsnNode> itr = method.code.instructions.listIterator(); itr.hasNext(); ) {
+        for (ListIterator<InsnNode> itr = mn.code.instructions.listIterator(); itr.hasNext(); ) {
             InsnNode node = itr.next();
             if (node.getOpcode() == Opcodes.LDC2_W) {
                 LoadConstInsnNode node1 = (LoadConstInsnNode) node;
                 if (node1.c.type() == CstType.LONG && ((CstLong) node1.c).value == 50L) {
                     itr.set(new FieldInsnNode(Opcodes.GETSTATIC, "ilib/asm/transformers/Transformer.MSpT:J"));
-                    return method;
+                    return Parser.toByteArrayShared(data);
                 }
             }
         }
-        logger.error("TPS change node not found!");
-        return method;
+        logger.error("[TPSChange.Transform] Node not found!");
+
+        return basicClass;
     }
 
     private ByteList transformAT(ByteList basicClass) {
@@ -262,9 +262,11 @@ public class Transformer implements IFasterClassTransformer {
         ConstantData data = Parser.parseConstants(basicClass);
         if (!Config.title.equals("Minecraft 1.12.2")) {
             boolean found = false;
-            for (Constant constant : data.cp.array()) {
-                if (constant != null && constant.type() == CstType.UTF) {
-                    CstUTF cstUTF = (CstUTF) constant;
+            Constant[] array = data.cp.array();
+            for (int i = 1; i < array.length; i++) {
+                Constant c = array[i];
+                if (c.type() == CstType.UTF) {
+                    CstUTF cstUTF = (CstUTF) c;
                     if ("Minecraft 1.12.2".equals(cstUTF.getString())) {
                         cstUTF.setString(Config.title);
                         found = true;
@@ -304,29 +306,26 @@ public class Transformer implements IFasterClassTransformer {
     private static ByteList transformMinecart(ByteList basicClass) {
         logger.debug("Changing class net.minecraft.entity.item.EntityMinecart");
         Clazz cn = Parser.parse(basicClass);
+        int index = cn.getMethodByName("func_180460_a");
+        Method mn = cn.methods.get(index);
 
-        for (Method mn : cn.methods) {
-            // find srg
-            if (mn.name.equals("func_180460_a")) {
-                InsnList list = mn.code.instructions;
-                final IntBiMap<InsnNode> pc = list.getPCMap();
+        InsnList list = mn.code.instructions;
+        final IntBiMap<InsnNode> pc = list.getPCMap();
 
-                int i = 420;
+        int i = 420;
 
-                while (i < 440) {
-                    InsnNode node = pc.get(i++);
-                    if (node != null && node.getOpcode() == Opcodes.INSTANCEOF) {
-                        ClassInsnNode node1 = (ClassInsnNode) node;
-                        node1.owner("net/minecraft/entity/player/EntityPlayer");
+        while (i < 440) {
+            InsnNode node = pc.get(i++);
+            if (node != null && node.getOpcode() == Opcodes.INSTANCEOF) {
+                ClassInsnNode node1 = (ClassInsnNode) node;
+                node1.owner("net/minecraft/entity/player/EntityPlayer");
 
-                        logger.debug("net.minecraft.entity.item.EntityMinecart change successful.");
-                        return Parser.toByteArrayShared(cn);
-                    }
-                }
-                logger.error("net.minecraft.entity.item.EntityMinecart change failed.");
-                logger.error(mn.toString());
+                logger.debug("net.minecraft.entity.item.EntityMinecart change successful.");
+                return Parser.toByteArrayShared(cn);
             }
         }
+        logger.error("net.minecraft.entity.item.EntityMinecart change failed.");
+        logger.error(mn.toString());
         throw new RuntimeException("出错了");
     }
 

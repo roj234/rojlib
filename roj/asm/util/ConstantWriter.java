@@ -412,6 +412,34 @@ public class ConstantWriter {
         }
     }
 
+    public void init(ConstantPool pool) {
+        final Constant[] cst = pool.array();
+
+        this.constants.clear();
+        this.refMap.clear();
+        this.index = pool.index;
+        this.duplicateEntry = 0;
+
+        for (int i = 1; i < cst.length; i++) {
+            Constant c = cst[i];
+            if (c == CstTop.TOP) continue;
+            if(!refMap.add(c)) {
+                if(c != refMap.find(c)) {
+                    duplicateEntry++;
+                    c.setIndex(refMap.find(c).getIndex());
+                }
+            }
+            this.constants.add(c);
+        }
+
+        if(duplicateEntry > 0 && DEBUG)
+            new Throwable("Duplicate entry: " + duplicateEntry).printStackTrace();
+    }
+
+    public Constant get(int index) {
+        return constants.get(index);
+    }
+
     public List<Constant> getConstants() {
         return Collections.unmodifiableList(constants);
     }
@@ -435,10 +463,6 @@ public class ConstantWriter {
             System.out.println("  content " + w.list);
             w.list.clear();
         }
-    }
-
-    public void clump() {
-
     }
 
     @Override

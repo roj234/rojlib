@@ -29,20 +29,21 @@ package ilib.api.recipe.impl;
 import ilib.api.recipe.IDisplayableRecipeList;
 import ilib.api.recipe.IModifiableRecipeList;
 import ilib.api.recipe.IRecipe;
-import ilib.api.recipe.MultiInputRecipe;
 import ilib.fluid.handler.IFluidProvider;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import roj.collect.ConcatedCollection;
-import roj.collect.SortedHashTrieMap;
+import ilib.util.CraftingMap;
+import roj.collect.UnsortedMultiKeyMap;
 import roj.math.MathUtils;
 import roj.math.MutableBoolean;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -50,39 +51,25 @@ import java.util.List;
  * @since 2021/5/23 18:0
  */
 public class AdvancedRecipeList implements IDisplayableRecipeList, IModifiableRecipeList {
-    public final SortedHashTrieMap<ItemStack, IRecipe> recipes;
+    public final UnsortedMultiKeyMap<ItemStack, String, IRecipe> recipes;
     private final List<IRecipe> fallback = new ArrayList<>();
     private final List<IRecipe> display = new ArrayList<>();
 
     public AdvancedRecipeList(int machineInventorySize) {
-        this.recipes = new SortedHashTrieMap<>(new ItemStackSortComparator(), machineInventorySize);
-    }
-
-    public AdvancedRecipeList() {
-        this(4);
+        this.recipes = UnsortedMultiKeyMap.create(CraftingMap.StackComparator.INSTANCE, machineInventorySize);
     }
 
     public void addRecipe(IRecipe recipe) {
-        if(recipe instanceof MultiInputRecipe) {
-            List<ItemStack[]> stacks = ((MultiInputRecipe) recipe).getMultiInputs();
-            int count = MathUtils.dikaerLength(stacks);
-            if(count > 100) {
-                fallback.add(recipe);
-            } else {
-                MathUtils.dikaerProduct(stacks, (k) -> {
-                    System.err.println(k);
-                    this.recipes.put(k, recipe);
-                });
-                display.add(recipe);
-            }
+        display.add(recipe);
+        if(recipe.isStandard()) {
+            recipes.put(recipe.getInput(), recipe);
         } else {
-            this.recipes.put(recipe.getInput(), recipe);
-            display.add(recipe);
+            fallback.add(recipe);
         }
     }
 
     public Collection<IRecipe> getDisplayableRecipes() {
-        return new ConcatedCollection<>(fallback, display);
+        return display;
     }
 
     @Override
@@ -96,7 +83,7 @@ public class AdvancedRecipeList implements IDisplayableRecipeList, IModifiableRe
     }
 
     public IRecipe contains(List<ItemStack> list, IFluidProvider machine, @Nullable EntityPlayer player) {
-        for (IRecipe recipe : this.recipes.getMulti(list, 127)) {
+        for (IRecipe recipe : this.recipes.getMulti(list, 10)) {
             if (recipe.matches(machine, list)) {
                 return recipe;
             }
@@ -107,47 +94,5 @@ public class AdvancedRecipeList implements IDisplayableRecipeList, IModifiableRe
             }
         }
         return null;
-    }
-
-    private static class ItemStackSortComparator implements SortedHashTrieMap.SortComparator<ItemStack> {
-        @Override
-        public boolean equalsTo(ItemStack o1, Object o2, int hashId) {
-            if(!(o2 instanceof ItemStack))
-                return false;
-            switch (hashId) {
-                case 1:
-                    if(o1.getMetadata() != ((ItemStack) o2).getMetadata())
-                        return false;
-                case 0:
-                    return o1.getItem() == ((ItemStack)o2).getItem();
-            }
-            return false;
-        }
-
-        @Override
-        public ItemStack toImmutable(ItemStack stack) {
-            return /*stack.copy()*/stack;
-        }
-
-        @Override
-        public int maxHashLength() {
-            return 2;
-        }
-
-        @Override
-        public int hashAt(ItemStack stack, int hashId) {
-            switch (hashId) {
-                case 0:
-                    return stack.getItem().hashCode();
-                case 1:
-                    return stack.getItem().hashCode() ^ stack.getMetadata();
-            }
-            return 0;
-        }
-
-        @Override
-        public int compare(ItemStack o1, ItemStack o2) {
-            return o1.getItem().getRegistryName().compareTo(o2.getItem().getRegistryName());
-        }
     }
 }

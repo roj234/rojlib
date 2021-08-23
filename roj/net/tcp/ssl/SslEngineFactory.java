@@ -29,7 +29,6 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManagerFactory;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -49,7 +48,7 @@ public final class SslEngineFactory {
         return KEY_FORMAT;
     }
 
-    private static SSLContext getJavaSslServerContext(String pkPath, String caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
+    private static SSLContext getSslContext(InputStream pkPath, InputStream caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
         // 密钥管理器
         KeyManagerFactory kmf = null;
         if (serverSide) {
@@ -57,25 +56,28 @@ public final class SslEngineFactory {
         }
 
         // 信任库
-        TrustManagerFactory tf = null;
+        TrustManagerFactory tmf = null;
         if (caPath != null) {
-            tf = getTrustManagerFactory(caPath, passwd);
+            tmf = getTrustManagerFactory(caPath, passwd);
         } else if (!serverSide)
-            System.err.println("Client must verify server.");
+            throw new RuntimeException("Client must verify server.");
 
         SSLContext ctx = SSLContext.getInstance(PROTOCOL);
 
         // 初始化此上下文
         // 参数一：认证的密钥 参数二：对等信任认证 参数三：伪随机数生成器
         // 单向认证，服务端不用验证客户端，所以第二个参数为null
-        ctx.init(kmf == null ? null : kmf.getKeyManagers(), tf == null ? null : tf.getTrustManagers(), null);
+        ctx.init(kmf == null ? null : kmf.getKeyManagers(), null, null);
+        System.out.println(kmf);
+        System.out.println(tmf);
+        System.out.println(ctx);
 
         return ctx;
     }
 
-    static TrustManagerFactory getTrustManagerFactory(String caPath, char[] passwd) throws GeneralSecurityException, IOException {
+    static TrustManagerFactory getTrustManagerFactory(InputStream caPath, char[] passwd) throws GeneralSecurityException, IOException {
         KeyStore tks = KeyStore.getInstance(KEY_FORMAT);
-        try (InputStream in = new FileInputStream(caPath)) {
+        try (InputStream in = caPath) {
             tks.load(in, passwd);
         }
         TrustManagerFactory tf = TrustManagerFactory.getInstance(MANAGER_FORMAT);
@@ -83,9 +85,9 @@ public final class SslEngineFactory {
         return tf;
     }
 
-    static KeyManagerFactory getKeyManagerFactory(String pkPath, char[] passwd) throws IOException, GeneralSecurityException {
+    static KeyManagerFactory getKeyManagerFactory(InputStream pkPath, char[] passwd) throws IOException, GeneralSecurityException {
         KeyStore ks = KeyStore.getInstance(KEY_FORMAT);
-        try (InputStream in = new FileInputStream(pkPath)) {
+        try (InputStream in = pkPath) {
             ks.load(in, passwd);
         }
 
@@ -95,14 +97,9 @@ public final class SslEngineFactory {
         return kmf;
     }
 
-    public static EngineAllocator getJavaSslEngine(SslConfig cfg) throws IOException, GeneralSecurityException {
-        SSLContext context = getJavaSslServerContext(cfg.getPkPath(), cfg.isNeedClientAuth() ? cfg.getCaPath() : null, cfg.getPasswd(), cfg.isServerSide());
-
+    public static EngineAllocator getSslFactory(SslConfig cfg) throws IOException, GeneralSecurityException {
+        SSLContext context = getSslContext(cfg.getPkPath(), cfg.getCaPath(), cfg.getPasswd(), cfg.isServerSide());
         return new Alloc(context, cfg);
-    }
-
-    public static EngineAllocator getAnySslEngine(SslConfig config) throws IOException, GeneralSecurityException {
-        return getJavaSslEngine(config);
     }
 
     private static final class Alloc extends EngineAllocator {

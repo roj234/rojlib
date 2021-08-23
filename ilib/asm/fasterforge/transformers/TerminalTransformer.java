@@ -25,34 +25,47 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstRef;
 import roj.asm.type.ParamHelper;
+import roj.asm.visitor.AsIsVisitor;
 import roj.asm.visitor.ClassVisitor;
+import roj.asm.visitor.CodeVisitor;
+import roj.asm.visitor.MethodVisitor;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
-public class TerminalTransformer extends ClassVisitor implements IClassTransformer {
+import net.minecraft.launchwrapper.IClassTransformer;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.FMLSecurityManager;
+
+public class TerminalTransformer extends CodeVisitor implements IClassTransformer {
+    ClassVisitor visitor;
+    public TerminalTransformer() {
+        visitor = new ClassVisitor();
+        visitor.fieldVisitor = new AsIsVisitor();
+        MethodVisitor mv = new MethodVisitor() {
+            @Override
+            public void visitNode(int acc, String name, String desc, int count) {
+                mName = name;
+                mDesc = desc;
+            }
+        };
+        visitor.methodVisitor = mv;
+        mv.codeVisitor = this;
+    }
+
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
         visit(name);
-        ByteList out = visit(clsName = name, new ByteReader(basicClass));
+        ByteList out = visitor.visit(clsName = name, new ByteReader(basicClass));
 
         return dirty ? out.toByteArray() : basicClass;
     }
 
-    @Override
-    protected void visitMethod(int acc, String name, String desc) {
-        super.visitMethod(acc, name, desc);
-        this.mName = name;
-        this.mDesc = desc;
-    }
-
-    String clsName, mName, mDesc;
+    static String clsName, mName, mDesc;
 
     @Override
     protected void invoke(byte code, CstRef method) {

@@ -29,18 +29,20 @@ import ilib.Config;
 import ilib.ImpLib;
 import ilib.asm.util.TileEntityCreator;
 import ilib.util.PlayerUtil;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.registry.RegistryNamespaced;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.common.FMLLog;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.MyHashMap;
-import roj.reflect.DirectConstructorAccess;
+import roj.reflect.DirectAccessor;
+
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.registry.RegistryNamespaced;
+import net.minecraft.world.World;
+
+import net.minecraftforge.fml.common.FMLLog;
 
 import javax.annotation.Nullable;
 import java.util.Map;
@@ -72,7 +74,9 @@ abstract class FastTileConst extends TileEntity {
 
     @Copy
     private static ilib.asm.util.TileEntityCreator createSupplierFor(Class<? extends TileEntity> clazz) {
-        return DirectConstructorAccess.get(ilib.asm.util.TileEntityCreator.class, "get", clazz);
+        return DirectAccessor.builder(TileEntityCreator.class)
+                             .construct(clazz, "get")
+                             .build();
     }
 
     @Nullable
@@ -103,7 +107,7 @@ abstract class FastTileConst extends TileEntity {
                 PlayerUtil.broadcastAll("未知TileEntityId: " + id);
             }
         } catch (Throwable var7) {
-            FMLLog.log.error("A TileEntity {}({}) has thrown an exception during loading, its state cannot be restored. Report this to the mod author", id, getTEClass(id), var7);
+            FMLLog.log.error("一个 Tile {}({}) 无法加载NBT数据, 这是一个bug!", id, getTEClass(id), var7);
         }
 
         if (tile != null) {
@@ -111,11 +115,11 @@ abstract class FastTileConst extends TileEntity {
                 tile.setWorldCreate(worldIn);
                 tile.readFromNBT(compound);
             } catch (Throwable var6) {
-                FMLLog.log.error("A TileEntity {}({}) has thrown an exception during loading, its state cannot be restored. Report this to the mod author", id, getTEClass(id), var6);
+                FMLLog.log.error("一个 Tile {}({}) 无法加载NBT数据, 这是一个bug!", id, getTEClass(id), var6);
                 tile = null;
             }
         } else {
-            FMLLog.log.warn("Skipping TileEntity {}", id);
+            FMLLog.log.warn("跳过不存在的Tile {}", id);
         }
 
         return tile;

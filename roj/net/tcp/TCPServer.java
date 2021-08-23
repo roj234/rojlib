@@ -54,7 +54,7 @@ public abstract class TCPServer implements Runnable {
     }
 
     public TCPServer(InetSocketAddress address, int maxConnection, String keyStoreFile, char[] keyPassword) throws IOException, GeneralSecurityException {
-        this.ssl = enableHTTPS(keyStoreFile, keyPassword);
+        this.ssl = enableSSL(keyStoreFile, keyPassword);
         this.socket = socket(address, maxConnection);
     }
 
@@ -74,8 +74,8 @@ public abstract class TCPServer implements Runnable {
         return socket;
     }
 
-    protected static EngineAllocator enableHTTPS(String keyStore, char[] password) throws IOException, GeneralSecurityException {
-        return SslEngineFactory.getAnySslEngine(new ServerSslConf(keyStore, password));
+    protected static EngineAllocator enableSSL(String keyStore, char[] password) throws IOException, GeneralSecurityException {
+        return SslEngineFactory.getSslFactory(new ServerSslConf(keyStore, password));
     }
 
     public final ServerSocket getSocket() {

@@ -103,6 +103,22 @@ public final class AccessData implements IClass {
         return fields;
     }
 
+    public int getMethodByName(String key) {
+        for (int i = 0; i < methods.size(); i++) {
+            MoFNode ms = methods.get(i);
+            if (ms.name().equals(key)) return i;
+        }
+        return -1;
+    }
+
+    public int getFieldByName(String key) {
+        for (int i = 0; i < fields.size(); i++) {
+            MoFNode fs = fields.get(i);
+            if (fs.name().equals(key)) return i;
+        }
+        return -1;
+    }
+
     @Override
     public AttributeList attributes() {
         throw new UnsupportedOperationException();

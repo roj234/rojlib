@@ -25,11 +25,14 @@
  */
 package ilib.asm.nixim;
 
-import ilib.util.StackCompareHelper;
-import net.minecraft.item.ItemStack;
+import ilib.asm.util.MCHooks.ItemStackMap;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
+
+import net.minecraft.item.ItemStack;
+
+import net.minecraftforge.fml.common.FMLLog;
 
 import java.util.Map;
 
@@ -47,12 +50,28 @@ public abstract class NiximFastFurnace {
     @Shadow("field_77605_c")
     private Map<ItemStack, Float> experienceList;
 
+    @RemapTo("<init>")
+    public NiximFastFurnace() {
+        this.smeltingList = new ItemStackMap<>();
+        this.experienceList = new ItemStackMap<>();
+    }
+
+    @RemapTo("func_151395_a")
+    public void addSmeltingRecipe(ItemStack input, ItemStack stack, float experience) {
+        ItemStack out = this.getSmeltingResult(input);
+        if (out != ItemStack.EMPTY) {
+            FMLLog.log.info("冲突的熔炉合成: {} => {} 和 {}", input, stack, out);
+        } else {
+            this.smeltingList.put(input, stack);
+            this.experienceList.put(stack, experience);
+        }
+    }
+
     /**
      * HashMap的实现: comparableItemStack.equals(storedStack)
      */
     @RemapTo("func_151395_a")
     public ItemStack getSmeltingResult(ItemStack stack) {
-        ItemStack comparableItemStack = StackCompareHelper.toComparable(stack, false, true, true);
         return smeltingList.getOrDefault(stack, ItemStack.EMPTY);
     }
 
@@ -62,7 +81,6 @@ public abstract class NiximFastFurnace {
         if (ret != -1) {
             return ret;
         } else {
-            ItemStack comparableItemStack = StackCompareHelper.toComparable(stack, false, true, true);
             return experienceList.getOrDefault(stack, 0.0f);
         }
     }

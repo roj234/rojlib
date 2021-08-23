@@ -25,15 +25,21 @@
  */
 package ilib.asm.nixim.client;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.DestroyBlockProgress;
-import net.minecraft.client.renderer.RenderGlobal;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.RayTraceResult;
+import org.lwjgl.opengl.GL11;
+import roj.asm.nixim.RemapTo;
 
+import net.minecraft.block.material.Material;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.*;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.world.World;
+
+import java.awt.*;
 import java.util.Map;
 
 /**
@@ -48,17 +54,18 @@ public abstract class NiximSelectionBox extends RenderGlobal {
         super(mcIn);
     }
 
-    /*@Override
+    @Override
+    @RemapTo("func_72731_b")
     public void drawSelectionBox(final EntityPlayer player, final RayTraceResult result, final int subID, final float partialTicks) {
         final World world = player.world;
         if (subID == 0 && result.typeOfHit == RayTraceResult.Type.BLOCK) {
-            final float breakProgress = getBlockDamage(result);
-            if (CSB.disableDepthBuffer) {
+            final float prg = getBlockDamage(result);
+            /*if (CSB.disableDepthBuffer) {
                 GL11.glDisable(2929);
-            }
+            }*/
             GlStateManager.enableBlend();
             GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
-            GL11.glLineWidth(getThickness());
+            GL11.glLineWidth(1f);
             GlStateManager.disableTexture2D();
             GlStateManager.depthMask(false);
             final BlockPos blockPos = result.getBlockPos();
@@ -68,35 +75,35 @@ public abstract class NiximSelectionBox extends RenderGlobal {
                 final double d2 = player.lastTickPosY + (player.posY - player.lastTickPosY) * partialTicks;
                 final double d3 = player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * partialTicks;
                 AxisAlignedBB bb = blockState.getSelectedBoundingBox(world, blockPos).offset(-d0, -d2, -d3);
-                if (CSB.breakAnimation == CSB.DOWN) {
+                /*if (CSB.breakAnimation == CSB.DOWN) {
                     bb = bb.expand(0.0, (-breakProgress / 2.0f), 0.0).offset(0.0, (-breakProgress / 2.0f), 0.0);
-                }
-                if (CSB.breakAnimation == CSB.SHRINK) {
-                    bb = bb.expand((-breakProgress / 2.0f), (-breakProgress / 2.0f), (-breakProgress / 2.0f));
-                }
-                float red = getRed();
-                float green = getGreen();
-                float blue = getBlue();
-                final float blinkAlpha = (CSB.breakAnimation == CSB.ALPHA) ? breakProgress : getBlinkAlpha();
-                final float outlineAlpha = getAlpha();
-                if (CSB.rainbow) {
+                }*/
+                //else if (CSB.breakAnimation == CSB.SHRINK) {
+                    bb = bb.expand((-prg / 2.0f), (-prg / 2.0f), (-prg / 2.0f));
+                //}
+                float red = 1;
+                float green = 1;
+                float blue = 1;
+                float blinkAlpha = /*(CSB.breakAnimation == CSB.ALPHA) ? */prg;
+                float outlineAlpha = 1;
+                //if (CSB.rainbow) {
                     final float millis = System.currentTimeMillis() % 10000L / 10000.0f;
                     final int color = Color.HSBtoRGB(millis, 0.8f, 0.8f);
                     red = (color >>> 16 & 0xFF) / 255.0f;
                     green = (color >>> 8 & 0xFF) / 255.0f;
                     blue = (color & 0xFF) / 255.0f;
-                }
+                //}
                 drawBlinkingBlock(bb.expand(0.002, 0.002, 0.002), red, green, blue, blinkAlpha);
                 drawOutlinedBoundingBox(bb.expand(0.002, 0.002, 0.002), red, green, blue, outlineAlpha);
             }
             GlStateManager.depthMask(true);
             GlStateManager.enableTexture2D();
             GlStateManager.disableBlend();
-            if (CSB.disableDepthBuffer) {
+            /*if (CSB.disableDepthBuffer) {
                 GL11.glEnable(2929);
-            }
+            }*/
         }
-    }*/
+    }
 
     private static float getBlockDamage(final RayTraceResult rtr) {
         final Map<Integer, DestroyBlockProgress> map = Minecraft.getMinecraft().renderGlobal.damagedBlocks;
@@ -138,18 +145,19 @@ public abstract class NiximSelectionBox extends RenderGlobal {
         buffer.pos(maxX, minY, minZ).color(red, green, blue, alpha).endVertex();
         buffer.pos(maxX, minY, minZ).color(red, green, blue, 0.0f).endVertex();
         tessellator.draw();
-    }/*
+    }
 
     private static void drawBlinkingBlock(final AxisAlignedBB alignedBB, final float red, final float green, final float blue, float alpha) {
         final Tessellator tessellator = Tessellator.getInstance();
         if (alpha > 0.0f) {
-            if (getBlinkSpeed() > 0.0f && CSB.breakAnimation != CSB.ALPHA) {
-                alpha *= (float)Math.abs(Math.sin(Minecraft.getSystemTime() / 100.0 * getBlinkSpeed()));
+            float blinkSpeed = 0.5f;
+            if (blinkSpeed > 0.0f) {
+                alpha *= (float)Math.abs(Math.sin(Minecraft.getSystemTime() / 100.0 * blinkSpeed));
             }
             final BufferBuilder buffer = tessellator.getBuffer();
             buffer.begin(5, DefaultVertexFormats.POSITION_COLOR);
             RenderGlobal.addChainedFilledBoxVertices(buffer, alignedBB.minX, alignedBB.minY, alignedBB.minZ, alignedBB.maxX, alignedBB.maxY, alignedBB.maxZ, red, green, blue, alpha);
             tessellator.draw();
         }
-    }*/
+    }
 }

@@ -25,17 +25,21 @@
  */
 package ilib.asm.nixim;
 
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
+import ilib.asm.util.MCHooks.RecipeCache;
 import ilib.util.PlayerUtil;
-import ilib.util.Registries;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.NonNullList;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
+
+import java.util.List;
 
 /**
  * No description provided
@@ -48,67 +52,66 @@ import roj.asm.nixim.RemapTo;
 public abstract class NiximFastWorkbench extends CraftingManager {
     @RemapTo("func_82787_a")
     public static ItemStack findMatchingResult(InventoryCrafting inv, World world) {
-        MethodEntryPoint.getCachedRecipeAcc().setInstance(inv);
-        IRecipe recipe = (IRecipe) MethodEntryPoint.getCachedRecipeAcc().getObject();
+        IRecipe recipe = ((RecipeCache) inv).getRecipe();
 
         if (recipe == null || !recipe.canFit(inv.getWidth(), inv.getHeight()) || !recipe.matches(inv, world)) {
-            recipe = null;
-            for (IRecipe recipe1 : Registries.recipe()) {
-                if (recipe1.canFit(inv.getWidth(), inv.getHeight()) && recipe1.matches(inv, world)) {
-                    MethodEntryPoint.getCachedRecipeAcc().setObject(recipe = recipe1);
-                    break;
-                }
-            }
+            recipe = findRecipe(inv, world);
         } else {
-            PlayerUtil.broadcastAll("Cache hit a!");
+            PlayerUtil.broadcastAll("[FW]Match1: " + recipe);
         }
-
-        MethodEntryPoint.getCachedRecipeAcc().clearInstance();
 
         return recipe == null ? null : recipe.getCraftingResult(inv);
     }
 
     @RemapTo("func_192413_b")
     public static IRecipe findMatchingRecipe(InventoryCrafting inv, World world) {
-        MethodEntryPoint.getCachedRecipeAcc().setInstance(inv);
-        IRecipe recipe = (IRecipe) MethodEntryPoint.getCachedRecipeAcc().getObject();
+        IRecipe recipe = ((RecipeCache) inv).getRecipe();
 
         if (recipe == null || !recipe.canFit(inv.getWidth(), inv.getHeight()) || !recipe.matches(inv, world)) {
-            recipe = null;
-            for (IRecipe recipe1 : Registries.recipe()) {
-                if (recipe1.canFit(inv.getWidth(), inv.getHeight()) && recipe1.matches(inv, world)) {
-                    MethodEntryPoint.getCachedRecipeAcc().setObject(recipe = recipe1);
-                    break;
-                }
-            }
+            recipe = findRecipe(inv, world);
         } else {
-            PlayerUtil.broadcastAll("Cache hit b!");
+            PlayerUtil.broadcastAll("[FW]Match2: " + recipe);
         }
-
-        MethodEntryPoint.getCachedRecipeAcc().clearInstance();
 
         return recipe;
     }
 
     @RemapTo("func_180303_b")
     public static NonNullList<ItemStack> getRemainingItems(InventoryCrafting inv, World world) {
-        MethodEntryPoint.getCachedRecipeAcc().setInstance(inv);
-        IRecipe recipe = (IRecipe) MethodEntryPoint.getCachedRecipeAcc().getObject();
+        IRecipe recipe = ((RecipeCache) inv).getRecipe();
 
         if (recipe == null || !recipe.canFit(inv.getWidth(), inv.getHeight()) || !recipe.matches(inv, world)) {
-            for (IRecipe recipe1 : Registries.recipe()) {
-                if (recipe1.matches(inv, world)) {
-                    MethodEntryPoint.getCachedRecipeAcc().setObject(recipe = recipe1);
-                    MethodEntryPoint.getCachedRecipeAcc().clearInstance();
-                    return recipe.getRemainingItems(inv);
-                }
-            }
+            recipe = findRecipe(inv, world);
         } else {
-            PlayerUtil.broadcastAll("Cache hit c!");
+            PlayerUtil.broadcastAll("[FW]Match3: " + recipe);
         }
 
-        MethodEntryPoint.getCachedRecipeAcc().clearInstance();
+        return recipe == null ? inv.stackList : recipe.getRemainingItems(inv);
+    }
 
-        return inv.stackList;
+    @Copy
+    private static IRecipe findRecipe(InventoryCrafting inv, World world) {
+        List<List<IRecipe>> multi = MCHooks.mcRecipes.getMulti(inv.stackList, 999);
+        PlayerUtil.broadcastAll("[FW]StdTotal: " + multi.size());
+        for (int i = 0; i < multi.size(); i++) {
+            List<IRecipe> recipe1 = multi.get(i);
+            for (int j = 0; j < recipe1.size(); j++) {
+                IRecipe recipe2 = recipe1.get(j);
+                if (recipe2.canFit(inv.getWidth(), inv.getHeight()) && recipe2.matches(inv, world)) {
+                    ((RecipeCache) inv).setRecipe(recipe2);
+                    PlayerUtil.broadcastAll("[FW]Found: " + recipe2);
+                    return recipe2;
+                }
+            }
+        }
+        for (IRecipe recipe2 : MCHooks.fallbackRecipes) {
+            if (recipe2.canFit(inv.getWidth(), inv.getHeight()) && recipe2.matches(inv, world)) {
+                ((RecipeCache) inv).setRecipe(recipe2);
+                PlayerUtil.broadcastAll("[FW]Found: " + recipe2);
+                return recipe2;
+            }
+        }
+        PlayerUtil.broadcastAll("[FW]FoundNone");
+        return null;
     }
 }

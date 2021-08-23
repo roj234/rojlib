@@ -242,20 +242,20 @@ public class ConstantData implements IClass {
                 '}';
     }
 
-    public MoFNode getMethodByName(String key) {
-        for (MoFNode ms : methods) {
-            if(ms.name().equals(key))
-                return ms;
+    public int getMethodByName(String key) {
+        for (int i = 0; i < methods.size(); i++) {
+            MoFNode ms = methods.get(i);
+            if (ms.name().equals(key)) return i;
         }
-        return null;
+        return -1;
     }
 
-    public MoFNode getFieldByName(String key) {
-        for (MoFNode fs : fields) {
-            if(fs.name().equals(key))
-                return fs;
+    public int getFieldByName(String key) {
+        for (int i = 0; i < fields.size(); i++) {
+            MoFNode fs = fields.get(i);
+            if (fs.name().equals(key)) return i;
         }
-        return null;
+        return -1;
     }
 
     @Override

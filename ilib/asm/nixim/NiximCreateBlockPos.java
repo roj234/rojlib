@@ -25,8 +25,13 @@
  */
 package ilib.asm.nixim;
 
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
 import ilib.util.PlayerUtil;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.state.IBlockState;
@@ -46,13 +51,10 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
+
 import net.minecraftforge.event.ForgeEventFactory;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 import java.util.EnumSet;
 
@@ -286,9 +288,7 @@ public abstract class NiximCreateBlockPos extends World {
     public boolean canBlockFreezeBody(BlockPos pos, boolean noWaterAdj) {
         Biome biome = this.getBiome(pos);
         float f = biome.getTemperature(pos);
-        if (f >= 0.15F) {
-            return false;
-        } else {
+        if (f < 0.15F) {
             if (pos.getY() >= 0 && pos.getY() < 256 && this.getLightFor(EnumSkyBlock.BLOCK, pos) < 10) {
                 BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain(pos);
                 IBlockState state = this.getBlockState(pos1);
@@ -305,9 +305,8 @@ public abstract class NiximCreateBlockPos extends World {
                 }
                 pos1.release();
             }
-
-            return false;
         }
+        return false;
     }
 
     @RemapTo("func_175666_e")
@@ -427,7 +426,7 @@ public abstract class NiximCreateBlockPos extends World {
     }
 
     public void neighborChanged(BlockPos pos, final Block blockIn, BlockPos fromPos) {
-        int depth = MethodEntryPoint.getStackDepth();
+        int depth = MCHooks.getStackDepth();
         if (depth > 120) {
             if (depth > 140) {
                 PlayerUtil.broadcastAll("neighborChanged() StackOverflow!");

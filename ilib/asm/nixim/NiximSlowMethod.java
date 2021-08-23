@@ -26,9 +26,17 @@
 package ilib.asm.nixim;
 
 import com.google.common.collect.ImmutableSetMultimap;
+import ilib.asm.util.MCHooks;
 import ilib.asm.util.MergedItr;
-import ilib.asm.util.MethodEntryPoint;
 import ilib.util.MutableVec;
+import org.apache.commons.lang3.mutable.MutableDouble;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+import roj.collect.FastSetList;
+import roj.collect.FilterList;
+import roj.concurrent.OperationDone;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -43,15 +51,9 @@ import net.minecraft.world.border.WorldBorder;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
+
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.event.ForgeEventFactory;
-import org.apache.commons.lang3.mutable.MutableDouble;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.FastSetList;
-import roj.collect.FilterList;
-import roj.concurrent.OperationDone;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -166,7 +168,7 @@ public abstract class NiximSlowMethod extends World {
 
         BlockPos.PooledMutableBlockPos mutPos = BlockPos.PooledMutableBlockPos.retain();
 
-        FilterList<AxisAlignedBB> outList = MethodEntryPoint.getThrowExceptionFilter();
+        FilterList<AxisAlignedBB> outList = MCHooks.getThrowExceptionFilter();
 
         if (!ForgeEventFactory.gatherCollisionBoxes(this, null, aabb, outList)) {
             return true;
@@ -210,7 +212,7 @@ public abstract class NiximSlowMethod extends World {
         int minZ = MathHelper.floor((aabb.minZ - MAX_ENTITY_RADIUS) / 16);
         int maxZ = MathHelper.ceil((aabb.maxZ + MAX_ENTITY_RADIUS) / 16);
 
-        FilterList<Entity> list = MethodEntryPoint.getEntityAliveFilter(entityIn);
+        FilterList<Entity> list = MCHooks.getEntityAliveFilter(entityIn);
 
         try {
             for (int x = minX; x < maxX; ++x) {

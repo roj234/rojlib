@@ -33,10 +33,6 @@ package ilib.asm.nixim;
  * @since  2020/11/14 16:15
  */
 
-import net.minecraftforge.fml.common.eventhandler.Event;
-import net.minecraftforge.fml.common.eventhandler.IEventListener;
-import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
@@ -45,7 +41,9 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrSourceFile;
 import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.IfInsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
@@ -56,6 +54,11 @@ import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.reflect.SunReflection;
 import roj.util.ByteList;
+
+import net.minecraftforge.fml.common.eventhandler.Event;
+import net.minecraftforge.fml.common.eventhandler.IEventListener;
+import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.io.FileNotFoundException;
 import java.lang.reflect.*;
@@ -85,38 +88,37 @@ public final class EventInvokerV2 implements IEventListener {
         return new Object[]{annotation.priority(), new EventInvokerV2(method, target, filter, (byte) ((annotation.receiveCanceled() ? 64 : 0) | annotation.priority().ordinal()))};
     }
 
-    public static IEventListener compressAll(List<EventInvokerV2> value, boolean cancel) {
+    public static IEventListener compressAll(List<EventInvokerV2> value, boolean ignoreCancelled) {
         value.sort((o1, o2) -> {
             int m1 = ((Method)((Object[])o1.handler)[0]).getModifiers();
             int m2 = ((Method)((Object[])o2.handler)[0]).getModifiers();
             return Modifier.isStatic(m1) == Modifier.isStatic(m2) ? 0 : (
                     Modifier.isStatic(m1) ? -1 : 1
                     );
-        });
+        }); // 把static放前面
 
         Object[] targets = new Object[value.size()];
         Method[] methods = new Method[value.size()];
 
-        int i = 0;
-        for (EventInvokerV2 v2 : value) {
+        for (int i = 0; i < value.size(); i++) {
+            EventInvokerV2 v2 = value.get(i);
             Object[] arr = (Object[]) v2.handler;
 
-            if (Modifier.isStatic((methods[i] = (Method) arr[0]).getModifiers())) {
+            if (!Modifier.isStatic((methods[i] = (Method) arr[0]).getModifiers())) {
                 targets[i] = arr[1];
             }
-            i++;
         }
 
         Clazz data = new Clazz();
 
-        DirectAccessor.makeHeader("EH2/merged_" + id.getAndIncrement(), HANDLER_DESC, data);
+        DirectAccessor.makeHeader("ilib/eh2/merged_" + id.getAndIncrement(), HANDLER_DESC, data);
         data.attributes.add(new AttrSourceFile(".merged_dynamic"));
 
         final FlagList flags = new FlagList(AccessFlag.PUBLIC);
 
         data.fields.add(new roj.asm.tree.Field(flags, "i", "[Ljava/lang/Object;"));
 
-        roj.asm.tree.Method init = new roj.asm.tree.Method(flags, data, "<init>", "(Ljava/lang/Object;)V");
+        roj.asm.tree.Method init = new roj.asm.tree.Method(flags, data, "<init>", "([Ljava/lang/Object;)V");
         data.methods.add(init);
         AttrCode code = init.code = new AttrCode(init);
 
@@ -137,13 +139,20 @@ public final class EventInvokerV2 implements IEventListener {
         data.methods.add(invoke);
         code = invoke.code = new AttrCode(invoke);
 
-        code.stackSize = 2;
-        code.localSize = 2;
+        code.stackSize = 3; // array object event
+        code.localSize = 2; // self event
         insns = code.instructions;
+        LabelInsnNode label = null;
+        if(ignoreCancelled) {
+            code.computeFrames = true;
+            insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+            insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraftforge/fml/common/eventhandler/Event", "isCanceled", "()Z"));
+            insns.add(new IfInsnNode(Opcodes.IFNE, label = new LabelInsnNode()));
+        }
 
         boolean ready = false;
 
-        for (i = 0; i < targets.length; i++) {
+        for (int i = 0; i < targets.length; i++) {
             Method method = methods[i];
 
             String clz = method.getDeclaringClass().getName().replace('.', '/');
@@ -156,6 +165,7 @@ public final class EventInvokerV2 implements IEventListener {
                     insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
                     insns.add(new FieldInsnNode(Opcodes.GETFIELD, data, 0));
                     ready = true;
+                    //缓存array
                 }
                 insns.add(NodeHelper.cached(Opcodes.DUP));
                 insns.add(NodeHelper.loadInt(i));
@@ -172,6 +182,8 @@ public final class EventInvokerV2 implements IEventListener {
             insns.add(NodeHelper.cached(Opcodes.POP));
         }
 
+        if(label != null)
+            insns.add(label);
         insns.add(NodeHelper.cached(Opcodes.RETURN));
         insns.add(AttrCode.METHOD_END_MARK);
 
@@ -180,7 +192,7 @@ public final class EventInvokerV2 implements IEventListener {
         Class<?> clazz = ClassDefiner.INSTANCE.defineClassC(data.name.replace('/', '.'), list.list, list.offset(), list.limit());
 
         try {
-            return (IEventListener) SunReflection.createClass(clazz, new Class<?>[]{Object.class}, targets);
+            return (IEventListener) SunReflection.createClass(clazz, new Class<?>[]{Object[].class}, targets);
         } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
             throw new InternalError(e);
         }
@@ -347,8 +359,6 @@ public final class EventInvokerV2 implements IEventListener {
                 ((CstUTF) data.cp.array(21 - i)).setString(callback.getName());
                 ((CstUTF) data.cp.array(22 - i)).setString("(L" + callback.getParameterTypes()[0].getName().replace('.', '/') + ";)V");
 
-                data.writer.clump();
-
                 list = Parser.toByteArrayShared(data);
             }
 
@@ -373,7 +383,7 @@ public final class EventInvokerV2 implements IEventListener {
     }
 
     private static String getUniqueName(Method callback) {
-        return "EH2." + callback.getDeclaringClass().getSimpleName() + '_' + callback.getName() + id.getAndIncrement();
+        return "ilib.eh2." + callback.getDeclaringClass().getSimpleName() + '_' + callback.getName() + id.getAndIncrement();
     }
 
     public int getPriority() {

@@ -50,7 +50,7 @@ public final class DirectMethodAccess {
         T t = DirectAccessor
                 .builder(i_Cls)
                 .makeCache(target).useCache()
-                .delegate(target, i_Method, t_Method)
+                .delegate(target, t_Method, i_Method)
                 .build();
 
         if (t_Cls_or_Inst.getClass() != Class.class)
@@ -68,14 +68,14 @@ public final class DirectMethodAccess {
         return DirectAccessor
                 .builder(i_Cls)
                 .makeCache(t_Cls).useCache()
-                .delegate(t_Cls, i_Method, t_Method)
+                .delegate(t_Cls, t_Method, i_Method)
                 .build();
     }
 
     public static <T> T getNCI(Class<T> i_Cls, String[] i_Method, IBitSet i_Flag, Class<?> t_Cls, String[] t_Method) {
         return DirectAccessor
                 .builder(i_Cls)
-                .delegate(t_Cls, i_Method, i_Flag, t_Method, Collections.emptyList())
+                .delegate(t_Cls, t_Method, i_Flag, i_Method, Collections.emptyList())
                 .build();
     }
 
@@ -88,7 +88,7 @@ public final class DirectMethodAccess {
     public static <T> T getStatic(Class<T> invoker, String invokeMethodName, Class<?> tClass, String methodName) {
         return DirectAccessor
                 .builder(invoker)
-                .delegate(tClass, new String[]{invokeMethodName}, DirectAccessor.EMPTY_BITS, new String[]{methodName},
+                .delegate(tClass, new String[]{methodName}, DirectAccessor.EMPTY_BITS, new String[]{invokeMethodName},
                           null)
                 .build();
     }
@@ -102,14 +102,14 @@ public final class DirectMethodAccess {
     public static <T> T getStatic(Class<T> invoker, String[] invokeMethodName, Class<?> tClass, String[] methodName) {
         return DirectAccessor
                 .builder(invoker)
-                .delegate(tClass, invokeMethodName, DirectAccessor.EMPTY_BITS, methodName, null)
+                .delegate(tClass, methodName, DirectAccessor.EMPTY_BITS, invokeMethodName, null)
                 .build();
     }
 
     public static <T> T getDMA(IBitSet opcode, Class<T> invoker, String[] invokeMethodName, Class<?> tClass, String[] methodName, int flag) {
         return DirectAccessor
                 .builder(invoker)
-                .delegate(tClass, invokeMethodName, opcode, methodName,
+                .delegate(tClass, methodName, opcode, invokeMethodName,
                           (flag & 2) == 0 ? null : Collections.emptyList())
                 .build();
     }

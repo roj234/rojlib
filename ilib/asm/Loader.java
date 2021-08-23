@@ -30,16 +30,6 @@ import ilib.Config;
 import ilib.asm.fasterforge.anc.JarInfo;
 import ilib.asm.fasterforge.transformers.FieldRedirect;
 import ilib.asm.transformers.*;
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -55,6 +45,18 @@ import roj.io.ZipUtil;
 import roj.reflect.IFieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
+
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 
 import javax.annotation.Nullable;
 import java.io.*;
@@ -165,6 +167,14 @@ public class Loader implements IFMLLoadingPlugin {
 
         if(Config.packetBufferInfinity || Config.nbtMaxLength != 2097152) {
             NiximTransformer.read(IOUtil.getBytesS(Loader.class, "ilib/asm/nixim/NiximPacketBuffer.class"));
+        }
+
+        if(Config.noAttackCD) {
+            NiximTransformer.read(IOUtil.getBytesS(Loader.class, "ilib/asm/nixim/NoAttackCD.class"));
+        }
+
+        if(Config.noEnchantTax) {
+            NiximTransformer.read(IOUtil.getBytesS(Loader.class, "ilib/asm/nixim/NoEnchantTax.class"));
         }
 
         if(Config.noRecipeBook) {

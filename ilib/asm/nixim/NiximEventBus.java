@@ -26,24 +26,24 @@
 package ilib.asm.nixim;
 
 import ilib.asm.util.InvokerCompressor;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.fml.common.eventhandler.*;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
-import roj.collect.EmptyList;
 import roj.collect.MyHashMap;
 import roj.reflect.ReflectionUtils;
+import roj.util.EmptyArrays;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.fml.common.eventhandler.*;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -116,7 +116,7 @@ public abstract class NiximEventBus {
         try {
             ListenerList list;
             //if(!eventType.getName().startsWith("net.minecraftforge.")) {
-            Constructor<?> ctr = eventType.getConstructor(EmptyList.EMPTY_C);
+            Constructor<?> ctr = eventType.getConstructor(EmptyArrays.CLASSES);
             ctr.setAccessible(true);
             Event e = (Event) ctr.newInstance();
             list = e.getListenerList();
@@ -147,11 +147,11 @@ public abstract class NiximEventBus {
             }
 
             list.register(this.busID, (EventPriority) arr[0], listener);
-            List<IEventListener> list1 = listeners.computeIfAbsent(target, (k) -> new ArrayList<>(2));
-            if (list1.isEmpty()) {
-                list1.add(new InvokerCompressor(list1, list, busID));
-            }
-            list1.add(listener);
+            listeners.computeIfAbsent(target, (k) -> {
+                ArrayList<IEventListener> listeners = new ArrayList<>(2);
+                listeners.add(new InvokerCompressor(listeners, list, busID));
+                return listeners;
+            }).add(listener);
         } catch (Exception var10) {
             FMLLog.log.error("Error registering event handler: {} {} {}", owner, eventType, method, var10);
         }
@@ -161,7 +161,7 @@ public abstract class NiximEventBus {
         ArrayList<IEventListener> list = this.listeners.remove(object);
         if (list != null) {
             if (!(list.get(0) instanceof InvokerCompressor)) {
-                FMLLog.bigWarning("注意：由于Implib的优化事件功能已开启, 可能有部分事件无法取消注册");
+                FMLLog.bigWarning("[Implib-事件优化]: 可能无法取消注册Combined Event");
             }
             for (IEventListener listener : list) {
                 ListenerList.unregisterAll(this.busID, listener);

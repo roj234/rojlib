@@ -32,9 +32,11 @@ import roj.util.Helpers;
 import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.PrimitiveIterator;
+import java.util.PrimitiveIterator.OfInt;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -203,6 +205,18 @@ public class IntSet implements CItrMap<IntSet.Entry>, Iterable<Integer> {
             k |= remove(o);
         }
         return k;
+    }
+
+    public boolean intersection(IntSet collection) {
+        boolean m = false;
+        for (OfInt itr = this.iterator(); itr.hasNext(); ) {
+            int i = itr.nextInt();
+            if(!collection.contains(i)) {
+                itr.remove();
+                m = true;
+            }
+        }
+        return m;
     }
 
     void afterAdd(int key) {

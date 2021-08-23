@@ -25,8 +25,13 @@
  */
 package ilib.asm.nixim;
 
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
 import ilib.util.PlayerUtil;
+import roj.asm.annotation.OpenAny;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.crash.CrashReport;
@@ -37,11 +42,8 @@ import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
+
 import net.minecraftforge.fml.common.FMLLog;
-import roj.asm.annotation.OpenAny;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -96,7 +98,7 @@ public abstract class NiximChunkLight extends Chunk {
 
     @RemapTo("func_150809_p")
     public void checkLight() {
-        int depth = MethodEntryPoint.getStackDepth();
+        int depth = MCHooks.getStackDepth();
         if (depth > 100) {
             if (depth > 120) {
                 PlayerUtil.broadcastAll("checkLight() StackOverFlow!");

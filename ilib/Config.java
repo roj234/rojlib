@@ -55,7 +55,7 @@ public final class Config extends JSONConfiguration {
              betterDCA, noSoManyBlockPos, fastLightCheck, fastMethod, lootR, otherWorldChange, cacheBox2, miscPickaxeOptimize,
             showDPS, moreEggs, portalCache, betterRenderGlobal, disableGlobalTESR, enablePinyinSearch, searchNameOnly, entityAabbCache,
             noAdvancement, eventInvoker, removePatchy, slabHelper, eventInvokerMost, packetBufferInfinity, IwantLight, noRecipeBook,
-            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision;
+            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax;
     public static int aabbCache, reduceFPSWhenNotActive, clientNetworkTimeout, chatLength, debug, maxParticleCountPerLayer,
             maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, autoFlipTooltip;
     public static byte advancedTooltipFlag, threadPriority, subThreadPriority, packetDelay, dynamicViewDistance, changeWorldSpeed;
@@ -187,8 +187,7 @@ public final class Config extends JSONConfiguration {
         cacheBox2 = map.putIfAbsent("Optimize.Game.修复村庄和世界优化同时开启时爆炸的问题", false);
         fixNaNHealth = map.putIfAbsent("Optimize.Game.修复实体假死(NaN/Inf)的BUG", true);
 
-        // todo make it
-        fastRecipe = map.putIfAbsent("Optimize.Game.WIP.替换MC的穷举法提高熔炉/工作台合成判断速度", false);
+        fastRecipe = map.putIfAbsent("Optimize.Game.替换MC的穷举法提高熔炉/工作台合成判断速度", false);
 
 
         commandEverywhere = map.putIfAbsent("Optimize.Client.Game.删除反胃药水效果并使得地狱门里可以输入指令", true);
@@ -256,6 +255,9 @@ public final class Config extends JSONConfiguration {
         noAdvancement = map.putIfAbsent("Tweak.禁用进度系统", false);
         setAttributeRange = map.getOrCreateMap("Tweak.属性调节");
         noRecipeBook = map.putIfAbsent("Tweak.不再保存合成书的NBT", false);
+        noAttackCD = map.putIfAbsent("Tweak.干掉攻击CD", false);
+        noEnchantTax = map.putIfAbsent("Tweak.附魔不掉等级，而是经验", true);
+        noAnvilTax = map.putIfAbsent("Tweak.铁X不掉等级，而是经验", true);
 
         siFrameTime = map.putIfAbsent("Tweak.无敌帧.新值(-1关闭)", -1);
         siTimeExcludeAttackers = map.putIfAbsent("Tweak.无敌帧.攻击者黑名单", CList.of("minecraft:slime", "tconstruct:blueslime", "thaumcraft:thaumslime")).asList().asStringSet();

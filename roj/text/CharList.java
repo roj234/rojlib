@@ -244,7 +244,7 @@ public class CharList implements CharSequence {
                 if (origLen > 0) {
                     if(origLen > s.length()) {
                         int delta = s.length() - origLen; // < 0
-                        System.arraycopy(list, end, list, end + delta, this.ptr - end - delta);
+                        System.arraycopy(list, end, list, end + delta, this.ptr - end);
                         this.ptr += delta;
                         end = start + s.length();
                     } else if(origLen < s.length()) {

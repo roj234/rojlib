@@ -26,15 +26,8 @@
 package ilib.asm.nixim.client;
 
 import ilib.asm.util.IFontRenderer;
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
 import ilib.client.util.RenderUtils;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.client.settings.GameSettings;
-import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
@@ -42,6 +35,14 @@ import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.IntList;
 import roj.text.TextUtil;
+
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.texture.TextureManager;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.client.settings.GameSettings;
+import net.minecraft.util.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,8 +113,8 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
             lastFlag = flag & 6;
             char c = text.charAt(i);
             if (c == '\u00a7' && i + 1 < len) {
-                if(MethodEntryPoint.COLOR_CODE.contains(c = Character.toLowerCase(text.charAt(i + 1)))) {
-                    if (MethodEntryPoint.HEX_CHAR.contains(c)) {
+                if(MCHooks.COLOR_CODE.contains(c = Character.toLowerCase(text.charAt(i + 1)))) {
+                    if (MCHooks.HEX_CHAR.contains(c)) {
                         flag = 0;
                         int index = TextUtil.getNumber(c);
                         if(index == -1)
@@ -165,11 +166,11 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
                 }
             }
 
-            int index = MethodEntryPoint.AWFUL_ASCII_ID.getOrDefault(c, -1);
+            int index = MCHooks.AWFUL_ASCII_ID.getOrDefault(c, -1);
             if (index != -1 && (flag & 16) != 0) {
                 int w = this.getCharWidth(c);
 
-                IntList list = MethodEntryPoint.getOrCreateWidthTable(this, w);
+                IntList list = MCHooks.getOrCreateWidthTable(this, w);
                 c = (char) list.get(this.fontRandom.nextInt(list.size()));
             }
 
@@ -279,7 +280,7 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
                 return -1;
         }
         int i;
-        if (c > 0 && (i = MethodEntryPoint.AWFUL_ASCII_ID.getOrDefault(c, -1)) != -1 && !this.unicodeFlag) {
+        if (c > 0 && (i = MCHooks.AWFUL_ASCII_ID.getOrDefault(c, -1)) != -1 && !this.unicodeFlag) {
             return this.charWidth[i];
         } else if (this.glyphWidth[c] != 0) {
             int j = this.glyphWidth[c];
@@ -301,7 +302,7 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
             case ' ':
                 return 4;
         }
-        int i = MethodEntryPoint.AWFUL_ASCII_ID.getOrDefault(ch, -1);
+        int i = MCHooks.AWFUL_ASCII_ID.getOrDefault(ch, -1);
         return i != -1 && !this.unicodeFlag ? this.renderDefaultChar(i, italic) : this.renderUnicodeChar(ch, italic);
     }
 

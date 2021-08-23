@@ -49,4 +49,22 @@ public class Hasher {
         hash = ((obj != null ? obj.hashCode() : 0) ^ hash) * FNV_PRIME;
         return this;
     }
+
+    public Hasher add(int obj) {
+        hash = ((obj ^ (obj >> 16)) ^ hash) * FNV_PRIME;
+        return this;
+    }
+
+    public Hasher add(float obj) {
+        return add(Float.floatToIntBits(obj));
+    }
+
+    public Hasher add(long obj) {
+        hash = (int) (((obj ^ (obj >> 32)) ^ hash) * FNV_PRIME);
+        return this;
+    }
+
+    public Hasher add(double obj) {
+        return add(Double.doubleToLongBits(obj));
+    }
 }

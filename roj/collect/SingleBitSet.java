@@ -37,7 +37,7 @@ import java.util.PrimitiveIterator;
  */
 public class SingleBitSet implements IBitSet {
     protected long set;
-    protected byte max;
+    protected byte max, size;
 
     public SingleBitSet() {
         max = -1;
@@ -74,14 +74,7 @@ public class SingleBitSet implements IBitSet {
 
     @Override
     public int size() {
-        int i = 0;
-        long set = this.set;
-        while (set != 0) {
-            if (((set >>>= 1) & 1) == 1) {
-                i++;
-            }
-        }
-        return i;
+        return size;
     }
 
     public boolean add(int e) {
@@ -92,6 +85,7 @@ public class SingleBitSet implements IBitSet {
             return false;
         } else {
             set |= 1 << e;
+            size++;
             return true;
         }
     }
@@ -101,6 +95,7 @@ public class SingleBitSet implements IBitSet {
             return false;
         if ((set & (1L << i)) != 0) {
             set ^= 1 << i;
+            size--;
             return true;
         }
         return false;
@@ -119,16 +114,18 @@ public class SingleBitSet implements IBitSet {
     public void fillAll() {
         set = 0xffffffffffffffffL;
         max = 63;
+        size = 64;
     }
 
     public void fillAll(int len) {
         check(len);
         long k = 0;
-        for (int i = 0; i <= len; i++) {
+        for (int i = 0; i < len; i++) {
             k |= 1 << i;
         }
         set = k;
         max = (byte) len;
+        size = (byte) (len + 1);
     }
 
     @Override
@@ -151,6 +148,7 @@ public class SingleBitSet implements IBitSet {
     public void clear() {
         set = 0;
         max = -1;
+        size = 0;
     }
 
     private static class Itr implements IntIterator {
@@ -163,6 +161,7 @@ public class SingleBitSet implements IBitSet {
 
         protected Itr(SingleBitSet $this) {
             this.$this = $this;
+            this.get = true;
         }
 
         public boolean hasNext() {
@@ -174,7 +173,7 @@ public class SingleBitSet implements IBitSet {
             if (!next && !get)
                 return;
             while (pos < 64) {
-                if ((($this.set >>> pos) & 1) == 1) {
+                if ((($this.set >>> pos) & 1) != 0) {
                     entry = pos++;
                     get = false;
                     return;
@@ -185,6 +184,7 @@ public class SingleBitSet implements IBitSet {
         }
 
         public int nextInt() {
+            checkNext(false);
             get = true;
             int ent = this.entry;
             checkNext(true);

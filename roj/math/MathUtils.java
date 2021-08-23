@@ -165,24 +165,57 @@ public abstract class MathUtils {
     /**
      * 多边形面积
      */
-    public static double compute_Polygon_Area(MPShape polygon) {
-        List<Vec2d> pts = polygon.getPoints();
+    public static double polygon_Area(IPolygon polygon) {
+        List<Vec2d> vertices = polygon.getPoints();
 
-        int N = pts.size();
+        int N = vertices.size();
         if(N < 3)
             return 0;
 
-        double area = pts.get(0).y * (pts.get(N - 1).x - pts.get(1).x);
+        double area = vertices.get(0).y * (vertices.get(N - 1).x - vertices.get(1).x);
         for(int i = 1; i < N; ++i)
-            area += pts.get(i).y * (pts.get(i - 1).x - pts.get((i + 1) % N).x);
+            area += vertices.get(i).y * (vertices.get(i - 1).x - vertices.get((i + 1) % N).x);
 
         return Math.abs(area / 2);
     }
 
     /**
+     * "双倍多边形面积" <br>
+     *     实际用途：通过符号可以判断多边形的顶点排列顺序
+     */
+    public static double signedDoubleArea(IPolygon polygon) {
+        List<Vec2d> vertices = polygon.getPoints();
+        double signedDoubleArea = 0;
+
+        for (int index = 0; index < vertices.size(); ++index) {
+            int nextIndex = (index + 1) % vertices.size();
+
+            Vec2d point = vertices.get(index);
+            Vec2d next = vertices.get(nextIndex);
+
+            signedDoubleArea += point.x * next.y - next.x * point.y;
+        }
+
+        return signedDoubleArea;
+    }
+
+    /**
+     * 判断多边形的顶点排列顺序
+     * <br> -1: 逆时针, 1: 顺时针, 0: 未知
+     */
+    public static int polygon_Winding(IPolygon polygon) {
+        double d = signedDoubleArea(polygon);
+        if(d < 0)
+            return -1;
+        else if (d > 0)
+            return 1;
+        return 0;
+    }
+
+    /**
      * 判断点是否在折线上
      */
-    public static boolean isOn_PolyLine(Vec2d point, MPShape polyline) {
+    public static boolean isOn_PolyLine(Vec2d point, IPolygon polyline) {
         Rect2d bounds = polyline.getBounds();
         if(bounds.contains(point)) {
             return false;
@@ -214,7 +247,7 @@ public abstract class MathUtils {
      * 判断点是否多边形内
      * @param canOn 点位于多边形的顶点或边上，也算做点在多边形内吗
      */
-    public static boolean isIn_Polygon(Vec2d point, MPShape polygon, boolean canOn) {
+    public static boolean isIn_Polygon(Vec2d point, IPolygon polygon, boolean canOn) {
         Rect2d bounds = polygon.getBounds();
         if(bounds.contains(point)) {
             return false;
@@ -285,7 +318,7 @@ public abstract class MathUtils {
     /**
      * 计算折线或者点数组的长度
      */
-    public static double polyLineLength(MPShape polyline) {
+    public static double polyLineLength(IPolygon polyline) {
         List<Vec2d> pts = polyline.getPoints();//获取多边形点
 
         int N = pts.size() - 1;

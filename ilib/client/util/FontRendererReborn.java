@@ -26,14 +26,15 @@
 package ilib.client.util;
 
 import ilib.asm.util.IFontRenderer;
-import ilib.asm.util.MethodEntryPoint;
+import ilib.asm.util.MCHooks;
+import org.lwjgl.opengl.GL11;
+import roj.collect.IntList;
+import roj.text.TextUtil;
+
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import org.lwjgl.opengl.GL11;
-import roj.collect.IntList;
-import roj.text.TextUtil;
 
 import java.util.Random;
 
@@ -78,8 +79,8 @@ public class FontRendererReborn {
             lastFlag = flag & 6;
             char c = text.charAt(i);
             if (c == '\u00a7' && i + 1 < len) {
-                if(MethodEntryPoint.COLOR_CODE.contains(c = Character.toLowerCase(text.charAt(i + 1)))) {
-                    if (MethodEntryPoint.HEX_CHAR.contains(c)) {
+                if(MCHooks.COLOR_CODE.contains(c = Character.toLowerCase(text.charAt(i + 1)))) {
+                    if (MCHooks.HEX_CHAR.contains(c)) {
                         flag = 0;
                         int index = TextUtil.getNumber(c);
                         if(index == -1)
@@ -121,7 +122,7 @@ public class FontRendererReborn {
                 }
             }
 
-            int index = MethodEntryPoint.AWFUL_ASCII_ID.getOrDefault(c, -1);
+            int index = MCHooks.AWFUL_ASCII_ID.getOrDefault(c, -1);
             if ((flag & 16) != 0) {
                 int w = this.getCharWidth(c);
 
@@ -195,7 +196,7 @@ public class FontRendererReborn {
                 return -1;
         }
         int i;
-        if (c > 0 && (i = MethodEntryPoint.AWFUL_ASCII_ID.getOrDefault(c, -1)) != -1 && !this.unicodeFlag) {
+        if (c > 0 && (i = MCHooks.AWFUL_ASCII_ID.getOrDefault(c, -1)) != -1 && !this.unicodeFlag) {
             return delegate.getAsciiWidth(i);
         } else {
             return fontUsing.getOrCreateEntry(c).width;
@@ -212,7 +213,7 @@ public class FontRendererReborn {
             RenderUtils.setColor(color, alpha);
             colorUpdated = false;
         }
-        int i = MethodEntryPoint.AWFUL_ASCII_ID.getOrDefault(ch, -1);
+        int i = MCHooks.AWFUL_ASCII_ID.getOrDefault(ch, -1);
         if(i != -1 && !this.unicodeFlag) {
             boolean bind = false;
             if((lastTexture & 0x7FFFFFFF) != 0x7FFFFFFF) {

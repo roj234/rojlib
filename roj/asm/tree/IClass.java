@@ -51,6 +51,8 @@ public interface IClass {
     List<String> interfaces();
     List<? extends MoFNode> methods();
     List<? extends MoFNode> fields();
+    int getMethodByName(String name);
+    int getFieldByName(String name);
 
     AttributeList attributes();
 
