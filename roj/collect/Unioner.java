@@ -40,34 +40,6 @@ import java.util.*;
 public final class Unioner<T extends Unioner.Section> implements Iterable<Unioner.Region> {
     private static final Region[] EMPTY_DATA = new Region[0];
 
-    /*public static void main(String[] args) {
-        Unioner<Wrap<Integer>> cfa = new Unioner<>(64);
-
-        Random rnd = new Random(args.length > 0 ? Integer.parseInt(args[0]) : System.currentTimeMillis());
-        Wrap<Integer>[] holder = (Wrap<Integer>[]) new Wrap<?>[10];
-        for (int i = 0; i < holder.length; i++) {
-            int s = rnd.nextInt(1500);
-            holder[i] = new Wrap<>(i, s, rnd.nextInt(1500 - s) + s);
-            if(!cfa.add(holder[i])) {
-                System.out.println("Add() conflict: " + holder[i]);
-            }
-        }
-        System.out.println(cfa);
-        System.out.print("Del: ");
-        for (int i = 0; i < 10; i++) {
-            int i1 = rnd.nextInt(holder.length);
-            boolean v = cfa.remove(holder[i1]);
-            System.out.print(i1);
-            System.out.print(',');
-        }
-        System.out.println();
-        System.out.println(cfa);
-        for (int i = 0; i < 20; i++) {
-            int pos = rnd.nextInt(1500);
-            System.out.println("Find " + pos + " : " + cfa.collect(pos));
-        }
-    }*/
-
     public Unioner() {
         data = EMPTY_DATA;
     }

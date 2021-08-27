@@ -25,10 +25,6 @@
  */
 package ilib.asm.fasterforge;
 
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import org.objectweb.asm.Type;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
@@ -36,6 +32,11 @@ import roj.asm.nixim.Shadow;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.type.ParamHelper;
 import roj.util.Helpers;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -75,18 +76,18 @@ public class NiximModContainerFactory {
             type = Type.getType(ParamHelper.getField(ann.type));
         } while (!modTypes.containsKey(type));
 
-        FMLLog.log.debug("Identified a mod of type {} ({}) - loading", type, className);
+        FMLLog.log.debug("检测到 {} 类型的mod ({}) - 开始加载", type, className);
 
         try {
             ModContainer ret = modTypes.get(type).newInstance(className, container, TypeHelper.toPrimitive(ann.values));
             if (!ret.shouldLoadInEnvironment()) {
-                FMLLog.log.debug("Skipping mod {}, container opted to not load.", className);
+                FMLLog.log.debug("放弃加载 {}, mod提示不应该在这个环境加载", className);
                 return null;
             } else {
                 return ret;
             }
         } catch (Exception var8) {
-            FMLLog.log.error("Unable to construct {} container", type.getClassName(), var8);
+            FMLLog.log.error("无法构建mod容器 {}", type.getClassName(), var8);
             return null;
         }
     }

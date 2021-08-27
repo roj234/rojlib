@@ -30,9 +30,12 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.SimpleSpinLock;
 import roj.concurrent.collect.ConcurrentTimedHashMap;
+import roj.config.JSONParser;
+import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.CString;
+import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.NetworkUtil;
 import roj.net.tcp.serv.HttpServer;
@@ -1414,12 +1417,25 @@ public class DnsServer implements Router {
         MyHashSet<InputStream> files = new MyHashSet<>(), blocked = new MyHashSet<>();
         File cache = null;
 
+        CMapping cfg = new CMapping();
+        cfg.getOrCreateList("trustedDnsServers").add(new CString("223.5.5.5:53"));
+        cfg.put("forwarderReceive", 40000);
+        cfg.put("requestTimeout", 5000);
+
         for(int i = 0; i < args.length; i++) {
             switch(args[i]) {
                 case "-auto":
                     httpPort = 8818;
                     blocked.add(DnsServer.class.getClassLoader().getResourceAsStream("META-INF/15_optimized.txt"));
                     blocked.add(DnsServer.class.getClassLoader().getResourceAsStream("META-INF/adguard.txt"));
+                    break;
+                case "-config":
+                    try {
+                        cfg = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[++i]))).asMap();
+                    } catch (ClassCastException | ParseException e) {
+                        e.printStackTrace();
+                        return;
+                    }
                     break;
                 case "-http":
                     httpPort = Integer.parseInt(args[++i]);
@@ -1448,11 +1464,6 @@ public class DnsServer implements Router {
         /**
          * Init DNS Server
          */
-
-        CMapping cfg = new CMapping();
-        cfg.getOrCreateList("trustedDnsServers").add(new CString("223.5.5.5:53"));
-        cfg.put("forwarderReceive", 40000);
-        cfg.put("requestTimeout", 5000);
 
 
         InetSocketAddress address = new InetSocketAddress(addr, dnsPort);

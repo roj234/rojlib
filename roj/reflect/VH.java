@@ -25,114 +25,161 @@
  */
 package roj.reflect;
 
-import java.lang.invoke.MethodHandles;
+import roj.util.EmptyArrays;
+
 import java.lang.reflect.Field;
 
 /**
- * Your description here
+ * Accessor for java9 到头还是逃不过煞笔包装
  *
  * @author Roj233
  * @version 0.1
  * @since 2021/8/15 23:36
  */
-class VarHandleAccessor extends IFieldAccessor {
-    // todo for java9
-    // VarHandle handle;
+class VH extends IFieldAccessor {
+    //VarHandle handle;
+    Object[] tmpG, tmpS;
 
-    public VarHandleAccessor(Field field) {
+    public VH(Field field) {
         super(field);
         field.setAccessible(true);
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        //handle = MethodHandles.lookup().unreflectVarHandle(field);
+        if((flag & 16) == 0) {
+            tmpG = new Object[1];
+            tmpS = new Object[2];
+        } else {
+            tmpG = EmptyArrays.OBJECTS;
+            tmpS = new Object[1];
+        }
+    }
 
+    private void checkAccess() {
+        if ((flag & 16) != 0)
+            return;
+        if (tmpS[0] == null)
+            throw new IllegalArgumentException("Instance can't be null for a non-static field!");
+    }
+
+    @Override
+    public void setInstance(Object instance) {
+        if ((flag & 16) != 0)
+            return;
+        checkObjectType(instance);
+        if (instance == null)
+            throw new IllegalArgumentException("Instance can't be null for a non-static field!");
+        tmpS[0] = instance;
+        tmpG[0] = instance;
+    }
+
+    @Override
+    public void clearInstance() {
+        if ((flag & 16) != 0)
+            return;
+        tmpS[0] = null;
+        tmpG[0] = null;
     }
 
     @Override
     public Object getObject() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        if ((flag & 16) == 0) {
+            checkAccess();
+        }
+        return null;//(flag & 32) != 0 ? handle.getVolatile(tmpG) : handle.get(tmpG);
     }
 
     @Override
     public boolean getBoolean() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (boolean) getObject();
     }
 
     @Override
     public byte getByte() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (byte) getObject();
     }
 
     @Override
     public char getChar() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (char) getObject();
     }
 
     @Override
     public short getShort() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (short) getObject();
     }
 
     @Override
     public int getInt() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (int) getObject();
     }
 
     @Override
     public long getLong() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (long) getObject();
     }
 
     @Override
     public float getFloat() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (float) getObject();
     }
 
     @Override
     public double getDouble() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return (double) getObject();
     }
 
     @Override
     public void setObject(Object obj) {
-
+        if ((flag & 16) == 0)
+            checkAccess();
+        /*tmpS[tmpS.length - 1] = obj;
+        try {
+            if ((flag & 32) != 0) {
+                handle.putVolatile(tmpS);
+            } else {
+                handle.put(tmpS);
+            }
+        } finally {
+            tmpS[tmpS.length - 1] = null;
+        }*/
     }
 
     @Override
     public void setBoolean(boolean value) {
-
+        setObject(value);
     }
 
     @Override
     public void setByte(byte value) {
-
+        setObject(value);
     }
 
     @Override
     public void setChar(char value) {
-
+        setObject(value);
     }
 
     @Override
     public void setShort(short value) {
-
+        setObject(value);
     }
 
     @Override
     public void setInt(int value) {
-
+        setObject(value);
     }
 
     @Override
     public void setLong(long value) {
-
+        setObject(value);
     }
 
     @Override
     public void setFloat(float value) {
-
+        setObject(value);
     }
 
     @Override
     public void setDouble(double value) {
-
+        setObject(value);
     }
 }

@@ -62,7 +62,9 @@ import static roj.asm.type.NativeType.CLASS;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * Your description here
+ * 替代反射，目前不能修改final字段，然而这是JVM的锅 <br>
+ * <br>
+ * PackagePrivateProxy已被Nixim替代，能用到它的都是【在应用启动前加载的class】那还不如boot class替换
  *
  * @author Roj233
  * @version 0.1
@@ -124,7 +126,7 @@ public final class DirectAccessor<T> {
         this.methodByName = new MyHashMap<>(methods.length);
         for (Method method : methods) {
             if((method.getModifiers() & AccessFlag.STATIC) != 0)
-                throw new IllegalArgumentException(deClass.getName() + " should not have static methods");
+                continue;
 
             // skip 'internal' methods
             if ("toString".equals(method.getName()) && method.getParameterCount() == 0) continue;
@@ -157,7 +159,7 @@ public final class DirectAccessor<T> {
         try {
             ByteList list = var.getBytes();
             Class<?> clz = ClassDefiner.INSTANCE.defineClassC(var.name.replace('/', '.'), list.list, 0, list.pos());
-            return instance = (T) SunReflection.createClass(clz);
+            return instance = (T) InstantiationUtil.createClass(clz);
         } catch (ClassFormatError | IllegalAccessException | InstantiationException | InvocationTargetException e) {
             throw new RuntimeException("不该发生的内部错误", e);
         }
@@ -608,8 +610,10 @@ public final class DirectAccessor<T> {
                             }
                         }
 
-                        if(off1 == 1 && method.getParameterTypes()[0] != Object.class)
-                            throw new IllegalArgumentException("非缓存方法 " + owner.getName() + '.' + name + " 的第一个参数 (" + types[0].getName() + ") 不是Object");
+                        types = method.getParameterTypes();
+                        if(off1 == 1 && target.isAssignableFrom(types[0])) {
+                            throw new IllegalArgumentException("非缓存方法 " + owner.getName() + '.' + name + " 的第一个参数 (" + types[0].getName() + ") 不能转换为 " + target.getName());
+                        }
                         if (found != -1) {
                             if(!Arrays.equals(m.getParameterTypes(), targetMethods[i].getParameterTypes())) {
                                 throw new IllegalArgumentException(
@@ -778,7 +782,7 @@ public final class DirectAccessor<T> {
                 throw new IllegalArgumentException("无法找到字段 " + target.getName() + '.' + fieldNames[i]);
             int off = useCache || ((targetFields[i] = fields.remove(found)).getModifiers() & AccessFlag.STATIC) != 0 ? 0 : 1;
 
-            String getterName = getterNames[i];
+            String getterName = getterNames == null ? null : getterNames[i];
             if(getterName != null) {
                 Method method = methodByName.remove(getterName);
                 if (method == null) {
@@ -793,7 +797,7 @@ public final class DirectAccessor<T> {
                 getterMethods[i] = method;
             }
 
-            String setterName = setterNames[i];
+            String setterName = setterNames == null ? null : setterNames[i];
             if(setterName != null) {
                 Method method = methodByName.remove(setterName);
                 if (method == null) {
@@ -1088,7 +1092,7 @@ public final class DirectAccessor<T> {
         CharList cl = new CharList();
         String[] dest = new String[orig.length];
         for (int i = 0; i < orig.length; i++) {
-            cl.append(prefix).append(dest);
+            cl.append(prefix).append(orig[i]);
             cl.set(prefix.length(), Character.toUpperCase(cl.charAt(prefix.length())));
             dest[i] = cl.toString();
             cl.clear();

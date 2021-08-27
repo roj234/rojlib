@@ -88,4 +88,9 @@ public final class CBoolean extends CEntry {
     public StringBuilder toJSON(StringBuilder sb, int depth) {
         return sb.append(this == TRUE);
     }
+
+    @Override
+    public Object toNudeObject() {
+        return this == TRUE;
+    }
 }

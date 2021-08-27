@@ -39,7 +39,6 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AbstractExecutionTask;
 import roj.concurrent.task.CalculateTask;
-import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
@@ -87,7 +86,7 @@ public final class FMDMain {
     static boolean isCLI;
 
     @SuppressWarnings("fallthrough")
-    public static void main(String[] args) throws IOException, InterruptedException, ParseException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         long startTime = System.currentTimeMillis();
 
         if(!isCLI) {
@@ -97,16 +96,23 @@ public final class FMDMain {
 
             Shared.loadConfig(true);
             if(args.length == 0) {
-                if(!CmdUtil.ENABLE) {
-                    System.out.print("FMD   更快的MOD开发环境 Ver ");
-                    System.out.println(VERSION);
-                    System.out.println("    Powered by Roj234");
-                } else {
-                    //System.out.print("\u001B[;\u005BmF\u001B[;\u005CmM\u001B[;\u0022mD\u001B[;\u0061m   更快的MOD开发环境\u001B[0m Ver \u001B[;\u005Cm");
-                    //System.out.println(VERSION);
-                    //System.out.print("\u001B[;\u0061m\u001B[;\u0068m    \u001B[;\u0025m by \u001B[;\u005DmRoj234");
-                    CmdUtil.reset();
-                }
+                CmdUtil.error("F", false);
+                CmdUtil.success("M", false);
+                CmdUtil.fg(CmdUtil.Color.BLUE, true);
+                System.out.print("D");
+                CmdUtil.fg(CmdUtil.Color.WHITE, true);
+                System.out.print("   更快的MOD开发环境 ");
+                CmdUtil.reset();
+                System.out.print("Ver ");
+                CmdUtil.fg(CmdUtil.Color.GREEN, true);
+                System.out.println(VERSION);
+                CmdUtil.fg(CmdUtil.Color.WHITE, true);
+                CmdUtil.bg(CmdUtil.Color.BLUE, true);
+                System.out.print("    Powered");
+                CmdUtil.fg(CmdUtil.Color.WHITE, false);
+                System.out.print(" by ");
+                CmdUtil.fg(CmdUtil.Color.YELLOW, true);
+                System.out.println("Roj234");
                 CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload");
                 System.out.println();
             }
@@ -122,11 +128,14 @@ public final class FMDMain {
             isCLI = true;
             Tokenizer tokenizer = new Tokenizer();
             ArrayList<String> tmp = new ArrayList<>(48);
+            Map<String, String> shortcuts = Helpers.cast(MAIN_CONFIG.getOrCreateMap("CLI Shortcuts").toNudeObject());
+            if(shortcuts.isEmpty())
+                shortcuts = Collections.emptyMap();
 
             o:
             while (true) {
-                tokenizer.init(UIUtil.userInput("> "));
-                tmp.clear();
+                String input = UIUtil.userInput("> ");
+                tokenizer.init(shortcuts.getOrDefault(input, input));
                 try {
                     while (tokenizer.hasNext()) {
                         Word w = tokenizer.readWord();
@@ -141,6 +150,7 @@ public final class FMDMain {
                 } catch (Throwable e) {
                     e.printStackTrace();
                 }
+                tmp.clear();
             }
         }
 
@@ -148,22 +158,17 @@ public final class FMDMain {
 
         switch (args[0]) {
             case "build":
-            case "b":
                 exitCode = build(buildArgs(args));
                 break;
             case "run":
-            case "r":
                 exitCode = run(buildArgs(args));
                 break;
             case "changeVersion":
-            case "cv":
                 exitCode = changeVersion();
                 break;
             case "f2m":
                 exitCode = forgeToMcp(args);
                 break;
-            case "cs":
-                args = new String[] {"config", "select", args[1]};
             case "config":
                 exitCode = config(args, currentProject);
                 break;
@@ -618,7 +623,7 @@ public final class FMDMain {
 
     // endregion
 
-    public static int run(Map<String, String> args) throws IOException, InterruptedException {
+    public static int run(Map<String, Object> args) throws IOException, InterruptedException {
         MCLauncher.load();
 
         CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
@@ -655,7 +660,7 @@ public final class FMDMain {
         }
     }
 
-    public static int build(Map<String, String> args) throws IOException, InterruptedException {
+    public static int build(Map<String, Object> args) throws IOException, InterruptedException {
         if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBool())
             args.put("_HOT_RELOAD_ENABLE_", Helpers.cast(new ArrayList<>()));
 
@@ -760,7 +765,7 @@ public final class FMDMain {
                     if (FileFilter.isOAMarked(file)) {
                         CmdUtil.warning("找到AT注解, 使用全量编译");
 
-                        FileFilter.state = 1;
+                        files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC));
                         increment = false;
 
                         break incr;
@@ -946,7 +951,10 @@ public final class FMDMain {
                         mz.open();
                     }
                 } catch (Throwable e) {
-                    CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
+                    if(e.getCause() instanceof EOFException)
+                        CmdUtil.warning("似乎jar文件不完整 请尝试全量编译", e);
+                    else
+                        CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
                     return false;
                 }
 
@@ -1012,8 +1020,10 @@ public final class FMDMain {
 
             CmdUtil.success("编译成功! 耗时: " + ((double) (System.currentTimeMillis() - time) / 1000d));
 
-            if(!binary.setLastModified(System.currentTimeMillis())) {
-                throw new IOException("设置时间戳失败!");
+            if(!args.containsKey("dbg-nots")) {
+                if (!binary.setLastModified(System.currentTimeMillis())) {
+                    throw new IOException("设置时间戳失败!");
+                }
             }
 
             project.registerWatcher();
@@ -1624,26 +1634,13 @@ public final class FMDMain {
     // endregion
     // region Common.Util
 
-    private static Map<String, String> buildArgs(String[] args) throws ParseException {
-        Tokenizer r = new Tokenizer().init(TextUtil.concat(args, ' '));
-        Map<String, String> map = new MyHashMap<>();
-        while(r.hasNext()) {
-            Word w = r.readStringToken();
-            if(w.type() != WordPresets.STRING && w.type() != WordPresets.LITERAL) {
-                throw r.err("Unexpected");
-            }
-
-            String text = w.val(), next = null;
-            w = r.nextWord();
-            if(w.type() == WordPresets.INTEGER && w.val().equals("=")) {
-                next = r.readWord().val();
-            } else {
-                r.retractWord();
-            }
-
-            map.put(text, next);
+    private static Map<String, Object> buildArgs(String[] args) {
+        // args: dbg-nots showErrorCode zl
+        MyHashMap<String, Object> ojbk = new MyHashMap<>(args.length);
+        for (String arg : args) {
+            ojbk.put(arg, null);
         }
-        return map;
+        return ojbk;
     }
 
     public static void readTextList(Consumer<String> set, String key) {

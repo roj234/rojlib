@@ -69,7 +69,7 @@ import java.util.function.IntFunction;
  * @version 0.1
  * @since  2020/8/19 22:13
  */
-public final class ConstMapper extends Mapping {
+public class ConstMapper extends Mapping {
     public static final int FILE_HEADER = 0xf0E72cEb;
 
     /**
@@ -507,7 +507,7 @@ public final class ConstMapper extends Mapping {
     /**
      * Step 1
      */
-    void parse(Context c) {
+    final void parse(Context c) {
         ConstantData data = c.getData();
 
         ArrayList<String> list = new ArrayList<>();
@@ -524,7 +524,7 @@ public final class ConstMapper extends Mapping {
                 int e = name.length() - "_NMR$FAKEIMPL".length();
                 name = new CharList(e - s + 1).append(name, s, e - s).replace('_', '/').toString();
                 if(DEBUG)
-                    System.out.println("[NMR继承] " + data.name + " <= " + name);
+                    System.out.println("[NMR继承] " + data.name + " <== " + name);
             }
             list.add(name);
         }
@@ -539,7 +539,7 @@ public final class ConstMapper extends Mapping {
     /**
      * 这个一定要有严格的顺序
      */
-    Collection<String> resolveParentShared(String name) {
+    final Collection<String> resolveParentShared(String name) {
         return Util.shareFC(name, selfSupers.getOrDefault(name, Collections.emptyList()));
     }
 
@@ -547,14 +547,14 @@ public final class ConstMapper extends Mapping {
      * addAllSupers + this
      * 也可以是lib
      */
-    private Collection<String> resolveParent(String name) {
+    final Collection<String> resolveParent(String name) {
         return new FirstCollection<>(selfSupers.getOrDefault(name, Collections.emptyList()), name);
     }
 
     /**
      * Set reference name
      */
-    private static void setRefName(ConstantData data, CstRef ref, String newName) {
+    static void setRefName(ConstantData data, CstRef ref, String newName) {
        ref.desc(data.writer.getDesc(newName, ref.desc().getType().getString()));
     }
 
@@ -641,7 +641,7 @@ public final class ConstMapper extends Mapping {
     /**
      * Map: self replace super fields...
      */
-    final void mapSelfField(Context ctx, List<FieldSimple> fields, ConstantData data, Collection<String> supers) {
+    void mapSelfField(Context ctx, List<FieldSimple> fields, ConstantData data, Collection<String> supers) {
         // skip bin class
         if(SKIP_BIN_FIELDS)
             if(classMap.containsKey(data.name)) return;
@@ -800,7 +800,7 @@ public final class ConstMapper extends Mapping {
     /**
      * Map: use other(non-self) fields
      */
-    final void mapField(Context ctx, ConstantData data, CstRef ref) {
+    void mapField(Context ctx, ConstantData data, CstRef ref) {
         FlDesc fd = Util.shareFD().read(ref);
 
         /**
@@ -839,7 +839,7 @@ public final class ConstMapper extends Mapping {
         generateSuperMap(FileUtil.findAllFiles(folder));
     }
 
-    final void generateSuperMap(List<File> files) {
+    void generateSuperMap(List<File> files) {
         libSupers.clear();
 
         libSkipFields.clear();

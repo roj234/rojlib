@@ -47,10 +47,6 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
         List<T> getKeysFor(K key, List<T> holder);
 
         T getMostFamous(K k);
-
-        default K getBack(T t) {
-            throw new UnsupportedOperationException();
-        }
     }
 
     public static final class REntry<T, V> implements Iterable<REntry<T, V>> {
@@ -519,7 +515,7 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
                                         next = Helpers.cast(nx_1);
                                     }
                                     if((next[nextUsed] = eee).children.length == 0) {
-                                        (src_nx[nextUsed] = new LongBitSet(from.max)).fillAll();
+                                        (src_nx[nextUsed] = new LongBitSet(from.max)).fill(from.max);
                                     } else {
                                         src_nx[nextUsed] = (LongBitSet) from.copy();
                                     }
@@ -993,8 +989,9 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
     @Override
     @SuppressWarnings("unchecked")
     public V get(Object id) {
-        List<V> vs = getMulti((List<K>) id, 1);
-        return vs.isEmpty() ? null : vs.get(0);
+        List<K> id1 = (List<K>) id;
+        REntry<T, V> vs = getEntry(id1, 0, id1.size());
+        return vs == null ? null : vs.v;
     }
 
     @Override

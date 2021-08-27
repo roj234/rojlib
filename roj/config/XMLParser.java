@@ -30,7 +30,6 @@ import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
 import roj.config.data.*;
 import roj.config.word.AbstLexer;
-import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.text.CharList;
@@ -260,7 +259,7 @@ public class XMLParser {
         throw OperationDone.NEVER;
     }
 
-    static void except(Lexer wr, short id, String s) throws ParseException {
+    static void except(AbstLexer wr, short id, String s) throws ParseException {
         Word w = wr.nextWord();
         if (w.type() != id) {
             unexpected(wr, w.val(), s);
@@ -289,7 +288,7 @@ public class XMLParser {
         throw new IllegalArgumentException(String.valueOf(word));
     }
 
-    public static final class XMLexer extends Lexer {
+    public static final class XMLexer extends AbstLexer {
         static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
 
         public Set<String> noCloseTags = Collections.emptySet();

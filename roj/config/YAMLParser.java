@@ -29,7 +29,7 @@ import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.collect.MyHashMap;
 import roj.config.data.*;
-import roj.config.word.Lexer;
+import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.config.word.Word_L;
@@ -442,7 +442,7 @@ public class YAMLParser {
         }
     }
 
-    public static final class YAMLLexer extends Lexer {
+    public static final class YAMLLexer extends AbstLexer {
         public static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
                                 SPECIAL_0 = LongBitSet.from(YAML_SPEC_CHARS_NOT_BEGIN),
                                 SPECIAL_1 = LongBitSet.from(YAML_SPEC_CHARS_NOT_SINGLE),
@@ -885,6 +885,7 @@ public class YAMLParser {
         }
 
         @Override
+        @SuppressWarnings("fallthrough")
         protected Word readSymbol() throws ParseException {
             String v;
             short id;

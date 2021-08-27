@@ -27,6 +27,9 @@
 package ilib.util;
 
 import com.google.common.collect.Sets;
+import roj.text.CharList;
+import roj.text.TextUtil;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.properties.IProperty;
@@ -44,9 +47,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+
 import net.minecraftforge.registries.GameData;
-import roj.text.CharList;
-import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;

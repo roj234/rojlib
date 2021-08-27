@@ -288,6 +288,12 @@ public class CharList implements CharSequence {
         return -1;
     }
 
+    public char[] toCharArray() {
+        char[] dest = new char[ptr - getOffset()];
+        System.arraycopy(list, getOffset(), dest, 0, ptr - getOffset());
+        return dest;
+    }
+
     public int getOffset() {
         return 0;
     }

@@ -30,6 +30,7 @@ import ilib.Config;
 import ilib.asm.fasterforge.anc.JarInfo;
 import ilib.asm.fasterforge.transformers.FieldRedirect;
 import ilib.asm.transformers.*;
+import ilib.command.parser.CommandNeXt;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,10 +42,9 @@ import roj.asm.transform.AccessTransformer;
 import roj.io.DummyOutputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
-import roj.io.ZipUtil;
+import roj.io.MutableZipFile;
 import roj.reflect.IFieldAccessor;
 import roj.reflect.ReflectionUtils;
-import roj.util.ByteList;
 
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
@@ -59,11 +59,10 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 
 import javax.annotation.Nullable;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
 
 @Name("ILASM")
 @MCVersion("1.12.2")
@@ -99,6 +98,11 @@ public class Loader implements IFMLLoadingPlugin {
         Configuration conf = ctx.getConfiguration();
         conf.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(level);
         ctx.updateLoggers(conf);
+
+        ctx = (LoggerContext) LogManager.getContext(true);
+        conf = ctx.getConfiguration();
+        conf.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(level);
+        ctx.updateLoggers(conf);
     }
 
     public Loader() {
@@ -108,51 +112,27 @@ public class Loader implements IFMLLoadingPlugin {
         // EntityEquipmentSlot.values() // EnumFacing.values() // etc
 
         if (Config.removePatchy) {
-            for (File patchy : FileUtil.findAllFiles(new File("."), file -> file.isFile() && file.getName().endsWith(".jar") && file.getName().startsWith("patchy-"))) {
+            for (File patchy : FileUtil.findAllFiles(new File("."), file -> file.getName().startsWith("patchy-") && file.getName().endsWith(".jar"))) {
                 File mark = new File(patchy, "-mark");
                 if (mark.isFile()) continue;
 
-                ByteList list = new ByteList(2048);
-                IOException error = null;
-                try (ZipInputStream zis = new ZipInputStream(new FileInputStream(patchy))) {
-                    ZipOutputStream zos = new ZipOutputStream(list.asOutputStream());
-                    try {
-                        ZipEntry ze;
-                        ByteList list2 = new ByteList(2048);
-                        while ((ze = zis.getNextEntry()) != null) {
-                            if (!ze.getName().startsWith("io.netty")) {
-                                list2.readStreamFully(zis);
-
-                                ZipEntry ze1 = new ZipEntry(ze);
-                                zos.putNextEntry(ze1);
-
-                                list2.writeToStream(zos);
-                                list2.clear();
-
-                                zos.closeEntry();
-                            }
-                            zis.closeEntry();
+                try(MutableZipFile mz = new MutableZipFile(patchy)) {
+                    for(String key : mz.getEntries().keySet()) {
+                        if (key.startsWith("io/netty")) {
+                            mz.setFileData(key, null, true);
                         }
-                    } catch (IOException e) {
-                        error = e;
-                    } finally {
-                        ZipUtil.close(zos);
                     }
+                    mz.store();
                 } catch (IOException e) {
-                    error = e;
+                    throw new IllegalArgumentException("操作失败", e);
                 }
 
-                if (error == null) {
-                    try (FileOutputStream fos = new FileOutputStream(patchy)) {
-                        list.writeToStream(fos);
-                        if (!mark.createNewFile()) {
-                            throw new IllegalArgumentException("Mark creation失败");
-                        }
-                    } catch (IOException e) {
-                        throw new IllegalArgumentException("操作失败", e);
+                try {
+                    if (!mark.createNewFile()) {
+                        throw new IllegalArgumentException("Mark creation失败");
                     }
-                } else {
-                    throw new IllegalArgumentException("操作失败", error);
+                } catch (IOException e) {
+                    throw new IllegalArgumentException("操作失败", e);
                 }
             }
             Config.instance.getConfig().put("Tweak.Client.修复进存档或服务器卡死(只需打开一次)", false);
@@ -197,9 +177,10 @@ public class Loader implements IFMLLoadingPlugin {
         }
 
         if (Config.replaceOIM) {
-            ClassReplacer.addClass("net.minecraft.util.ObjectIntIdentityMap", IOUtil.getBytesS(Loader.class, "META-INF/nixim/net_minecraft_util_ObjectIntIdentityMap.class"));
-            NiximTransformer.read(IOUtil.getBytesS(Loader.class, "ilib/asm/nixim/NiximOIIMClr.class"));
-            NiximTransformer.read(IOUtil.getBytesS(Loader.class, "ilib/asm/nixim/NiximOIIMGet.class"));
+            ClassReplacer.addClass("net.minecraft.util.ObjectIntIdentityMap",
+                                   IOUtil.getBytesS(Loader.class, "META-INF/nixim/ObjectIntIdentityMap.class"));
+            NiximTransformer.read(IOUtil.getBytesS(Loader.class, "META-INF/nixim/MapClear.class"));
+            NiximTransformer.read(IOUtil.getBytesS(Loader.class, "META-INF/nixim/MapGet.class"));
         }
 
         ClassReplacer.addClass("net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper", IOUtil.getBytesS(Loader.class, "ilib/asm/fasterforge/FMLDeobfuscatingRemapper.class"));
@@ -424,7 +405,7 @@ public class Loader implements IFMLLoadingPlugin {
                 }
             } else {
                 firstTransformers.add(ClassReplacer.INSTANCE);
-                endTransformers.add(0, new AutoRegisterTransformer());
+                endTransformers.add(new AutoRegisterTransformer());
                 endTransformers.add(new Transformer());
 
                 NiximProxy.alreadyAtDeobfEnv = true;
@@ -455,18 +436,18 @@ public class Loader implements IFMLLoadingPlugin {
         list.addAll(transformerSet);
         list.addAll(Math.min(2, list.size()), firstTransformers);
 
-        int endIndex = -1;
-        int i = 0;
-        for (IClassTransformer transformer : transformerSet) {
-            i++;
-            if (transformer.getClass().getName().endsWith("DeobfuscationTransformer")) {
-                endIndex = i + 1;
-                break;
-            }
-        }
-        if (endIndex != -1 && endIndex < list.size()) {
-            list.addAll(endIndex, endTransformers);
-        } else
+        //int endIndex = -1;
+        //int i = 0;
+        //for (IClassTransformer transformer : transformerSet) {
+        //    i++;
+        //    if (transformer.getClass().getName().endsWith("DeobfuscationTransformer")) {
+        //        endIndex = i + 1;
+        //        break;
+        //    }
+        //}
+        //if (endIndex != -1 && endIndex < list.size()) {
+        //    list.addAll(endIndex, endTransformers);
+        //} else
             list.addAll(endTransformers);
 
         list.add(list.size() - 1, NiximProxy.instance);
@@ -493,7 +474,7 @@ public class Loader implements IFMLLoadingPlugin {
     public static void handleASMData(ASMDataTable store, Map<String, JarInfo> info) {
         asmInfo = store;
         AutoRegisterTransformer.initStore();
-        //CommandNeXt.initStore();
+        CommandNeXt.initStore();
     }
 
     @Override

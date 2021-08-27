@@ -54,8 +54,6 @@ import net.minecraftforge.common.MinecraftForge;
 
 import java.util.ListIterator;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * No description provided
@@ -77,8 +75,6 @@ public class Transformer implements IFasterClassTransformer {
                 return Config.fixMinecart ? transformMinecart(data) : data;
             case "net.minecraft.client.Minecraft":
                 return transformMc(data);
-            case "ilib.AT_PATCH_AT":
-                return transformAT(data);
             case "net.minecraft.inventory.ContainerRepair$2":
                 return Config.noAnvilTax ? transformAnvilSlot(data) : data;
             case "net.minecraft.server.MinecraftServer":
@@ -172,28 +168,6 @@ public class Transformer implements IFasterClassTransformer {
         logger.error("[TPSChange.Transform] Node not found!");
 
         return basicClass;
-    }
-
-    private ByteList transformAT(ByteList basicClass) {
-        String old = "ilib/AT_PATCH_AT\\$Modifier";
-        String now = "net/minecraftforge/fml/common/asm/transformers/AccessTransformer\\$Modifier";
-
-        Matcher matcher = Pattern.compile(old, Pattern.LITERAL).matcher("");
-
-        ConstantData data = Parser.parseConstants(basicClass);
-        for (Constant constant : data.cp.array()) {
-            if (constant != null && constant.type() == CstType.UTF) {
-                CstUTF cstUTF = (CstUTF) constant;
-                if (cstUTF.getString().length() >= old.length()) {
-                    String nn = matcher.reset(cstUTF.getString()).replaceAll(now);
-                    if (!nn.equals(cstUTF.getString()))
-                        System.out.println("Changed: " + cstUTF.getString() + " -> " + nn);
-                    cstUTF.setString(nn);
-                }
-            }
-        }
-
-        return Parser.toByteArrayShared(data);
     }
 
     private Method appendOnEndMark(Method method) {

@@ -52,7 +52,7 @@ import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.SunReflection;
+import roj.reflect.InstantiationUtil;
 import roj.util.ByteList;
 
 import net.minecraftforge.fml.common.eventhandler.Event;
@@ -192,7 +192,7 @@ public final class EventInvokerV2 implements IEventListener {
         Class<?> clazz = ClassDefiner.INSTANCE.defineClassC(data.name.replace('/', '.'), list.list, list.offset(), list.limit());
 
         try {
-            return (IEventListener) SunReflection.createClass(clazz, new Class<?>[]{Object[].class}, targets);
+            return (IEventListener) InstantiationUtil.createClass(clazz, new Class<?>[]{Object[].class}, targets);
         } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
             throw new InternalError(e);
         }
@@ -331,9 +331,9 @@ public final class EventInvokerV2 implements IEventListener {
     public static IEventListener createListener(Method method, Object target) throws IllegalAccessException, InstantiationException, InvocationTargetException {
         final Class<?> clazz = createWrapper(method);
         if (Modifier.isStatic(method.getModifiers())) {
-            return (IEventListener) SunReflection.createClass(clazz);
+            return (IEventListener) InstantiationUtil.createClass(clazz);
         } else {
-            return (IEventListener) SunReflection.createClass(clazz, new Class<?>[]{Object.class}, target);
+            return (IEventListener) InstantiationUtil.createClass(clazz, new Class<?>[]{Object.class}, target);
         }
     }
 

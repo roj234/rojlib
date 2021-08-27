@@ -26,8 +26,11 @@
 package roj.config.data;
 
 import roj.config.word.AbstLexer;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Config Entry
@@ -87,10 +90,18 @@ public abstract class CEntry {
         return toYAML(new StringBuilder(), 0).toString();
     }
 
+    public final StringBuilder toYAMLb() {
+        return toYAML(new StringBuilder(), 0);
+    }
+
     public abstract StringBuilder toJSON(StringBuilder sb, int depth);
 
     public final String toJSON() {
         return toJSON(new StringBuilder(), 0).toString();
+    }
+
+    public final StringBuilder toJSONb() {
+        return toJSON(new StringBuilder(), 0);
     }
 
     @Override
@@ -101,6 +112,59 @@ public abstract class CEntry {
     public final String toShortJSON() {
         return toJSON(new StringBuilder(), -9999999).toString();
     }
+
+    public final StringBuilder toShortJSONb() {
+        return toJSON(new StringBuilder(), -9999999);
+    }
+
+    // Convert util
+
+    /**
+     * 转换为"裸"对象 <br>
+     *     适配垃圾软件
+     * @return Map, List, String or 基本类型的包装
+     */
+    public abstract Object toNudeObject();
+
+    /**
+     * 包装"裸"对象
+     * @param o 裸对象
+     * @return Config对象
+     */
+    @Deprecated
+    public static CEntry wrapNudeObject(Object o) {
+        if(o instanceof Map) {
+            Map<String, Object> map = Helpers.cast(o);
+            CMapping dst = new CMapping(map.size());
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                dst.put(entry.getKey(), wrapNudeObject(entry.getValue()));
+            }
+            return dst;
+        } else if (o instanceof List) {
+            List<Object> list = Helpers.cast(o);
+            CList dst = new CList(list.size());
+            for (int i = 0; i < list.size(); i++) {
+                dst.add(wrapNudeObject(list.get(i)));
+            }
+            return dst;
+        } else if (o instanceof String) {
+            return CString.valueOf(o.toString());
+        } else if (o instanceof Boolean) {
+            return CBoolean.valueOf((Boolean) o);
+        } else if (o instanceof Integer) {
+            return CInteger.valueOf((Integer) o);
+        } else if (o instanceof Long) {
+            return CLong.valueOf((Long) o);
+        } else if (o instanceof Double) {
+            return CDouble.valueOf((Double) o);
+        } else if (o == null) {
+            return CNull.NULL;
+        } else {
+            return new CObject<>(o);
+        }
+    }
+
+    // Utilities
 
     public boolean equalsTo(CEntry entry) {
         return equals(entry);

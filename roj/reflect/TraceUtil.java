@@ -25,59 +25,25 @@
  */
 package roj.reflect;
 
-import javax.annotation.Nonnull;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.concurrent.locks.LockSupport;
-
-/**
- * 警告: 请小心使用
- */
-public final class J8Util {
-    static final boolean uav, jav;
+public final class TraceUtil {
+    static final boolean ok;
 
     static {
         boolean a;
         try {
-            U.U.getClass();
+            H.JLA.getClass();
             a = true;
         } catch (Throwable e) {
             a = false;
         }
-        uav = a;
-        try {
-            JLA.JLA.getClass();
-            a = true;
-        } catch (Throwable e) {
-            a = false;
-        }
-        jav = a;
-    }
-
-    /**
-     * 使线程开始运行
-     *
-     * @param thread The thread to run
-     */
-    public static void unfreezeThread(@Nonnull Thread thread) {
-        LockSupport.unpark(thread);
-    }
-
-    public static long getFieldOffset(Field field) {
-        if(uav)
-            if (Modifier.isStatic(field.getModifiers())) {
-                return U.U.staticFieldOffset(field);
-            } else {
-                return U.U.objectFieldOffset(field);
-            }
-        return -1;
+        ok = a;
     }
 
     public static StackTraceElement[] getTraces(Throwable t) {
-        if(jav) {
-            StackTraceElement[] arr = new StackTraceElement[JLA.JLA.getStackTraceDepth(t)];
+        if(ok) {
+            StackTraceElement[] arr = new StackTraceElement[H.JLA.getStackTraceDepth(t)];
             for (int i = 0; i < arr.length; i++) {
-                arr[i] = JLA.JLA.getStackTraceElement(t, i);
+                arr[i] = H.JLA.getStackTraceElement(t, i);
             }
             return arr;
         }
@@ -85,8 +51,12 @@ public final class J8Util {
     }
 
     public static int stackDepth(Throwable t) {
-        if(jav)
-            return JLA.JLA.getStackTraceDepth(t);
+        if(ok)
+            return H.JLA.getStackTraceDepth(t);
         return t.getStackTrace().length;
+    }
+
+    static class H {
+        static final sun.misc.JavaLangAccess JLA = sun.misc.SharedSecrets.getJavaLangAccess();
     }
 }

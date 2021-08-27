@@ -25,10 +25,12 @@
  */
 package ilib.asm.fasterforge;
 
-import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
 import org.objectweb.asm.Type;
+import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.AnnValArray;
 import roj.asm.type.ParamHelper;
+
+import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -72,7 +74,9 @@ public abstract class TypeHelper {
             case ARRAY:
                 roj.asm.tree.anno.AnnValArray annotationValueArray = (AnnValArray) param;
                 List<Object> list = new ArrayList<>(annotationValueArray.value.size());
-                annotationValueArray.value.forEach((c) -> list.add(toPrimitive(c)));
+                for (AnnVal c : annotationValueArray.value) {
+                    list.add(toPrimitive(c));
+                }
                 return list;
             case CLASS:
                 roj.asm.tree.anno.AnnValClass annotationValueClass = (roj.asm.tree.anno.AnnValClass) param;

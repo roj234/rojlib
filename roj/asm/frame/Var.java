@@ -101,6 +101,6 @@ public final class Var {
     }
 
     public String toString() {
-        return owner == null ? (node == null ? VarType.toString(type) : " [未初始化]直到 " + node) : owner;
+        return owner == null ? (node == null ? VarType.toString(type) : " [未初始化]直到 " + node) : owner.substring(owner.lastIndexOf('/') + 1);
     }
 }

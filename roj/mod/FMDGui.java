@@ -45,9 +45,7 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -201,7 +199,7 @@ public class FMDGui extends JFrame {
                         "  混淆mod代码\n" +
                         "    详情查看config.json中相应配置项\n" +
                         "    此功能可能含有BUG, 出现错误可以在配置中关闭\n" +
-                        "  其他小问题\n" +
+                        "  不少bug\n" +
                         "\n" +
                         "下一个版本更新: \b" +
                         "  可能会支持1.17的开发, 开发！\n", "关于FMD", INFORMATION_MESSAGE, icon);
@@ -362,23 +360,23 @@ public class FMDGui extends JFrame {
     }
 
     private static void runClient(ActionEvent event) {
-        Map<String, String> map = getCompileSetting();
+        Map<String, Object> map = getCompileSetting();
         if(map == null)
             return;
         asyncRun(() -> FMDMain.run(map));
     }
 
     private static void build(ActionEvent event) {
-        Map<String, String> map = getCompileSetting();
+        Map<String, Object> map = getCompileSetting();
         if(map == null)
             return;
 
         asyncRun(() -> FMDMain.build(map));
     }
 
-    private static Map<String, String> getCompileSetting() {
+    private static Map<String, Object> getCompileSetting() {
         frame.consoleOutput.setText("");
-        Map<String, String> map = new MyHashMap<>(2, 10);
+        Map<String, Object> map = new MyHashMap<>(2, 10);
 
         String[] availableValue = new String [] {
                 "增量编译",

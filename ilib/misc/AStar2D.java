@@ -25,7 +25,7 @@
  */
 package ilib.misc;
 
-import roj.collect.BinaryHeap;
+import roj.collect.BSLowHeap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.math.Vec2i;
@@ -46,8 +46,8 @@ public abstract class AStar2D {
     private final Point[] cache;
     private int cacheIdx = -1;
 
-    protected final BinaryHeap<Point> open = new BinaryHeap<>(BinaryHeap.BIG, PointCpr.INSTANCE),
-            tmp = new BinaryHeap<>(BinaryHeap.BIG, PointCpr.INSTANCE);
+    protected final BSLowHeap<Point> open = new BSLowHeap<>(PointCpr.INSTANCE),
+            tmp                           = new BSLowHeap<>(PointCpr.INSTANCE);
     public List<Point> result;
 
     protected final MyHashSet<Point> closed = new MyHashSet<>();
@@ -78,11 +78,11 @@ public abstract class AStar2D {
     public final List<Point> find(int strX, int strY, int endX, int endY) {
         result = null;
 
-        BinaryHeap<Point> open = this.open;
+        BSLowHeap<Point> open = this.open;
         open.clear();
         MyHashSet<Point> closed = this.closed;
         closed.clear();
-        BinaryHeap<Point> tmp = this.tmp;
+        BSLowHeap<Point> tmp = this.tmp;
         tmp.clear();
 
         long startTime = System.currentTimeMillis();
@@ -121,7 +121,7 @@ public abstract class AStar2D {
 
             open.clear();
 
-            BinaryHeap<Point> tmp1 = open;
+            BSLowHeap<Point> tmp1 = open;
             open = tmp;
             tmp = tmp1;
         }
@@ -133,7 +133,7 @@ public abstract class AStar2D {
         return null;
     }
 
-    protected void check(Point parent, BinaryHeap<Point> list, int cost, int x, int y, Point end) {
+    protected void check(Point parent, BSLowHeap<Point> list, int cost, int x, int y, Point end) {
         if (valid(x, y)) {
             final Point node = retainP(x, y);
 
@@ -141,7 +141,7 @@ public abstract class AStar2D {
             node.cost = parent.cost + cost;
 
             //如果访问到开放列表中的点，则将此点重置为消耗最小的路径,否则添加到开放列表
-            int i = list.indexOfEquals(node);
+            int i = list.indexOf(node);
             if(i != -1) {
                 Point in = list.get(i);
                 if(node.cost < in.cost) {

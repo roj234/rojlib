@@ -109,7 +109,7 @@ public final class ClassDefiner extends ClassLoader {
         }
     }
 
-    private String defineClassSourceLocation(ProtectionDomain pd) {
+    private static String defineClassSourceLocation(ProtectionDomain pd) {
         CodeSource cs = pd.getCodeSource();
         String source = null;
         if (cs != null && cs.getLocation() != null) {

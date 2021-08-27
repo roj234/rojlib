@@ -38,8 +38,8 @@ import java.util.Arrays;
  * @version 0.1
  * @since  2020/12/6 15:04
  */
-public final class SunReflection {
-    private SunReflection() {
+public final class InstantiationUtil {
+    private InstantiationUtil() {
     }
 
     private static final Object[] FIND = new Object[]{
@@ -54,7 +54,8 @@ public final class SunReflection {
     private static java.lang.reflect.Method newInstance0;
     private static java.lang.reflect.Method getDeclaredConstructors0;
 
-    public static void doSunReflectCache() throws Exception {
+    public static synchronized void doSunReflectCache() throws Exception {
+        if(newInstance0 != null) return;
         try {
             Class<?> clazz = Class.forName("sun.reflect.NativeConstructorAccessorImpl");
             java.lang.reflect.Method method = clazz.getDeclaredMethod("newInstance0", Constructor.class, Object[].class);
@@ -77,6 +78,7 @@ public final class SunReflection {
         } else {
             synchronized (CONST) {
                 CONST[0] = constructor;
+                CONST[1] = EmptyArrays.OBJECTS;
                 return newInstance0.invoke(null, CONST);
             }
         }
@@ -91,10 +93,9 @@ public final class SunReflection {
         } else {
             synchronized (CONST) {
                 CONST[0] = constructor;
-                Object data = CONST[1];
                 CONST[1] = o1;
                 Object inst = newInstance0.invoke(null, CONST);
-                CONST[1] = data;
+                CONST[1] = EmptyArrays.OBJECTS;
                 return inst;
             }
         }
@@ -111,8 +112,8 @@ public final class SunReflection {
         }
         try {
             return clazz.getConstructor(types);
-        } catch (NoSuchMethodException ignored) {
+        } catch (NoSuchMethodException e) {
+            throw new InvocationTargetException(e);
         }
-        throw new InvocationTargetException(new NoSuchMethodError(clazz.getName() + ".<init>()V"));
     }
 }

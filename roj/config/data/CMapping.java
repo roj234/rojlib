@@ -29,6 +29,7 @@ import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.config.word.AbstLexer;
 import roj.text.TextUtil;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -51,6 +52,10 @@ public class CMapping extends CEntry {
 
     public CMapping(Map<String, CEntry> map) {
         this.map = map;
+    }
+
+    public CMapping(int size) {
+        this.map = new MyHashMap<>(size);
     }
 
     public int size() {
@@ -349,6 +354,15 @@ public class CMapping extends CEntry {
             }
         }
         return sb.append('}');
+    }
+
+    @Override
+    public Object toNudeObject() {
+        MyHashMap<String, Object> caster = Helpers.cast(new MyHashMap<>(map));
+        for (Map.Entry<String, Object> entry : caster.entrySet()) {
+            entry.setValue(((CEntry) entry.getValue()).toNudeObject());
+        }
+        return caster;
     }
 
     @Override

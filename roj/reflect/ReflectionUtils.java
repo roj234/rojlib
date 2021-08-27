@@ -26,6 +26,8 @@
 
 package roj.reflect;
 
+import roj.asm.type.NativeType;
+import roj.asm.type.ParamHelper;
 import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
@@ -39,6 +41,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
+
+import static roj.asm.type.NativeType.ARRAY;
+import static roj.asm.type.NativeType.CLASS;
 
 /**
  * No description provided
@@ -249,11 +254,11 @@ public final class ReflectionUtils {
                         .makeCache(field.getDeclaringClass())
                         .useCache()
                         .access(field.getDeclaringClass(), new String[]{field.getName()},
-                                new String[]{"get" + DirectFieldAccess.accessorName(field)},
-                                new String[]{"set" + DirectFieldAccess.accessorName(field)})
+                                new String[]{"get" + accessorName(field)},
+                                new String[]{"set" + accessorName(field)})
                         .build();
             } else {
-                accessor = new VarHandleAccessor(field);
+                accessor = new VH(field);
             }
             accessorWeakHashMap.put(field, accessor);
             return accessor;
@@ -303,6 +308,19 @@ public final class ReflectionUtils {
         @Override
         public void removeRange(int fromIndex, int toIndex) {
             super.removeRange(fromIndex, toIndex);
+        }
+    }
+
+    public static String accessorName(Field field) {
+        char c = ParamHelper.classDescriptor(field.getType()).charAt(0);
+        switch (c) {
+            case ARRAY:
+            case CLASS:
+                return "Object";
+            default:
+                StringBuilder s = new StringBuilder(NativeType.toDesc(c));
+                s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
+                return s.toString();
         }
     }
 }

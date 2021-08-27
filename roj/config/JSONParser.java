@@ -28,7 +28,6 @@ package roj.config;
 import roj.collect.MyHashSet;
 import roj.config.data.*;
 import roj.config.word.AbstLexer;
-import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.util.ByteList;
@@ -60,16 +59,8 @@ public final class JSONParser {
             colon = 18;
 
     public static void main(String[] args) throws ParseException, IOException {
-        long t = System.currentTimeMillis();
         String s = ByteReader.readUTF(new ByteList().readStreamArrayFully(new FileInputStream(args[0])));
-        System.out.println("读取T " + (System.currentTimeMillis() - t));
-        t = System.currentTimeMillis();
-
-        List<CEntry> e = parseMulti(s);
-
-        System.out.println("解析T " + (System.currentTimeMillis() - t));
-
-        System.out.println(e);
+        System.out.println(parse(s));
     }
 
     public static CEntry parse(CharSequence string) throws ParseException {
@@ -89,9 +80,12 @@ public final class JSONParser {
     }
 
     public static List<CEntry> parseMulti(AbstLexer wr, int flag) throws ParseException {
+        JSONLexer l = (JSONLexer) wr;
+        l.flag = (byte) flag;
+
         List<CEntry> list = new ArrayList<>();
         while (wr.hasNext()) {
-            list.add(jsonRead(wr, (byte) flag));
+            list.add(jsonRead(l, (byte) flag));
         }
         return list;
     }
@@ -99,10 +93,15 @@ public final class JSONParser {
     /**
      * @param flag <BR>
      *             1: 对重复的key报错 <BR>
-     *             2: 仁慈模式 (忽略key中的literal string)
+     *             2: 仁慈模式 (忽略key中的literal string) <BR>
+     *             4: 不对单引号转义
      */
     public static CEntry parse(AbstLexer wr, int flag) throws ParseException {
-        CEntry ce = jsonRead(wr, (byte) flag);
+        JSONLexer l = (JSONLexer) wr;
+        l.flag = (byte) flag;
+
+        CEntry ce = jsonRead(l, (byte) flag);
+
         if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
@@ -113,7 +112,7 @@ public final class JSONParser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    static CList jsonArray(AbstLexer wr, byte flag) throws ParseException {
+    static CList jsonArray(JSONLexer wr, byte flag) throws ParseException {
         CList list = new CList();
 
         boolean more = false;
@@ -146,7 +145,7 @@ public final class JSONParser {
      * {xxx: yyy, zzz: uuu}
      */
     @SuppressWarnings("fallthrough")
-    static CMapping jsonObject(AbstLexer wr, byte flag) throws ParseException {
+    static CMapping jsonObject(JSONLexer wr, byte flag) throws ParseException {
         CMapping map = new CMapping();
 
         boolean more = false;
@@ -195,7 +194,7 @@ public final class JSONParser {
     }
 
     @SuppressWarnings("fallthrough")
-    private static CEntry jsonRead(AbstLexer wr, byte flag) throws ParseException {
+    private static CEntry jsonRead(JSONLexer wr, byte flag) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case left_m_bracket:
@@ -230,9 +229,62 @@ public final class JSONParser {
         throw wr.err("未预料的: " + got);
     }
 
-    private static class JSONLexer extends Lexer {
+    private static class JSONLexer extends AbstLexer {
+        public byte flag;
+
         @Override
-        protected Word formAlphabetClip(CharSequence temp) {
+        @SuppressWarnings("fallthrough")
+        public Word readWord() throws ParseException {
+            CharSequence input = this.input;
+            int index = this.index;
+
+            while (index < input.length()) {
+                int c = input.charAt(index++);
+                switch (c) {
+                    case '\'':
+                    case '"':
+                        this.index = index;
+                        return readConstString((char) c);
+                    case '/':
+                        this.index = index;
+                        Word word = ignoreStdNote();
+                        if (word != null)
+                            return word;
+                        index = this.index;
+                        break;
+                    default: {
+                        if (!WHITESPACE.contains(c)) {
+                            this.index = index - 1;
+                            if (SPECIAL.contains(c)) {
+                                switch (c) {
+                                    case '-':
+                                    case '+':
+                                        if(input.length() > index && NUMBER.contains(input.charAt(index))) {
+                                            return readDigit(true);
+                                        }
+                                        break;
+                                }
+                                return readSymbol();
+                            } else if (NUMBER.contains(c)) {
+                                return readDigit(false);
+                            } else {
+                                return readLiteral();
+                            }
+                        }
+                    }
+                }
+            }
+            this.index = index;
+            return eof();
+        }
+
+        @Override
+        protected final Word readConstString(char key) throws ParseException {
+            return formClip(WordPresets.STRING, readSlashString(key, key != '\'' || (flag & 4) == 0));
+        }
+
+        @Override
+        protected final Word formAlphabetClip(CharSequence temp) {
             String s = temp.toString();
 
             short id = WordPresets.LITERAL;

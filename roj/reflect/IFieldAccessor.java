@@ -25,44 +25,79 @@
  */
 package roj.reflect;
 
+import roj.text.TextUtil;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * No description provided
+ * 抽象字段访问者
  *
  * @author Roj234
  * @version 0.1
  * @since  2020/10/17 18:24
  */
 public abstract class IFieldAccessor {
+    static final List<String> arr = TextUtil.split(new ArrayList<>(9), "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT", ',');
+
     public final Field field;
-    Object instance;
-    public final boolean isStatic;
+    public final byte flag;
 
     public IFieldAccessor(Field field) {
         this.field = field;
-        this.isStatic = Modifier.isStatic(field.getModifiers());
+        byte flag;
+        Class<?> type = field.getType();
+        if (type.isPrimitive()) {
+            switch (type.getName()) {
+                case "int":
+                    flag = 4;
+                break;
+                case "short":
+                    flag = 2;
+                break;
+                case "double":
+                    flag = 7;
+                break;
+                case "long":
+                    flag = 5;
+                break;
+                case "float":
+                    flag = 6;
+                break;
+                case "char":
+                    flag = 3;
+                break;
+                case "byte":
+                    flag = 1;
+                break;
+                case "boolean":
+                    flag = 0;
+                break;
+                default:
+                    throw new InternalError("Unknown class " + type);
+            }
+        } else 
+            flag = 8;
+        flag |= Modifier.isStatic(field.getModifiers()) ? 16 : 0;
+        flag |= Modifier.isVolatile(field.getModifiers()) ? 32 : 0;
+        this.flag = flag;
     }
 
-    public void setInstance(Object instance) {
-        if (isStatic)
-            return;
-        if (instance == null)
-            throw new IllegalArgumentException("Instance can't be null in a non-static field!");
-        this.instance = instance;
+    protected void checkObjectType(Object obj) {
+        if (!field.getDeclaringClass().isInstance(obj)) // include null
+            throw new IllegalArgumentException("Cannot set instance (not instance) to " + field.getDeclaringClass().getName());
     }
 
-    protected void checkAccess() {
-        if (instance == null)
-            throw new IllegalArgumentException("Instance can't be null in a non-static field!");
+    protected void checkType(byte required) {
+        if ((flag & 15) != required)
+            throw new IllegalArgumentException(arr.get(flag & 15) + " cannot cast to " + arr.get(required));
     }
 
-    public void clearInstance() {
-        if (isStatic)
-            return;
-        this.instance = null;
-    }
+    public abstract void setInstance(Object instance);
+
+    public abstract void clearInstance();
 
     public abstract Object getObject();
 

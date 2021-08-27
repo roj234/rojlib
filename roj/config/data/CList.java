@@ -31,10 +31,7 @@ import roj.collect.SimpleList;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * No description provided
@@ -88,6 +85,22 @@ public final class CList extends CEntry implements Iterable<CEntry> {
     public CList add(@Nullable CEntry entry) {
         list.add(entry == null ? CNull.NULL : entry);
         return this;
+    }
+
+    public void add(@Nonnull String s) {
+        list.add(new CString(s));
+    }
+
+    public void add(int s) {
+        list.add(new CInteger(s));
+    }
+
+    public void add(double s) {
+        list.add(new CDouble(s));
+    }
+
+    public void add(long s) {
+        list.add(new CLong(s));
     }
 
     public void set(int index, @Nullable CEntry entry) {
@@ -186,6 +199,15 @@ public final class CList extends CEntry implements Iterable<CEntry> {
             }
         }
         return sb.append(']');
+    }
+
+    @Override
+    public Object toNudeObject() {
+        List<Object> caster = Arrays.asList(new Object[list.size()]);
+        for (int i = 0; i < list.size(); i++) {
+            caster.set(i, list.get(i).toNudeObject());
+        }
+        return caster;
     }
 
     @Override

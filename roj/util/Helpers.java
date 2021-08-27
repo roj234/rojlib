@@ -27,7 +27,7 @@ package roj.util;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.reflect.J8Util;
+import roj.reflect.TraceUtil;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -100,7 +100,7 @@ public class Helpers {
      * @return 运行过
      */
     public static boolean noBurstStackHelper(String className, String methodName) {
-        StackTraceElement[] elements = J8Util.getTraces(new Throwable());
+        StackTraceElement[] elements = TraceUtil.getTraces(new Throwable());
         int i = 2;
         for (StackTraceElement element : elements) {
             if (i-- > 0) continue;

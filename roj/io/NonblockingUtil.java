@@ -29,7 +29,6 @@ import roj.io.misc.FileNIODispatcher;
 import roj.io.misc.SocketNIODispatcher;
 import roj.net.tcp.util.SharedConfig;
 import roj.reflect.DirectAccessor;
-import roj.reflect.DirectMethodAccess;
 import roj.util.ByteList;
 
 import java.io.FileDescriptor;
@@ -72,7 +71,7 @@ public final class NonblockingUtil {
             String[] ss2 = new String[]{
                     "read0", "readv0", "write0", "writev0", "preClose0", "close0"
             };
-            snd = DirectMethodAccess.getStatic(SocketNIODispatcher.class, ss1, Class.forName("sun.nio.ch.SocketDispatcher"), ss2);
+            snd = DirectAccessor.builder(SocketNIODispatcher.class).delegate(Class.forName("sun.nio.ch.SocketDispatcher"), ss2, ss1).build();
 
             ss1 = new String[]{
                     "read", "readv", "write", "writev", "duplicateHandle", "close"
@@ -80,7 +79,7 @@ public final class NonblockingUtil {
             ss2 = new String[]{
                     "read0", "readv0", "write0", "writev0", "duplicateHandle", "close0"
             };
-            fnf = DirectMethodAccess.getStatic(FileNIODispatcher.class, ss1, Class.forName("sun.nio.ch.FileDispatcherImpl"), ss2);
+            fnf = DirectAccessor.builder(FileNIODispatcher.class).delegate(Class.forName("sun.nio.ch.FileDispatcherImpl"), ss2, ss1).build();
         } catch (Throwable e) {
             e.printStackTrace();
             System.err.println("Failed to initialize NonblockingUtil: Unsupported java version");

@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipOutputStream;
 
-import static roj.asm.mapper.Obfuscator.TREMINATE_THIS_CLASS;
-
 /**
  * 反混淆
  *
@@ -54,17 +52,20 @@ public final class SimpleDeobfuscator extends Deobfuscator {
                 case "mapStore":
                     mapStore = args[++i];
                     break;
-                case "noPkg":
-                    obf.pkg = false;
+                case "deobfs":
+                    String v = args[++i];
+                    obf.clazz = v.contains("c") ? 0 : -1;
+                    obf.field = v.contains("f") ? 0 : -1;
+                    obf.method = v.contains("m") ? 0 : -1;
                     break;
-                case "cType":
-                    obf.clazz = 0;
-                    break;
-                case "fType":
-                    obf.field = 0;
-                    break;
-                case "mType":
-                    obf.method = 0;
+                case "names":
+                    v = args[++i];
+                    int o = 0;
+                    o |= v.contains("p") ? 1 : 0;
+                    o |= v.contains("c") ? 2 : 0;
+                    o |= v.contains("f") ? 8 : 0;
+                    o |= v.contains("m") ? 4 : 0;
+                    obf.reFlags = o;
                     break;
                 default:
                     throw new IllegalArgumentException("未知 " + args[i]);
@@ -100,12 +101,11 @@ public final class SimpleDeobfuscator extends Deobfuscator {
     public final TrieTreeSet packageExclusions = new TrieTreeSet();
     public final MyHashSet<String> classExclusions = new MyHashSet<>();
 
-    public boolean pkg;
+    public int reFlags;
     public int clazz, method, field;
 
     public SimpleDeobfuscator() {
-        pkg = true;
-        clazz = method = field = -1;
+        reFlags = 1;
     }
 
     CharList buf = new CharList();
@@ -117,14 +117,18 @@ public final class SimpleDeobfuscator extends Deobfuscator {
         if(clazz == -1)
             return null;
         buf.clear();
-        if (pkg) {
-            int i = origin.lastIndexOf('/');
+        int i = origin.lastIndexOf('/');
+        if ((reFlags & 1) != 0) {
             if(i != -1) {
                 buf.append(origin, 0, i + 1);
             }
         }
 
-        return buf.append("c_" + (clazz++)).toString();
+        buf.append("class_").append(Integer.toString(clazz++));
+        if((reFlags & 2) != 0) {
+            buf.append('_').append(origin, i + 1, origin.length() - i - 1);
+        }
+        return buf.toString();
     }
 
     @Override
@@ -132,7 +136,11 @@ public final class SimpleDeobfuscator extends Deobfuscator {
         if(method == -1)
             return null;
 
-        return "m_" + (method++);
+        if((reFlags & 4) != 0) {
+            return "method_" + (method++) + '_' + desc.name;
+        } else {
+            return "method_" + (method++);
+        }
     }
 
     @Override
@@ -140,6 +148,10 @@ public final class SimpleDeobfuscator extends Deobfuscator {
         if(field == -1)
             return null;
 
-        return "f_" + (field++);
+        if((reFlags & 8) != 0) {
+            return "field_" + (field++) + '_' + desc.name;
+        } else {
+            return "field_" + (field++);
+        }
     }
 }

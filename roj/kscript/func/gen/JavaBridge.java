@@ -44,7 +44,7 @@ import roj.concurrent.OperationDone;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KObject;
 import roj.reflect.ClassDefiner;
-import roj.reflect.SunReflection;
+import roj.reflect.InstantiationUtil;
 import roj.util.Helpers;
 
 import java.lang.reflect.InvocationTargetException;
@@ -225,7 +225,7 @@ public final class JavaBridge {
         try {
             ClassDefiner.INSTANCE.defineClass(name = clz.name.replace('/', '.'), Parser.toByteArray(clz));
             Class<?> cz = Class.forName(name);
-            return (KFuncJava) SunReflection.createClass(cz);
+            return (KFuncJava) InstantiationUtil.createClass(cz);
         } catch (InstantiationException | InvocationTargetException | IllegalAccessException | ClassNotFoundException e) {
             throw new RuntimeException("JavaBridge internal error", e);
         }

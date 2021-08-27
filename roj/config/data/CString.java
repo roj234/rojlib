@@ -152,4 +152,9 @@ public final class CString extends CEntry {
         return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
     }
 
+    @Override
+    public Object toNudeObject() {
+        return value;
+    }
+
 }

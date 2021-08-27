@@ -39,7 +39,7 @@ import java.util.Set;
  * @since 2021/4/21 22:51
  */
 public interface ItfGet {
-    Set<String> getItf(Object parser);
+    Set<String> getItf();
 
-    Map<String, List<Annotation>> getMap(Object parser);
+    Map<String, List<Annotation>> getFieldAnnotationMap();
 }

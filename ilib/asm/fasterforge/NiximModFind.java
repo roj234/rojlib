@@ -25,15 +25,17 @@
  */
 package ilib.asm.fasterforge;
 
-import net.minecraft.launchwrapper.Launch;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.libraries.LibraryManager;
-import net.minecraftforge.fml.relauncher.libraries.ModList;
 import roj.asm.annotation.OpenAny;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.MyHashSet;
+
+import net.minecraft.launchwrapper.Launch;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.libraries.LibraryManager;
+import net.minecraftforge.fml.relauncher.libraries.ModList;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -59,6 +61,7 @@ public class NiximModFind extends LibraryManager {
     private static Comparator<File> FILE_NAME_SORTER_INSENSITVE;
 
     @RemapTo("gatherLegacyCanidates")
+    @SuppressWarnings("unchecked")
     public static List<File> gatherLegacyCanidates(File mcDir) {
         MyHashSet<File> list = new MyHashSet<>();
         Map<String, String> args = (Map) Launch.blackboard.get("forgeLaunchArgs");
@@ -69,7 +72,7 @@ public class NiximModFind extends LibraryManager {
         String mod;
         File file;
         if (extraMods != null) {
-            FMLLog.log.info("Found mods from the command line:");
+            FMLLog.log.info("从指令中找mod:");
             var4 = extraMods.split(",");
             var5 = var4.length;
 
@@ -77,12 +80,12 @@ public class NiximModFind extends LibraryManager {
                 mod = var4[var6];
                 file = new File(mcDir, mod);
                 if (!file.exists()) {
-                    FMLLog.log.info("  Failed to find mod file {} ({})", mod, file.getAbsolutePath());
+                    FMLLog.log.info("  无法找到 {} 的文件 {}", mod, file.getAbsolutePath());
                 } else if (!list.contains(file)) {
-                    FMLLog.log.debug("  Adding {} ({}) to the mod list", mod, file.getAbsolutePath());
+                    FMLLog.log.debug("  已加载 {} ({})", mod, file.getAbsolutePath());
                     list.add(file);
                 } else {
-                    FMLLog.log.debug("  Duplicte command line mod detected {} ({})", mod, file.getAbsolutePath());
+                    FMLLog.log.debug("  重复的mod {} ({})", mod, file.getAbsolutePath());
                 }
             }
         }
@@ -94,10 +97,10 @@ public class NiximModFind extends LibraryManager {
             mod = var4[var6];
             file = new File(mcDir, mod);
             if (file.isDirectory() && file.exists()) {
-                FMLLog.log.info("Searching {} for mods", file.getAbsolutePath());
+                FMLLog.log.info("正在 {} 中寻找mod", file.getAbsolutePath());
                 for (File f : file.listFiles(MOD_FILENAME_FILTER)) {
                     if (!list.contains(f)) {
-                        FMLLog.log.debug("  Adding {} to the mod list", f.getName());
+                        FMLLog.log.debug("  找到可能的mod {}", f.getName());
                         list.add(f);
                     }
                 }

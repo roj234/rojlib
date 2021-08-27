@@ -61,4 +61,8 @@ public final class CComment extends CEntry {
         return multiLine ? sb.append("/*").append(comment).append("*/") : sb.append("//").append(comment);
     }
 
+    @Override
+    public Object toNudeObject() {
+        throw new UnsupportedOperationException("Comment couldn't cast!");
+    }
 }

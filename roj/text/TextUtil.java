@@ -428,7 +428,7 @@ public class TextUtil {
             while (lexer.hasNext()) {
                 Word word = lexer.readStringToken();
                 String val = word.val();
-                if(word.type() == WordPresets.INTEGER) {
+                if(word.type() == Tokenizer.SYMBOL) {
                     // =
                     word = lexer.readStringToken();
                     if(word.type() == WordPresets.EOF) {

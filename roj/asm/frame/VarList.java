@@ -49,10 +49,26 @@ public final class VarList implements Iterable<Var> {
     public VarList() {}
 
     public VarList copyFrom(VarList other) {
+        if(this != other) {
+            this.size = 0;
+            ensureCapacity(other.size + 4);
+            this.size = other.size;
+            System.arraycopy(other.list, 0, this.list, 0, other.size);
+        }
+        return this;
+    }
+
+    public VarList stripTops(VarList x) {
         this.size = 0;
-        ensureCapacity(other.size + 4);
-        this.size = other.size;
-        System.arraycopy(other.list, 0, this.list, 0, other.size);
+        ensureCapacity(x.size);
+        Var[] list = x.list;
+        int j = 0;
+        for (int i = 0; i < x.size; i++) {
+            if(list[i] != Var.TOP) {
+                this.list[j++] = list[i];
+            }
+        }
+        this.size = j;
         return this;
     }
 
@@ -93,6 +109,7 @@ public final class VarList implements Iterable<Var> {
 
     public void removeTo(int index) {
         if (index < 0) throw new IllegalArgumentException("Size will < 0 after pop.");
+        if(size <= index) return;
 
         ensureCapacity(index);
 
@@ -125,5 +142,29 @@ public final class VarList implements Iterable<Var> {
     @Override
     public Iterator<Var> iterator() {
         return new ArrayIterator<>(this.list, 0, size);
+    }
+
+    public boolean eq(VarList list) {
+        if (size != list.size)
+            return false;
+        Var[] list1 = this.list;
+        Var[] list2 = list.list;
+
+        int size = this.size;
+        for (int i = 0; i < size; i++) {
+            if (!list1[i].eq(list2[i])) return false;
+        }
+        return true;
+    }
+
+    public boolean sw(VarList list) {
+        Var[] list1 = this.list;
+        Var[] list2 = list.list;
+
+        int size = Math.min(this.size, list.size);
+        for (int i = 0; i < size; i++) {
+            if (!list1[i].eq(list2[i])) return false;
+        }
+        return true;
     }
 }

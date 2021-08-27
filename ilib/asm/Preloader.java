@@ -25,11 +25,12 @@
  */
 package ilib.asm;
 
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.text.CharList;
+
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
 
 import java.io.File;
 import java.io.IOException;
@@ -87,8 +88,7 @@ public class Preloader {
 
         for (File file1 : files) {
             if (file1.isFile() && (file1.getName().endsWith(".jar") || file1.getName().endsWith(".zip"))) {
-                try {
-                    ZipFile jar = new ZipFile(file1);
+                try(ZipFile jar = new ZipFile(file1)) {
                     ZipEntry entry = jar.getEntry("META-INF/Preload.ini");
                     if (entry != null) {
                         Loader.logger().info("Found Preload ASM config in " + file1.getName());

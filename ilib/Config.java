@@ -65,6 +65,7 @@ public final class Config extends JSONConfiguration {
     public static CMapping setAttributeRange;
     public static float attackCancelThreshold;
     public static Set<Map.Entry<String, CEntry>> powerShotRequirement;
+    public static MyHashSet<String> freezeUnknownEntries;
 
     public static boolean thallium;
 
@@ -244,14 +245,21 @@ public final class Config extends JSONConfiguration {
         searchNameOnly = map.putIfAbsent("Util.只搜索物品名字", false);
 
 
-        CList l = new CList();
+        CList empty = new CList();
 
+        CList list = map.getOrCreateList("Tweak.FlashFreeze");
+        if(list.size() == 0) {
+            list.add("来自高版本的mod ( 当然, 没抄代码 )");
+            list.add("删除和添加模组, 而无需担心丢弃方块实体或物品");
+            list.add("可选择保留哪些: 将 item, block, entity, tile 中的一些放入这个列表");
+        }
+        freezeUnknownEntries = list.asStringSet();
         moreEggs = map.putIfAbsent("Tweak.来点蛋吧", true);
         mobSpawnFullBlock = map.putIfAbsent("Tweak.怪物只能在完整方块上生成", false);
         fixMinecart = map.putIfAbsent("Tweak.只有玩家可以开着矿车到处跑", false);
         jumpAttack = map.putIfAbsent("Tweak.从高处落下会具有更多的攻击伤害", false);
         registerItem = map.putIfAbsent("Tweak.注册ImpLib自身的物品", true);
-        disableTileEntities = map.putIfAbsent("Tweak.禁用的方块实体列表", l).asList().asStringSet();
+        disableTileEntities = map.putIfAbsent("Tweak.禁用的方块实体列表", empty).asList().asStringSet();
         noAdvancement = map.putIfAbsent("Tweak.禁用进度系统", false);
         setAttributeRange = map.getOrCreateMap("Tweak.属性调节");
         noRecipeBook = map.putIfAbsent("Tweak.不再保存合成书的NBT", false);
@@ -262,14 +270,14 @@ public final class Config extends JSONConfiguration {
         siFrameTime = map.putIfAbsent("Tweak.无敌帧.新值(-1关闭)", -1);
         siTimeExcludeAttackers = map.putIfAbsent("Tweak.无敌帧.攻击者黑名单", CList.of("minecraft:slime", "tconstruct:blueslime", "thaumcraft:thaumslime")).asList().asStringSet();
         siTimeExcludeDmgs = map.putIfAbsent("Tweak.无敌帧.伤害源黑名单", CList.of("inFire", "lava", "cactus", "lightningBolt", "inWall", "hotFloor")).asList().asStringSet();
-        siTimeExcludeTargets = map.putIfAbsent("Tweak.无敌帧.攻击目标黑名单", l).asList().asStringSet();
+        siTimeExcludeTargets = map.putIfAbsent("Tweak.无敌帧.攻击目标黑名单", empty).asList().asStringSet();
 
         attackCancelThreshold = (float) map.putIfAbsent("Tweak.攻击最低CD(百分比0-1)", -1d);
 
         noRepairCost = map.putIfAbsent("Tweak.Anvil.无限修复", false);
         enchantOverload = map.putIfAbsent("Tweak.Anvil.允许合成超过最大等级的附魔书", false);
 
-        nbtMaxLength = (long)map.putIfAbsent("Tweak,Client.NBT数据包最大长度(KB)", 2048) << 10;
+        nbtMaxLength = (long)map.putIfAbsent("Tweak.Client.NBT数据包最大长度(KB)", 2048) << 10;
         title = map.putIfAbsent("Tweak.Client.窗口标题", "Minecraft 1.12.2");
         clientNetworkTimeout = map.putIfAbsent("Tweak.Client.客户端连接服务器的网络超时", 30);
         autoClimb = map.putIfAbsent("Tweak.Client.自动爬楼梯", false);
@@ -301,7 +309,7 @@ public final class Config extends JSONConfiguration {
 
         if (betterDCA) {
             try {
-                SunReflection.doSunReflectCache();
+                InstantiationUtil.doSunReflectCache();
             } catch (Throwable e) {
                 Loader.logger().warn("无法替换DMA的native!", e);
             }

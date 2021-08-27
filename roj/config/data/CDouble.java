@@ -105,6 +105,11 @@ public final class CDouble extends CEntry {
     }
 
     @Override
+    public Object toNudeObject() {
+        return value;
+    }
+
+    @Override
     protected boolean isSimilar(CEntry value) {
         return value.getType().isNumber();
     }

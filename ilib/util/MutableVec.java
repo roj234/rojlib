@@ -25,54 +25,31 @@
  */
 package ilib.util;
 
-import net.minecraft.util.math.Vec3d;
 import roj.asm.annotation.OpenAny;
-import roj.reflect.DirectFieldAccess;
-import roj.reflect.DirectFieldAccessor;
+
+import net.minecraft.util.math.Vec3d;
 
 /**
- * No description provided
+ * 然而自从FMD支持AT起，它唯一的命运就只是测试DirectAccessor了...
  *
  * @author Roj234
  * @version 0.1
  * @since  2020/8/22 19:45
  */
 @OpenAny(value = "net.minecraft.util.math.Vec3d", names = {
-        "field_72450_a", "field_72448_b", "field_72449_c"
+        "field_72450_a", "field_72448_b", "field_72449_c" // should remove final
 })
 public final class MutableVec {
-    private final Vec3d vec = new Vec3d(0, 0, 0);
-
-    static DirectFieldAccessor xMutator, yMutator, zMutator;
-
-    static {
-        try {
-            xMutator = DirectFieldAccess.get(Vec3d.class, Vec3d.class.getField("field_72450_a"));
-            yMutator = DirectFieldAccess.get(Vec3d.class, Vec3d.class.getField("field_72448_b"));
-            zMutator = DirectFieldAccess.get(Vec3d.class, Vec3d.class.getField("field_72449_c"));
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-        }
-    }
+    public final Vec3d vec = new Vec3d(0, 0, 0);
 
     public Vec3d getVector() {
         return vec;
     }
 
     public MutableVec set(double x, double y, double z) {
-        synchronized (xMutator) {
-            xMutator.setInstance(vec);
-            xMutator.setDouble(x);
-            xMutator.clearInstance();
-
-            yMutator.setInstance(vec);
-            yMutator.setDouble(y);
-            yMutator.clearInstance();
-
-            zMutator.setInstance(vec);
-            zMutator.setDouble(z);
-            zMutator.clearInstance();
-        }
+        Reflection.HELPER.setVecX(vec, x);
+        Reflection.HELPER.setVecY(vec, y);
+        Reflection.HELPER.setVecZ(vec, z);
         return this;
     }
 }

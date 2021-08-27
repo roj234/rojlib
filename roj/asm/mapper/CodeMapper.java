@@ -28,7 +28,7 @@ package roj.asm.mapper;
 
 import roj.asm.cst.*;
 import roj.asm.mapper.struct.AttrCode_Simple;
-import roj.asm.mapper.struct.AttrLVT_Simple;
+import roj.asm.mapper.struct.AttrLVT_Simple.SimpleVar;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.FlDesc;
 import roj.asm.mapper.util.MtDesc;
@@ -435,9 +435,9 @@ public final class CodeMapper extends Mapping {
             String methodDesc = method.name.getString() + '|' + method.rawDesc();
 
             if (sc.lvt != null) {
-                List<AttrLVT_Simple.V> list =sc.lvt.list;
+                List<SimpleVar> list =sc.lvt.list;
                 for (int i = 0; i < list.size(); i++) {
-                    AttrLVT_Simple.V entry = list.get(i);
+                    SimpleVar entry = list.get(i);
                     Type type = (Type) entry.type;
                     if (type.owner != null) {
                         String clazz = Util.mapOwner(classMap, type.owner, false);
@@ -460,9 +460,9 @@ public final class CodeMapper extends Mapping {
                 }
             }
             if (sc.lvtt != null) {
-                List<AttrLVT_Simple.V> list = sc.lvtt.list;
+                List<SimpleVar> list = sc.lvtt.list;
                 for (int i = 0; i < list.size(); i++) {
-                    AttrLVT_Simple.V entry = list.get(i);
+                    SimpleVar entry = list.get(i);
                     ((Signature) entry.type).rename(NAME_REMAPPER);
                     entry.refType.setString(entry.type.toGeneric());
 
@@ -486,7 +486,7 @@ public final class CodeMapper extends Mapping {
     }
 
     @SuppressWarnings("unchecked")
-    final String mapEntryName(ConstantData data, String methodDesc, AttrLVT_Simple.V entry, int i) {
+    final String mapEntryName(ConstantData data, String methodDesc, SimpleVar entry, int i) {
         String name = entry.name.getString();
 
         switch (paramNameType) {

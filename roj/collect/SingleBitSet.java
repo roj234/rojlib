@@ -25,6 +25,8 @@
  */
 package roj.collect;
 
+import roj.collect.LongBitSet.FItr;
+
 import javax.annotation.Nonnull;
 import java.util.PrimitiveIterator;
 
@@ -84,7 +86,7 @@ public class SingleBitSet implements IBitSet {
         if ((set & (1L << e)) != 0) {
             return false;
         } else {
-            set |= 1 << e;
+            set |= 1L << e;
             size++;
             return true;
         }
@@ -94,7 +96,7 @@ public class SingleBitSet implements IBitSet {
         if(i < 0)
             return false;
         if ((set & (1L << i)) != 0) {
-            set ^= 1 << i;
+            set ^= 1L << i;
             size--;
             return true;
         }
@@ -111,21 +113,15 @@ public class SingleBitSet implements IBitSet {
         return new SingleBitSet(set, max);
     }
 
-    public void fillAll() {
-        set = 0xffffffffffffffffL;
-        max = 63;
-        size = 64;
-    }
-
-    public void fillAll(int len) {
+    public void fill(int len) {
         check(len);
         long k = 0;
         for (int i = 0; i < len; i++) {
-            k |= 1 << i;
+            k |= 1L << i;
         }
         set = k;
-        max = (byte) len;
-        size = (byte) (len + 1);
+        size = (byte) len;
+        max = (byte) (len - 1);
     }
 
     @Override
@@ -151,51 +147,31 @@ public class SingleBitSet implements IBitSet {
         size = 0;
     }
 
-    private static class Itr implements IntIterator {
-        protected boolean get;
+    @Override
+    public String toString() {
+        return "1x{" + Long.toBinaryString(set) + '}';
+    }
 
-        private final SingleBitSet $this;
-
-        protected int pos;
-        protected int entry;
-
-        protected Itr(SingleBitSet $this) {
-            this.$this = $this;
-            this.get = true;
+    static final class Itr extends FItr {
+        Itr(SingleBitSet $this) {
+            super($this);
         }
 
-        public boolean hasNext() {
-            checkNext(false);
-            return entry != -1;
-        }
-
-        private void checkNext(boolean next) {
+        void checkNext(boolean next) {
             if (!next && !get)
                 return;
-            while (pos < 64) {
-                if ((($this.set >>> pos) & 1) != 0) {
-                    entry = pos++;
+            SingleBitSet $this = (SingleBitSet) this.$this;
+            int pos = this.pos;
+            while (pos <= $this.max) {
+                if ((($this.set >>> pos) & 1L) != 0L) {
+                    this.pos = (entry = pos) + 1;
                     get = false;
                     return;
                 }
                 pos++;
             }
+            this.pos = pos;
             entry = -1;
-        }
-
-        public int nextInt() {
-            checkNext(false);
-            get = true;
-            int ent = this.entry;
-            checkNext(true);
-            return ent;
-        }
-
-        @Nonnull
-        public Itr reset() {
-            get = true;
-            pos = 0;
-            return this;
         }
     }
 }

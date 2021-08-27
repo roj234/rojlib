@@ -36,16 +36,23 @@ import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
 import roj.asm.type.NativeType;
 import roj.asm.type.Type;
-import roj.asm.util.*;
-import roj.collect.MyHashMap;
-import roj.collect.ToIntMap;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.ExceptionEntry;
+import roj.asm.util.InsnList;
+import roj.asm.util.NodeHelper;
+import roj.collect.*;
 import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
 import roj.text.CharList;
-import roj.util.ByteWriter;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.frame.VarType.*;
@@ -61,12 +68,23 @@ import static roj.asm.frame.VarType.*;
  * @since 2021/6/18 9:51
  */
 public final class FrameTraverser {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, NoSuchMethodException, IllegalAccessException, InstantiationException, InvocationTargetException {
         Clazz clazz = Parser.parse(IOUtil.readFile(new File(args[0])));
-        AttrCode code = clazz.methods.get(0).code;
-        System.out.println(code);
+        AttrCode code = clazz.methods.get(args.length == 1 ? 0 : Integer.parseInt(args[1])).code;
+        if (code.frames != null) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < code.frames.size(); i++) {
+                sb.append(code.frames.get(i)).append("\n");
+            }
+            System.out.println(sb.toString());
+        }
+        //System.out.println(code);
         code.computeFrames = true;
-        code.toByteArray(new ConstantWriter(), new ByteWriter());
+
+        Class<?> x = ClassDefiner.INSTANCE.defineClass(clazz.name.replace('/', '.'), Parser.toByteArray(clazz));
+        System.out.println(x);
+        Object o = x.newInstance();
+        x.getDeclaredMethod("test", File.class).invoke(o, new File("xxx"));
     }
 
     public static final boolean PERFORM_ADDITIONAL_CHECK = false;
@@ -158,13 +176,22 @@ public final class FrameTraverser {
     }
 
     private void initialize(Var v, String className) {
-        if(v.type == UNINITIAL_THIS) {
+        Var v2 = new Var(v.type == UNINITIAL_THIS ? clazz : className);
 
-        } else {
-
+        Var[] list = stack.list;
+        for (int i = stack.size - 1; i >= 0; i--) {
+            Var v1 = list[i];
+            if(v1 == v) {
+                list[i] = v2;
+            }
         }
-        v.owner = v.type == UNINITIAL_THIS ? clazz : className;
-        v.type = REFERENCE;
+        list = local.list;
+        for (int i = local.size - 1; i >= 0; i--) {
+            Var v1 = list[i];
+            if(v1 == v) {
+                list[i] = v2;
+            }
+        }
     }
 
     private Var loadRef(int i) {
@@ -256,17 +283,7 @@ public final class FrameTraverser {
     public Frame build(InsnNode node) {
         Frame frame = null;
 
-        sameTest:
-        if (local.size == lastLocal.size) {
-            final Var[] list1 = local.list;
-            final Var[] list2 = lastLocal.list;
-
-            final int size = local.size;
-            for (int i = 0; i < size; i++) {
-                if (!list1[i].eq(list2[i]))
-                    break sameTest;
-            }
-
+        if (local.eq(lastLocal)) {
             switch (stack.size) {
                 case 0:
                     frame = new Frame(FrameType.same);
@@ -292,13 +309,12 @@ public final class FrameTraverser {
             final Var[] n = local.list;
             final Var[] o = lastLocal.list;
             for (int i = 0; i < inCommon; i++) {
-                if(n[i] == null || o[i] == null) {
-                    throw new NullPointerException("Unregistered #" + i);
-                }
-
                 if(!n[i].eq(o[i])) {
                     break chopAppendTest;
                 }
+                if(n[i].type == TOP)
+                    if(delta < 0) delta++;
+                    else delta--;
             }
 
             if(delta < 0 && delta >= -3) { // chop
@@ -317,6 +333,7 @@ public final class FrameTraverser {
         (lastLocal = frame.locals).copyFrom(local);
         (lastStack = frame.stacks).copyFrom(stack);
         frame.target = node;
+        frame.pack();
 
         return frame;
     }
@@ -1018,7 +1035,7 @@ public final class FrameTraverser {
 
     // 变量i是这个类型的吗? stopped: 需要使用LVT检测！
     // No local variable (or pair, type == long or double) can be accessed before assign.
-    private static void isVarType(int id, byte type, boolean load) {
+    private void isVarType(int id, byte type, boolean load) {
         //if(!PERFORM_ADDITIONAL_CHECK)
         //    return;
         /*switch (type) {
@@ -1038,233 +1055,184 @@ public final class FrameTraverser {
 
     // endregion
 
-    private void visitInRange(InsnList list, int i, Map<InsnNode, Pt> fromTo, Pt pt, boolean trace) {
-        VarList b1 = new VarList().copyFrom(local);
-        VarList b2 = new VarList().copyFrom(stack);
-
-        if(trace)
-            System.out.println("$ENTRY");
-        while (i < list.size()) {
-            InsnNode node = list.get(i++);
-            if(trace)
-                System.out.println(" pVisit " + i);
-
-            int flg = visitNode(node, trace);
-            if(flg != 0 && flg != 4)
-                break;
-        }
-        if(trace)
-            System.out.println("$ENTRY OUT");
-
-
-        local.copyFrom(b1);
-        stack.copyFrom(b2);
-
-        pt.local.copyFrom(local);
-        pt.stack.copyFrom(stack);
-        pt.done = true;
-        if(trace)
-            System.out.println("Write[T] " + pt);
-    }
-
     public Collection<Frame> collect(InsnList list, List<ExceptionEntry> exceptionEntries, boolean trace, ToIntMap<InsnNode> pcRev) {
-        final List<Frame> frames = new ArrayList<>();
+        Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
+        Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
 
-        /**
-         * 一个“基本块”（basic block）就是一个方法中的代码最长的直线型一段段代码序列。
-         *     “直线型”也就是说代码序列中除了末尾之外不能有控制流（跳转）指令。
-         * 一个基本块的开头可以是方法的开头，也可以是某条跳转指令的跳转目标；
-         * 一个基本块的结尾可以是方法的末尾，也可以是某条跳转指令（Java中就是goto、if*系列等；invoke*系列的方法调用指令不算在跳转指令中）。
-         */
+        resolve(list, bySource, byTarget, exceptionEntries);
 
-        Map<InsnNode, Pt> bySource = new MyHashMap<>();
-        Map<InsnNode, Pt> byTarget = new MyHashMap<>();
+        LongBitSet routines = new LongBitSet();
 
-        getBBBegin(list, bySource, byTarget, exceptionEntries);
-        if(trace)
-            System.out.println("StackMap起始位置: " + byTarget.keySet());
+        MyHashSet<BasicBlock> visited = new MyHashSet<>();
+        MyHashSet<BasicBlock> toVisit = new MyHashSet<>();
+        MyHashSet<BasicBlock> tmp = new MyHashSet<>();
+        BasicBlock first = new BasicBlock(0);
+        first.targets = new int[] {0};
+        first.localBegin = new VarList().copyFrom(local);
+        first.stackBegin = new VarList().copyFrom(stack);
+        toVisit.add(first);
 
-        int i = 0;
-        while (i < list.size()) {
-            InsnNode node = list.get(i++);
+        int i, flg;
+        InsnNode node;
+        while (!toVisit.isEmpty()) {
+            for (BasicBlock bb : toVisit) {
+                mainCyc:
+                for (int j : bb.targets) {
+                    if(!routines.add(j)) continue;
 
-            Pt pt = bySource.get(node);
-            if(pt != null) {
-                System.out.println("Pt " + pt.to + " at " + node + "(" + i + "), d=" + pt.done);
-                if(!pt.done) {
-                    pt.local.copyFrom(local);
-                    pt.stack.copyFrom(stack);
-                    pt.done = true;
-                } else {
-                    if (local.size != pt.local.size) {
-                        throw new IllegalStateException("stack.equals(lastExecutionPath.stack) || throw Error");
+                    System.out.println("=============================================");
+                    System.out.println("            Subroutine begin at " + j);
+                    System.out.println("=============================================");
+                    local.copyFrom(bb.localBegin);
+                    stack.copyFrom(bb.stackBegin);
+                    boolean b = false;//j <= 300;
+                    while (j < list.size()) {
+                        node = list.get(j++);
+                        if(b) {
+                            if (byTarget.containsKey(node)) System.out.print("F ");
+                            System.out.println("#" + j + " " + node);
+                            System.out.println("L " + local);
+                            if (stack.size > 0) System.out.println("S " + stack);
+                        }
+                        switch (flg = visitNode(node, false)) {
+                            case 1:
+                            case 2:
+                            case 3:
+                                BasicBlock next = bySource.get(node);
+                                if (next != null) {
+                                    if(visited.add(next)) {
+                                        next.localBegin.copyFrom(local);
+                                        next.stackBegin.copyFrom(stack);
+                                        tmp.add(next);
+                                    } else {
+                                        if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
+                                            throw new RuntimeException(
+                                                    "从各点到达同一位置的跳转栈必须相同！\n" +
+                                                            "Block: " + next + "\n" +
+                                                            "ExcL: " + next.localBegin + "\n" +
+                                                            "ExcS: " + next.stackBegin + "\n" +
+                                                            "GotL: " + local + "\n" +
+                                                            "GotS: " + stack);
+                                        }
+                                        next.localBegin.removeTo(local.size);
+                                    }
+                                } else {
+                                    assert flg == 1;
+                                }
+                                // end of basic block
+                                continue mainCyc;
+                            case 4:
+                                checkWide(list.get(j));
+                                break;
+                        }
                     }
-
-                    Var[] list1 = local.list;
-                    Var[] list2 = pt.local.list;
-
-                    int size = local.size;
-                    for (int j = 0; j < size; j++) {
-                        if (!list1[j].eq(list2[j]))
-                            throw new IllegalStateException();
-                    }
-
-                    if (stack.size != pt.stack.size) {
-                        throw new IllegalStateException();
-                    }
-
-                    list1 = stack.list;
-                    list2 = pt.stack.list;
-
-                    size = stack.size;
-                    for (int j = 0; j < size; j++) {
-                        if (!list1[j].eq(list2[j]))
-                            throw new IllegalStateException();
-                    }
-
                 }
-                // create snapshot
             }
+            MyHashSet<BasicBlock> tmp1 = tmp;
+            tmp = toVisit;
+            tmp.clear();
+            toVisit = tmp1;
+        }
 
-            // build frame on target nodes
-            if (byTarget.containsKey(node)) {
-                pt = byTarget.get(node);
-
-                if(pt != null && !pt.done) {
-                    pt.local.copyFrom(local);
-                    pt.stack.copyFrom(stack);
-                    System.out.println("Pt2 " + pt + " at " + node + "(" + i + "), d=" + pt.done);
+        System.out.println("=============CONSTRUCT FRAMES============================");
+        List<InsnNode> frames0 = new ArrayList<>(byTarget.keySet());
+        frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
+        for (i = 0; i < frames0.size(); i++) {
+            List<BasicBlock> bbs = byTarget.get(frames0.get(i));
+            BasicBlock bb = bbs.get(0);
+            assert bb.done;
+            local.copyFrom(bb.localBegin);
+            stack.copyFrom(bb.stackBegin);
+            for (int j = 1; j < bbs.size(); j++) {
+                BasicBlock next = bbs.get(j);
+                if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
+                    throw new RuntimeException(
+                            "从各点到达同一位置的跳转栈必须相同！\n" +
+                                    "Block: " + next + "\n" +
+                                    "ExcL: " + next.localBegin + "\n" +
+                                    "ExcS: " + next.stackBegin + "\n" +
+                                    "GotL: " + local + "\n" +
+                                    "GotS: " + stack);
                 }
-                frames.add(build(node));
+                local.removeTo(next.localBegin.size);
             }
+            frames0.set(i, Helpers.cast(build(frames0.get(i))));
+        }
+        return Helpers.cast(frames0);
+    }
 
-            /**
-             * RETURN: 1
-             * GOTO: 2
-             * IF: 3
-             * WIDE: 4
-             */
-            int flg = visitNode(node, trace);
-            switch (flg) {
-                case 1:
-                    // make snapshot
-                    if(i < list.size())
-                        afterJump(list.get(i), byTarget);
-                    break;
-                case 2:
-                case 3: {
-                    Pt pt2 = bySource.get(node);
-                    if (pt2 == null) {
-                        throw new IllegalArgumentException("Unregistered goto");
-                    }
-                    assert pt2.to.size() == 1;
-                    int i1 = list.indexOf(pt2.to.get(0));
-
-
-                    visitInRange(list, i1, bySource, pt2, trace);
-
-                    //if(flg == 3) {
-                        afterJump(list.get(i), byTarget);
-                    //}
-                }
+    private static void checkWide(InsnNode node) {
+        switch (node.getOpcode()) {
+            case RET:
+            case IINC:
+            case ISTORE:
+            case LSTORE:
+            case FSTORE:
+            case DSTORE:
+            case ASTORE:
+            case ILOAD:
+            case LLOAD:
+            case FLOAD:
+            case DLOAD:
+            case ALOAD:
                 break;
-                case 4:
-                    switch ((node = list.get(i)).getOpcode()) {
-                        case RET:
-                        case IINC:
-                        case ISTORE:
-                        case LSTORE:
-                        case FSTORE:
-                        case DSTORE:
-                        case ASTORE:
-                        case ILOAD:
-                        case LLOAD:
-                        case FLOAD:
-                        case DLOAD:
-                        case ALOAD:
-                            break;
-                        default:
-                            throw new IllegalStateException("Unable wide " + Opcodes.toString0(node.getOpcode()));
-                    }
-                    break;
-            }
+            default:
+                throw new IllegalStateException("Unable wide " + Opcodes.toString0(node.getOpcode()));
         }
-
-        return frames;
     }
 
-    private void afterJump(InsnNode node, Map<InsnNode, Pt> byTarget) {
-        Pt pt = byTarget.get(node);
-        if (pt == null) {
-            throw new IllegalArgumentException("Dead code at " + node);
-        }
-        System.out.println("VTP " + node + " => " + pt);
-        if (!pt.done) {
-            System.err.println("PtStack undone: " + pt);
-            pt.local.copyFrom(local);
-        }
-        local.copyFrom(pt.local);
-        stack.copyFrom(pt.stack);
-    }
-
-    private static void getBBBegin(InsnList list, Map<InsnNode, Pt> bySource, Map<InsnNode, Pt> byTarget, List<ExceptionEntry> exc) {
+    private static void resolve(InsnList list, Map<InsnNode, BasicBlock> bySource, Map<InsnNode, List<BasicBlock>> byTarget, List<ExceptionEntry> exc) {
         int i = 0;
+        IntList il = new IntList(4);
         while (i < list.size()) {
             InsnNode node = list.get(i++);
-            if(node.isJumpSource()) {
-                if(node.getClass() == SwitchInsnNode.class) {
+            if (node.isJumpSource()) {
+                if (node.getClass() == SwitchInsnNode.class) {
                     SwitchInsnNode node1 = (SwitchInsnNode) node;
+
+                    BasicBlock pt = new BasicBlock(i - 1);
+
                     List<InsnNode> lst1 = new ArrayList<>();
-
-                    final Pt pt = new Pt(lst1);
-
-                    lst1.add(node = InsnNode.validate(node1.def));
-                    byTarget.put(node, pt);
+                    il.add(list.indexOf(node = InsnNode.validate(node1.def)));
+                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
 
                     for (InsnNode node2 : node1.mapping.values()) {
-                        lst1.add(node = InsnNode.validate(node2));
-                        byTarget.put(node, pt);
+                        il.add(list.indexOf(node = InsnNode.validate(node2)));
+                        byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
                     }
 
+                    pt.targets = il.toArray();
                     bySource.put(node1, pt);
                 } else {
                     GotoInsnNode node1 = (GotoInsnNode) node;
 
-                    final Pt pt = new Pt(Collections.singletonList(node = InsnNode.validate(node1.getTarget())));
-                    byTarget.put(node, pt);
+                    BasicBlock pt = new BasicBlock(i - 1);
+                    il.add(list.indexOf(node = InsnNode.validate(node1.getTarget())));
+                    if(node1 instanceof IfInsnNode) {
+                        il.add(i);
+                    }
+                    pt.targets = il.toArray();
+
+                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
                     bySource.put(node1, pt);
                 }
+                il.clear();
             }
         }
-        for (i = 0; i < exc.size(); i++) {
+        /*for (i = 0; i < exc.size(); i++) {
             ExceptionEntry entry = exc.get(i);
             InsnNode node = InsnNode.validate(entry.handler);
-            Pt pt = new Pt(Collections.singletonList(node));
+            BasicBlock pt = byTarget.get(node);
+            if(pt == null) {
+                pt = bySource.get(entry.handler);
+                if(pt == null) {
+                    System.out.println("x2");
+                    pt = new BasicBlock(Collections.singletonList(node));
+                }
+                byTarget.put(node, pt);
+                System.out.println("Add for ex");
+            }
             pt.stack.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
-            byTarget.put(node, pt);
-        }
-        for (Map.Entry<InsnNode, Pt> entry : bySource.entrySet()) {
-            entry.setValue(byTarget.getOrDefault(entry.getKey(), entry.getValue()));
-        }
-        for (Map.Entry<InsnNode, Pt> entry : byTarget.entrySet()) {
-            entry.setValue(bySource.getOrDefault(entry.getKey(), entry.getValue()));
-        }
-    }
-
-    private static final class Pt {
-        boolean done;
-        VarList local = new VarList(),
-              stack = new VarList();
-
-        final List<InsnNode> to;
-
-        private Pt(List<InsnNode> to) {
-            this.to = to;
-        }
-
-        @Override
-        public String toString() {
-            return "Partial{target=" + to + ", stack=" + stack + '}';
-        }
+        }*/
     }
 }

@@ -30,7 +30,6 @@ import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.config.XMLParser;
 import roj.config.word.AbstLexer;
-import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 
@@ -53,7 +52,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
             or = 22,
             comma = 23;
 
-    private static class XSLexer extends Lexer {
+    private static class XSLexer extends AbstLexer {
         static final LongBitSet SPECIAL = LongBitSet.from("+-()!=<>.[]*,");
 
         @Override
@@ -183,7 +182,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         result.add(this);
         List<AbstXML> result2 = new ArrayList<>();
 
-        Lexer wr = new XSLexer().init(key);
+        AbstLexer wr = new XSLexer().init(key);
 
         int dotFlag = 0;
         while (wr.hasNext() && !result.isEmpty()) {

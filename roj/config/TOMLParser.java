@@ -28,7 +28,7 @@ package roj.config;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.config.data.*;
-import roj.config.word.Lexer;
+import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
@@ -219,7 +219,7 @@ public class TOMLParser {
         }
     }
 
-    private static final class TOMLLexer extends Lexer {
+    private static final class TOMLLexer extends AbstLexer {
         static final IBitSet SPECIAL = LongBitSet.from("+-()#.=?\"'[]");
 
         boolean comment;

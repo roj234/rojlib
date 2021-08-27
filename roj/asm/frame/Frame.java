@@ -42,7 +42,7 @@ public final class Frame {
      */
     public int type;
     public InsnNode target;
-    public final VarList
+    public VarList
             locals = new VarList(),
             stacks = new VarList();
 
@@ -68,5 +68,9 @@ public final class Frame {
             sb.delete(sb.length() - 2, sb.length());
         }
         return sb.append('\n').toString();
+    }
+
+    public void pack() {
+        locals = new VarList().stripTops(locals);
     }
 }

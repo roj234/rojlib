@@ -41,9 +41,9 @@ public final class AttrLVT_Simple {
         this.list = readVar(pool, r, generic);
     }
 
-    private static List<V> readVar(ConstantPool pool, ByteReader r, boolean generic) {
+    private static List<SimpleVar> readVar(ConstantPool pool, ByteReader r, boolean generic) {
         final int len = r.readUnsignedShort();
-        List<V> list = new ArrayList<>(len);
+        List<SimpleVar> list = new ArrayList<>(len);
 
         for (int i = 0; i < len; i++) {
             r.index += 4;
@@ -51,7 +51,7 @@ public final class AttrLVT_Simple {
             CstUTF name = ((CstUTF) pool.get(r));
             CstUTF desc = ((CstUTF) pool.get(r));
             IType type = generic ? SignatureHelper.parse(desc.getString()) : ParamHelper.parseField(desc.getString());
-            V sv = new V();
+            SimpleVar sv = new SimpleVar();
             sv.nameId = clo;
             sv.name = name;
             sv.refType = desc;
@@ -63,9 +63,9 @@ public final class AttrLVT_Simple {
         return list;
     }
 
-    public final List<V> list;
+    public final List<SimpleVar> list;
 
-    public static class V {
+    public static class SimpleVar {
         public CstUTF name;
         public CstUTF refType;
         public IType type;

@@ -107,6 +107,11 @@ public final class CInteger extends CEntry {
     }
 
     @Override
+    public Object toNudeObject() {
+        return value;
+    }
+
+    @Override
     protected boolean isSimilar(CEntry value) {
         return value.getType().isNumber();
     }

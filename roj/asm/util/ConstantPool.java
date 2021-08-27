@@ -112,7 +112,7 @@ public class ConstantPool {
                     }
                 } catch (ClassCastException e) {
                     Constant err = getReferTo(c, pass);
-                    throw new IllegalArgumentException("Constant " + c + " is referencing to invalid index " + err.getIndex() + " ( " + err + " )", e);
+                    throw new IllegalArgumentException("Constant " + c + " is referencing an invalid index " + err.getIndex() + " ( " + err + " )", e);
                 } catch (NullPointerException e) {
                     if (fixNPE(c)) {
                         System.err.println("NPE at " + i + ", probably a coding error.");

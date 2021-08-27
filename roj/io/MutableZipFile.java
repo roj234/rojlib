@@ -298,9 +298,13 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         return entry;
     }
 
-    //private static long _date(int time, int date) {
-    //    return (long)date << 32 | time;
-    //}
+    public MyHashMap<String, EFile> getEntries() {
+        return entries;
+    }
+
+    public EEOF getEOF() {
+        return eof;
+    }
 
     public byte[] getFileData(String entry) throws IOException {
         EFile file = entries.get(entry);
@@ -339,7 +343,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     }
 
     // content == null : 删除
-    public void setFileData(String entry, ByteList content) {
+    public ModFile setFileData(String entry, ByteList content) {
         ModFile file = new ModFile();
         file.name = entry;
         if(file == (file = modified.find(file))) {
@@ -348,9 +352,10 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
         file.compress = true;
         file.data = content;
+        return file;
     }
 
-    public void setFileData(String entry, ByteList content, boolean requiredExistence) {
+    public ModFile setFileData(String entry, ByteList content, boolean requiredExistence) {
         ModFile file = new ModFile();
         file.name = entry;
         if(file == (file = modified.find(file))) {
@@ -361,6 +366,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
         file.compress = true;
         file.data = content;
+        return file;
     }
 
     public void setFileDataMore(Map<String, ByteList> content) {

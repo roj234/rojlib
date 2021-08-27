@@ -99,6 +99,11 @@ public final class CNull extends CEntry {
     }
 
     @Override
+    public Object toNudeObject() {
+        return null;
+    }
+
+    @Override
     protected boolean isSimilar(CEntry value) {
         return false;
     }

@@ -152,7 +152,7 @@ public class ConstantData implements IClass {
         for (int j = 0; j < methods.size(); j++) {
             MoFNode method = methods.get(j);
             if (!descs.add(method.name() + '|' + method.rawDesc())) {
-                throw new IllegalArgumentException("Duplicate method with same name and desc! " + method.name() + method.rawDesc());
+                throw new IllegalArgumentException("Duplicate method " + method.name() + method.rawDesc());
             }
         }
         descs.clear();
@@ -160,7 +160,7 @@ public class ConstantData implements IClass {
         for (int j = 0; j < fields.size(); j++) {
             MoFNode field = fields.get(j);
             if (!descs.add(field.name() + '|' + field.rawDesc())) {
-                throw new IllegalArgumentException("Duplicate field with same name and desc! " + field.name() + field.rawDesc());
+                throw new IllegalArgumentException("Duplicate field " + field.name() + field.rawDesc());
             }
         }
     }

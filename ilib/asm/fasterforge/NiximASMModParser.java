@@ -26,12 +26,7 @@
 package ilib.asm.fasterforge;
 
 import com.google.common.base.MoreObjects;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.LoaderException;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
-import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
+import ilib.asm.fasterforge.anc.ItfGet;
 import org.objectweb.asm.Type;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
@@ -50,12 +45,19 @@ import roj.io.IOUtil;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.LoaderException;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
+import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
-@Nixim("net.minecraftforge.fml.common.discovery.asm.ASMModParser")
-public class NiximASMModParser extends ASMModParser {
+@Nixim(value = "net.minecraftforge.fml.common.discovery.asm.ASMModParser", copyItf = true)
+public class NiximASMModParser extends ASMModParser implements ItfGet {
     @Copy
     private Map<String, List<Annotation>> named;
 
@@ -131,7 +133,7 @@ public class NiximASMModParser extends ASMModParser {
 
             //this.data = data;
         } catch (Exception ex) {
-            FMLLog.log.error("Unable to read a class file correctly", ex);
+            FMLLog.log.error("class加载失败", ex);
             throw new LoaderException(ex);
         }
     }
@@ -171,7 +173,6 @@ public class NiximASMModParser extends ASMModParser {
             list.addAll(entry.getValue());
         }
         return Helpers.cast(list);
-        //throw new UnsupportedOperationException("Fuck the package-private access! I can't get type");
     }
 
     @Copy

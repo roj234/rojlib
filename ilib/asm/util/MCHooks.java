@@ -29,12 +29,12 @@ import ilib.ClientProxy;
 import ilib.Config;
 import ilib.util.CraftingMap.StackComparator;
 import ilib.util.PinyinUtil;
+import ilib.util.Reflection;
 import ilib.util.Registries;
 import ilib.util.TextHelperM;
 import roj.collect.*;
 import roj.concurrent.OperationDone;
 import roj.math.MathUtils;
-import roj.reflect.DirectAccessor;
 import roj.util.Helpers;
 
 import net.minecraft.block.Block;
@@ -162,7 +162,7 @@ public class MCHooks {
     }
 
     public static int getStackDepth() {
-        return accessor.getStackTraceDepth(new Throwable());
+        return Reflection.HELPER.getStackTraceDepth(new Throwable());
     }
 
     private static final FilterList<Entity> list = new FilterList<>(((old, latest) -> {
@@ -177,17 +177,6 @@ public class MCHooks {
     private static final FilterList<Object> throwAny = new FilterList<>((old, latest) -> {
         throw OperationDone.INSTANCE;
     });
-
-    public interface Helper {
-        int getStackTraceDepth(Throwable throwable);
-
-        void addAll(EnumSet<?> set);
-    }
-
-    private static final Helper accessor = DirectAccessor.builder(Helper.class)
-                                                         .delegate(Throwable.class, "getStackTraceDepth")
-                                                         .delegate(EnumSet.class, "addAll")
-                                                         .build();
 
     private static final EnumSet<EnumFacing> facings = EnumSet.allOf(EnumFacing.class);
 
@@ -288,7 +277,7 @@ public class MCHooks {
     }
 
     public static EnumSet<EnumFacing> getAllFaceSet() {
-        accessor.addAll(facings);
+        Reflection.HELPER.addAll(facings);
         return facings;
     }
 
@@ -416,10 +405,6 @@ public class MCHooks {
                 /*entity.posX + */aabb.getDoubleAt(3),
                 /*entity.posY + */aabb.getDoubleAt(4),
                 /*entity.posZ + */aabb.getDoubleAt(5)));
-    }
-
-    public static Helper helper() {
-        return accessor;
     }
 
     public static void playerAnvilClick(EntityPlayer player, int level) {

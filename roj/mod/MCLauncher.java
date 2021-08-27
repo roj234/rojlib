@@ -60,9 +60,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -134,6 +132,11 @@ public class MCLauncher extends JFrame {
         button.setToolTipText("配置<当前版本>的玩家名等");
         add(button);
 
+        button = new JButton("清日志");
+        button.addActionListener(MCLauncher::clearLogs);
+        button.setToolTipText("一键清理垃圾文件");
+        add(button);
+
         button = new JButton("终止");
         button.addActionListener((e) -> {
             if (task != null && !task.isDone()) {
@@ -152,6 +155,30 @@ public class MCLauncher extends JFrame {
         setResizable(true);
         setBounds(700, 500, 320, 100);
         setVisible(true);
+    }
+
+    public static void clearLogs(ActionEvent e) {
+        if (checkMCRun()) return;
+
+        if(!config.containsKey("mc_conf")) {
+            error("没有选择版本!");
+            return;
+        }
+
+        File basePath = new File(config.getString("mc_conf.root"));
+        if(e != null) {
+            File debugLog = new File(basePath, "debug.log");
+            FileUtil.deleteFile(debugLog);
+        }
+        File logs = new File(basePath, "logs");
+        FileUtil.deletePath(logs);
+        File crashes = new File(basePath, "crash-reports");
+        FileUtil.deletePath(crashes);
+
+        if(e != null)
+            info("清除了没啥用的日志文件!");
+        else
+            CmdUtil.warning("清除了没啥用的日志文件!");
     }
 
     // region Select version
@@ -514,6 +541,7 @@ public class MCLauncher extends JFrame {
             e.printStackTrace();
             return false;
         }
+        mc_conf.put("player_name", cfgGen.getString("玩家名字"));
 
         waitFor(null);
 
@@ -1274,6 +1302,7 @@ public class MCLauncher extends JFrame {
     // region UI
     private static void runClient(ActionEvent event) {
         if (checkMCRun()) return;
+        clearLogs(null);
 
         if(!config.containsKey("mc_conf")) {
             error("没有选择版本!");
@@ -1285,6 +1314,7 @@ public class MCLauncher extends JFrame {
 
     private static void debug(ActionEvent event) {
         if (checkMCRun()) return;
+        clearLogs(null);
 
         if(!config.containsKey("mc_conf")) {
             error("没有选择版本!");
@@ -1299,7 +1329,7 @@ public class MCLauncher extends JFrame {
     // region prepare MC
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File mcNative, CMapping general) throws IOException {
-        return getRunConf(mcRoot, mcJson, mcNative, Collections.emptyList(), false, general);
+        return getRunConf(mcRoot, mcJson, mcNative, Collections.emptyList(), true, general);
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, CMapping general) throws IOException {

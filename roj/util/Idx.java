@@ -47,8 +47,8 @@ public final class Idx {
     private byte str = 0;
 
     public Idx(int length) {
-        list = length > 64 ? new LongBitSet(length) : new SingleBitSet();
-        list.fillAll(length);
+        list = length >= 64 ? new LongBitSet(length) : new SingleBitSet();
+        list.fill(length);
         len = (short) length;
     }
 
@@ -60,7 +60,7 @@ public final class Idx {
     public void reset(int length) {
         if(length >= 64 && !(list instanceof LongBitSet))
             list = new LongBitSet(length);
-        list.fillAll(length);
+        list.fill(length);
         len = (short) length;
         size = 0;
     }
@@ -81,6 +81,11 @@ public final class Idx {
     public IntIterator remains() {
         assert str == 0;
         return (IntIterator) list.iterator();
+    }
+
+    @Override
+    public String toString() {
+        return "Idx{" + list + ", remain=" + (len - size) + ", off=" + str + '}';
     }
 
     public int size() {

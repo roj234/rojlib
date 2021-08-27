@@ -25,7 +25,6 @@
  */
 package roj.io;
 
-import org.jetbrains.annotations.Async;
 import roj.collect.MyHashMap;
 import roj.concurrent.Ref;
 import roj.concurrent.WaitingIOFuture;
@@ -281,7 +280,6 @@ public final class FileUtil {
     /**
      * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
      */
-    @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file, IProgressHandler handler) throws IOException {
         return downloadFileAsync(address, file, new File(file.getAbsolutePath() + ".mtd.nfo"), handler, 0, true);
     }
@@ -289,7 +287,6 @@ public final class FileUtil {
     /**
      * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
      */
-    @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file) throws IOException {
         return downloadFileAsync(address, file, new File(file.getAbsolutePath() + ".mtd.nfo"), new MTDProgress(), 0, true);
     }
@@ -297,7 +294,6 @@ public final class FileUtil {
     /**
      * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
      */
-    @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file, int max) throws IOException {
         return downloadFileAsync(address, file, new File(file.getAbsolutePath() + ".mtd.nfo"), new MTDProgress(), 0, true, max);
     }
@@ -305,7 +301,6 @@ public final class FileUtil {
     /**
      * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
      */
-    @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler) throws IOException {
         return downloadFileAsync(address, file, infoFile, handler, 0, true);
     }
@@ -313,7 +308,6 @@ public final class FileUtil {
     /**
      * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
      */
-    @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler, int startPid, boolean deleteInfoFile) throws IOException {
         return downloadFileAsync(address, file, infoFile, handler, startPid, deleteInfoFile, Runtime.getRuntime().availableProcessors() << 2);
     }
@@ -329,7 +323,6 @@ public final class FileUtil {
      * @param deleteInfo 完成后删除进度
      * @param threadMax      最大线程数
      */
-    @Async.Execute
     public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler, int startPid, boolean deleteInfo, final int threadMax) throws IOException {
         if(file.isFile()) {
             return new ImmediateFuture("done");

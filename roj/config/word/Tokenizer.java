@@ -36,6 +36,8 @@ import roj.text.CharList;
  * @since  2021/6/15 20:43
  */
 public final class Tokenizer extends AbstLexer {
+    public static final short SYMBOL = 15;
+
     public Tokenizer init(CharSequence s) {
         super.init(s);
         return this;
@@ -50,7 +52,7 @@ public final class Tokenizer extends AbstLexer {
             switch (c) {
                 case '=':
                     this.index = index;
-                    return formClip(WordPresets.INTEGER, "=");
+                    return formClip(SYMBOL, "=");
                 case '\'':
                 case '"':
                     this.index = index;
@@ -80,9 +82,18 @@ public final class Tokenizer extends AbstLexer {
                 case '"':
                     this.index = index;
                     return readConstString((char) c);
+                case '+':
+                case '-':
+                    if(index < input.length() && NUMBER.contains(input.charAt(index))) {
+                        this.index = index - 1;
+                        return readDigit(true);
+                    }
                 default:
                     if (!WHITESPACE.contains(c)) {
                         this.index = index - 1;
+                        if(NUMBER.contains(c)) {
+                            return readDigit(false);
+                        }
                         return readLiteral();
                     }
             }
@@ -114,18 +125,5 @@ public final class Tokenizer extends AbstLexer {
         }
 
         return formAlphabetClip(temp);
-    }
-
-    /**
-     * 其他字符
-     */
-    @Override
-    protected Word readSymbol() {
-        return null;
-    }
-
-    @Override
-    protected Word formNumberClip(byte flag, CharList temp, boolean negative) {
-        return null;
     }
 }

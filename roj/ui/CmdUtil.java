@@ -59,7 +59,7 @@ public class CmdUtil {
                 e = false;
             }
         }
-        ENABLE = e;
+        ENABLE = e || System.getProperty("cmd.forceColor") != null;
     }
 
 

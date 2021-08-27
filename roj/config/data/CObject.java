@@ -101,4 +101,8 @@ public final class CObject<T> extends CMapping {
         return super.toYAML(sb, depth);
     }
 
+    @Override
+    public Object toNudeObject() {
+        return this.object;
+    }
 }

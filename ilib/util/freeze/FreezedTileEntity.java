@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,18 +23,44 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.reflect;
+package ilib.util.freeze;
+
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
 
 /**
- * No description provided
+ * 冻结的方块实体
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since 2021/4/21 22:51
+ * @since 2021/8/26 19:36
  */
-@Deprecated
-public interface Instanced {
-    void setInstance(Object o);
+public final class FreezedTileEntity extends TileEntity {
+    public FreezedTileEntity() {
+        this.isInitial = true;
+        new Throwable("未授权的创建").printStackTrace();
+    }
 
-    void clearInstance();
+    public FreezedTileEntity(NBTTagCompound tag) {
+        this.tag = tag;
+    }
+
+    public boolean isInitial;
+    public NBTTagCompound tag;
+
+    @Override
+    public void readFromNBT(NBTTagCompound tag) {
+        isInitial = false;
+        this.tag = tag;
+    }
+
+    @Override
+    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
+        if (this.tag != null) {
+            for (String key : this.tag.getKeySet()) {
+                tag.setTag(key, this.tag.getTag(key));
+            }
+        }
+        return tag;
+    }
 }

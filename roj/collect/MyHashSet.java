@@ -169,7 +169,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
 
     public void deduplicate(Collection<K> otherSet) {
         for (K k : otherSet) {
-            if (this.add(k)) {
+            if (!this.add(k)) {
                 otherSet.remove(k);
             }
         }
@@ -182,7 +182,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
             if (entry == null)
                 continue;
             while (entry != null) {
-                if (this.add(entry.k)) {
+                if (!this.add(entry.k)) {
                     otherSet.remove(entry.k);
                 }
                 entry = entry.next;

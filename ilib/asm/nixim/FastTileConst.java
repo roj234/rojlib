@@ -28,7 +28,7 @@ package ilib.asm.nixim;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.asm.util.TileEntityCreator;
-import ilib.util.PlayerUtil;
+import ilib.util.freeze.FreezedTileEntity;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
@@ -104,7 +104,11 @@ abstract class FastTileConst extends TileEntity {
                 if (tile == null)
                     throw new InternalError(supplier.toString());
             } else {
-                PlayerUtil.broadcastAll("未知TileEntityId: " + id);
+                if(Config.freezeUnknownEntries.contains("tile")) {
+                    FMLLog.log.debug("冻结不存在的Tile {}", id);
+                    return new FreezedTileEntity(compound);
+                }
+                //System.out.println("未知TileEntityId: " + id);
             }
         } catch (Throwable var7) {
             FMLLog.log.error("一个 Tile {}({}) 无法加载NBT数据, 这是一个bug!", id, getTEClass(id), var7);

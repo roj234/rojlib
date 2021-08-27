@@ -25,8 +25,9 @@
  */
 package ilib.util;
 
-import net.minecraft.nbt.*;
 import roj.config.word.AbstLexer;
+
+import net.minecraft.nbt.*;
 
 import java.util.Set;
 

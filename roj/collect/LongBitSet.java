@@ -97,10 +97,6 @@ public class LongBitSet implements IBitSet {
         return size;
     }
 
-    public boolean isEmpty() {
-        return size() == 0;
-    }
-
     public int first() {
         if (max == -1) return -1;
         for (int i = 0; i <= max; i++) {
@@ -188,19 +184,20 @@ public class LongBitSet implements IBitSet {
             if (e == max) {
                 int o = e >>> 6;
                 while (true) {
-                    long v;
-                    if((v = set[o--]) != 0) {
-                        int pos = 0;
-                        while (v != 0) {
-                            v >>>= 1;
-                            pos++;
+                    long v = set[o];
+
+                    if(v != 0) {
+                        int pos = 63;
+                        while ((v & Long.MIN_VALUE) == 0) {
+                            v <<= 1;
+                            pos--;
                         }
                         max = o << 6 | pos;
                         break;
                     }
 
-                    if(o == -1) {
-                        max = 0;
+                    if(--o == -1) {
+                        max = -1;
                         break;
                     }
                 }
@@ -216,25 +213,21 @@ public class LongBitSet implements IBitSet {
         return new FItr(this);
     }
 
-    public void fillAll() {
-        Arrays.fill(set, 0xffffffffffffffffL);
-        size = max = cap;
-    }
-
-    public void fillAll(int len) {
+    public void fill(int len) {
         expand(len);
         int x = len >> 6;
         for (int i = 0; i < x; i++)
             set[i] = 0xffffffffffffffffL;
         int o = len & 63;
-        if (o != 0 && x < set.length) {
+        if (o != 0) {
             long k = 0;
             for (int i = 0; i < o; i++) {
                 k |= 1L << i;
             }
             set[x] = k;
         }
-        size = max = len;
+        size = len;
+        max = len - 1;
     }
 
     public IBitSet copy() {
@@ -253,24 +246,30 @@ public class LongBitSet implements IBitSet {
 
     @Override
     public String toString() {
-        return "FastIntSet{" +
-                "set=" + Arrays.toString(set) +
-                ", max=" + max +
-                ", size=" + size +
-                '}';
+        StringBuilder sb = new StringBuilder(max + 5).append(set.length).append("x{");
+        if(max != -1) {
+            for (int k = (max >> 6), i = k; i >= 0; i--) {
+                long se = set[i];
+                for (int j = i == k ? max & 63 : 63; j >= 0; j--) {
+                    sb.append((se & (1L << j)) == 0 ? "0" : "1");
+                }
+            }
+        }
+        return sb.append('}').toString();
     }
 
-    public static class FItr implements IntIterator {
-        protected boolean get = true;
+    static class FItr implements IntIterator {
+        boolean get;
 
-        private final LongBitSet $this;
+        final IBitSet $this;
 
-        protected int pos;
-        protected int entry;
-        protected int previous = -1;
+        int pos, entry, previous;
 
-        protected FItr(LongBitSet $this) {
+        protected FItr(IBitSet $this) {
             this.$this = $this;
+            this.get = true;
+            this.entry = -1;
+            this.previous = -1;
         }
 
         public boolean hasNext() {
@@ -278,25 +277,25 @@ public class LongBitSet implements IBitSet {
             return entry != -1;
         }
 
-        private void checkNext(boolean next) {
+        void checkNext(boolean next) {
             if (!next && !get)
                 return;
-            if ($this.isEmpty()) {
-                entry = -1;
-                return;
-            }
+            LongBitSet $this = (LongBitSet) this.$this;
+            int pos = this.pos;
             while (pos <= $this.max) {
-                if ($this.set[pos >>> 6] == 0) {
+                long set = $this.set[pos >>> 6];
+                if (set == 0) {
                     pos += 64;
                 } else {
-                    if (($this.set[pos >>> 6] & (1L << (pos & 63))) != 0) {
-                        entry = pos++;
+                    if (((set >>> (pos & 63L)) & 1L) != 0L) {
+                        this.pos = (entry = pos) + 1;
                         get = false;
                         return;
                     }
                     pos++;
                 }
             }
+            this.pos = pos;
             entry = -1;
         }
 
@@ -315,6 +314,7 @@ public class LongBitSet implements IBitSet {
         public FItr reset() {
             get = true;
             pos = 0;
+            entry = -1;
             previous = -1;
             return this;
         }

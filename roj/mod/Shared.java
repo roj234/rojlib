@@ -60,7 +60,7 @@ public final class Shared {
     public static final Map<String, String> srg2mcp = new MyHashMap<>(1000, 1.5f);
     static final boolean ENABLE_CONCURRENT = false;
 
-    public static final String VERSION = "1.5.4";
+    public static final String VERSION = "1.5.5";
 
     public static final File BASE, TMP_DIR, PROJ_CONF_DIR;
 
@@ -77,9 +77,13 @@ public final class Shared {
     public static final CMapping MAIN_CONFIG;
 
     static {
+        boolean ASSIGNED_LAUNCH_ONLY = System.getProperty("fmd.launch_only") != null;
+
         File base;
         try {
-            base = new File(FMDMain.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile().getParentFile();
+            base = new File(FMDMain.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile();
+            if(!ASSIGNED_LAUNCH_ONLY)
+                base = base.getParentFile();
         } catch (URISyntaxException e) {
             e.printStackTrace();
             base = new File("").getAbsoluteFile();
@@ -99,7 +103,7 @@ public final class Shared {
         }
 
         PROJ_CONF_DIR = new File(BASE, "/config/");
-        if(!PROJ_CONF_DIR.isDirectory() && !PROJ_CONF_DIR.mkdirs()) {
+        if(!ASSIGNED_LAUNCH_ONLY && !PROJ_CONF_DIR.isDirectory() && !PROJ_CONF_DIR.mkdirs()) {
             CmdUtil.error("无法创建配置保存文件夹: " + PROJ_CONF_DIR.getAbsolutePath());
             System.exit(-2);
         }
@@ -111,7 +115,7 @@ public final class Shared {
                 CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getEncoding());
             }
 
-            MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 2).asMap();
+            MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 7).asMap();
 
             MAIN_CONFIG.dotMode(true);
 

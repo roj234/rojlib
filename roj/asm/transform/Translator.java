@@ -34,7 +34,6 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.config.word.AbstLexer;
-import roj.config.word.Lexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.FileUtil;
@@ -100,7 +99,7 @@ public class Translator {
 
     private static void apply(String[] args) throws IOException, ParseException {
         String in = args[args.length - 1];
-        Lexer wr = (Lexer) new Lexer() {
+        AbstLexer wr = new AbstLexer() {
             @Override
             public Word readWord() throws ParseException {
                 int index = this.index;
@@ -143,7 +142,7 @@ public class Translator {
             /**
              * @return 标识符 or 变量
              */
-            protected Word readLiteral() throws ParseException {
+            protected Word readLiteral() {
                 int index = this.index;
                 final CharSequence input = this.input;
 

@@ -47,11 +47,7 @@ public interface IBitSet extends Iterable<Integer> {
 
     int size();
 
-    /**
-     * 全1
-     */
-    void fillAll();
-    void fillAll(int len);
+    void fill(int len);
 
     @Nonnull
     PrimitiveIterator.OfInt iterator();

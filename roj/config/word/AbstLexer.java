@@ -424,7 +424,9 @@ public abstract class AbstLexer {
     /**
      * @return 其他字符
      */
-    protected abstract Word readSymbol() throws ParseException;
+    protected Word readSymbol() throws ParseException {
+        throw err(getClass().getName() + " 没有覆写readSymbol()并调用了");
+    }
 
     /**
      * int double
@@ -683,7 +685,9 @@ public abstract class AbstLexer {
         return formNumberClip(flag, temp, negative);
     }
 
-    protected abstract Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException;
+    protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
+    }
 
     /**
      * 获取常量字符
@@ -698,7 +702,7 @@ public abstract class AbstLexer {
     /**
      * 获取常量字符串
      */
-    protected final Word readConstString(char key) throws ParseException {
+    protected Word readConstString(char key) throws ParseException {
         return formClip(WordPresets.STRING, readSlashString(key, true));
     }
 

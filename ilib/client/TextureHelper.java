@@ -30,13 +30,14 @@ import ilib.ATHandler;
 import ilib.ClientProxy;
 import ilib.Config;
 import ilib.ImpLib;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.*;
-import net.minecraftforge.fml.client.FMLClientHandler;
+import ilib.util.Reflection;
 import roj.asm.annotation.OpenAny;
 import roj.collect.SimpleList;
-import roj.reflect.DirectFieldAccess;
-import roj.reflect.Instanced;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.*;
+
+import net.minecraftforge.fml.client.FMLClientHandler;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
@@ -49,7 +50,8 @@ import java.util.Queue;
 })
 @OpenAny(value = "net.minecraft.client.resources:FallbackResourceManager", names = {
         "resourcePacks", "field_110540_a"
-})/**
+})
+/**
  * No description provided
  *
  * @author Roj234
@@ -85,25 +87,8 @@ public final class TextureHelper implements IResourceManagerReloadListener {
         }
     }
 
-    interface I extends Instanced {
-        List<IResourcePack> getObject();
-
-        void setObject(List<IResourcePack> list);
-    }
-
-    static I invoker;
-
-    static {
-        try {
-            invoker = DirectFieldAccess.get(FMLClientHandler.class, FMLClientHandler.class.getDeclaredField("resourcePackList"), I.class);
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-        }
-    }
-
     private static void register(IResourcePack pack) {
-        invoker.setInstance(FMLClientHandler.instance());
-        invoker.getObject().add(pack);
+        Reflection.HELPER.getResourcePackList(FMLClientHandler.instance()).add(pack);
         resourceManager.reloadResourcePack(pack);
     }
 

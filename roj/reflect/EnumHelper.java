@@ -26,6 +26,7 @@
 
 package roj.reflect;
 
+import roj.asm.util.AccessFlag;
 import roj.collect.MyHashMap;
 import roj.util.EmptyArrays;
 import roj.util.Helpers;
@@ -46,28 +47,28 @@ import java.util.*;
  * @since 2021/5/2 8:22
  */
 public final class EnumHelper<E extends Enum<E>> {
-    private static final Field ORDINAL_FIELD;
-    private static final DirectFieldAccessor mapSet;
+    private static final Helper hlp;
+    private static final IFieldAccessor ordinalAcc;
+
+    interface Helper {
+        Map<String, ?> getEnumConstantDirectory(Class<? extends Enum<?>> clazz);
+    }
 
     static {
-        Field fl = null;
+        hlp = DirectAccessor.builder(Helper.class)
+                //.access(Enum.class, "ordinal", null, "setOrdinal")
+                .access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null)
+        .build();
         try {
-            fl = Enum.class.getDeclaredField("ordinal");
-            fl.setAccessible(true);
-        } catch (NoSuchFieldException ignored) {
+            ordinalAcc = ReflectionUtils.accessField(Enum.class.getDeclaredField("ordinal"));
+        } catch (NoSuchFieldException e) {
+            throw new ExceptionInInitializerError(e);
         }
-        ORDINAL_FIELD = fl;
-
-        DirectFieldAccessor ecd = null;
-        try {
-            ecd = DirectFieldAccess.get(Class.class, Class.class.getDeclaredField("enumConstantDirectory"));
-        } catch (NoSuchFieldException ignored) {}
-        mapSet = ecd;
     }
 
     private final Class<E> clazz;
     private final Field[] fields;
-    private Field values;
+    private IFieldAccessor values;
     private final Collection<Field> switchFields;
     private final Deque<UndoInfo<E>> undoStack = new LinkedList<>();
 
@@ -113,6 +114,12 @@ public final class EnumHelper<E extends Enum<E>> {
         }
     }
 
+    static synchronized void o(Enum<?> ex, int ix) {
+        ordinalAcc.setInstance(ex);
+        ordinalAcc.setInt(ix);
+        ordinalAcc.clearInstance();
+    }
+
     /**
      * Add enum instance, overwrite if exists.
      * <p/>
@@ -129,48 +136,40 @@ public final class EnumHelper<E extends Enum<E>> {
         if (e == null)
             throw new NullPointerException();
 
-        try {
-            undoStack.push(new UndoInfo<>(this));
+        undoStack.push(new UndoInfo<>(this));
 
-            Field vf = findValuesField(valueName);
+        IFieldAccessor vf = findValuesField(valueName);
 
-            E[] values = values();
-            for (int i = 0; i < values.length; i++) {
-                E value = values[i];
+        E[] values = values();
+        for (int i = 0; i < values.length; i++) {
+            E value = values[i];
 
-                if (value.name().equals(e.name())) {
-                    ORDINAL_FIELD.set(e, value.ordinal());
-                    values[i] = e;
-                    replace(e.name(), e);
+            if (value.name().equals(e.name())) {
+                o(e, value.ordinal());
+                values[i] = e;
+                replace(e.name(), e);
 
-                    return;
-                }
+                return;
             }
-
-            E[] newValues = Arrays.copyOf(values, values.length + 1);
-            newValues[newValues.length - 1] = e;
-            ReflectionUtils.setFinal(vf, newValues);
-
-            int ordinal = newValues.length - 1;
-            ORDINAL_FIELD.set(e, ordinal);
-
-            addSwitch();
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalArgumentException("Could not set the enum", ex);
         }
+
+        E[] newValues = Arrays.copyOf(values, values.length + 1);
+        newValues[newValues.length - 1] = e;
+        vf.setObject(newValues);
+
+        int ordinal = newValues.length - 1;
+        o(e, ordinal);
+
+        addSwitch();
     }
 
-    private Field findValuesField(String valueId) {
+    private IFieldAccessor findValuesField(String valueId) {
         if (values == null) {
-            // the values in the enum class
             for (Field field : fields) {
-                if (field.getName().equals(valueId)) {
-                    values = field;
-                    break;
+                if (field.getName().equals(valueId) && (field.getModifiers() & AccessFlag.STATIC) != 0) {
+                    return values = ReflectionUtils.accessField(field);
                 }
             }
-            // we mark it to be public
-            values.setAccessible(true);
         }
         return values;
     }
@@ -182,30 +181,26 @@ public final class EnumHelper<E extends Enum<E>> {
         if (e == null)
             throw new NullPointerException();
 
-        try {
-            undoStack.push(new UndoInfo<>(this));
+        undoStack.push(new UndoInfo<>(this));
 
-            E[] values = values();
-            for (int i = 0; i < values.length; i++) {
-                E value = values[i];
+        E[] values = values();
+        for (int i = 0; i < values.length; i++) {
+            E value = values[i];
 
-                if (value.name().equals(e.name())) {
-                    E[] newValues = Arrays.copyOf(values, values.length - 1);
-                    System.arraycopy(values, i + 1, newValues, i, values.length - i - 1);
+            if (value.name().equals(e.name())) {
+                E[] newValues = Arrays.copyOf(values, values.length - 1);
+                System.arraycopy(values, i + 1, newValues, i, values.length - i - 1);
 
-                    for (int j = i; j < newValues.length; j++) {
-                        ORDINAL_FIELD.set(newValues[j], j);
-                    }
-
-                    ReflectionUtils.setFinal(this.values, newValues);
-                    removeSwitch(i);
-                    replace(e.name(), null);
-
-                    return true;
+                for (int j = i; j < newValues.length; j++) {
+                    o(newValues[j], j);
                 }
+
+                findValuesField(valueName).setObject(newValues);
+                removeSwitch(i);
+                replace(e.name(), null);
+
+                return true;
             }
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalArgumentException("Could not set the enum", ex);
         }
 
         return false;
@@ -214,11 +209,7 @@ public final class EnumHelper<E extends Enum<E>> {
     public void restore() {
         UndoInfo<E> info = undoStack.peekLast();
         if (info != null) {
-            try {
-                info.undo();
-            } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
-            }
+            info.undo();
             undoStack.clear();
         }
     }
@@ -229,12 +220,8 @@ public final class EnumHelper<E extends Enum<E>> {
             return false;
         }
 
-        try {
-            info.undo();
-            return true;
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException(e);
-        }
+        info.undo();
+        return true;
     }
 
     private Constructor<?> findConstructor(Class<?>[] add, Class<E> clazz) throws NoSuchMethodException {
@@ -256,9 +243,9 @@ public final class EnumHelper<E extends Enum<E>> {
 
         E cast = clazz.cast(cst.newInstance(param));
 
-        mapSet.setInstance(clazz);
-        if(mapSet.getObject() != null) {
-            Map<String, E> map = Helpers.cast(mapSet.getObject());
+        Map<String, ?> obj = hlp.getEnumConstantDirectory(clazz);
+        if(obj != null) {
+            Map<String, E> map = Helpers.cast(obj);
             map.put(value, cast);
         }
 
@@ -332,8 +319,8 @@ public final class EnumHelper<E extends Enum<E>> {
     }
 
     @SuppressWarnings("unchecked")
-    public E[] values() throws IllegalAccessException {
-        return (E[]) findValuesField(valueName).get(null);
+    public E[] values() {
+        return (E[]) findValuesField(valueName).getObject();
     }
 
     private static final class UndoInfo<E extends Enum<E>> {
@@ -356,12 +343,11 @@ public final class EnumHelper<E extends Enum<E>> {
             }
         }
 
-        private void undo() throws IllegalAccessException {
-            Field vf = helper.findValuesField(helper.valueName);
-            ReflectionUtils.setFinal(vf, values);
+        private void undo() {
+            helper.findValuesField(helper.valueName).setObject(values);
 
             for (int i = 0; i < values.length; i++) {
-                ORDINAL_FIELD.set(values[i], i);
+                o(values[i], i);
             }
 
             // reset all of the constants defined inside the enum

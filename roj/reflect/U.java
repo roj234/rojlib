@@ -25,16 +25,12 @@
  */
 package roj.reflect;
 
-import roj.text.TextUtil;
-
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * No description provided
+ * 使用Unsafe的字段访问
  *
  * @author Roj234
  * @version 0.1
@@ -51,148 +47,121 @@ final class U {
         } catch (Throwable ignored) {}
     }
 
+    static long getFieldOffset(Field field) {
+        if (Modifier.isStatic(field.getModifiers())) {
+            return U.staticFieldOffset(field);
+        } else {
+            return U.objectFieldOffset(field);
+        }
+    }
+
     static final class UFA extends IFieldAccessor {
-        static final List<String> arr = TextUtil.split(new ArrayList<>(9), "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT", ',');
         /**
          * 内存地址相对instance起始偏移量
          */
         final long offset;
-        final byte type;
+        Object instance;
 
-        /**
-         * 检测类型转换 <Br>
-         * JVM内部没有类型检查 <br>
-         * 只要index对上了
-         * ...
-         */
         public boolean checkCast = true;
-
-        /**
-         * 警告: 修改这个字段的只可能会破坏concurrent!
-         */
-        public boolean isVolatile;
 
         UFA(@Nonnull Field field) {
             super(field);
-            this.offset = J8Util.getFieldOffset(field);
+            this.offset = getFieldOffset(field);
             if (this.offset == -1) {
                 throw new IllegalArgumentException("Field offset error " + field);
             }
-            if (isStatic) {
+            if ((flag & 16) != 0) {
                 this.instance = U.staticFieldBase(field);
             }
-            Class<?> type = field.getType();
-            if (type == Boolean.TYPE) {
-                this.type = 0;
-            } else if (type == Byte.TYPE) {
-                this.type = 1;
-            } else if (type == Short.TYPE) {
-                this.type = 2;
-            } else if (type == Character.TYPE) {
-                this.type = 3;
-            } else if (type == Integer.TYPE) {
-                this.type = 4;
-            } else if (type == Long.TYPE) {
-                this.type = 5;
-            } else if (type == Float.TYPE) {
-                this.type = 6;
-            } else {
-                this.type = (byte) ((type == Double.TYPE) ? 7 : 8);
-            }
-            this.isVolatile = Modifier.isVolatile(field.getModifiers());
         }
 
-        @Override
-        public void setInstance(@Nonnull Object instance) {
-            super.setInstance(instance);
-            if(!isStatic)
-                checkObjectType(instance);
+        public void setInstance(Object instance) {
+            if ((flag & 16) != 0)
+                return;
+            checkObjectType(instance);
+            if (instance == null)
+                throw new IllegalArgumentException("Instance can't be null for a non-static field!");
+            this.instance = instance;
         }
 
-        @Override
         public void clearInstance() {
-            if (isStatic)
+            if ((flag & 16) != 0)
                 return;
             this.instance = null;
         }
 
-        private void checkObjectType(Object obj) {
-            if (!field.getDeclaringClass().isInstance(obj)) // include null
-                throw new IllegalArgumentException("Cannot set instance to not instance of " + field.getDeclaringClass().getName());
-        }
-
-        private void checkType(byte required) {
-            if (this.type != required)
-                throw new IllegalArgumentException("Type " + arr.get(this.type) + " cannot cast to Type " + arr.get(required));
+        private void checkAccess() {
+            if (instance == null)
+                throw new IllegalArgumentException("Instance can't be null for a non-static field!");
         }
 
         @Override
         public Object getObject() {
             checkType((byte) 8);
             checkAccess();
-            return isVolatile ? U.getObjectVolatile(instance, offset) : U.getObject(instance, offset);
+            return (flag & 32) != 0 ? U.getObjectVolatile(instance, offset) : U.getObject(instance, offset);
         }
 
         @Override
         public boolean getBoolean() {
             checkType((byte) 0);
             checkAccess();
-            return isVolatile ? U.getBooleanVolatile(instance, offset) : U.getBoolean(instance, offset);
+            return (flag & 32) != 0 ? U.getBooleanVolatile(instance, offset) : U.getBoolean(instance, offset);
         }
 
         @Override
         public byte getByte() {
             checkType((byte) 1);
             checkAccess();
-            return isVolatile ? U.getByteVolatile(instance, offset) : U.getByte(instance, offset);
+            return (flag & 32) != 0 ? U.getByteVolatile(instance, offset) : U.getByte(instance, offset);
         }
 
         @Override
         public char getChar() {
             checkType((byte) 2);
             checkAccess();
-            return isVolatile ? U.getCharVolatile(instance, offset) : U.getChar(instance, offset);
+            return (flag & 32) != 0 ? U.getCharVolatile(instance, offset) : U.getChar(instance, offset);
         }
 
         @Override
         public short getShort() {
             checkType((byte) 3);
             checkAccess();
-            return isVolatile ? U.getShortVolatile(instance, offset) : U.getShort(instance, offset);
+            return (flag & 32) != 0 ? U.getShortVolatile(instance, offset) : U.getShort(instance, offset);
         }
 
         @Override
         public int getInt() {
             checkType((byte) 4);
             checkAccess();
-            return isVolatile ? U.getIntVolatile(instance, offset) : U.getInt(instance, offset);
+            return (flag & 32) != 0 ? U.getIntVolatile(instance, offset) : U.getInt(instance, offset);
         }
 
         @Override
         public long getLong() {
             checkType((byte) 5);
             checkAccess();
-            return isVolatile ? U.getLongVolatile(instance, offset) : U.getLong(instance, offset);
+            return (flag & 32) != 0 ? U.getLongVolatile(instance, offset) : U.getLong(instance, offset);
         }
 
         @Override
         public float getFloat() {
             checkType((byte) 6);
             checkAccess();
-            return isVolatile ? U.getFloatVolatile(instance, offset) : U.getFloat(instance, offset);
+            return (flag & 32) != 0 ? U.getFloatVolatile(instance, offset) : U.getFloat(instance, offset);
         }
 
         @Override
         public double getDouble() {
             checkType((byte) 7);
             checkAccess();
-            return isVolatile ? U.getDoubleVolatile(instance, offset) : U.getDouble(instance, offset);
+            return (flag & 32) != 0 ? U.getDoubleVolatile(instance, offset) : U.getDouble(instance, offset);
         }
 
         @Override
         public void setObject(Object obj) {
-            if (type != 8) {
-                switch (type) {
+            if ((flag & 15) != 8) {
+                switch (flag & 15) {
                     case 0:
                         setBoolean((Boolean) obj);
                         break;
@@ -223,8 +192,8 @@ final class U {
             checkType((byte) 8);
             checkAccess();
             if (checkCast && obj != null && !field.getType().isInstance(obj))
-                throw new IllegalArgumentException(obj.getClass().getName() + " cannot cast to " + field.getType().getName());
-            if (isVolatile) {
+                throw new ClassCastException(obj.getClass().getName() + " cannot cast to " + field.getType().getName());
+            if ((flag & 32) != 0) {
                 U.putObjectVolatile(instance, offset, obj);
             } else {
                 U.putObject(instance, offset, obj);
@@ -235,7 +204,7 @@ final class U {
         public void setBoolean(boolean value) {
             checkType((byte) 0);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putBooleanVolatile(instance, offset, value);
             } else {
                 U.putBoolean(instance, offset, value);
@@ -246,7 +215,7 @@ final class U {
         public void setByte(byte value) {
             checkType((byte) 1);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putByteVolatile(instance, offset, value);
             } else {
                 U.putByte(instance, offset, value);
@@ -257,7 +226,7 @@ final class U {
         public void setChar(char value) {
             checkType((byte) 2);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putCharVolatile(instance, offset, value);
             } else {
                 U.putChar(instance, offset, value);
@@ -268,7 +237,7 @@ final class U {
         public void setShort(short value) {
             checkType((byte) 3);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putShortVolatile(instance, offset, value);
             } else {
                 U.putShort(instance, offset, value);
@@ -279,7 +248,7 @@ final class U {
         public void setInt(int value) {
             checkType((byte) 4);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putIntVolatile(instance, offset, value);
             } else {
                 U.putInt(instance, offset, value);
@@ -290,7 +259,7 @@ final class U {
         public void setLong(long value) {
             checkType((byte) 5);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putLongVolatile(instance, offset, value);
             } else {
                 U.putLong(instance, offset, value);
@@ -301,7 +270,7 @@ final class U {
         public void setFloat(float value) {
             checkType((byte) 6);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putFloatVolatile(instance, offset, value);
             } else {
                 U.putFloat(instance, offset, value);
@@ -312,7 +281,7 @@ final class U {
         public void setDouble(double value) {
             checkType((byte) 7);
             checkAccess();
-            if (isVolatile) {
+            if ((flag & 32) != 0) {
                 U.putDoubleVolatile(instance, offset, value);
             } else {
                 U.putDouble(instance, offset, value);

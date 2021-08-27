@@ -28,7 +28,7 @@ package roj.kscript;
 import roj.kscript.api.ArgList;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KType;
-import roj.reflect.J8Util;
+import roj.reflect.TraceUtil;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
@@ -75,7 +75,7 @@ public final class Arguments extends ArgList {
         argv.getClass();
         this.argv = argv;
         this.prev = prev;
-        StackTraceElement[] traces = J8Util.getTraces(new Throwable());
+        StackTraceElement[] traces = TraceUtil.getTraces(new Throwable());
         int i = prev == null ? traces.length : 0;
         if(prev != null)
         for (StackTraceElement str : traces) {

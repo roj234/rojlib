@@ -32,24 +32,23 @@ import ilib.asm.Preloader;
 import ilib.asm.fasterforge.anc.ClassInfo;
 import ilib.asm.fasterforge.anc.ItfGet;
 import ilib.asm.fasterforge.anc.JarInfo;
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
-import roj.collect.SingleBitSet;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
-import roj.reflect.DirectMethodAccess;
 import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -133,7 +132,6 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
         store = null;
         fileProcessors = null;
         myMatcher = null;
-        itfGetImpl = null;
     }
 
     @Copy
@@ -150,22 +148,11 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
     @RemapTo("discover")
     public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table) {
         if (!init) {
-            itfGetImpl = DirectMethodAccess.getNCI(ItfGet.class, new String[]{
-                    "getItf", "getMap"
-            }, new SingleBitSet(), ASMModParser.class, new String[]{
-                    "getItf", "getFieldAnnotationMap"
-            });
-
             init();
             fileProcessors = Preloader.getFileProcessors();
             myMatcher = classFile.matcher("");
             init = true;
         }
-
-        /*if(Preloader.visitedFiles.contains(candidate.getModContainer().getAbsolutePath())) {
-            FMLLog.log.info("Skipped preloaded file {}.", candidate.getModContainer().getName());
-            return Collections.emptyList();
-        }*/
 
         List<ModContainer> foundMods = Lists.newArrayList();
 
@@ -190,7 +177,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 findClassesASM_my(candidate, table, jar, foundMods, mc);
             }
         } catch (Exception e) {
-            FMLLog.log.warn("Zip file {} failed to read properly, it will be ignored", candidate.getModContainer().getName(), e);
+            FMLLog.log.warn("文件 {} 无法读取", candidate.getModContainer().getName(), e);
         }
 
         if (jarModified) {
@@ -230,13 +217,12 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             for (Map.Entry<String, Collection<Annotation>> ma : classInfo.annotations.asMap().entrySet()) {
                 String annoClz = ma.getKey();
 
-                Constructor<? extends ModContainer> container = ModContainerFactory.modTypes.get(org.objectweb.asm.Type.getType('L' + annoClz.replace('.', '/') + ';'));
+                Constructor<? extends ModContainer> container = ModContainerFactory.modTypes.get(TypeHelper.asmType(annoClz.replace('.', '/')));
 
                 if (container != null) {
-
                     String className = classInfo.internalName.replace('/', '.');
 
-                    FMLLog.log.debug("Identified a mod of type {} ({}) - loading", annoClz, className);
+                    FMLLog.log.debug("检测到 {} 类型的mod ({}) - 开始加载", annoClz, className);
 
                     Iterator<Annotation> itr = ma.getValue().iterator();
 
@@ -246,16 +232,17 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                         try {
                             ModContainer ret = container.newInstance(className, candidate, prm);
                             if (!ret.shouldLoadInEnvironment()) {
-                                FMLLog.log.debug("Skipping mod {}, container opted to not load.", className);
+                                FMLLog.log.debug("放弃加载 {}, mod提示不应该在这个环境加载", className);
                             } else {
                                 table.addContainer(ret);
                                 foundMods.add(ret);
                                 ret.bindMetadata(mc);
                                 // java 8
                                 ret.setClassVersion(52 << 16);
+                                break;
                             }
                         } catch (Exception var8) {
-                            FMLLog.log.error("Unable to construct {} container", annoClz, var8);
+                            FMLLog.log.error("无法构建mod容器 {}", annoClz, var8);
                         }
                     }
                 }
@@ -335,13 +322,14 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             }
             candidate.addClassEntry(ze.getName());
         } catch (LoaderException e) {
-            FMLLog.log.error("There was a problem reading the entry {} in the jar {} - probably a corrupt zip", candidate.getModContainer().getPath(), e);
+            FMLLog.log.error("无法加载 " + candidate.getModContainer().getPath() + " - 也许文件损坏了", e);
             jar.close();
             throw e;
         }
 
-        Map<String, List<Annotation>> map = itfGetImpl.getMap(modParser);
-        Set<String> itf = itfGetImpl.getItf(modParser);
+        ItfGet parser = (ItfGet) modParser;
+        Map<String, List<Annotation>> map = parser.getFieldAnnotationMap();
+        Set<String> itf = parser.getItf();
 
         if (map.isEmpty() && itf.isEmpty())
             return;
@@ -371,8 +359,4 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             container.setClassVersion(modParser.getClassVersion());
         }
     }
-
-    @Copy
-    static ItfGet itfGetImpl;
-
 }
