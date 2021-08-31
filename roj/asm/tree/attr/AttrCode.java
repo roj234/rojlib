@@ -39,21 +39,31 @@ import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.PrimitiveIterator;
+import java.util.*;
 
 import static roj.asm.Opcodes.*;
 
 /**
- * IMPORTANT NOTICE: 在InsnList最后总会有一个 UNTIL_THIS_METHOD_END
+ * 默认情况, 在InsnList最后总会有一个 {@link AttrCode#METHOD_END_MARK}
  *
  * @author Roj234
- * @version 0.1
+ * @version 1.3
  * @since 2021/6/18 9:51
  */
 public class AttrCode extends Attribute {
+    static class ExEntCmp implements Comparator<ExceptionEntry> {
+        private final ToIntMap<InsnNode> pcRev;
+
+        public ExEntCmp(ToIntMap<InsnNode> pcRev) {this.pcRev = pcRev;}
+
+        @Override
+        public int compare(ExceptionEntry t1, ExceptionEntry t2) {
+            int l1 = pcRev.getInt(t1.end) - pcRev.getInt(t1.start);
+            int l2 = pcRev.getInt(t2.end) - pcRev.getInt(t2.start);
+            return l1 - l2;
+        }
+    }
+
     public AttrCode(MethodNode method) {
         super("Code");
         this.owner = method;
@@ -175,6 +185,9 @@ public class AttrCode extends Attribute {
 
         w.writeShort(this.exceptions.size());
         ArrayList<ExceptionEntry> exs = this.exceptions;
+
+        exs.sort(new ExEntCmp(pcRev));
+
         for (int i = 0; i < exs.size(); i++) {
             ExceptionEntry ex = exs.get(i);
             w.writeShort(pcRev.getInt(InsnNode.validate(ex.start)))
@@ -295,10 +308,6 @@ public class AttrCode extends Attribute {
 
     /**
      * 重新计算栈帧
-     * <pre>
-     *     一般编译器碰到一个跳转指令（ifxx/goto等）就会生成一个frame来描述跳转处的locals情况
-     * 好，到了链接时校验方法字节码的时候会把方法的所有指令都线性扫一遍，碰到store类指令（istore、fstore等）就会把在init_frame.locals中保存一个type，碰到跳转指令就会把init_frame和StackMapTable中对应offset的frame对比看看locals stack 类型 大小是否一致来判断跳转前后局部变量是否发生变化
-     * </pre>
      */
     private void recalculateFrames(ToIntMap<InsnNode> pcRev) {
         this.frames.clear();
@@ -307,15 +316,10 @@ public class AttrCode extends Attribute {
         ft.init(owner);
 
         try {
-            frames.addAll(ft.collect(instructions, exceptions, true, pcRev));
+            frames.addAll(ft.collect(instructions, exceptions, pcRev));
         } catch (Throwable e) {
             e.printStackTrace();
-            //ft.init(owner);
-            //ft.collect(instructions, exceptions, true, pcRev);
         }
-        System.out.println("===================================");
-        System.out.println(frames);
-        System.out.println("===================================");
     }
 
     protected IntBiMap<InsnNode> parseCode(ConstantPool pool, ByteList data) {
@@ -420,25 +424,14 @@ public class AttrCode extends Attribute {
         FrameTraverser ft = new FrameTraverser();
         ft.init(owner);
 
-        try {
-            o:
-            for (int i = 0; i < insn.size();) {
-                switch (ft.visitNode(insn.get(i++), false)) {
-                    case 1: // return
-                    case 2: // goto
-                    case 3: // if
-                        this.firstFrame = ft.build(null);
-                        break o;
-                }
-            }
-        } catch (Exception e) {
-            ft.init(owner);
-
-            for (int i = 0; i < insn.size();) {
-                switch (ft.visitNode(insn.get(i++), true)) {
-                    case 1: case 2: case 3:
-                        ft.build(null);
-                }
+        o:
+        for (int i = 0; i < insn.size();) {
+            switch (ft.visitNode(insn.get(i++))) {
+                case 1: // return
+                case 2: // goto
+                case 3: // if
+                    this.firstFrame = ft.build(null);
+                    break o;
             }
         }
 
@@ -586,9 +579,6 @@ public class AttrCode extends Attribute {
     }
 
     public static InsnNode parseTableSwitch(ByteReader r) {
-        /*if ((r.index & 3) != 0) {
-            r.index = r.index + 4 - (r.index & 3);
-        }*/
         while ((r.index & 3) != 0) {
             r.index++;
         }
@@ -649,27 +639,27 @@ public class AttrCode extends Attribute {
                 throw new IllegalArgumentException("Illegal curr offset");
             }
 
-            int type = curr.type;
+            char type = curr.type;
             switch (curr.type) {
                 case FrameType.same:
                     if (offset < 64) {
-                        type = offset;
+                        type = (char) offset;
                     } else {
                         curr.type = type = FrameType.same_ex;
                     }
                     break;
                 case FrameType.same_local_1_stack:
                     if (offset < 64) {
-                        type = offset + 64;
+                        type = (char) (offset + 64);
                     } else {
                         curr.type = type = FrameType.same_local_1_stack_ex;
                     }
                     break;
                 case FrameType.chop:
-                    type = 251 - (prev.locals.size - curr.locals.size);
+                    type = (char) (251 - (prev.locals.size - curr.locals.size));
                     break;
                 case FrameType.append:
-                    type = 251 + (curr.locals.size - prev.locals.size);
+                    type = (char) (251 + (curr.locals.size - prev.locals.size));
                     break;
                 case FrameType.same_ex:
                 case FrameType.same_local_1_stack_ex:
@@ -847,7 +837,7 @@ public class AttrCode extends Attribute {
                 InsnNode node = pcCounter.get(r.readUnsignedShort());
                 return new Var(node);
             case VarType.UNINITIAL_THIS:
-                return new Var(VarType.UNINITIAL_THIS);
+                return Var.READ_ONLY_UNI_THIS;
             default:
                 return Var.std(type);
         }

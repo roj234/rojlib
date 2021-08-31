@@ -36,7 +36,7 @@ import java.util.Arrays;
  */
 final class BasicBlock {
     boolean done;
-    int start, end;
+    int start;
     public VarList localBegin = new VarList(), stackBegin = new VarList();
 
     int[] targets;
@@ -47,6 +47,6 @@ final class BasicBlock {
 
     @Override
     public String toString() {
-        return "BasicBlock{" + start + "=>" + end + ",target=" + Arrays.toString(targets) + '}';
+        return "BasicBlock{" + start + " => " + Arrays.toString(targets) + ",locals=" + localBegin + '}';
     }
 }

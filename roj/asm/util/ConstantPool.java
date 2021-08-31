@@ -52,11 +52,10 @@ public class ConstantPool {
     int index = 1;
 
     MyHashSet<Constant> uniquer;
-    CstUTF empty;
 
     public ConstantPool(int len) {
         this.cst = new Constant[len];
-        this.uniquer = new MyHashSet<>(len);
+        this.uniquer = new MyHashSet<>(len / 2);
     }
 
     public int index() {
@@ -64,7 +63,8 @@ public class ConstantPool {
     }
 
     void addConstant(Constant c) {
-        c.setIndex(index);
+        if(c.getIndex() == 0)
+            c.setIndex(index);
         cst[index++] = c;
         switch (c.type()) {
             case LONG:
@@ -73,26 +73,13 @@ public class ConstantPool {
         }
     }
 
-    private boolean fixNPE(Constant c) {
-        if (empty == null) {
-            this.cst = Arrays.copyOf(this.cst, this.cst.length + 1);
-            addConstant(empty = new CstUTF(""));
-        }
-        if (c instanceof CstRefUTF) {
-            CstRefUTF ref = ((CstRefUTF) c);
-            ref.setValue(empty);
-        } else {
-            return false;
-        }
-        return true;
-    }
-
     @SuppressWarnings("fallthrough")
     public void valid() {
         if (uniquer == null)
             throw new IllegalStateException("Already validated.");
 
-        MyHashSet<Constant> uniquer = new MyHashSet<>(cst.length);
+        MyHashSet<Constant> uniquer = this.uniquer;
+        uniquer.clear();
 
         Constant[] cst = this.cst;
         Idx idx = new Idx(cst.length);
@@ -105,22 +92,13 @@ public class ConstantPool {
                 Constant c = cst[i];
 
                 try {
-                    boolean thisLv = validate(c, pass);
-                    if (thisLv) {
+                    if (validate(c, pass)) {
                         cst[i] = uniquer.intern(c);
                         idx.add(i);
                     }
                 } catch (ClassCastException e) {
                     Constant err = getReferTo(c, pass);
                     throw new IllegalArgumentException("Constant " + c + " is referencing an invalid index " + err.getIndex() + " ( " + err + " )", e);
-                } catch (NullPointerException e) {
-                    if (fixNPE(c)) {
-                        System.err.println("NPE at " + i + ", probably a coding error.");
-                        validate(c, pass);
-                        idx.add(i);
-                    } else {
-                        throw e;
-                    }
                 }
             }
             itr.reset();
@@ -287,69 +265,6 @@ public class ConstantPool {
                 return new CstMethodHandle(r.readByte(), r.readUnsignedShort());
         }
         throw OperationDone.NEVER;
-    }
-
-    public void readNames(ByteReader r) {
-        if (uniquer == null)
-            throw new IllegalStateException("Already validated.");
-
-        int len = cst.length;
-        while (index < len) {
-            Constant c = null;
-
-            int b = r.readUnsignedByte();
-            if (CstType.toString(b) == null)
-                throw new IllegalArgumentException("Illegal constant type " + b);
-            switch (b) {
-                case UTF:
-                    try {
-                        c = new CstUTF(r.readUTF());
-                    } catch (UTFDataFormatException e) {
-                        throw new RuntimeException(e);
-                    }
-                    break;
-                case INT:
-                case INVOKE_DYNAMIC:
-                case METHOD:
-                case FIELD:
-                case FLOAT:
-                case INTERFACE:
-                case NAME_AND_TYPE:
-                    r.index += 4;
-                    break;
-
-                case LONG:
-                case DOUBLE:
-                    index++;
-                    r.index += 8;
-                    break;
-
-                case METHOD_TYPE:
-                case STRING:
-                case MODULE: // may
-                case PACKAGE: // may
-                    r.index += 2;
-                    break;
-
-                case CLASS:
-                    c = new CstClass(r.readUnsignedShort());
-                    break;
-
-                case METHOD_HANDLE:
-                    r.index += 3;
-                    break;
-            }
-
-            if (c != null)
-                addConstant(c);
-            else
-                index++;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T extends Constant> T autoCast(int index) {
-        return (T) cst[index];
     }
 
     public Constant[] array() {

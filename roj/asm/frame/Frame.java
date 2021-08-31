@@ -40,14 +40,14 @@ public final class Frame {
     /**
      * @see FrameType
      */
-    public int type;
+    public char type;
     public InsnNode target;
     public VarList
             locals = new VarList(),
             stacks = new VarList();
 
     public Frame(int type) {
-        this.type = type;
+        this.type = (char) type;
     }
 
     public String toString() {
@@ -71,6 +71,6 @@ public final class Frame {
     }
 
     public void pack() {
-        locals = new VarList().stripTops(locals);
+        locals = locals.stripTops();
     }
 }

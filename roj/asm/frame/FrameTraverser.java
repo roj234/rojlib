@@ -50,7 +50,6 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -115,7 +114,7 @@ public final class FrameTraverser {
 
         boolean _init_ = owner.name().equals("<init>");
         if (0 == (owner.accessFlag2() & AccessFlag.STATIC)) { // this
-            this.local.add(_init_ ? new Var(UNINITIAL_THIS) : obj(owner.ownerClass()));
+            this.local.add(_init_ ? new Var() : obj(owner.ownerClass()));
         } else if(_init_) {
             throw new IllegalArgumentException("static <init>!");
         }
@@ -339,7 +338,7 @@ public final class FrameTraverser {
     }
 
     @SuppressWarnings("fallthrough")
-    public int visitNode(InsnNode node, boolean trace) {
+    public int visitNode(InsnNode node) {
         Var t1, t2, t3;
         int arg = -1;
         String clazz = null;
@@ -1055,7 +1054,7 @@ public final class FrameTraverser {
 
     // endregion
 
-    public Collection<Frame> collect(InsnList list, List<ExceptionEntry> exceptionEntries, boolean trace, ToIntMap<InsnNode> pcRev) {
+    public List<Frame> collect(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
         Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
         Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
 
@@ -1080,21 +1079,11 @@ public final class FrameTraverser {
                 for (int j : bb.targets) {
                     if(!routines.add(j)) continue;
 
-                    System.out.println("=============================================");
-                    System.out.println("            Subroutine begin at " + j);
-                    System.out.println("=============================================");
                     local.copyFrom(bb.localBegin);
                     stack.copyFrom(bb.stackBegin);
-                    boolean b = false;//j <= 300;
+
                     while (j < list.size()) {
-                        node = list.get(j++);
-                        if(b) {
-                            if (byTarget.containsKey(node)) System.out.print("F ");
-                            System.out.println("#" + j + " " + node);
-                            System.out.println("L " + local);
-                            if (stack.size > 0) System.out.println("S " + stack);
-                        }
-                        switch (flg = visitNode(node, false)) {
+                        switch (flg = visitNode(node = list.get(j++))) {
                             case 1:
                             case 2:
                             case 3:
@@ -1134,30 +1123,52 @@ public final class FrameTraverser {
             toVisit = tmp1;
         }
 
-        System.out.println("=============CONSTRUCT FRAMES============================");
         List<InsnNode> frames0 = new ArrayList<>(byTarget.keySet());
         frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
+
         for (i = 0; i < frames0.size(); i++) {
             List<BasicBlock> bbs = byTarget.get(frames0.get(i));
             BasicBlock bb = bbs.get(0);
+
+            System.out.println("At tNode " + frames0.get(i));
+            for (int j = 0; j < bbs.size(); j++) {
+                BasicBlock next = bbs.get(j);
+
+                System.out.println(next);
+                if(j > 0) {
+                    if (!next.localBegin.sw(bb.localBegin) || !next.stackBegin.eq(bb.stackBegin)) {
+                        throw new RuntimeException(
+                                "从各点到达同一位置的跳转栈必须相同！\n" +
+                                        "Block: " + next + "\n" +
+                                        "ExcL: " + next.localBegin + "\n" +
+                                        "ExcS: " + next.stackBegin + "\n" +
+                                        "GotL: " + bb.localBegin + "\n" +
+                                        "GotS: " + bb.stackBegin);
+                    }
+                    bb.localBegin.removeTo(next.localBegin.size);
+                }
+
+                List<BasicBlock> new1 = byTarget.get(list.get(next.start));
+                if(new1 != null) {
+                    for (int k = 0; k < new1.size(); k++) {
+                        BasicBlock new2 = new1.get(k);
+                        if(!bbs.contains(new2)) {
+                            bbs.add(new2);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (i = 0; i < frames0.size(); i++) {
+            BasicBlock bb = byTarget.get(frames0.get(i)).get(0);
             assert bb.done;
+
             local.copyFrom(bb.localBegin);
             stack.copyFrom(bb.stackBegin);
-            for (int j = 1; j < bbs.size(); j++) {
-                BasicBlock next = bbs.get(j);
-                if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
-                    throw new RuntimeException(
-                            "从各点到达同一位置的跳转栈必须相同！\n" +
-                                    "Block: " + next + "\n" +
-                                    "ExcL: " + next.localBegin + "\n" +
-                                    "ExcS: " + next.stackBegin + "\n" +
-                                    "GotL: " + local + "\n" +
-                                    "GotS: " + stack);
-                }
-                local.removeTo(next.localBegin.size);
-            }
             frames0.set(i, Helpers.cast(build(frames0.get(i))));
         }
+        System.out.println(frames0);
         return Helpers.cast(frames0);
     }
 
@@ -1219,20 +1230,13 @@ public final class FrameTraverser {
                 il.clear();
             }
         }
-        /*for (i = 0; i < exc.size(); i++) {
+        for (i = 0; i < exc.size(); i++) {
             ExceptionEntry entry = exc.get(i);
             InsnNode node = InsnNode.validate(entry.handler);
-            BasicBlock pt = byTarget.get(node);
-            if(pt == null) {
-                pt = bySource.get(entry.handler);
-                if(pt == null) {
-                    System.out.println("x2");
-                    pt = new BasicBlock(Collections.singletonList(node));
-                }
-                byTarget.put(node, pt);
-                System.out.println("Add for ex");
-            }
-            pt.stack.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
-        }*/
+            BasicBlock pt = new BasicBlock(list.indexOf(node));
+            //byException.put(InsnNode.validate(entry.start), pt);
+            byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+            pt.stackBegin.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
+        }
     }
 }

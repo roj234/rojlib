@@ -37,7 +37,7 @@ import roj.util.ByteWriter;
  * @since 2021/5/29 17:16
  */
 public abstract class Constant {
-    private short index;
+    private char index;
 
     Constant() {}
 
@@ -54,16 +54,16 @@ public abstract class Constant {
     public abstract int hashCode();
 
     public String toString() {
-        return CstType.toString(type()) + "#" + index;
+        return CstType.toString(type()) + "#" + (int)index;
     }
 
     @Internal
     public void setIndex(int index) {
-        this.index = (short) index;
+        this.index = (char) index;
     }
 
     public int getIndex() {
-        return index & 0xFFFF;
+        return index;
     }
 
     public abstract byte type();

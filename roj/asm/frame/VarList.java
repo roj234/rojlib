@@ -58,17 +58,23 @@ public final class VarList implements Iterable<Var> {
         return this;
     }
 
-    public VarList stripTops(VarList x) {
-        this.size = 0;
-        ensureCapacity(x.size);
-        Var[] list = x.list;
-        int j = 0;
-        for (int i = 0; i < x.size; i++) {
-            if(list[i] != Var.TOP) {
-                this.list[j++] = list[i];
+    public VarList stripTops() {
+        Var[] list = this.list;
+        for (int i = 0; i < this.size; i++) {
+            if(list[i] == Var.TOP) {
+                VarList t2 = new VarList();
+                t2.ensureCapacity(this.size - 1);
+                System.arraycopy(list, 0, t2.list, 0, i);
+                int j = i;
+                for (i++; i < this.size; i++) {
+                    if(list[i] != Var.TOP) {
+                        t2.list[j++] = list[i];
+                    }
+                }
+                t2.size = j;
+                return t2;
             }
         }
-        this.size = j;
         return this;
     }
 

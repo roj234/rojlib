@@ -34,10 +34,7 @@ import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.AttributeList;
-import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
+import roj.asm.util.*;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
@@ -266,7 +263,7 @@ public final class Parser {
         }
         r.index += 4; // ver
 
-        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+        ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
         pool.readNames(r);
 
         int cfo = r.index; // acc
@@ -329,7 +326,7 @@ public final class Parser {
 
         r.index += 4; // ver
 
-        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+        ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
         pool.readNames(r);
 
         int cfo = r.index; // acc

@@ -44,7 +44,8 @@ public final class Var {
             FLOAT = new Var(VarType.FLOAT),
             DOUBLE = new Var(VarType.DOUBLE),
             LONG = new Var(VarType.LONG),
-            NULL = new Var(VarType.NULL);
+            NULL = new Var(VarType.NULL),
+            READ_ONLY_UNI_THIS = new Var();
 
     public static Var std(int type) {
         switch (type) {
@@ -64,8 +65,12 @@ public final class Var {
         throw new ArrayIndexOutOfBoundsException(type);
     }
 
-    public Var(byte type) {
+    private Var(byte type) {
         this.type = type;
+    }
+
+    public Var() {
+        this.type = VarType.UNINITIAL_THIS;
     }
 
     public Var(String owner) {
