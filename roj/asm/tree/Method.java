@@ -145,7 +145,7 @@ public final class Method implements MethodNode, MoFNode {
                 break;
             // 泛型签名
             case "Signature":
-                signature = SignatureHelper.parse(((CstUTF) pool.get(r)).getString());
+                signature = Signature.parse(((CstUTF) pool.get(r)).getString());
                 return;
             // 显示方法参数的标识符
             case "MethodParameters":

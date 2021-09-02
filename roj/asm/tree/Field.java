@@ -32,7 +32,6 @@ import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
-import roj.asm.type.SignatureHelper;
 import roj.asm.type.Type;
 import roj.asm.util.*;
 import roj.util.ByteReader;
@@ -110,7 +109,7 @@ public final class Field implements MoFNode {
                 break;
             // 字段泛型签名
             case "Signature":
-                signature = SignatureHelper.parse(((CstUTF) pool.get(r)).getString());
+                signature = Signature.parse(((CstUTF) pool.get(r)).getString());
                 return;
             // 字段注解
             case "RuntimeVisibleAnnotations":

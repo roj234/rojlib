@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -25,14 +25,16 @@
  */
 package roj.asm.util;
 
+import roj.text.CharList;
+
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since 2021/5/11 23:46
+ * @since 2021/9/4 19:03
  */
-public interface IType {
-    boolean isGeneric();
-    String toGeneric();
+public interface IGeneric {
+    void appendGeneric(CharList sb);
+    void appendString(CharList sb);
 }

@@ -27,7 +27,7 @@ package roj.asm.mapper.struct;
 
 import roj.asm.cst.CstUTF;
 import roj.asm.type.ParamHelper;
-import roj.asm.type.SignatureHelper;
+import roj.asm.type.Signature;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.IType;
 import roj.util.ByteList;
@@ -50,7 +50,7 @@ public final class AttrLVT_Simple {
             int clo = r.index;
             CstUTF name = ((CstUTF) pool.get(r));
             CstUTF desc = ((CstUTF) pool.get(r));
-            IType type = generic ? SignatureHelper.parse(desc.getString()) : ParamHelper.parseField(desc.getString());
+            IType type = generic ? Signature.parse(desc.getString()) : ParamHelper.parseField(desc.getString());
             SimpleVar sv = new SimpleVar();
             sv.nameId = clo;
             sv.name = name;

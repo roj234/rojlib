@@ -38,7 +38,6 @@ import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
-import roj.asm.type.SignatureHelper;
 import roj.asm.type.Type;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
@@ -229,13 +228,13 @@ public final class CodeMapper extends Mapping {
         if(a instanceof AttrUTF) {
             AttrUTF au = (AttrUTF) a;
 
-            Signature generic = SignatureHelper.parse(au.value);
+            Signature generic = Signature.parse(au.value);
 
             generic.rename(NAME_REMAPPER);
 
             au.value = generic.toGeneric();
         } else {
-            Signature generic = SignatureHelper.parse(((CstUTF) pool.array()[new ByteReader(a.getRawData()).readUnsignedShort()]).getString());
+            Signature generic = Signature.parse(((CstUTF) pool.array()[new ByteReader(a.getRawData()).readUnsignedShort()]).getString());
 
             generic.rename(NAME_REMAPPER);
 

@@ -11,7 +11,7 @@ import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.*;
 import roj.asm.util.AttributeList;
-import roj.asm.util.IType;
+import roj.asm.util.IGeneric;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToIntMap;
@@ -323,7 +323,7 @@ public final class SimpleObfuscator extends Obfuscator {
             }
     }
 
-    static final List<IType> fake = Collections.singletonList(Type.std(NativeType.INT));
+    static final List<IGeneric>                   fake  = Collections.singletonList(Type.std(NativeType.INT));
     static final Map<String, Collection<Generic>> fake2 = new MyHashMap<>();
     static {
         fake2.put("\u0000", Collections.singletonList(new Generic(Generic.TYPE_TYPE_PARAM, "int", 23, Generic.EX_SUPERS)));
@@ -453,7 +453,7 @@ public final class SimpleObfuscator extends Obfuscator {
             sign1.genericTypeMap = fake2;
         } else {
             int len = rand.nextInt(4);
-            ArrayList<IType> gens = new ArrayList<>(len);
+            ArrayList<IGeneric> gens = new ArrayList<>(len);
             for (int i = 0; i < len; i++) {
                 gens.add(randAny());
             }
@@ -511,7 +511,7 @@ public final class SimpleObfuscator extends Obfuscator {
         }
     }
 
-    private IType randAny() {
+    private IGeneric randAny() {
         return rand.nextBoolean() ? randType() : randGen();
     }
 

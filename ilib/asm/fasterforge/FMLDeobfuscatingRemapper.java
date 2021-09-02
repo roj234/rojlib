@@ -38,7 +38,6 @@ import roj.asm.mapper.util.FlDesc;
 import roj.asm.mapper.util.MtDesc;
 import roj.asm.tree.AccessData;
 import roj.asm.type.Signature;
-import roj.asm.type.SignatureHelper;
 import roj.collect.Flippable;
 import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
@@ -173,7 +172,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
         if(signature == null || signature.contains("!*")) {
             return signature;
         }
-        Signature parse = SignatureHelper.parse(signature);
+        Signature parse = Signature.parse(signature);
         parse.rename(s -> classNameBiMap.get(s));
         return parse.toGeneric();
     }

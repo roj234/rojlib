@@ -31,7 +31,7 @@ import roj.asm.cst.CstUTF;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.type.LocalVariable;
 import roj.asm.type.ParamHelper;
-import roj.asm.type.SignatureHelper;
+import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
@@ -88,7 +88,7 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
             String desc = ((CstUTF) pool.get(r)).getString();
             list.add(new LocalVariable(r.readUnsignedShort(),
                     name,
-                    generic ? SignatureHelper.parse(desc) : ParamHelper.parseField(desc),
+                    generic ? Signature.parse(desc) : ParamHelper.parseField(desc),
                     startNode, endNode
             ));
         }
@@ -128,7 +128,7 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
             w.writeShort(pcRev.getInt(s))
                     .writeShort(pcRev.getInt(e) - pcRev.getInt(s))
                     .writeShort(pool.getUtfId(c.name))
-                    .writeShort(pool.getUtfId(c.type.isRootGeneric() ? c.type.toGeneric() : ParamHelper.getField((Type) c.type)))
+                    .writeShort(pool.getUtfId(c.type.isGeneric() ? c.type.toGeneric() : ParamHelper.getField((Type) c.type)))
                     .writeShort(c.slot);
         }
     }

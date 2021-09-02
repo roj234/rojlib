@@ -34,7 +34,6 @@ import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
 import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.Signature;
-import roj.asm.type.SignatureHelper;
 import roj.asm.util.*;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -286,7 +285,7 @@ public final class Clazz implements IClass {
                 attr = new AttrEnclosingMethod((CstClass) pool.get(r), (CstNameAndType) pool.get(r));
                 break;
             case "Signature":
-                signature = SignatureHelper.parse(((CstUTF) pool.get(r)).getString());
+                signature = Signature.parse(((CstUTF) pool.get(r)).getString());
 
                 return;
             case "Deprecated":

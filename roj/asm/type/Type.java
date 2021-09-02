@@ -25,6 +25,7 @@
  */
 package roj.asm.type;
 
+import roj.asm.util.IGeneric;
 import roj.asm.util.IType;
 import roj.collect.CharMap;
 import roj.concurrent.OperationDone;
@@ -33,13 +34,13 @@ import roj.text.CharList;
 import static roj.asm.type.NativeType.*;
 
 /**
- * No description provided
+ * 类型
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class Type implements IType {
+public class Type implements IType, IGeneric {
     private static final CharMap<Type> STD = new CharMap<>(9);
 
     public static synchronized Type std(char c) {
@@ -48,7 +49,7 @@ public class Type implements IType {
             STD.put(c, type = new Type(c));
         }
         if(type.array != 0) {
-            throw new IllegalArgumentException("Std type " + c + " have been changed.");
+            throw new IllegalArgumentException("Std type " + c + " has been changed.");
         }
         return type;
     }
@@ -86,7 +87,7 @@ public class Type implements IType {
     }
 
     @Override
-    public boolean isRootGeneric() {
+    public boolean isGeneric() {
         return false;
     }
 
@@ -102,7 +103,13 @@ public class Type implements IType {
 
     @Override
     public void appendString(CharList sb) {
-        sb.append(toString());
+        if (this.owner != null) {
+            sb.append(owner);
+        } else {
+            sb.append(NativeType.toString(type));
+        }
+        for (int i = 0; i < this.array; i++)
+            sb.append("[]");
     }
 
     public int length() {
@@ -132,15 +139,8 @@ public class Type implements IType {
     }
 
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        if (this.owner != null) {
-            sb.append(owner/*.substring(owner.lastIndexOf('/') + 1)*/);
-        } else {
-            sb.append(NativeType.toString(type));
-        }
-
-        for (int i = 0; i < this.array; i++)
-            sb.append("[]");
+        CharList sb = new CharList();
+        appendString(sb);
         return sb.toString();
     }
 

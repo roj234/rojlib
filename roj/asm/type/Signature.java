@@ -26,18 +26,18 @@
 
 package roj.asm.type;
 
+import roj.asm.util.IGeneric;
 import roj.asm.util.IType;
+import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
+import roj.math.MutableInt;
 import roj.text.CharList;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.UnaryOperator;
 
 /**
- * No description provided
+ * 泛型签名
  *
  * @author Roj234
  * @version 0.1
@@ -53,10 +53,10 @@ public class Signature implements IType {
     /**
      * Contract: values[0] is class, other is interface
      */
-    public List<IType> values;
-    public IType returns;
+    public List<IGeneric> values;
+    public IGeneric returns;
     public final byte type;
-    public List<IType> throwsException;
+    public List<IGeneric> throwsException;
 
     public Signature(int type) {
         this.genericTypeMap = new MyHashMap<>();
@@ -64,7 +64,7 @@ public class Signature implements IType {
         this.type = (byte) type;
     }
 
-    public Signature(Map<String, Collection<Generic>> genericTypeMap, List<IType> value, boolean isMethod, List<IType> exceptions) {
+    public Signature(Map<String, Collection<Generic>> genericTypeMap, List<IGeneric> value, boolean isMethod, List<IGeneric> exceptions) {
         this.genericTypeMap = genericTypeMap;
         this.returns = value.remove(value.size() - 1);
         this.values = value;
@@ -98,30 +98,19 @@ public class Signature implements IType {
             if (type == METHOD)
                 sb.append('(');
             for (int i = 0; i < values.size(); i++) {
-                IType value = values.get(i);
-                value.appendGeneric(sb);
+                values.get(i).appendGeneric(sb);
             }
             if (type == METHOD)
                 sb.append(')');
         }
         returns.appendGeneric(sb);
         if (throwsException != null) {
-            for (IType value : throwsException) {
+            for (IGeneric value : throwsException) {
                 sb.append('^');
                 value.appendGeneric(sb);
             }
         }
         return sb.toString();
-    }
-
-    @Override
-    public void appendGeneric(CharList sb) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void appendString(CharList sb) {
-        throw new UnsupportedOperationException();
     }
 
     public String getSignatureType() {
@@ -154,16 +143,14 @@ public class Signature implements IType {
                 returns.appendString(sb);
                 sb.append(' ').append('(');
                 for (int i = 0; i < values.size(); i++) {
-                    IType value = values.get(i);
-                    value.appendString(sb);
+                    values.get(i).appendString(sb);
                     sb.append(", ");
                 }
                 sb.setIndex(sb.length() - 2);
                 sb.append(')');
             } else {
                 for (int i = 0; i < values.size(); i++) {
-                    IType value = values.get(i);
-                    value.appendString(sb);
+                    values.get(i).appendString(sb);
                 }
                 returns.appendString(sb);
             }
@@ -179,14 +166,13 @@ public class Signature implements IType {
         }
         if (values != null) {
             for (int i = 0; i < values.size(); i++) {
-                IType value = values.get(i);
-                rename0(fn, value);
+                rename0(fn, values.get(i));
             }
         }
         rename0(fn, returns);
     }
 
-    static void rename0(UnaryOperator<String> fn, IType value) {
+    static void rename0(UnaryOperator<String> fn, IGeneric value) {
         if (value.getClass() == Type.class) {
             Type type = (Type) value;
             if (type.owner != null)
@@ -197,7 +183,244 @@ public class Signature implements IType {
     }
 
     @Override
-    public boolean isRootGeneric() {
+    public boolean isGeneric() {
         return true;
+    }
+
+    public static void main(String[] args) {
+        Signature signature = parse(args[0]);
+        System.out.println("toString(): " + signature);
+        System.out.println("getSignatureType(): " + signature.getSignatureType());
+        System.out.println("toGeneric(): " + signature.toGeneric());
+    }
+
+    private static final int F_TEST_ITF = 1, F_PRIMITIVE = 2, F_IS_SUB_CLASS = 4;
+
+    /**
+     * Signatures encode declarations written in the Java programming language that use types outside the type system of the Java Virtual Machine. They support reflection and debugging, as well as compilation when only class files are available.
+     * <p>
+     * A Java compiler must emit a signature for any class, interface, constructor, method, or field whose declaration uses type variables or parameterized types. Specifically, a Java compiler must emit:
+     * <p>
+     * A class signature for any class or interface declaration which is either generic, or has a parameterized type as a superclass or superinterface, or both.
+     * <p>
+     * A method signature for any method or constructor declaration which is either generic, or has a type variable or parameterized type as the return type or a formal parameter type, or has a type variable in a throws clause, or any combination thereof.
+     * <p>
+     * If the throws clause of a method or constructor declaration does not involve type variables, then a compiler may treat the declaration as having no throws clause for the purpose of emitting a method signature.
+     * <p>
+     * A field signature for any field, formal parameter, or local variable declaration whose type uses a type variable or a parameterized type.
+     * <p>
+     * Signatures are specified using a grammar which follows the notation of §4.3.1. In addition to that notation:
+     * <p>
+     * The syntax [x] on the right-hand side of a production denotes zero or one occurrences of x. That is, x is an optional symbol. The alternative which contains the optional symbol actually defines two alternatives: one that omits the optional symbol and one that includes it.
+     * <p>
+     * A very long right-hand side may be continued on a second line by clearly indenting the second line.
+     * <p>
+     * The grammar includes the terminal symbol Identifier to denote the name of a type, field, method, formal parameter, local variable, or type variable, as generated by a Java compiler. Such a name must not contain any of the ASCII characters . ; [ / < > : (that is, the characters forbidden in method names (§4.2.2) and also colon) but may contain characters that must not appear in an identifier in the Java programming language (JLS §3.8).
+     * <p>
+     * Signatures rely on a hierarchy of nonterminals known as type signatures:
+     * <p>
+     * A Java type signature represents either a reference type or a primitive type of the Java programming language.
+     * <p>
+     * 下面都啥鬼东西，不如实践
+     */
+
+    public static Signature parse(String generic) {
+        MutableInt mi = new MutableInt();
+        CharList tmp = ParamHelper.sharedBuffer.get();
+        tmp.clear();
+
+        int i = 0;
+
+        Map<String, Collection<Generic>> map = new LinkedMyHashMap<>();
+
+        if (generic.charAt(0) == '<') {
+            i = 1;
+
+            outer:
+            while (i < generic.length()) {
+                char cr = generic.charAt(i++);
+                switch (cr) {
+                    case ':': {
+                        String key = tmp.toString();
+                        tmp.clear();
+                        Collection<Generic> collection = new LinkedList<>();
+
+                        boolean first = true;
+
+                        while (first || hasNext(generic, i)) {
+                            mi.setValue(i);
+                            collection.add((Generic) getSignatureValue(generic, mi, F_TEST_ITF, tmp));
+                            i = mi.getValue();
+                            first = false;
+                        }
+
+                        map.put(key, collection);
+                        continue;
+                    }
+                    case '>':
+                        break outer;
+                    default:
+                        tmp.append(cr);
+                }
+            }
+        }
+
+        List<IGeneric> params = new ArrayList<>();
+        boolean isMethod = generic.charAt(i) == '(';
+        if (isMethod) {
+            i++;
+        }
+
+        List<IGeneric> exceptions = new ArrayList<>();
+
+        boolean returnVal = false;
+        while (i < generic.length()) {
+            switch (generic.charAt(i)) {
+                case '^':
+                    if (returnVal) {
+                        mi.setValue(i + 1);
+                        tmp.clear();
+                        exceptions.add(getSignatureValue(generic, mi, 0, tmp));
+                        i = mi.getValue();
+
+                        continue;
+                    } else {
+                        throw new IllegalArgumentException("[" + (i) + "(" + generic.charAt(i) + ")]" + generic);
+                    }
+                case ')':
+                    if (!returnVal) {
+                        i++;
+                        returnVal = true;
+                        break;
+                    } else {
+                        throw new IllegalArgumentException("[" + (i) + "(" + generic.charAt(i) + ")]" + generic);
+                    }
+            }
+
+            mi.setValue(i + 1);
+            tmp.clear();
+            params.add(getSignatureValue(generic, mi, F_PRIMITIVE, tmp));
+            i = mi.getValue();
+        }
+
+        return new Signature(map, params, isMethod, exceptions);
+    }
+
+    private static boolean hasNext(String generic, int i) {
+        switch (generic.charAt(i++)) {
+            case ':':
+                return true;
+            case 'L':
+            case 'T':
+                return generic.charAt(i) != ':';
+            case '>':
+            default:
+                return false;
+        }
+    }
+
+    @SuppressWarnings("fallthrough")
+    private static IGeneric getSignatureValue(String s, MutableInt mi, int F, CharList tmp) {
+        int i = mi.getValue();
+
+        int arrayLevel = 0;
+        byte subClass = 0;
+
+        byte cat;
+        if ((F & F_IS_SUB_CLASS) == 0) {
+            switch (s.charAt(i)) {
+                case '+':
+                    subClass = Generic.EX_EXTENDS;
+                    i++;
+                    break;
+                case '-':
+                    subClass = Generic.EX_SUPERS;
+                    i++;
+                    break;
+                case '[':
+                    while (s.charAt(i) == '[') {
+                        arrayLevel++;
+                        i++;
+                    }
+            }
+
+            final char c = s.charAt(i);
+            if ((F & F_PRIMITIVE) != 0) {
+                if (NativeType.isValidate(c) && c != NativeType.CLASS) {
+                    mi.setValue(i + 1);
+                    return new Type(c, arrayLevel);
+                }
+            }
+
+            switch (c) {
+                case '*': {
+                    mi.setValue(i + 1);
+                    return new Generic(Generic.TYPE_CLASS, "*", arrayLevel, subClass);
+                }
+                case 'T':
+                    cat = Generic.TYPE_TYPE_PARAM;
+                    break;
+                case 'L':
+                    cat = Generic.TYPE_CLASS;
+                    break;
+                case ':':
+                    cat = Generic.TYPE_INTERFACE;
+                    if ((F & F_TEST_ITF) != 0) {
+                        if (s.charAt(++i) == 'L')
+                            break;
+                    }
+                default:
+                    throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
+            }
+            i++;
+        } else {
+            cat = Generic.TYPE_SUB_CLASS;
+        }
+
+        boolean shouldFindNext = false;
+
+        while (i < s.length()) {
+            char c1 = s.charAt(i++);
+            if (c1 == ';' || c1 == '<') {
+                i--;
+                if (c1 == '<')
+                    shouldFindNext = true;
+                break;
+            }
+            tmp.append(c1);
+        }
+
+        if (tmp.length() == 0) {
+            throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
+        }
+
+        Generic value = new Generic(cat, tmp.toString(), arrayLevel, subClass);
+
+        if (shouldFindNext) {
+            i++;
+            while (i < s.length() && s.charAt(i) != '>') {
+                mi.setValue(i);
+                tmp.clear();
+                value.addChild(getSignatureValue(s, mi, F, tmp));
+                i = mi.getValue();
+            }
+        }
+        if (s.charAt(i) != ';') {
+            if (s.charAt(i) != '>') {
+                throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
+            } else if (s.charAt(++i) != ';') {
+                if (s.charAt(i) != '.')
+                    throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
+                else {
+                    mi.setValue(i + 1);
+                    tmp.clear();
+                    value.subClass = (Generic) getSignatureValue(s, mi, (F & 1) | 4, tmp);
+                    i = mi.getValue() - 1;
+                }
+            }
+        }
+
+        mi.setValue(i + 1);
+        return value;
     }
 }

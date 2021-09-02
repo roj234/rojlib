@@ -27,7 +27,7 @@
 package roj.asm.type;
 
 import roj.annotation.Internal;
-import roj.asm.util.IType;
+import roj.asm.util.IGeneric;
 import roj.text.CharList;
 
 import javax.annotation.Nonnull;
@@ -37,13 +37,13 @@ import java.util.List;
 import java.util.function.UnaryOperator;
 
 /**
- * No description provided
+ * 泛型类型
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class Generic implements IType {
+public class Generic implements IGeneric {
     public static final byte TYPE_TYPE_PARAM = 0,
             TYPE_INTERFACE = 1,
             TYPE_CLASS = 2,
@@ -61,7 +61,7 @@ public class Generic implements IType {
     public int array;
     public byte extendType;
     @Nullable
-    public List<IType> children;
+    public List<IGeneric> children;
 
     public Generic(byte type, @Nonnull String owner, int array, byte extendType) {
         this.type = type;
@@ -70,7 +70,7 @@ public class Generic implements IType {
         this.extendType = extendType;
     }
 
-    public void addChild(IType child) {
+    public void addChild(IGeneric child) {
         if (children == null) {
             children = new LinkedList<>();
         }
@@ -91,7 +91,7 @@ public class Generic implements IType {
             sb.append(owner);
             if (children != null && !children.isEmpty()) {
                 sb.append('<');
-                for (IType child : children) {
+                for (IGeneric child : children) {
                     child.appendGeneric(sb);
                 }
                 sb.append('>');
@@ -151,20 +151,10 @@ public class Generic implements IType {
             subClass.owner = tmp.substring(idx + 1);
         }
         if (children != null) {
-            for (IType value : children) {
+            for (IGeneric value : children) {
                 Signature.rename0(renameFunction, value);
             }
         }
-    }
-
-    @Override
-    public boolean isRootGeneric() {
-        return false;
-    }
-
-    @Override
-    public String toGeneric() {
-        throw new UnsupportedOperationException();
     }
 
     public void appendString(CharList sb) {
@@ -179,7 +169,7 @@ public class Generic implements IType {
         sb.append(owner.equals("*") ? "?" : owner.substring(owner.lastIndexOf('/') + 1));
         if (children != null && !children.isEmpty()) {
             sb.append('<');
-            for (IType child : children) {
+            for (IGeneric child : children) {
                 child.appendString(sb);
                 sb.append(", ");
             }
