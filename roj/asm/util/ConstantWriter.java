@@ -477,4 +477,10 @@ public class ConstantWriter {
     public int getIndex() {
         return index;
     }
+
+    public void clear() {
+        this.constants.clear();
+        this.refMap.clear();
+        this.index = 1;
+    }
 }

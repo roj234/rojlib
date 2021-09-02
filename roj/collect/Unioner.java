@@ -237,7 +237,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
         return arrSize;
     }
 
-    private Region findRegion(int pos) {
+    public Region findRegion(int pos) {
         pos = binarySearch(pos);
         if(pos < 0) {
             // array id now
@@ -260,7 +260,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     }
 
     @SuppressWarnings("unchecked")
-    public <B extends Collection<T>> B collect(int pos, B target) {
+    public <COLLECTION extends Collection<T>> COLLECTION collect(int pos, COLLECTION target) {
         Region region = findRegion(pos);
         if(region != null)
             target.addAll((Collection<T>) region.value);

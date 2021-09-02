@@ -68,7 +68,7 @@ public class TerminalTransformer extends CodeVisitor implements IClassTransforme
     static String clsName, mName, mDesc;
 
     @Override
-    protected void invoke(byte code, CstRef method) {
+    public void invoke(byte code, CstRef method) {
         String owner = method.getClassName();
         if(owner.length() < 16 || owner.length() > 17 || !owner.startsWith("java/lang/")) {
             super.invoke(code, method);

@@ -40,9 +40,9 @@ import roj.util.Helpers;
  * @since 2021/8/16 18:12
  */
 public abstract class IVisitor {
-    protected ByteWriter     bw;
-    protected ConstantWriter cw;
-    protected ByteReader     br;
+    public ByteWriter     bw;
+    public ConstantWriter cw;
+    public ByteReader     br;
 
     protected int amountIndex, amount;
     protected int attrAmountIndex, attrAmount;

@@ -15,10 +15,10 @@ import roj.util.ByteWriter;
  * @since 2021/7/21 2:28
  */
 public class ClassVisitor {
-    protected ConstantWriter cw = new ConstantWriter();
-    protected ByteWriter bw = new ByteWriter();
+    public ConstantWriter cw = new ConstantWriter();
+    public ByteWriter bw = new ByteWriter();
 
-    protected ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
+    public ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
 
     public IVisitor fieldVisitor;
     public IVisitor methodVisitor;
@@ -78,6 +78,7 @@ public class ClassVisitor {
         kb.addAll(r.getBytes(), r.index, r.remain());
         bw.list = pb;
         cw.write(bw);
+        cw.clear();
         pb.addAll(kb, 0, kb.pos());
         return pb;
     }
@@ -87,7 +88,7 @@ public class ClassVisitor {
      * @param major 主版本号
      * @param minor 次版本号
      */
-    protected void visitBegin(int major, int minor) {
+    public void visitBegin(int major, int minor) {
         bw.writeInt(0xCAFEBABE).writeShort(major).writeShort(minor);
     }
 
@@ -95,7 +96,7 @@ public class ClassVisitor {
      * 读取完了常量池
      * @param pool 常量池
      */
-    protected void visitConstants(ConstantPool pool) {}
+    public void visitConstants(ConstantPool pool) {}
 
     /**
      *
@@ -104,23 +105,23 @@ public class ClassVisitor {
      * @param parent 父类
      * @param interfaces 接口
      */
-    protected void visitClass(int acc, String name, String parent, String[] interfaces) {
+    public void visitClass(int acc, String name, String parent, String[] interfaces) {
         bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(parent)).writeShort(interfaces.length);
         for(String s : interfaces)
             bw.writeShort(cw.getUtfId(s));
     }
 
-    protected void visitAttributes() {
+    public void visitAttributes() {
         attrAmountIndex = bw.list.pos();
         attrAmount = 0;
         bw.writeShort(0);
     }
 
-    protected void visitAttribute(String name, ByteList data) {
+    public void visitAttribute(String name, ByteList data) {
         bw.writeShort(cw.getUtfId(name)).writeInt(data.pos()).writeBytes(data);
     }
 
-    protected void visitEnd() {
+    public void visitEnd() {
         int pos = bw.list.pos();
         bw.list.pos(attrAmountIndex);
         bw.writeShort(attrAmount);

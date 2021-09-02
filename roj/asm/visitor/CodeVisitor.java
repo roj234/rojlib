@@ -43,12 +43,12 @@ import static roj.asm.Opcodes.*;
  * @since 2021/8/16 19:07
  */
 public abstract class CodeVisitor {
-    protected ByteWriter     bw;
-    protected ConstantWriter cw;
-    protected ByteReader     br;
-    protected ConstantPool   cp;
+    public ByteWriter     bw;
+    public ConstantWriter cw;
+    public ByteReader     br;
+    public ConstantPool   cp;
 
-    protected ByteList code;
+    public ByteList code;
     protected int bci;
 
     // 方法的Code属性的长度的位置
@@ -88,7 +88,7 @@ public abstract class CodeVisitor {
         visitEndCode();
     }
 
-    protected void visitCode(int stackSize, int localSize, int len) {
+    public void visitCode(int stackSize, int localSize, int len) {
         bw.writeShort(cw.getUtfId("Code"));
         bw.writeInt(0);
         codeIndex = bw.list.pos();
@@ -97,7 +97,7 @@ public abstract class CodeVisitor {
         codeAttrAmountIndex = bw.list.pos();
     }
 
-    protected void visitBytecode(ConstantPool pool) {
+    public void visitBytecode(ConstantPool pool) {
         ByteReader r = new ByteReader(code);
 
         byte prev = 0, code;
@@ -242,15 +242,15 @@ public abstract class CodeVisitor {
         }
     }
 
-    protected void multi_dimension_array(CstClass clz, int dimension) {
+    public void multi_dimension_array(CstClass clz, int dimension) {
         bw.writeByte(MULTIANEWARRAY).writeShort(clz.getIndex()).writeByte((byte) dimension);
     }
 
-    protected void clazz(byte code, CstClass clz) {
+    public void clazz(byte code, CstClass clz) {
         bw.writeByte(code).writeShort(clz.getIndex());
     }
 
-    protected void increase(boolean widen, int var_id, int count) {
+    public void increase(boolean widen, int var_id, int count) {
         bw.writeByte(IINC);
         if(widen) {
             bw.writeByte((byte) var_id).writeByte((byte) count);
@@ -259,7 +259,7 @@ public abstract class CodeVisitor {
         }
     }
 
-    protected void ldc(byte code, Constant c) {
+    public void ldc(byte code, Constant c) {
         bw.writeByte(code);
         if(code == LDC) {
             bw.writeByte((byte) c.getIndex());
@@ -268,47 +268,47 @@ public abstract class CodeVisitor {
         }
     }
 
-    protected void invoke_dynamic(CstDynamic dyn, int type) {
+    public void invoke_dynamic(CstDynamic dyn, int type) {
         bw.writeByte(INVOKEDYNAMIC).writeShort(dyn.getIndex()).writeShort(type);
     }
 
-    protected void invoke_interface(CstRefItf itf, short argc) {
+    public void invoke_interface(CstRefItf itf, short argc) {
         bw.writeByte(INVOKEINTERFACE).writeShort(itf.getIndex()).writeShort(argc);
     }
 
-    protected void invoke(byte code, CstRef method) {
+    public void invoke(byte code, CstRef method) {
         bw.writeByte(code).writeShort(method.getIndex());
     }
 
-    protected void field(byte code, CstRefField field) {
+    public void field(byte code, CstRefField field) {
         bw.writeByte(code).writeShort(field.getIndex());
     }
 
-    protected void jump(byte code, int offset) {
+    public void jump(byte code, int offset) {
         std_u2(code, offset);
     }
 
-    protected void jump_4(byte code, int offset) {
+    public void jump_4(byte code, int offset) {
         std_u4(code, offset);
     }
 
-    protected void std(byte code) {
+    public void std(byte code) {
         bw.writeByte(code);
     }
 
-    protected void std_u1(byte code, int value) {
+    public void std_u1(byte code, int value) {
         bw.writeByte(code).writeByte((byte) value);
     }
 
-    protected void std_u2(byte code, int value) {
+    public void std_u2(byte code, int value) {
         bw.writeByte(code).writeShort(value);
     }
 
-    protected void std_u4(byte code, int value) {
+    public void std_u4(byte code, int value) {
         bw.writeByte(code).writeInt(value);
     }
 
-    protected void parse_table_switch(ByteReader r) {
+    public void parse_table_switch(ByteReader r) {
         while ((r.index & 3) != 0) {
             r.index++;
         }
@@ -333,14 +333,14 @@ public abstract class CodeVisitor {
         }
     }
 
-    protected void align_out() {
+    public void align_out() {
         ByteList out = bw.list;
         while ((out.pos() & 3) != 0) {
             out.pos(out.pos() + 1);
         }
     }
 
-    protected void parse_lookup_switch(ByteReader r) {
+    public void parse_lookup_switch(ByteReader r) {
         while ((r.index & 3) != 0) {
             r.index++;
         }
@@ -364,7 +364,7 @@ public abstract class CodeVisitor {
         }
     }
 
-    protected void visitEndBytecodes(int exLen) {
+    public void visitEndBytecodes(int exLen) {
         int pos = bw.list.pos();
         bw.list.pos(codeAttrAmountIndex - 4);
         bw.writeInt(pos - codeAttrAmountIndex);
@@ -375,12 +375,12 @@ public abstract class CodeVisitor {
         bw.writeShort(0);
     }
 
-    protected void visitException(int start, int end, int handler, CstClass type) {
+    public void visitException(int start, int end, int handler, CstClass type) {
         bw.writeShort(start).writeShort(end).writeShort(handler).writeShort(cw.getClassId(type.getValue().getString()));
         codeAttrAmount++;
     }
 
-    protected void visitCodeAttributes(int l) {
+    public void visitCodeAttributes(int l) {
         int pos = bw.list.pos();
         bw.list.pos(codeAttrAmountIndex);
         bw.writeShort(codeAttrAmount);
@@ -391,12 +391,12 @@ public abstract class CodeVisitor {
         bw.writeShort(0);
     }
 
-    protected void visitCodeAttribute(String name, ByteList data) {
+    public void visitCodeAttribute(String name, ByteList data) {
         bw.writeShort(cw.getUtfId(name)).writeInt(data.pos()).writeBytes(data);
         codeAttrAmount++;
     }
 
-    protected void visitEndCode() {
+    public void visitEndCode() {
         int pos = bw.list.pos();
         bw.list.pos(codeAttrAmountIndex);
         bw.writeShort(codeAttrAmount);

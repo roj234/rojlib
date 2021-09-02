@@ -41,6 +41,8 @@ import roj.asm.util.ExceptionEntry;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.collect.*;
+import roj.collect.Unioner.Region;
+import roj.collect.Unioner.Section;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
@@ -48,7 +50,6 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -60,35 +61,22 @@ import static roj.asm.frame.VarType.*;
  *  [local + stack].hasAny(type == uninitialized) && throw Error
  */
 /**
- * No description provided
+ * "Interpreter"
  *
  * @author Roj234
- * @version 0.1
+ * @version 1.1
  * @since 2021/6/18 9:51
  */
-public final class FrameTraverser {
-    public static void main(String[] args) throws IOException, NoSuchMethodException, IllegalAccessException, InstantiationException, InvocationTargetException {
+public final class Interpreter {
+    public static void main(String[] args) throws IOException {
         Clazz clazz = Parser.parse(IOUtil.readFile(new File(args[0])));
         AttrCode code = clazz.methods.get(args.length == 1 ? 0 : Integer.parseInt(args[1])).code;
-        if (code.frames != null) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < code.frames.size(); i++) {
-                sb.append(code.frames.get(i)).append("\n");
-            }
-            System.out.println(sb.toString());
-        }
-        //System.out.println(code);
         code.computeFrames = true;
 
-        Class<?> x = ClassDefiner.INSTANCE.defineClass(clazz.name.replace('/', '.'), Parser.toByteArray(clazz));
-        System.out.println(x);
-        Object o = x.newInstance();
-        x.getDeclaredMethod("test", File.class).invoke(o, new File("xxx"));
+        ClassDefiner.INSTANCE.defineClass(clazz.name.replace('/', '.'), Parser.toByteArray(clazz)).getDeclaredMethods();
     }
 
-    public static final boolean PERFORM_ADDITIONAL_CHECK = false;
-
-    public FrameTraverser() {}
+    public Interpreter() {}
 
     String clazz;
 
@@ -98,6 +86,7 @@ public final class FrameTraverser {
                 local = new VarList();
 
     VarList lastStack, lastLocal;
+    public int maxStackSize, maxLocalSize;
 
     CharList sb = new CharList();
 
@@ -130,6 +119,9 @@ public final class FrameTraverser {
                 this.local.add(Var.TOP);
             // ... double top ...
         }
+
+        this.maxLocalSize = this.local.size;
+        this.maxStackSize = 0;
     }
 
     // region A
@@ -709,9 +701,9 @@ public final class FrameTraverser {
                 checkReturn(NativeType.INT);
                 pop(INT);
                 break;
-            case ATHROW:
             case ARETURN:
                 checkReturn(NativeType.CLASS);
+            case ATHROW:
                 pop(REFERENCE);
                 flag = 1;
                 break;
@@ -960,9 +952,6 @@ public final class FrameTraverser {
     // region B
 
     private void checkReturn(char type) {
-        if(!PERFORM_ADDITIONAL_CHECK)
-            return;
-
         switch (returnType) {
             case NativeType.BOOLEAN:
             case NativeType.BYTE:
@@ -1033,166 +1022,40 @@ public final class FrameTraverser {
     }
 
     // 变量i是这个类型的吗? stopped: 需要使用LVT检测！
-    // No local variable (or pair, type == long or double) can be accessed before assign.
     private void isVarType(int id, byte type, boolean load) {
-        //if(!PERFORM_ADDITIONAL_CHECK)
-        //    return;
-        /*switch (type) {
+        switch (type) {
             case DOUBLE:
-                local.get(id).type == TOP;
-                local.get(id + 1).type == DOUBLE;
-                break;
             case LONG:
-                local.get(id).type == TOP;
-                local.get(id + 1).type == LONG;
+                id++;
                 break;
-            default:
-                local.get(id).type == type;
-                break;
-        }*/
+        }
+        if(load && local.size < id)
+            throw new IllegalArgumentException("Access #" + id + " before assign");
+        maxLocalSize = Math.max(maxLocalSize, id);
     }
 
     // endregion
 
+    static class Exc implements Section {
+        int start, end;
+        BasicBlock bb;
+
+        @Override
+        public int startPos() {
+            return start;
+        }
+
+        @Override
+        public int endPos() {
+            return end;
+        }
+    }
+
     public List<Frame> collect(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
         Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
         Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
+        Unioner<Exc> byException = new Unioner<>();
 
-        resolve(list, bySource, byTarget, exceptionEntries);
-
-        LongBitSet routines = new LongBitSet();
-
-        MyHashSet<BasicBlock> visited = new MyHashSet<>();
-        MyHashSet<BasicBlock> toVisit = new MyHashSet<>();
-        MyHashSet<BasicBlock> tmp = new MyHashSet<>();
-        BasicBlock first = new BasicBlock(0);
-        first.targets = new int[] {0};
-        first.localBegin = new VarList().copyFrom(local);
-        first.stackBegin = new VarList().copyFrom(stack);
-        toVisit.add(first);
-
-        int i, flg;
-        InsnNode node;
-        while (!toVisit.isEmpty()) {
-            for (BasicBlock bb : toVisit) {
-                mainCyc:
-                for (int j : bb.targets) {
-                    if(!routines.add(j)) continue;
-
-                    local.copyFrom(bb.localBegin);
-                    stack.copyFrom(bb.stackBegin);
-
-                    while (j < list.size()) {
-                        switch (flg = visitNode(node = list.get(j++))) {
-                            case 1:
-                            case 2:
-                            case 3:
-                                BasicBlock next = bySource.get(node);
-                                if (next != null) {
-                                    if(visited.add(next)) {
-                                        next.localBegin.copyFrom(local);
-                                        next.stackBegin.copyFrom(stack);
-                                        tmp.add(next);
-                                    } else {
-                                        if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
-                                            throw new RuntimeException(
-                                                    "从各点到达同一位置的跳转栈必须相同！\n" +
-                                                            "Block: " + next + "\n" +
-                                                            "ExcL: " + next.localBegin + "\n" +
-                                                            "ExcS: " + next.stackBegin + "\n" +
-                                                            "GotL: " + local + "\n" +
-                                                            "GotS: " + stack);
-                                        }
-                                        next.localBegin.removeTo(local.size);
-                                    }
-                                } else {
-                                    assert flg == 1;
-                                }
-                                // end of basic block
-                                continue mainCyc;
-                            case 4:
-                                checkWide(list.get(j));
-                                break;
-                        }
-                    }
-                }
-            }
-            MyHashSet<BasicBlock> tmp1 = tmp;
-            tmp = toVisit;
-            tmp.clear();
-            toVisit = tmp1;
-        }
-
-        List<InsnNode> frames0 = new ArrayList<>(byTarget.keySet());
-        frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
-
-        for (i = 0; i < frames0.size(); i++) {
-            List<BasicBlock> bbs = byTarget.get(frames0.get(i));
-            BasicBlock bb = bbs.get(0);
-
-            System.out.println("At tNode " + frames0.get(i));
-            for (int j = 0; j < bbs.size(); j++) {
-                BasicBlock next = bbs.get(j);
-
-                System.out.println(next);
-                if(j > 0) {
-                    if (!next.localBegin.sw(bb.localBegin) || !next.stackBegin.eq(bb.stackBegin)) {
-                        throw new RuntimeException(
-                                "从各点到达同一位置的跳转栈必须相同！\n" +
-                                        "Block: " + next + "\n" +
-                                        "ExcL: " + next.localBegin + "\n" +
-                                        "ExcS: " + next.stackBegin + "\n" +
-                                        "GotL: " + bb.localBegin + "\n" +
-                                        "GotS: " + bb.stackBegin);
-                    }
-                    bb.localBegin.removeTo(next.localBegin.size);
-                }
-
-                List<BasicBlock> new1 = byTarget.get(list.get(next.start));
-                if(new1 != null) {
-                    for (int k = 0; k < new1.size(); k++) {
-                        BasicBlock new2 = new1.get(k);
-                        if(!bbs.contains(new2)) {
-                            bbs.add(new2);
-                        }
-                    }
-                }
-            }
-        }
-
-        for (i = 0; i < frames0.size(); i++) {
-            BasicBlock bb = byTarget.get(frames0.get(i)).get(0);
-            assert bb.done;
-
-            local.copyFrom(bb.localBegin);
-            stack.copyFrom(bb.stackBegin);
-            frames0.set(i, Helpers.cast(build(frames0.get(i))));
-        }
-        System.out.println(frames0);
-        return Helpers.cast(frames0);
-    }
-
-    private static void checkWide(InsnNode node) {
-        switch (node.getOpcode()) {
-            case RET:
-            case IINC:
-            case ISTORE:
-            case LSTORE:
-            case FSTORE:
-            case DSTORE:
-            case ASTORE:
-            case ILOAD:
-            case LLOAD:
-            case FLOAD:
-            case DLOAD:
-            case ALOAD:
-                break;
-            default:
-                throw new IllegalStateException("Unable wide " + Opcodes.toString0(node.getOpcode()));
-        }
-    }
-
-    private static void resolve(InsnList list, Map<InsnNode, BasicBlock> bySource, Map<InsnNode, List<BasicBlock>> byTarget, List<ExceptionEntry> exc) {
         int i = 0;
         IntList il = new IntList(4);
         while (i < list.size()) {
@@ -1230,13 +1093,220 @@ public final class FrameTraverser {
                 il.clear();
             }
         }
-        for (i = 0; i < exc.size(); i++) {
-            ExceptionEntry entry = exc.get(i);
+        for (i = 0; i < exceptionEntries.size(); i++) {
+            ExceptionEntry entry = exceptionEntries.get(i);
+            Exc exc = new Exc();
+            exc.start = list.indexOf(InsnNode.validate(entry.start));
+            exc.end = list.indexOf(InsnNode.validate(entry.end));
+            byException.add(exc);
+
             InsnNode node = InsnNode.validate(entry.handler);
-            BasicBlock pt = new BasicBlock(list.indexOf(node));
-            //byException.put(InsnNode.validate(entry.start), pt);
+            BasicBlock pt = exc.bb = new BasicBlock(-1);
+            pt.targets = new int[] { list.indexOf(node) };
             byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
             pt.stackBegin.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
+        }
+
+        LongBitSet routines = new LongBitSet();
+
+        MyHashSet<BasicBlock> visited = new MyHashSet<>();
+        MyHashSet<BasicBlock> toVisit = new MyHashSet<>();
+        MyHashSet<BasicBlock> tmp = new MyHashSet<>();
+        BasicBlock first = new BasicBlock(0);
+        first.targets = new int[] {0};
+        first.localBegin = new VarList().copyFrom(local);
+        first.stackBegin = new VarList().copyFrom(stack);
+        toVisit.add(first);
+
+        InsnNode node;
+        while (!toVisit.isEmpty()) {
+            for (BasicBlock bb : toVisit) {
+                mainCyc:
+                for (int j : bb.targets) {
+                    if(!routines.add(j)) continue;
+
+                    local.copyFrom(bb.localBegin);
+                    stack.copyFrom(bb.stackBegin);
+
+                    Region rg = byException.findRegion(j);
+                    while (j < list.size()) {
+                        maxStackSize = Math.max(maxStackSize, stack.size);
+                        int flg;
+                        switch (flg = visitNode(node = list.get(j++))) {
+                            case 1:
+                            case 2:
+                            case 3:
+                                BasicBlock next = bySource.get(node);
+                                if (next != null) {
+                                    if(visited.add(next)) {
+                                        next.localBegin.copyFrom(local);
+                                        next.stackBegin.copyFrom(stack);
+                                        tmp.add(next);
+                                    } else {
+                                        if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
+                                            throw new RuntimeException(
+                                                    "从各点到达同一位置的跳转栈必须相同！\n" +
+                                                            "Block: " + next + "\n" +
+                                                            "ExcL: " + next.localBegin + "\n" +
+                                                            "ExcS: " + next.stackBegin + "\n" +
+                                                            "GotL: " + local + "\n" +
+                                                            "GotS: " + stack);
+                                        }
+                                        next.localBegin.removeTo(local.size);
+                                    }
+                                } else {
+                                    assert flg == 1;
+                                }
+                                // end of basic block
+                                continue mainCyc;
+                            case 4:
+                                checkWide(list.get(j));
+                                break;
+                        }
+                        if(rg != (rg = byException.findRegion(j))) {
+                            List<Exc> mv = rg._int_mod_value();
+                            if(mv.isEmpty()) continue;
+                            BasicBlock next = mv.get(mv.size() - 1).bb;
+                            if(visited.add(next)) {
+                                next.localBegin.copyFrom(local);
+                                tmp.add(next);
+                                System.out.println(next);
+                            } else {
+                                if (!next.localBegin.sw(local)) {
+                                    throw new RuntimeException(
+                                            "[Ex]从各点到达同一位置的跳转栈必须相同！\n" +
+                                                    "Block: " + next + "\n" +
+                                                    "ExcL: " + next.localBegin + "\n" +
+                                                    "GotL: " + local);
+                                }
+                                next.localBegin.removeTo(local.size);
+                            }
+                        }
+                    }
+                }
+            }
+            MyHashSet<BasicBlock> tmp1 = tmp;
+            tmp = toVisit;
+            tmp.clear();
+            toVisit = tmp1;
+        }
+
+        List<InsnNode> frames0 = new ArrayList<>(byTarget.keySet());
+        frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
+
+        for (i = 0; i < frames0.size(); i++) {
+            List<BasicBlock> bbs = byTarget.get(frames0.get(i));
+            BasicBlock bb = bbs.get(0);
+
+            //System.out.println("Node: " + frames0.get(i));
+            for (int j = 0; j < bbs.size(); j++) {
+                BasicBlock next = bbs.get(j);
+
+                //System.out.println(next);
+                if(j > 0) {
+                    if (!next.localBegin.sw(bb.localBegin) || !next.stackBegin.eq(bb.stackBegin)) {
+                        throw new RuntimeException(
+                                "从各点到达同一位置的跳转栈必须相同！\n" +
+                                        "Block: " + next + "\n" +
+                                        "ExcL: " + next.localBegin + "\n" +
+                                        "ExcS: " + next.stackBegin + "\n" +
+                                        "GotL: " + bb.localBegin + "\n" +
+                                        "GotS: " + bb.stackBegin);
+                    }
+                    bb.localBegin.removeTo(next.localBegin.size);
+                }
+
+                if(next.start == -1)
+                    continue;
+                List<BasicBlock> new1 = byTarget.get(list.get(next.start));
+                if(new1 != null) {
+                    for (int k = 0; k < new1.size(); k++) {
+                        BasicBlock new2 = new1.get(k);
+                        if(!bbs.contains(new2)) {
+                            bbs.add(new2);
+                        }
+                    }
+                }
+            }
+        }
+
+        lastLocal = first.localBegin;
+        lastStack = first.stackBegin;
+        for (i = 0; i < frames0.size(); i++) {
+            BasicBlock bb = byTarget.get(frames0.get(i)).get(0);
+            assert bb.done;
+
+            local.copyFrom(bb.localBegin);
+            stack.copyFrom(bb.stackBegin);
+            if(i == frames0.size() - 1) {
+                assert bb.targets.length == 1;
+                //int max = MathUtils.max(bb.targets);
+                local.removeTo(fixLastFrame(bb.targets[0], list, first.localBegin.size));
+            }
+            frames0.set(i, Helpers.cast(build(frames0.get(i))));
+        }
+        System.out.println("Max Stack Size: " + maxStackSize + ", Max Local Size: " + maxLocalSize);
+        System.out.println(frames0);
+        return Helpers.cast(frames0);
+    }
+
+    // todo ?
+    private int fixLastFrame(int j, InsnList list, int max) {
+        int arg = -1;
+        while (j < list.size()) {
+            InsnNode node = list.get(j++);
+
+            byte code = node.code;
+            if (code >= ILOAD && code <= ALOAD_3) {
+                arg = NodeHelper.getIndex(node);
+                if (code >= ILOAD_0)
+                    code = (byte) (((code - ILOAD_0) / 4) + ILOAD);
+            } else if (code >= ISTORE && code <= ASTORE_3) {
+                arg = NodeHelper.getIndex(node);
+                if (code >= ISTORE_0)
+                    code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
+            } else {
+                if (node instanceof IIndexInsnNode) {
+                    arg = ((IIndexInsnNode) node).getIndex();
+                }
+            }
+            switch (code) {
+                case DLOAD:
+                case LLOAD:
+                case LSTORE:
+                case DSTORE:
+                    arg++;
+                case ILOAD:
+                case FLOAD:
+                case ALOAD:
+                case ISTORE:
+                case FSTORE:
+                case ASTORE:
+                    if(arg > max)
+                        max = arg;
+                    break;
+            }
+        }
+        return max;
+    }
+
+    private static void checkWide(InsnNode node) {
+        switch (node.getOpcode()) {
+            case RET:
+            case IINC:
+            case ISTORE:
+            case LSTORE:
+            case FSTORE:
+            case DSTORE:
+            case ASTORE:
+            case ILOAD:
+            case LLOAD:
+            case FLOAD:
+            case DLOAD:
+            case ALOAD:
+                break;
+            default:
+                throw new IllegalStateException("Unable wide " + Opcodes.toString0(node.getOpcode()));
         }
     }
 }

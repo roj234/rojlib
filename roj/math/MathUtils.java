@@ -28,7 +28,6 @@ package roj.math;
 import roj.collect.SimpleList;
 import roj.text.TextUtil;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -537,46 +536,6 @@ public abstract class MathUtils {
             sb.deleteCharAt(0);
 
         return list.append(sb);
-    }
-
-    /**
-     * 快速排序
-     * <br>
-     * 在平均状况下，排序n个项目要O(n * log (n))次比较。在最坏状况下则需要O(n^2) 次比较
-     */
-    @Nonnull
-    public static int[] quickShort(@Nonnull final int[] array) {
-        quickSort0(array, 0, array.length - 1);
-        return array;
-    }
-
-    public static void quickSort0(@Nonnull int[] array, int left, int right) {
-        if (left < right) {
-            int i = left;
-            int j = right;
-            int pivot = array[left];
-            while (i < j) {
-                while (i < j && array[j] >= pivot) {
-                    j--;
-                }
-                if (i < j) {
-                    array[i] = array[j];
-                    i++;
-                }
-                while (i < j && array[i] < pivot) {
-                    i++;
-                }
-                if (i < j) {
-                    array[j] = array[i];
-                    j--;
-                }
-            }
-            array[i] = pivot;
-
-            //递归排序
-            quickSort0(array, left, i - 1);
-            quickSort0(array, i + 1, right);
-        }
     }
 
     /**

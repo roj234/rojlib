@@ -312,7 +312,7 @@ public class AttrCode extends Attribute {
     private void recalculateFrames(ToIntMap<InsnNode> pcRev) {
         this.frames.clear();
 
-        FrameTraverser ft = new FrameTraverser();
+        Interpreter ft = new Interpreter();
         ft.init(owner);
 
         try {
@@ -421,7 +421,7 @@ public class AttrCode extends Attribute {
             }
         }
 
-        FrameTraverser ft = new FrameTraverser();
+        Interpreter ft = new Interpreter();
         ft.init(owner);
 
         o:
