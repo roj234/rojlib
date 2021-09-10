@@ -25,7 +25,7 @@
  */
 package roj.kscript.ast;
 
-import roj.annotation.Internal;
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.kscript.Constants;
 import roj.kscript.api.IObject;
 import roj.kscript.type.KType;

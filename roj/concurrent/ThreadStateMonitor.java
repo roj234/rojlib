@@ -23,54 +23,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package roj.concurrent;
 
-import roj.math.MutableBoolean;
-/**
+/**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/4/21 22:51
+ * @since  2020/8/24 22:56
  */
-public final class NextTickList {
-    private NextTickEntry entry;
-    private final MutableBoolean empty = new MutableBoolean(true);
+public interface ThreadStateMonitor {
+    boolean threadDeath(TaskExecutor executor);
 
-    public void add(Runnable fun) {
-        synchronized (empty) {
-            empty.set(false);
-        }
-        NextTickEntry prev = entry;
-        (entry = new NextTickEntry(fun)).prev = prev;
-    }
-
-    public void call() {
-        NextTickEntry e = entry;
-        entry = null;
-        while (e != null) {
-            e.run.run();
-            e = e.prev;
-        }
-        synchronized (empty) {
-            empty.set(true);
-        }
-    }
-
-    public boolean empty() {
-        synchronized (empty) {
-            return empty.get();
-        }
-    }
-
-    public static final class NextTickEntry {
-        Runnable run;
-
-        public NextTickEntry(Runnable r) {
-            run = r;
-        }
-
-        NextTickEntry prev;
-    }
+    boolean working();
 }

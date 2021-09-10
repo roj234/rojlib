@@ -23,48 +23,29 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package roj.concurrent;
 
-package roj.asm.cst;
-
-import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.util.ByteWriter;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/5/29 17:16
+ * @since  2021/2/17 23:08
  */
-public abstract class Constant {
-    private char index;
+public class PrefixFactory implements TaskPool.MyThreadFactory {
+    final String prefix;
+    final int stop;
+    final AtomicInteger ai = new AtomicInteger(1);
 
-    Constant() {}
-
-    public final void write(ByteWriter writer) {
-        write0(writer.writeByte(type()));
+    public PrefixFactory(String prefix, int stop) {
+        this.prefix = prefix;
+        this.stop = stop;
     }
-
-    protected abstract void write0(ByteWriter writer);
 
     @Override
-    public abstract boolean equals(Object o);
-
-    @Override
-    public abstract int hashCode();
-
-    public String toString() {
-        return CstType.toString(type()) + "#" + (int)index;
+    public TaskExecutor get(TaskPool pool) {
+        return new TaskExecutor(pool, prefix + '-' + ai.getAndIncrement(), stop);
     }
-
-    @Internal
-    public void setIndex(int index) {
-        this.index = (char) index;
-    }
-
-    public int getIndex() {
-        return index;
-    }
-
-    public abstract byte type();
 }

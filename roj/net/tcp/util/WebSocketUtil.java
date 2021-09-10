@@ -32,7 +32,7 @@ import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.text.CharList;
-import roj.util.Base64;
+import roj.text.crypt.Base64;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;

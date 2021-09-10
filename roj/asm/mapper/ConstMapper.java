@@ -597,6 +597,7 @@ public class ConstMapper extends Mapping {
 
             for (String parent : supers) {
                 sp.owner = parent;
+                // uninheritable
                 if (selfSkipMethods.contains(sp))
                     break;
 
@@ -607,7 +608,9 @@ public class ConstMapper extends Mapping {
                         sp.owner = data.name;
                         selfSkipMethods.add(sp.copy());
                         if (DEBUG) {
-                            System.out.println("[2M-" + data.name + "-ST/PR]: " + sp.name + sp.param);
+                            // World: amu, check why ST/PR trigger?
+                            // Should not even if no ACCESS FLAG found: public is default
+                            System.out.println("[2M-" + data.name + "-ST/PR]: " + parent + '.' + sp.name + sp.param);
                         }
                     } else if (flags.hasAny(AccessFlag.PUBLIC | AccessFlag.PROTECTED)) {
                         // can inherit
@@ -616,7 +619,7 @@ public class ConstMapper extends Mapping {
                         sp.owner = data.name;
                         selfMethods.put(sp.copy(), newName);
                         if (DEBUG)
-                            System.out.println("[2M-" + data.name + "]: " + sp.name + sp.param + " => " + newName);
+                            System.out.println("[2M-" + data.name + "]: " + parent + '.' + sp.name + sp.param + " => " + newName);
                     } else { // may extend
                         if (Util.arePackagesSame(data.name, parent)) {
                             String newName = entry.getValue();
@@ -624,12 +627,12 @@ public class ConstMapper extends Mapping {
                             sp.owner = data.name;
                             selfMethods.put(sp.copy(), newName);
                             if (DEBUG)
-                                System.out.println("[2M-" + data.name + "-PP]: " + sp.name + sp.param + " => " + newName);
+                                System.out.println("[2M-" + data.name + "-PP]: " + parent + '.' + sp.name + sp.param + " => " + newName);
                         } else {
                             sp.owner = data.name;
                             selfSkipMethods.add(sp.copy());
                             if (DEBUG)
-                                System.out.println("[2M-" + data.name + "-PP-NS]: " + sp.name + sp.param + ": " + supers);
+                                System.out.println("[2M-" + data.name + "-PP-NS]: " + parent + '.' + sp.name + sp.param + ": " + supers);
                         }
                     }
                     break;

@@ -41,8 +41,8 @@ import roj.asm.util.ExceptionEntry;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.collect.*;
+import roj.collect.Unioner.Range;
 import roj.collect.Unioner.Region;
-import roj.collect.Unioner.Section;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
@@ -127,7 +127,7 @@ public final class Interpreter {
     // region A
 
     private void pushRefArray(String name) {
-        stack.add(obj("[" + name));
+        stack.add(obj("[L" + name + ';'));
     }
 
     private void pushPrimArray(int arrayType) {
@@ -653,7 +653,7 @@ public final class Interpreter {
                 pop(REFERENCE);
                 pop(INT);
                 final Var aArray = pop(REFERENCE);
-                if ('[' != aArray.owner.charAt(0)) {
+                if ('[' != aArray.owner.charAt(0) || ';' != aArray.owner.charAt(aArray.owner.length() - 1)) {
                     throw new IllegalStateException("Unable assign " + aArray.owner + " to [L<any>");
                 }
                 break;
@@ -702,7 +702,7 @@ public final class Interpreter {
                 pop(INT);
                 break;
             case ARETURN:
-                checkReturn(NativeType.CLASS);
+                //checkReturn(NativeType.CLASS);
             case ATHROW:
                 pop(REFERENCE);
                 flag = 1;
@@ -1036,17 +1036,17 @@ public final class Interpreter {
 
     // endregion
 
-    static class Exc implements Section {
+    static class Exc implements Range {
         int start, end;
         BasicBlock bb;
 
         @Override
-        public int startPos() {
+        public long startPos() {
             return start;
         }
 
         @Override
-        public int endPos() {
+        public long endPos() {
             return end;
         }
     }
@@ -1164,7 +1164,7 @@ public final class Interpreter {
                                 break;
                         }
                         if(rg != (rg = byException.findRegion(j))) {
-                            List<Exc> mv = rg._int_mod_value();
+                            List<Exc> mv = rg.i_value();
                             if(mv.isEmpty()) continue;
                             BasicBlock next = mv.get(mv.size() - 1).bb;
                             if(visited.add(next)) {

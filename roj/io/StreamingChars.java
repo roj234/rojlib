@@ -28,7 +28,7 @@ package roj.io;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.Wrapped;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -112,7 +112,7 @@ public class StreamingChars implements CharSequence {
                 }
             }
         } catch (IOException e) {
-            throw new Wrapped("StreamingChars error", e);
+            Helpers.throwAny(e);
         } finally {
             bufOff = start;
         }

@@ -55,10 +55,13 @@ import roj.mod.util.MappingHelper;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
+import roj.text.crypt.Base64;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
-import roj.util.Base64;
-import roj.util.*;
+import roj.util.ByteList;
+import roj.util.ByteWriter;
+import roj.util.Executable;
+import roj.util.Helpers;
 
 import java.io.*;
 import java.net.SocketException;
@@ -1101,6 +1104,8 @@ public final class FMDMain {
         File mcRoot = new File(cfgGen.getString("MC目录"));
         if (!mcRoot.isDirectory())
             mcRoot = UIUtil.readFile("MC目录(.minecraft)");
+        if (!new File(mcRoot, "/versions/").isDirectory())
+            mcRoot = new File(mcRoot, ".minecraft");
 
         List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
 

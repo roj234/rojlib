@@ -28,16 +28,17 @@ package lac.server;
 
 import ilib.ImpLib;
 import lac.common.pkt.PktLogin;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.util.ByteReader;
+import roj.util.ByteWriter;
+import roj.util.FixedString;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketChat;
 import net.minecraft.network.play.server.SPacketDisconnect;
 import net.minecraft.util.text.TextComponentTranslation;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.fbt.tags.TagString;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.io.*;
 
@@ -91,7 +92,7 @@ public final class LoginMgr {
 
     private static final RandomAccessFile userData;
 
-    private static final TagString FORMAT = new TagString(64);
+    private static final FixedString FORMAT = new FixedString(64);
 
     private static final int USERDATA_HEADER = 0xa92f84d1;
 

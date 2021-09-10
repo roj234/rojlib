@@ -176,11 +176,15 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
     }
 
     public void reset() {
+        if(registeredProjects == null)
+            return;
         synchronized (this) {
             t.interrupt();
             LockSupport.parkNanos(100);
-            for (WatchKey key : actions.keySet())
-                key.cancel();
+            for (WatchKey key : actions.keySet()) {
+                if(key != null)
+                    key.cancel();
+            }
             actions.clear();
             registeredProjects.clear();
         }

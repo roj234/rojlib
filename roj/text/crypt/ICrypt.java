@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,48 +23,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package roj.text.crypt;
 
-package roj.asm.cst;
+import roj.util.ByteList;
 
-import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.util.ByteWriter;
+import java.security.DigestException;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since 2021/5/29 17:16
+ * @since 2021/9/7 13:07
  */
-public abstract class Constant {
-    private char index;
-
-    Constant() {}
-
-    public final void write(ByteWriter writer) {
-        write0(writer.writeByte(type()));
-    }
-
-    protected abstract void write0(ByteWriter writer);
-
-    @Override
-    public abstract boolean equals(Object o);
-
-    @Override
-    public abstract int hashCode();
-
-    public String toString() {
-        return CstType.toString(type()) + "#" + (int)index;
-    }
-
-    @Internal
-    public void setIndex(int index) {
-        this.index = (char) index;
-    }
-
-    public int getIndex() {
-        return index;
-    }
-
-    public abstract byte type();
+public interface ICrypt {
+    String name();
+    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
 }

@@ -249,10 +249,12 @@ public class Signature implements IType {
 
                         while (first || hasNext(generic, i)) {
                             mi.setValue(i);
+                            tmp.clear();
                             collection.add((Generic) getSignatureValue(generic, mi, F_TEST_ITF, tmp));
                             i = mi.getValue();
                             first = false;
                         }
+                        tmp.clear();
 
                         map.put(key, collection);
                         continue;
@@ -297,7 +299,7 @@ public class Signature implements IType {
                     }
             }
 
-            mi.setValue(i + 1);
+            mi.setValue(i);
             tmp.clear();
             params.add(getSignatureValue(generic, mi, F_PRIMITIVE, tmp));
             i = mi.getValue();
@@ -395,6 +397,9 @@ public class Signature implements IType {
         }
 
         Generic value = new Generic(cat, tmp.toString(), arrayLevel, subClass);
+        // probably: method generic should check class generic...
+        //if(cat == Generic.TYPE_TYPE_PARAM && !tnKeySet.contains(value.owner))
+        //    throw new IllegalArgumentException("没找到Type Variable " + value.owner);
 
         if (shouldFindNext) {
             i++;
@@ -414,7 +419,7 @@ public class Signature implements IType {
                 else {
                     mi.setValue(i + 1);
                     tmp.clear();
-                    value.subClass = (Generic) getSignatureValue(s, mi, (F & 1) | 4, tmp);
+                    value.subClass = (Generic) getSignatureValue(s, mi, (F & 1) | F_IS_SUB_CLASS, tmp);
                     i = mi.getValue() - 1;
                 }
             }

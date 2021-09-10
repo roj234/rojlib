@@ -26,7 +26,6 @@
 
 package roj.asm.type;
 
-import roj.annotation.Internal;
 import roj.asm.util.IGeneric;
 import roj.text.CharList;
 
@@ -82,7 +81,6 @@ public class Generic implements IGeneric {
         children.add(child);
     }
 
-    @Internal
     public void appendGeneric(CharList sb) {
         if (owner.equals("*")) {
             sb.append('*');

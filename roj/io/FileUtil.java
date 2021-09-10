@@ -26,10 +26,10 @@
 package roj.io;
 
 import roj.collect.MyHashMap;
+import roj.concurrent.PrefixFactory;
 import roj.concurrent.Ref;
+import roj.concurrent.TaskPool;
 import roj.concurrent.WaitingIOFuture;
-import roj.concurrent.pool.PrefixFactory;
-import roj.concurrent.pool.TaskPool;
 import roj.concurrent.task.AbstractCalcTask;
 import roj.io.down.Downloader;
 import roj.io.down.IProgressHandler;

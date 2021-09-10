@@ -25,7 +25,7 @@
  */
 package roj.mod;
 
-import roj.concurrent.pool.TaskExecutor;
+import roj.concurrent.TaskExecutor;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;

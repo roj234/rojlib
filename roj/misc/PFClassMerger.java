@@ -1,4 +1,4 @@
-package roj;
+package roj.misc;
 
 import roj.asm.Parser;
 import roj.asm.tree.Clazz;

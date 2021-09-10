@@ -25,7 +25,7 @@
  */
 package lac.server;
 
-import roj.concurrent.pool.TaskExecutor;
+import roj.concurrent.TaskExecutor;
 import roj.ui.UIUtil;
 
 import javax.swing.*;

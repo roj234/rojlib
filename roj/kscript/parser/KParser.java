@@ -25,7 +25,7 @@
  */
 package roj.kscript.parser;
 
-import roj.annotation.Internal;
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.collect.MyHashMap;
 import roj.collect.ReuseStack;
 import roj.collect.ToIntMap;

@@ -75,9 +75,8 @@ public final class DirectAccessor<T> {
     public static boolean       DEBUG;
     public static final IBitSet EMPTY_BITS           = new SingleBitSet();
 
-    static final boolean        CHECK_CLASS_CAST = System.getProperty("roj.reflect.dac.checkCast") == null;
-    static final AtomicInteger  NEXT_ID          = new AtomicInteger();
-    static final FlagList       PUBLIC_ACCESS    = new FlagList(AccessFlag.PUBLIC);
+    static final AtomicInteger NEXT_ID = new AtomicInteger();
+    static final FlagList      PUBLIC_ACCESS    = new FlagList(AccessFlag.PUBLIC);
 
     private final MyHashMap<String, Method> methodByName;
     private final MyCustomMap caches;
@@ -86,6 +85,7 @@ public final class DirectAccessor<T> {
     private       CharList sb;
     private       T        instance;
     private       MyCustomMap.Entry cache;
+    private       boolean check;
 
     static final class MyCustomMap extends MyHashMap<String, Class<?>> {
         static final class Entry extends MyHashMap.Entry<String, Class<?>> {
@@ -120,6 +120,7 @@ public final class DirectAccessor<T> {
 
     private DirectAccessor(Class<T> deClass, String packageName) {
         this.owner = deClass;
+        this.check = true;
         if(!deClass.isInterface())
             throw new IllegalArgumentException(deClass.getName() + " should be a interface");
         Method[] methods = deClass.getMethods();
@@ -231,7 +232,7 @@ public final class DirectAccessor<T> {
             insn = code.instructions;
             insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
             insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-            if(CHECK_CLASS_CAST)
+            if(check)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, type));
             insn.add(_set);
             insn.add(NodeHelper.cached(Opcodes.RETURN));
@@ -448,7 +449,7 @@ public final class DirectAccessor<T> {
             for (Class<?> param : params) {
                 String tag = ParamHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), size++);
-                if (CHECK_CLASS_CAST && !param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
+                if (check && !param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, param.getName().replace('.', '/')));
                 switch (tag) {
                     case "D":
@@ -686,7 +687,7 @@ public final class DirectAccessor<T> {
                     insn.add(cache.node);
                 } else {
                     insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-                    if (CHECK_CLASS_CAST)
+                    if (check)
                         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     invoke.parameters().add(0, new Type("java/lang/Object"));
                 }
@@ -696,7 +697,7 @@ public final class DirectAccessor<T> {
             for (Class<?> param : params) {
                 String tag = ParamHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), ++size);
-                if (CHECK_CLASS_CAST && !param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
+                if (check && !param.isPrimitive() && objectModes != null && param != Object.class) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, param.getName().replace('.', '/')));
                 switch (tag) {
                     case "D":
@@ -848,7 +849,7 @@ public final class DirectAccessor<T> {
                         insn.add(cache.node);
                     } else {
                         insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-                        if (CHECK_CLASS_CAST)
+                        if (check)
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     }
                     insn.add(new FieldInsnNode(Opcodes.GETFIELD, targetName, field.getName(), fieldType));
@@ -878,14 +879,14 @@ public final class DirectAccessor<T> {
                         insn.add(cache.node);
                     } else {
                         insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-                        if (CHECK_CLASS_CAST)
+                        if (check)
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     }
                 } else {
                     code.localSize = --code.stackSize;
                 }
                 insn.add(NodeHelper.X_LOAD_I(fieldType.nativeName().charAt(0), isStatic || useCache ? 1 : 2));
-                if (CHECK_CLASS_CAST && fieldType.type == CLASS && !field.getType().isAssignableFrom(setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
+                if (check && fieldType.type == CLASS && !field.getType().isAssignableFrom(setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fieldType.owner));
                 insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, targetName, field.getName(), fieldType));
                 insn.add(NodeHelper.cached(Opcodes.RETURN));
@@ -1056,10 +1057,10 @@ public final class DirectAccessor<T> {
 
             InsnList insn = code.instructions;
             insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-            if (CHECK_CLASS_CAST)
+            if (check)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
             insn.add(NodeHelper.X_LOAD_I(targetType.nativeName().charAt(0), 2));
-            if (CHECK_CLASS_CAST && targetType.type == CLASS)
+            if (check && targetType.type == CLASS)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetType.owner));
             insn.add(new FieldInsnNode(Opcodes.PUTFIELD, targetName, targetFieldName, targetType));
             insn.add(NodeHelper.cached(Opcodes.RETURN));
@@ -1083,6 +1084,11 @@ public final class DirectAccessor<T> {
 
     public static <V> DirectAccessor<V> withPackage(Class<V> deClass, Class<?> packageClass) {
         return new DirectAccessor<>(deClass, packageClass.getName().substring(0, packageClass.getName().lastIndexOf('/') + 1));
+    }
+
+    public DirectAccessor<T> unchecked() {
+        check = false;
+        return this;
     }
 
     /**

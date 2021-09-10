@@ -26,13 +26,13 @@
 package roj.concurrent;
 
 /**
- * No description provided
+ * 引用
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51
  */
-public class Ref<T> {
+public final class Ref<T> {
     T t;
 
     public Ref(T t) {

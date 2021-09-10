@@ -74,8 +74,8 @@ public final class IfNode extends Node {
 
     @Override
     protected void genDiff(Unioner<Unioner.Wrap<Variable>> var, IntBiMap<Node> idx) {
-        List<Unioner.Wrap<Variable>> self = var._collect_modifiable_int_(idx.getByValue(this)),
-                dest = var._collect_modifiable_int_(idx.getByValue(target));
+        List<Unioner.Wrap<Variable>> self = var.i_collect(idx.getByValue(this)),
+                dest = var.i_collect(idx.getByValue(target));
         if(self != dest) {
             diff = NodeUtil.calcDiff(self, dest);
         }

@@ -25,8 +25,6 @@
  */
 package roj.concurrent;
 
-import roj.concurrent.pool.TaskPool;
-
 /**
  * No description provided
  *

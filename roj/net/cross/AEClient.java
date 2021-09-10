@@ -247,6 +247,10 @@ public class AEClient {
                             System.out.println(" from is slave: " + slave);
                             except_length = -1;
 
+                            /**
+                             * todo A lot!
+                             */
+
                             buf.writePos(5);
                             if(slave) {
                                 int addrLen = buf.getU(buf.pos() - 1);

@@ -23,9 +23,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.concurrent.pool;
+package roj.concurrent;
 
-import roj.concurrent.TaskHandler;
 import roj.concurrent.task.ExecutionTask;
 import roj.concurrent.task.ITask;
 

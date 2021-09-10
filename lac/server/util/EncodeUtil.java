@@ -27,7 +27,7 @@
 package lac.server.util;
 
 import lac.server.Config;
-import roj.util.Base64;
+import roj.text.crypt.Base64;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;

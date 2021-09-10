@@ -25,6 +25,7 @@
  */
 package roj.asm.util;
 
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.text.CharList;
 
 /**
@@ -34,6 +35,7 @@ import roj.text.CharList;
  * @version 0.1
  * @since 2021/9/4 19:03
  */
+@Internal
 public interface IGeneric {
     void appendGeneric(CharList sb);
     void appendString(CharList sb);

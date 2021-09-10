@@ -28,7 +28,7 @@ package roj.mod;
 import roj.asm.annotation.AnnotationProcessor;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.pool.TaskExecutor;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.task.ITask;
 import roj.concurrent.task.ITaskNaCl;
 import roj.io.IOUtil;

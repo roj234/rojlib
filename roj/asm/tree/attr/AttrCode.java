@@ -186,13 +186,19 @@ public class AttrCode extends Attribute {
         w.writeShort(this.exceptions.size());
         ArrayList<ExceptionEntry> exs = this.exceptions;
 
-        exs.sort(new ExEntCmp(pcRev));
+        for (int i = 0; i < exs.size(); i++) {
+            ExceptionEntry ex = exs.get(i);
+            ex.start  = InsnNode.validate(ex.start);
+            ex.end    = InsnNode.validate(ex.end);
+            ex.handler= InsnNode.validate(ex.handler);
+        }
+        //exs.sort(new ExEntCmp(pcRev));
 
         for (int i = 0; i < exs.size(); i++) {
             ExceptionEntry ex = exs.get(i);
-            w.writeShort(pcRev.getInt(InsnNode.validate(ex.start)))
-             .writeShort(pcRev.getInt(InsnNode.validate(ex.end)))
-             .writeShort(pcRev.getInt(InsnNode.validate(ex.handler)))
+            w.writeShort(pcRev.getInt(ex.start))
+             .writeShort(pcRev.getInt(ex.end))
+             .writeShort(pcRev.getInt(ex.handler))
              .writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : pool.getClassId(ex.type));
         }
 

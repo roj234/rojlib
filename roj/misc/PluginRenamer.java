@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj;
+package roj.misc;
 
 import roj.config.ParseException;
 import roj.config.YAMLParser;

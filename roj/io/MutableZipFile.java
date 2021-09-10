@@ -2,8 +2,9 @@ package roj.io;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.collect.UnionerL;
-import roj.collect.UnionerL.Point;
+import roj.collect.Unioner;
+import roj.collect.Unioner.Point;
+import roj.collect.Unioner.Range;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -387,7 +388,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         EFile minFile = null;
 
-        UnionerL<EFile> uFile = new UnionerL<>();
+        Unioner<EFile> uFile = new Unioner<>();
 
         for(ModFile file : modified) {
             EFile o = entries.get(file.name);
@@ -424,12 +425,12 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             long begin = -1;
             long len = offset;
             long delta = 0;
-            for (UnionerL.Region region : uFile) { // index modified
+            for (Unioner.Region region : uFile) { // index modified
                 if (region.node().next() != null) {
                     if (begin == -1)
                         throw new IllegalStateException("Unexpected -1 at " + region.node().pos());
                     // req: 两个, id: 不能是第一个
-                    UnionerL.Point point = region.node();
+                    Unioner.Point point = region.node();
                     if (point.end())
                         point = point.next(); // 找到Start
 
@@ -535,7 +536,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         for (EFile file : entries.values()) {
             uFile.add(file);
         }
-        for (UnionerL.Region region : uFile) {
+        for (Unioner.Region region : uFile) {
             Point node = region.node();
             if (node.next() != null) {
                 // 不用再做验证，做过一次了
@@ -709,7 +710,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 arr[ACalendar.SECOND] >> 1;
     }
 
-    public static class EFile implements UnionerL.Section {
+    public static class EFile implements Range {
         //int minExtractVer;
         char flags;
         //int compressMethod;

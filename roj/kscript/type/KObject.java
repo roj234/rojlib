@@ -25,7 +25,7 @@
  */
 package roj.kscript.type;
 
-import roj.annotation.Internal;
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.word.AbstLexer;

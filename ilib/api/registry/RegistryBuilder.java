@@ -31,7 +31,8 @@ import roj.config.data.*;
 
 import java.util.ArrayList;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -46,7 +47,7 @@ public final class RegistryBuilder {
         }
     }
 
-    public static class Std extends IdxImpl implements Propertied<Std> {
+    public static class Std extends Indexable.Impl implements Propertied<Std> {
         Std(String name, int id) {
             super(name, id);
         }

@@ -28,7 +28,6 @@ package ilib.api.registry;
 import ilib.network.IMessage;
 import ilib.network.IMessageHandler;
 import ilib.network.MessageContext;
-import net.minecraftforge.fml.relauncher.Side;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -36,6 +35,8 @@ import roj.collect.ToIntMap;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
+
+import net.minecraftforge.fml.relauncher.Side;
 
 import java.util.function.IntFunction;
 
@@ -89,7 +90,7 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
         ToIntMap<String> mapping = new ToIntMap<>();
 
         for (int i = 0; i < values.size(); i++) {
-            mapping.put(values.get(i).getName(), i);
+            mapping.putInt(values.get(i).getName(), i);
         }
 
         return new SyncPacket(id, mapping);
@@ -122,7 +123,7 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
             int len = buf.readVarInt(false);
             mapping.ensureCapacity(len);
             for (int i = 0; i < len; i++) {
-                mapping.put(buf.readVString(), buf.readVarInt(false));
+                mapping.putInt(buf.readVString(), buf.readVarInt(false));
             }
         }
 

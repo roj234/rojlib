@@ -213,8 +213,5 @@ public class ClassMerger {
                 mainItf.add(n);
             }
         }
-
-        // 这是干么？不懂
-        //mainItf.sort(Comparator.comparing(clz -> clz.getValue().getString()));
     }
 }

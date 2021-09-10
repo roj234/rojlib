@@ -260,7 +260,7 @@ public final class ASTree implements LineHandler {
 
             List<Unioner.Wrap<Variable>> last = Collections.emptyList();
             for (Unioner.Region region : cf) {
-                List<Unioner.Wrap<Variable>> curr = region._int_mod_value();
+                List<Unioner.Wrap<Variable>> curr = region.i_value();
 
                 Unioner.Point point = region.node();
                 while (point != null) {
@@ -283,7 +283,7 @@ public final class ASTree implements LineHandler {
                 if (info == null)
                     System.out.println("Should not be null: " + curr);
 
-                mi.put(indexer.get(region.node().pos()), info);
+                mi.put(indexer.get((int) region.node().pos()), info);
 
                 last = curr;
             }

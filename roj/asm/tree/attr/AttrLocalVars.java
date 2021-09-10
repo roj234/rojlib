@@ -26,7 +26,7 @@
 
 package roj.asm.tree.attr;
 
-import roj.annotation.Internal;
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.type.LocalVariable;

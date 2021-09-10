@@ -23,48 +23,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package roj.concurrent;
 
-package roj.asm.cst;
-
-import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.util.ByteWriter;
+import roj.concurrent.task.ITask;
 
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/5/29 17:16
+ * @since 2021/4/21 22:51
  */
-public abstract class Constant {
-    private char index;
+final class IntervalTask {
+    final ITask run;
+    final long interval;
+    long nextRun;
+    int maxRun;
 
-    Constant() {}
-
-    public final void write(ByteWriter writer) {
-        write0(writer.writeByte(type()));
+    public IntervalTask(ITask run, long interval, long delay, int maxRun) {
+        this.run = run;
+        this.interval = interval;
+        this.nextRun = System.currentTimeMillis() + delay;
+        this.maxRun = maxRun;
     }
-
-    protected abstract void write0(ByteWriter writer);
-
-    @Override
-    public abstract boolean equals(Object o);
-
-    @Override
-    public abstract int hashCode();
-
-    public String toString() {
-        return CstType.toString(type()) + "#" + (int)index;
-    }
-
-    @Internal
-    public void setIndex(int index) {
-        this.index = (char) index;
-    }
-
-    public int getIndex() {
-        return index;
-    }
-
-    public abstract byte type();
 }

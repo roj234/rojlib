@@ -26,7 +26,7 @@
 
 package roj.asm.tree.insn;
 
-import roj.annotation.Internal;
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantWriter;
 import roj.collect.LinkedIntMap;

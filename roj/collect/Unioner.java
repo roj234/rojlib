@@ -25,7 +25,8 @@
  */
 package roj.collect;
 
-import roj.annotation.Internal;
+import org.jetbrains.annotations.ApiStatus.Internal;
+import roj.collect.Unioner.Range;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -37,7 +38,7 @@ import java.util.*;
  * @version 0.1
  * @since  2021/4/27 18:20
  */
-public final class Unioner<T extends Unioner.Section> implements Iterable<Unioner.Region> {
+public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
     private static final Region[] EMPTY_DATA = new Region[0];
 
     public Unioner() {
@@ -51,7 +52,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     Region[] data;
     int size, arrSize;
 
-    private int binarySearch(int key) {
+    private int binarySearch(long key) {
         int low = 0;
         int high = arrSize - 1;
 
@@ -59,7 +60,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
 
         while (low <= high) {
             int mid = (low + high) >>> 1;
-            int midVal = a[mid].node.pos();
+            long midVal = a[mid].node.pos();
 
             if (midVal < key) {
                 low = mid + 1;
@@ -87,7 +88,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     }
 
     public boolean add(T t) {
-        int sp = t.startPos();
+        long sp = t.startPos();
         if(sp >= t.endPos())
             throw new IndexOutOfBoundsException("start >= end: " + t);
 
@@ -104,8 +105,8 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
             }
             Point point = h.node;
 
+            Object owner = point.owner;
             while (true) {
-                Section owner = point.owner;
                 if(t.equals(owner))
                     return false;
                 if(point.next == null) {
@@ -159,19 +160,18 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     }
 
     public boolean remove(T t) {
-        int nearest = t.startPos();
-        if(nearest >= t.endPos())
+        long startPos = t.startPos();
+        if(startPos >= t.endPos())
             throw new IndexOutOfBoundsException("start >= end");
 
-        nearest = binarySearch(nearest);
+        int nearest = binarySearch(startPos);
 
         k:
         if(nearest >= 0) {
             Point prev = null;
             Point point = this.data[nearest].node;
             while (point != null) {
-                Section owner = point.owner;
-                if(t.equals(owner)) {
+                if(t.equals(point.owner)) {
                     if(prev == null) {
                         if(point.next == null)
                             removeId(nearest);
@@ -196,8 +196,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
             Point prev = null;
             Point point = this.data[endPos].node;
             while (point != null) {
-                Section owner = point.owner;
-                if(t.equals(owner)) {
+                if(t.equals(point.owner)) {
                     if(prev == null) {
                         if(point.next == null)
                             removeId(endPos);
@@ -248,7 +247,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
 
     @SuppressWarnings("unchecked")
     @Internal
-    public List<T> _collect_modifiable_int_(int pos) {
+    public List<T> i_collect(int pos) {
         Region region = findRegion(pos);
         return region == null ? Collections.emptyList() : (List<T>) region.value;
     }
@@ -305,7 +304,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
             data1[arrSize - 1].value.clear();
     }
 
-    public void ensureCapacity(int cap) {
+    void ensureCapacity(int cap) {
         if(data.length < cap) {
             Region[] newArr = new Region[cap + 8];
             if(arrSize > 0)
@@ -334,12 +333,12 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     /**
      * 两个方法的调用最好能常数时间
      */
-    public interface Section {
-        int startPos();
-        int endPos();
+    public interface Range {
+        long startPos();
+        long endPos();
     }
 
-    public static final class Wrap<T1> implements Section {
+    public static final class Wrap<T1> implements Range {
         public int s, e;
         public T1 sth;
 
@@ -350,12 +349,12 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
         }
 
         @Override
-        public int startPos() {
+        public long startPos() {
             return s;
         }
 
         @Override
-        public int endPos() {
+        public long endPos() {
             return e;
         }
 
@@ -366,7 +365,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
     }
 
     public static final class Region {
-        final ArrayList<Section> value = new ArrayList<>();
+        final ArrayList<Range> value = new ArrayList<>();
         Point node;
 
         public Point node() {
@@ -374,28 +373,28 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
         }
 
         @SuppressWarnings("unchecked")
-        public <T extends Section> List<T> value() {
+        public <T extends Range> List<T> value() {
             return (List<T>) Collections.unmodifiableList(value);
         }
 
         @SuppressWarnings("unchecked")
         @Internal
-        public <T extends Section> List<T> _int_mod_value() {
+        public <T extends Range> List<T> i_value() {
             return (List<T>) value;
         }
     }
 
     public static final class Point {
-        Section owner;
+        Range owner;
         boolean end;
         Point next;
 
-        public Point(Section data, boolean end) {
+        public Point(Range data, boolean end) {
             this.end = end;
             owner = data;
         }
 
-        public int pos() {
+        public long pos() {
             return end ? owner.endPos() : owner.startPos();
         }
 
@@ -409,7 +408,7 @@ public final class Unioner<T extends Unioner.Section> implements Iterable<Unione
         }
 
         @SuppressWarnings("unchecked")
-        public <T extends Section> T owner() {
+        public <T extends Range> T owner() {
             return (T) owner;
         }
 
