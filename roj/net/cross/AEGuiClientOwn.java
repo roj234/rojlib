@@ -25,10 +25,20 @@
  */
 package roj.net.cross;
 
+import roj.net.NetworkUtil;
+import roj.text.TextUtil;
+import roj.ui.TextAreaPrintStream;
+import roj.ui.UIUtil;
+
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Your description here
@@ -37,44 +47,140 @@ import java.awt.event.*;
  * @version 0.1
  * @since 2021/9/11 2:00
  */
-public class AEGui extends JFrame {
+public class AEGuiClientOwn extends JFrame {
     private JTextField     inpUrl;
     private JButton        btnConnect;
     private JCheckBox      chkSsl;
     private JPasswordField inpServPass;
     private JTextField     inpHouse;
-    private JCheckBox      chkHouseOwner;
     private JTextField     inpPort;
     private JButton        btnSave;
     private JTextArea      stdout;
-    private JTextField     inpMaxConn;
     private JButton        btnClear;
     private JButton        btnManage;
     JScrollPane scroll;
     private JPasswordField inpPass;
 
     public static void main(String[] args) {
-        new AEGui();
+        new AEGuiClientOwn();
     }
 
-    public AEGui() {
-        setTitle("AbyssalEye");
-        setLayout(null);
+    public AEGuiClientOwn() {
+        setTitle("AbyssalEye客户端服务器");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+        btnConnect.addActionListener(this::toggle);
+        System.setOut(new TextAreaPrintStream(stdout, 99999));
+        Util.out = System.out;
+
+        new Thread() {
+            {
+                setName("Updater");
+                setDaemon(true);
+                start();
+            }
+
+            @Override
+            public void run() {
+                boolean prevState = false;
+                while (true) {
+                    boolean currState = client != null && clientThread.isAlive();
+                    if(prevState != currState) {
+                        prevState = currState;
+                        if(!currState && !btnConnect.getText().equals("连接"))
+                            toggle(null);
+                    }
+                    LockSupport.parkNanos(10000);
+                }
+            }
+        };
+
         pack();
+        setBounds(0, 0, 400, 320);
+        UIUtil.center(this);
         setVisible(true);
         setResizable(true);
-        setBounds(520, 260, 510, 500);
         validate();
     }
 
-    private void save(ActionEvent event) {
+    static Thread clientThread;
+    static AEClientOwner client;
 
-    }
+    private void toggle(ActionEvent event) {
+        if (btnConnect.getText().equals("断开")) {
+            btnConnect.setEnabled(false);
 
-    private void connect(ActionEvent event) {
+            btnConnect.setText("连接");
+            btnConnect.setEnabled(true);
 
+            chkSsl.setEnabled(true);
+            inpHouse.setEnabled(true);
+            inpPass.setEnabled(true);
+            inpServPass.setEnabled(true);
+            inpPort.setEnabled(true);
+            inpUrl.setEnabled(true);
+
+            if(clientThread != null && clientThread.isAlive()) {
+                try {
+                    client.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    clientThread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            clientThread = null;
+            client = null;
+        } else {
+            String[] text = TextUtil.split(inpUrl.getText(), ':');
+            if(text.length == 0) {
+                JOptionPane.showMessageDialog(this, "Invalid port");
+                return;
+            }
+
+            InetAddress addr;
+            try {
+                addr = text.length == 1 ? null : InetAddress.getByAddress(NetworkUtil.ip2bytes(text[0]));
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Unknown host");
+                return;
+            }
+
+            InetSocketAddress address;
+            try {
+                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Invalid port");
+                return;
+            }
+
+            int port;
+            try {
+                port = Integer.parseInt(inpPort.getText());
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Invalid port");
+                return;
+            }
+            client = new AEClientOwner(inpHouse.getText(), inpPass.getText(), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), chkSsl.isSelected());
+
+            Thread clientRunner = clientThread = new Thread(client);
+            clientRunner.setName("Client Thread");
+            clientRunner.setDaemon(true);
+            clientRunner.start();
+
+            btnConnect.setText("断开");
+
+            chkSsl.setEnabled(false);
+            inpHouse.setEnabled(false);
+            inpPass.setEnabled(false);
+            inpServPass.setEnabled(false);
+            inpPort.setEnabled(false);
+            inpUrl.setEnabled(false);
+        }
     }
 
     {
@@ -116,7 +222,7 @@ public class AEGui extends JFrame {
         gbc.anchor = GridBagConstraints.WEST;
         panel1.add(label1, gbc);
         chkSsl = new JCheckBox();
-        chkSsl.setSelected(true);
+        chkSsl.setSelected(false);
         chkSsl.setText("SSL");
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
@@ -159,7 +265,6 @@ public class AEGui extends JFrame {
         gbc.anchor = GridBagConstraints.WEST;
         panel1.add(label3, gbc);
         inpPort = new JTextField();
-        inpPort.setText("");
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
         gbc.gridy = 3;
@@ -184,6 +289,7 @@ public class AEGui extends JFrame {
         stdout.setLineWrap(true);
         scroll.setViewportView(stdout);
         btnSave = new JButton();
+        btnSave.setEnabled(false);
         btnSave.setText("保存");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
@@ -192,17 +298,9 @@ public class AEGui extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnSave, gbc);
-        final JLabel label4 = new JLabel();
-        label4.setText("最大人数");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 3;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label4, gbc);
         btnClear = new JButton();
-        btnClear.setText("清空");
+        btnClear.setEnabled(false);
+        btnClear.setText("踢出");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 5;
@@ -220,33 +318,15 @@ public class AEGui extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnManage, gbc);
-        final JLabel label5 = new JLabel();
-        label5.setText("服务器密码");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 1;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label5, gbc);
-        final JLabel label6 = new JLabel();
-        label6.setText("密码");
+        final JLabel label4 = new JLabel();
+        label4.setText("密码");
         gbc = new GridBagConstraints();
         gbc.gridx = 2;
         gbc.gridy = 2;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label6, gbc);
-        chkHouseOwner = new JCheckBox();
-        chkHouseOwner.setText("房主");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(chkHouseOwner, gbc);
+        panel1.add(label4, gbc);
         inpUrl = new JTextField();
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
@@ -258,8 +338,6 @@ public class AEGui extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(inpUrl, gbc);
         inpPass = new JPasswordField();
-        inpPass.setText("");
-        inpPass.setToolTipText("");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 2;
@@ -270,24 +348,23 @@ public class AEGui extends JFrame {
         panel1.add(inpPass, gbc);
         inpServPass = new JPasswordField();
         gbc = new GridBagConstraints();
-        gbc.gridx = 3;
+        gbc.gridx = 2;
         gbc.gridy = 1;
+        gbc.gridwidth = 2;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(inpServPass, gbc);
-        inpMaxConn = new JTextField();
-        inpMaxConn.setEditable(true);
-        inpMaxConn.setText("-1");
-        inpMaxConn.setToolTipText("");
+        final JLabel label5 = new JLabel();
+        label5.setText("服务器密码");
         gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 3;
+        gbc.gridx = 1;
+        gbc.gridy = 1;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpMaxConn, gbc);
+        panel1.add(label5, gbc);
+        setContentPane(panel1);
     }
 }

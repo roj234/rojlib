@@ -1,0 +1,344 @@
+/*
+ * This file is a part of MoreItems
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+package roj.net.cross;
+
+import roj.config.JSONParser;
+import roj.config.ParseException;
+import roj.config.data.CMapping;
+import roj.io.IOUtil;
+import roj.text.TextUtil;
+import roj.ui.UIUtil;
+import roj.util.ByteWriter;
+
+import javax.swing.*;
+import javax.swing.border.TitledBorder;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+
+/**
+ * Your description here
+ *
+ * @author Roj233
+ * @version 0.1
+ * @since 2021/9/11 2:00
+ */
+public class AEGuiClient extends JFrame {
+    private final JButton        btnConnect;
+    private final JCheckBox      chkSsl;
+    private final JTextField     inpUrl;
+    private final JTextField     inpHouse;
+    private final JTextField     inpPort;
+    private final JPasswordField inpServPass;
+    private final JPasswordField inpPass;
+
+    public static void main(String[] args) throws IOException, ParseException {
+        if(args.length > 0) {
+            CMapping cfg = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[0]))).asMap();
+
+            String[] text = TextUtil.split(cfg.getString("addr"), ':');
+            if(text.length == 0) {
+                JOptionPane.showMessageDialog(null, "Invalid port");
+                return;
+            }
+
+            InetAddress addr;
+            try {
+                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "Unknown host");
+                return;
+            }
+
+            InetSocketAddress address;
+            try {
+                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(null, "Invalid port");
+                return;
+            }
+
+            client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
+            client.run();
+        } else {
+            new AEGuiClient();
+        }
+    }
+
+    public AEGuiClient() {
+        final JPanel panel1 = new JPanel();
+        panel1.setLayout(new GridBagLayout());
+        panel1.setBorder(
+                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "AbyssalEye 0.3.1 By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+        btnConnect = new JButton();
+        btnConnect.setText("连接");
+        GridBagConstraints gbc;
+        gbc = new GridBagConstraints();
+        gbc.gridx = 3;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(btnConnect, gbc);
+        final JLabel label1 = new JLabel();
+        label1.setText("服务器地址");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        panel1.add(label1, gbc);
+        final JLabel label2 = new JLabel();
+        label2.setText("房间");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        panel1.add(label2, gbc);
+        inpHouse = new JTextField();
+        inpHouse.setDoubleBuffered(false);
+        inpHouse.setEnabled(true);
+        inpHouse.setOpaque(true);
+        inpHouse.setRequestFocusEnabled(true);
+        inpHouse.setVisible(true);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(inpHouse, gbc);
+        final JLabel label3 = new JLabel();
+        label3.setText("端口");
+        label3.setToolTipText("eg: 80-88,1954");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        panel1.add(label3, gbc);
+        inpPort = new JTextField();
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 3;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(inpPort, gbc);
+        final JLabel label4 = new JLabel();
+        label4.setText("密码");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 2;
+        gbc.gridy = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        panel1.add(label4, gbc);
+        inpUrl = new JTextField();
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(inpUrl, gbc);
+        inpPass = new JPasswordField();
+        gbc = new GridBagConstraints();
+        gbc.gridx = 3;
+        gbc.gridy = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(inpPass, gbc);
+        JButton btnSave = new JButton();
+        btnSave.setText("保存");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 3;
+        gbc.gridy = 3;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(btnSave, gbc);
+        chkSsl = new JCheckBox();
+        chkSsl.setText("SSL");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        panel1.add(chkSsl, gbc);
+        final JLabel label5 = new JLabel();
+        label5.setText("服务器密码");
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        panel1.add(label5, gbc);
+        inpServPass = new JPasswordField();
+        gbc = new GridBagConstraints();
+        gbc.gridx = 2;
+        gbc.gridy = 1;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(inpServPass, gbc);
+        setContentPane(panel1);
+
+        setTitle("AbyssalEye客户端");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        btnConnect.addActionListener(this::toggle);
+        btnSave.addActionListener(this::save);
+
+        setBounds(0, 0, 360, 200);
+        UIUtil.center(this);
+        pack();
+        setVisible(true);
+        setResizable(true);
+        validate();
+    }
+
+    static Thread   clientThread;
+    static AEClient client;
+
+    private void save(ActionEvent event) {
+        CMapping x = new CMapping();
+        x.put("room", inpHouse.getText());
+        x.put("pass", inpPass.getText());
+        x.put("port", Integer.parseInt(inpPort.getText()));
+        x.put("ssl", chkSsl.isSelected());
+        x.put("url", inpUrl.getText());
+        try (FileOutputStream fos = new FileOutputStream("asc.json")) {
+            ByteWriter.encodeUTF(x.toJSONb()).writeToStream(fos);
+            JOptionPane.showMessageDialog(this, "保存在asc.json");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void toggle(ActionEvent event) {
+        if (btnConnect.getText().equals("断开")) {
+            btnConnect.setEnabled(false);
+
+            btnConnect.setText("连接");
+            btnConnect.setEnabled(true);
+
+            chkSsl.setEnabled(true);
+            inpHouse.setEnabled(true);
+            inpPass.setEnabled(true);
+            inpServPass.setEnabled(true);
+            inpPort.setEnabled(true);
+            inpUrl.setEnabled(true);
+
+            if(clientThread != null && clientThread.isAlive()) {
+                try {
+                    client.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    clientThread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            clientThread = null;
+            client = null;
+        } else {
+            String[] text = TextUtil.split(inpUrl.getText(), ':');
+            if(text.length == 0) {
+                JOptionPane.showMessageDialog(this, "Invalid port");
+                return;
+            }
+
+            InetAddress addr;
+            try {
+                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Unknown host");
+                return;
+            }
+
+            InetSocketAddress address;
+            try {
+                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Invalid port");
+                return;
+            }
+
+            int port;
+            try {
+                port = Integer.parseInt(inpPort.getText());
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Invalid port");
+                return;
+            }
+            try {
+                client = new AEClient(inpHouse.getText(), inpPass.getText(), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), chkSsl.isSelected());
+            } catch (IOException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Invalid certificate / IO Error");
+                return;
+            }
+
+            Thread clientRunner = clientThread = new Thread(client);
+            clientRunner.setName("Client Thread");
+            clientRunner.setDaemon(true);
+            clientRunner.start();
+
+            btnConnect.setText("断开");
+
+            chkSsl.setEnabled(false);
+            inpHouse.setEnabled(false);
+            inpPass.setEnabled(false);
+            inpServPass.setEnabled(false);
+            inpPort.setEnabled(false);
+            inpUrl.setEnabled(false);
+        }
+    }
+}

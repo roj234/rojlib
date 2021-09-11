@@ -163,7 +163,8 @@ public class FMDGui extends JFrame {
         setMinimumSize(new Dimension(534, 400));
         pack();
         setResizable(true);
-        setBounds(600, 300, 540, 400);
+        setBounds(0, 0, 540, 400);
+        UIUtil.center(this);
 
         setHeight();
 

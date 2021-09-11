@@ -29,6 +29,7 @@ import roj.text.TextUtil;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import java.awt.*;
 import java.io.*;
 import java.util.List;
 import java.util.function.Function;
@@ -191,5 +192,11 @@ public final class UIUtil {
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
             e.printStackTrace();
         }
+    }
+
+    public static void center(JFrame frame) {
+        Dimension dim = Toolkit.getDefaultToolkit().getScreenSize();
+        Rectangle bounds = frame.getBounds();
+        frame.setBounds((dim.width - bounds.width) / 2, (dim.height - bounds.height) / 2, bounds.width, bounds.height);
     }
 }

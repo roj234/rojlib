@@ -214,6 +214,7 @@ public final class NonblockingUtil {
                 data[3] = shared = ByteBuffer.allocateDirect(len);
             }
         }
+        shared.position(0).limit(len);
 
         int read;
         try {

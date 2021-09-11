@@ -48,6 +48,8 @@ public interface WrappedSocket extends AutoCloseable {
 
     int read() throws IOException;
 
+    int read(int max) throws IOException;
+
     ByteList buffer();
 
     int write(ByteList src) throws IOException;

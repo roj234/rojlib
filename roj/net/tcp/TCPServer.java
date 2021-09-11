@@ -92,17 +92,15 @@ public abstract class TCPServer implements Runnable {
     @Override
     public void run() {
         TaskHandler handler = getTaskHandler();
-
-        Thread self = Thread.currentThread();
-        while (!self.isInterrupted()) {
+        while (true) {
             try {
                 Socket socket = this.socket.accept();
-
                 socket.setReuseAddress(true);
                 socket.setKeepAlive(true);
 
                 handler.pushTask(getTaskFor(socket));
             } catch (IOException e) {
+                if(e.getMessage().contains("close")) return;
                 e.printStackTrace();
             }
         }

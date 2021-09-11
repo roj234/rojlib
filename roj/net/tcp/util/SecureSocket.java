@@ -344,7 +344,7 @@ public class SecureSocket extends InsecureSocket {
      * <P>
      * Each call to this method will perform at most one underlying read().
      */
-    public int read() throws IOException {
+    public int read(int max) throws IOException {
         SSLEngineResult result;
 
         if (!hsDone) {

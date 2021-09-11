@@ -150,10 +150,11 @@ public class MCLauncher extends JFrame {
         add(button);
 
         setMinimumSize(new Dimension(240, 100));
-        pack();
         setLayout(new FlowLayout());
+        pack();
+        setBounds(0, 0, 320, 100);
+        UIUtil.center(this);
         setResizable(true);
-        setBounds(700, 500, 320, 100);
         setVisible(true);
     }
 

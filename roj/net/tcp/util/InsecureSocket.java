@@ -57,13 +57,18 @@ public class InsecureSocket implements WrappedSocket {
 
     @Override
     public int read() throws IOException {
+        return read(SharedConfig.READ_MAX);
+    }
+
+    @Override
+    public int read(int max) throws IOException {
         if(socket.isClosed())
             return -1;
 
-        buffer.ensureCapacity(buffer.pos() + SharedConfig.READ_MAX);
+        buffer.ensureCapacity(buffer.pos() + max);
         int read;
         do {
-            read = NonblockingUtil.normalize(NonblockingUtil.readSocket(fd, buffer, SharedConfig.READ_MAX));
+            read = NonblockingUtil.normalize(NonblockingUtil.readSocket(fd, buffer, max));
         } while (read == -3 && !socket.isClosed());
         return read;
     }
@@ -129,5 +134,10 @@ public class InsecureSocket implements WrappedSocket {
             socket.close();
             fd = null;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "InsSocket{" + socket.getRemoteSocketAddress() + '}';
     }
 }
