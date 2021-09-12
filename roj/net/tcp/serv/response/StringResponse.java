@@ -37,14 +37,11 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 
 public class StringResponse implements HTTPResponse {
-    final String mime, content;
+    final String mime;
+    final CharSequence content;
 
     public StringResponse(CharSequence c, String mime) {
-        if (c.length() == 0 || c.charAt(c.length() - 1) != '\n')
-            content = new StringBuilder().append(c).append('\n').toString();
-        else
-            content = c.toString();
-
+        content = c;
         this.mime = mime + "; charset=UTF-8";
     }
 
@@ -91,10 +88,8 @@ public class StringResponse implements HTTPResponse {
         if (buf == null) {
             ByteList list = new ByteList(content.length());
             ByteWriter.writeUTF(list, content, (byte) -1);
-            if(!content.endsWith("\r\n")) {
-                list.add((byte) '\r');
-                list.add((byte) '\n'); // EOF flag
-            }
+            list.add((byte) '\r');
+            list.add((byte) '\n'); // EOF flag
             buf = list;
         } else {
             buf.compress();

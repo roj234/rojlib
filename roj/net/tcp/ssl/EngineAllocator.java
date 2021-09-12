@@ -43,7 +43,7 @@ public abstract class EngineAllocator {
 
     protected static void config(SSLEngine sslEngine, SslConfig cfg) {
         sslEngine.setUseClientMode(!cfg.isServerSide());
-        sslEngine.setEnabledProtocols(new String[] { "TLSv1", "TLSv1.1", "TLSv1.2" });
+        sslEngine.setEnabledProtocols(sslEngine.getSupportedProtocols());
         // false为单向认证，true为双向认证
         sslEngine.setNeedClientAuth(cfg.isNeedClientAuth());
     }

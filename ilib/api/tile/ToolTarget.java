@@ -26,11 +26,13 @@
 
 package ilib.api.tile;
 
-import ilib.api.registry.IdxImpl;
+import ilib.api.registry.Indexable;
+import org.apache.commons.lang3.NotImplementedException;
+
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
-import org.apache.commons.lang3.NotImplementedException;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -46,7 +48,7 @@ public interface ToolTarget {
 
     int ID_WRENCH = 0;
 
-    class Type extends IdxImpl {
+    class Type extends Indexable.Impl {
         public static final Type WRENCH = new Type("wrench", 100);
         public static final Type CUTTER = new Type("cutter", 300);
 

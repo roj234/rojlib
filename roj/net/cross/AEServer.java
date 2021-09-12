@@ -26,7 +26,7 @@
 package roj.net.cross;
 
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
+import roj.collect.IntSet;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.task.ITask;
@@ -46,9 +46,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
@@ -70,7 +68,7 @@ public class AEServer extends TCPServer {
     TaskExecutor[] runner;
 
     int maxConn;
-    Watcher watcher;
+    Watcher watcher = new Watcher();
 
     public AEServer(InetSocketAddress address, int maxConnection, String keyStoreFile, char[] keyPassword) throws
             IOException, GeneralSecurityException {
@@ -81,12 +79,6 @@ public class AEServer extends TCPServer {
     public AEServer(InetSocketAddress address, int maxConnection) throws IOException {
         super(address, maxConnection);
         this.maxConn = maxConnection;
-    }
-
-    @Override
-    public void run() {
-        watcher = new Watcher(Thread.currentThread(), this);
-        super.run();
     }
 
     public boolean canCreateRoom = true, canJoinRoom = true;
@@ -108,6 +100,7 @@ public class AEServer extends TCPServer {
             }
         } else {
             FileDescriptor fd = NonblockingUtil.fd(client);
+            client.setTrafficClass(0x10);
 
             WrappedSocket cio = (
                     ssl != null ?
@@ -153,16 +146,14 @@ public class AEServer extends TCPServer {
         if(watcher == null) return;
         try {
             socket.close();
-            watcher.join();
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
         LockSupport.parkNanos(1000);
-        for (Map.Entry<Worker, Object> entry : workers.entrySet()) {
-            Worker w = entry.getKey();
-            ByteList tmp = new ByteList(5);
-            tmp.add((byte) PS_ERROR);
-            tmp.add((byte) PS_ERROR_SHUTDOWN);
+        ByteList tmp = new ByteList(5);
+        tmp.add((byte) PS_ERROR);
+        tmp.add((byte) PS_ERROR_SHUTDOWN);
+        for (Worker w : workers.keySet()) {
             switch (w.state) {
                 case CONNECTED:
                 case ESTABLISHED:
@@ -170,10 +161,11 @@ public class AEServer extends TCPServer {
                         w.state = SHUTDOWN;
                         try {
                             synchronized (w) {
-                                w.wait(10);
+                                w.wait(50);
                             }
                         } catch (InterruptedException ignored) {}
                         w.channel.write(tmp);
+                        w.channel.dataFlush();
                         tmp.writePos(0);
                         for (int i = 0; i < 50; i++) {
                             if (w.channel.shutdown())
@@ -184,10 +176,16 @@ public class AEServer extends TCPServer {
                     } catch (IOException ignored) {}
             }
             w.state = SHUTDOWN;
+            w.interrupt();
+        }
+        for (Worker w : workers.keySet()) {
+            try {
+                w.join(50);
+            } catch (InterruptedException ignored) {}
         }
         workers.clear();
         watcher = null;
-        syncPrint("Server closed");
+        System.out.println("Server closed");
     }
 
     public static final class Room extends AtomicInteger {
@@ -196,6 +194,7 @@ public class AEServer extends TCPServer {
         int index;
         final IntMap<WrappedSocket> slaves = new IntMap<>();
         List<Worker> packets = new ArrayList<>();
+        IntSet kicked = new IntSet(4);
         public boolean locked;
 
         public Room(String id, Worker owner, String token) {
@@ -248,6 +247,14 @@ public class AEServer extends TCPServer {
             packets.add(worker);
             set(0);
             LockSupport.park();
+        }
+
+        public void kick(int id) {
+            while (!compareAndSet(0, 1)) {
+                LockSupport.parkNanos(100);
+            }
+            kicked.add(id);
+            set(0);
         }
     }
 
@@ -339,22 +346,12 @@ public class AEServer extends TCPServer {
                     int except_length = -1;
                     main:
                     while (true) {
-                        if(room != null) {
-                            if(room.master == null) {
-                                w.writeByte((byte) PS_ERROR).writeByte((byte) PS_ERROR_MASTER_DIE);
-                                this.channel.write(buf);
-                                this.channel.dataFlush();
-                                LockSupport.parkNanos(10 * 1000);
-                                break;
-                            } else if(room.master == channel)
-                                room.mainThread();
-                        }
+                        if (chkRoomState(buf, w)) break;
                         while ((read = channel.read(except_length == -1 ? 1 : except_length - buf.pos())) == 0 || buf.pos() < except_length) {
                             if(read < 0)
                                 break main;
                             if(read == 0) {
-                                if(room != null && room.master == channel)
-                                    room.mainThread();
+                                if (chkRoomState(buf, w)) break;
                                 LockSupport.parkNanos(1000);
                                 if(wait-- <= 0) {
                                     timeout(channel);
@@ -372,7 +369,7 @@ public class AEServer extends TCPServer {
                             case PS_HEARTBEAT:
                                 buf.writePos(0);
                                 while (channel.write(buf) == 0) {
-                                    LockSupport.parkNanos(1000);
+                                    LockSupport.parkNanos(200);
                                     if(state == SHUTDOWN)
                                         return;
                                     if(wait-- <= 0) {
@@ -449,13 +446,35 @@ public class AEServer extends TCPServer {
                                 syncPrint(this + ": 断开连接(协议)");
                                 state = DISCONNECT;
                                 break main;
+                            case PS_RESET:
+                                if(state != ESTABLISHED) {
+                                    nonLogon(buf);
+                                }
+                                if (room.master != this.channel) {
+                                    w.writeInt(this.roomIndex);
+                                    room.register(this);
+                                }
+                                buf.clear();
+                                break;
+                            case PS_KICK_SLAVE:
+                                if (buf.pos() < 5) {
+                                    except_length = 5;
+                                    break;
+                                }
+                                except_length = -1;
+                                if(state != ESTABLISHED) {
+                                    nonLogon(buf);
+                                    break;
+                                }
+                                if (room.master == this.channel) {
+                                    r.index = 1;
+                                    room.kick(r.readInt());
+                                }
+                                buf.clear();
+                                break;
                             case PS_DATA:
                                 if(state != ESTABLISHED) {
-                                    buf.clear();
-                                    buf.add((byte) PS_ERROR);
-                                    buf.add((byte) PS_ERROR_NOT_CONNECT);
-                                    this.channel.write(buf);
-                                    this.channel.dataFlush();
+                                    nonLogon(buf);
                                 } else {
                                     r.index = 1;
                                     wait = TIMEOUT_ESTABLISHED;
@@ -509,6 +528,8 @@ public class AEServer extends TCPServer {
                                         buf.clear();
                                         buf.add((byte) PS_STATE_SLAVE);
 
+                                        while (!room.compareAndSet(0, 2))
+                                            LockSupport.parkNanos(100);
                                         slave = room.master;
                                         syncPrint(this + " => '" + room.id + "'.master");
                                     }
@@ -540,6 +561,8 @@ public class AEServer extends TCPServer {
                                     this.channel.dataFlush();
                                     buf.clear();
                                     wait = TIMEOUT_ESTABLISHED;
+
+                                    room.compareAndSet(2, 0);
                                 }
                                 break;
                             case PS_ERROR:
@@ -617,6 +640,28 @@ public class AEServer extends TCPServer {
             }
         }
 
+        private void nonLogon(ByteList buf) throws IOException {
+            buf.clear();
+            buf.add((byte) PS_ERROR);
+            buf.add((byte) PS_ERROR_NOT_CONNECT);
+            this.channel.write(buf);
+            this.channel.dataFlush();
+            return;
+        }
+
+        private boolean chkRoomState(ByteList buf, ByteWriter w) throws IOException {
+            if (room != null) {
+                if (room.master == null || room.kicked.remove(roomIndex)) {
+                    w.writeByte((byte) PS_ERROR).writeByte((byte) PS_ERROR_MASTER_DIE);
+                    this.channel.write(buf);
+                    this.channel.dataFlush();
+                    LockSupport.parkNanos(10 * 1000);
+                    return true;
+                } else if (room.master == channel) room.mainThread();
+            }
+            return false;
+        }
+
         private static void timeout(WrappedSocket channel) {
             ByteList buf = channel.buffer();
             buf.clear();
@@ -628,66 +673,16 @@ public class AEServer extends TCPServer {
         }
     }
 
-    static class Watcher extends Thread implements TaskHandler {
-        Thread owner;
-        AEServer server;
-        final List<ITask> tasks = new ArrayList<>();
-        final List<ITask> tasks2 = new SimpleList<>();
-
-        public Watcher(Thread thread, AEServer server) {
-            this.owner = thread;
-            this.server = server;
-            setDaemon(true);
-            setName("Timeout watcher");
-            start();
-        }
-
-        @Override
-        public void run() {
-            while (owner.isAlive()) {
-                for (Iterator<Map.Entry<Worker, Object>> it = server.workers.entrySet().iterator(); it.hasNext(); ) {
-                    Map.Entry<Worker, Object> entry = it.next();
-                    Worker w = entry.getKey();
-                    switch (w.state) {
-                        case WAIT:
-                        case ERROR:
-                        case FINALIZED:
-                            it.remove();
-                    }
-                }
-                tasks2.clear();
-                synchronized (tasks) {
-                    if(!tasks.isEmpty()) {
-                        tasks2.addAll(tasks);
-                    }
-                    tasks.clear();
-                }
-                for (int i = 0; i < tasks2.size(); i++) {
-                    try {
-                        tasks2.get(i).calculate(owner);
-                    } catch (Throwable e) {
-                        e.printStackTrace();
-                    }
-                }
-                tasks2.clear();
-                LockSupport.parkNanos(1000 * 1000);
-            }
-        }
+    static class Watcher implements TaskHandler {
+        public Watcher() {}
 
         @Override
         public void pushTask(ITask task) {
-            if(task != null) {
-                synchronized (tasks) {
-                    tasks.add(task);
-                }
-            }
+            if(task != null)
+                throw new RuntimeException();
         }
 
         @Override
-        public void clearTasks() {
-            synchronized (tasks) {
-                tasks.clear();
-            }
-        }
+        public void clearTasks() {}
     }
 }

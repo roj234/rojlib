@@ -75,7 +75,7 @@ public class HttpClient extends ClientSocket {
                 @Override
                 public InputStream getPkPath() {
                     try {
-                        return new FileInputStream("server.keystore");
+                        return new FileInputStream("server.ks");
                     } catch (FileNotFoundException e) {
                         return null;
                     }
@@ -84,7 +84,7 @@ public class HttpClient extends ClientSocket {
                 @Override
                 public InputStream getCaPath() {
                     try {
-                        return new FileInputStream("server.keystore");
+                        return new FileInputStream("server.ks");
                     } catch (FileNotFoundException e) {
                         return null;
                     }

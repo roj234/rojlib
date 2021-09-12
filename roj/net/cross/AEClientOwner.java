@@ -26,6 +26,8 @@
 package roj.net.cross;
 
 import roj.collect.IntMap;
+import roj.config.data.CList;
+import roj.config.data.CMapping;
 import roj.io.NonblockingUtil;
 import roj.net.NetworkUtil;
 import roj.net.tcp.client.HttpClient;
@@ -77,6 +79,22 @@ public final class AEClientOwner extends AEClient {
         return id;
     }
 
+    void cb_onClientJoin(Worker w) {
+        w.state = 1;
+    }
+
+    void cb_onClientExit(Worker w) {
+        w.state = 2;
+    }
+
+    void cb_onClientHang(Worker w) {
+        w.state = 3;
+    }
+
+    void cb_onClientRejoin(Worker w) {
+        w.state = 4;
+    }
+
     public void run1() throws IOException {
         Socket remote = new Socket();
         remote.connect(server);
@@ -126,7 +144,7 @@ public final class AEClientOwner extends AEClient {
                 ByteWriter w = new ByteWriter(buf);
 
                 buf.clear();
-                w.writeByte((byte) PS_CONNECT).writeByte((byte) id.length()).writeByte((byte) token.length()).writeByte((byte) 1).writeAllUTF(id).writeAllUTF(token);
+                w.writeByte((byte) PS_CONNECT).writeByte((byte) ByteWriter.byteCountUTF8(id)).writeByte((byte) ByteWriter.byteCountUTF8(token)).writeByte((byte) 1).writeAllUTF(id).writeAllUTF(token);
                 while (buf.writePos() < buf.pos()) {
                     channel.write(buf);
                     LockSupport.parkNanos(1000);
@@ -142,10 +160,11 @@ public final class AEClientOwner extends AEClient {
                 ArrayList<Worker> dead = new ArrayList<>();
                 main:
                 while (!shutdownRequested) {
-                    while ((read = channel.read(except_length == -1 ? 1 : except_length - buf.pos())) == 0 || buf.pos() < except_length) {
+                    while (!shutdownRequested && (read = channel.read(except_length == -1 ? 1 : except_length - buf.pos())) == 0 || buf.pos() < except_length) {
                         LockSupport.parkNanos(1000);
                         ByteList ob = this.outBuf;
                         for (Worker wk : channelById.values()) {
+                            if(wk.lock.get() == 2) continue; // standby
                             while(!wk.lock.compareAndSet(0, -1))
                                 LockSupport.parkNanos(1000);
                             ByteList buf1 = wk.client.buffer();
@@ -161,17 +180,33 @@ public final class AEClientOwner extends AEClient {
                                     if(o < 0)
                                         break;
                                     else if (o == 0) {
-                                        LockSupport.parkNanos(1000);
+                                        LockSupport.parkNanos(100);
                                     }
                                 }
                             }
-                            if(!wk.alive)
+                            if(!wk.alive) {
+                                ob.clear();
+                                ob.add((byte) PS_KICK_SLAVE);
+                                w.list = ob;
+                                w.writeInt(wk.order)
+                                        .list = buf;
+                                while (ob.writePos() < ob.pos()) {
+                                    int o = channel.write(ob);
+                                    if(o < 0)
+                                        break;
+                                    else if (o == 0) {
+                                        LockSupport.parkNanos(100);
+                                    }
+                                }
                                 dead.add(wk);
+                            }
                             wk.lock.set(0);
                         }
                         for (int i = 0; i < dead.size(); i++) {
-                            channelById.remove(dead.get(i).order);
-                            syncPrint("分机断开(cleanup) #" + dead.get(i).order);
+                            Worker worker = dead.get(i);
+                            channelById.remove(worker.order);
+                            syncPrint("分机断开(cleanup) #" + worker.order);
+                            cb_onClientExit(worker);
                         }
                         dead.clear();
 
@@ -225,6 +260,34 @@ public final class AEClientOwner extends AEClient {
                                 syncPrint(this + ": 上次的转发状态: " + RSTATE_NAMES[buf.getU(1)]);
                             buf.clear();
                             break;
+                        case PS_RESET:
+                            if(buf.pos() < 5) {
+                                except_length = 5;
+                                break;
+                            }
+                            except_length = -1;
+                            r.index = 1;
+                            int id1 = r.readInt();
+                            Worker wxxx1 = channelById.get(id1);
+                            if(wxxx1 != null) {
+                                if(wxxx1.lock.get() == 2) {
+                                    System.out.println("Already reset");
+                                }
+                                while (!wxxx1.lock.compareAndSet(0, 1))
+                                    LockSupport.parkNanos(100);
+                                while (wxxx1.lock.get() != 2) {
+                                    LockSupport.parkNanos(100);
+                                }
+                                wxxx1.client.dataFlush();
+                                while (!wxxx1.client.shutdown());
+                                wxxx1.client.close();
+                                //syncPrint("分机 #" + wxxx1.order + " 挂起");
+                                cb_onClientHang(wxxx1);
+                            } else {
+                                syncPrint("分机已断开 #" + id);
+                            }
+                            buf.clear();
+                            break;
                         case PS_SLAVE_DISCONNECT:
                             if(buf.pos() < 5) {
                                 except_length = 5;
@@ -236,7 +299,9 @@ public final class AEClientOwner extends AEClient {
                             Worker wxxx = channelById.remove(id);
                             if(wxxx != null) {
                                 syncPrint("分机断开 #" + wxxx.order);
+                                LockSupport.unpark(wxxx);
                                 wxxx.client.close();
+                                cb_onClientExit(wxxx);
                             } else {
                                 syncPrint("分机已断开(cl) #" + id);
                             }
@@ -263,8 +328,10 @@ public final class AEClientOwner extends AEClient {
                             }
                             Socket soc = new Socket();
                             soc.connect(local2);
+                            soc.setTrafficClass(0x10);
                             Worker wxx = new Worker(index, NetworkUtil.bytes2ip(r.readBytes(addrLen)) + ':' + port, new InsecureSocket(soc, NonblockingUtil.fd(soc)));
                             workers.add(wxx);
+                            cb_onClientJoin(wxx);
                             channelById.put(index, wxx);
                             wxx.start();
                             syncPrint("分机连接 #" + index + ", " + wxx.remoteIp);
@@ -292,8 +359,18 @@ public final class AEClientOwner extends AEClient {
                                 buf.clear();
                                 break;
                             }
-                            while(!worker.lock.compareAndSet(0, -1))
-                                LockSupport.parkNanos(1000);
+                            if(worker.lock.get() == 2) {
+                                worker.lock.set(-1);
+                                Socket soc2 = new Socket();
+                                soc2.connect(local2);
+                                worker.client = new InsecureSocket(soc2, NonblockingUtil.fd(soc2));
+                                LockSupport.unpark(worker);
+                                //syncPrint(this + ": Rejoin " + from);
+                                cb_onClientRejoin(worker);
+                            } else {
+                                while (!worker.lock.compareAndSet(0, -1))
+                                    LockSupport.parkNanos(1000);
+                            }
                             worker.pending.addAll(buf, 9, buf.pos() - 9);
                             worker.lock.set(0);
                             buf.clear();
@@ -321,6 +398,15 @@ public final class AEClientOwner extends AEClient {
             } else {
                 syncPrint("连接断开");
             }
+
+            ByteList buf = channel.buffer();
+            buf.clear();
+            buf.add((byte) PS_DISCONNECT);
+            int i = 0;
+            while (channel.write(buf) == 0 && i++ < 30)
+                LockSupport.parkNanos(200);
+            channel.dataFlush();
+            LockSupport.parkNanos(10 * 1000);
 
             while (!channel.shutdown());
             channel.close();
@@ -352,12 +438,27 @@ public final class AEClientOwner extends AEClient {
         }
     }
 
-    private class Worker extends AEClient.Worker {
+    final class Worker extends AEClient.Worker {
         int order;
-        String remoteIp;
         ByteList pending;
         AtomicInteger lock;
         volatile boolean alive;
+
+        byte state;
+        long connectTime;
+        String remoteIp;
+        long upstream, downstream;
+
+        public void serialize(CList lx) {
+            CMapping self = new CMapping();
+            self.put("id", order);
+            self.put("ip", remoteIp);
+            self.put("time", connectTime);
+            self.put("up", upstream);
+            self.put("down", downstream);
+            self.put("state", state);
+            lx.add(self);
+        }
 
         @Override
         public String toString() {
@@ -371,10 +472,12 @@ public final class AEClientOwner extends AEClient {
             this.lock = new AtomicInteger();
             this.pending = new ByteList();
             this.alive = true;
+            this.connectTime = System.currentTimeMillis();
         }
 
         @Override
         void run1() throws IOException {
+            x:
             while (!shutdownRequested) {
                 int read = client.read();
                 if(read < -1) {
@@ -382,20 +485,30 @@ public final class AEClientOwner extends AEClient {
                     break;
                 } else if (read > 0) {
                     lastHeart = System.currentTimeMillis();
-                    while (client.read() > 0);
+                    downstream += read;
+                    while ((read = client.read()) > 0)
+                        downstream += read;
                 } else {
-                    LockSupport.parkNanos(1000);
+                    LockSupport.parkNanos(100);
                 }
                 while (!lock.compareAndSet(0, -1)) {
+                    if(lock.compareAndSet(1, 2)) {
+                        LockSupport.park();
+                        if(lock.get() == 2)
+                            break;
+                        continue x;
+                    }
                     LockSupport.parkNanos(1000);
                 }
+                ByteList pending = this.pending;
                 if(pending.pos() > 0) {
-                    while (pending.writePos() < pending.pos()) {
+                    while (!shutdownRequested && pending.writePos() < pending.pos()) {
                         int w = client.write(pending);
                         if(w < 0)
                             break;
                         else if (w == 0)
-                            LockSupport.parkNanos(1000);
+                            LockSupport.parkNanos(100);
+                        upstream += w;
                     }
                     pending.clear();
                 }

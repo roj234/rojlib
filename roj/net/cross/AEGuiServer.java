@@ -25,25 +25,28 @@
  */
 package roj.net.cross;
 
+import roj.config.data.CList;
+import roj.io.IOUtil;
+import roj.io.NonblockingUtil;
 import roj.net.NetworkUtil;
-import roj.net.cross.AEServer.Room;
+import roj.net.tcp.serv.HttpServer;
+import roj.net.tcp.serv.Reply;
+import roj.net.tcp.serv.response.EmptyResponse;
+import roj.net.tcp.serv.response.StringResponse;
+import roj.net.tcp.util.ResponseCode;
 import roj.text.TextUtil;
+import roj.ui.TextAreaPrintStream;
 import roj.ui.UIUtil;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
-import java.util.Vector;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * Your description here
@@ -53,23 +56,19 @@ import java.util.concurrent.locks.LockSupport;
  * @since 2021/9/11 12:49
  */
 public class AEGuiServer extends JFrame {
-    private JButton       btnToggle;
-    private JButton       btnKick;
-    private JButton       btnManage;
-    private JList<String> houses;
-    private JButton     chkSsl;
-    private JTextField    inpPass;
-    private JTextField  inpAddr;
-    private JScrollPane scroll;
-    private JTextField  inpMaxUser;
+    private final JButton   btnToggle;
+    private final JButton     chkSsl;
+    private final JTextField inpAddr;
+    private final JTextField inpMaxUser;
 
     static AEServer server;
     static Thread serverThread;
 
-    static String certFile;
-    static char[] certPass;
-
     public static void main(String[] args) {
+        if(!NonblockingUtil.available()) {
+            JOptionPane.showMessageDialog(null, "请使用Java8!");
+            return;
+        }
         new AEGuiServer();
     }
 
@@ -79,7 +78,7 @@ public class AEGuiServer extends JFrame {
         panel1.setBorder(
                 BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "AbyssalEye 0.3.1 By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null,
                                                  null));
-        scroll = new JScrollPane();
+        JScrollPane scroll = new JScrollPane();
         GridBagConstraints gbc;
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
@@ -90,10 +89,10 @@ public class AEGuiServer extends JFrame {
         gbc.weighty = 2.0;
         gbc.fill = GridBagConstraints.BOTH;
         panel1.add(scroll, gbc);
-        houses = new JList<>();
+        JTextArea houses = new JTextArea();
         scroll.setViewportView(houses);
         btnToggle = new JButton();
-        btnToggle.setText("Start");
+        btnToggle.setText("启动");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 4;
@@ -101,9 +100,9 @@ public class AEGuiServer extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnToggle, gbc);
-        btnKick = new JButton();
+        JButton btnKick = new JButton();
         btnKick.setEnabled(false);
-        btnKick.setText("踢出");
+        btnKick.setText("预留");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 2;
@@ -111,16 +110,15 @@ public class AEGuiServer extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnKick, gbc);
-        btnManage = new JButton();
-        btnManage.setEnabled(false);
-        btnManage.setText("锁定");
+        JButton btnHttp = new JButton();
+        btnHttp.setText("后台");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 3;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnManage, gbc);
+        panel1.add(btnHttp, gbc);
         chkSsl = new JButton();
         chkSsl.setText("SSL");
         gbc = new GridBagConstraints();
@@ -141,7 +139,7 @@ public class AEGuiServer extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(inpAddr, gbc);
         final JLabel label1 = new JLabel();
-        label1.setText("Bind on");
+        label1.setText("Addr");
         gbc = new GridBagConstraints();
         gbc.gridx = 2;
         gbc.gridy = 0;
@@ -149,15 +147,6 @@ public class AEGuiServer extends JFrame {
         gbc.weighty = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
         panel1.add(label1, gbc);
-        inpPass = new JTextField();
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 1;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpPass, gbc);
         inpMaxUser = new JTextField();
         inpMaxUser.setText("512");
         gbc = new GridBagConstraints();
@@ -166,15 +155,6 @@ public class AEGuiServer extends JFrame {
         gbc.anchor = GridBagConstraints.WEST;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(inpMaxUser, gbc);
-        final JLabel label2 = new JLabel();
-        label2.setText("Pass");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 1;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label2, gbc);
         final JLabel label3 = new JLabel();
         label3.setText("最大连接");
         gbc = new GridBagConstraints();
@@ -188,44 +168,30 @@ public class AEGuiServer extends JFrame {
         setTitle("AbyssalEye服务器");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        // todo
-        inpPass.setEnabled(false);
+        btnHttp.addActionListener(e -> {
+            String s = JOptionPane.showInputDialog("Http Manage Port\n配置[manage_port]项");
+            if(s == null) return;
+            int port = Integer.parseInt(s);
+            btnHttp.setEnabled(false);
 
-        chkSsl.addActionListener(e -> {
-            SslDialog.sho1w();
+            try {
+                HttpServer server = runServer(port);
+                Thread t = new Thread(server);
+                t.setDaemon(true);
+                t.setName("Http Server");
+                t.start();
+            } catch (IOException exception) {
+                exception.printStackTrace();
+            }
         });
 
-        new Thread() {
-            {
-                setName("Updater");
-                setDaemon(true);
-                start();
-            }
+        System.setOut(new TextAreaPrintStream(houses, 65535));
 
-            @Override
-            public void run() {
-                while (true) {
-                    if(server != null) {
-                        Vector<String> vex = new Vector<>();
-                        for (Room room : server.rooms.values()) {
-                            vex.add(room.id + "(" + (room.slaves.size() + 1) + ")");
-                        }
-                        houses.setListData(vex);
-                        houses.addListSelectionListener(new ListSelectionListener() {
-                            @Override
-                            public void valueChanged(ListSelectionEvent e) {
-                                // todo drag
-                            }
-                        });
-                    }
-                    LockSupport.parkNanos(5000L * 1000 * 1000);
-                }
-            }
-        };
-
+        chkSsl.addActionListener(e -> {
+            Util.SslDialog.sho1w();
+        });
 
         btnToggle.addActionListener(this::toggle);
-        btnManage.addActionListener(this::roomManage);
 
         setBounds(0, 0, 400, 300);
         UIUtil.center(this);
@@ -235,30 +201,38 @@ public class AEGuiServer extends JFrame {
         validate();
     }
 
-    private void roomManage(ActionEvent event) {
-
+    private HttpServer runServer(int port) throws IOException {
+        return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (socket, request) -> {
+            switch (request.path()) {
+                case "/":
+                    return new Reply(ResponseCode.OK, new StringResponse(IOUtil.readAsUTF(AEGuiClientOwn.class, "META-INF/ae_res/ae_s.html"), "text/html"));
+                case "/user_list":
+                    String roomId = request.getFields().get("room");
+                    CList lx = new CList();
+                    return new Reply(ResponseCode.UNAVAILABLE, new StringResponse("Unsupported case", "application/json"));
+                case "/kick_room":
+                case "/toggle_open":
+                case "/lock_room":
+                case "/kick_user":
+                    return new Reply(ResponseCode.UNAVAILABLE, new StringResponse("Unsupported case", "application/json"));
+            }
+            return EmptyResponse.INSTANCE;
+        });
     }
 
     private void toggle(ActionEvent event) {
-        if (btnToggle.getText().equals("Shutdown")) {
+        if (btnToggle.getText().equals("停止")) {
             btnToggle.setEnabled(false);
 
-            btnToggle.setText("Start");
+            btnToggle.setText("启动");
             btnToggle.setEnabled(true);
 
             chkSsl.setEnabled(true);
             inpAddr.setEnabled(true);
-            inpPass.setEnabled(true);
             inpMaxUser.setEnabled(true);
-            houses.removeAll();
 
-            if(serverThread != null && serverThread.isAlive()) {
+            if(serverThread != null) {
                 server.shutdown();
-                try {
-                    serverThread.join();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
             }
             serverThread = null;
             server = null;
@@ -294,183 +268,24 @@ public class AEGuiServer extends JFrame {
                 return;
             }
             try {
-                server = certFile != null ? new AEServer(address, maxUsers, certFile, certPass) : new AEServer(address, maxUsers);
+                server = Util.certFile != null ? new AEServer(address, maxUsers, Util.certFile, Util.certPass) : new AEServer(address, maxUsers);
             } catch (IOException | GeneralSecurityException e) {
                 e.printStackTrace();
                 JOptionPane.showMessageDialog(this, "Invalid certificate / IO Error");
                 return;
             }
-            //server.password = inpPass.getText().toCharArray();
 
             Thread serverRunner = serverThread = new Thread(server);
             serverRunner.setName("Server Thread");
             serverRunner.setDaemon(true);
             serverRunner.start();
 
-            btnToggle.setText("Shutdown");
+            btnToggle.setText("停止");
 
             chkSsl.setEnabled(false);
             inpAddr.setEnabled(false);
-            inpPass.setEnabled(false);
             inpMaxUser.setEnabled(false);
-            houses.removeAll();
 
-        }
-    }
-
-    public static class SslDialog extends JDialog {
-        private final JPasswordField inpPass;
-        private final JTextField     inpCert;
-        static boolean x;
-
-        public static void sho1w() {
-            if(!x) {
-                x = true;
-                new SslDialog();
-            }
-        }
-
-        public SslDialog() {
-            JPanel contentPane = new JPanel();
-            contentPane.setLayout(new GridBagLayout());
-            final JPanel panel1 = new JPanel();
-            panel1.setLayout(new GridBagLayout());
-            GridBagConstraints gbc;
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.BOTH;
-            contentPane.add(panel1, gbc);
-            final JPanel panel2 = new JPanel();
-            panel2.setLayout(new GridBagLayout());
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.BOTH;
-            panel1.add(panel2, gbc);
-            JButton buttonOK = new JButton();
-            buttonOK.setText("OK");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel2.add(buttonOK, gbc);
-            JButton buttonCancel = new JButton();
-            buttonCancel.setText("Cancel");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel2.add(buttonCancel, gbc);
-            final JPanel panel3 = new JPanel();
-            panel3.setLayout(new GridBagLayout());
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.BOTH;
-            contentPane.add(panel3, gbc);
-            JButton btnBrowseCert = new JButton();
-            btnBrowseCert.setText("Browse");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 2;
-            gbc.gridy = 0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel3.add(btnBrowseCert, gbc);
-            inpPass = new JPasswordField();
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 1;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel3.add(inpPass, gbc);
-            final JLabel label1 = new JLabel();
-            label1.setText("Cert");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            panel3.add(label1, gbc);
-            final JLabel label2 = new JLabel();
-            label2.setText("Pass");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            panel3.add(label2, gbc);
-            inpCert = new JTextField();
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel3.add(inpCert, gbc);
-
-            setContentPane(contentPane);
-            setModal(true);
-            getRootPane().setDefaultButton(buttonOK);
-
-            buttonOK.addActionListener(e -> onOK());
-
-            ActionListener c = e -> {
-                certFile = null;
-                certPass = null;
-                dispose();
-            };
-            buttonCancel.addActionListener(c);
-
-            // call onCancel() when cross is clicked
-            setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-            addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosed(WindowEvent e) {
-                    x = false;
-                }
-            });
-
-            btnBrowseCert.addActionListener(e -> {
-                JFileChooser fc = new JFileChooser();
-                fc.setDialogTitle("Certificate File");
-                fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
-                fc.setMultiSelectionEnabled(false);
-                if (fc.showOpenDialog(SslDialog.this) == JFileChooser.APPROVE_OPTION) {
-                    inpCert.setText(fc.getSelectedFile().getAbsolutePath());
-                }
-            });
-
-            // call onCancel() on ESCAPE
-            contentPane.registerKeyboardAction(c, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-
-            pack();
-            setBounds(400, 400, 200, 200);
-            setVisible(true);
-        }
-
-        private void onOK() {
-            File f = new File(inpCert.getText());
-            if(!f.isFile()) {
-                JOptionPane.showMessageDialog(this, "Invalid Certificate File");
-                return;
-            }
-            certFile = inpCert.getText();
-            certPass = inpPass.getPassword();
-
-            dispose();
         }
     }
 }

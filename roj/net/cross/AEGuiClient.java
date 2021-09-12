@@ -29,6 +29,7 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
+import roj.io.NonblockingUtil;
 import roj.text.TextUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteWriter;
@@ -57,14 +58,17 @@ public class AEGuiClient extends JFrame {
     private final JTextField     inpUrl;
     private final JTextField     inpHouse;
     private final JTextField     inpPort;
-    private final JPasswordField inpServPass;
     private final JPasswordField inpPass;
 
     public static void main(String[] args) throws IOException, ParseException {
+        if(!NonblockingUtil.available()) {
+            JOptionPane.showMessageDialog(null, "请使用Java8!");
+            return;
+        }
         if(args.length > 0) {
             CMapping cfg = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[0]))).asMap();
 
-            String[] text = TextUtil.split(cfg.getString("addr"), ':');
+            String[] text = TextUtil.split(cfg.getString("url"), ':');
             if(text.length == 0) {
                 JOptionPane.showMessageDialog(null, "Invalid port");
                 return;
@@ -90,6 +94,7 @@ public class AEGuiClient extends JFrame {
             client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
             client.run();
         } else {
+            Util.out = System.out;
             new AEGuiClient();
         }
     }
@@ -206,25 +211,6 @@ public class AEGuiClient extends JFrame {
         gbc.weighty = 1.0;
         gbc.anchor = GridBagConstraints.WEST;
         panel1.add(chkSsl, gbc);
-        final JLabel label5 = new JLabel();
-        label5.setText("服务器密码");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label5, gbc);
-        inpServPass = new JPasswordField();
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 1;
-        gbc.gridwidth = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpServPass, gbc);
         setContentPane(panel1);
 
         setTitle("AbyssalEye客户端");
@@ -233,9 +219,9 @@ public class AEGuiClient extends JFrame {
         btnConnect.addActionListener(this::toggle);
         btnSave.addActionListener(this::save);
 
+        pack();
         setBounds(0, 0, 360, 200);
         UIUtil.center(this);
-        pack();
         setVisible(true);
         setResizable(true);
         validate();
@@ -269,7 +255,6 @@ public class AEGuiClient extends JFrame {
             chkSsl.setEnabled(true);
             inpHouse.setEnabled(true);
             inpPass.setEnabled(true);
-            inpServPass.setEnabled(true);
             inpPort.setEnabled(true);
             inpUrl.setEnabled(true);
 
@@ -290,7 +275,7 @@ public class AEGuiClient extends JFrame {
         } else {
             String[] text = TextUtil.split(inpUrl.getText(), ':');
             if(text.length == 0) {
-                JOptionPane.showMessageDialog(this, "Invalid port");
+                JOptionPane.showMessageDialog(this, "服务器端口有误");
                 return;
             }
 
@@ -298,8 +283,7 @@ public class AEGuiClient extends JFrame {
             try {
                 addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
             } catch (UnknownHostException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Unknown host");
+                JOptionPane.showMessageDialog(this, "未知的主机");
                 return;
             }
 
@@ -307,7 +291,7 @@ public class AEGuiClient extends JFrame {
             try {
                 address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
             } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this, "Invalid port");
+                JOptionPane.showMessageDialog(this, "服务器端口有误");
                 return;
             }
 
@@ -315,14 +299,14 @@ public class AEGuiClient extends JFrame {
             try {
                 port = Integer.parseInt(inpPort.getText());
             } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this, "Invalid port");
+                JOptionPane.showMessageDialog(this, "本地端口有误");
                 return;
             }
             try {
                 client = new AEClient(inpHouse.getText(), inpPass.getText(), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), chkSsl.isSelected());
             } catch (IOException e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Invalid certificate / IO Error");
+                JOptionPane.showMessageDialog(this, "证书错误/端口被占用");
                 return;
             }
 
@@ -336,7 +320,6 @@ public class AEGuiClient extends JFrame {
             chkSsl.setEnabled(false);
             inpHouse.setEnabled(false);
             inpPass.setEnabled(false);
-            inpServPass.setEnabled(false);
             inpPort.setEnabled(false);
             inpUrl.setEnabled(false);
         }

@@ -67,10 +67,8 @@ public final class SslEngineFactory {
         // 初始化此上下文
         // 参数一：认证的密钥 参数二：对等信任认证 参数三：伪随机数生成器
         // 单向认证，服务端不用验证客户端，所以第二个参数为null
-        ctx.init(kmf == null ? null : kmf.getKeyManagers(), null, null);
-        System.out.println(kmf);
-        System.out.println(tmf);
-        System.out.println(ctx);
+        ctx.init(kmf == null ? null : kmf.getKeyManagers(), tmf == null ? null : tmf.getTrustManagers(), null);
+        System.out.println("Ssl initialized");
 
         return ctx;
     }

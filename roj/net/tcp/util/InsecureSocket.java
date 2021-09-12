@@ -117,8 +117,12 @@ public class InsecureSocket implements WrappedSocket {
     @Override
     public boolean shutdown() throws IOException {
         dataFlush();
-        socket.shutdownInput();
-        socket.shutdownOutput();
+        try {
+            socket.shutdownInput();
+        } catch (IOException ignored) {}
+        try {
+            socket.shutdownOutput();
+        } catch (IOException ignored) {}
         return true;
     }
 

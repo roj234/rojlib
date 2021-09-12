@@ -164,6 +164,7 @@ public final class Project extends JSONConfiguration {
                 if(!resourceCache.isEmpty() && !set.contains(null)) {
                     int len = resource.getAbsolutePath().length();
                     for (String s : set) {
+                        if(new File(s).isDirectory()) continue;
                         try {
                             resourceCache.put(s.substring(len).replace('\\', '/'), IOUtil.readFully(new FileInputStream(s)));
                         } catch (IOException e) {

@@ -33,14 +33,15 @@ import roj.io.FileUtil;
 
 import java.io.File;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/2 23:45
  */
-public final class Structures extends IdxImpl {
+public final class Structures extends Indexable.Impl {
     private static final RegistrySimple<Structures> WRAPPER = new RegistrySimple<>(Structures[]::new);
     private static int index = 0;
 

@@ -29,7 +29,10 @@ import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import javax.net.ssl.*;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -52,7 +55,7 @@ public final class NetworkUtil {
     }
 
     public static void trustAllHosts() {
-        HttpsURLConnection.setDefaultHostnameVerifier((HostnameVerifier) (host, session) -> true);
+        HttpsURLConnection.setDefaultHostnameVerifier((host, session) -> true);
     }
 
     public static int number2hex(int i, byte[] buf) {

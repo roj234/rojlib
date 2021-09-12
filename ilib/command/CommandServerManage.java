@@ -29,9 +29,6 @@ package ilib.command;
 import ilib.command.sub.AbstractSubCommand;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
-import net.minecraft.command.ICommandSender;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TextComponentString;
 import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
@@ -42,6 +39,10 @@ import roj.net.tcp.serv.util.StaticZipRouter;
 import roj.net.tcp.util.ResponseCode;
 import roj.net.tcp.util.WrappedSocket;
 import roj.util.ByteList;
+
+import net.minecraft.command.ICommandSender;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.text.TextComponentString;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -190,6 +191,11 @@ public final class CommandServerManage extends AbstractSubCommand {
         }
 
         @Override
+        public int read(int max) throws IOException {
+            throw new UnsupportedOperationException("Not implemented yet");
+        }
+
+        @Override
         public ByteList buffer() {
             return null;
         }
@@ -200,6 +206,11 @@ public final class CommandServerManage extends AbstractSubCommand {
             /*int wrote = */buffer.writeBytes(src.list, src.offset() + wp, src.pos() - wp);
             src.writePos(/*wp + wrote*/src.pos());
             return src.pos() - wp;
+        }
+
+        @Override
+        public long write(InputStream src, long max) throws IOException {
+            throw new UnsupportedOperationException("Not implemented yet");
         }
 
         @Override
