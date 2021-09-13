@@ -27,6 +27,7 @@ package roj.net.tcp.util;
 
 import roj.util.ByteList;
 
+import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
@@ -88,4 +89,6 @@ public interface WrappedSocket extends AutoCloseable {
     boolean shutdown() throws IOException;
 
     void close() throws IOException;
+
+    FileDescriptor fd();
 }

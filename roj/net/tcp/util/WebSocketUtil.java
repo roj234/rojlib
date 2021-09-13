@@ -145,7 +145,7 @@ public class WebSocketUtil {
         if(!validProtocol.contains(protocol))
             return null;
 
-        return new Reply(ResponseCode.SWITCHING_PROTOCOL, new HTTPResponse() {
+        return new Reply(Code.SWITCHING_PROTOCOL, new HTTPResponse() {
             @Override
             public void writeHeader(CharList list) {
                 list.append("Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");

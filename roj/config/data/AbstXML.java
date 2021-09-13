@@ -35,6 +35,7 @@ import roj.config.word.WordPresets;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * XML Parser Value Base
@@ -329,6 +330,13 @@ public abstract class AbstXML implements Iterable<AbstXML> {
             }
         }
         return result;
+    }
+
+    public void iterate(Consumer<AbstXML> x) {
+        x.accept(this);
+        for (int i = 0; i < children.size(); i++) {
+            children.get(i).iterate(x);
+        }
     }
 
     // todo compare type

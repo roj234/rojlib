@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,22 +23,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.tcp.util;
+package roj.util;
 
-public final class IllegalRequestException extends Exception {
-    public final Code code;
-
-    public IllegalRequestException(Code code) {
-        this.code = code;
+/**
+ * Your description here
+ *
+ * @author Roj233
+ * @version 0.1
+ * @since 2021/9/13 12:49
+ */
+public class FastLocalThread extends Thread {
+    public FastLocalThread() {
+        super();
+        this.localDataArray = EmptyArrays.OBJECTS;
     }
-
-    public IllegalRequestException(Code code, String msg) {
-        super(msg);
-        this.code = code;
-    }
-
-    public IllegalRequestException(Code code, Throwable x) {
-        super(x);
-        this.code = code;
-    }
+    Object[] localDataArray;
 }

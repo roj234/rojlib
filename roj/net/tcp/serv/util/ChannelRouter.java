@@ -31,8 +31,8 @@ import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.Router;
 import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
+import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
-import roj.net.tcp.util.ResponseCode;
 import roj.net.tcp.util.SharedConfig;
 import roj.net.tcp.util.WrappedSocket;
 
@@ -104,12 +104,13 @@ public class ChannelRouter extends ChannelRouterSync {
                 if(stage < 2) {
                     long time = System.currentTimeMillis() + router.readTimeout();
 
-                    while (!channel.handShake()) {
-                        if (System.currentTimeMillis() > time) {
-                            this.reply = EmptyResponse.INSTANCE;
-                            this.stage = 3;
-                            return;
-                        }
+                    if (!channel.handShake()) {
+                        return;
+                    }
+                    if (System.currentTimeMillis() > time) {
+                        this.reply = EmptyResponse.INSTANCE;
+                        this.stage = 3;
+                        return;
                     }
 
                     this.stage = 2;
@@ -124,12 +125,12 @@ public class ChannelRouter extends ChannelRouterSync {
                             reply.getClass(); // checkNull
                             reply.prepare();
                         } catch (Throwable e) {
-                            reply = new Reply(ResponseCode.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
                         }
                     } catch (IllegalRequestException e) {
                         final Throwable cause = e.getCause();
                         reply = new Reply(e.code, cause instanceof Notify ?
-                                StringResponse.errorResponse(e.code, e.code == ResponseCode.INTERNAL_ERROR ? cause.getCause() : null) :
+                                StringResponse.errorResponse(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
                                 StringResponse.errorResponse(null, e)
                         );
                     }
@@ -164,12 +165,12 @@ public class ChannelRouter extends ChannelRouterSync {
             }
             return;
 
-        } catch (IOException e) {
+        } catch (Throwable e) {
             if (reply != null) {
                 reply.release();
             }
 
-            reply = new Reply(ResponseCode.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
             try {
                 long time = System.currentTimeMillis();
                 long timeout = router.writeTimeout(request);

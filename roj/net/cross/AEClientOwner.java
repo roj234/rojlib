@@ -41,8 +41,7 @@ import roj.util.ByteWriter;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketException;
-import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
@@ -59,11 +58,11 @@ public final class AEClientOwner extends AEClient {
     public AEClientOwner(String roomId, String roomToken, InetSocketAddress server, InetSocketAddress local, boolean ssl) {
         super(roomId, roomToken, server, local, ssl, 0);
         channelById = new IntMap<>();
-        this.outBuf = new ByteList();
+        this.ob = new ByteList();
     }
 
     IntMap<Worker> channelById;
-    ByteList outBuf;
+    ByteList ob;
 
     @Override
     public void run() {
@@ -101,135 +100,76 @@ public final class AEClientOwner extends AEClient {
         WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), HttpClient.CLIENT_ALLOCATOR, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
         try {
             int read = 0;
-            x:
+            conn:
             {
-                int wait = TIMEOUT_CONNECT;
-                while (!channel.handShake()) {
-                    LockSupport.parkNanos(1000);
-                    if(wait-- <= 0) {
-                        syncPrint("T1 连接超时");
-                        break x;
-                    }
+                int result = handshakeClient(channel);
+                if(result != 0) {
+                    syncPrint("握手失败: " + result);
+                    break conn;
                 }
-
                 ByteList buf = channel.buffer();
-                buf.clear();
-                buf.addAll(new byte[] {
-                        'A','E','C','L','I','E','N','T','H','A','L','L','O'
-                });
-                while (buf.writePos() < buf.pos()) {
-                    channel.write(buf);
-                    LockSupport.parkNanos(1000);
-                    if(wait-- <= 0) {
-                        syncPrint("T2 连接超时");
-                        break x;
-                    }
-                }
-                buf.clear();
-
-                while (channel.read(1) == 0) {
-                    LockSupport.parkNanos(1000);
-                    if(wait-- <= 0) {
-                        syncPrint("T3 连接超时");
-                        break x;
-                    }
-                }
-                if(buf.getU(0) != PS_SERVER_HALLO) {
-                    throw new SocketException("协议错误: " + buf);
-                }
-
-                wait = TIMEOUT_ESTABLISHED;
-
                 ByteReader r = new ByteReader(buf);
                 ByteWriter w = new ByteWriter(buf);
 
-                buf.clear();
                 w.writeByte((byte) PS_CONNECT).writeByte((byte) ByteWriter.byteCountUTF8(id)).writeByte((byte) ByteWriter.byteCountUTF8(token)).writeByte((byte) 1).writeAllUTF(id).writeAllUTF(token);
-                while (buf.writePos() < buf.pos()) {
-                    channel.write(buf);
-                    LockSupport.parkNanos(1000);
-                    if(wait-- <= 0) {
-                        syncPrint("T4 连接超时");
-                        break x;
-                    }
+                if(writeAndFlush(channel, buf, TIMEOUT_ESTABLISHED) < 0) {
+                    syncPrint(this + ": 连接数据包发送超时");
+                    break conn;
                 }
                 buf.clear();
 
-                wait = 5000;
-                int except_length = -1;
-                ArrayList<Worker> dead = new ArrayList<>();
-                main:
+                int heart = 200;
+                int except = -1;
+                Worker wk;
                 while (!shutdownRequested) {
-                    while (!shutdownRequested && (read = channel.read(except_length == -1 ? 1 : except_length - buf.pos())) == 0 || buf.pos() < except_length) {
-                        LockSupport.parkNanos(1000);
-                        ByteList ob = this.outBuf;
-                        for (Worker wk : channelById.values()) {
-                            if(wk.lock.get() == 2) continue; // standby
-                            while(!wk.lock.compareAndSet(0, -1))
-                                LockSupport.parkNanos(1000);
-                            ByteList buf1 = wk.client.buffer();
-                            if(buf1.pos() > 0) {
-                                ob.clear();
-                                ob.add((byte) PS_DATA);
-                                w.list = ob;
-                                w.writeInt(buf1.pos() + 4).writeBytes(buf1).writeInt(wk.order)
-                                        .list = buf;
-                                buf1.clear();
-                                while (ob.writePos() < ob.pos()) {
-                                    int o = channel.write(ob);
-                                    if(o < 0)
-                                        break;
-                                    else if (o == 0) {
-                                        LockSupport.parkNanos(100);
-                                    }
+                    while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
+                        if(heart-- <= 0) {
+                            if(heart == -1 || heart == -500) {
+                                if (writeEx(channel, (byte) PS_HEARTBEAT) < 0) {
+                                    syncPrint(this + ": 心跳发送失败");
                                 }
+                            } else if(heart < -1000) {
+                                syncPrint(this + ": 没收到服务端心跳");
+                                break conn;
                             }
-                            if(!wk.alive) {
-                                ob.clear();
-                                ob.add((byte) PS_KICK_SLAVE);
-                                w.list = ob;
-                                w.writeInt(wk.order)
-                                        .list = buf;
-                                while (ob.writePos() < ob.pos()) {
-                                    int o = channel.write(ob);
-                                    if(o < 0)
-                                        break;
-                                    else if (o == 0) {
-                                        LockSupport.parkNanos(100);
-                                    }
-                                }
-                                dead.add(wk);
-                            }
-                            wk.lock.set(0);
                         }
-                        for (int i = 0; i < dead.size(); i++) {
-                            Worker worker = dead.get(i);
-                            channelById.remove(worker.order);
-                            syncPrint("分机断开(cleanup) #" + worker.order);
-                            cb_onClientExit(worker);
-                        }
-                        dead.clear();
+                        if(shutdownRequested) break conn;
 
-                        if(wait-- <= 0) {
-                            buf.clear();
-                            buf.add((byte) PS_HEARTBEAT);
-                            wait = 1000;
-                            while (channel.write(buf) == 0) {
-                                LockSupport.parkNanos(1000);
-                                if(wait-- <= 0) {
-                                    syncPrint(this + ": 客户端没收到心跳!");
-                                    break;
+                        ByteList ob = this.ob;
+                        for (Iterator<Worker> itr = channelById.values().iterator(); itr.hasNext(); ) {
+                            wk = itr.next();
+                            // client读取锁
+                            if (!wk.lock.compareAndSet(ST_AVAILABLE, ST_CHANNEL_OP)) continue;
+                            try {
+                                ByteList in = wk.client.buffer();
+                                if (in.pos() > 0) {
+                                    ob.clear();
+                                    ob.add((byte) PS_DATA);
+                                    w.list = ob;
+                                    w.writeInt(in.pos() + 4).writeBytes(in).writeInt(wk.slaveId).list = buf;
+                                    in.clear();
+                                    writeAndFlush(channel, ob, TIMEOUT_TRANSFER);
                                 }
+                                if (!wk.alive) {
+                                    ob.clear();
+                                    ob.add((byte) PS_KICK_SLAVE);
+                                    w.list = ob;
+                                    w.writeInt(wk.slaveId).list = buf;
+                                    writeAndFlush(channel, ob, 100);
+                                    syncPrint("分机断开(cleanup) #" + wk.slaveId);
+                                    cb_onClientExit(wk);
+                                    itr.remove();
+                                }
+                            } finally {
+                                wk.lock.set(ST_AVAILABLE);
                             }
-                            channel.dataFlush();
-                            buf.clear();
-                            break;
                         }
+                        LockSupport.parkNanos(20);
+                    }
+                    if (read < 0 || shutdownRequested) {
+                        break;
                     }
                     if(buf.pos() < 1) {
-                        if (read < 0) {
-                            break;
-                        }
                         continue;
                     }
                     switch (buf.get(0) & 0xFF) {
@@ -237,52 +177,52 @@ public final class AEClientOwner extends AEClient {
                             //lastHeart = System.currentTimeMillis();
                             buf.clear();
                             break;
-                        case PS_TIMEOUT:
-                            syncPrint(this + ": 服务器报告客户端长时间没心跳");
-                            buf.clear();
-                            break main;
                         case PS_LOGON:
                             if(buf.pos() < 5) {
-                                except_length = 5;
+                                except = 5;
                                 break;
                             }
-                            except_length = -1;
+                            except = -1;
                             syncPrint(this + ": 登录成功");
                             buf.clear();
                             break;
+                        case PS_DISCONNECT:
+                            syncPrint(this + ": 断开连接(协议)");
+                            break conn;
                         case PS_STATE:
                             if(buf.pos() < 2) {
-                                except_length = 2;
+                                except = 2;
                                 break;
                             }
-                            except_length = -1;
-                            if(buf.getU(1) != 0)
-                                syncPrint(this + ": 上次的转发状态: " + RSTATE_NAMES[buf.getU(1)]);
+                            except = -1;
+                            syncPrint(this + ": 上次的转发状态: " + RSTATE_NAMES[buf.getU(1)]);
                             buf.clear();
                             break;
                         case PS_RESET:
                             if(buf.pos() < 5) {
-                                except_length = 5;
+                                except = 5;
                                 break;
                             }
-                            except_length = -1;
+                            except = -1;
                             r.index = 1;
-                            int id1 = r.readInt();
-                            Worker wxxx1 = channelById.get(id1);
-                            if(wxxx1 != null) {
-                                if(wxxx1.lock.get() == 2) {
-                                    System.out.println("Already reset");
+                            wk = channelById.get(r.readInt());
+                            if(wk != null && wk.alive) {
+                                if(wk.lock.get() == ST_HANGUP) {
+                                    syncPrint("分机 #" + wk.lock + " 已经挂起");
                                 }
-                                while (!wxxx1.lock.compareAndSet(0, 1))
-                                    LockSupport.parkNanos(100);
-                                while (wxxx1.lock.get() != 2) {
-                                    LockSupport.parkNanos(100);
+                                while (!wk.lock.compareAndSet(ST_AVAILABLE, ST_REQUEST_HANGUP))
+                                    LockSupport.parkNanos(10);
+                                int i = 0;
+                                while (wk.lock.get() != ST_HANGUP && i++ < 5) {
+                                    LockSupport.parkNanos(10);
                                 }
-                                wxxx1.client.dataFlush();
-                                while (!wxxx1.client.shutdown());
-                                wxxx1.client.close();
-                                //syncPrint("分机 #" + wxxx1.order + " 挂起");
-                                cb_onClientHang(wxxx1);
+
+                                wk.client.dataFlush();
+                                while (!wk.client.shutdown()) {
+                                    LockSupport.parkNanos(10);
+                                }
+                                wk.client.close();
+                                cb_onClientHang(wk);
                             } else {
                                 syncPrint("分机已断开 #" + id);
                             }
@@ -290,18 +230,24 @@ public final class AEClientOwner extends AEClient {
                             break;
                         case PS_SLAVE_DISCONNECT:
                             if(buf.pos() < 5) {
-                                except_length = 5;
+                                except = 5;
                                 break;
                             }
-                            except_length = -1;
+                            except = -1;
                             r.index = 1;
                             int id = r.readInt();
-                            Worker wxxx = channelById.remove(id);
-                            if(wxxx != null) {
-                                syncPrint("分机断开 #" + wxxx.order);
-                                LockSupport.unpark(wxxx);
-                                wxxx.client.close();
-                                cb_onClientExit(wxxx);
+                            wk = channelById.remove(id);
+                            if(wk != null && wk.alive) {
+                                syncPrint("分机断开 #" + wk.slaveId);
+                                wk.alive = false;
+                                wk.client.dataFlush();
+                                while (!wk.client.shutdown()) {
+                                    LockSupport.parkNanos(100);
+                                }
+                                wk.client.close();
+                                if(wk.lock.get() == ST_HANGUP)
+                                    LockSupport.unpark(wk);
+                                cb_onClientExit(wk);
                             } else {
                                 syncPrint("分机已断开(cl) #" + id);
                             }
@@ -309,7 +255,7 @@ public final class AEClientOwner extends AEClient {
                             break;
                         case PS_SLAVE_CONNECT:
                             if(buf.pos() < 8) { // PKT IDX IDX IDX IDX PRT PRT ADR [ADR]
-                                except_length = 8;
+                                except = 8;
                                 break;
                             }
                             r.index = 1;
@@ -317,80 +263,85 @@ public final class AEClientOwner extends AEClient {
                             int port = r.readUnsignedShort();
                             int addrLen = r.readUByte();
                             if(buf.pos() < addrLen + 8) {
-                                except_length = addrLen + 8;
+                                except = addrLen + 8;
                                 break;
                             }
-                            except_length = -1;
+                            except = -1;
                             if(channelById.containsKey(index)) {
                                 syncPrint("分机已连接 #" + index + " ???");
                                 buf.clear();
                                 break;
                             }
                             Socket soc = new Socket();
-                            soc.connect(local2);
-                            soc.setTrafficClass(0x10);
-                            Worker wxx = new Worker(index, NetworkUtil.bytes2ip(r.readBytes(addrLen)) + ':' + port, new InsecureSocket(soc, NonblockingUtil.fd(soc)));
-                            workers.add(wxx);
-                            cb_onClientJoin(wxx);
-                            channelById.put(index, wxx);
-                            wxx.start();
-                            syncPrint("分机连接 #" + index + ", " + wxx.remoteIp);
+                            soc.connect(localServer);
+                            initSocketPref(soc);
+                            wk = new Worker(index, NetworkUtil.bytes2ip(r.readBytes(addrLen)) + ':' + port, new InsecureSocket(soc, NonblockingUtil.fd(soc)));
+                            workers.add(wk);
+                            cb_onClientJoin(wk);
+                            channelById.put(index, wk);
+                            wk.start();
+                            syncPrint("分机连接 #" + index + ", " + wk.remoteIp);
                             buf.clear();
                             break;
                         case PS_SERVER_SLAVE_DATA:
                             if(buf.pos() < 9) { // PKT FRM FRM FRM FRM LEN LEN LEN LEN [len]
-                                except_length = 9;
+                                except = 9;
                                 break;
                             }
                             r.index = 1;
                             int from = r.readInt();
                             int value = r.readInt();
                             if(buf.pos() < value + 9) {
-                                except_length = value + 9;
+                                except = value + 9;
                                 break;
                             }
+                            except = -1;
 
-                            except_length = -1;
-
-                            //syncPrint(this + ": 接收 " + value);
                             Worker worker = channelById.get(from);
                             if(worker == null) {
                                 syncPrint("未知分机 #" + from);
                                 buf.clear();
                                 break;
                             }
-                            if(worker.lock.get() == 2) {
-                                worker.lock.set(-1);
-                                Socket soc2 = new Socket();
-                                soc2.connect(local2);
-                                worker.client = new InsecureSocket(soc2, NonblockingUtil.fd(soc2));
-                                LockSupport.unpark(worker);
-                                //syncPrint(this + ": Rejoin " + from);
-                                cb_onClientRejoin(worker);
-                            } else {
-                                while (!worker.lock.compareAndSet(0, -1))
-                                    LockSupport.parkNanos(1000);
+                            int i = 0;
+                            while (i++ < 20) {
+                                int v = worker.lock.get();
+                                if (v == ST_HANGUP) {
+                                    worker.lock.set(ST_CHANNEL_OP);
+                                    Socket soc2 = new Socket();
+                                    soc2.connect(localServer);
+                                    initSocketPref(soc2);
+                                    worker.client = new InsecureSocket(soc2, NonblockingUtil.fd(soc2));
+                                    LockSupport.unpark(worker);
+                                    cb_onClientRejoin(worker);
+                                    i = -1;
+                                    break;
+                                } else if (worker.lock.compareAndSet(ST_AVAILABLE, ST_CHANNEL_OP)) {
+                                    i = -1;
+                                    break;
+                                }
+                                LockSupport.parkNanos(10);
                             }
-                            worker.pending.addAll(buf, 9, buf.pos() - 9);
-                            worker.lock.set(0);
+                            if (i != -1) {
+                                System.out.println("内部错误! 忽略发来的数据" + worker.lock.get());
+                                worker.alive = false;
+                                buf.clear();
+                                break;
+                            }
+                            worker.ob.addAll(buf, 9, buf.pos() - 9);
+                            worker.lock.set(ST_AVAILABLE);
                             buf.clear();
                             break;
-                        case PS_ERROR:
-                            while (channel.read(1) == 0);
-                            if(buf.pos() > 1) {
-                                r.index = 1;
-                                syncPrint(this + ": 错误" + ERROR_NAMES[r.readUByte()]);
-                            } else {
-                                syncPrint(this + ": 错误, 且连接过早终止");
-                            }
-                            buf.clear();
-                            break main;
                         default:
-                            syncPrint(this + ": UNKNOWN PACKET: " + buf);
-                            buf.clear();
-                            break main;
+                            int bc = buf.getU(0) - 0x20;
+                            if(buf.pos() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
+                                syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+                            } else {
+                                syncPrint(this + ": 未知数据包: " + buf);
+                            }
+                            break conn;
                     }
-                    wait = 1000;
+                    heart = 500;
                 }
             }
             if(read < 0) {
@@ -399,51 +350,29 @@ public final class AEClientOwner extends AEClient {
                 syncPrint("连接断开");
             }
 
-            ByteList buf = channel.buffer();
-            buf.clear();
-            buf.add((byte) PS_DISCONNECT);
-            int i = 0;
-            while (channel.write(buf) == 0 && i++ < 30)
-                LockSupport.parkNanos(200);
-            channel.dataFlush();
-            LockSupport.parkNanos(10 * 1000);
-
-            while (!channel.shutdown());
+            try {
+                writeEx(channel, (byte) PS_DISCONNECT);
+            } catch (IOException ignored) {}
+            while (!channel.shutdown()) {
+                LockSupport.parkNanos(100);
+            }
             channel.close();
         } catch (Throwable e) {
-            ByteList buf = channel.buffer();
-            if(buf.pos() > 0 && buf.get(0) == PS_ERROR) {
-                if(buf.pos() > 1) {
-                    syncPrint(this + ": 错误" + ERROR_NAMES[buf.getU(1)]);
-                } else {
-                    syncPrint(this + ": 错误, 且连接过早终止");
-                }
-            } else {
-                String msg = e.getMessage();
-                if (!"Broken pipe".equals(msg) && !"Connection reset by peer".equals(msg)) {
-                    e.printStackTrace();
-                }
-            }
-
-            try {
-                /*
-                 * Only try once
-                 */
-                channel.shutdown();
-            } catch (IOException ignored) {}
-
-            try {
-                channel.close();
-            } catch (IOException ignored) {}
+            onError(channel, e);
         }
     }
 
+    static final int ST_AVAILABLE      = 0;
+    static final int ST_REQUEST_HANGUP = 1;
+    static final int ST_CHANNEL_OP     = 2;
+    static final int ST_HANGUP         = 3;
+
     final class Worker extends AEClient.Worker {
-        int order;
-        ByteList pending;
+        int           slaveId;
         AtomicInteger lock;
         volatile boolean alive;
 
+        // 统计信息, 可选
         byte state;
         long connectTime;
         String remoteIp;
@@ -451,7 +380,7 @@ public final class AEClientOwner extends AEClient {
 
         public void serialize(CList lx) {
             CMapping self = new CMapping();
-            self.put("id", order);
+            self.put("id", slaveId);
             self.put("ip", remoteIp);
             self.put("time", connectTime);
             self.put("up", upstream);
@@ -462,23 +391,21 @@ public final class AEClientOwner extends AEClient {
 
         @Override
         public String toString() {
-            return "Worker{" + "id=" + order + ", ip='" + remoteIp + '\'' + '}';
+            return "Worker{" + "id=" + slaveId + ", ip='" + remoteIp + '\'' + '}';
         }
 
-        Worker(int order, String remoteIp, WrappedSocket client) {
+        Worker(int slaveId, String remoteIp, WrappedSocket client) {
             super(client);
-            this.order = order;
+            this.slaveId = slaveId;
             this.remoteIp = remoteIp;
             this.lock = new AtomicInteger();
-            this.pending = new ByteList();
             this.alive = true;
             this.connectTime = System.currentTimeMillis();
         }
 
         @Override
         void run1() throws IOException {
-            x:
-            while (!shutdownRequested) {
+            while (!shutdownRequested && alive) {
                 int read = client.read();
                 if(read < -1) {
                     alive = false;
@@ -486,35 +413,35 @@ public final class AEClientOwner extends AEClient {
                 } else if (read > 0) {
                     lastHeart = System.currentTimeMillis();
                     downstream += read;
-                    while ((read = client.read()) > 0)
-                        downstream += read;
-                } else {
-                    LockSupport.parkNanos(100);
                 }
-                while (!lock.compareAndSet(0, -1)) {
-                    if(lock.compareAndSet(1, 2)) {
-                        LockSupport.park();
-                        if(lock.get() == 2)
-                            break;
-                        continue x;
-                    }
-                    LockSupport.parkNanos(1000);
+                switch (lock.get()) {
+                    case ST_AVAILABLE:
+                        if(!lock.compareAndSet(ST_AVAILABLE, ST_CHANNEL_OP)) break;
+                        ByteList ob = this.ob;
+                        try {
+                            if (ob.writePos() < ob.pos()) {
+                                int w = client.write(ob);
+                                if (w < 0) {
+                                    alive = false;
+                                    break;
+                                }
+                                upstream += w;
+                            }
+                            if (ob.writePos() == ob.pos()) ob.clear();
+                        } finally {
+                            lock.set(ST_AVAILABLE);
+                        }
+                        break;
+                    case ST_REQUEST_HANGUP:
+                        if(lock.compareAndSet(ST_REQUEST_HANGUP, ST_HANGUP))
+                            LockSupport.park();
+                        break;
                 }
-                ByteList pending = this.pending;
-                if(pending.pos() > 0) {
-                    while (!shutdownRequested && pending.writePos() < pending.pos()) {
-                        int w = client.write(pending);
-                        if(w < 0)
-                            break;
-                        else if (w == 0)
-                            LockSupport.parkNanos(100);
-                        upstream += w;
-                    }
-                    pending.clear();
-                }
-                lock.set(0);
+                LockSupport.parkNanos(20);
             }
-            while (!client.shutdown());
+            while (!client.shutdown()) {
+                LockSupport.parkNanos(100);
+            }
             client.close();
         }
     }

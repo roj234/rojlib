@@ -36,7 +36,7 @@ import roj.net.tcp.serv.Router;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.net.tcp.serv.util.StaticZipRouter;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 import roj.net.tcp.util.WrappedSocket;
 import roj.util.ByteList;
 
@@ -45,6 +45,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
 
 import javax.annotation.Nonnull;
+import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
@@ -164,7 +165,7 @@ public final class CommandServerManage extends AbstractSubCommand {
                 case "mem":
                 case "execution":
             }
-            return new Reply(ResponseCode.NOT_FOUND, new StringResponse("服务器制作中"));
+            return new Reply(Code.NOT_FOUND, new StringResponse("服务器制作中"));
         }
     }
 
@@ -231,6 +232,11 @@ public final class CommandServerManage extends AbstractSubCommand {
         @Override
         public void close() throws IOException {
 
+        }
+
+        @Override
+        public FileDescriptor fd() {
+            throw new UnsupportedOperationException("Not implemented yet");
         }
     }
 }

@@ -25,8 +25,8 @@
  */
 package roj.net.tcp.serv.response;
 
+import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
-import roj.net.tcp.util.ResponseCode;
 import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -49,9 +49,9 @@ public class StringResponse implements HTTPResponse {
         this(c, "text/plain");
     }
 
-    public static StringResponse errorResponse(ResponseCode code, Object e) {
+    public static StringResponse errorResponse(Code code, Object e) {
         if(code == null) {
-            code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : ResponseCode.INTERNAL_ERROR;
+            code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : Code.INTERNAL_ERROR;
         }
 
         StringWriter sw = new StringWriter();

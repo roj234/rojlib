@@ -30,7 +30,7 @@ import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.Router;
 import roj.net.tcp.serv.response.StreamResponse;
 import roj.net.tcp.serv.response.StringResponse;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 import roj.text.CharList;
 
 import javax.annotation.Nullable;
@@ -74,11 +74,11 @@ public class StaticZipRouter implements Router {
             if(flag) {
                 ZipEntry dir = zipFs.getEntry(url);
                 if(dir != null && dir.isDirectory())
-                    return new Reply(ResponseCode.FORBIDDEN, StringResponse.errorResponse(ResponseCode.FORBIDDEN,null));
+                    return new Reply(Code.FORBIDDEN, StringResponse.errorResponse(Code.FORBIDDEN, null));
             }
-            return new Reply(ResponseCode.NOT_FOUND, StringResponse.errorResponse(ResponseCode.NOT_FOUND, null));
+            return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, null));
         }
-        return new Reply(ResponseCode.OK, new ZipResponse(url, zipFs.getInputStream(ze)));
+        return new Reply(Code.OK, new ZipResponse(url, zipFs.getInputStream(ze)));
     }
 
     private static class ZipResponse extends StreamResponse {

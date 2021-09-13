@@ -25,6 +25,7 @@
  */
 package roj.net.cross;
 
+import roj.collect.MyHashMap;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
@@ -36,9 +37,8 @@ import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 import roj.text.TextUtil;
-import roj.ui.TextAreaPrintStream;
 import roj.ui.UIUtil;
 
 import javax.swing.*;
@@ -51,6 +51,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.concurrent.locks.LockSupport;
+
+import static roj.net.cross.Util.PROTOCOL_VERSION;
 
 /**
  * Your description here
@@ -106,6 +108,10 @@ public class AEGuiClientOwn extends JFrame {
                 t.start();
             }
 
+            if(!cfg.getBool("no_log"))
+                Util.out = System.out;
+
+            Thread.currentThread().setName("Client Thread");
             client = new AEClientOwner(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
             client.run();
         } else {
@@ -114,17 +120,29 @@ public class AEGuiClientOwn extends JFrame {
         }
     }
 
+    static MyHashMap<String, String> tmp = new MyHashMap<>();
+    private static String res(String name) throws IOException {
+        String v = tmp.get(name);
+        if(v == null)
+            tmp.put(name, v = IOUtil.readAsUTF(IOUtil.class, "META-INF/ae/html/" + name));
+        return v;
+    }
+
     private static HttpServer runServer(int port) throws IOException {
         return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (socket, request) -> {
             switch (request.path()) {
+                case "/bundle.min.css":
+                    return new Reply(Code.OK, new StringResponse(res("bundle.min.css"), "text/css"));
+                case "/bundle.min.js":
+                    return new Reply(Code.OK, new StringResponse(res("bundle.min.js"), "text/javascript"));
                 case "/":
-                    return new Reply(ResponseCode.OK, new StringResponse(IOUtil.readAsUTF(AEGuiClientOwn.class, "META-INF/ae_res/ae_co.html"), "text/html"));
+                    return new Reply(Code.OK, new StringResponse(res("client_owner.html"), "text/html"));
                 case "/user_list":
                     CList lx = new CList();
                     for (Worker w : client.channelById.values()) {
                         w.serialize(lx);
                     }
-                    return new Reply(ResponseCode.OK, new StringResponse(lx.toJSON(), "application/json"));
+                    return new Reply(Code.OK, new StringResponse(lx.toJSON(), "application/json"));
                 case "/kick_user":
                     int count = 0;
                     String[] arr = request.postFields().get("users").split(",");
@@ -134,7 +152,7 @@ public class AEGuiClientOwn extends JFrame {
                             count++;
                         } catch (Throwable ignored) {}
                     }
-                    return new Reply(ResponseCode.OK, new StringResponse("{\"count\":" + count + "}", "application/json"));
+                    return new Reply(Code.OK, new StringResponse("{\"count\":" + count + "}", "application/json"));
             }
             return EmptyResponse.INSTANCE;
         });
@@ -144,7 +162,8 @@ public class AEGuiClientOwn extends JFrame {
         final JPanel panel1 = new JPanel();
         panel1.setLayout(new GridBagLayout());
         panel1.setBorder(
-                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "AbyssalEye 0.3.1 By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "v" + PROTOCOL_VERSION + " By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null,
+                                                 null));
         btnConnect = new JButton();
         btnConnect.setText("连接");
         GridBagConstraints gbc;
@@ -156,7 +175,7 @@ public class AEGuiClientOwn extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnConnect, gbc);
         final JLabel label1 = new JLabel();
-        label1.setText("服务器地址");
+        label1.setText("地址");
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -199,7 +218,6 @@ public class AEGuiClientOwn extends JFrame {
         panel1.add(inpHouse, gbc);
         final JLabel label3 = new JLabel();
         label3.setText("端口");
-        label3.setToolTipText("eg: 80-88,1954");
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 3;
@@ -226,20 +244,20 @@ public class AEGuiClientOwn extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.BOTH;
         panel1.add(scroll, gbc);
-        JTextArea stdout = new JTextArea();
-        stdout.setEditable(false);
-        stdout.setEnabled(true);
-        stdout.setLineWrap(true);
-        scroll.setViewportView(stdout);
-        JButton btnSave = new JButton();
-        btnSave.setText("保存");
+        JTextArea text = new JTextArea();
+        text.setLineWrap(true);
+        text.setEditable(false);
+        scroll.setViewportView(text);
+        JButton btnX = new JButton();
+        btnX.setEnabled(false);
+        btnX.setText("预留");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 4;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnSave, gbc);
+        panel1.add(btnX, gbc);
         JButton btnHttp = new JButton();
         btnHttp.setText("后台");
         gbc = new GridBagConstraints();
@@ -249,16 +267,16 @@ public class AEGuiClientOwn extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnHttp, gbc);
-        JButton btnManage = new JButton();
-        btnManage.setEnabled(false);
-        btnManage.setText("预留");
+        JButton btnX2 = new JButton();
+        btnX2.setEnabled(false);
+        btnX2.setText("预留");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 6;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnManage, gbc);
+        panel1.add(btnX2, gbc);
         final JLabel label4 = new JLabel();
         label4.setText("密码");
         gbc = new GridBagConstraints();
@@ -293,10 +311,9 @@ public class AEGuiClientOwn extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         btnHttp.addActionListener(e -> {
-            String s = JOptionPane.showInputDialog("Http Manage Port\n配置[manage_port]项");
+            String s = JOptionPane.showInputDialog("Http 管理端口\n配置[manage_port]项\n只能本地访问");
             if(s == null) return;
             int port = Integer.parseInt(s);
-            btnHttp.setEnabled(false);
 
             try {
                 HttpServer server = runServer(port);
@@ -304,13 +321,13 @@ public class AEGuiClientOwn extends JFrame {
                 t.setDaemon(true);
                 t.setName("Http Server");
                 t.start();
-            } catch (IOException exception) {
-                exception.printStackTrace();
+            } catch (IOException e1) {
+                e1.printStackTrace();
             }
+            btnHttp.setEnabled(false);
+            btnHttp.setText(":" + port);
         });
         btnConnect.addActionListener(this::toggle);
-        System.setOut(new TextAreaPrintStream(stdout, 99999));
-        Util.out = System.out;
 
         new Thread() {
             {
@@ -323,7 +340,7 @@ public class AEGuiClientOwn extends JFrame {
             public void run() {
                 boolean prevState = false;
                 while (true) {
-                    boolean currState = client != null && clientThread.isAlive();
+                    boolean currState = client != null && clientThread != null && clientThread.isAlive();
                     if(prevState != currState) {
                         prevState = currState;
                         if(!currState && !btnConnect.getText().equals("连接"))
@@ -334,11 +351,10 @@ public class AEGuiClientOwn extends JFrame {
             }
         };
 
-        pack();
-        setBounds(0, 0, 400, 320);
+        setBounds(0, 0, 360, 250);
         UIUtil.center(this);
         setVisible(true);
-        setResizable(true);
+        setResizable(false);
         validate();
     }
 

@@ -32,7 +32,7 @@ import roj.net.tcp.serv.response.CachedFileResponse;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 import roj.net.tcp.util.SharedConfig;
 
 import java.io.File;
@@ -98,7 +98,7 @@ public class Test {
 
                         switch (request.path()) {
                             case "/favicon.ico":
-                                return new Reply(ResponseCode.NOT_FOUND, StringResponse.errorResponse(ResponseCode.NOT_FOUND, null));
+                                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, null));
                             case "/":
                             case "":
                                 StringBuilder sb = new StringBuilder().append("<h1>Welcome! <br> Asyncorized_MC's HTTP(S) Server</h1>");
@@ -111,22 +111,20 @@ public class Test {
                                         .append("<br/>POST:").append(request.postFields()).append("<br/ >")
                                         .append("<br/><h2 style='color:#eecc44'>Server version 1.2.0</h2><form method=post><input type=text name=myname /><input type=text name=myname22 /><input type=submit /></form>");
 
-                                return new Reply(ResponseCode.OK, new StringResponse(sb, "text/html"), action);
+                                return new Reply(Code.OK, new StringResponse(sb, "text/html"), action);
                             case "/file":
-                                return new Reply(ResponseCode.OK, gzc);
+                                return new Reply(Code.OK, gzc);
                             case "/mem":
-                                return new Reply(ResponseCode.OK, new StringResponse(getMemory(), "text/plain"));
+                                return new Reply(Code.OK, new StringResponse(getMemory(), "text/plain"));
                             default:
-                                return new Reply(ResponseCode.NOT_FOUND, StringResponse.errorResponse(ResponseCode.NOT_FOUND, "未定义的路由"));
+                                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, "未定义的路由"));
                         }
                     }
                 }), "server.keystore", "123456".toCharArray());
 
         System.out.println("Max connection: " + 2048);
-        System.out.println("Read buffer: " + SharedConfig.READ_MAX);
         System.out.println("Write buffer: " + SharedConfig.WRITE_MAX);
         System.out.println("UTF-8 decode buffer: " + SharedConfig.MAX_CHAR_BUFFER_CAPACITY);
-        System.out.println("Native buffer: " + SharedConfig.DIRECT_CACHE_MAX);
         System.out.println("Listening on " + server.getSocket().getLocalSocketAddress());
 
         server.run();

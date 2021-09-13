@@ -88,19 +88,23 @@ public final class CList extends CEntry implements Iterable<CEntry> {
     }
 
     public void add(@Nonnull String s) {
-        list.add(new CString(s));
+        list.add(CString.valueOf(s));
     }
 
     public void add(int s) {
-        list.add(new CInteger(s));
+        list.add(CInteger.valueOf(s));
     }
 
     public void add(double s) {
-        list.add(new CDouble(s));
+        list.add(CDouble.valueOf(s));
     }
 
     public void add(long s) {
-        list.add(new CLong(s));
+        list.add(CLong.valueOf(s));
+    }
+
+    public void add(boolean b) {
+        list.add(CBoolean.valueOf(b));
     }
 
     public void set(int index, @Nullable CEntry entry) {

@@ -27,7 +27,7 @@ package roj.net.tcp.serv;
 
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.util.Action;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 import roj.net.tcp.util.SharedConfig;
 import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
@@ -40,16 +40,16 @@ import java.util.Objects;
 
 public class Reply implements Response {
     @Nonnull
-    private final ResponseCode code;
+    private final Code         code;
     @Nonnull
     private final HTTPResponse response;
     private final boolean headerOnly;
 
-    public Reply(ResponseCode code, HTTPResponse response) {
+    public Reply(Code code, HTTPResponse response) {
         this(code, response, -1);
     }
 
-    public Reply(ResponseCode code, HTTPResponse response, int action) {
+    public Reply(Code code, HTTPResponse response, int action) {
         this.code = Objects.requireNonNull(code, "code");
         this.response = Objects.requireNonNull(response, "response");
         this.headerOnly = (action == Action.HEAD);

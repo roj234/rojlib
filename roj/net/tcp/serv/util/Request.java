@@ -136,13 +136,13 @@ public final class Request {
         try {
             return getRequest(lexer, router, socket);
         } catch (Notify notifyException) {
-            ResponseCode code = ResponseCode.INTERNAL_ERROR;
+            Code code = Code.INTERNAL_ERROR;
             switch (notifyException.code) {
                 case -127:
-                    code = ResponseCode.ENTITY_TOO_LARGE;
+                    code = Code.ENTITY_TOO_LARGE;
                     break;
                 case -128:
-                    code = ResponseCode.TIMEOUT;
+                    code = Code.TIMEOUT;
                     break;
             }
             throw new IllegalRequestException(code, notifyException);
@@ -158,15 +158,15 @@ public final class Request {
                 version = lexer.readHttpWord();
 
         if (version == null || !version.startsWith("HTTP/"))
-            throw new IllegalRequestException(ResponseCode.BAD_REQUEST, "Illegal header " + version);
+            throw new IllegalRequestException(Code.BAD_REQUEST, "Illegal header " + version);
 
         if (path.length() > 1024) {
-            throw new IllegalRequestException(ResponseCode.URI_TOO_LONG);
+            throw new IllegalRequestException(Code.URI_TOO_LONG);
         }
 
         int act = Action.valueOf(method);
         if (!router.checkAction(act))
-            throw new IllegalRequestException(ResponseCode.METHOD_NOT_ALLOWED, "Illegal action " + method);
+            throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "Illegal action " + method);
 
         String postFields = null;
 
@@ -175,13 +175,13 @@ public final class Request {
         while (true) {
             t = lexer.readHttpWord();
             if (t == SharedConfig._ERROR) {
-                throw new IllegalRequestException(ResponseCode.BAD_REQUEST, lexer.err("Unexpected " + t));
+                throw new IllegalRequestException(Code.BAD_REQUEST, lexer.err("Unexpected " + t));
             } else if (t == SharedConfig._SHOULD_EOF) {
                 //if (t != (t = lexer.readHttpWord())) {
                     //if (act == Action.POST) {
                         //lexer.retractWord();
                     //} else {
-                    //    throw new IllegalRequestException(ResponseCode.BAD_REQUEST, lexer.exception("Excepting EOF, got " + t));
+                    //    throw new IllegalRequestException(Code.BAD_REQUEST, lexer.exception("Excepting EOF, got " + t));
                     //}
                 //}
                 // streamlike: end
@@ -197,7 +197,7 @@ public final class Request {
             try {
                 postFields = lexer.content(headers.get("Content-Length"), router.postMaxLength());
             } catch (ParseException e) {
-                throw new IllegalRequestException(ResponseCode.BAD_REQUEST, lexer.err("Excepting EOF, got " + e.getMessage()));
+                throw new IllegalRequestException(Code.BAD_REQUEST, lexer.err("Excepting EOF, got " + e.getMessage()));
             }
         }
 
@@ -231,13 +231,13 @@ public final class Request {
             lexer.index = 0;
             return null;
         } catch (Notify notifyException) {
-            ResponseCode code = ResponseCode.INTERNAL_ERROR;
+            Code code = Code.INTERNAL_ERROR;
             switch (notifyException.code) {
                 case -127:
-                    code = ResponseCode.ENTITY_TOO_LARGE;
+                    code = Code.ENTITY_TOO_LARGE;
                     break;
                 case -128:
-                    code = ResponseCode.TIMEOUT;
+                    code = Code.TIMEOUT;
                     break;
             }
             throw new IllegalRequestException(code, notifyException);

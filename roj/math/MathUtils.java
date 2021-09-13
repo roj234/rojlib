@@ -457,7 +457,7 @@ public abstract class MathUtils {
                     return (n < 1000000000) ? 9 : 10;
     }
 
-    static final char[] CHINA_NUMERIC = new char[]{
+    public static final char[] CHINA_NUMERIC = new char[]{
             '零', '一', '二', '三', '四', '五', '六', '七', '八', '九'
     };
     static final char[] CHINA_NUMERIC_POSITION = new char[]{
@@ -673,15 +673,6 @@ public abstract class MathUtils {
         } else {
             return -sin(-value);
         }
-    }
-
-    public static int boolArr2int(boolean[] array) {
-        int result = 0;
-        for (int i = 0; i < array.length; i++) {
-            if (array[i])
-                result |= 1 << i;
-        }
-        return result;
     }
 
     public static int floor(float value) {

@@ -27,7 +27,7 @@ package roj.net.tcp.serv;
 
 import roj.net.tcp.serv.response.HeadResponse;
 import roj.net.tcp.serv.util.Request;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -79,7 +79,7 @@ public class RouterImpl implements Router {
             headers.put("Upgrade", "h2c");
             headers.put("Connection", "upgrade");
 
-            return new Reply(ResponseCode.SWITCHING_PROTOCOL, response);
+            return new Reply(Code.SWITCHING_PROTOCOL, response);
         }
         // todo HTTP2.0
         // todo MY SSL

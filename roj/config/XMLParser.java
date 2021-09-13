@@ -27,6 +27,7 @@ package roj.config;
 
 import roj.collect.LongBitSet;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
 import roj.config.data.*;
 import roj.config.word.AbstLexer;
@@ -58,6 +59,10 @@ public class XMLParser {
             slash = 12, equ = 13, ask = 14,
             semicolon = 15, not = 16, colon = 17,
             namespace = 18, unknown = 19;
+    public static final MyHashSet<String> HTML_CLOSE_TAGS;
+    static {
+        HTML_CLOSE_TAGS = new MyHashSet<>("meta", "link", "input", "img");
+    }
 
     public static void main(String[] args) throws ParseException {
         String xml = TextUtil.concat(args, ' ');
@@ -172,9 +177,13 @@ public class XMLParser {
                     case namespace:
                     case WordPresets.LITERAL: {
                         String aName = w.val();
-                        except(wr, equ, "=");
-                        // todo 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
-                        attributes.put(aName, of(wr.nextWord()));
+                        if(wr.nextWord().type() == equ) {
+                            // todo 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
+                            attributes.put(aName, of(wr.nextWord()));
+                        } else {
+                            wr.retractWord();
+                            attributes.put(aName, CString.valueOf(""));
+                        }
                     }
                     break;
                     default:
@@ -184,11 +193,11 @@ public class XMLParser {
 
             if (needCloseTag && !wr.noCloseTags.contains(name)) {
                 AbstLexer.Snapshot lcb = wr.snapshot();
-                w = wr.nextWord(); // 这里有问题，特殊符号，已修复 unknown
+                w = wr.nextWord();
 
                 if (!wr.checkCDATATag(w)) {
                     o:
-                    while (true) {
+                    while (w.type() != WordPresets.EOF) {
                         if (w.type() == left_curly_bracket) {
                             w = wr.nextWord();
                             if (w.type() == slash) {
@@ -198,7 +207,14 @@ public class XMLParser {
                                     case WordPresets.LITERAL:
                                     case namespace:
                                         if (!w.val().equals(name)) {
-                                            throw wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
+                                            ParseException e = wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
+                                            if(wr.lenient) {
+                                                System.out.println(e.toString());
+                                                wr.errorTag = w.val();
+                                                break o;
+                                            } else {
+                                                throw e;
+                                            }
                                         }
 
                                         break o;
@@ -210,7 +226,10 @@ public class XMLParser {
                                 break;
                             } else {
                                 wr.restore(lcb);
-                                children.add(xmlElement(wr));
+                                XElement xe = xmlElement(wr);
+                                if(xe != null) {
+                                    children.add(xe);
+                                }
                                 wr.snapshot(lcb);
                                 w = wr.nextWord();
                             }
@@ -249,7 +268,8 @@ public class XMLParser {
                     //}
                 }
 
-                except(wr, right_curly_bracket, ">");
+                if(!wr.lenient || wr.hasNext())
+                    except(wr, right_curly_bracket, ">");
             }
 
             return new XElement(name, attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children, !needCloseTag);
@@ -292,7 +312,8 @@ public class XMLParser {
         static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
 
         public Set<String> noCloseTags = Collections.emptySet();
-        public boolean keepAmp;
+        public boolean     keepAmp, lenient;
+        String errorTag;
 
         public XMLexer noCloseTags(@Nonnull Set<String> noCloseTags) {
             this.noCloseTags = noCloseTags;
@@ -301,6 +322,11 @@ public class XMLParser {
 
         public XMLexer keepAmp(boolean keepAmp) {
             this.keepAmp = keepAmp;
+            return this;
+        }
+
+        public XMLexer lenient(boolean lenient) {
+            this.lenient = lenient;
             return this;
         }
 

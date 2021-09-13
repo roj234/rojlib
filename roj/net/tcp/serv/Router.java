@@ -48,6 +48,9 @@ public interface Router {
         return 5000;
     }
 
+    /**
+     * any root router should return a {@link Reply}
+     */
     Response response(Socket socket, Request request) throws IOException;
 
     default int maxLength() {

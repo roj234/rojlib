@@ -25,11 +25,20 @@
  */
 package roj.net.cross;
 
+import roj.io.NonblockingUtil;
+import roj.net.tcp.util.WrappedSocket;
+import roj.util.ByteList;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.net.Socket;
+import java.net.SocketException;
+import java.nio.ByteBuffer;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Your description here
@@ -39,7 +48,7 @@ import java.io.PrintStream;
  * @since 2021/9/12 5:25
  */
 public class Util {
-    public static final String[] STATE_NAMES = {"握手", "连接", "运行", "错误", "断开", "结束"};
+    public static final String[] STATE_NAMES = {"握手", "连接", "运行", "错误", "断开", "结束", "cleanup"};
     public static final int WAIT        = 0;
     public static final int CONNECTED   = 1;
     public static final int ESTABLISHED = 2;
@@ -48,43 +57,46 @@ public class Util {
     public static final int FINALIZED   = 5;
     public static final int SHUTDOWN    = 6;
 
+    public static final int TIMEOUT_HEARTBEAT   = 5000;
     public static final int TIMEOUT_CONNECT     = 5000;
-    public static final int TIMEOUT_ESTABLISHED = 10000;
-    public static final int TIMEOUT_TRANSFER    = 15000;
+    public static final int TIMEOUT_ESTABLISHED = 20000;
+    public static final int TIMEOUT_TRANSFER    = 20000;
 
-    public static final int PS_HEARTBEAT = 1;
-    public static final int PS_CONNECT = 2;
-    public static final int PS_DISCONNECT = 3;
-    public static final int PS_DATA = 4;
-    public static final int PS_SERVER_DATA = 5;
-    public static final int PS_ERROR = 6;
-    public static final int PS_TIMEOUT = 7;
-    public static final int PS_STATE = 8;
-    public static final int PS_STATE_SLAVE = 9;
-    public static final int PS_SERVER_SLAVE_DATA = 10;
-    public static final int PS_LOGON             = 11;
-    public static final int PS_SLAVE_CONNECT     = 12;
-    public static final int PS_SLAVE_DISCONNECT  = 13;
-    public static final int PS_RESET             = 14;
-    public static final int PS_KICK_SLAVE        = 15;
+    public static final int PS_HEARTBEAT         = 1;
+    public static final int PS_CONNECT           = 2;
+    public static final int PS_DISCONNECT        = 3;
     public static final int PS_SERVER_HALLO      = 233;
-    public static final int PS_LINK_OVERFLOW = 255;
+    public static final int PS_LOGON             = 4;
+    public static final int PS_DATA              = 5;
+    public static final int PS_SERVER_DATA       = 6;
+    public static final int PS_STATE             = 7;
+    public static final int PS_KICK_SLAVE        = 8;
+    public static final int PS_SERVER_SLAVE_DATA = 9;
+    public static final int PS_SLAVE_CONNECT     = 10;
+    public static final int PS_SLAVE_DISCONNECT  = 11;
+    public static final int PS_RESET             = 12;
+    public static final int PS_LINK_OVERFLOW     = 255;
 
-    public static final String[] ERROR_NAMES = {"IO错误", "密码无效/房间不存在/房间已有房主", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制"};
-    public static final int PS_ERROR_IO = 0;
-    public static final int PS_ERROR_AUTH = 1;
-    public static final int PS_ERROR_CONNECTED = 2;
-    public static final int PS_ERROR_NOT_CONNECT = 3;
-    public static final int PS_ERROR_UNKNOWN_PACKET = 4;
-    public static final int PS_ERROR_SHUTDOWN = 5;
-    public static final int PS_ERROR_MASTER_DIE = 6;
-    public static final int PS_ERROR_SYSTEM_LIMIT = 7;
+    public static final String[] ERROR_NAMES = {"IO错误", "密码无效/房间不存在/房间已有房主", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
+    public static final int PS_ERROR_IO = 0x20;
+    public static final int PS_ERROR_AUTH = 0x21;
+    public static final int PS_ERROR_CONNECTED = 0x22;
+    public static final int PS_ERROR_NOT_CONNECT = 0x23;
+    public static final int PS_ERROR_UNKNOWN_PACKET = 0x24;
+    public static final int PS_ERROR_SHUTDOWN = 0x25;
+    public static final int PS_ERROR_MASTER_DIE = 0x26;
+    public static final int PS_ERROR_SYSTEM_LIMIT = 0x27;
+    public static final int PS_ERROR_TIMEOUT = 0x28;
 
-    public static final String[] RSTATE_NAMES = {"正常", "超时", "IO错误", "无接收者"};
-    public static final int PS_STATE_OK = 0;
-    public static final int PS_STATE_TIMEOUT = 1;
-    public static final int PS_STATE_IO_ERROR = 2;
-    public static final int PS_STATE_DISCARD = 3;
+    public static final String[] RSTATE_NAMES = {"超时", "IO错误", "无接收者"};
+    public static final int PS_STATE_TIMEOUT = 0;
+    public static final int PS_STATE_IO_ERROR = 1;
+    public static final int PS_STATE_DISCARD = 2;
+
+    public static final int PROTOCOL_VERSION = 3_2;
+    public static final ByteList CLIENT_HALLO = new ByteList(new byte[] {
+            'A','E','C','L','I','E','N','T','H','A','L','L','O'
+    });
 
     public static class SslDialog extends JDialog {
         private final JPasswordField inpPass;
@@ -155,6 +167,8 @@ public class Util {
             gbc.fill = GridBagConstraints.HORIZONTAL;
             panel3.add(btnBrowseCert, gbc);
             inpPass = new JPasswordField();
+            if(certPass != null)
+                inpPass.setText(new String(certPass));
             gbc = new GridBagConstraints();
             gbc.gridx = 1;
             gbc.gridy = 1;
@@ -180,6 +194,8 @@ public class Util {
             gbc.anchor = GridBagConstraints.WEST;
             panel3.add(label2, gbc);
             inpCert = new JTextField();
+            if(certFile != null)
+                inpCert.setText(certFile);
             gbc = new GridBagConstraints();
             gbc.gridx = 1;
             gbc.gridy = 0;
@@ -196,8 +212,6 @@ public class Util {
             buttonOK.addActionListener(e -> onOK());
 
             ActionListener c = e -> {
-                certFile = null;
-                certPass = null;
                 dispose();
             };
             buttonCancel.addActionListener(c);
@@ -213,7 +227,7 @@ public class Util {
 
             btnBrowseCert.addActionListener(e -> {
                 JFileChooser fc = new JFileChooser();
-                fc.setDialogTitle("Certificate File");
+                fc.setDialogTitle("Certificate");
                 fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
                 fc.setMultiSelectionEnabled(false);
                 if (fc.showOpenDialog(SslDialog.this) == JFileChooser.APPROVE_OPTION) {
@@ -242,7 +256,7 @@ public class Util {
         }
     }
 
-    static PrintStream out = System.out;
+    static PrintStream out;
     static String certFile;
     static char[] certPass;
 
@@ -253,4 +267,78 @@ public class Util {
         }
     }
 
+    static void initSocketPref(Socket client) throws SocketException {
+        client.setTcpNoDelay(true);
+        client.setPerformancePreferences(1, 1, 0);
+        client.setTrafficClass(0b10010000);
+    }
+
+    static int handshakeClient(WrappedSocket channel) throws IOException {
+        int wait = TIMEOUT_CONNECT;
+        while (!channel.handShake()) {
+            LockSupport.parkNanos(1000);
+            if(wait-- <= 0) {
+                return 1;
+            }
+        }
+
+        ByteList buf = channel.buffer();
+        buf.clear();
+        buf.addAll(CLIENT_HALLO.list);
+        buf.add((byte) PROTOCOL_VERSION);
+        wait = writeAndFlush(channel, buf, wait);
+        buf.clear();
+
+        int read;
+        while ((read = channel.read(1)) == 0) {
+            LockSupport.parkNanos(1000);
+            if(wait-- <= 0) {
+                return 3;
+            }
+        }
+        if(read < 0)
+            return 4;
+        if(buf.getU(0) != PS_SERVER_HALLO) {
+            if (buf.getU(0) == PS_LINK_OVERFLOW) {
+                syncPrint("服务端报告: 超过最大连接数");
+                return 4;
+            } else
+                throw new SocketException("协议错误: " + buf);
+        }
+        buf.clear();
+        return 0;
+    }
+
+    static int writeAndFlush(WrappedSocket channel, ByteList buf, int timeout) throws IOException {
+        Thread t = Thread.currentThread();
+        do {
+            int w = channel.write(buf);
+            if(w < 0)
+                return w;
+            if (buf.writePos() == buf.pos()) {
+                channel.dataFlush();
+                break;
+            }
+            LockSupport.parkNanos(20);
+            if(t.isInterrupted())
+                return NonblockingUtil.INTERRUPTED;
+            if (timeout-- <= 0) {
+                return -7;
+            }
+        } while (true);
+        return timeout;
+    }
+
+    static int writeEx(WrappedSocket channel, byte buf) throws IOException {
+        int state;
+        ByteBuffer nx = NonblockingUtil.getNativeDirectBuffer();
+        nx.position(0).limit(1);
+        nx.put(buf).position(0);
+        int timeout = 20;
+        while ((state = NonblockingUtil.writeFromNativeBuffer(channel.fd(), nx, NonblockingUtil.SOCKET_FD)) == 0 && timeout > 0) {
+            LockSupport.parkNanos(20);
+            timeout--;
+        }
+        return state < 0 ? state : timeout <= 0 ? -7 : 0;
+    }
 }

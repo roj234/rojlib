@@ -32,8 +32,8 @@ import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.Router;
 import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
+import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
-import roj.net.tcp.util.ResponseCode;
 import roj.net.tcp.util.SharedConfig;
 import roj.net.tcp.util.WrappedSocket;
 import roj.util.log.Logger;
@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 public class ChannelRouterSync implements ITaskNaCl {
     protected WrappedSocket channel;
@@ -96,9 +97,10 @@ public class ChannelRouterSync implements ITaskNaCl {
 
                 while (!channel.handShake()) {
                     if (System.currentTimeMillis() > time) {
-                        reply = new Reply(ResponseCode.TIMEOUT, StringResponse.errorResponse(ResponseCode.TIMEOUT, null));
+                        reply = new Reply(Code.TIMEOUT, StringResponse.errorResponse(Code.TIMEOUT, null));
                         break;
                     }
+                    LockSupport.parkNanos(1000);
                 }
                 if(reply == null) {
                     try {
@@ -108,12 +110,12 @@ public class ChannelRouterSync implements ITaskNaCl {
                             reply.getClass(); // checkNull
                             reply.prepare();
                         } catch (Throwable e) {
-                            reply = new Reply(ResponseCode.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
                         }
                     } catch (IllegalRequestException e) {
                         final Throwable cause = e.getCause();
                         reply = new Reply(e.code, cause instanceof Notify ?
-                                StringResponse.errorResponse(e.code, e.code == ResponseCode.INTERNAL_ERROR ? cause.getCause() : null) :
+                                StringResponse.errorResponse(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
                                 StringResponse.errorResponse(null, e)
                         );
                     }
@@ -130,9 +132,12 @@ public class ChannelRouterSync implements ITaskNaCl {
                     logger.warn("[Send] " + System.currentTimeMillis() + ": Timeout while sending " + reply + " to " + remote);
                     break;
                 }
+                LockSupport.parkNanos(1000);
             }
 
-            while (!channel.shutdown());
+            while (!channel.shutdown()) {
+                LockSupport.parkNanos(1000);
+            }
             channel.close();
             reply.release();
 
@@ -141,7 +146,7 @@ public class ChannelRouterSync implements ITaskNaCl {
                 reply.release();
             }
 
-            reply = new Reply(ResponseCode.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
             try {
                 long time = System.currentTimeMillis();
                 long timeout = router.writeTimeout(request);
@@ -150,6 +155,7 @@ public class ChannelRouterSync implements ITaskNaCl {
                     if (System.currentTimeMillis() - time >= timeout) {
                         break;
                     }
+                    LockSupport.parkNanos(1000);
                 }
             } catch (Throwable ignored) {
 

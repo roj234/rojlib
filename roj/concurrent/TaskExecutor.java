@@ -27,11 +27,12 @@ package roj.concurrent;
 
 import roj.concurrent.task.ExecutionTask;
 import roj.concurrent.task.ITask;
+import roj.util.FastLocalThread;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 
-public class TaskExecutor extends Thread implements TaskHandler, Executor {
+public class TaskExecutor extends FastLocalThread implements TaskHandler, Executor {
     ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
     final ThreadStateMonitor monitor;
     final int timeout;
@@ -98,16 +99,13 @@ public class TaskExecutor extends Thread implements TaskHandler, Executor {
 
                 try {
                     task.calculate(this);
+                    if (task.continueExecuting()) {
+                        tasks.add(task);
+                    }
                 } catch (Throwable e) {
                     if(!(e instanceof InterruptedException))
                         e.printStackTrace();
                 }
-
-                try {
-                    if (task.continueExecuting()) {
-                        tasks.add(task);
-                    }
-                } catch (Throwable ignored) {}
 
                 tasks.poll();
             }

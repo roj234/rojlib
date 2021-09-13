@@ -30,6 +30,7 @@ import roj.collect.IntSet;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.task.ITask;
+import roj.config.data.CMapping;
 import roj.io.NonblockingUtil;
 import roj.net.tcp.TCPServer;
 import roj.net.tcp.client.HttpClient;
@@ -39,6 +40,7 @@ import roj.net.tcp.util.WrappedSocket;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+import roj.util.FastLocalThread;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -49,6 +51,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
@@ -84,9 +87,22 @@ public class AEServer extends TCPServer {
     public boolean canCreateRoom = true, canJoinRoom = true;
 
     public void m_KickRoom(Room room) throws IOException {
-        while (!room.master.shutdown());
-        room.master.close();
-        room.master = null;
+        if(room.master == null) return;
+        while (!room.compareAndSet(0, 2)) {
+            LockSupport.parkNanos(10);
+            if(room.master == null || watcher == null) return;
+        }
+        try {
+            writeEx(room.master, (byte) PS_ERROR_SYSTEM_LIMIT);
+            while (!room.master.shutdown()) {
+                LockSupport.parkNanos(1000);
+            }
+            room.master.close();
+            room.master = null;
+            rooms.remove(room.id);
+        } finally {
+            room.set(0);
+        }
     }
 
     @Override
@@ -100,7 +116,7 @@ public class AEServer extends TCPServer {
             }
         } else {
             FileDescriptor fd = NonblockingUtil.fd(client);
-            client.setTrafficClass(0x10);
+            initSocketPref(client);
 
             WrappedSocket cio = (
                     ssl != null ?
@@ -119,7 +135,7 @@ public class AEServer extends TCPServer {
         return watcher;
     }
 
-    protected int handleConnect(Worker address, String id, String token, boolean owner) {
+    protected int handleConnect(Worker address, boolean owner, String id, String token) {
         Room room = rooms.get(id);
         if(owner != (room == null)) return PS_ERROR_AUTH;
         if(room == null) {
@@ -138,44 +154,35 @@ public class AEServer extends TCPServer {
         return ssl != null ? SecureSocket.get(socket, NonblockingUtil.fd(socket), HttpClient.CLIENT_ALLOCATOR, true) : new InsecureSocket(socket, NonblockingUtil.fd(socket));
     }
 
-    static ByteList CLIENTHALLO = new ByteList(new byte[] {
-        'A','E','C','L','I','E','N','T','H','A','L','L','O'
-    });
-
     public void shutdown() {
         if(watcher == null) return;
         try {
             socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        } catch (IOException ignored) {}
         LockSupport.parkNanos(1000);
-        ByteList tmp = new ByteList(5);
-        tmp.add((byte) PS_ERROR);
-        tmp.add((byte) PS_ERROR_SHUTDOWN);
+        for (Room room : rooms.values()) {
+            room.master = null;
+        }
+        rooms.clear();
         for (Worker w : workers.keySet()) {
-            switch (w.state) {
+            int state = w.state;
+            w.state = SHUTDOWN;
+            LockSupport.unpark(w);
+            switch (state) {
                 case CONNECTED:
                 case ESTABLISHED:
                     try {
-                        w.state = SHUTDOWN;
-                        try {
-                            synchronized (w) {
-                                w.wait(50);
-                            }
-                        } catch (InterruptedException ignored) {}
-                        w.channel.write(tmp);
-                        w.channel.dataFlush();
-                        tmp.writePos(0);
-                        for (int i = 0; i < 50; i++) {
+                        LockSupport.parkNanos(100);
+                        if(w.channel == null) break;
+                        writeEx(w.channel, (byte) PS_ERROR_SHUTDOWN);
+                        for (int i = 0; i < 20; i++) {
                             if (w.channel.shutdown())
                                 break;
-                            LockSupport.parkNanos(100);
+                            LockSupport.parkNanos(20);
                         }
                         w.channel.close();
                     } catch (IOException ignored) {}
             }
-            w.state = SHUTDOWN;
             w.interrupt();
         }
         for (Worker w : workers.keySet()) {
@@ -185,23 +192,33 @@ public class AEServer extends TCPServer {
         }
         workers.clear();
         watcher = null;
-        System.out.println("Server closed");
+        System.out.println("服务器已关闭");
     }
 
     public static final class Room extends AtomicInteger {
         String id, token;
         WrappedSocket master;
         int index;
-        final IntMap<WrappedSocket> slaves = new IntMap<>();
+
+        final IntMap<Worker> slaves = new IntMap<>();
         List<Worker> packets = new ArrayList<>();
         IntSet kicked = new IntSet(4);
+
+        // 配置项
         public boolean locked;
+
+        // 统计数据
+        LongAdder up, down;
+        long creation;
 
         public Room(String id, Worker owner, String token) {
             this.master = owner.channel;
             this.id = id;
             this.token = token;
             this.index = 1;
+            this.creation = System.currentTimeMillis() / 1000;
+            this.up = new LongAdder();
+            this.down = new LongAdder();
             owner.room = this;
         }
 
@@ -209,7 +226,7 @@ public class AEServer extends TCPServer {
             if(!token.equals(this.token))
                 return PS_ERROR_AUTH;
             synchronized (slaves) {
-                slaves.put(address.roomIndex = index++, address.channel);
+                slaves.put(address.roomIndex = index++, address);
             }
             address.room = this;
             return -1;
@@ -217,22 +234,34 @@ public class AEServer extends TCPServer {
 
         public void mainThread() {
             if(packets.size() > 0) {
-                while (!compareAndSet(0, 1)) {
-                    LockSupport.parkNanos(100);
+                int trys = 10;
+                while (!compareAndSet(0, -1) && trys-- > 0) {
+                    LockSupport.parkNanos(10);
                 }
-                ByteList bl;
-                x:
+                if(trys == 0) return;
+
                 for (int i = 0; i < packets.size(); i++) {
-                    bl = packets.get(i).channel.buffer();
-                    while (bl.writePos() < bl.pos()) {
-                        try {
-                            master.write(bl);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            break x;
-                        }
-                        LockSupport.parkNanos(100);
+                    WrappedSocket channel = packets.get(i).channel;
+                    try {
+                        writeAndFlush(master, channel.buffer(), 200);
+                        LockSupport.unpark(packets.get(i));
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                        System.out.println("Error at #" + i);
                     }
+                }
+                packets.clear();
+                set(0);
+            }
+        }
+
+        public void wakeupAndDiscard() {
+            if(packets.size() > 0) {
+                while (!compareAndSet(0, -1)) {
+                    LockSupport.parkNanos(10);
+                }
+
+                for (int i = 0; i < packets.size(); i++) {
                     LockSupport.unpark(packets.get(i));
                 }
                 packets.clear();
@@ -242,7 +271,8 @@ public class AEServer extends TCPServer {
 
         public void register(Worker worker) {
             while (!compareAndSet(0, 1)) {
-                LockSupport.parkNanos(100);
+                LockSupport.parkNanos(10);
+                if(worker.state == SHUTDOWN || master == null) return;
             }
             packets.add(worker);
             set(0);
@@ -251,23 +281,50 @@ public class AEServer extends TCPServer {
 
         public void kick(int id) {
             while (!compareAndSet(0, 1)) {
-                LockSupport.parkNanos(100);
+                LockSupport.parkNanos(10);
+                if(master == null) return;
             }
             kicked.add(id);
             set(0);
         }
+
+        public void resetStats() {
+            up.reset();
+            down.reset();
+            synchronized (slaves) {
+                for(Worker w : slaves.values()) {
+                    w.up = w.down = 0;
+                }
+            }
+        }
+
+        public CMapping serialize() {
+            CMapping json = new CMapping();
+            json.put("id", id);
+            json.put("pass", token);
+            json.put("time", creation);
+            json.put("up", up.sum());
+            json.put("down", down.sum());
+            json.put("users", slaves.size());
+            json.put("index", index);
+            json.put("master", master == null ? "断线" : master.socket().getRemoteSocketAddress().toString());
+            return json;
+        }
     }
 
-    static class Worker extends Thread {
+    static class Worker extends FastLocalThread {
         AEServer server;
         WrappedSocket channel;
 
         Room room;
         int roomIndex;
+        AtomicInteger busy;
 
         volatile int state;
-        long creation;
-        ByteList buffer;
+
+        // 统计数据 (可以删除)
+        long creation, lastHeart;
+        long up, down;
 
         @Override
         public String toString() {
@@ -277,9 +334,9 @@ public class AEServer extends TCPServer {
         public Worker(AEServer aeServer, WrappedSocket channel) {
             this.server = aeServer;
             this.channel = channel;
-            this.creation = System.currentTimeMillis();
+            this.creation = System.currentTimeMillis() / 1000;
             this.state = WAIT;
-            this.buffer = new ByteList();
+            this.busy = new AtomicInteger(3);
             setDaemon(true);
             setName("Worker " + channel.socket().getRemoteSocketAddress());
             start();
@@ -288,141 +345,74 @@ public class AEServer extends TCPServer {
         @Override
         public void run() {
             try {
-                Socket socket = this.channel.socket();
-                socket.setSoTimeout(TIMEOUT_CONNECT);
-
-                InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
-
-                x:
+                conn:
                 {
-                    int wait = TIMEOUT_CONNECT;
-                    while (!channel.handShake()) {
-                        LockSupport.parkNanos(1000);
-                        if(wait-- <= 0) {
-                            timeout(channel);
-                            break x;
-                        }
+                    int heart = handshake();
+                    if (heart != 0) {
+                        syncPrint(this + ": 握手失败: " + heart);
+                        break conn;
                     }
+                    if(state == SHUTDOWN) break conn;
 
-                    while (channel.read() == 0) {
-                        LockSupport.parkNanos(1000);
-                        if(wait-- <= 0) {
-                            timeout(channel);
-                            break x;
-                        }
-                    }
-
-                    while (!channel.buffer().startsWith(CLIENTHALLO)) {
-                        if(channel.read() < 0)
-                            break x;
-                        LockSupport.parkNanos(1000);
-                        if(state == SHUTDOWN)
-                            return;
-                        if(wait-- <= 0) {
-                            timeout(channel);
-                            break x;
-                        }
-                    }
                     ByteList buf = channel.buffer();
                     buf.clear();
-
-                    buf.add((byte) PS_SERVER_HALLO);
-                    while (channel.write(buf) == 0) {
-                        LockSupport.parkNanos(1000);
-                        if(wait-- <= 0) {
-                            timeout(channel);
-                            break x;
-                        }
-                    }
-                    buf.clear();
-
                     state = CONNECTED;
 
-                    wait = TIMEOUT_ESTABLISHED;
                     ByteReader r = new ByteReader(buf);
                     ByteWriter w = new ByteWriter(buf);
 
-                    int read;
-                    int except_length = -1;
-                    main:
-                    while (true) {
-                        if (chkRoomState(buf, w)) break;
-                        while ((read = channel.read(except_length == -1 ? 1 : except_length - buf.pos())) == 0 || buf.pos() < except_length) {
-                            if(read < 0)
-                                break main;
-                            if(read == 0) {
-                                if (chkRoomState(buf, w)) break;
-                                LockSupport.parkNanos(1000);
-                                if(wait-- <= 0) {
-                                    timeout(channel);
-                                    break main;
-                                }
+                    heart = 500;
+                    int except = -1;
+                    while (state != SHUTDOWN) {
+                        if (chkRoomState()) break;
+                        int read;
+                        while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
+                            if (chkRoomState()) break conn;
+                            checkBusy(true);
+                            LockSupport.parkNanos(20);
+                            checkBusy(false);
+                            if (heart-- <= 0) {
+                                writeEx(channel, (byte) PS_ERROR_TIMEOUT);
+                                break conn;
                             }
-                            if(state == SHUTDOWN)
-                                return;
+                            if (state == SHUTDOWN) break conn;
                         }
-                        if(read < 0)
-                            break;
-                        if(state == SHUTDOWN)
-                            return;
+                        if (read < 0 || state == SHUTDOWN) break;
                         switch (buf.get(0) & 0xFF) {
                             case PS_HEARTBEAT:
-                                buf.writePos(0);
-                                while (channel.write(buf) == 0) {
-                                    LockSupport.parkNanos(200);
-                                    if(state == SHUTDOWN)
-                                        return;
-                                    if(wait-- <= 0) {
-                                        timeout(channel);
-                                        break x;
-                                    }
-                                }
-                                wait = TIMEOUT_ESTABLISHED;
+                                lastHeart = System.currentTimeMillis();
+                                writeEx(channel, (byte) PS_HEARTBEAT);
                                 buf.clear();
                                 break;
-                            case PS_TIMEOUT:
-                                state = ERROR;
-                                break main;
                             case PS_CONNECT:
-                                if(state == CONNECTED) {
-                                    if(buf.pos() < 4) { // PKT VL VL XL
-                                        except_length = 4;
+                                if (state == CONNECTED) {
+                                    if (buf.pos() < 4) { // PKT VL VL XL
+                                        except = 4;
                                         break;
                                     }
                                     r.index = 1;
                                     int value = r.readUByte() + r.readUByte();
-                                    if(buf.pos() < value + 4) {
-                                        except_length = value + 4;
+                                    if (buf.pos() < value + 4) {
+                                        except = value + 4;
                                         break;
                                     }
                                     r.index = 1;
-                                    except_length = -1;
+                                    except = -1;
+
                                     int idLen = r.readUByte();
                                     int tokenLen = r.readUByte();
-                                    boolean owner = r.readBoolean();
-                                    String id = r.readUTF0(idLen);
-                                    String token = r.readUTF0(tokenLen);
-                                    buf.clear();
-                                    int vx = server.handleConnect(this, id, token, owner);
-                                    if (vx != -1) {
+
+                                    int code = server.handleConnect(this, r.readBoolean(), r.readUTF0(idLen), r.readUTF0(tokenLen));
+                                    if (code != -1) {
                                         syncPrint(this + ": 连接失败(协议)");
-                                        buf.add((byte) PS_ERROR);
-                                        buf.add((byte) vx);
-                                        this.channel.write(buf);
-                                        this.channel.dataFlush();
-                                        LockSupport.parkNanos(10 * 1000);
-                                        break main;
+                                        writeEx(channel, (byte) code);
+                                        break conn;
                                     }
                                     buf.clear();
                                     buf.add((byte) PS_LOGON);
-                                    w.writeInt(roomIndex);
-                                    while (buf.writePos() < buf.pos()) {
-                                        if(this.channel.write(buf) < 0)
-                                            break;
-                                    }
-                                    this.channel.dataFlush();
+                                    writeAndFlush(channel, w.writeInt(roomIndex).list, 500);
                                     buf.clear();
-                                    if(room.master != channel) {
+                                    if (room.master != channel) {
                                         buf.add((byte) PS_SLAVE_CONNECT);
                                         byte[] addr = channel.socket().getInetAddress().getAddress();
                                         int port = channel.socket().getPort();
@@ -430,25 +420,21 @@ public class AEServer extends TCPServer {
                                         room.register(this);
                                         buf.clear();
                                     }
+                                    if(state == SHUTDOWN) break conn;
                                     state = ESTABLISHED;
-                                    wait = TIMEOUT_ESTABLISHED;
                                 } else {
-                                    buf.clear();
-                                    buf.add((byte) PS_ERROR);
-                                    buf.add((byte) PS_ERROR_CONNECTED);
-                                    this.channel.write(buf);
-                                    this.channel.dataFlush();
-                                    buf.clear();
+                                    writeEx(channel, (byte) PS_ERROR_CONNECTED);
                                 }
                                 break;
                             case PS_DISCONNECT:
                                 buf.clear();
                                 syncPrint(this + ": 断开连接(协议)");
                                 state = DISCONNECT;
-                                break main;
+                                break conn;
                             case PS_RESET:
-                                if(state != ESTABLISHED) {
-                                    nonLogon(buf);
+                                if (state != ESTABLISHED) {
+                                    writeEx(channel, (byte) PS_ERROR_NOT_CONNECT);
+                                    break;
                                 }
                                 if (room.master != this.channel) {
                                     w.writeInt(this.roomIndex);
@@ -458,12 +444,12 @@ public class AEServer extends TCPServer {
                                 break;
                             case PS_KICK_SLAVE:
                                 if (buf.pos() < 5) {
-                                    except_length = 5;
+                                    except = 5;
                                     break;
                                 }
-                                except_length = -1;
-                                if(state != ESTABLISHED) {
-                                    nonLogon(buf);
+                                except = -1;
+                                if (state != ESTABLISHED) {
+                                    writeEx(channel, (byte) PS_ERROR_NOT_CONNECT);
                                     break;
                                 }
                                 if (room.master == this.channel) {
@@ -473,131 +459,129 @@ public class AEServer extends TCPServer {
                                 buf.clear();
                                 break;
                             case PS_DATA:
-                                if(state != ESTABLISHED) {
-                                    nonLogon(buf);
-                                } else {
-                                    r.index = 1;
-                                    wait = TIMEOUT_ESTABLISHED;
-                                    if (buf.pos() < 5) {
-                                        except_length = 5;
-                                        continue;
-                                    }
-                                    int value = r.readInt();
-                                    if (buf.pos() < value + 5) {
-                                        except_length = value + 5;
-                                        continue;
-                                    }
-                                    except_length = -1;
+                                if (state != ESTABLISHED) {
+                                    writeEx(channel, (byte) PS_ERROR_NOT_CONNECT);
+                                    break;
+                                }
 
-                                    WrappedSocket slave;
-                                    ByteList outBuf = this.buffer;
-                                    outBuf.clear();
-                                    if (room.master == this.channel) {
-                                        // from ClientOwner: PKT LEN LEN LEN [len - 4] TO TO TO TO
-                                        r.index = buf.pos() - 4;
-                                        int id = r.readInt();
-                                        synchronized (room.slaves) {
-                                            slave = room.slaves.get(id);
-                                        }
-                                        if (slave == null) {
-                                            syncPrint(this + ": 没有接受者: " + buf);
-                                            buf.clear();
-                                            buf.add((byte) PS_STATE);
-                                            buf.add((byte) PS_STATE_DISCARD);
-                                            this.channel.write(buf);
-                                            this.channel.dataFlush();
-                                            buf.clear();
-                                            break;
-                                        }
+                                r.index = 1;
+                                if (buf.pos() < 5) {
+                                    except = 5;
+                                    break;
+                                }
+                                int value = r.readInt();
+                                if (buf.pos() < value + 5) {
+                                    except = value + 5;
+                                    break;
+                                }
+                                except = -1;
 
-                                        // 转移数据到outBuf
-                                        w.list = outBuf;
-                                        w.writeByte((byte) PS_SERVER_DATA).writeInt(value).list = buf;
-                                        outBuf.addAll(buf.list, 4, buf.pos() - 5);
+                                Worker wk = null;
+                                AtomicInteger targetLock;
+                                WrappedSocket target;
+                                buf.writePos(0);
+                                if (room.master == this.channel) {
+                                    // from ClientOwner: PKT LEN LEN LEN [len - 4] TO TO TO TO
+                                    r.index = buf.pos() - 4;
+                                    synchronized (room.slaves) {
+                                        wk = room.slaves.get(r.readInt());
+                                    }
+                                    if (wk == null) {
+                                        syncPrint(this + ": 没有接受者: " + buf);
                                         buf.clear();
-
                                         buf.add((byte) PS_STATE);
-                                        syncPrint(this + " => '" + room.id + "'.slave[" + id + "]");
-                                    } else {
-                                        // from Client: PKT LEN LEN LEN LEN [len]
-                                        w.list = outBuf;
-                                        w.writeByte((byte) PS_SERVER_SLAVE_DATA).writeInt(roomIndex)
-                                                .list = buf;
-                                        outBuf.addAll(buf, 1, buf.pos() - 1);
-
+                                        buf.add((byte) PS_STATE_DISCARD);
+                                        writeAndFlush(channel, buf, 200);
                                         buf.clear();
-                                        buf.add((byte) PS_STATE_SLAVE);
-
-                                        while (!room.compareAndSet(0, 2))
-                                            LockSupport.parkNanos(100);
-                                        slave = room.master;
-                                        syncPrint(this + " => '" + room.id + "'.master");
+                                        break;
                                     }
-                                    wait = TIMEOUT_TRANSFER;
-                                    while (outBuf.writePos() < outBuf.pos()) {
-                                        int wr;
-                                        try {
-                                            wr = slave.write(outBuf);
-                                        } catch (Throwable e) {
-                                            buf.add((byte) PS_STATE_IO_ERROR);
-                                            break;
-                                        }
-                                        if (wr < -1) {
-                                            buf.add((byte) PS_STATE_IO_ERROR);
-                                            break;
-                                        } else if (wr == 0) {
-                                            LockSupport.parkNanos(100);
-                                        }
-                                        if (state == SHUTDOWN) return;
-                                        if (wait-- <= 0) {
-                                            buf.add((byte) PS_STATE_TIMEOUT);
-                                            break;
-                                        }
+                                    target = wk.channel;
+                                    targetLock = wk.busy;
+
+                                    int pos = buf.pos() - 4;
+                                    buf.pos(0);
+                                    w.writeByte((byte) PS_SERVER_DATA).writeInt(value - 4);
+                                    buf.pos(pos);
+                                    //syncPrint(this + " => '" + room.id + "'[" + id + "]");
+                                    // 拿到写入锁
+                                    if (!acquireWriteLock(targetLock)) break conn;
+                                    // 等待线程停车
+                                    while (targetLock.get() != 1) {
+                                        LockSupport.parkNanos(10);
+                                        if(state == SHUTDOWN ||
+                                                room.master == null ||
+                                                room.kicked.remove(roomIndex)) break conn;
                                     }
+                                    room.down.add(value - 4);
+                                    wk.down += value - 4;
+                                } else {
+                                    // from Client: PKT LEN LEN LEN LEN [len]
+                                    int pos = buf.pos();
+                                    byte[] x = buf.list;
+                                    if(x.length < buf.pos() + 4) {
+                                        x = new byte[buf.pos() + 4];
+                                    }
+                                    System.arraycopy(buf.list, 1, buf.list = x, 5, pos - 1);
+                                    buf.pos(0);
+                                    w.writeByte((byte) PS_SERVER_SLAVE_DATA).writeInt(roomIndex);
+                                    buf.pos(pos + 4);
 
-                                    if(buf.pos() == 1)
-                                        buf.add((byte) PS_STATE_OK);
-                                    this.channel.write(buf);
-                                    this.channel.dataFlush();
-                                    buf.clear();
-                                    wait = TIMEOUT_ESTABLISHED;
+                                    target = room.master;
+                                    targetLock = room;
+                                    //syncPrint(this + " => '" + room.id + "'[0]");
+                                    // 拿到写入锁
+                                    if (!acquireWriteLock(targetLock)) break conn;
+                                    room.up.add(value);
+                                    up += value;
+                                }
+                                int v = writeAndFlush(target, buf, TIMEOUT_TRANSFER);
+                                buf.clear();
+                                if (v == -7) {
+                                    buf.add((byte) PS_STATE);
+                                    buf.add((byte) PS_STATE_TIMEOUT);
+                                } else if (v < 0) {
+                                    buf.add((byte) PS_STATE);
+                                    buf.add((byte) PS_STATE_IO_ERROR);
+                                }
 
-                                    room.compareAndSet(2, 0);
+                                if (buf.pos() > 0) writeAndFlush(channel, buf, 200);
+
+                                if(room.master == channel) {
+                                    LockSupport.unpark(wk);
+                                } else {
+                                    targetLock.set(0);
                                 }
                                 break;
-                            case PS_ERROR:
-                                try {
-                                    syncPrint(this + ": ERROR: " + r.readUByte());
-                                } catch (ArrayIndexOutOfBoundsException ignored) {
-                                    syncPrint(this + ": REPORTED AN EMPTY ERROR ");
-                                }
-                                break main;
                             default:
-                                syncPrint(this + ": UNKNOWN PACKET: " + buf);
-                                buf.clear();
-                                buf.add((byte) PS_ERROR);
-                                buf.add((byte) PS_ERROR_UNKNOWN_PACKET);
-                                this.channel.write(buf);
-                                this.channel.dataFlush();
-                                break main;
+                                int bc = buf.getU(0) - 0x20;
+                                if(buf.pos() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
+                                    syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+                                } else {
+                                    syncPrint(this + ": 未知数据包: " + buf);
+                                    writeEx(channel, (byte) PS_ERROR_UNKNOWN_PACKET);
+                                }
+                                break conn;
                         }
+                        heart = 1200;
                     }
                 }
 
+                // wait for last (writeEx) message to send
+                try {
+                    writeEx(channel, (byte) PS_DISCONNECT);
+                } catch (IOException ignored) {}
+                LockSupport.parkNanos(2000);
                 syncPrint(this + ": 断开");
-                while (!channel.shutdown());
+                while (!channel.shutdown()) {
+                    LockSupport.parkNanos(100);
+                }
                 channel.close();
                 state = FINALIZED;
             } catch (Throwable e) {
                 state = ERROR;
 
                 try {
-                    ByteList error = this.channel.buffer();
-                    error.clear();
-                    error.add((byte) PS_ERROR);
-                    error.add((byte) PS_ERROR_IO);
-                    this.channel.write(error);
-                    this.channel.dataFlush();
+                    writeEx(channel, (byte) PS_ERROR_IO);
                 } catch (Throwable ignored) {}
 
                 String msg = e.getMessage();
@@ -622,6 +606,7 @@ public class AEServer extends TCPServer {
                 if(room.master == channel) {
                     room.master = null;
                     server.rooms.remove(room.id);
+                    room.wakeupAndDiscard();
                 } else {
                     synchronized (room.slaves) {
                         room.slaves.remove(roomIndex);
@@ -640,36 +625,91 @@ public class AEServer extends TCPServer {
             }
         }
 
-        private void nonLogon(ByteList buf) throws IOException {
-            buf.clear();
-            buf.add((byte) PS_ERROR);
-            buf.add((byte) PS_ERROR_NOT_CONNECT);
-            this.channel.write(buf);
-            this.channel.dataFlush();
-            return;
+        private boolean acquireWriteLock(AtomicInteger targetLock) {
+            while (!targetLock.compareAndSet(0, 2)) {
+                if(room.master == channel) room.mainThread();
+                LockSupport.parkNanos(10);
+                if(state == SHUTDOWN ||
+                        room.master == null ||
+                        room.kicked.remove(roomIndex)) return false;
+            }
+            return true;
         }
 
-        private boolean chkRoomState(ByteList buf, ByteWriter w) throws IOException {
+        private void checkBusy(boolean state) {
+            if(state) {
+                if(!busy.compareAndSet(3, 0))
+                    throw new IllegalStateException(String.valueOf(busy.get()));
+            } else {
+                int v;
+                do {
+                    v = busy.get();
+                    if(v != 0 && v != 2)
+                        throw new IllegalStateException(String.valueOf(busy.get()));
+                    if (busy.compareAndSet(2, 1)) {
+                        LockSupport.park();
+                        if (!busy.compareAndSet(1, 3))
+                            throw new IllegalStateException(String.valueOf(busy.get()));
+                        break;
+                    } else if (busy.compareAndSet(0, 3))
+                        break;
+                    LockSupport.parkNanos(10);
+                } while (true);
+            }
+        }
+
+        private int handshake() throws IOException {
+            int wait = TIMEOUT_CONNECT;
+            while (!channel.handShake()) {
+                LockSupport.parkNanos(100);
+                if(wait-- <= 0) {
+                    writeEx(channel, (byte) PS_ERROR_TIMEOUT);
+                    return 1;
+                }
+            }
+
+            int rem = CLIENT_HALLO.list.length + 1;
+            while (rem > 0) {
+                int r = channel.read(rem);
+                if(r < 0)
+                    return 2;
+                rem -= r;
+                LockSupport.parkNanos(100);
+                if(state == SHUTDOWN)
+                    return 3;
+                if(wait-- <= 0) {
+                    writeEx(channel, (byte) PS_ERROR_TIMEOUT);
+                    return 4;
+                }
+            }
+            if(!channel.buffer().startsWith(CLIENT_HALLO))
+                return 5;
+            if(channel.buffer().getU(CLIENT_HALLO.list.length) != PROTOCOL_VERSION)
+                return 6;
+
+            return writeEx(channel, (byte) PS_SERVER_HALLO) < 0 ? 7 : 0;
+        }
+
+        private boolean chkRoomState() throws IOException {
             if (room != null) {
                 if (room.master == null || room.kicked.remove(roomIndex)) {
-                    w.writeByte((byte) PS_ERROR).writeByte((byte) PS_ERROR_MASTER_DIE);
-                    this.channel.write(buf);
-                    this.channel.dataFlush();
-                    LockSupport.parkNanos(10 * 1000);
+                    writeEx(channel, (byte) PS_ERROR_MASTER_DIE);
                     return true;
                 } else if (room.master == channel) room.mainThread();
             }
             return false;
         }
 
-        private static void timeout(WrappedSocket channel) {
-            ByteList buf = channel.buffer();
-            buf.clear();
-            buf.add((byte) PS_TIMEOUT);
-            try {
-                channel.write(buf);
-                channel.dataFlush();
-            } catch (Throwable ignored) {}
+        public CMapping serialize() {
+            CMapping json = new CMapping();
+            json.put("id", roomIndex);
+            json.put("ip", channel.socket().getRemoteSocketAddress().toString());
+            json.put("state", STATE_NAMES[state]);
+            json.put("time", creation);
+            json.put("heart", lastHeart);
+            json.put("up", up);
+            json.put("down", down);
+            return json;
         }
     }
 

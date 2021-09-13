@@ -46,7 +46,7 @@ import roj.net.tcp.serv.response.HeadResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.net.tcp.util.Action;
-import roj.net.tcp.util.ResponseCode;
+import roj.net.tcp.util.Code;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
@@ -1296,7 +1296,7 @@ public class DnsServer implements Router {
     public Response response(Socket socket, Request request) throws IOException {
         switch (request.path()) {
             case "/favicon.ico":
-                return new Reply(ResponseCode.NOT_FOUND, StringResponse.errorResponse(ResponseCode.NOT_FOUND, null));
+                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, null));
             case "/":
             case "": {
                 StringBuilder sb = new StringBuilder().append("<title>AsyncDns 1.0</title><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.0</h1>");
@@ -1320,23 +1320,23 @@ public class DnsServer implements Router {
                   .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by Asyncorized_MC's HTTPServer v1.2.0</h2>Allocated Memory: ")
                   .append(TextUtil.getScaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
-                return new Reply(ResponseCode.OK, new StringResponse(sb, "text/html"), request.action());
+                return new Reply(Code.OK, new StringResponse(sb, "text/html"), request.action());
             }
             case "/stop": {
                 System.exit(0);
                 return null;
             }
             case "/stat":
-                return new Reply(ResponseCode.OK, new StringResponse(dumpIpAddress(), "text/plain"));
+                return new Reply(Code.OK, new StringResponse(dumpIpAddress(), "text/plain"));
             case "/save": {
                 HeadResponse hp = new HeadResponse();
                 hp.headers().put("Location", dirty.get() ? "/?msg=保存成功" : "/?msg=数据没更改");
                 save();
-                return new Reply(ResponseCode.FOUND, hp);
+                return new Reply(Code.FOUND, hp);
             }
             case "/set": {
                 if(request.action() != Action.POST) {
-                    return new Reply(ResponseCode.METHOD_NOT_ALLOWED, StringResponse.errorResponse(ResponseCode.METHOD_NOT_ALLOWED, "不是POST请求"));
+                    return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.errorResponse(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
                 }
                 Map<String, String> postFields = request.postFields();
                 String url = postFields.get("url");
@@ -1394,10 +1394,10 @@ public class DnsServer implements Router {
 
                 HeadResponse hp = new HeadResponse();
                 hp.headers().put("Location", "/?msg=" + msg);
-                return new Reply(ResponseCode.FOUND, hp);
+                return new Reply(Code.FOUND, hp);
             }
             default:
-                return new Reply(ResponseCode.NOT_FOUND, StringResponse.errorResponse(ResponseCode.NOT_FOUND, "未定义的路由"));
+                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, "未定义的路由"));
         }
     }
 

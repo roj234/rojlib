@@ -835,7 +835,7 @@ public final class FMDMain {
 
         // 反正compile时间绝对够
 
-        boolean canIncrementWrite = MAIN_CONFIG.getBool("FMD配置.启用MutableZipFile") && increment & project.state != null & jarFile.isFile();
+        boolean canIncrementWrite = !args.containsKey("dbg-nomz") && MAIN_CONFIG.getBool("FMD配置.启用MutableZipFile") && increment & project.state != null & jarFile.isFile();
         if(!canIncrementWrite) {
             if(project.mz != null) {
                 project.mz.close();

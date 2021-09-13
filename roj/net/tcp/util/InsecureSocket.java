@@ -46,6 +46,11 @@ public class InsecureSocket implements WrappedSocket {
     }
 
     @Override
+    public FileDescriptor fd() {
+        return fd;
+    }
+
+    @Override
     public Socket socket() {
         return socket;
     }
@@ -57,7 +62,7 @@ public class InsecureSocket implements WrappedSocket {
 
     @Override
     public int read() throws IOException {
-        return read(SharedConfig.READ_MAX);
+        return read(65536);
     }
 
     @Override
@@ -129,15 +134,7 @@ public class InsecureSocket implements WrappedSocket {
     @Override
     public void close() throws IOException {
         socket.close();
-        fd = null;
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-        if (fd != null) {
-            socket.close();
-            fd = null;
-        }
+        //fd = null;
     }
 
     @Override

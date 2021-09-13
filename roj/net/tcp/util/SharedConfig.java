@@ -48,20 +48,17 @@ public final class SharedConfig {
             STREAM_SEQ_INITIAL_CAPACITY = 100,
             THROTTLING_INTERVAL = 1000,
             MAX_CHAR_BUFFER_CAPACITY = 262144,
-            READ_MAX = 4096,
-            WRITE_MAX = 131072,
-            DIRECT_CACHE_MAX = 1048576;
+            WRITE_MAX = 131072;
 
     public static final boolean THROTTLING_CHECK_ENABLED = false;
 
-    public static final Response CONNECTION_THROTTLING = new Reply(ResponseCode.UNAVAILABLE, new StringResponse("压测防御" + THROTTLING_INTERVAL + "ms"));
+    public static final Response CONNECTION_THROTTLING = new Reply(Code.UNAVAILABLE, new StringResponse("压测防御" + THROTTLING_INTERVAL + "ms"));
     public static final TimedHashMap<String, AtomicInteger> CONNECTING_ADDRESSES = new TimedHashMap<>(THROTTLING_INTERVAL);
 
     public static final ThreadLocal<Object[]> SYNC_BUFFER = ThreadLocal.withInitial(() -> new Object[]{
             new StreamLikeSequence(STREAM_SEQ_INITIAL_CAPACITY, false),
             new HTTPHeaderLexer(),
-            new CharList(),
-            null
+            new CharList()
     });
 
     public static final byte[] END_OF_CHUNK = new byte[] {

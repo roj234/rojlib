@@ -105,9 +105,8 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
             }
             Point point = h.node;
 
-            Object owner = point.owner;
             while (true) {
-                if(t.equals(owner))
+                if(t.equals(point.owner))
                     return false;
                 if(point.next == null) {
                     point.next = start;
@@ -370,6 +369,11 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
 
         public Point node() {
             return node;
+        }
+
+        @Override
+        public String toString() {
+            return "Region{" + "value=" + value + ", node=" + node + '}';
         }
 
         @SuppressWarnings("unchecked")

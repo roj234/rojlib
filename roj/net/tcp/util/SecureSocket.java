@@ -305,7 +305,7 @@ public class SecureSocket extends InsecureSocket {
     }
 
     private int _read(ByteBuffer buffer) throws IOException {
-        return NonblockingUtil.normalize(NonblockingUtil.readSocket(fd, buffer, SharedConfig.READ_MAX));
+        return NonblockingUtil.normalize(NonblockingUtil.readSocket(fd, buffer, 65536));
     }
 
     private SSLEngineResult.HandshakeStatus doTasks() {

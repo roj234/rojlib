@@ -27,9 +27,9 @@ package roj.io;
 
 import roj.io.misc.FileNIODispatcher;
 import roj.io.misc.SocketNIODispatcher;
-import roj.net.tcp.util.SharedConfig;
 import roj.reflect.DirectAccessor;
 import roj.util.ByteList;
+import roj.util.FastThreadLocal;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -93,6 +93,22 @@ public final class NonblockingUtil {
     public static final int THROWN = -5;
     public static final int UNSUPPORTED_CASE = -6;
 
+    public static final int SOCKET_FD = 1;
+    public static final int APPEND_FD = 2;
+
+    public static final int DIRECT_CACHE_MAX = 1048576;
+    static final FastThreadLocal<Object[]> DIRECT_CACHE = new FastThreadLocal<Object[]>() {
+        @Override
+        protected Object[] initialValue() {
+            return new Object[] {
+                    ByteBuffer.allocateDirect(512)
+            };
+        }
+    };
+    public static ByteBuffer getNativeDirectBuffer() {
+        return (ByteBuffer) DIRECT_CACHE.get()[0];
+    }
+
     static final int MMAP_LIMIT = 8388608;
 
     public static int normalize(int length) {
@@ -116,18 +132,15 @@ public final class NonblockingUtil {
         int lim = buf.pos();
 
         int len = pos < lim ? Math.min(lim - pos, max) : 0;
+        len = Math.min(DIRECT_CACHE_MAX, len);
 
-        Object[] data = SharedConfig.SYNC_BUFFER.get();
-        ByteBuffer shared = (ByteBuffer) data[3];
+        Object[] data = DIRECT_CACHE.get();
+        ByteBuffer shared = (ByteBuffer) data[0];
         if (shared == null || shared.capacity() < len) {
             if (shared != null) {
                 clean(shared);
             }
-            if (len > SharedConfig.DIRECT_CACHE_MAX) {
-                shared = ByteBuffer.allocateDirect(len);
-            } else {
-                data[3] = shared = ByteBuffer.allocateDirect(len);
-            }
+            data[0] = shared = ByteBuffer.allocateDirect(len);
         }
 
         int wrote;
@@ -140,7 +153,7 @@ public final class NonblockingUtil {
                 buf.writePos(pos + wrote);
             }
         } finally {
-            if (data[3] != shared) {
+            if (data[0] != shared) {
                 clean(shared);
             } else {
                 shared.position(0).limit(shared.capacity());
@@ -162,6 +175,8 @@ public final class NonblockingUtil {
         if (len == 0) {
             return 0;
         } else {
+            if(!fd.valid())
+                throw new IOException();
             int wrote = flag == 1 ? snd.write(fd, addr(buf) + pos, len) : fnf.write(fd, addr(buf) + pos, len, (flag & 2) == 2);
 
             if (wrote > 0) {
@@ -201,18 +216,15 @@ public final class NonblockingUtil {
 
     private static int read(FileDescriptor fd, ByteList buf, int max, int socket) throws IOException {
         int len = Math.min(buf.capacity() - buf.pos(), max);
+        len = Math.min(DIRECT_CACHE_MAX, len);
 
-        Object[] data = SharedConfig.SYNC_BUFFER.get();
-        ByteBuffer shared = (ByteBuffer) data[3];
+        Object[] data = DIRECT_CACHE.get();
+        ByteBuffer shared = (ByteBuffer) data[0];
         if (shared == null || shared.capacity() < len) {
             if (shared != null) {
                 clean(shared);
             }
-            if (len > SharedConfig.DIRECT_CACHE_MAX) {
-                shared = ByteBuffer.allocateDirect(len);
-            } else {
-                data[3] = shared = ByteBuffer.allocateDirect(len);
-            }
+            data[0] = shared = ByteBuffer.allocateDirect(len);
         }
         shared.position(0).limit(len);
 
@@ -223,11 +235,7 @@ public final class NonblockingUtil {
                 buf.readFrom(shared);
             }
         } finally {
-            if (data[3] != shared) {
-                clean(shared);
-            } else {
-                shared.position(0).limit(shared.capacity());
-            }
+            shared.position(0).limit(shared.capacity());
         }
 
         return read;
@@ -241,6 +249,8 @@ public final class NonblockingUtil {
         if (len == 0) {
             return 0;
         } else {
+            if(!fd.valid())
+                throw new IOException();
             int read = socket == 1 ? snd.read(fd, addr(buf) + pos, len) : fnf.read(fd, addr(buf) + pos, len);
 
             if (read > 0) {

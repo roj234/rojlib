@@ -71,13 +71,13 @@ public final class HTTPResponse {
         try {
             return getRequest(lexer, socket, maxReceive);
         } catch (Notify notifyException) {
-            ResponseCode code = ResponseCode.INTERNAL_ERROR;
+            Code code = Code.INTERNAL_ERROR;
             switch (notifyException.code) {
                 case -127:
-                    code = ResponseCode.ENTITY_TOO_LARGE;
+                    code = Code.ENTITY_TOO_LARGE;
                     break;
                 case -128:
-                    code = ResponseCode.TIMEOUT;
+                    code = Code.TIMEOUT;
                     break;
             }
             throw lexer.err(code.toString(), notifyException);

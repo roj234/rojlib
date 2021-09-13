@@ -45,6 +45,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
+import static roj.net.cross.Util.PROTOCOL_VERSION;
+
 /**
  * Your description here
  *
@@ -70,7 +72,7 @@ public class AEGuiClient extends JFrame {
 
             String[] text = TextUtil.split(cfg.getString("url"), ':');
             if(text.length == 0) {
-                JOptionPane.showMessageDialog(null, "Invalid port");
+                JOptionPane.showMessageDialog(null, "服务器端口有误");
                 return;
             }
 
@@ -79,7 +81,7 @@ public class AEGuiClient extends JFrame {
                 addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
             } catch (UnknownHostException e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(null, "Unknown host");
+                JOptionPane.showMessageDialog(null, "未知的主机");
                 return;
             }
 
@@ -87,14 +89,17 @@ public class AEGuiClient extends JFrame {
             try {
                 address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
             } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(null, "Invalid port");
+                JOptionPane.showMessageDialog(null, "服务器端口有误");
                 return;
             }
 
+            if(!cfg.getBool("no_log"))
+                Util.out = System.out;
+
+            Thread.currentThread().setName("Client Thread");
             client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
             client.run();
         } else {
-            Util.out = System.out;
             new AEGuiClient();
         }
     }
@@ -103,7 +108,7 @@ public class AEGuiClient extends JFrame {
         final JPanel panel1 = new JPanel();
         panel1.setLayout(new GridBagLayout());
         panel1.setBorder(
-                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "AbyssalEye 0.3.1 By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "v" + PROTOCOL_VERSION + " By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         btnConnect = new JButton();
         btnConnect.setText("连接");
         GridBagConstraints gbc;
@@ -115,7 +120,7 @@ public class AEGuiClient extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnConnect, gbc);
         final JLabel label1 = new JLabel();
-        label1.setText("服务器地址");
+        label1.setText("地址");
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -148,7 +153,6 @@ public class AEGuiClient extends JFrame {
         panel1.add(inpHouse, gbc);
         final JLabel label3 = new JLabel();
         label3.setText("端口");
-        label3.setToolTipText("eg: 80-88,1954");
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 3;
@@ -220,7 +224,7 @@ public class AEGuiClient extends JFrame {
         btnSave.addActionListener(this::save);
 
         pack();
-        setBounds(0, 0, 360, 200);
+        setBounds(0, 0, 360, 160);
         UIUtil.center(this);
         setVisible(true);
         setResizable(true);

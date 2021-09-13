@@ -428,7 +428,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             for (Unioner.Region region : uFile) { // index modified
                 if (region.node().next() != null) {
                     if (begin == -1)
-                        throw new IllegalStateException("Unexpected -1 at " + region.node().pos());
+                        throw new IllegalStateException("Unexpected -1 at " + region);
                     // req: 两个, id: 不能是第一个
                     Unioner.Point point = region.node();
                     if (point.end())
@@ -441,7 +441,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 }
                 if (begin == -1) { // node k
                     if (region.node().end())
-                        throw new IllegalStateException("Unexpected value");
+                        throw new IllegalStateException("Unexpected value at " + region);
                     EFile file1 = region.node().owner();
                     begin = file1.startPos();
 
@@ -452,7 +452,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     EFile file1 = region.node().owner();
 
                     if (!region.node().end())
-                        throw new IllegalStateException("Unexpected value");
+                        throw new IllegalStateException("Unexpected value at " + region);
 
                     len = file1.endPos() - begin - delta;
                     cf.transferTo(begin, len, ct);
