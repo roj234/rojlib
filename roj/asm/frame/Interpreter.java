@@ -69,7 +69,7 @@ import static roj.asm.frame.VarType.*;
  */
 public final class Interpreter {
     public static void main(String[] args) throws IOException {
-        Clazz clazz = Parser.parse(IOUtil.readFile(new File(args[0])));
+        Clazz clazz = Parser.parse(IOUtil.read(new File(args[0])));
         AttrCode code = clazz.methods.get(args.length == 1 ? 0 : Integer.parseInt(args[1])).code;
         code.computeFrames = true;
 

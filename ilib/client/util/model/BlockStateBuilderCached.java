@@ -26,7 +26,7 @@
 package ilib.client.util.model;
 
 import ilib.ImpLib;
-import roj.io.AppendOnlyCache;
+import roj.io.BoxFile;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -43,8 +43,8 @@ import java.io.IOException;
  * @since  2020/10/2 2:19
  */
 public final class BlockStateBuilderCached extends BlockStateBuilder {
-    static File cacheFl = new File(".cache/");
-    static AppendOnlyCache cache;
+    static File    cacheFl = new File(".cache/");
+    static BoxFile cache;
 
     private CharSequence storedData;
     private final String cacheId;
@@ -92,8 +92,8 @@ public final class BlockStateBuilderCached extends BlockStateBuilder {
         if(cache == null) {
             File cacheFile = new File(cacheFl, "bsb.tmp");
             try {
-                cache = new AppendOnlyCache(cacheFile);
-                cache.read();
+                cache = new BoxFile(cacheFile);
+                cache.load();
                 String v = cache.getUTF("version");
                 if(!ImpLib.MODEL_HASH.equals(v)) {
                     if(v != null)

@@ -100,7 +100,7 @@ public class ChannelRouterSync implements ITaskNaCl {
                         reply = new Reply(Code.TIMEOUT, StringResponse.errorResponse(Code.TIMEOUT, null));
                         break;
                     }
-                    LockSupport.parkNanos(1000);
+                    LockSupport.parkNanos(50);
                 }
                 if(reply == null) {
                     try {

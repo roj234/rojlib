@@ -27,10 +27,6 @@
 package ilib.client.resource;
 
 import ilib.client.util.RenderUtils;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.texture.TextureUtil;
-import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import roj.io.IOUtil;
 import roj.util.ByteReader;
@@ -38,12 +34,17 @@ import roj.util.ByteWriter;
 import roj.util.GIFDecoder;
 import roj.util.GIFDecoder.Gif;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.texture.TextureUtil;
+import net.minecraft.util.ResourceLocation;
+
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
+import java.awt.image.*;
 import java.io.*;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -79,7 +80,7 @@ public class GifImage {
 
         Gif gif;
         try (InputStream stream = new BufferedInputStream(Minecraft.getMinecraft().getResourceManager().getResource(res).getInputStream())) {
-            gif = GIFDecoder.decode(IOUtil.readFully(stream));
+            gif = GIFDecoder.decode(IOUtil.read(stream));
         } catch (IOException | NullPointerException e) {
             throw new IllegalArgumentException("Error loading gif file: " + res, e);
         }
@@ -92,7 +93,7 @@ public class GifImage {
     private boolean loadFromCache(File info) {
         if (!info.exists()) return false;
         try (InputStream s = new FileInputStream(info)) {
-            ByteReader r = new ByteReader(IOUtil.readFully(s));
+            ByteReader r = new ByteReader(IOUtil.read(s));
             if (r.readInt() != 0x23336688)
                 System.err.println("Invalid cache file header");
             String fileName = r.readString();

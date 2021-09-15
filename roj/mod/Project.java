@@ -166,7 +166,7 @@ public final class Project extends JSONConfiguration {
                     for (String s : set) {
                         if(new File(s).isDirectory()) continue;
                         try {
-                            resourceCache.put(s.substring(len).replace('\\', '/'), IOUtil.readFully(new FileInputStream(s)));
+                            resourceCache.put(s.substring(len).replace('\\', '/'), IOUtil.read(new FileInputStream(s)));
                         } catch (IOException e) {
                             Helpers.throwAny(e);
                         }
@@ -180,7 +180,7 @@ public final class Project extends JSONConfiguration {
 
                     for (Map.Entry<String, Object> entry : entrySet) {
                         try {
-                            entry.setValue(IOUtil.readFully((InputStream) entry.getValue()));
+                            entry.setValue(IOUtil.read((InputStream) entry.getValue()));
                         } catch (IOException e) {
                             Helpers.throwAny(e);
                         }

@@ -53,7 +53,7 @@ public class JPinyin {
         //System.out.println(SystemInfo.getMemoryUsage());
         long t = System.currentTimeMillis();
         long mem = SystemInfo.getMemoryUsed();
-        JPinyin pinyin = new JPinyin(IOUtil.readAsUTF(new FileInputStream(args[0])), IOUtil.readAsUTF(new FileInputStream(args[1])), IOUtil.readAsUTF(new FileInputStream(args[2])), IOUtil.readAsUTF(new FileInputStream(args[3])), 1);
+        JPinyin pinyin = new JPinyin(IOUtil.readUTF(new FileInputStream(args[0])), IOUtil.readUTF(new FileInputStream(args[1])), IOUtil.readUTF(new FileInputStream(args[2])), IOUtil.readUTF(new FileInputStream(args[3])), 1);
         System.out.println("加载时间: " + (System.currentTimeMillis() - t) + "ms");
         System.out.println("占用内存: " + ((SystemInfo.getMemoryUsed() - mem) >> 10) + "KB");
 

@@ -28,7 +28,7 @@ package roj.mod;
 
 import roj.asm.Parser;
 import roj.asm.tree.AccessData;
-import roj.io.AppendOnlyCache;
+import roj.io.BoxFile;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -62,7 +62,7 @@ public final class HotReload {
 
         System.out.println("Path: " + Base64.encode(ByteWriter.encodeUTF(path.getAbsolutePath()), new CharList()));
 
-        AppendOnlyCache aoc = new AppendOnlyCache(new File(path, "modified.bin"));
+        BoxFile aoc = new BoxFile(new File(path, "modified.bin"));
         aoc.clear();
         while (true) {
             String ques = UIUtil.userInput("class路径, 留空转换 or CLR 清除");
@@ -82,7 +82,7 @@ public final class HotReload {
                     continue;
                 }
 
-                byte[] buf = IOUtil.readFully(new FileInputStream(clz));
+                byte[] buf = IOUtil.read(new FileInputStream(clz));
                 AccessData ad;
                 try {
                     ad = Parser.parseAccessDirect(buf);
@@ -98,8 +98,8 @@ public final class HotReload {
     }
 
     public static void doEvent(Instrumentation inst, Path path) throws IOException {
-        AppendOnlyCache aoc = new AppendOnlyCache(new File(path.toString(), "modified.bin"));
-        aoc.read();
+        BoxFile aoc = new BoxFile(new File(path.toString(), "modified.bin"));
+        aoc.load();
 
         ByteList rl = new ByteList();
         final Set<String> keys = aoc.keys();

@@ -67,33 +67,114 @@ import static roj.net.cross.Util.PROTOCOL_VERSION;
  * @since 2021/9/11 12:49
  */
 public class AEGuiServer extends JFrame {
-    private final JButton   btnToggle, btnX, btnSsl;
+    private final JButton   btnToggle, btnSsl;
     private final JTextField inpAddr;
     private final JTextField inpMaxUser;
 
     static AEServer server;
     static Thread serverThread;
     static RingBuffer<String> logger;
+    static AEGuiServer instance;
 
     public static void main(String[] args) {
         if(!NonblockingUtil.available()) {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }
-        if (args.length == 0 || !args[0].equals("-nolog")) {
-            RingBuffer<String> logger = AEGuiServer.logger = new RingBuffer<>(1000);
+        boolean nolog = false;
+        boolean nogui = false;
+        String port = null;
+        int webPort = -1, maxUsers = 100;
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "-nolog":
+                    nolog = true;
+                    break;
+                case "-nogui":
+                    nogui = true;
+                    break;
+                case "-maxUsers":
+                    maxUsers = Integer.parseInt(args[++i]);
+                    break;
+                case "-port":
+                    port = args[++i];
+                    break;
+                case "-web":
+                    webPort = Integer.parseInt(args[++i]);
+                    break;
+                case "-ssl":
+                    Util.SslDialog.sho1w();
+                    break;
+            }
+        }
+        if(!nogui) {
+            instance = new AEGuiServer();
+        } else {
+            String[] text = TextUtil.split(port, ':');
+            if(text.length == 0) {
+                System.out.println("无效的监听端口");
+                return;
+            }
+
+            InetAddress addr;
+            try {
+                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
+            } catch (UnknownHostException e) {
+                System.out.println("未知的主机");
+                return;
+            }
+
+            InetSocketAddress address;
+            try {
+                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
+            } catch (NumberFormatException e) {
+                System.out.println("无效的监听端口");
+                return;
+            }
+
+            if(maxUsers <= 1) {
+                System.out.println("无效的最大连接数");
+                return;
+            }
+
+            try {
+                server = Util.certFile != null ? new AEServer(address, maxUsers, Util.certFile, Util.certPass) : new AEServer(address, maxUsers);
+            } catch (IOException | GeneralSecurityException e) {
+                e.printStackTrace();
+                System.out.println("Invalid certificate / IO Error");
+                return;
+            }
+
+            Thread serverRunner = serverThread = new Thread(server);
+            serverRunner.setName("Server Thread");
+            serverRunner.setDaemon(true);
+            serverRunner.start();
+
+            if(webPort != -1) {
+                try {
+                    HttpServer server = runServer(webPort);
+                    Thread t = new Thread(server);
+                    t.setDaemon(true);
+                    t.setName("Http Server");
+                    t.start();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        if (!nolog) {
+            RingBuffer<String> logger = AEGuiServer.logger = new RingBuffer<>(Integer.parseInt(System.getProperty("ae.logLines", "1000")));
             ACalendar cl = new ACalendar();
             Util.out = new DelegatedPrintStream(2000) {
                 @Override
                 protected void newLine() {
-                    logger.push(cl.formatDate("[H:i:s]", System.currentTimeMillis()) + sb);
+                    logger.push(cl.formatDate("[H:i:s] ", System.currentTimeMillis()) + sb);
                     sb.clear();
                 }
             };
             System.setOut(Util.out);
             System.setErr(Util.out);
         }
-        new AEGuiServer();
     }
 
     public AEGuiServer() {
@@ -116,7 +197,7 @@ public class AEGuiServer extends JFrame {
         JTextArea text = new JTextArea();
         text.setLineWrap(true);
         text.setEditable(false);
-        text.setText("这里本来是放日志的，但是现在请使用【后台】按钮");
+        text.setText("这里本来是放日志的\n现在请使用【后台】按钮");
         scroll.setViewportView(text);
         btnToggle = new JButton();
         btnToggle.setText("启动");
@@ -127,16 +208,6 @@ public class AEGuiServer extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnToggle, gbc);
-        btnX = new JButton();
-        btnX.setEnabled(false);
-        btnX.setText("预留");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnX, gbc);
         JButton btnHttp = new JButton();
         btnHttp.setText("后台");
         gbc = new GridBagConstraints();
@@ -230,14 +301,14 @@ public class AEGuiServer extends JFrame {
     private static String res(String name) throws IOException {
         String v = tmp.get(name);
         if(v == null)
-            tmp.put(name, v = IOUtil.readAsUTF(IOUtil.class, "META-INF/ae/html/" + name));
+            tmp.put(name, v = IOUtil.readUTF("META-INF/ae/html/" + name));
         return v;
     }
 
-    private HttpServer runServer(int port) throws IOException {
+    private static HttpServer runServer(int port) throws IOException {
         Reply NOT_RUNNING = new Reply(Code.OK, new StringResponse("{\"o\":0,\"r\":\"服务器没有启动\"}", "application/json"));
         Reply DONE = new Reply(Code.OK, new StringResponse("{\"o\":1}", "application/json"));
-        Reply UNCHANGED = new Reply(Code.OK, new StringResponse("{\"o\":0,\"r\":\"状态相同未更改\"}", "application/json"));
+        Reply UNCHANGED = new Reply(Code.OK, new StringResponse("{\"o\":1,\"r\":\"状态相同未更改\"}", "application/json"));
 
         return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (socket, request) -> {
             switch (request.path()) {
@@ -252,9 +323,10 @@ public class AEGuiServer extends JFrame {
                         case "main":
                             CMapping json = new CMapping();
                             String logs;
-                            if(logger == null)
+                            if(logger == null) {
                                 logs = "服务器未开启日志缓冲";
-                            else {
+                                logger = new RingBuffer<>(1);
+                            } else {
                                 CharList cl = new CharList();
                                 for (String s : logger) {
                                     cl.append(s).append("\r\n");
@@ -274,7 +346,7 @@ public class AEGuiServer extends JFrame {
                         case "users":
                             if(server == null)
                                 return NOT_RUNNING;
-                            Room room = server.rooms.get(request.getFields().get("r"));
+                            Room room = server.rooms.get(TextUtil.unescapeBytes(request.getFields().get("r")));
                             if(room == null) {
                                 return new Reply(Code.OK, new StringResponse("\"房间不存在\"", "application/json"));
                             }
@@ -289,7 +361,7 @@ public class AEGuiServer extends JFrame {
                             String r = request.getFields().get("r");
                             if(r != null) {
                                 if (server == null) return NOT_RUNNING;
-                                room = server.rooms.get(r);
+                                room = server.rooms.get(TextUtil.unescapeBytes(r));
                                 if (room == null) {
                                     r = "\"房间不存在\"";
                                 } else {
@@ -360,7 +432,7 @@ public class AEGuiServer extends JFrame {
                         switch (post.get("i")) {
                             case "power":
                                 if((server == null) == post.get("v").equals("true")) {
-                                    toggle(null);
+                                    instance.toggle(null);
                                     return DONE;
                                 }
                                 return UNCHANGED;
@@ -389,7 +461,6 @@ public class AEGuiServer extends JFrame {
             btnToggle.setText("启动");
             btnToggle.setEnabled(true);
 
-            btnX.setEnabled(false);
             btnSsl.setEnabled(true);
             inpAddr.setEnabled(true);
             inpMaxUser.setEnabled(true);
@@ -449,7 +520,6 @@ public class AEGuiServer extends JFrame {
 
             btnToggle.setText("停止");
 
-            btnX.setEnabled(true);
             btnSsl.setEnabled(false);
             inpAddr.setEnabled(false);
             inpMaxUser.setEnabled(false);

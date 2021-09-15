@@ -50,7 +50,7 @@ public class IDEAHelper {
     public static void config(File imlPath, String projName, boolean remove) throws IOException, ParseException {
         String basePath = "file://$MODULE_DIR$/projects/" + projName + "/";
 
-        XHeader header = XMLParser.parse(IOUtil.readAsUTF(new FileInputStream(imlPath)));
+        XHeader header = XMLParser.parse(IOUtil.readUTF(new FileInputStream(imlPath)));
         XElement content = header.getXS("module.component[name=\"NewModuleRootManager\"].content").get(0).asElement();
         List<AbstXML> sourceUrls = content.childElements();
         for (int i = 0; i < sourceUrls.size(); i++) {

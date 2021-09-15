@@ -453,7 +453,7 @@ public class MCLauncher extends JFrame {
         if(mcJson == null) {
             String jar = mc_conf.getString("jar");
             try {
-                mcJson = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(jar.substring(0, jar.lastIndexOf('.')) + ".json"))).asMap();
+                mcJson = JSONParser.parse(IOUtil.readUTF(new FileInputStream(jar.substring(0, jar.lastIndexOf('.')) + ".json"))).asMap();
             } catch (ParseException e) {
                 throw new IOException("无效的MC配置json", e);
             }
@@ -473,7 +473,7 @@ public class MCLauncher extends JFrame {
         }
         CMapping objects;
         try {
-            objects = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(index))).asMap().get("objects").asMap();
+            objects = JSONParser.parse(IOUtil.readUTF(new FileInputStream(index))).asMap().get("objects").asMap();
         } catch (ParseException e) {
             throw new IOException("无效的索引json", e);
         }
@@ -587,7 +587,7 @@ public class MCLauncher extends JFrame {
                 if(!json.isFile()) {
                     FileUtil.downloadFileAsync(url, target).waitFor();
                 }
-                download = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(json.isFile() ? json : target))).asMap().get("downloads").asMap().get("client").asMap();
+                download = JSONParser.parse(IOUtil.readUTF(new FileInputStream(json.isFile() ? json : target))).asMap().get("downloads").asMap().get("client").asMap();
             } catch (IOException | ParseException e) {
                 error("下载/解析版本json出了点错...\n请查看控制台");
                 e.printStackTrace();
@@ -693,7 +693,7 @@ public class MCLauncher extends JFrame {
 
         CMapping instConf;
         try {
-            instConf = JSONParser.parse(IOUtil.readAsUTF(zf.getInputStream(instProf))).asMap();
+            instConf = JSONParser.parse(IOUtil.readUTF(zf.getInputStream(instProf))).asMap();
         } catch (ParseException e) {
             e.printStackTrace();
             zf.close();
@@ -1359,7 +1359,7 @@ public class MCLauncher extends JFrame {
         CMapping jsonDesc;
 
         try {
-            jsonDesc = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(mcJson))).asMap();
+            jsonDesc = JSONParser.parse(IOUtil.readUTF(new FileInputStream(mcJson))).asMap();
 
             File librariesPath = new File(mcRoot, "/libraries/");
 
@@ -1541,7 +1541,7 @@ public class MCLauncher extends JFrame {
         String inherit = mapping.getString("inheritsFrom");
         if(inherit.length() > 0) {
             File dir = new File(version, inherit + '/' + inherit + ".json");
-            CMapping desc = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(dir))).asMap();
+            CMapping desc = JSONParser.parse(IOUtil.readUTF(new FileInputStream(dir))).asMap();
             Object[] arr = mergeInherit(imArg, version, desc, jar, asset, mainClass, arg, ver);
             if(jar == null)
                 jar = (File) arr[0];
@@ -1822,7 +1822,7 @@ public class MCLauncher extends JFrame {
                 final String name = zipEntry.getName();
                 if(!zipEntry.isDirectory() && !trieTree.startsWith(name) && (name.endsWith(".dll") || name.endsWith(".so"))) {
                     try(FileOutputStream fos = new FileOutputStream(new File(nativePath, name))) {
-                        fos.write(IOUtil.readFully(zipFile.getInputStream(zipEntry)));
+                        fos.write(IOUtil.read(zipFile.getInputStream(zipEntry)));
                     }
                 } else if(DEBUG) {
                     CmdUtil.info("排除文件 " + zipEntry);
@@ -1947,7 +1947,7 @@ public class MCLauncher extends JFrame {
                 }
 
                 FileUtil.SHA1.reset();
-                byte[] _sha1 = FileUtil.SHA1.digest(IOUtil.readFully(new FileInputStream(targetFile)));
+                byte[] _sha1 = FileUtil.SHA1.digest(IOUtil.read(new FileInputStream(targetFile)));
                 FileUtil.SHA1.reset();
                 BigInteger sha1Resl = new BigInteger(1, _sha1);
 
@@ -2015,7 +2015,7 @@ public class MCLauncher extends JFrame {
                     return;
 
                 FileUtil.MD5.reset();
-                byte[] _md5 = FileUtil.MD5.digest(IOUtil.readFully(new FileInputStream(targetFile)));
+                byte[] _md5 = FileUtil.MD5.digest(IOUtil.read(new FileInputStream(targetFile)));
                 FileUtil.MD5.reset();
                 BigInteger md5Resl = new BigInteger(1, _md5);
 
@@ -2106,7 +2106,7 @@ public class MCLauncher extends JFrame {
             waitDigest = false;
 
             FileUtil.SHA1.reset();
-            byte[] _sha1 = FileUtil.SHA1.digest(IOUtil.readFully(new FileInputStream(target)));
+            byte[] _sha1 = FileUtil.SHA1.digest(IOUtil.read(new FileInputStream(target)));
             FileUtil.SHA1.reset();
 
             BigInteger sha1Resl = new BigInteger(1, _sha1);

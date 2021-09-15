@@ -131,7 +131,7 @@ public class Compiler {
         if(lineNumber == -1)
             return "";
         try {
-            SimpleLineReader is = new SimpleLineReader(IOUtil.readAsUTF(source.openInputStream()), false);
+            SimpleLineReader is = new SimpleLineReader(IOUtil.readUTF(source.openInputStream()), false);
             return is.get((int) lineNumber - 1);
         } catch (IOException e) {
             e.printStackTrace();

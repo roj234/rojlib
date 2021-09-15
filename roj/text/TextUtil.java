@@ -170,7 +170,10 @@ public class TextUtil {
                     i = pos + 3;
                 }
             } else {
-                throw new IllegalStateException();
+                while (i < pos) {
+                    tmp.add((byte) src.charAt(i));
+                    i++;
+                }
             }
         }
         try {

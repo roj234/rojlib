@@ -96,7 +96,7 @@ public abstract class Obfuscator extends Mapping {
         CharMap<FlagList> byAcc = new CharMap<>();
 
         ZipUtil.ICallback cb = (fileName, s) -> {
-            byte[] bytes = IOUtil.readFully(s);
+            byte[] bytes = IOUtil.read(s);
             if(bytes.length < 32)
                 return;
 

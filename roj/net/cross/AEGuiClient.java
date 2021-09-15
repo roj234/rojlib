@@ -68,7 +68,7 @@ public class AEGuiClient extends JFrame {
             return;
         }
         if(args.length > 0) {
-            CMapping cfg = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[0]))).asMap();
+            CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[0]))).asMap();
 
             String[] text = TextUtil.split(cfg.getString("url"), ':');
             if(text.length == 0) {

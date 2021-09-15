@@ -26,7 +26,6 @@
 package roj.misc;
 
 import roj.io.FileUtil;
-import roj.io.StreamingChars;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -94,7 +93,6 @@ public class Prefixer {
 
         ACalendar calender = new ACalendar();
 
-        StreamingChars st = new StreamingChars();
         ByteList bl = new ByteList();
         CharList cl = new CharList();
         CharList cl2 = new CharList();

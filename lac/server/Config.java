@@ -27,7 +27,7 @@ package lac.server;
 
 import roj.config.JSONConfiguration;
 import roj.config.data.CMapping;
-import roj.io.AppendOnlyCache;
+import roj.io.BoxFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,7 +42,7 @@ import java.io.IOException;
 public final class Config extends JSONConfiguration {
     public static final Config instance;
 
-    public static AppendOnlyCache mod_info;
+    public static BoxFile mod_info;
     public static boolean enableLoginModule, kickWrong;
     public static int loginDelay;
 
@@ -68,7 +68,7 @@ public final class Config extends JSONConfiguration {
         if(!f.isFile())
             throw new RuntimeException("未找到mod描述文件, 请先配置LAC！");
         try {
-            mod_info = new AppendOnlyCache(f);
+            mod_info = new BoxFile(f);
         } catch (IOException e) {
             throw new RuntimeException("mod描述文件无法读取", e);
         }

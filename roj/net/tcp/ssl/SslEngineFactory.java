@@ -42,11 +42,7 @@ import java.security.KeyStore;
  * @since  2021/2/5 0:26
  */
 public final class SslEngineFactory {
-    static final String PROTOCOL = "TLS", KEY_FORMAT = "PKCS12", MANAGER_FORMAT = "SunX509";
-
-    public static String getKeyFormat() {
-        return KEY_FORMAT;
-    }
+    public static final String PROTOCOL = "TLS", KEY_FORMAT = "PKCS12", MANAGER_FORMAT = "SunX509";
 
     private static SSLContext getSslContext(InputStream pkPath, InputStream caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
         // 密钥管理器

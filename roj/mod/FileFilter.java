@@ -45,7 +45,7 @@ class FileFilter implements Predicate<File> {
             case F_CLASS_TIME: {
                 if (file.getName().endsWith(".class") && file.lastModified() > stamp) {
                     try {
-                        modified.add(Parser.simpleData(IOUtil.readFile(file)).get(0));
+                        modified.add(Parser.simpleData(IOUtil.read(file)).get(0));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -69,7 +69,7 @@ class FileFilter implements Predicate<File> {
                 boolean is = file.getName().endsWith(".java");
                 if (is && file.lastModified() > stamp) {
                     try {
-                        modified.add(Parser.simpleData(IOUtil.readFile(file)).get(0));
+                        modified.add(Parser.simpleData(IOUtil.read(file)).get(0));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }

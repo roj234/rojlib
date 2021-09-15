@@ -200,7 +200,7 @@ public class AEClient implements Runnable, Closeable {
                     }
                     buf.clear();
 
-                    int heart = 200;
+                    int heart = T_CLIENT_HEARTBEAT_INIT;
                     int except = -1;
                     while (!shutdownRequested) {
                         while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
@@ -209,7 +209,7 @@ public class AEClient implements Runnable, Closeable {
                                     if (writeEx(channel, (byte) PS_HEARTBEAT) < 0) {
                                         syncPrint(this + ": 心跳发送失败");
                                     }
-                                } else if(heart < -1000) {
+                                } else if(heart < -T_CLIENT_HEARTBEAT_TIMEOUT) {
                                     syncPrint(this + ": 没收到服务端心跳");
                                     break conn;
                                 }
@@ -316,7 +316,7 @@ public class AEClient implements Runnable, Closeable {
                                 }
                                 break conn;
                         }
-                        heart = 500;
+                        heart = T_CLIENT_HEARTBEAT_RECV;
                     }
                 }
                 if(read < 0) {
@@ -346,8 +346,8 @@ public class AEClient implements Runnable, Closeable {
 
     void onError(WrappedSocket channel, Throwable e) {
         ByteList buf = channel.buffer();
-        int bc = buf.getU(0) - 0x20;
-        if(buf.pos() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
+        int bc;
+        if(buf.pos() == 1 && (bc = buf.getU(0) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
             syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
         } else {
             String msg = e.getMessage();

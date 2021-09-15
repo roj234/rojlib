@@ -29,8 +29,7 @@ package roj.util;
 import roj.io.IOUtil;
 
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
+import java.awt.image.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,7 +51,7 @@ public class GIFDecoder {
 
     public static void decodeAndSave(InputStream in, String cacheFolder) {
         try (InputStream s = in) {
-            Gif gif = decode(IOUtil.readFully(s));
+            Gif gif = decode(IOUtil.read(s));
 
             File file = new File(cacheFolder);
             if (!file.exists()) {

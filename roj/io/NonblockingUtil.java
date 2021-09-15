@@ -36,8 +36,6 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketImpl;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 
@@ -49,16 +47,14 @@ import java.nio.channels.SocketChannel;
  * @since  2020/12/6 14:15
  */
 public final class NonblockingUtil {
-    static SocketNIODispatcher snd;
-    static FileNIODispatcher fnf;
-    static AI1 Util;
+    private static final SocketNIODispatcher sdp;
+    private static final FileNIODispatcher   fdp;
+    private static final Ux                  Util;
 
     static {
         try {
-            Util = DirectAccessor.builder(AI1.class)
+            Util = DirectAccessor.builder(Ux.class)
                                  .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
-                                 .delegate(FileChannel.class, new String[] {"begin", "end"})
-                                 .delegate(Class.forName("sun.nio.ch.FileChannelImpl"), "map0", "unmap0", "transferTo0"/*, "position0"*/)
                                  .access(Socket.class, "impl", "getSocketImpl", null)
                                  .access(SocketImpl.class, "fd", "getSocketImplFd", null)
                                  .access(Class.forName("sun.nio.ch.SocketChannelImpl"), "fd", "getSocketChannelFd", null)
@@ -71,7 +67,7 @@ public final class NonblockingUtil {
             String[] ss2 = new String[]{
                     "read0", "readv0", "write0", "writev0", "preClose0", "close0"
             };
-            snd = DirectAccessor.builder(SocketNIODispatcher.class).delegate(Class.forName("sun.nio.ch.SocketDispatcher"), ss2, ss1).build();
+            sdp = DirectAccessor.builder(SocketNIODispatcher.class).delegate(Class.forName("sun.nio.ch.SocketDispatcher"), ss2, ss1).build();
 
             ss1 = new String[]{
                     "read", "readv", "write", "writev", "duplicateHandle", "close"
@@ -79,10 +75,9 @@ public final class NonblockingUtil {
             ss2 = new String[]{
                     "read0", "readv0", "write0", "writev0", "duplicateHandle", "close0"
             };
-            fnf = DirectAccessor.builder(FileNIODispatcher.class).delegate(Class.forName("sun.nio.ch.FileDispatcherImpl"), ss2, ss1).build();
+            fdp = DirectAccessor.builder(FileNIODispatcher.class).delegate(Class.forName("sun.nio.ch.FileDispatcherImpl"), ss2, ss1).build();
         } catch (Throwable e) {
-            e.printStackTrace();
-            System.err.println("Failed to initialize NonblockingUtil: Unsupported java version");
+            throw new Error("Failed to initialize NonblockingUtil: Unsupported java version",e );
         }
     }
 
@@ -97,19 +92,15 @@ public final class NonblockingUtil {
     public static final int APPEND_FD = 2;
 
     public static final int DIRECT_CACHE_MAX = 1048576;
-    static final FastThreadLocal<Object[]> DIRECT_CACHE = new FastThreadLocal<Object[]>() {
+    static final FastThreadLocal<ByteBuffer> DIRECT_CACHE = new FastThreadLocal<ByteBuffer>() {
         @Override
-        protected Object[] initialValue() {
-            return new Object[] {
-                    ByteBuffer.allocateDirect(512)
-            };
+        protected ByteBuffer initialValue() {
+            return ByteBuffer.allocateDirect(512);
         }
     };
     public static ByteBuffer getNativeDirectBuffer() {
-        return (ByteBuffer) DIRECT_CACHE.get()[0];
+        return DIRECT_CACHE.get();
     }
-
-    static final int MMAP_LIMIT = 8388608;
 
     public static int normalize(int length) {
         return length == UNAVAILABLE ? 0 : length;
@@ -134,30 +125,21 @@ public final class NonblockingUtil {
         int len = pos < lim ? Math.min(lim - pos, max) : 0;
         len = Math.min(DIRECT_CACHE_MAX, len);
 
-        Object[] data = DIRECT_CACHE.get();
-        ByteBuffer shared = (ByteBuffer) data[0];
+        ByteBuffer shared = DIRECT_CACHE.get();
         if (shared == null || shared.capacity() < len) {
             if (shared != null) {
                 clean(shared);
             }
-            data[0] = shared = ByteBuffer.allocateDirect(len);
+            DIRECT_CACHE.set(shared = ByteBuffer.allocateDirect(len));
         }
+        shared.position(0).limit(shared.capacity());
 
-        int wrote;
-        try {
-            buf.putInto(shared, len);
-            buf.writePos(pos);
-            shared.flip();
-            wrote = writeFromNativeBuffer(fd, shared, socket);
-            if (wrote > 0) {
-                buf.writePos(pos + wrote);
-            }
-        } finally {
-            if (data[0] != shared) {
-                clean(shared);
-            } else {
-                shared.position(0).limit(shared.capacity());
-            }
+        buf.putInto(shared, len);
+        buf.writePos(pos);
+        shared.flip();
+        int wrote = writeFromNativeBuffer(fd, shared, socket);
+        if (wrote > 0) {
+            buf.writePos(pos + wrote);
         }
 
         return wrote;
@@ -177,7 +159,7 @@ public final class NonblockingUtil {
         } else {
             if(!fd.valid())
                 throw new IOException();
-            int wrote = flag == 1 ? snd.write(fd, addr(buf) + pos, len) : fnf.write(fd, addr(buf) + pos, len, (flag & 2) == 2);
+            int wrote = flag == 1 ? sdp.write(fd, addr(buf) + pos, len) : fdp.write(fd, addr(buf) + pos, len, (flag & 2) == 2);
 
             if (wrote > 0) {
                 buf.position(pos + wrote);
@@ -198,7 +180,7 @@ public final class NonblockingUtil {
     private static int read(FileDescriptor fd, ByteBuffer buf, int max, int socket) throws IOException {
         if (buf.isDirect()) {
             int lim = buf.limit();
-            buf.limit(max);
+            buf.limit(Math.min(max, buf.capacity()));
             int read = readToNativeBuffer(fd, buf, socket);
             buf.limit(lim);
             return read;
@@ -218,24 +200,18 @@ public final class NonblockingUtil {
         int len = Math.min(buf.capacity() - buf.pos(), max);
         len = Math.min(DIRECT_CACHE_MAX, len);
 
-        Object[] data = DIRECT_CACHE.get();
-        ByteBuffer shared = (ByteBuffer) data[0];
+        ByteBuffer shared = DIRECT_CACHE.get();
         if (shared == null || shared.capacity() < len) {
             if (shared != null) {
                 clean(shared);
             }
-            data[0] = shared = ByteBuffer.allocateDirect(len);
+            DIRECT_CACHE.set(shared = ByteBuffer.allocateDirect(len));
         }
         shared.position(0).limit(len);
 
-        int read;
-        try {
-            read = readToNativeBuffer(fd, shared, socket);
-            if (read > 0) {
-                buf.readFrom(shared);
-            }
-        } finally {
-            shared.position(0).limit(shared.capacity());
+        int read = readToNativeBuffer(fd, shared, socket);
+        if (read > 0) {
+            buf.readFrom(shared);
         }
 
         return read;
@@ -251,7 +227,7 @@ public final class NonblockingUtil {
         } else {
             if(!fd.valid())
                 throw new IOException();
-            int read = socket == 1 ? snd.read(fd, addr(buf) + pos, len) : fnf.read(fd, addr(buf) + pos, len);
+            int read = socket == 1 ? sdp.read(fd, addr(buf) + pos, len) : fdp.read(fd, addr(buf) + pos, len);
 
             if (read > 0) {
                 buf.position(pos + read);
@@ -286,106 +262,13 @@ public final class NonblockingUtil {
     public static void preClose(FileDescriptor fd) throws IOException {
         if(!fd.valid())
             throw new IOException("Invalid FileDescriptor");
-        snd.preClose(fd);
+        sdp.preClose(fd);
     }
 
     public static void close(FileDescriptor fd) throws IOException {
         if(!fd.valid())
             throw new IOException("Invalid FileDescriptor");
-        snd.close(fd);
-    }
-
-    static boolean supportSF = true;
-    public static long transferInto(FileChannel fc, long pos, long len, FileDescriptor target, boolean socket) throws IOException {
-        long got;
-        if(supportSF) {
-            got = NonblockingUtil.transferInto_sendfile(fc, pos, len, target);
-            if (got == UNSUPPORTED_CASE) {
-                supportSF = false;
-            } else {
-                return got;
-            }
-        }
-        return NonblockingUtil.transferInto_mmap(fc, pos, len, target, 4 | (socket ? 1 : 0));
-    }
-
-    public static long transferInto_mmap(FileChannel fc, long pos, long len, FileDescriptor target, int flag) throws IOException {
-        if(!target.valid())
-            throw new IOException("Invalid trg FileDescriptor");
-        long remain = len;
-
-        while (remain > 0L) {
-            long mapSize = Math.min(remain, MMAP_LIMIT);
-
-            try {
-                MappedByteBuffer mb = fc.map(FileChannel.MapMode.READ_ONLY, pos, mapSize);
-
-                try {
-                    int wrote = writeFromNativeBuffer(target, mb, flag & 3);
-
-                    remain -= wrote;
-                    if ((flag & 4) == 4) {
-                        break;
-                    }
-
-                    pos += wrote;
-                } finally {
-                    clean(mb);
-                }
-            } catch (ClosedByInterruptException e) {
-                assert !fc.isOpen();
-
-                try {
-                    fc.close();
-                } catch (Throwable e1) {
-                    e.addSuppressed(e1);
-                }
-
-                throw e;
-            } catch (IOException e) {
-                if (remain != len) {
-                    break;
-                }
-
-                throw e;
-            }
-        }
-
-        return len - remain;
-    }
-
-    public static long transferInto_sendfile(FileChannel fc, long pos, long len, FileDescriptor target) {
-        if(target == null || !target.valid())
-            throw new RuntimeException("Invalid trg FileDescriptor");
-        long resl = -1L;
-
-        FileDescriptor fd = fd(fc);
-        if(fd == null || !fd.valid())
-            throw new RuntimeException("Invalid src FileDescriptor");
-
-        try {
-            Util.begin(fc);
-
-            if (!fc.isOpen()) {
-                return EOF;
-            }
-
-            do {
-                resl = Util.transferTo0(fc, fd, pos, len, target);
-            } while (resl == INTERRUPTED && fc.isOpen());
-
-            if (resl == UNSUPPORTED_CASE) {
-                return UNSUPPORTED_CASE;
-            }
-
-            if (resl == UNSUPPORTED) {
-                return UNSUPPORTED;
-            }
-
-            return normalize(resl);
-        } finally {
-            Util.end(fc, resl > -1L);
-        }
+        sdp.close(fd);
     }
 
     public static boolean available() {
@@ -399,40 +282,12 @@ public final class NonblockingUtil {
         Util.configureBlocking(fd, block);
     }
 
-    private interface AI1 {
+    private interface Ux {
         SocketImpl getSocketImpl(Socket socket);
         FileDescriptor getSocketImplFd(SocketImpl impl);
         FileDescriptor getSocketChannelFd(SocketChannel socketChannelImpl);
         FileDescriptor getFileChannelFd(FileChannel channel);
 
         void configureBlocking(FileDescriptor fd, boolean var1) throws IOException;
-
-        /**
-         * FileChannelImpl
-         */
-
-        /**
-         * 注意对齐!
-         *
-         * @param ch permission
-         *           READ_ONLY 0 <br>
-         *           READ_WRITE 1 <br>
-         *           PRIVATE 2 <br>
-         */
-        long map0(Object self, int ch, long pos, long len) throws IOException;
-
-        /* static */
-        int unmap0(long ptr, long len);
-
-        long transferTo0(Object self, FileDescriptor fd, long pos, long len, FileDescriptor target);
-
-        //long position0(Object self, FileDescriptor fd, long pos);
-
-        /**
-         * FileChannel
-         */
-        void begin(Object self);
-
-        void end(Object self, boolean completed);
     }
 }

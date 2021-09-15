@@ -71,7 +71,7 @@ public class ResWriter implements Runnable, Callable<Void> {
             Object obj = entry.getValue();
             if(obj instanceof InputStream) {
                 try (InputStream is = (InputStream) entry.getValue()) {
-                    zos.write(IOUtil.readFully(is));
+                    zos.write(IOUtil.read(is));
                 }
             } else if(obj instanceof byte[]) {
                 zos.write((byte[]) obj);

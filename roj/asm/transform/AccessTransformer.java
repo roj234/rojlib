@@ -61,7 +61,7 @@ public class AccessTransformer {
 
     public static void readAndParseAt(@Nonnull File file) {
         try {
-            readAndParseAt(IOUtil.readAsUTF(new FileInputStream(file)));
+            readAndParseAt(IOUtil.readUTF(new FileInputStream(file)));
         } catch (IOException e) {
             throw new RuntimeException("Failed to parse AT file: " + file.getName(), e);
         }
@@ -69,7 +69,7 @@ public class AccessTransformer {
 
     public static void readAndParseAt(@Nonnull Class<?> jarProvider, @Nonnull String fileName) {
         try {
-            readAndParseAt(IOUtil.readAsUTF(jarProvider, fileName));
+            readAndParseAt(IOUtil.readUTF(jarProvider, fileName));
         } catch (IOException e) {
             throw new RuntimeException("Failed to parse AT file: " + fileName + " not found");
         }

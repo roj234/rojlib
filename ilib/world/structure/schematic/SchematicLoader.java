@@ -29,6 +29,10 @@ package ilib.world.structure.schematic;
 import ilib.ImpLib;
 import ilib.util.NBTType;
 import ilib.util.Registries;
+import roj.collect.IntBiMap;
+import roj.collect.IntMap;
+import roj.io.IOUtil;
+
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.nbt.CompressedStreamTools;
@@ -37,12 +41,10 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import roj.collect.IntBiMap;
-import roj.collect.IntMap;
-import roj.io.IOUtil;
 
 import java.io.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -67,7 +69,7 @@ public final class SchematicLoader {
 
     public Schematic loadSchematic(String path) {
         try {
-            return this.loadSchematic(new ByteArrayInputStream(IOUtil.getBytes(ImpLib.class, path)));
+            return this.loadSchematic(new ByteArrayInputStream(IOUtil.read(ImpLib.class, path)));
         } catch (IOException e) {
             e.printStackTrace();
             ImpLib.logger().fatal("Error loading schematic at: " + path);

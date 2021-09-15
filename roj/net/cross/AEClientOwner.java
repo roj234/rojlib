@@ -118,17 +118,17 @@ public final class AEClientOwner extends AEClient {
                 }
                 buf.clear();
 
-                int heart = 200;
+                int heart = T_CLIENT_HEARTBEAT_INIT;
                 int except = -1;
                 Worker wk;
                 while (!shutdownRequested) {
                     while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
-                        if(heart-- <= 0) {
-                            if(heart == -1 || heart == -500) {
+                        if(--heart <= 0) {
+                            if(heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
                                 if (writeEx(channel, (byte) PS_HEARTBEAT) < 0) {
                                     syncPrint(this + ": 心跳发送失败");
                                 }
-                            } else if(heart < -1000) {
+                            } else if(heart < -T_CLIENT_HEARTBEAT_TIMEOUT) {
                                 syncPrint(this + ": 没收到服务端心跳");
                                 break conn;
                             }
@@ -208,13 +208,20 @@ public final class AEClientOwner extends AEClient {
                             wk = channelById.get(r.readInt());
                             if(wk != null && wk.alive) {
                                 if(wk.lock.get() == ST_HANGUP) {
-                                    syncPrint("分机 #" + wk.lock + " 已经挂起");
+                                    syncPrint("分机 #" + wk.slaveId + " 已经挂起");
                                 }
-                                while (!wk.lock.compareAndSet(ST_AVAILABLE, ST_REQUEST_HANGUP))
-                                    LockSupport.parkNanos(10);
                                 int i = 0;
-                                while (wk.lock.get() != ST_HANGUP && i++ < 5) {
+                                while (!wk.lock.compareAndSet(ST_AVAILABLE, ST_REQUEST_HANGUP) && i++ < 5)
                                     LockSupport.parkNanos(10);
+                                while (wk.lock.get() != ST_HANGUP && i++ < 5)
+                                    LockSupport.parkNanos(10);
+                                if(wk.lock.get() != ST_HANGUP) {
+                                    // kill
+                                    r.index = 0;
+                                    channelById.remove(r.readInt());
+                                    buf.set(0, (byte) PS_KICK_SLAVE);
+                                    writeAndFlush(channel, buf, 200);
+                                    syncPrint("错误! #" + wk.slaveId);
                                 }
 
                                 wk.client.dataFlush();
@@ -224,7 +231,8 @@ public final class AEClientOwner extends AEClient {
                                 wk.client.close();
                                 cb_onClientHang(wk);
                             } else {
-                                syncPrint("分机已断开 #" + id);
+                                if(wk != null)
+                                    syncPrint("分机已断开 #" + wk.slaveId);
                             }
                             buf.clear();
                             break;
@@ -341,7 +349,7 @@ public final class AEClientOwner extends AEClient {
                             }
                             break conn;
                     }
-                    heart = 500;
+                    heart = T_CLIENT_HEARTBEAT_RECV;
                 }
             }
             if(read < 0) {

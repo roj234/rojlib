@@ -40,10 +40,10 @@ public class PFClassMerger {
         int j = 0;
 
         while (++j < args.length) {
-            ConstantData now = Parser.parseConstants(IOUtil.readFile(new File(args[j])));
+            ConstantData now = Parser.parseConstants(IOUtil.read(new File(args[j])));
             ZipEntry ze = zf.getEntry(now.name + ".class");
             if (ze == null) throw new FileNotFoundException(now.name + ".class");
-            ConstantData orig = Parser.parseConstants(IOUtil.readFully(zf.getInputStream(ze)));
+            ConstantData orig = Parser.parseConstants(IOUtil.read(zf.getInputStream(ze)));
 
             MyHashMap<String, List<MoFNode>> s = new MyHashMap<>();
             for (; j < args.length; j++) {

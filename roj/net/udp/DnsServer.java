@@ -1431,7 +1431,7 @@ public class DnsServer implements Router {
                     break;
                 case "-config":
                     try {
-                        cfg = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[++i]))).asMap();
+                        cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[++i]))).asMap();
                     } catch (ClassCastException | ParseException e) {
                         e.printStackTrace();
                         return;

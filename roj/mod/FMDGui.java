@@ -90,7 +90,7 @@ public class FMDGui extends JFrame {
 
         try {
             File af = new File(TMP_DIR, "noFirstUse");
-            if(!af.isFile() || !IOUtil.readAsUTF(new FileInputStream(af)).equals(VERSION)) {
+            if(!af.isFile() || !IOUtil.readUTF(new FileInputStream(af)).equals(VERSION)) {
                 try(FileOutputStream fos = new FileOutputStream(af)) {
                     ByteWriter.encodeUTF(VERSION).writeToStream(fos);
                 }
@@ -196,13 +196,14 @@ public class FMDGui extends JFrame {
                 "FMD - 快速mod开发环境 - 作者 Roj234\n" +
                         VERSION + "\n" +
                         "\n" +
-                        "此版本修复了以下问题：\n" +
-                        "  混淆mod代码\n" +
-                        "    详情查看config.json中相应配置项\n" +
-                        "    此功能可能含有BUG, 出现错误可以在配置中关闭\n" +
-                        "  不少bug\n" +
+                        //"  混淆mod代码\n" +
+                        //"    详情查看config.json中相应配置项\n" +
+                        //"    此功能可能含有BUG, 出现错误可以在配置中关闭\n" +
+                        "  修复不少bug\n" +
+                        "  CLI支持shortcut\n" +
+                        "  仍然有少量bug, 将尽快修复\n" +
                         "\n" +
-                        "下一个版本更新: \b" +
+                        "下一个版本更新: \n" +
                         "  可能会支持1.17的开发, 开发！\n", "关于FMD", INFORMATION_MESSAGE, icon);
     }
 

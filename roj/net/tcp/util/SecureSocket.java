@@ -83,8 +83,6 @@ public class SecureSocket extends InsecureSocket {
      */
     private ByteBuffer networkIn, networkOut;
 
-    private ByteList tmp3;
-
     /*
      * An empty ByteBuffer for use when one isn't available, say
      * as a source buffer during initial handshake wraps or for close
@@ -127,8 +125,6 @@ public class SecureSocket extends InsecureSocket {
         networkIn = ByteBuffer.allocateDirect(netBufSize);
         networkOut = ByteBuffer.allocate(netBufSize);
         networkOut.limit(0);
-
-        this.tmp3 = new ByteList();
     }
 
     public static SecureSocket get(Socket sc, FileDescriptor fd, EngineAllocator ssl, boolean isClient) throws IOException {
@@ -334,12 +330,14 @@ public class SecureSocket extends InsecureSocket {
             throw new IllegalStateException("Not handshake");
         }
 
-        if (_read(networkIn) < 0) {
+        int read = _read(networkIn);
+        if (read < 0) {
+            System.err.println("!! Read Closed " + read);
             engine.closeInbound();  // probably throws exception
             return -1;
         }
 
-        int read = 0;
+        read = 0;
         do {
             result = _readNetworkIn();
             read += result.bytesProduced();
@@ -394,7 +392,7 @@ public class SecureSocket extends InsecureSocket {
 
     public int write(ByteList src) throws IOException {
         if (!hsDone) {
-            throw new IllegalStateException();
+            throw new IllegalStateException("Not handshake");
         }
 
         if (networkOut.hasRemaining() && !tryFlush(networkOut)) {

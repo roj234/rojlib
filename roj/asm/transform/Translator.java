@@ -165,7 +165,7 @@ public class Translator {
 
                 return formAlphabetClip(temp);
             }
-        }.init(IOUtil.readFile(new File(in)));
+        }.init(IOUtil.read(new File(in)));
 
         while (wr.hasNext()) {
             Word w = wr.readWord();
@@ -216,7 +216,7 @@ public class Translator {
             }
         } else if (f.isFile()) {
             if (f.getName().endsWith(".class")) {
-                byte[] bytes = applyClass("/", IOUtil.readFile(f));
+                byte[] bytes = applyClass("/", IOUtil.read(f));
                 if (bytes != null) {
                     System.out.println("已修改的内容: " + f.getName());
                     try (FileOutputStream fos = new FileOutputStream(f)) {
@@ -242,7 +242,7 @@ public class Translator {
             ZipEntry ze = e.nextElement();
             if (!ze.isDirectory() && ze.getName().endsWith(".class")) {
 
-                final byte[] bc = IOUtil.readFully(zf.getInputStream(ze));
+                final byte[] bc = IOUtil.read(zf.getInputStream(ze));
                 byte[] bytes = applyClass(fn, bc);
                 if (bytes != null)
                     System.out.println("已修改的内容: " + fn + ze.getName());
@@ -286,7 +286,7 @@ public class Translator {
             }
         } else if (f.isFile()) {
             if (f.getName().endsWith(".class")) {
-                addClass("/", IOUtil.readFile(f));
+                addClass("/", IOUtil.read(f));
             } else {
                 readZipFile(f);
             }
@@ -300,7 +300,7 @@ public class Translator {
         while (e.hasMoreElements()) {
             ZipEntry ze = e.nextElement();
             if (!ze.isDirectory() && ze.getName().endsWith(".class")) {
-                addClass(fn, IOUtil.readFully(zf.getInputStream(ze)));
+                addClass(fn, IOUtil.read(zf.getInputStream(ze)));
             }
         }
     }

@@ -96,7 +96,7 @@ public class Preloader {
                         Launch.classLoader.addURL(file1.toURI().toURL());
                         visitedFiles.add(file1.getAbsolutePath());
 
-                        String text = new String(IOUtil.readFully(jar.getInputStream(entry)), StandardCharsets.UTF_8);
+                        String text = new String(IOUtil.read(jar.getInputStream(entry)), StandardCharsets.UTF_8);
                         CharList cl = new CharList();
                         for (int i = 0; i < text.length(); i++) {
                             char c = text.charAt(i);

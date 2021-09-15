@@ -81,7 +81,7 @@ public class YAMLParser {
 
     public static void main(String[] args) throws ParseException, IOException {
         CharList yaml = new CharList();
-        ByteReader.decodeUTF(-1, yaml, new ByteList(IOUtil.readFile(new File(args[0]))));
+        ByteReader.decodeUTF(-1, yaml, new ByteList(IOUtil.read(new File(args[0]))));
 
         System.out.print("YML = " + parse(yaml).toYAML());
     }

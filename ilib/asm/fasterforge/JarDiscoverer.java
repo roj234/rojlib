@@ -78,7 +78,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             store.clear();
 
             try (FileInputStream fis = new FileInputStream(file)) {
-                ByteReader reader = new ByteReader(IOUtil.readFully(fis));
+                ByteReader reader = new ByteReader(IOUtil.read(fis));
 
                 if (reader.readInt() != 0x22332233) {
                     FMLLog.bigWarning("缓存文件错误");
@@ -268,7 +268,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 for (Function<String, UnaryOperator<byte[]>> supplier : fileProcessors) {
                     UnaryOperator<byte[]> operator = supplier.apply(ze.getName());
                     if (operator != null) {
-                        byte[] result = operator.apply(IOUtil.readFully(jar.getInputStream(ze)));
+                        byte[] result = operator.apply(IOUtil.read(jar.getInputStream(ze)));
                         if (result != null) {
                             if (map == null)
                                 map = new MyHashMap<>();
@@ -292,9 +292,9 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                         continue;
                     os.putNextEntry(new ZipEntry(entry.getName()));
                     if (entry.getName().equals("MANIFEST.MF")) {
-                        os.write(map.getOrDefault(entry.getName(), doManifest(IOUtil.readFully(jar.getInputStream(entry)))));
+                        os.write(map.getOrDefault(entry.getName(), doManifest(IOUtil.read(jar.getInputStream(entry)))));
                     } else {
-                        os.write(map.getOrDefault(entry.getName(), IOUtil.readFully(jar.getInputStream(entry))));
+                        os.write(map.getOrDefault(entry.getName(), IOUtil.read(jar.getInputStream(entry))));
                     }
                     os.closeEntry();
                 }

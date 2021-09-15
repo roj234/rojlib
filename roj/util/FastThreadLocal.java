@@ -34,7 +34,7 @@ package roj.util;
  */
 public class FastThreadLocal<T> {
     static int registrations;
-    static final ThreadLocal<Object[]> slowGetter = new ThreadLocal<>();
+    private static final ThreadLocal<Object[]> slowGetter = new ThreadLocal<>();
 
     private final int seqNum;
 

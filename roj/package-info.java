@@ -24,8 +24,6 @@
  * THE SOFTWARE.
  */
 /**
- * 放点东西
- *
  * @since 2020/11/1 13:02
  */
 package roj;
@@ -62,60 +60,8 @@ package roj;
  * <p>
  * 减少内存的访问次数
  * <p>
- * 本来,只需要交换两个变量的值的话,用异或的方法是个相当不错的选择(本来xor reg, reg只需要1个时钟周期),
- * 但这里不巧遇上了数组而需要间接寻址,就(细微得)慢了.把结束标记的0(一个必须要分配,平时却没显著作用的空间)作为临时变量也是个不错的方案,
- * 但同样是遭遇到数组访问的问题而受到了拖累.反而在源代码里用了"额外的临时变量"的foo2()得到了不错的优化.
- * 这里的启示是: 没必要的时候,不要乱做优化.首先,凭"一般常识"而不是profile做出的优化决定很可能并不会给程序带来显著的性能提升.
+ * 没必要的时候,不要乱做优化.首先,凭"一般常识"而不是profile做出的优化决定很可能并不会给程序带来显著的性能提升.
  * 其次,耍小聪明的优化反而可能干扰编译器的判断,从而阻挠了一些优化,反而使代码变得更慢.那就得不偿失了.
- * <p>
- * 虚引用PhantomReference， 在<<深入理解Java虚拟机>>一文中，
- * 它唯一的目的就是为一个对象设置虚引用关联的唯一目的就是能在这个对象被收集器回收时收到一个系统通知。
- **/
-
-/**
- * Java Example of a Nested Loop That Can Be Improved
- *
- * for ( column = 0; column < 100; column++ ) {
- *     for ( row = 0; row < 5; row++ ) {
- *        sum = sum + table[ row ][ column ];
- *     }
- * }
- *
- *
- * The key to improving the loop is that the outer loop executes much more often than the inner loop.
- * Each time the loop executes, it has to initialize the loop index, increment it on each pass through
- *    the loop, and check it after each pass. The total number of loop executions is 100
- *    for the outer loop and 100 * 5 = 500 for the inner loop, for a total of 600 iterations.
- * By merely switching the inner and outer loops, you can change the total number of iterations to 5
- *    for the outer loop and 5 * 100 = 500 for the inner loop, for a total of 505 iterations.
- * Analytically, you'd expect to save about (600 - 505) / 600 = 16 percent by switching the loops.
- *
- *
- **/
-
-/**
- * for (int i = 0; i < 100; i++)
- *    for (int j = 0; j < 20; j++)
- *        a[j] = a[j] + 1;
- *    =>
- * for (int j = 0; j < 20; j++)
- *     for (int i = 0; i < 100; i++)
- *         a[j] = a[j] + 1;
- *
- * 减少内存的访问次数
- **/
-
-/**
- * 本来,只需要交换两个变量的值的话,用异或的方法是个相当不错的选择(本来xor reg, reg只需要1个时钟周期),
- * 但这里不巧遇上了数组而需要间接寻址,就(细微得)慢了.把结束标记的0(一个必须要分配,平时却没显著作用的空间)作为临时变量也是个不错的方案,
- * 但同样是遭遇到数组访问的问题而受到了拖累.反而在源代码里用了"额外的临时变量"的foo2()得到了不错的优化.
- * 这里的启示是: 没必要的时候,不要乱做优化.首先,凭"一般常识"而不是profile做出的优化决定很可能并不会给程序带来显著的性能提升.
- * 其次,耍小聪明的优化反而可能干扰编译器的判断,从而阻挠了一些优化,反而使代码变得更慢.那就得不偿失了.
- **/
-
-/**
- * 虚引用PhantomReference， 在<<深入理解Java虚拟机>>一文中，
- * 它唯一的目的就是为一个对象设置虚引用关联的唯一目的就是能在这个对象被收集器回收时收到一个系统通知。
  **/
 
 /**
@@ -136,13 +82,4 @@ package roj;
  * -XX:+EliminateLocks
  *
  * volatile : 对此变量的写操作对任何线程可见
- */
-
-/**
- * spi : Service Provider Interface
- *
- * 在resource/META-INF/services 创建一个以接口全限定名为命名的文件，内容写上实现类的全限定名
- * 主程序通过 java.util.ServiceLoader 动态装载实现模块（扫描META-INF/services目录下的配置文件找到实现类，装载到 JVM）
- *
- * 解耦，主程序和实现类之间不用硬编码
  */

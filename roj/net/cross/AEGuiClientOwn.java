@@ -39,7 +39,9 @@ import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.util.Code;
 import roj.text.TextUtil;
+import roj.ui.TextAreaPrintStream;
 import roj.ui.UIUtil;
+import roj.util.FastLocalThread;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -75,7 +77,7 @@ public class AEGuiClientOwn extends JFrame {
             return;
         }
         if(args.length > 0) {
-            CMapping cfg = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[0]))).asMap();
+            CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[0]))).asMap();
 
             String[] text = TextUtil.split(cfg.getString("url"), ':');
             if(text.length == 0) {
@@ -111,9 +113,12 @@ public class AEGuiClientOwn extends JFrame {
             if(!cfg.getBool("no_log"))
                 Util.out = System.out;
 
-            Thread.currentThread().setName("Client Thread");
             client = new AEClientOwner(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
-            client.run();
+
+            Thread clientRunner = clientThread = new FastLocalThread(client);
+            clientRunner.setName("Client Owner Thread");
+            clientRunner.setDaemon(true);
+            clientRunner.start();
         } else {
             Util.out = System.out;
             new AEGuiClientOwn();
@@ -124,7 +129,7 @@ public class AEGuiClientOwn extends JFrame {
     private static String res(String name) throws IOException {
         String v = tmp.get(name);
         if(v == null)
-            tmp.put(name, v = IOUtil.readAsUTF(IOUtil.class, "META-INF/ae/html/" + name));
+            tmp.put(name, v = IOUtil.readUTF("META-INF/ae/html/" + name));
         return v;
     }
 
@@ -245,12 +250,11 @@ public class AEGuiClientOwn extends JFrame {
         gbc.fill = GridBagConstraints.BOTH;
         panel1.add(scroll, gbc);
         JTextArea text = new JTextArea();
-        text.setLineWrap(true);
         text.setEditable(false);
         scroll.setViewportView(text);
         JButton btnX = new JButton();
         btnX.setEnabled(false);
-        btnX.setText("预留");
+        btnX.setText(" ");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 4;
@@ -258,25 +262,24 @@ public class AEGuiClientOwn extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnX, gbc);
-        JButton btnHttp = new JButton();
-        btnHttp.setText("后台");
+        JButton btnClear = new JButton();
+        btnClear.setText("清空");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 5;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnHttp, gbc);
-        JButton btnX2 = new JButton();
-        btnX2.setEnabled(false);
-        btnX2.setText("预留");
+        panel1.add(btnClear, gbc);
+        JButton btnHttp = new JButton();
+        btnHttp.setText("后台");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 6;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnX2, gbc);
+        panel1.add(btnHttp, gbc);
         final JLabel label4 = new JLabel();
         label4.setText("密码");
         gbc = new GridBagConstraints();
@@ -328,6 +331,10 @@ public class AEGuiClientOwn extends JFrame {
             btnHttp.setText(":" + port);
         });
         btnConnect.addActionListener(this::toggle);
+        Util.out = new TextAreaPrintStream(text, 66666);
+        System.setErr(Util.out);
+        System.setOut(Util.out);
+        btnClear.addActionListener(e -> text.setText(""));
 
         new Thread() {
             {
@@ -420,8 +427,8 @@ public class AEGuiClientOwn extends JFrame {
             }
             client = new AEClientOwner(inpHouse.getText(), inpPass.getText(), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), chkSsl.isSelected());
 
-            Thread clientRunner = clientThread = new Thread(client);
-            clientRunner.setName("Client Thread");
+            Thread clientRunner = clientThread = new FastLocalThread(client);
+            clientRunner.setName("Client Owner Thread");
             clientRunner.setDaemon(true);
             clientRunner.start();
 

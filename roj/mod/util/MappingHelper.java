@@ -197,7 +197,7 @@ public class MappingHelper {
         Enumeration<? extends ZipEntry> enumeration = zipFile.entries();
         while(enumeration.hasMoreElements()) {
             ZipEntry ze = enumeration.nextElement();
-            String data = IOUtil.readAsUTF(zipFile.getInputStream(ze));
+            String data = IOUtil.readUTF(zipFile.getInputStream(ze));
             switch (ze.getName()) {
                 case "fields.csv": {
                     parseCSVFields(data);
@@ -310,7 +310,7 @@ public class MappingHelper {
             CmdUtil.error("错误: 无法找到文件 " + path + "#!config/joined.tsrg");
             return false;
         }
-        SimpleLineReader slr = new SimpleLineReader(IOUtil.readAsUTF(zipFile.getInputStream(entry)));
+        SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(zipFile.getInputStream(entry)));
 
         String[] ctx = new String[2];
 
@@ -602,7 +602,7 @@ public class MappingHelper {
                 }
             }
 
-            SimpleLineReader slr = new SimpleLineReader(IOUtil.readAsUTF(new FileInputStream(intermediary)));
+            SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(new FileInputStream(intermediary)));
             slr.index(1);
 
             String[] ctx = null;
@@ -701,7 +701,7 @@ public class MappingHelper {
         }
 
         private String readYarnMap(InputStream in, Map<String, Map<String, String>> elementMap) {
-            /*SimpleLineReader slr = new SimpleLineReader(IOUtil.readAsUTF(in));
+            /*SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(in));
             int i = 1;
 
             String cls = null;
@@ -868,7 +868,7 @@ public class MappingHelper {
         }
 
         private boolean readMojangMap(File map, Map<String, Map<String, String>> elementMap) throws IOException {
-            SimpleLineReader slr = new SimpleLineReader(IOUtil.readAsUTF(new FileInputStream(map)));
+            SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(new FileInputStream(map)));
 
             String[] currentClass = null;
 

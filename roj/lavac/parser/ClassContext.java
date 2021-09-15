@@ -60,7 +60,7 @@ public final class ClassContext {
     }
 
     public void stage0Read() throws IOException {
-        wr = (JavaLexer) new JavaLexer().init(IOUtil.readFully(in));
+        wr = (JavaLexer) new JavaLexer().init(IOUtil.read(in));
     }
 
     public void stage1Struct() throws ParseException {

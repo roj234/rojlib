@@ -45,6 +45,9 @@ import ilib.entity.EntityLightningBoltMI;
 import ilib.event.ClientEvent;
 import ilib.util.*;
 import ilib.util.hook.Hook;
+import roj.config.data.CMapping;
+import roj.io.IOUtil;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -55,16 +58,15 @@ import net.minecraft.entity.item.EntityTNTPrimed;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
+
 import net.minecraftforge.client.event.ColorHandlerEvent;
 import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.client.model.ModelLoader;
 import net.minecraftforge.fluids.BlockFluidBase;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import roj.config.data.CMapping;
-import roj.io.IOUtil;
 
 import javax.annotation.Nonnull;
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -184,18 +186,18 @@ public final class ClientProxy extends ServerProxy {
 
     static {
         try {
-            itemMergedModel = BlockStateBuilderCached.from("il_item", new String(IOUtil.getBytes(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), StandardCharsets.UTF_8), true);
-        } catch (FileNotFoundException e) {
+            itemMergedModel = BlockStateBuilderCached.from("il_item", new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), StandardCharsets.UTF_8), true);
+        } catch (IOException e) {
             itemMergedModel = new BlockStateBuilder(true);
         }
         try {
-            blockMergedModel = BlockStateBuilderCached.from("il_block", new String(IOUtil.getBytes(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), StandardCharsets.UTF_8), false);
-        } catch (FileNotFoundException e) {
+            blockMergedModel = BlockStateBuilderCached.from("il_block", new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), StandardCharsets.UTF_8), false);
+        } catch (IOException e) {
             blockMergedModel = new BlockStateBuilder(false);
         }
         try {
-            fluidMergedModel = BlockStateBuilderCached.from("il_fluid", new String(IOUtil.getBytes(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/fluids.json"), StandardCharsets.UTF_8), false);
-        } catch (FileNotFoundException e) {
+            fluidMergedModel = BlockStateBuilderCached.from("il_fluid", new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/fluids.json"), StandardCharsets.UTF_8), false);
+        } catch (IOException e) {
             fluidMergedModel = new BlockStateBuilder(false);
         }
     }

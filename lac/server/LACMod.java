@@ -28,6 +28,9 @@ package lac.server;
 import ilib.command.MasterCommand;
 import lac.common.pkt.PktLogin;
 import lac.server.util.EncodeUtil;
+import roj.asm.nixim.NiximTransformer;
+import roj.io.IOUtil;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
@@ -36,8 +39,8 @@ import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import roj.asm.nixim.NiximTransformer;
-import roj.io.IOUtil;
+
+import java.io.IOException;
 
 /**
  * LAC Mod Server-side entry
@@ -51,11 +54,11 @@ public class LACMod {
     public static final String NAME = "LaoAntiCheat";
     public static final String VERSION = "0.1.0-beta";
 
-    public LACMod() {
+    public LACMod() throws IOException {
         PktLogin.register();
         MinecraftForge.EVENT_BUS.register(LACMod.class);
         EncodeUtil.initBase64Chars();
-        NiximTransformer.read(IOUtil.getBytesS(LACMod.class, "lac/server/util/ModListServer.class"));
+        NiximTransformer.read(IOUtil.read(LACMod.class, "lac/server/util/ModListServer.class"));
     }
 
     @Mod.EventHandler

@@ -35,7 +35,11 @@ package roj.util;
 public class FastLocalThread extends Thread {
     public FastLocalThread() {
         super();
-        this.localDataArray = EmptyArrays.OBJECTS;
     }
-    Object[] localDataArray;
+
+    public FastLocalThread(Runnable r) {
+        super(r);
+    }
+
+    Object[] localDataArray = EmptyArrays.OBJECTS;
 }

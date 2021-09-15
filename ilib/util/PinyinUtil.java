@@ -43,10 +43,10 @@ public final class PinyinUtil {
     public static JPinyin pinyin() {
         if (pinyin == null) {
             try {
-                pinyin = new JPinyin(IOUtil.readAsUTF(PinyinUtil.class, "META-INF/pinyin/char_t2s_yin.txt"),
-                        null,//IOUtil.readAsUTF(Config.class, "META-INF/pinyin/word_s2t.txt"),
-                        null,//IOUtil.readAsUTF(Config.class, "META-INF/pinyin/word_t2s.txt"),
-                        IOUtil.readAsUTF(PinyinUtil.class, "META-INF/pinyin/word_yin.txt"),
+                pinyin = new JPinyin(IOUtil.readUTF("META-INF/pinyin/char_t2s_yin.txt"),
+                        null,//IOUtil.readUTF("META-INF/pinyin/word_s2t.txt"),
+                        null,//IOUtil.readUTF( "META-INF/pinyin/word_t2s.txt"),
+                        IOUtil.readUTF("META-INF/pinyin/word_yin.txt"),
                         -1);
             } catch (IOException e) {
                 e.printStackTrace();

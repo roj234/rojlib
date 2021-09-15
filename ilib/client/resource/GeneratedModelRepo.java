@@ -28,10 +28,11 @@ package ilib.client.resource;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.client.TextureHelper;
-import net.minecraft.client.resources.AbstractResourcePack;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
+
+import net.minecraft.client.resources.AbstractResourcePack;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -90,7 +91,7 @@ public final class GeneratedModelRepo extends AbstractResourcePack {
         final String domain = "fake";
         domains.add(domain);
         try {
-            data.put("assets/" + domain + "/textures/" + texture, IOUtil.readFully(new FileInputStream(real)));
+            data.put("assets/" + domain + "/textures/" + texture, IOUtil.read(new FileInputStream(real)));
         } catch (IOException e) {
             ImpLib.logger().warn("File couldn't be read: ", e);
             return "missingno";

@@ -46,7 +46,7 @@ public class JarReaderStream extends JarOutputStream {
     private ZipEntry entryCache;
 
     public JarReaderStream(BiConsumer<ZipEntry, ByteList> zipEntryConsumer) throws IOException {
-        super(new DummyOutputStream());
+        super(DummyOutputStream.INSTANCE);
         this.consumer = zipEntryConsumer;
     }
 

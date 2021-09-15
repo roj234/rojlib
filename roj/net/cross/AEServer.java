@@ -361,7 +361,7 @@ public class AEServer extends TCPServer {
                     ByteReader r = new ByteReader(buf);
                     ByteWriter w = new ByteWriter(buf);
 
-                    heart = 500;
+                    heart = T_SERVER_HEARTBEAT_INIT;
                     int except = -1;
                     while (state != SHUTDOWN) {
                         if (chkRoomState()) break;
@@ -372,8 +372,13 @@ public class AEServer extends TCPServer {
                             LockSupport.parkNanos(20);
                             checkBusy(false);
                             if (heart-- <= 0) {
-                                writeEx(channel, (byte) PS_ERROR_TIMEOUT);
-                                break conn;
+                                syncPrint(this + ": 心跳超时");
+                                if(T_SERVER_HEARTBEAT) {
+                                    writeEx(channel, (byte) PS_ERROR_TIMEOUT);
+                                    break conn;
+                                } else {
+                                    heart = T_SERVER_HEARTBEAT_RECV;
+                                }
                             }
                             if (state == SHUTDOWN) break conn;
                         }
@@ -404,7 +409,7 @@ public class AEServer extends TCPServer {
 
                                     int code = server.handleConnect(this, r.readBoolean(), r.readUTF0(idLen), r.readUTF0(tokenLen));
                                     if (code != -1) {
-                                        syncPrint(this + ": 连接失败(协议)");
+                                        syncPrint(this + ": 连接失败(协议): " + code);
                                         writeEx(channel, (byte) code);
                                         break conn;
                                     }
@@ -486,8 +491,9 @@ public class AEServer extends TCPServer {
                                     synchronized (room.slaves) {
                                         wk = room.slaves.get(r.readInt());
                                     }
-                                    if (wk == null) {
-                                        syncPrint(this + ": 没有接受者: " + buf);
+                                    if (wk == null || (target = wk.channel) == null) {
+                                        r.index = buf.pos() - 4;
+                                        syncPrint(this + ": 没有接受者 " + r.readInt());
                                         buf.clear();
                                         buf.add((byte) PS_STATE);
                                         buf.add((byte) PS_STATE_DISCARD);
@@ -495,7 +501,6 @@ public class AEServer extends TCPServer {
                                         buf.clear();
                                         break;
                                     }
-                                    target = wk.channel;
                                     targetLock = wk.busy;
 
                                     int pos = buf.pos() - 4;
@@ -562,7 +567,7 @@ public class AEServer extends TCPServer {
                                 }
                                 break conn;
                         }
-                        heart = 1200;
+                        heart = T_SERVER_HEARTBEAT_RECV;
                     }
                 }
 
@@ -661,9 +666,8 @@ public class AEServer extends TCPServer {
         private int handshake() throws IOException {
             int wait = TIMEOUT_CONNECT;
             while (!channel.handShake()) {
-                LockSupport.parkNanos(100);
+                LockSupport.parkNanos(50);
                 if(wait-- <= 0) {
-                    writeEx(channel, (byte) PS_ERROR_TIMEOUT);
                     return 1;
                 }
             }
@@ -687,7 +691,7 @@ public class AEServer extends TCPServer {
             if(channel.buffer().getU(CLIENT_HALLO.list.length) != PROTOCOL_VERSION)
                 return 6;
 
-            return writeEx(channel, (byte) PS_SERVER_HALLO) < 0 ? 7 : 0;
+            return writeEx(channel, (byte) PS_SERVER_HALLO);
         }
 
         private boolean chkRoomState() throws IOException {

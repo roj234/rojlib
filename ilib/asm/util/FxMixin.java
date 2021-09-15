@@ -32,6 +32,8 @@ import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 
+import java.io.IOException;
+
 /**
  * No description provided
  *
@@ -40,10 +42,18 @@ import roj.io.IOUtil;
  * @since  2020/9/30 15:45
  */
 public class FxMixin {
-    public static byte[] code = getCode();
+    public static byte[] code;
 
-    private static byte[] getCode() {
-        ConstantData data = Parser.parseConstants(IOUtil.getBytesS(FxMixin.class, "ilib/asm/util/mixin/Proxy.class"));
+    static {
+        try {
+            code = getCode();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static byte[] getCode() throws IOException {
+        ConstantData data = Parser.parseConstants(IOUtil.read("ilib/asm/util/mixin/Proxy.class"));
         for (Constant constant : data.cp.array()) {
             if (constant != null && constant.type() == CstType.UTF) {
                 CstUTF u = (CstUTF) constant;

@@ -116,11 +116,13 @@ public class ObjectPropMap extends MyHashMap<String, KType> {
 
                 map.entries[map.indexFor(id)] = entry;
             } else {
-                Entry<String, KType> prev = null;
-                while (true) {
+                Entry<String, KType> prev;
+                while (chk.next != null) {
+                    prev = chk;
+                    chk = chk.next;
                     if (Objects.equals(id, chk.k)) {
                         byte flags = ((KOEntry) chk).flags;
-                        if((flags & 1) == 1) {
+                        if ((flags & 1) == 1) {
                             throw new UnmodifiableException();
                         }
                         entry.flags = flags;
@@ -128,10 +130,6 @@ public class ObjectPropMap extends MyHashMap<String, KType> {
                         prev.next = entry;
                         entry.next = chk.next;
                     }
-                    if (chk.next == null)
-                        break;
-                    prev = chk;
-                    chk = chk.next;
                 }
                 chk.next = entry;
             }

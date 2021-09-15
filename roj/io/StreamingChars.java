@@ -25,6 +25,7 @@
  */
 package roj.io;
 
+import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -92,7 +93,7 @@ public class StreamingChars implements CharSequence {
         try {
             int read;
             while (cl.length() < required) {
-                read = buffer.readStreamArray(in, in.available());
+                read = buffer.readStreamArray(in, MathUtils.clamp(in.available(), 128, 4096));
                 if (read >= 0) {
                     if (read > 0) {
                         start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);

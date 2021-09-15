@@ -158,7 +158,7 @@ public class KParser implements ParseContext {
     /// region 解析
 
     public KFunction parse(File file) throws IOException, ParseException {
-        wr.init(IOUtil.readFile(file));
+        wr.init(IOUtil.read(file));
         this.file = file.getName();
         return parse0();
     }

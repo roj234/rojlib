@@ -26,18 +26,22 @@
 package roj.net.cross;
 
 import roj.io.NonblockingUtil;
+import roj.net.tcp.ssl.SslEngineFactory;
+import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.WrappedSocket;
+import roj.ui.UIUtil;
 import roj.util.ByteList;
+import roj.util.FastThreadLocal;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
+import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -98,6 +102,15 @@ public class Util {
             'A','E','C','L','I','E','N','T','H','A','L','L','O'
     });
 
+    public static final boolean T_SERVER_HEARTBEAT = System.getProperty("ae.noHeartbeat") == null;
+    public static final int T_SERVER_HEARTBEAT_INIT = 5000;
+    public static final int T_SERVER_HEARTBEAT_RECV = 600000;
+
+    public static final int T_CLIENT_HEARTBEAT_INIT = 5;
+    public static final int T_CLIENT_HEARTBEAT_RECV = 800;
+    public static final int T_CLIENT_HEARTBEAT_RETRY = 800;
+    public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 6000;
+
     public static class SslDialog extends JDialog {
         private final JPasswordField inpPass;
         private final JTextField     inpCert;
@@ -141,7 +154,7 @@ public class Util {
             gbc.fill = GridBagConstraints.HORIZONTAL;
             panel2.add(buttonOK, gbc);
             JButton buttonCancel = new JButton();
-            buttonCancel.setText("Cancel");
+            buttonCancel.setText("取消");
             gbc = new GridBagConstraints();
             gbc.gridx = 1;
             gbc.gridy = 0;
@@ -159,7 +172,7 @@ public class Util {
             gbc.fill = GridBagConstraints.BOTH;
             contentPane.add(panel3, gbc);
             JButton btnBrowseCert = new JButton();
-            btnBrowseCert.setText("Browse");
+            btnBrowseCert.setText("浏览");
             gbc = new GridBagConstraints();
             gbc.gridx = 2;
             gbc.gridy = 0;
@@ -178,7 +191,8 @@ public class Util {
             gbc.fill = GridBagConstraints.HORIZONTAL;
             panel3.add(inpPass, gbc);
             final JLabel label1 = new JLabel();
-            label1.setText("Cert");
+            label1.setText("证书");
+            label1.setToolTipText("格式PKCS12");
             gbc = new GridBagConstraints();
             gbc.gridx = 0;
             gbc.gridy = 0;
@@ -186,7 +200,7 @@ public class Util {
             gbc.anchor = GridBagConstraints.WEST;
             panel3.add(label1, gbc);
             final JLabel label2 = new JLabel();
-            label2.setText("Pass");
+            label2.setText("密码");
             gbc = new GridBagConstraints();
             gbc.gridx = 0;
             gbc.gridy = 1;
@@ -227,7 +241,8 @@ public class Util {
 
             btnBrowseCert.addActionListener(e -> {
                 JFileChooser fc = new JFileChooser();
-                fc.setDialogTitle("Certificate");
+                fc.setDialogTitle("选择证书");
+                fc.setCurrentDirectory(new File("."));
                 fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
                 fc.setMultiSelectionEnabled(false);
                 if (fc.showOpenDialog(SslDialog.this) == JFileChooser.APPROVE_OPTION) {
@@ -239,18 +254,36 @@ public class Util {
             contentPane.registerKeyboardAction(c, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
 
             pack();
-            setBounds(400, 400, 200, 200);
+            setBounds(0, 0, 200, 120);
+            UIUtil.center(this);
             setVisible(true);
+            setResizable(false);
         }
 
         private void onOK() {
-            File f = new File(inpCert.getText());
-            if(!f.isFile()) {
-                JOptionPane.showMessageDialog(this, "Invalid Certificate File");
-                return;
+            if(inpCert.getText().equals("")) {
+                certFile = null;
+                certPass = null;
+            } else {
+                File f = new File(inpCert.getText());
+                if (!f.isFile()) {
+                    JOptionPane.showMessageDialog(this, "无效的证书");
+                    return;
+                }
+                certFile = inpCert.getText();
+                certPass = inpPass.getPassword();
+
+                try {
+                    KeyStore ks = KeyStore.getInstance(SslEngineFactory.KEY_FORMAT);
+                    try (InputStream in = new FileInputStream(certFile)) {
+                        ks.load(in, certPass);
+                    }
+                } catch (GeneralSecurityException | IOException e) {
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(this, "无效的证书");
+                    return;
+                }
             }
-            certFile = inpCert.getText();
-            certPass = inpPass.getPassword();
 
             dispose();
         }
@@ -276,7 +309,7 @@ public class Util {
     static int handshakeClient(WrappedSocket channel) throws IOException {
         int wait = TIMEOUT_CONNECT;
         while (!channel.handShake()) {
-            LockSupport.parkNanos(1000);
+            LockSupport.parkNanos(50);
             if(wait-- <= 0) {
                 return 1;
             }
@@ -329,16 +362,26 @@ public class Util {
         return timeout;
     }
 
+    private static final FastThreadLocal<ByteList> FCG = new FastThreadLocal<>();
     static int writeEx(WrappedSocket channel, byte buf) throws IOException {
         int state;
-        ByteBuffer nx = NonblockingUtil.getNativeDirectBuffer();
-        nx.position(0).limit(1);
-        nx.put(buf).position(0);
-        int timeout = 20;
-        while ((state = NonblockingUtil.writeFromNativeBuffer(channel.fd(), nx, NonblockingUtil.SOCKET_FD)) == 0 && timeout > 0) {
-            LockSupport.parkNanos(20);
-            timeout--;
+        if(channel.getClass() == InsecureSocket.class) {
+            ByteBuffer nx = NonblockingUtil.getNativeDirectBuffer();
+            nx.position(0).limit(1);
+            nx.put(buf).position(0);
+            int timeout = 10;
+            while ((state = NonblockingUtil.writeFromNativeBuffer(channel.fd(), nx, NonblockingUtil.SOCKET_FD)) == 0 && timeout > 0) {
+                LockSupport.parkNanos(20);
+                timeout--;
+            }
+            return state < 0 ? state : timeout <= 0 ? -7 : 0;
+        } else {
+            ByteList tmp = FCG.get();
+            if(tmp == null)
+                FCG.set(tmp = new ByteList(1));
+            tmp.clear();
+            tmp.add(buf);
+            return (state = writeAndFlush(channel, tmp, 200)) > 0 ? 0 : state;
         }
-        return state < 0 ? state : timeout <= 0 ? -7 : 0;
     }
 }

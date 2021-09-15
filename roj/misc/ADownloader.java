@@ -58,7 +58,7 @@ public class ADownloader {
         }
         FileOutputStream fos = new FileOutputStream(args[0], true);
         XMLexer init = new XMLexer();
-        init.init(IOUtil.readFully(new FileInputStream(args[1])));
+        init.init(IOUtil.read(new FileInputStream(args[1])));
         init.noCloseTags(new AbstractSet<String>() {
             @Override
             public boolean contains(Object o) {

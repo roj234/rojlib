@@ -25,12 +25,11 @@
  */
 package roj.text;
 
+import roj.collect.LongBitSet;
 import roj.math.MathUtils;
 
 import javax.annotation.Nullable;
 import java.util.TimeZone;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Replacement? of {@link java.util.Calendar}
@@ -301,108 +300,102 @@ public class ACalendar {
         sb.append(number);
     }
 
-    private static final Pattern PATTERN = Pattern.compile("([LYydjlwNmntaAgGhHisOPcU])");
+    private static final LongBitSet PATTERN = LongBitSet.from("LYydjlwNmntaAgGhHisOPcU");
 
     public String formatDate(String format, long stamp) {
-        Matcher m = PATTERN.matcher(format).reset();
-        boolean found = m.find();
-        if (found) {
-            int[] date = get(stamp);
-            StringBuffer sb2 = new StringBuffer();
-            StringBuilder sb = new StringBuilder();
-            do {
-                sb.setLength(0);
-                switch (format.charAt(m.start(0))) {
-                    case 'L':
-                        sb.append(date[REN_YEAR]);
-                        break;
-                    case 'Y':
-                        sb.append(date[YEAR]);
-                        break;
-                    case 'y':
-                        sb.append(date[YEAR]).delete(sb.length() - 4, sb.length() - 2);
-                        break;
-                    case 'd':
-                        pad(sb, date[DAY], 2);
-                        break;
-                    case 'j':
-                        sb.append(date[DAY]);
-                        break;
-                    case 'l':
-                        sb.append("星期").append(MathUtils.CHINA_NUMERIC[date[DAY_OF_WEEK]]);
-                        break;
-                    case 'w':
-                        sb.append(date[DAY_OF_WEEK]);
-                        break;
-                    case 'N':
-                        sb.append(date[DAY_OF_WEEK] + 1);
-                        break;
-                    case 'm':
-                        pad(sb, date[MONTH] + 1, 2);
-                        break;
-                    case 'n':
-                        sb.append(date[MONTH]);
-                        break;
-                    case 't': // 本月有几天
-                        int mth = date[MONTH];
-                        if (mth++ == 1) {
-                            sb.append(28 + date[REN_YEAR]);
-                        } else {
-                            sb.append(((mth & 1) != 0) == mth < 8 ? 31 : 30);
-                        }
-                        break;
-                    case 'a':
-                        sb.append(date[HOUR] > 11 ? "pm" : "am");
-                        break;
-                    case 'A':
-                        sb.append(date[HOUR] > 11 ? "PM" : "AM");
-                        break;
-                    case 'g': // am/pm时间
-                        int h = date[HOUR] % 12;
-                        sb.append(h == 0 ? 12 : h);
-                        break;
-                    case 'G':
-                        sb.append(date[HOUR]);
-                        break;
-                    case 'h':
-                        h = date[HOUR] % 12;
-                        pad(sb, h == 0 ? 12 : h, 2);
-                        break;
-                    case 'H':
-                        pad(sb, date[HOUR], 2);
-                        break;
-                    case 'i':
-                        pad(sb, date[MINUTE], 2);
-                        break;
-                    case 's':
-                        pad(sb, date[SECOND], 2);
-                        break;
-                    case 'O': // timezone offset 2
-                        tzoff(stamp, sb);
-                        break;
-                    case 'P':
-                        sb.insert(tzoff(stamp, sb) + 2, ':');
-                        break;
-                    case 'c':
-                        sb.append(date[YEAR]).append('-')
-                          .append(date[MONTH] + 1).append('-')
-                          .append(date[DAY]).append('T')
-                          .append(date[HOUR]).append(':')
-                          .append(date[MINUTE]).append(':')
-                          .append(date[SECOND])
-                          .insert(tzoff(stamp, sb) + 2, ':');
-                        break;
-                    case 'U':
-                        sb.append(stamp / 1000);
-                        break;
-                }
-                m.appendReplacement(sb2, sb.toString());
-                found = m.find();
-            } while (found);
-            m.appendTail(sb2);
-            return sb2.toString();
+        int[] date = get(stamp);
+        StringBuilder sb = new StringBuilder(format.length());
+        char c;
+        for (int i = 0; i < format.length(); i++) {
+            switch (c = format.charAt(i)) {
+                case 'L':
+                    sb.append(date[REN_YEAR]);
+                    break;
+                case 'Y':
+                    sb.append(date[YEAR]);
+                    break;
+                case 'y':
+                    sb.append(date[YEAR]).delete(sb.length() - 4, sb.length() - 2);
+                    break;
+                case 'd':
+                    pad(sb, date[DAY], 2);
+                    break;
+                case 'j':
+                    sb.append(date[DAY]);
+                    break;
+                case 'l':
+                    sb.append("星期").append(MathUtils.CHINA_NUMERIC[date[DAY_OF_WEEK]]);
+                    break;
+                case 'w':
+                    sb.append(date[DAY_OF_WEEK]);
+                    break;
+                case 'N':
+                    sb.append(date[DAY_OF_WEEK] + 1);
+                    break;
+                case 'm':
+                    pad(sb, date[MONTH] + 1, 2);
+                    break;
+                case 'n':
+                    sb.append(date[MONTH]);
+                    break;
+                case 't': // 本月有几天
+                    int mth = date[MONTH];
+                    if (mth++ == 1) {
+                        sb.append(28 + date[REN_YEAR]);
+                    } else {
+                        sb.append(((mth & 1) != 0) == mth < 8 ? 31 : 30);
+                    }
+                    break;
+                case 'a':
+                    sb.append(date[HOUR] > 11 ? "pm" : "am");
+                    break;
+                case 'A':
+                    sb.append(date[HOUR] > 11 ? "PM" : "AM");
+                    break;
+                case 'g': // am/pm时间
+                    int h = date[HOUR] % 12;
+                    sb.append(h == 0 ? 12 : h);
+                    break;
+                case 'G':
+                    sb.append(date[HOUR]);
+                    break;
+                case 'h':
+                    h = date[HOUR] % 12;
+                    pad(sb, h == 0 ? 12 : h, 2);
+                    break;
+                case 'H':
+                    pad(sb, date[HOUR], 2);
+                    break;
+                case 'i':
+                    pad(sb, date[MINUTE], 2);
+                    break;
+                case 's':
+                    pad(sb, date[SECOND], 2);
+                    break;
+                case 'O': // timezone offset 2
+                    tzoff(stamp, sb);
+                    break;
+                case 'P':
+                    sb.insert(tzoff(stamp, sb) + 2, ':');
+                    break;
+                case 'c':
+                    sb.append(date[YEAR]).append('-')
+                      .append(date[MONTH] + 1).append('-')
+                      .append(date[DAY]).append('T')
+                      .append(date[HOUR]).append(':')
+                      .append(date[MINUTE]).append(':')
+                      .append(date[SECOND])
+                      .insert(tzoff(stamp, sb) + 2, ':');
+                    break;
+                case 'U':
+                    sb.append(stamp / 1000);
+                    break;
+                default:
+                    sb.append(c);
+                    break;
+            }
         }
-        return format;
+        return sb.toString();
     }
 
     private int tzoff(long stamp, StringBuilder sb) {

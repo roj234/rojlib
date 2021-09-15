@@ -25,7 +25,6 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
@@ -33,6 +32,8 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
+
+import net.minecraft.launchwrapper.IClassTransformer;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -56,9 +57,9 @@ public class MarkerTransformer implements IClassTransformer {
         String rulesResource;
         File file = new File(rulesFile);
         if (!file.exists()) {
-            rulesResource = IOUtil.readAsUTF(MarkerTransformer.class, rulesFile);
+            rulesResource = IOUtil.readUTF(MarkerTransformer.class, rulesFile);
         } else {
-            rulesResource = IOUtil.readAsUTF(new FileInputStream(file));
+            rulesResource = IOUtil.readUTF(new FileInputStream(file));
         }
         ArrayList<String> tmp = new ArrayList<>();
         CharList tmp2 = new CharList();

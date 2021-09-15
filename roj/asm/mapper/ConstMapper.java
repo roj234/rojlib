@@ -230,7 +230,7 @@ public class ConstMapper extends Mapping {
         if(cache.length() == 0) throw new FileNotFoundException();
         ByteReader r;
         try (FileInputStream fis = new FileInputStream(cache)) {
-            r = new ByteReader(IOUtil.readFully(fis));
+            r = new ByteReader(IOUtil.read(fis));
         }
 
         CharMap<FlagList> flagCache = new CharMap<>();
@@ -328,8 +328,8 @@ public class ConstMapper extends Mapping {
                 }
 
                 initSelfSuperMap();
-                if(DEBUG)
-                    System.out.println("[1-SuperMap]: " + selfSupers);
+                //if(DEBUG)
+                //    System.out.println("[1-SuperMap]: " + selfSupers);
 
                 for (int i = 0; i < arr.size(); i++) {
                     mapSelf(curr = arr.get(i));
@@ -867,7 +867,7 @@ public class ConstMapper extends Mapping {
         CharMap<FlagList> flagCache = new CharMap<>();
 
         ZipUtil.ICallback cb = (fileName, s) -> {
-            byte[] bytes = IOUtil.readFully(s);
+            byte[] bytes = IOUtil.read(s);
             if(bytes.length < 32)
                 return;
 

@@ -371,8 +371,8 @@ public final class FileUtil {
                 }
 
                 File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
-                AppendOnlyCache aoc = new AppendOnlyCache(tagFile);
-                aoc.read();
+                BoxFile aoc = new BoxFile(tagFile);
+                aoc.load();
                 if(!aoc.contains("ETag")) {
                     aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
                     aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));

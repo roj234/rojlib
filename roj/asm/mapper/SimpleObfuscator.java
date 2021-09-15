@@ -127,7 +127,7 @@ public final class SimpleObfuscator extends Obfuscator {
                     obf.rand.setSeed(Long.parseLong(args[++i]));
                     break;
                 case "cfg":
-                    CMapping map = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(args[++i]))).asMap();
+                    CMapping map = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[++i]))).asMap();
                     obf.packageExclusions.addAll(map.get("keepPackages").asList().asStringList());
                     obf.classExclusions.addAll(map.get("keepClasses").asList().asStringList());
                     for (CEntry entry : map.get("keep").asList()) {

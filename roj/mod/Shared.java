@@ -177,7 +177,7 @@ public final class Shared {
                 return false;
             String cf;
             try {
-                CMapping map = JSONParser.parse(IOUtil.readAsUTF(new FileInputStream(CONF_INDEX))).asMap();
+                CMapping map = JSONParser.parse(IOUtil.readUTF(new FileInputStream(CONF_INDEX))).asMap();
                 cf = map.getString("config");
                 isForgeMap = map.getBool("forgeMapping");
             } catch (ParseException | ClassCastException e) {

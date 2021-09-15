@@ -433,7 +433,7 @@ public final class FMDMain {
 
             String name = className.remove(ze.getName());
             if(name != null) {
-                byte[] code = AccessTransformer.transform(name, IOUtil.readFully(origZip.getInputStream(ze)));
+                byte[] code = AccessTransformer.transform(name, IOUtil.read(origZip.getInputStream(ze)));
                 Collection<String> subs = openSubClasses.remove(ze.getName());
                 if(subs != null)
                     code = AccessTransformer.openSubClass(code, subs);
@@ -675,7 +675,7 @@ public final class FMDMain {
                 }
 
                 List<ConstantData> modified = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
-                AppendOnlyCache aoc = new AppendOnlyCache(new File(hrTmp, "modified.bin"));
+                BoxFile aoc = new BoxFile(new File(hrTmp, "modified.bin"));
                 aoc.clear();
 
                 for (int i = 0; i < modified.size(); i++) {
@@ -903,7 +903,7 @@ public final class FMDMain {
 
             if (md != null) {
                 try {
-                    resources.put("META-INF/" + project.atName + ".cfg" , IOUtil.readFile(md.getAtPath()));
+                    resources.put("META-INF/" + project.atName + ".cfg" , IOUtil.read(md.getAtPath()));
                 } catch (IOException e) {
                     CmdUtil.warning("更新AT失败", e);
                 }

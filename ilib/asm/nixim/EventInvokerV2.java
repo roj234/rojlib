@@ -60,7 +60,7 @@ import net.minecraftforge.fml.common.eventhandler.IEventListener;
 import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.lang.reflect.*;
 import java.util.Arrays;
 import java.util.List;
@@ -373,9 +373,9 @@ public final class EventInvokerV2 implements IEventListener {
     private static ConstantData getData(boolean isStatic) {
         if (objectData == null) {
             try {
-                objectData = Parser.parseConstants(IOUtil.getBytes(EventInvokerV2.class, "META-INF/nixim/eh/object.class"));
-                staticData = Parser.parseConstants(IOUtil.getBytes(EventInvokerV2.class, "META-INF/nixim/eh/static.class"));
-            } catch (FileNotFoundException e) {
+                objectData = Parser.parseConstants(IOUtil.read(EventInvokerV2.class, "META-INF/nixim/eh/object.class"));
+                staticData = Parser.parseConstants(IOUtil.read(EventInvokerV2.class, "META-INF/nixim/eh/static.class"));
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }

@@ -79,7 +79,7 @@ public class ShaderWrap {
      * Shared code for compiling a shader program's shader
      */
     protected int createShader(String shader, int shaderType, boolean isPath) throws IOException {
-        shader = isPath ? IOUtil.readAsUTF(ShaderWrap.class, shader) : shader;
+        shader = isPath ? IOUtil.readUTF(shader) : shader;
         int id = GL20.glCreateShader(shaderType);
 
         if (id == 0)

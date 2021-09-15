@@ -77,8 +77,7 @@ public class I18n {
         String path = System.getProperty("lavac.translate");
         Map<String, String> m;
         try {
-            m = TextUtil.loadLang(path == null ? IOUtil.readAsUTF(
-                    I18n.class, "META-INF/lavac.lang") : IOUtil.readAsUTF(new FileInputStream(path)));
+            m = TextUtil.loadLang(path == null ? IOUtil.readUTF("META-INF/lavac.lang") : IOUtil.readUTF(new FileInputStream(path)));
         } catch (IOException e) {
             e.printStackTrace();
             m = Collections.emptyMap();

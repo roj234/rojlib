@@ -33,7 +33,8 @@ import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -81,7 +82,7 @@ public final class ZipUtil {
             byte[] buffer = bytecodeMap.get(file);
             if (buffer == null) {
                 try (InputStream is = new BufferedInputStream(new FileInputStream(file))) {
-                    buffer = IOUtil.readFully(is);
+                    buffer = IOUtil.read(is);
                 }
             }
             zos.write(buffer);
@@ -106,7 +107,7 @@ public final class ZipUtil {
             ZipEntry ze = enumeration.nextElement();
             if (!ze.isDirectory() && predicate.test(ze)) {
                 zos.putNextEntry(new ZipEntry(ze.getName()));
-                zos.write(IOUtil.readFully(zip.getInputStream(ze)));
+                zos.write(IOUtil.read(zip.getInputStream(ze)));
                 zos.closeEntry();
             }
         }
@@ -180,7 +181,7 @@ public final class ZipUtil {
             if (!zn.isDirectory()) {
                 try (InputStream is = zf.getInputStream(zn)) {
                     try (FileOutputStream fos = new FileOutputStream(path + zn.getName())) {
-                        fos.write(IOUtil.readFully(is));
+                        fos.write(IOUtil.read(is));
                     }
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to write file data ", e);

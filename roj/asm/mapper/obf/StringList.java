@@ -21,7 +21,7 @@ public final class StringList extends SimpleNamer {
     public StringList() {}
 
     public StringList(File file) throws IOException {
-        this.chars = new SimpleLineReader(IOUtil.readAsUTF(new FileInputStream(file))).toArray();
+        this.chars = new SimpleLineReader(IOUtil.readUTF(new FileInputStream(file))).toArray();
     }
 
     public static StringList newJavaKeyword() {

@@ -71,7 +71,7 @@ public abstract class JSONConfiguration {
 
     public void reload() {
         try (FileInputStream fis = new FileInputStream(config)) {
-            CMapping map = this.map = JSONParser.parse(new String(IOUtil.readFully(fis), StandardCharsets.UTF_8), 2).asMap();
+            CMapping map = this.map = JSONParser.parse(new String(IOUtil.read(fis), StandardCharsets.UTF_8), 2).asMap();
             readConfig(map);
         } catch (IOException | ParseException | ClassCastException e) {
             logger.catching(e);

@@ -79,7 +79,7 @@ public class NiximASMModParser extends ASMModParser implements ItfGet {
         interfaces = new HashSet<>();
         named = new HashMap<>();
         try {
-            byte[] bytes = IOUtil.readFully(stream);
+            byte[] bytes = IOUtil.read(stream);
             ConstantData data = Parser.parseConstants(bytes);
 
             this.asmType = TypeHelper.asmType(data.name);

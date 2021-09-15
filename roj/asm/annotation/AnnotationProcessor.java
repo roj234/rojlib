@@ -173,7 +173,7 @@ public class AnnotationProcessor extends AbstractProcessor implements Runnable {
         Object is = classData.get(fullClassName + ".class");
         try {
             if (is instanceof InputStream) {
-                byte[] code = IOUtil.readFully((InputStream) is);
+                byte[] code = IOUtil.read((InputStream) is);
                 classData.put(fullClassName + ".class", code);
                 return AccessTransformer.openSome(code, names);
             } else if (is instanceof byte[]) {
