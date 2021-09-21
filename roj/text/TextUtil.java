@@ -122,7 +122,7 @@ public class TextUtil {
         if (db.length() > 5) {
             int dot = db.lastIndexOf('.');
             if(dot != -1) {
-                db = db.substring(0, dot + 1 + accurate);
+                db = db.substring(0, Math.min(dot + 1 + accurate, db.length()));
             }
         }
         return db;

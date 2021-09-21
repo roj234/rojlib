@@ -665,7 +665,8 @@ public abstract class MathUtils {
 
                 if (value > HALF_PI) {
                     value = sin(value - HALF_PI);
-                    return sqrt(1 - value * value);
+                    value *= value;
+                    return value > 1 ? 0 : sqrt(1 - value);
                 }
 
                 return sin(value);

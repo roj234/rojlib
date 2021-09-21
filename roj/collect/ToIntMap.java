@@ -152,6 +152,7 @@ public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>,
     }
 
     @Nonnull
+    @Deprecated
     public Collection<Integer> values() {
         throw new UnsupportedOperationException();
     }
@@ -303,9 +304,9 @@ public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>,
         return getValueEntry(e) != null;
     }
 
-    protected Entry<K> notUsing = null;
+    private Entry<K> notUsing = null;
 
-    protected Entry<K> getCachedEntry(K id, int value) {
+    private Entry<K> getCachedEntry(K id, int value) {
         Entry<K> cached = this.notUsing;
         if (cached != null) {
             cached.k = id;
@@ -315,10 +316,14 @@ public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>,
             return cached;
         }
 
+        return newEntry(id, value);
+    }
+
+    protected Entry<K> newEntry(K id, int value) {
         return new Entry<>(id, value);
     }
 
-    protected void putRemovedEntry(Entry<K> entry) {
+    private void putRemovedEntry(Entry<K> entry) {
         if (notUsing != null && notUsing.v > MAX_NOT_USING) {
             return;
         }

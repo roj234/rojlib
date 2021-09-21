@@ -325,7 +325,7 @@ public class Vec3i implements Vector {
 
     @Override
     public String toString() {
-        return this.getClass().getName() + " {" + x + ", " + y + ", " + z + "}";
+        return "{" + x + ", " + y + ", " + z + "}";
     }
 
     @Override

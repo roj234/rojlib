@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,17 +23,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.asm.util;
-
-import roj.opengl.text.FontTex;
+package roj.opengl.vertex;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2021/2/3 21:14
+ * @since 2021/9/19 18:46
  */
-public interface IFontRenderer {
-    void setFont(FontTex unicode);
+public class VertexFormats {
+    public static final VertexFormat POSITION           = VertexFormat.builder().pos3f().build();
+    public static final VertexFormat POSITION_TEX       = VertexFormat.builder().pos3f().uv2f().build();
+    public static final VertexFormat POSITION_COLOR     = VertexFormat.builder().pos3f().color4ub().build();
+    public static final VertexFormat POSITION_TEX_COLOR = VertexFormat.builder().pos3f().uv2f().color4ub().build();
 }

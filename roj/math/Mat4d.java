@@ -1289,4 +1289,12 @@ public class Mat4d implements Cloneable {
                 .add(m30).add(m31).add(m32).add(m33)
                 .getHash();
     }
+
+    @Override
+    public String toString() {
+        return "Mat4d{" + m00 + "," + m01 + "," + m02 + "," + m03 + ",\n" +
+                m10 + "," + m11 + "," + m12 + "," + m13 + ",\n" +
+                m20 + "," + m21 + "," + m22 + "," + m23 + ",\n" +
+                m30 + "," + m31 + "," + m32 + "," + m33 + '}';
+    }
 }

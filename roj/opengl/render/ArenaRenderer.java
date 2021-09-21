@@ -24,15 +24,14 @@
  * THE SOFTWARE.
  */
 
-package ilib.client.renderer;
+package roj.opengl.render;
 
-import ilib.client.util.RenderUtils;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import org.lwjgl.opengl.GL11;
+import roj.math.MathUtils;
+import roj.math.Vec3i;
+import roj.opengl.util.VboUtil;
+import roj.opengl.vertex.VertexBuilder;
+import roj.opengl.vertex.VertexFormats;
 
 /**
  * No description provided
@@ -44,11 +43,17 @@ import org.lwjgl.opengl.GL11;
 public class ArenaRenderer {
     public static final ArenaRenderer INSTANCE = new ArenaRenderer();
 
-    private static final float DTHETA = 0.025F;
+    private static final float DTHETA  = 0.025F;
+    private static final float MAX_ALPHA = .1f;
     private float r, g, b;
+    private VertexBuilder vertexBuilder;
 
     public ArenaRenderer() {
-        r = 1;
+        r = g = b = 1;
+    }
+
+    public void setVertexBuilder(VertexBuilder vb) {
+        vertexBuilder = vb;
     }
 
     public void setColor(int color) {
@@ -57,47 +62,47 @@ public class ArenaRenderer {
         b = ((0xFF & color) / 255F);
     }
     
-    public void render(BlockPos pos1, BlockPos pos2, float partialTicks, boolean anim) {
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(pos1.getX(), pos1.getY(), pos1.getZ());
+    public void render(Vec3i pos1, Vec3i pos2, float partialTicks, boolean anim) {
+        GL11.glPushMatrix();
+        GL11.glTranslatef(pos1.x, pos1.y, pos1.z);
 
-        float lx = pos2.getX() - pos1.getX();
-        float ly = pos2.getY() - pos1.getY();
-        float lz = pos2.getZ() - pos1.getZ();
+        float lx = pos2.x - pos1.x;
+        float ly = pos2.y - pos1.y;
+        float lz = pos2.z - pos1.z;
         if (lx < 0) {
-            GlStateManager.translate(lx, 0, 0);
+            GL11.glTranslatef(lx, 0, 0);
             lx = -lx;
         }
         if (ly < 0) {
-            GlStateManager.translate(0, ly, 0);
+            GL11.glTranslatef(0, ly, 0);
             ly = -ly;
         }
         if (lz < 0) {
-            GlStateManager.translate(0, 0, lz);
+            GL11.glTranslatef(0, 0, lz);
             lz = -lz;
         }
         lx += 1;
         ly += 1;
         lz += 1;
 
-        GlStateManager.disableTexture2D();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-        GlStateManager.glLineWidth(5);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glLineWidth(5);
 
         if (anim)
             renderAnimated(lx, ly, lz, partialTicks);
         else
             renderDefault(lx, ly, lz, r, g, b);
 
-        GlStateManager.disableBlend();
-        GlStateManager.enableTexture2D();
-        GlStateManager.popMatrix();
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glPopMatrix();
     }
 
-    public static void renderDefault(float lx, float ly, float lz, float r, float g, float b) {
-        BufferBuilder bb = RenderUtils.BUILDER;
-        bb.begin(GL11.GL_LINE_STRIP, DefaultVertexFormats.POSITION_COLOR);
+    private void renderDefault(float lx, float ly, float lz, float r, float g, float b) {
+        VertexBuilder bb = vertexBuilder;
+        bb.begin(VertexFormats.POSITION_COLOR);
 
         bb.pos(0, 0, 0).color(r, g, b, 1).endVertex();
         bb.pos(lx, 0, 0).color(r, g, b, 1).endVertex();
@@ -121,24 +126,26 @@ public class ArenaRenderer {
 
         bb.pos(0, ly, 0).color(r, g, b, 1).endVertex();
 
-        RenderUtils.TESSELLATOR.draw();
+        bb.end();
+        VboUtil.drawVertexes(GL11.GL_LINE_STRIP, bb);
     }
 
-    public void renderAnimated(float lx, float ly, float lz, float partialTicks) {
-        GlStateManager.disableCull();
+    private void renderAnimated(float lx, float ly, float lz, float partialTicks) {
+        GL11.glDisable(GL11.GL_CULL_FACE);
         
         float theta = DTHETA * partialTicks;
 
         float r = this.r, g = this.g, b = this.b;
 
-        BufferBuilder bb = RenderUtils.BUILDER;
-        bb.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        VertexBuilder bb = vertexBuilder;
+        bb.begin(VertexFormats.POSITION_COLOR);
+
         for (int i = 0; i < lx; i++) {
             for (int j = 0; j < lz; j++) {
-                float anime = (MathHelper.sin(theta + j + i) + 1) * 0.5F;
+                float anime = (MathUtils.sin(theta + j + i) + 1) * 0.5F;
                 float lenDis = 0.4F * anime + 0.1F;
                 float lenDis_ = 1 - lenDis;
-                anime = 1 - anime;
+                anime = Math.max(1 - anime, MAX_ALPHA);
 
                 bb.pos(i + lenDis, -0.025D, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, -0.025D, j + lenDis).color(r, g, b, anime).endVertex();
@@ -154,10 +161,10 @@ public class ArenaRenderer {
 
         for (int i = 0; i < lx; i++) {
             for (int j = 0; j < ly; j++) {
-                float anime = (MathHelper.sin(theta + j + i) + 1) * 0.5F;
+                float anime = (MathUtils.sin(theta + j + i) + 1) * 0.5F;
                 float lenDis = 0.4F * anime + 0.1F;
                 float lenDis_ = 1 - lenDis;
-                anime = 1 - anime;
+                anime = Math.max(1 - anime, MAX_ALPHA);
                 bb.pos(i + lenDis, j + lenDis, -0.025D).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, j + lenDis, -0.025D).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, j + lenDis_, -0.025D).color(r, g, b, anime).endVertex();
@@ -172,10 +179,10 @@ public class ArenaRenderer {
 
         for (int i = 0; i < ly; i++) {
             for (int j = 0; j < lz; j++) {
-                float anime = (MathHelper.sin(theta + j + i) + 1) * 0.5F;
+                float anime = (MathUtils.sin(theta + j + i) + 1) * 0.5F;
                 float lenDis = 0.4F * anime + 0.1F;
                 float lenDis_ = 1 - lenDis;
-                anime = 1 - anime;
+                anime = Math.max(1 - anime, MAX_ALPHA);
                 bb.pos(-0.025D, i + lenDis, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(-0.025D, i + lenDis_, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(-0.025D, i + lenDis_, j + lenDis_).color(r, g, b, anime).endVertex();
@@ -185,11 +192,10 @@ public class ArenaRenderer {
                 bb.pos(lx + 0.025F, i + lenDis_, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(lx + 0.025F, i + lenDis_, j + lenDis_).color(r, g, b, anime).endVertex();
                 bb.pos(lx + 0.025F, i + lenDis, j + lenDis_).color(r, g, b, anime).endVertex();
-                bb.pos(lx + 0.025F, i + lenDis, j + lenDis).color(r, g, b, anime).endVertex();
             }
         }
+        VboUtil.drawVertexes(GL11.GL_QUADS, bb);
 
-        RenderUtils.TESSELLATOR.draw();
-        GlStateManager.enableCull();
+        GL11.glEnable(GL11.GL_CULL_FACE);
     }
 }

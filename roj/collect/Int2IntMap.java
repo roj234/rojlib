@@ -116,6 +116,14 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
         return new EntrySet(this);
     }
 
+    public KeySet keySet() {
+        return new KeySet(this);
+    }
+
+    public Values values() {
+        return new Values(this);
+    }
+
     public int size() {
         return size;
     }

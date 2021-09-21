@@ -30,11 +30,13 @@ import roj.io.misc.SocketNIODispatcher;
 import roj.reflect.DirectAccessor;
 import roj.util.ByteList;
 import roj.util.FastThreadLocal;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketImpl;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
@@ -145,8 +147,13 @@ public final class NonblockingUtil {
         return wrote;
     }
 
-    public static void clean(ByteBuffer shared) {
-        ((sun.nio.ch.DirectBuffer) shared).cleaner().clean();
+    public static void clean(Buffer shared) {
+        try {
+            DirectBuffer db = (DirectBuffer) shared;
+            while (db.cleaner() == null)
+                db = (DirectBuffer) db.attachment();
+            db.cleaner().clean();
+        } catch (Throwable ignored) {}
     }
 
     public static int writeFromNativeBuffer(FileDescriptor fd, ByteBuffer buf, int flag) throws IOException {

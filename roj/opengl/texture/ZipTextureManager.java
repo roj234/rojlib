@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,17 +23,44 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.asm.util;
+package roj.opengl.texture;
 
-import roj.opengl.text.FontTex;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2021/2/3 21:14
+ * @since 2021/9/19 18:30
  */
-public interface IFontRenderer {
-    void setFont(FontTex unicode);
+public class ZipTextureManager extends TextureManager {
+    private final ZipFile zf;
+    private final String base;
+
+    public ZipTextureManager(ZipFile zf) {
+        this.zf = zf;
+        this.base = "";
+    }
+    public ZipTextureManager(ZipFile zf, String base) {
+        this.zf = zf;
+        this.base = base;
+    }
+
+    @Override
+    protected BufferedImage getTexture(String id) {
+        ZipEntry entry = zf.getEntry(base.isEmpty() ? id : base + id);
+        if(entry == null) return null;
+        try (InputStream stream = zf.getInputStream(entry)) {
+            return ImageIO.read(stream);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }

@@ -375,7 +375,20 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             ModFile file = new ModFile();
             file.name = entry.getKey();
             if(file == (file = modified.find(file))) {
-                file.file = entries.get(entry.getKey());
+                if((file.file = entries.get(entry.getKey())) != null) {
+                    ByteList bl = entry.getValue();
+                    Attr attr = file.file.attr;
+                    if(bl.pos() == attr.uSize) {
+                        crc.reset();
+                        crc.update(bl.list, bl.offset(), bl.pos());
+                        if ((int) crc.getValue() == attr.CRC32) {
+                            // same length and checksum: same file, skip
+                            System.out.println("Skip unchanged " + file.file.name);
+                            continue;
+                        }
+                        crc.reset();
+                    }
+                }
                 modified.add(file);
             }
             file.compress = true;
@@ -480,6 +493,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 entries.put(ef.name = file.name, ef);
             } else {
                 file.file.ext = 0;
+                file.file.data = null;
             }
 
             EFile file1 = file.file;
@@ -491,7 +505,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             attr.compressMethod = (char) (file.compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 
             crc.reset();
-            crc.update(file.data.list, 0, file.data.pos());
+            crc.update(file.data.list, file.data.offset(), file.data.pos());
             attr.CRC32 = (int) crc.getValue();
             crc.reset();
             attr.uSize = file.data.pos();

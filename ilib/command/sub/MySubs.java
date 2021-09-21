@@ -34,7 +34,6 @@ import ilib.util.DimensionHelper;
 import ilib.util.ItemUtils;
 import ilib.util.PlayerUtil;
 import ilib.util.internal.ItemSpecialRenderer;
-import ilib.util.internal.OpenGLDebug;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
@@ -54,6 +53,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
 import roj.collect.LongMap;
 import roj.collect.MyHashSet;
+import roj.opengl.util.OpenGLDebug;
 import roj.text.TextUtil;
 
 import java.util.Iterator;
@@ -225,9 +225,7 @@ public abstract class MySubs extends AbstractSubCommand {
     public static void clientInit() {
         DUMP_GL_INFO = new MySubs("dump_gl_info") {
             public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-                OpenGLDebug.dumpAll();
-                String[] lines = OpenGLDebug.getString().split("\n");
-                for (String s : lines)
+                for (String s : OpenGLDebug.dumpStrings())
                     ItemSpecialRenderer.b(s);
             }
         };

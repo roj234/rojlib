@@ -90,6 +90,10 @@ public class ADownloader {
         CharList tmp = new CharList();
         for (XElement e : threads) {
             String title = e.children(0).asElement().children(0).asText();
+            if(e.children(1).asElement().childElementCount() == 0)  {
+                System.out.println("跳广告: " + e);
+                continue;
+            }
             String author = e.children(1).asElement().children(0).asText();
             String time = e.children(2).asElement().children(0).asText();
             String cookie = e.children(3).asElement().children(0).asText();

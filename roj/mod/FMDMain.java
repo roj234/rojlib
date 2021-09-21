@@ -782,6 +782,50 @@ public final class FMDMain {
         }
 
         if(files.isEmpty()) {
+            inc:
+            if(increment) {
+                AbstractExecutionTask task = project.getResourceTask();
+                Project.resourceFilter.reset(stamp, FileFilter.F_TIME);
+                task.calculate(null);
+
+                String jarName = project.name + ((flag & 1) == 0 ? '-' + project.version : "") + ".jar";
+                File jarFile = new File(jarDest, jarName);
+
+                if(!jarFile.isFile()) {
+                    CmdUtil.error("31: Only resource changed, with no destination jar found");
+                    break inc;
+                }
+
+                if (!FileUtil.checkTotalWritePermission(jarFile)) {
+                    if (!isCLI || !UIUtil.readBoolean("输出jar已被锁定, 是否能解决? ")) {
+                        CmdUtil.error("30: 输出jar已被锁定");
+                        break inc;
+                    }
+                }
+
+                Map<String, ByteList> entries = Helpers.cast(project.resourceCache);
+                for (Map.Entry<String, ?> entry : entries.entrySet()) {
+                    if (entry.getValue() instanceof byte[])
+                        entry.setValue(Helpers.cast(new ByteList((byte[]) entry.getValue())));
+                }
+
+                MutableZipFile mz = project.mz;
+                try {
+                    if (mz == null) {
+                        mz = project.mz = new MutableZipFile(jarFile);
+                    } else {
+                        mz.open();
+                    }
+                    mz.setFileDataMore(entries);
+                    mz.store();
+                    mz.tClose();
+                } catch (Throwable e) {
+                    if (e.getCause() instanceof EOFException)
+                        CmdUtil.warning("似乎jar文件不完整 请尝试全量编译", e);
+                    else CmdUtil.warning("MutableZipFile 遇到了一些问题", e);
+                    return false;
+                }
+            }
             if((flag & 3) != 0)
                 return true;
             else

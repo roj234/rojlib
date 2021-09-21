@@ -32,13 +32,7 @@ import ilib.util.PinyinUtil;
 import ilib.util.Reflection;
 import ilib.util.Registries;
 import ilib.util.TextHelperM;
-import roj.collect.*;
-import roj.concurrent.OperationDone;
-import roj.math.MathUtils;
-import roj.util.Helpers;
-
 import net.minecraft.block.Block;
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.Entity;
@@ -55,13 +49,17 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.text.TextFormatting;
-
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.OreIngredient;
 import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
+import roj.collect.FilterList;
+import roj.collect.IntSet;
+import roj.collect.MyHashMap;
+import roj.collect.UnsortedMultiKeyMap;
+import roj.concurrent.OperationDone;
+import roj.math.MathUtils;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -105,52 +103,6 @@ public class MCHooks {
             }
             return entry;
         }
-    }
-
-    public static  IBitSet    COLOR_CODE;
-    public static  IBitSet    HEX_CHAR;
-    private static char[]     AWFUL_ASCII;
-    public static  Int2IntMap AWFUL_ASCII_ID;
-
-    private static IntMap<IntList> widthTable;
-
-    @SideOnly(Side.CLIENT)
-    public static IntList getOrCreateWidthTable(FontRenderer fr, int w) {
-        if(widthTable == null) {
-            widthTable = new IntMap<>(4);
-            for (char c : AWFUL_ASCII) {
-                int width = fr.getCharWidth(c);
-                IntList list = widthTable.get(width);
-                if(list == null)
-                    widthTable.put(width, list = new IntList());
-                list.add(width);
-            }
-        }
-        return widthTable.get(w);
-    }
-
-    public static void clientInit() {
-        AWFUL_ASCII_ID = filled(AWFUL_ASCII = new char[] {'À','Á','Â','È','Ê','Ë','Í','Ó','Ô','Õ','Ú','ß','ã','õ','ğ','İ','ı',
-                'Œ','œ','Ş','ş','Ŵ','ŵ','ž','ȇ','�','�','�','�','�','�','�','�','�','�','�','�','�','�',' ','!','"',
-                '#','$','%','&','\'','(',')','*','+',',','-','.','/','0','1','2','3','4','5','6','7','8','9',':',';','<','=',
-                '>','?','@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X',
-                'Y','Z','[','\\',']','^','_','`','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s',
-                't','u','v','w','x','y','z','{','|','}','~','�','�','Ç','ü','é','â','ä','à','å','ç','ê','ë','è','ï','î','ì',
-                'Ä','Å','É','æ','Æ','ô','ö','ò','û','ù','ÿ','Ö','Ü','ø','£','Ø','×','ƒ','á','í','ó','ú','ñ','Ñ','ª','º','¿',
-                '®','¬','½','¼','¡','«','»','░','▒','▓','│','┤','╡','╢','╖','╕','╣','║','╗','╝','╜','╛','┐','└','┴','┬','├',
-                '─','┼','╞','╟','╚','╔','╩','╦','╠','═','╬','╧','╨','╤','╥','╙','╘','╒','╓','╫','╪','┘','┌','█','▄','▌','▐',
-                '▀','α','β','Γ','π','Σ','σ','μ','τ','Φ','Θ','Ω','δ','∞','∅','∈','∩','≡','±','≥','≤','⌠','⌡','÷','≈',
-                '°','∙','·','√','ⁿ','²','■','�','�'}); // ? why it not crash...
-        COLOR_CODE = LongBitSet.from('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'k', 'l', 'm', 'n', 'o', 'r');
-        HEX_CHAR = LongBitSet.from('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
-    }
-
-    private static Int2IntMap filled(char... chars) {
-        Int2IntMap map = new Int2IntMap(chars.length);
-        for (int i = 0, l = chars.length; i < l; i++) {
-            map.put(i, chars[i]);
-        }
-        return map;
     }
 
     protected static List<String> aList;
