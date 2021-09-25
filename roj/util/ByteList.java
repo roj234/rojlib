@@ -194,22 +194,20 @@ public class ByteList {
         return 0;
     }
 
-    public final void readFrom(ByteBuffer buffer) {
-        readFrom(buffer, buffer.position());
+    public final int readFrom(ByteBuffer buffer) {
+        return readFrom(buffer, buffer.remaining());
     }
 
-    public final void readFrom(ByteBuffer buffer, int len) {
-        len = Math.min(buffer.position(), len);
+    public final int readFrom(ByteBuffer buffer, int len) {
+        len = Math.min(buffer.remaining(), len);
         if(len <= 0)
-            return;
+            return 0;
         ensureCapacity(pointer + len);
 
-        int pos = buffer.position();
-        buffer.position(0);
         buffer.get(list, offset() + pointer, len);
-        buffer.position(pos);
 
         pointer += len;
+        return len;
     }
 
     public final ByteList readStreamFully(InputStream stream) throws IOException {

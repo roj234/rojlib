@@ -30,7 +30,6 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.NonblockingUtil;
 import roj.net.NetworkUtil;
-import roj.net.tcp.client.HttpClient;
 import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.SecureSocket;
 import roj.net.tcp.util.WrappedSocket;
@@ -97,7 +96,7 @@ public final class AEClientOwner extends AEClient {
     public void run1() throws IOException {
         Socket remote = new Socket();
         remote.connect(server);
-        WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), HttpClient.CLIENT_ALLOCATOR, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
+        WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), AE_SSL, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
         try {
             int read = 0;
             conn:

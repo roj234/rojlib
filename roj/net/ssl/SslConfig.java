@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.tcp.ssl;
+package roj.net.ssl;
 
 import java.io.InputStream;
 
@@ -36,7 +36,9 @@ import java.io.InputStream;
  */
 public interface SslConfig {
     boolean isServerSide();
-    boolean isNeedClientAuth();
+    default boolean isNeedClientAuth() {
+        return false;
+    }
 
     InputStream getPkPath();
     InputStream getCaPath();

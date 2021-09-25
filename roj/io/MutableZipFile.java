@@ -16,66 +16,63 @@ import java.io.*;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
-import java.util.Random;
+import java.util.jar.Manifest;
 import java.util.zip.*;
 
 /**
- * 你别指望这东西能打开分卷压缩文件，没有ZIP64，也没有EXTTag，别做梦了 <BR>
- * 我要做一个XIP压缩文件
+ * 你别指望这东西能打开分卷压缩文件，没有ZIP64，也没有EXTTag
  *
  * @author Roj233
  * @since 2021/7/10 17:09
  */
 public class MutableZipFile implements Closeable, AutoCloseable {
-    public static void main(String[] args) throws IOException {
-        MutableZipFile file = new MutableZipFile(new File(args[0]));
-        byte[] data = file.getFileData("test.txt");
-        if(data != null)
-            System.out.println(ByteReader.readUTF(new ByteList(data)));
-        int seed = Integer.parseInt(args[1]);
-        Random rnd = new Random(seed);
-        for (int i = 0; i < 10; i++) {
-            file.setFileData("F" + (10 + rnd.nextInt(90)), ByteWriter.encodeUTF("测试数据" + i));
-        }
-        file.store();
-    }
+    public final File file;
+    private RandomAccessFile zip;
+    private final MyHashMap<String, EFile> entries = new MyHashMap<>();
+    private final MyHashSet<ModFile> modified = new MyHashSet<>();
+    private EEOF eof;
 
-    File file;
-    RandomAccessFile zip;
-    MyHashMap<String, EFile> entries = new MyHashMap<>();
-    MyHashSet<ModFile> modified = new MyHashSet<>();
-    EEOF eof;
+    private final ByteList buffer = new ByteList();
+    private final Inflater inflater = new Inflater(true);
+    private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+    private final CRC32 crc = new CRC32();
 
-    ByteList buffer = new ByteList();
-    Inflater inflater = new Inflater(true);
-    Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
-    CRC32 crc = new CRC32();
+    private final boolean killExtFlags;
 
     public static final int HEADER_EXT = 0x504b0708;
     public static final int HEADER_EOF = 0x504b0506;
     public static final int HEADER_FILE = 0x504b0304;
     public static final int HEADER_ATTRIBUTE = 0x504b0102;
 
-    public MutableZipFile(File file) throws IOException {
+    public static final int FLAG_KILL_EXT = 1;
+    public static final int FLAG_VERIFY = 2;
+
+    public MutableZipFile(File file, int flag) throws IOException {
         this.file = file;
         if(!file.isFile() && !file.createNewFile())
             throw new IOException("Unable to create a new file");
         eof = new EEOF();
         eof.comment = "";
-        zip = new RandomAccessFile(file, "r");
+        killExtFlags = (flag & FLAG_KILL_EXT) != 0;
+        zip = new RandomAccessFile(file, killExtFlags ? "rw" : "r");
         zip.seek(0);
         try {
             readInternal();
         } catch (EOFException e) {
             throw (ZipException) new ZipException("Unexpected EOF at " + zip.getFilePointer()).initCause(e);
         }
-        verify();
+        if((flag & FLAG_VERIFY) != 0)
+            verify();
+    }
+
+    public MutableZipFile(File file) throws IOException {
+        this(file, FLAG_KILL_EXT | FLAG_VERIFY);
     }
 
     private void verify() throws IOException {
         for (EFile file : entries.values()) {
             if(file.attr == null)
-                throw new IllegalArgumentException(file.name + " doesnt have a CDir definition!");
+                throw new IllegalArgumentException(file.name + " doesn't have a CDir definition!");
         }
         if(eof.cDirLen != 0) {
             zip.seek(eof.cDirOffset + eof.cDirLen);
@@ -101,8 +98,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             int header = zip.readInt();
             switch (header) {
                 case HEADER_EOF:
-                    //if(eof != null)
-                    //    throw new ZipException("Duplicate End_Of_Core_Directory entry found at " + zip.getFilePointer());
                     eof = readEOF(out);
                     break cyl;
                 case HEADER_ATTRIBUTE:
@@ -159,33 +154,48 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         entry.offset = off;
 
-        // ... skip method, really
-        if((flags & 8) != 0) {
+        // ... skip method, PRETTY NOT WELL
+        // cSize == 0: killExtFlags
+        if((flags & 8) != 0 && cSize == 0) {
             Inflater inflater = this.inflater;
-            ByteList b = buffer;
-            b.ensureCapacity(1024);
-            byte[] buf1 = b.list;
+            buffer.ensureCapacity(1024);
+            buf = buffer.list;
             try {
                 while (true) {
-                    if (inflater.inflate(buf1, 512, 512) == 0) {
+                    if (inflater.inflate(buf, 512, 512) == 0) {
                         if (inflater.finished() || inflater.needsDictionary()) {
+                            // OVERWRITE FUCKING ZERO ENTRY (as we know actual size now)
+                            // NOTE: attr knows size
+                            if(killExtFlags) {
+                                // top + header + offset (usize)
+                                zip.seek(entry.startPos() + 4 + 14);
+                                // not update EXT flag: not more I/O (moving)
+                                buffer.clear();
+                                new ByteWriter(buffer)
+                                        // U(ncompressed)Size
+                                        .writeIntR((int) inflater.getBytesWritten())
+                                        // C(ompressed)Size
+                                        .writeIntR((int) inflater.getBytesRead());
+                                zip.write(buf, 0, 8);
+                            }
                             zip.seek(off + inflater.getBytesRead());
-                            zip.read(buf1, 0, 16);
-                            int sig = (buf1[3] & 0xFF) | (buf1[2] & 0xFF) << 8 | (buf1[1] & 0xFF) << 16 | (buf1[0] & 0xFF) << 24;
+                            zip.read(buf, 0, 4);
+                            int sig = (buf[3] & 0xFF) | (buf[2] & 0xFF) << 8 | (buf[1] & 0xFF) << 16 | (buf[0] & 0xFF) << 24;
                             if (sig != HEADER_EXT) {
-                                zip.seek(off + inflater.getBytesRead() + 12);
+                                zip.skipBytes(8);
                                 entry.ext = 12;
                             } else {
+                                zip.skipBytes(12);
                                 entry.ext = 16;
                             }
                             break;
                         }
                         if (inflater.needsInput()) {
-                            int read = zip.read(buf1, 0, 512);
+                            int read = zip.read(buf, 0, 512);
                             if (read <= 0)
                                 throw new EOFException("Before entry decompression completed");
 
-                            inflater.setInput(buf1, 0, read);
+                            inflater.setInput(buf, 0, read);
                         }
                     }
                 }
@@ -351,7 +361,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             file.file = entries.get(entry);
             modified.add(file);
         }
-        file.compress = true;
+        file.compress = content != null && content.pos() > 0;
         file.data = content;
         return file;
     }
@@ -361,11 +371,11 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         file.name = entry;
         if(file == (file = modified.find(file))) {
             if(((file.file = entries.get(entry)) == null) == requiredExistence) {
-                throw new AssertionError("(entries.get(entry) == null) == requiredExistence");
+                throw new AssertionError("(entries.get(entry) == null) != requiredExistence");
             }
             modified.add(file);
         }
-        file.compress = true;
+        file.compress = content != null && content.pos() > 0;
         file.data = content;
         return file;
     }
@@ -374,9 +384,12 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         for (Map.Entry<String, ByteList> entry : content.entrySet()) {
             ModFile file = new ModFile();
             file.name = entry.getKey();
+
+            ByteList bl = entry.getValue();
+            file.compress = bl != null && bl.pos() > 0;
+            file.data = bl;
             if(file == (file = modified.find(file))) {
                 if((file.file = entries.get(entry.getKey())) != null) {
-                    ByteList bl = entry.getValue();
                     Attr attr = file.file.attr;
                     if(bl.pos() == attr.uSize) {
                         crc.reset();
@@ -391,8 +404,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 }
                 modified.add(file);
             }
-            file.compress = true;
-            file.data = entry.getValue();
         }
     }
 
@@ -591,15 +602,31 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             f.close();
             t.close();
         }
-        zip = new RandomAccessFile(file, "r");
+        zip = new RandomAccessFile(file, killExtFlags ? "rw" : "r");
+    }
+
+    public void setManifest(Manifest mf) throws IOException {
+        ByteList bl = new ByteList();
+        mf.write(bl.asOutputStream());
+        setFileData("META-INF/MANIFEST.MF", bl);
     }
 
     /**
      * 你见过关了还可以在打开的么？现在有了
      */
     public void open() throws IOException {
+        // 别人改了怎么办
         if(zip == null)
-            zip = new RandomAccessFile(file, "r");
+            zip = new RandomAccessFile(file, killExtFlags ? "rw" : "r");
+        try {
+            verify();
+        } catch (IOException e) {
+            entries.clear();
+            readInternal();
+            for (ModFile file : modified) {
+                file.file = entries.get(file.name);
+            }
+        }
     }
 
     public void tClose() throws IOException {

@@ -29,11 +29,12 @@ import roj.collect.IntMap;
 import roj.collect.IntSet;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
+import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CMapping;
 import roj.io.NonblockingUtil;
 import roj.net.tcp.TCPServer;
-import roj.net.tcp.client.HttpClient;
 import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.SecureSocket;
 import roj.net.tcp.util.WrappedSocket;
@@ -66,9 +67,6 @@ import static roj.net.cross.Util.*;
 public class AEServer extends TCPServer {
     ConcurrentHashMap<Worker, Object> workers = new ConcurrentHashMap<>();
     ConcurrentHashMap<String, Room> rooms = new ConcurrentHashMap<>();
-
-    AtomicInteger freeThreads = new AtomicInteger();
-    TaskExecutor[] runner;
 
     int maxConn;
     Watcher watcher = new Watcher();
@@ -114,6 +112,7 @@ public class AEServer extends TCPServer {
             } finally {
                 client.close();
             }
+            return null;
         } else {
             FileDescriptor fd = NonblockingUtil.fd(client);
             initSocketPref(client);
@@ -125,9 +124,8 @@ public class AEServer extends TCPServer {
             );
             Worker w = new Worker(this, cio);
             workers.put(w, 0);
-            //enqueue(w);
+            return w;
         }
-        return null;
     }
 
     @Override
@@ -150,12 +148,9 @@ public class AEServer extends TCPServer {
         return room.tryConnect(this, address, token);
     }
 
-    WrappedSocket getClientChannel(Socket socket) throws IOException {
-        return ssl != null ? SecureSocket.get(socket, NonblockingUtil.fd(socket), HttpClient.CLIENT_ALLOCATOR, true) : new InsecureSocket(socket, NonblockingUtil.fd(socket));
-    }
-
     public void shutdown() {
         if(watcher == null) return;
+        watcher.shutdown();
         try {
             socket.close();
         } catch (IOException ignored) {}
@@ -191,6 +186,7 @@ public class AEServer extends TCPServer {
             } catch (InterruptedException ignored) {}
         }
         workers.clear();
+        watcher.waitUntilFinish();
         watcher = null;
         System.out.println("服务器已关闭");
     }
@@ -312,7 +308,7 @@ public class AEServer extends TCPServer {
         }
     }
 
-    static class Worker extends FastLocalThread {
+    static final class Worker extends FastLocalThread implements ITaskNaCl {
         AEServer server;
         WrappedSocket channel;
 
@@ -339,7 +335,6 @@ public class AEServer extends TCPServer {
             this.busy = new AtomicInteger(3);
             setDaemon(true);
             setName("Worker " + channel.socket().getRemoteSocketAddress());
-            start();
         }
 
         @Override
@@ -715,18 +710,33 @@ public class AEServer extends TCPServer {
             json.put("down", down);
             return json;
         }
-    }
-
-    static class Watcher implements TaskHandler {
-        public Watcher() {}
 
         @Override
-        public void pushTask(ITask task) {
-            if(task != null)
-                throw new RuntimeException();
+        public void calculate(Thread thread) {
+            run();
         }
 
         @Override
-        public void clearTasks() {}
+        public boolean isDone() {
+            return channel == null;
+        }
+    }
+
+    static final class Watcher extends TaskPool {
+        public Watcher() {
+            super(1, Integer.parseInt(System.getProperty("ae.server.threads", "10")), 1, 1, pool -> new TaskExecutor(pool, "Worker", 120000));
+        }
+
+        @Override
+        public void pushTask(ITask task) {
+            if(task == null) return;
+            super.pushTask(task);
+        }
+
+        @Override
+        protected void onReject(ITask task, int minPending) {
+            Worker w = (Worker) task;
+            w.start();
+        }
     }
 }

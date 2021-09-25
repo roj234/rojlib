@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.tcp.ssl;
+package roj.net.ssl;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -64,7 +64,6 @@ public final class SslEngineFactory {
         // 参数一：认证的密钥 参数二：对等信任认证 参数三：伪随机数生成器
         // 单向认证，服务端不用验证客户端，所以第二个参数为null
         ctx.init(kmf == null ? null : kmf.getKeyManagers(), tmf == null ? null : tmf.getTrustManagers(), null);
-        System.out.println("Ssl initialized");
 
         return ctx;
     }

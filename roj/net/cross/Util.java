@@ -26,7 +26,7 @@
 package roj.net.cross;
 
 import roj.io.NonblockingUtil;
-import roj.net.tcp.ssl.SslEngineFactory;
+import roj.net.ssl.SslEngineFactory;
 import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.WrappedSocket;
 import roj.ui.UIUtil;

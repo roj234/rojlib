@@ -23,29 +23,54 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.concurrent;
+package roj.net.ssl;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since  2020/8/24 22:56
+ * @since  2021/2/6 22:11
  */
-public interface ThreadStateMonitor {
-    ThreadStateMonitor EVER = new ThreadStateMonitor() {
-        @Override
-        public boolean threadDeath(TaskExecutor e) {
-            return false;
+public class ServerSslConf implements SslConfig {
+    private final String keyStore;
+    private final char[] password;
+
+    public ServerSslConf(String keyStore, char[] password) {
+        this.keyStore = keyStore;
+        this.password = password;
+    }
+
+    @Override
+    public boolean isServerSide() {
+        return true;
+    }
+
+    @Override
+    public boolean isNeedClientAuth() {
+        return false;
+    }
+
+    @Override
+    public InputStream getPkPath() {
+        try {
+            return new FileInputStream(keyStore);
+        } catch (FileNotFoundException e) {
+            return null;
         }
+    }
 
-        @Override
-        public boolean working() {
-            return true;
-        }
-    };
+    @Override
+    public InputStream getCaPath() {
+        return getPkPath();
+    }
 
-    boolean threadDeath(TaskExecutor executor);
-
-    boolean working();
+    @Override
+    public char[] getPasswd() {
+        return password;
+    }
 }

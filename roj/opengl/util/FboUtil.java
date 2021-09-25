@@ -15,15 +15,15 @@ import org.lwjgl.opengl.*;
  * @since 2021/9/17 23:15
  */
 public class FboUtil {
-    public static final int GL_FRAMEBUFFER;
-    public static final int GL_RENDERBUFFER;
-    public static final int GL_COLOR_ATTACHMENT0;
-    public static final int GL_DEPTH_ATTACHMENT;
-    public static final int GL_FRAMEBUFFER_COMPLETE;
-    public static final int GL_FB_INCOMPLETE_ATTACHMENT;
-    public static final int GL_FB_INCOMPLETE_MISS_ATTACH;
-    public static final int GL_FB_INCOMPLETE_DRAW_BUFFER;
-    public static final int GL_FB_INCOMPLETE_READ_BUFFER;
+    public static final int GL_FRAMEBUFFER = 36160;
+    public static final int GL_RENDERBUFFER = 36161;
+    public static final int GL_COLOR_ATTACHMENT0 = 36064;
+    public static final int GL_DEPTH_ATTACHMENT = 36096;
+    public static final int GL_FRAMEBUFFER_COMPLETE = 36053;
+    public static final int GL_FB_INCOMPLETE_ATTACHMENT = 36054;
+    public static final int GL_FB_INCOMPLETE_MISS_ATTACH = 36055;
+    public static final int GL_FB_INCOMPLETE_DRAW_BUFFER = 36059;
+    public static final int GL_FB_INCOMPLETE_READ_BUFFER = 36060;
 
     private static final int mode;
     private static final int
@@ -45,28 +45,9 @@ public class FboUtil {
             } else {
                 mode = EXT;
             }
-            GL_FRAMEBUFFER = 36160;
-            GL_RENDERBUFFER = 36161;
-            GL_COLOR_ATTACHMENT0 = 36064;
-            GL_DEPTH_ATTACHMENT = 36096;
-            GL_FRAMEBUFFER_COMPLETE = 36053;
-            GL_FB_INCOMPLETE_MISS_ATTACH = 36055;
-            GL_FB_INCOMPLETE_ATTACHMENT = 36054;
-            GL_FB_INCOMPLETE_DRAW_BUFFER = 36059;
-            GL_FB_INCOMPLETE_READ_BUFFER = 36060;
             System.out.println("FBO: OK, Mode=" + mode);
         } else {
             mode = NONE;
-            GL_FRAMEBUFFER = 0;
-            GL_RENDERBUFFER = 0;
-            GL_COLOR_ATTACHMENT0 = 0;
-            GL_DEPTH_ATTACHMENT = 0;
-            GL_FRAMEBUFFER_COMPLETE = 0;
-            GL_FB_INCOMPLETE_MISS_ATTACH = 0;
-            GL_FB_INCOMPLETE_ATTACHMENT = 0;
-            GL_FB_INCOMPLETE_DRAW_BUFFER = 0;
-            GL_FB_INCOMPLETE_READ_BUFFER = 0;
-
             System.out.println("FBO: ERROR");
         }
     }

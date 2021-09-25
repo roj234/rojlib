@@ -103,6 +103,7 @@ public class AEGuiServer extends JFrame {
                     webPort = Integer.parseInt(args[++i]);
                     break;
                 case "-ssl":
+                    Util.certFile = args[++i];
                     Util.SslDialog.sho1w();
                     break;
             }
@@ -147,7 +148,6 @@ public class AEGuiServer extends JFrame {
 
             Thread serverRunner = serverThread = new Thread(server);
             serverRunner.setName("Server Thread");
-            serverRunner.setDaemon(true);
             serverRunner.start();
 
             if(webPort != -1) {

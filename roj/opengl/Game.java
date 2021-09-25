@@ -39,14 +39,11 @@ import roj.math.Mat4f;
 import roj.math.MathUtils;
 import roj.opengl.text.FontTex;
 import roj.opengl.text.TextRenderer;
-import roj.opengl.util.FboUtil;
-import roj.opengl.util.VboUtil;
 import roj.opengl.vertex.VertexBuilder;
 import roj.text.TextUtil;
 
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
+import java.awt.image.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -91,13 +88,10 @@ public abstract class Game {
             Display.create();
         }
 
-        FboUtil.initFramebuffers();
-        VboUtil.initVertexbuffers();
-
         Mouse.create();
         Keyboard.create();
 
-        fps = 30;
+        fps = 40;
         vertexBuilder = new VertexBuilder(262144);
         textRenderer = new TextRenderer(new FontTex("黑体-20"), TextRenderer.COLOR_CODE, vertexBuilder);
         init();
@@ -111,7 +105,7 @@ public abstract class Game {
     public double motionX, motionY, motionZ;
     private int moveForward, moveLeft, moveUp;
     public boolean cameraMode;
-    public double mouseSensitive = .5, moveFactor = .05;
+    public double mouseSensitive = .4, moveFactor = .03;
     public int fps;
 
     private int   frameCounter;
@@ -380,7 +374,7 @@ public abstract class Game {
     protected void renderSky() {}
 
     protected void renderUI() {
-        textRenderer.renderStringWithShadow("FPS: " + TextUtil.scaledDouble(1000 / avgFrameTime, 3) + '/' + fps, 4, 0);
+        textRenderer.renderStringWithShadow("FPS: " + TextUtil.scaledDouble(1000 / avgFrameTime, 1) + '/' + fps, 4, 0);
         textRenderer.renderStringWithShadow("XYZ " + TextUtil.scaledDouble(x, 3) + ' ' + TextUtil.scaledDouble(y, 3) + ' ' + TextUtil.scaledDouble(z, 3), 4, -24);
         if(!glErrors.isEmpty()) {
             textRenderer.renderStringWithShadow("OpenGL Errors: ", 4, -48);

@@ -230,7 +230,6 @@ public final class FMDMain {
                 System.gc();
                 System.runFinalization();
                 System.gc();
-                //Runtime.getRuntime().traceMethodCalls(true);
             break;
             default:
                 CmdUtil.warning("参数错误");

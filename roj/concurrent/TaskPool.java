@@ -110,19 +110,24 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
             return;
         }
 
-        if (minPending > addThr) {
+        if (minPending >= addThr) {
             if (len < max) {
                 newWorker(task, ov);
                 return;
-            } else if (minPending > maxThr) {
-                // maybe execution by caller
-                throw new RejectedExecutionException("Minimum tasks on thread (" + minPending + ") is larger than limit (" + maxThr + ")");
+            } else if (minPending >= maxThr) {
+                onReject(task, minPending);
+                return;
             }
         }
 
         untilCas(lock, ov + 1, ov);
 
         th.pushTask(task);
+    }
+
+    protected void onReject(ITask task, int minPending) {
+        // maybe execution by caller
+        throw new RejectedExecutionException("Minimum tasks on thread (" + minPending + ") is larger than limit (" + maxThr + ")");
     }
 
     private void newWorker(ITask task, int ov) {
@@ -216,7 +221,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         }
     }
 
-    public void shutdown(boolean shutdown) {
+    public void shutdown() {
         untilCas(lock, 0, -3);
         int running = this.running;
         this.running = -1;

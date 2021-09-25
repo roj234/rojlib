@@ -39,7 +39,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
     boolean sleeping;
 
     public TaskExecutor() {
-        this(null);
+        this(ThreadStateMonitor.EVER);
     }
 
     public TaskExecutor(ThreadStateMonitor monitor) {
@@ -63,7 +63,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
     @Override
     public void run() {
         out:
-        while (!tasks.isEmpty() || (monitor == null || monitor.working())) {
+        while (!tasks.isEmpty() || monitor.working()) {
             if (tasks.isEmpty()) {
                 synchronized (this) {
                     notifyAll();
@@ -81,7 +81,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
                     synchronized (this) {
                         notifyAll();
                     }
-                    if (tasks.isEmpty() && monitor != null && monitor.threadDeath(this)) {
+                    if (tasks.isEmpty() && monitor.threadDeath(this)) {
                         break;
                     }
                 }

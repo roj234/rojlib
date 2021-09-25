@@ -29,9 +29,7 @@ import roj.collect.MyHashMap;
 import roj.concurrent.task.CalculateTask;
 import roj.config.ParseException;
 import roj.io.NonblockingUtil;
-import roj.net.tcp.ssl.EngineAllocator;
-import roj.net.tcp.ssl.SslConfig;
-import roj.net.tcp.ssl.SslEngineFactory;
+import roj.net.ssl.EngineAllocator;
 import roj.net.tcp.util.Action;
 import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.SecureSocket;
@@ -40,10 +38,7 @@ import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.security.GeneralSecurityException;
@@ -57,50 +52,6 @@ import java.util.Map;
  * @since  2020/12/5 14:34
  */
 public class HttpClient extends ClientSocket {
-    public static EngineAllocator CLIENT_ALLOCATOR;
-
-    static {
-        try {
-            CLIENT_ALLOCATOR = SslEngineFactory.getSslFactory(new SslConfig() {
-                @Override
-                public boolean isServerSide() {
-                    return false;
-                }
-
-                @Override
-                public boolean isNeedClientAuth() {
-                    return false;
-                }
-
-                @Override
-                public InputStream getPkPath() {
-                    try {
-                        return new FileInputStream("server.ks");
-                    } catch (FileNotFoundException e) {
-                        return null;
-                    }
-                }
-
-                @Override
-                public InputStream getCaPath() {
-                    try {
-                        return new FileInputStream("server.ks");
-                    } catch (FileNotFoundException e) {
-                        return null;
-                    }
-                }
-
-                @Override
-                public char[] getPasswd() {
-                    return "123456".toCharArray();
-                }
-            });
-        } catch (IOException | GeneralSecurityException e) {
-            System.err.println("Failed to initialize SelEngine");
-            e.printStackTrace();
-        }
-    }
-
     private CharSequence action, path, body;
     private final MyHashMap<CharSequence, CharSequence> header = new MyHashMap<>();
     private final CharList utf8Buf = new CharList();
@@ -141,13 +92,13 @@ public class HttpClient extends ClientSocket {
 
     @Override
     protected WrappedSocket getChannel() throws IOException {
-        return ssl ? SecureSocket.get(server.socket(), NonblockingUtil.fd(server), CLIENT_ALLOCATOR, true) : new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
+        return clientEngine != null ? SecureSocket.get(server.socket(), NonblockingUtil.fd(server), clientEngine, true) : new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
     }
 
-    boolean ssl;
+    EngineAllocator clientEngine;
 
-    public HttpClient ssl(boolean ssl) {
-        this.ssl = ssl;
+    public HttpClient ssl(EngineAllocator clientEngine) {
+        this.clientEngine = clientEngine;
         return this;
     }
 
@@ -226,7 +177,13 @@ public class HttpClient extends ClientSocket {
     }
 
     public HttpClient url(URL url) throws IOException {
-        ssl = url.getProtocol().equals("https");
+        if(url.getProtocol().equals("https")) {
+            try {
+                clientEngine = EngineAllocator.getClientDefault();
+            } catch (GeneralSecurityException e) {
+                e.printStackTrace();
+            }
+        }
         path = url.getPath();
         header.put("Host", url.getHost());
         createSocket(url.getHost(), url.getPort() == -1 ? url.getDefaultPort() : url.getPort(), false);

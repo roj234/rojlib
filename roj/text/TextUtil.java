@@ -170,6 +170,9 @@ public class TextUtil {
                     i = pos + 3;
                 }
             } else {
+                if(pos == -1) {
+                    pos = len;
+                }
                 while (i < pos) {
                     tmp.add((byte) src.charAt(i));
                     i++;

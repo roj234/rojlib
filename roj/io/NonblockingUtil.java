@@ -218,6 +218,7 @@ public final class NonblockingUtil {
 
         int read = readToNativeBuffer(fd, shared, socket);
         if (read > 0) {
+            shared.flip();
             buf.readFrom(shared);
         }
 

@@ -27,7 +27,7 @@ package roj.net.tcp.util;
 
 
 import roj.io.NonblockingUtil;
-import roj.net.tcp.ssl.EngineAllocator;
+import roj.net.ssl.EngineAllocator;
 import roj.util.ByteList;
 
 import javax.net.ssl.SSLEngine;
@@ -82,6 +82,7 @@ public class SecureSocket extends InsecureSocket {
      * Outbound application data is supplied to us by our callers.
      */
     private ByteBuffer networkIn, networkOut;
+    private ByteList pushback;
 
     /*
      * An empty ByteBuffer for use when one isn't available, say
@@ -117,6 +118,7 @@ public class SecureSocket extends InsecureSocket {
         engine.beginHandshake();
         status = engine.getHandshakeStatus();
         hsDone = false;
+        pushback = new ByteList();
 
         // Create a buffer using the normal expected packet size we'll
         // be getting.  This may change, depending on the peer's
@@ -218,7 +220,7 @@ public class SecureSocket extends InsecureSocket {
 
                 needIO:
                 while (this.status == HandshakeStatus.NEED_UNWRAP) {
-                    result = _readNetworkIn();
+                    result = _readNetworkIn(-1);
 
                     this.status = result.getHandshakeStatus();
 
@@ -330,6 +332,22 @@ public class SecureSocket extends InsecureSocket {
             throw new IllegalStateException("Not handshake");
         }
 
+        int nread;
+        if(pushback.pos() > 0) {
+            ByteList pb = this.pushback;
+            nread = Math.min(pb.pos(), max);
+            buffer.addAll(pb, 0, nread);
+            if(pb.pos() - nread > 0)
+                System.arraycopy(pb.list, nread, pb.list, 0, pb.pos() - nread);
+            pb.pos(pb.pos() - nread);
+
+            max -= nread;
+            if(max == 0)
+                return nread;
+        } else {
+            nread = 0;
+        }
+
         int read = _read(networkIn);
         if (read < 0) {
             System.err.println("!! Read Closed " + read);
@@ -339,7 +357,7 @@ public class SecureSocket extends InsecureSocket {
 
         read = 0;
         do {
-            result = _readNetworkIn();
+            result = _readNetworkIn(max - read);
             read += result.bytesProduced();
 
             /*
@@ -366,6 +384,7 @@ public class SecureSocket extends InsecureSocket {
 
                         break; // for next read
                     }
+                    break;
                 case OK:
                     if (result.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
                         doTasks();
@@ -376,15 +395,24 @@ public class SecureSocket extends InsecureSocket {
                     throw new IOException("SSLEngine error during data read: " + result.getStatus());
             }
         } while ((networkIn.position() != 0) && result.getStatus() != Status.BUFFER_UNDERFLOW);
-        return read;
+        return read + nread;
     }
 
-    private SSLEngineResult _readNetworkIn() throws SSLException {
+    private SSLEngineResult _readNetworkIn(int mx) throws SSLException {
         networkIn.flip();
         SSLEngineResult result = engine.unwrap(networkIn, appInTmp);
 
-        buffer.readFrom(appInTmp);
-        appInTmp.clear();
+        if(result.bytesProduced() > 0) {
+            appInTmp.flip();
+            if(mx > 0) {
+                if (buffer.readFrom(appInTmp, mx = Math.min(mx, result.bytesProduced())) != mx) {
+                    throw new IllegalStateException("result.bytesProduced() != appInTmp.remaining()");
+                }
+            }
+            if (appInTmp.remaining() > 0)
+                pushback.readFrom(appInTmp);
+            appInTmp.clear();
+        }
 
         networkIn.compact();
         return result;

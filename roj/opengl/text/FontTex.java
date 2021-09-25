@@ -34,10 +34,9 @@ import roj.opengl.util.Util;
 import roj.text.CharList;
 
 import java.awt.*;
-import java.awt.font.FontRenderContext;
-import java.awt.font.GlyphVector;
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
+import java.awt.font.*;
+import java.awt.geom.*;
+import java.awt.image.*;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.PrimitiveIterator;
@@ -189,8 +188,6 @@ public class FontTex {
 
     public void dumpTexture() {
         glDisable(GL_CULL_FACE);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         int z = 100;
         for (PrimitiveIterator.OfInt itr = textureIds.keySet().iterator(); itr.hasNext(); ) {
@@ -208,7 +205,6 @@ public class FontTex {
             z += 20;
         }
 
-        glDisable(GL_BLEND);
         glEnable(GL_CULL_FACE);
     }
 

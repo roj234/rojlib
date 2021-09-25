@@ -31,15 +31,12 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
 import roj.io.JarReaderStream;
-import roj.repackage.com_nothome_delta.ByteBufferSeekableSource;
-import roj.repackage.com_nothome_delta.GDiffPatcher;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,30 +58,109 @@ import java.util.zip.ZipInputStream;
 public final class Patcher {
     public static final boolean DEBUG = false;
 
-    public static final byte[] EMPTY = new byte[0];
+    static final class GDP {
+        static final int DIFF_HEADER = 0xD1FFD1FF;
+        static final int VERSION_4 = 4;
 
-    private final GDiffPatcher serverPatcher = new GDiffPatcher();
-    private final GDiffPatcher clientPatcher = new GDiffPatcher();
+        public static void patch(ByteList src, byte[] patch, ByteList dst) {
+            ByteReader r = new ByteReader(patch);
+            if (r.readInt() == DIFF_HEADER && r.readUnsignedByte() == VERSION_4) {
+                while(true) {
+                    int cmd = r.readUnsignedByte();
+                    if (cmd == 0) {
+                        return;
+                    }
+
+                    if (cmd <= 246) {
+                        append(cmd, r, dst);
+                    } else {
+                        int len, off;
+                        switch(cmd) {
+                            case 247:
+                                append(r.readUnsignedShort(), r, dst);
+                                break;
+                            case 248:
+                                append(r.readInt(), r, dst);
+                                break;
+                            case 249:
+                                off = r.readUnsignedShort();
+                                len = r.readUnsignedByte();
+                                copy(off, len, src, dst);
+                                break;
+                            case 250:
+                                off = r.readUnsignedShort();
+                                len = r.readUnsignedShort();
+                                copy(off, len, src, dst);
+                                break;
+                            case 251:
+                                off = r.readUnsignedShort();
+                                len = r.readInt();
+                                copy(off, len, src, dst);
+                                break;
+                            case 252:
+                                off = r.readInt();
+                                len = r.readUnsignedByte();
+                                copy(off, len, src, dst);
+                                break;
+                            case 253:
+                                off = r.readInt();
+                                len = r.readUnsignedShort();
+                                copy(off, len, src, dst);
+                                break;
+                            case 254:
+                                off = r.readInt();
+                                len = r.readInt();
+                                copy(off, len, src, dst);
+                                break;
+                            case 255:
+                                long loffset = r.readLong();
+                                if(loffset >= Integer.MAX_VALUE)
+                                    throw new ArrayIndexOutOfBoundsException("Long param 0xFF is not supported");
+                                off = (int) loffset;
+                                len = r.readInt();
+                                copy(off, len, src, dst);
+                                break;
+                            default:
+                                throw new IllegalStateException("command " + cmd);
+                        }
+                    }
+                }
+            } else {
+                throw new IllegalStateException("magic string not found, aborting!");
+            }
+        }
+
+        private static void copy(int off, int len, ByteList src, ByteList dst) {
+            dst.ensureCapacity(dst.pos() + len);
+            System.arraycopy(src.list, off, dst.list, dst.pos(), len);
+        }
+
+        private static void append(int len, ByteReader src, ByteList dst) {
+            dst.ensureCapacity(dst.pos() + len);
+            System.arraycopy(src.getBytes().list, src.index, dst.list, dst.pos(), len);
+            src.index += len;
+        }
+    }
 
     private Map<String, List<Patch>> clientPatches, serverPatches;
 
     public int clientSuccessCount, serverSuccessCount, errorCount;
 
     public ByteList patchClient(@Nonnull String name, @Nonnull ByteList basicClass) {
-        ByteList patch = patch(name, basicClass, clientPatches, clientPatcher);
+        ByteList patch = patch(name, basicClass, clientPatches);
         if(patch != null)
             clientSuccessCount++;
         return patch;
     }
 
     public ByteList patchServer(@Nonnull String name, @Nonnull ByteList basicClass) {
-        ByteList patch = patch(name, basicClass, serverPatches, serverPatcher);
+        ByteList patch = patch(name, basicClass, serverPatches);
         if(patch != null)
             serverSuccessCount++;
         return patch;
     }
 
-    public ByteList patch(@Nonnull String name, @Nonnull ByteList input, Map<String, List<Patch>> patchMap, GDiffPatcher patcher) {
+    public ByteList patch(@Nonnull String name, @Nonnull ByteList input, Map<String, List<Patch>> patchMap) {
         if (patchMap == null)
             return null;
 
@@ -125,9 +201,9 @@ public final class Patcher {
             }
             try {
                 ByteList out = new ByteList(input.pos());
-                patcher.patch(new ByteBufferSeekableSource(input.toByteBuffer()), new ByteArrayInputStream(patch.patch), out.asOutputStream());
-                input = out;
-            } catch (IOException e) {
+                GDP.patch(input, patch.patch, out);
+                return out;
+            } catch (Throwable e) {
                 CmdUtil.error(name + "打补丁失败", e);
             }
         }

@@ -60,7 +60,7 @@ public class JarReaderStream extends JarOutputStream {
     }
 
     @Override
-    public synchronized void write(byte[] bytes, int i, int i1) {
+    public void write(byte[] bytes, int i, int i1) {
         byteCache.addAll(bytes, i, i1);
     }
 

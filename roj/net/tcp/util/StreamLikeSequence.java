@@ -102,7 +102,7 @@ public class StreamLikeSequence implements CharSequence {
                         start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);
                     }
 
-                    LockSupport.parkNanos(1);
+                    LockSupport.parkNanos(10);
                 } else {
                     if(read == -1) {
                         bufOff = -1;

@@ -199,4 +199,8 @@ public final class UIUtil {
         Rectangle bounds = frame.getBounds();
         frame.setBounds((dim.width - bounds.width) / 2, (dim.height - bounds.height) / 2, bounds.width, bounds.height);
     }
+
+    public static char[] readPassword() {
+        return System.console().readPassword("");
+    }
 }

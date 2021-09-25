@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,54 +23,63 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.tcp.ssl;
+package roj.opengl;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
+import org.lwjgl.LWJGLException;
+import org.lwjgl.opengl.Display;
+import org.lwjgl.opengl.GL11;
+import roj.opengl.altas.TextureAtlas;
+import roj.opengl.render.SkyRenderer;
+import roj.opengl.util.Util;
+
+import java.io.IOException;
+
+import static org.lwjgl.opengl.GL11.GL_BLEND;
+import static org.lwjgl.opengl.GL11.glDisable;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2021/2/6 22:11
+ * @since 2021/9/19 13:50
  */
-public class ServerSslConf implements SslConfig {
-    private final String keyStore;
-    private final char[] password;
-
-    public ServerSslConf(String keyStore, char[] password) {
-        this.keyStore = keyStore;
-        this.password = password;
-    }
-
-    @Override
-    public boolean isServerSide() {
-        return true;
-    }
-
-    @Override
-    public boolean isNeedClientAuth() {
-        return false;
-    }
-
-    @Override
-    public InputStream getPkPath() {
-        try {
-            return new FileInputStream(keyStore);
-        } catch (FileNotFoundException e) {
-            return null;
+public class Test extends Game {
+    public static void main(String[] args) throws LWJGLException, IOException {
+        Game game = new Test();
+        game.create();
+        while (!Display.isCloseRequested()) {
+            game.mainLoop();
         }
     }
 
-    @Override
-    public InputStream getCaPath() {
-        return getPkPath();
+    protected void init() {
+        TextureAtlas atlas = new TextureAtlas();
+        Util.sharedVertexBuilder = vertexBuilder;
     }
 
     @Override
-    public char[] getPasswd() {
-        return password;
+    public void processInput() {
+
+        super.processInput();
+    }
+
+    @Override
+    protected void renderSky() {
+        GL11.glCullFace(GL11.GL_BACK);
+        SkyRenderer.renderStar();
+        GL11.glCullFace(GL11.GL_FRONT);
+    }
+
+    @Override
+    protected void render3D() {
+        glDisable(GL_BLEND);
+        glDisable(GL11.GL_CULL_FACE);
+
+        Util.drawXYZ(33);
+
+        // stub code
+
+        GL11.glEnable(GL11.GL_CULL_FACE);
     }
 }

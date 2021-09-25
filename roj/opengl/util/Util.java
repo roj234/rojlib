@@ -49,7 +49,7 @@ public class Util {
         GL11.glColor4f(red, green, blue, 1);
     }
 
-    public static void setColor(int color, float alpha) {
+    public static void color(int color, float alpha) {
         float red = (color >> 16 & 0xFF) / 255F;
         float green = (color >> 8 & 0xFF) / 255F;
         float blue = (color & 0xFF) / 255F;
@@ -59,7 +59,8 @@ public class Util {
     /**
      * 圆柱
      */
-    public static void drawCylinder(VertexBuilder bb, float cx, float cy, float cz, float r, float height) {
+    public static void drawCylinder(float cx, float cy, float cz, float r, float height) {
+        VertexBuilder bb = sharedVertexBuilder;
         float x, z;
         float x2, z2;
 
@@ -82,7 +83,8 @@ public class Util {
         }
     }
 
-    public static void drawCircleZ(VertexBuilder bb, double cx, double cy, double cz, double r) {
+    public static void drawCircleZ(double cx, double cy, double cz, double r) {
+        VertexBuilder bb = sharedVertexBuilder;
         double angle = 0;
         double delta = Math.PI / 24.0;
 
@@ -98,7 +100,8 @@ public class Util {
     }
 
     static final VertexFormat POS2 = VertexFormat.builder().pos(VertexFormat.FLOAT, 2).build();
-    public static void drawCircle(VertexBuilder bb, double cx, double cy, double r) {
+    public static void drawCircle(double cx, double cy, double r) {
+        VertexBuilder bb = sharedVertexBuilder;
         double angle = 0;
         double delta = Math.PI / 24.0;
 
@@ -115,18 +118,19 @@ public class Util {
         VboUtil.drawVertexes(GL11.GL_TRIANGLE_FAN, bb);
     }
 
-    public static void drawXYZ(VertexBuilder bb, int length) {
+    public static void drawXYZ(int length) {
         GL11.glLineWidth(2);
+        VertexBuilder bb = sharedVertexBuilder;
         // Axis
         bb.begin(VertexFormats.POSITION_COLOR);
         // X
         bb.pos(.5f, .5f, .5f).color(255, 0, 0, 255).endVertex();
-        bb.pos(9999, .5f, .5f).color(255, 0, 0, 255).endVertex();
+        bb.pos(length, .5f, .5f).color(255, 0, 0, 255).endVertex();
         // Y
         bb.pos(.5f, .5f, .5f).color(0, 255, 0, 255).endVertex();
-        bb.pos(.5f, 9999, .5f).color(0, 255, 0, 255).endVertex();
+        bb.pos(.5f, length, .5f).color(0, 255, 0, 255).endVertex();
         // Z
-        bb.pos(.5f, .5f, 9999).color(0, 0, 255, 255).endVertex();
+        bb.pos(.5f, .5f, length).color(0, 0, 255, 255).endVertex();
         bb.pos(.5f, .5f, .5f).color(0, 0, 255, 255).endVertex();
         bb.end();
         VboUtil.drawVertexes(GL11.GL_LINES, bb);

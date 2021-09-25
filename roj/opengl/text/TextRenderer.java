@@ -121,7 +121,7 @@ public class TextRenderer {
         lastTexture = -1;
         lineHeight = font.preRender(text, 0, text.length());
         int color = 0xFFFFFF;
-        Util.setColor(color, alpha);
+        Util.color(color, alpha);
 
         int flag = 0, lastFlag = 0;
         float lastX = 0;
@@ -193,7 +193,7 @@ public class TextRenderer {
                         }
 
                         vb.begin(VertexFormats.POSITION_TEX);
-                        Util.setColor(color = tColor, alpha);
+                        Util.color(color = tColor, alpha);
                     }
                     ++i;
                     continue;

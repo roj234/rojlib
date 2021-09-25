@@ -23,9 +23,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.tcp.ssl;
+package roj.net.ssl;
 
 import javax.net.ssl.SSLEngine;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
 
 /**
  * No description provided
@@ -35,6 +39,8 @@ import javax.net.ssl.SSLEngine;
  * @since  2021/2/5 0:33
  */
 public abstract class EngineAllocator {
+    static EngineAllocator defaultClient;
+
     protected final SslConfig config;
 
     public EngineAllocator(SslConfig config) {
@@ -46,6 +52,32 @@ public abstract class EngineAllocator {
         sslEngine.setEnabledProtocols(sslEngine.getSupportedProtocols());
         // false为单向认证，true为双向认证
         sslEngine.setNeedClientAuth(cfg.isNeedClientAuth());
+    }
+
+    public static EngineAllocator getClientDefault() throws IOException, GeneralSecurityException {
+        if(defaultClient != null)
+            return defaultClient;
+        return defaultClient = SslEngineFactory.getSslFactory(new SslConfig() {
+            @Override
+            public boolean isServerSide() {
+                return false;
+            }
+
+            @Override
+            public InputStream getPkPath() {
+                return null;
+            }
+
+            @Override
+            public InputStream getCaPath() {
+                return new ByteArrayInputStream(new byte[0]);
+            }
+
+            @Override
+            public char[] getPasswd() {
+                return null;
+            }
+        });
     }
 
     public abstract SSLEngine allocate();

@@ -27,7 +27,9 @@ package roj.net.cross;
 
 import roj.collect.MyHashSet;
 import roj.io.NonblockingUtil;
-import roj.net.tcp.client.HttpClient;
+import roj.net.ssl.EngineAllocator;
+import roj.net.ssl.SslConfig;
+import roj.net.ssl.SslEngineFactory;
 import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.SecureSocket;
 import roj.net.tcp.util.WrappedSocket;
@@ -38,10 +40,12 @@ import roj.util.FastLocalThread;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
@@ -56,6 +60,36 @@ import static roj.net.cross.Util.*;
  * @since 2021/8/18 0:09
  */
 public class AEClient implements Runnable, Closeable {
+    static EngineAllocator AE_SSL;
+
+    static {
+        try {
+            AE_SSL = SslEngineFactory.getSslFactory(new SslConfig() {
+                @Override
+                public boolean isServerSide() {
+                    return false;
+                }
+
+                @Override
+                public InputStream getPkPath() {
+                    return null;
+                }
+
+                @Override
+                public InputStream getCaPath() {
+                    return AEClient.class.getResourceAsStream("/META-INF/client.ks");
+                }
+
+                @Override
+                public char[] getPasswd() {
+                    return "123456".toCharArray();
+                }
+            });
+        } catch (IOException | GeneralSecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
     boolean ssl;
     String id, token;
 
@@ -179,7 +213,7 @@ public class AEClient implements Runnable, Closeable {
                 syncPrint("无法连接至服务器");
                 return;
             }
-            WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), HttpClient.CLIENT_ALLOCATOR, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
+            WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), AE_SSL, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
             try {
                 int read = 0;
                 conn:
