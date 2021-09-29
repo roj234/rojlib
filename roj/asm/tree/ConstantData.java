@@ -38,7 +38,6 @@ import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.PrimitiveIterator;
 
@@ -291,7 +290,7 @@ public class ConstantData implements IClass {
         for (int i = 0; i < list.size(); i++) {
             list.set(i, ((CstClass)list.get(i)).getValue().getString());
         }
-        return Helpers.cast(Collections.unmodifiableList(list));
+        return Helpers.cast(list);
     }
 
     @Override

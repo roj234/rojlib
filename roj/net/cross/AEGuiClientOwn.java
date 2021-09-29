@@ -117,7 +117,6 @@ public class AEGuiClientOwn extends JFrame {
 
             Thread clientRunner = clientThread = new FastLocalThread(client);
             clientRunner.setName("Client Owner Thread");
-            clientRunner.setDaemon(true);
             clientRunner.start();
         } else {
             Util.out = System.out;

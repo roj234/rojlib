@@ -786,7 +786,7 @@ public abstract class MathUtils {
      */
     public static <T> void dikaerProduct(List<T[]> values, Consumer<List<T>> consumer) {
         SimpleList<T> cache = new SimpleList<>(values.size());
-        cache._int_setSize(values.size());
+        cache.i_setSize(values.size());
         dikaerProduct(values, 0, consumer, cache);
     }
 

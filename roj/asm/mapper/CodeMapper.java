@@ -30,8 +30,7 @@ import roj.asm.cst.*;
 import roj.asm.mapper.struct.AttrCode_Simple;
 import roj.asm.mapper.struct.AttrLVT_Simple.SimpleVar;
 import roj.asm.mapper.util.Context;
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.simple.FieldSimple;
@@ -61,9 +60,8 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public final class CodeMapper extends Mapping {
-    public static final boolean
-            DEBUG = Boolean.parseBoolean(System.getProperty("roj.codeMapper.debug", "false")),
-            REPLACE_DESC = Boolean.parseBoolean(System.getProperty("roj.codeMapper.replaceDesc", "false"));
+    // 没有BUG了，有的话也是ASM的问题
+    public static final boolean DEBUG = false, REPLACE_DESC = false;
 
     public static final IBitSet HUMAN_READABLE_TOKENS = LongBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
 
@@ -71,7 +69,7 @@ public final class CodeMapper extends Mapping {
     private byte paramNameType;
 
     public boolean rewrite;
-    public IBitSet validVarChars = HUMAN_READABLE_TOKENS;
+    private IBitSet validVarChars = HUMAN_READABLE_TOKENS;
 
     private final UnaryOperator<String> NAME_REMAPPER = (old) -> {
         String now = Util.mapOwner(classMap, old, false);
@@ -94,9 +92,13 @@ public final class CodeMapper extends Mapping {
 
     public final CodeMapper read(Mapping mapping) {
         this.classMap = mapping.getClassMap();
-        this.fieldMap = (MyHashMap<FlDesc, String>) mapping.getFieldMap();
-        this.methodMap = (MyHashMap<MtDesc, String>) mapping.getMethodMap();
+        this.fieldMap = (MyHashMap<Desc, String>) mapping.getFieldMap();
+        this.methodMap = (MyHashMap<Desc, String>) mapping.getMethodMap();
         return this;
+    }
+
+    public void setValidVarChars(IBitSet valid) {
+        this.validVarChars = valid == null ? HUMAN_READABLE_TOKENS : valid;
     }
 
     public final void remap(boolean singleThread, Collection<Context> arr) {
@@ -220,7 +222,7 @@ public final class CodeMapper extends Mapping {
         }
     }
 
-    final void mapSignature(ConstantPool pool, AttributeList list) {
+    private void mapSignature(ConstantPool pool, AttributeList list) {
         Attribute a = (Attribute) list.getByName("Signature");
         if(a == null) {
             return;
@@ -242,7 +244,7 @@ public final class CodeMapper extends Mapping {
         }
     }
 
-    final void mapClassAndSuper(ConstantData data) {
+    private void mapClassAndSuper(ConstantData data) {
         String name = Util.mapOwner(classMap, data.name, false);
         if(name != null)
             data.nameCst.setValue(data.writer.getUtf(name));
@@ -260,12 +262,12 @@ public final class CodeMapper extends Mapping {
         }
     }
 
-    final void mapParam(Context ctx, ConstantData data) {
+    private void mapParam(Context ctx, ConstantData data) {
         String oldCls, newCls;
         int i;
 
         List<?> methods1 = data.methods;
-        MtDesc md = Util.shareMD();
+        Desc md = Util.shareMD();
         md.owner = data.name;
         int max = 0;
         for (i = 0; i < methods1.size(); i++) {
@@ -306,12 +308,17 @@ public final class CodeMapper extends Mapping {
                 mapSignature(data.cp, method.attributes);
                 max = Math.max(transform_LVT_LVTT_ST(data, method), max);
             } else {
-                throw new IllegalArgumentException("toByteArray (rewrite) is needed");
+                // need test
+                ctx.compress();
+                data = ctx.getData();
+                methods1 = data.methods;
+                i = 0;
+                System.err.println("ValidateSelf() test");
             }
         }
 
-        FlDesc fd = Util.shareFD();
-        fd.owner = data.name;
+        md.owner = data.name;
+        md.param = "";
         List<FieldSimple> fields = data.fields;
         for (i = 0; i < fields.size(); i++) {
             FieldSimple field = fields.get(i);
@@ -319,9 +326,9 @@ public final class CodeMapper extends Mapping {
             /**
              * Field Name
              */
-            fd.name = field.name.getString();
+            md.name = field.name.getString();
 
-            String newName = fieldMap.get(fd);
+            String newName = fieldMap.get(md);
             if(newName != null) {
                 if (DEBUG) {
                     System.out.println("[" + data.name + "]F-NAME: " + field.name + ' ' + newName);
@@ -335,7 +342,7 @@ public final class CodeMapper extends Mapping {
             oldCls = field.type.getString();
             newCls = Util.transformFieldType(classMap, oldCls);
 
-            if(!oldCls.equals(newCls)) {
+            if(newCls != null) {
                 if(REPLACE_DESC)
                     field.type.setString(newCls);
                 else
@@ -359,7 +366,7 @@ public final class CodeMapper extends Mapping {
             oldCls = field.desc().getType().getString();
             newCls = Util.transformFieldType(classMap, oldCls);
 
-            if(!oldCls.equals(newCls)) {
+            if(newCls != null) {
                 if(REPLACE_DESC)
                     field.desc().getType().setString(newCls);
                 else
@@ -425,7 +432,7 @@ public final class CodeMapper extends Mapping {
             data.cp.reload(data.writer);
     }
 
-    final int transform_LVT_LVTT_ST(ConstantData data, MethodSimple method) {
+    private int transform_LVT_LVTT_ST(ConstantData data, MethodSimple method) {
         int max = 0;
         AttrUnknown au = (AttrUnknown) method.attributes.getByName("Code");
         if(au != null) {
@@ -485,7 +492,7 @@ public final class CodeMapper extends Mapping {
     }
 
     @SuppressWarnings("unchecked")
-    final String mapEntryName(ConstantData data, String methodDesc, SimpleVar entry, int i) {
+    private String mapEntryName(ConstantData data, String methodDesc, SimpleVar entry, int i) {
         String name = entry.name.getString();
 
         switch (paramNameType) {
@@ -521,7 +528,7 @@ public final class CodeMapper extends Mapping {
     /**
      * By name
      */
-    public void setParamRemapping(Map<String, String> paramMap) {
+    public final void setParamRemapping(Map<String, String> paramMap) {
         this.paramNameMap = paramMap;
         this.paramNameType = (byte) (paramMap == null ? 0 : 1);
     }
@@ -529,7 +536,7 @@ public final class CodeMapper extends Mapping {
     /**
      * By index
      */
-    public void setParamRemappingV1(Map<String, Map<String, List<String>>> paramMap) {
+    public final void setParamRemappingV1(Map<String, Map<String, List<String>>> paramMap) {
         this.paramNameMap = paramMap;
         this.paramNameType = (byte) (paramMap == null ? 0 : 2);
     }
@@ -537,7 +544,7 @@ public final class CodeMapper extends Mapping {
     /**
      * By slot
      */
-    public void setParamRemappingV2(Map<String, Map<String, List<String>>> paramMap) {
+    public final void setParamRemappingV2(Map<String, Map<String, List<String>>> paramMap) {
         this.paramNameMap = paramMap;
         this.paramNameType = (byte) (paramMap == null ? 0 : 3);
     }

@@ -33,10 +33,10 @@ package roj.util;
  * @since 2021/9/13 12:48
  */
 public class FastThreadLocal<T> {
-    static int registrations;
+    private static int registrations;
     private static final ThreadLocal<Object[]> slowGetter = new ThreadLocal<>();
 
-    private final int seqNum;
+    public final int seqNum;
 
     public FastThreadLocal() {
         synchronized (FastThreadLocal.class) {
@@ -50,66 +50,42 @@ public class FastThreadLocal<T> {
 
     @SuppressWarnings("unchecked")
     public T get() {
-        Thread t = Thread.currentThread();
-        if(t instanceof FastLocalThread) {
-            FastLocalThread t1 = (FastLocalThread) t;
-            Object[] data = t1.localDataArray;
-            if(data.length > seqNum) {
-                if(data[seqNum] == null)
-                    data[seqNum] = initialValue();
-                return (T) data[seqNum];
-            } else {
-                Object[] oldArray = data;
-                data = new Object[registrations];
-                if(oldArray.length > 0) {
-                    System.arraycopy(oldArray, 0, data, 0, oldArray.length);
-                }
-                t1.localDataArray = data;
-                return (T) (data[seqNum] = initialValue());
-            }
-        }
-
-        Object[] x = slowGetter.get();
-        if(x == null || x.length < seqNum) {
-            Object[] oldArray = x;
-            x = new Object[registrations];
-            if(oldArray != null) {
-                System.arraycopy(oldArray, 0, x, 0, oldArray.length);
-            }
-            slowGetter.set(x);
-        }
+        Object[] x = getDataHolder();
         if(x[seqNum] == null)
             x[seqNum] = initialValue();
         return (T) x[seqNum];
     }
 
     public void set(T v) {
+        getDataHolder()[seqNum] = v;
+    }
+
+    public Object[] getDataHolder() {
         Thread t = Thread.currentThread();
         if(t instanceof FastLocalThread) {
             FastLocalThread t1 = (FastLocalThread) t;
             Object[] data = t1.localDataArray;
-            if(data.length < seqNum) {
+            if(data.length <= seqNum) {
                 Object[] oldArray = data;
-                data = new Object[registrations];
+                data = new Object[seqNum + 1];
                 if(oldArray.length > 0) {
                     System.arraycopy(oldArray, 0, data, 0, oldArray.length);
                 }
                 t1.localDataArray = data;
             }
-            data[seqNum] = v;
-            return;
+            return data;
         }
 
         Object[] x = slowGetter.get();
-        if(x == null || x.length < seqNum) {
+        if(x == null || x.length <= seqNum) {
             Object[] oldArray = x;
-            x = new Object[registrations];
+            x = new Object[seqNum + 1];
             if(oldArray != null) {
                 System.arraycopy(oldArray, 0, x, 0, oldArray.length);
             }
             slowGetter.set(x);
-            x[seqNum] = v;
         }
+        return x;
     }
 
     @Deprecated

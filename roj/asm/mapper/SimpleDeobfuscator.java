@@ -1,7 +1,7 @@
 package roj.asm.mapper;
 
 import roj.asm.mapper.util.Context;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTreeSet;
@@ -20,7 +20,7 @@ import java.util.zip.ZipOutputStream;
  * @author Roj233
  * @since 2021/8/9 23:01
  */
-public final class SimpleDeobfuscator extends Deobfuscator {
+public final class SimpleDeobfuscator extends Obfuscator {
     public static void main(String[] args) throws Exception {
         if(args.length < 2) {
             System.out.println("Roj234's Class Deobfuscator 0.1\n" +
@@ -105,6 +105,7 @@ public final class SimpleDeobfuscator extends Deobfuscator {
     public int clazz, method, field;
 
     public SimpleDeobfuscator() {
+        m1.checkFieldType = true;
         reFlags = 1;
     }
 
@@ -132,7 +133,7 @@ public final class SimpleDeobfuscator extends Deobfuscator {
     }
 
     @Override
-    public String obfMethodName(MtDesc desc) {
+    public String obfMethodName(Desc desc) {
         if(method == -1)
             return null;
 
@@ -144,7 +145,7 @@ public final class SimpleDeobfuscator extends Deobfuscator {
     }
 
     @Override
-    public String obfFieldName(MtDesc desc) {
+    public String obfFieldName(Desc desc) {
         if(field == -1)
             return null;
 

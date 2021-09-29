@@ -87,4 +87,14 @@ public class StringPool {
     public int size() {
         return ordered.size();
     }
+
+    public int add(String string) {
+        int id = list.getByValue(string);
+        if (id == -1) {
+            list.putByValue(id = list.size(), string);
+            ordered.add(string);
+            return id;
+        }
+        return -1;
+    }
 }

@@ -1,4 +1,4 @@
-package roj.asm.mapper.obf;
+package roj.asm.mapper.obf.policy;
 
 import roj.io.IOUtil;
 import roj.text.SimpleLineReader;

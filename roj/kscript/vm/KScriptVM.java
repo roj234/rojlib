@@ -147,7 +147,7 @@ public final class KScriptVM {
         }
         ls.ensureCapacity(argc);
         if(!spread)
-            ls._int_setSize(argc);
+            ls.i_setSize(argc);
         return ls;
     }
 
@@ -174,7 +174,7 @@ public final class KScriptVM {
         SimpleList<KType> argv = (SimpleList<KType>) vm_argList.argv;
         vm_argList.reset(node, frame, argv);
         argv.ensureCapacity(argc);
-        argv._int_setSize(argc);
+        argv.i_setSize(argc);
         return argv;
     }
 

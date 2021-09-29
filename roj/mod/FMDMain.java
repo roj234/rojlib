@@ -29,6 +29,7 @@ import roj.asm.Parser;
 import roj.asm.annotation.AnnotationProcessor;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
+import roj.asm.mapper.ConstMapper.State;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.ResWriter;
@@ -342,7 +343,7 @@ public final class FMDMain {
             parallel.pushTask(task);
 
             rev.remap(DEBUG, list);
-            rev.addPermanently(rev.snapshot(state));
+            rev.getExtendedSuperList().add(rev.snapshot(state));
 
             if (!isForgeMap) {
                 new CodeMapper(rev).remap(DEBUG, list);
@@ -958,15 +959,16 @@ public final class FMDMain {
                 System.out.println("资源处理完成 " + (System.currentTimeMillis() - time));
 
             List<Project> ad = project.getAllDependencies();
+            List<State> extendedSuperList = mapperFwd.getExtendedSuperList();
+            extendedSuperList.clear();
             for (int i = 0; i < ad.size(); i++) {
-                mapperFwd.addPermanently(ad.get(i).state);
+                extendedSuperList.add(ad.get(i).state);
             }
 
             if(canIncrementWrite) {
                 mapperFwd.state(project.state);
                 mapperFwd.remapIncrement(list);
-                mapperFwd.restoreLibSupers();
-                project.state = mapperFwd.snapshot();
+                project.state = mapperFwd.snapshot(project.state);
 
                 if(!isForgeMap) {
                     new CodeMapper(mapperFwd).remap(DEBUG, list);
@@ -1036,7 +1038,6 @@ public final class FMDMain {
                 parallel.pushTask(rw);
 
                 mapperFwd.remap(DEBUG, list);
-                mapperFwd.restoreLibSupers();
                 project.state = mapperFwd.snapshot(project.state);
 
                 if(!isForgeMap) {
@@ -1096,7 +1097,7 @@ public final class FMDMain {
         CharList sb = libClasses;
         if(sb == null)
             libClasses = sb = new CharList();
-        else if(ConstMapper.libHash(fs) == lastLibHash)
+        else if(Util.libHash(fs) == lastLibHash)
             return sb;
         sb.clear();
 
@@ -1119,7 +1120,7 @@ public final class FMDMain {
 
             sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
         }
-        lastLibHash = ConstMapper.libHash(fs);
+        lastLibHash = Util.libHash(fs);
         sb.setIndex(sb.length() - 1);
         return sb;
     }

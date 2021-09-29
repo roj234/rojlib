@@ -26,19 +26,18 @@
 package roj.mod;
 
 import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.asm.type.ParamHelper;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTree;
 import roj.collect.TrieTreeSet;
 import roj.ui.UIUtil;
+import roj.util.Helpers;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.*;
 import java.awt.event.*;
 import java.util.List;
 import java.util.*;
@@ -133,12 +132,11 @@ public class ReflectTool extends JFrame {
 
     static final Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
-    static final TrieTree<String> simple2full = new TrieTree<>();
-    static final TrieTreeSet fullClass = new TrieTreeSet();
-    static final Map<String, ArrayList<MtDesc>> methodIndex = new MyHashMap<>();
-    static final Map<String, ArrayList<FlDesc>> fieldIndex = new MyHashMap<>();
-    static Map<MtDesc, String> methodMap;
-    static Map<FlDesc, String> fieldMap;
+    static final TrieTree<String>             simple2full = new TrieTree<>();
+    static final TrieTreeSet                  fullClass   = new TrieTreeSet();
+    static final Map<String, ArrayList<Desc>> methodIndex = new MyHashMap<>(),
+            fieldIndex                                    = new MyHashMap<>();
+    static Map<Desc, String> methodMap, fieldMap;
 
     public static void start(boolean exit) {
         new ReflectTool(exit, null);
@@ -159,21 +157,20 @@ public class ReflectTool extends JFrame {
                 }
             }
 
-            for (Map.Entry<MtDesc, String> entry : methodMap.entrySet()) {
-                methodIndex.computeIfAbsent(entry.getKey().owner, (s) -> new ArrayList<>()).add(entry.getKey());
+            for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+                methodIndex.computeIfAbsent(entry.getKey().owner, Helpers.cast(Helpers.fnArrayList())).add(entry.getKey());
             }
-            final Comparator<MtDesc> comparator = (o1, o2) -> o1.name.compareToIgnoreCase(o2.name);
-            for(ArrayList<MtDesc> list : methodIndex.values()) {
+            final Comparator<Desc> comparator = (o1, o2) -> o1.name.compareToIgnoreCase(o2.name);
+            for(ArrayList<Desc> list : methodIndex.values()) {
                 list.sort(comparator);
                 list.trimToSize();
             }
 
-            for (Map.Entry<FlDesc, String> entry : fieldMap.entrySet()) {
-                fieldIndex.computeIfAbsent(entry.getKey().owner, (s) -> new ArrayList<>()).add(entry.getKey());
+            for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
+                fieldIndex.computeIfAbsent(entry.getKey().owner, Helpers.cast(Helpers.fnArrayList())).add(entry.getKey());
             }
-            final Comparator<FlDesc> comparator1 = (o1, o2) -> o1.name.compareToIgnoreCase(o2.name);
-            for(ArrayList<FlDesc> list : fieldIndex.values()) {
-                list.sort(comparator1);
+            for(ArrayList<Desc> list : fieldIndex.values()) {
+                list.sort(comparator);
                 list.trimToSize();
             }
         }
@@ -337,7 +334,7 @@ public class ReflectTool extends JFrame {
 
             if(methodIndex.get(className) != null) {
                 int y = 25;
-                for(MtDesc descriptor : methodIndex.get(className)) {
+                for(Desc descriptor : methodIndex.get(className)) {
                     try {
                         List<roj.asm.type.Type> params = ParamHelper.parseMethod(descriptor.param);
                         if(search == null || descriptor.name.toLowerCase().contains(search)) {
@@ -364,7 +361,7 @@ public class ReflectTool extends JFrame {
 
             if(fieldIndex.get(className) != null) {
                 int y = 25;
-                for (FlDesc descriptor : fieldIndex.get(className)) {
+                for (Desc descriptor : fieldIndex.get(className)) {
                     if(search == null || descriptor.name.toLowerCase().contains(search)) {
                         JLabel label1 = new JLabel(descriptor.name);
                         label1.addMouseListener(new LabelClick(false, label1, descriptor));
@@ -391,10 +388,10 @@ public class ReflectTool extends JFrame {
         private static class LabelClick implements MouseListener {
             final boolean md;
             final JLabel label;
-            final Object descriptor;
+            final Desc   descriptor;
             String originalLabel;
 
-            public LabelClick(boolean md, JLabel label1, Object descriptor) {
+            public LabelClick(boolean md, JLabel label1, Desc descriptor) {
                 this.md = md;
                 this.label = label1;
                 this.descriptor = descriptor;

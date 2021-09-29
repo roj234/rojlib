@@ -37,6 +37,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.PrimitiveIterator;
 
 /**
@@ -255,15 +256,7 @@ public class JPinyin {
 
             char vowelChar = vowel.charAt(TextUtil.getNumber(s.charAt(s.length() - 1)) - 1);
 
-            StringBuilder sb = new StringBuilder(s.length()).append(s, 0, i).append(vowelChar).append(s, i + 1, s.length() - 1);
-
-            for (int j = 0, l = sb.length(); j < l; j++) {
-                if (sb.charAt(j) == 'v') {
-                    sb.setCharAt(j, 'ü');
-                }
-            }
-
-            return sb.toString();
+            return new CharList(s.length()).append(s, 0, i).append(vowelChar).append(s, i + 1, s.length() - 1).replace('v', 'ü').toString();
         } else {
             // only replace v with ü (umlat) character
             return s.replace('v', 'ü');
@@ -286,66 +279,70 @@ public class JPinyin {
         return sb;
     }
 
-    protected void operate(String s, StringBuilder sb, int type) {
-        final int length = s.length();
+    protected final void operate(String src, StringBuilder dst, int type) {
+        final int length = src.length();
         int i = 0;
 
         while (i < length) {
-            char c1 = s.charAt(i++);
-            if (!Character.isHighSurrogate(c1) || i >= length) {
-                accept(s, sb, c1, i, type);
+            char c1 = src.charAt(i);
+            if (!Character.isHighSurrogate(c1)) {
+                i = accept(src, dst, c1, i, type);
             } else {
-                char c2 = s.charAt(i);
+                char c2 = src.charAt(i + 1);
                 if (Character.isLowSurrogate(c2)) {
-                    i++;
-                    accept(s, sb, Character.toCodePoint(c1, c2), i, type);
+                    i = accept(src, dst, Character.toCodePoint(c1, c2), ++i, type);
                 } else {
-                    accept(s, sb, c1, i, type);
+                    i = accept(src, dst, c1, i, type);
                 }
             }
         }
     }
 
-    protected void accept(String s, StringBuilder sb, int codePoint, int offset, int cat) {
+    protected final int accept(String src, StringBuilder dst, int cp, int off, int cat) {
+        Map.Entry<Integer, String> specification;
         switch (cat & 7) {
             case 0: { // simplified to pinyin
 
-                String yin = this.wordYin.get(s, offset, s.length());
-                if (yin != null) {
-                    sb.append(yin);
+                specification = this.wordYin.longestMatches(src, off, src.length());
+                if (specification != null) {
+                    dst.append(specification.getValue());
+                    return off + specification.getKey();
                 } else {
                     if ((cat & 8) != 0) {
-                        String v = charYin.get(codePoint);
+                        String v = charYin.get(cp);
                         if (v != null)
-                            sb.append(v);
+                            dst.append(v);
                         else if ((cat & 16) != 0) {
-                            sb.appendCodePoint(codePoint);
+                            dst.appendCodePoint(cp);
                         }
                     } else {
-                        sb.append(charYin.getOrDefault(codePoint, "[?]"));
+                        dst.append(charYin.getOrDefault(cp, "[?]"));
                     }
                 }
             }
             break;
             case 1: { // simplified to traditional
-                String tra = this.wordS2T.get(s, offset, s.length());
-                if (tra != null) {
-                    sb.append(tra);
+                specification = this.wordS2T.longestMatches(src, off, src.length());
+                if (specification != null) {
+                    dst.append(specification.getValue());
+                    return off + specification.getKey();
                 } else {
-                    sb.appendCodePoint(this.T2S.getByValueOrDefault(codePoint, codePoint));
+                    dst.appendCodePoint(this.T2S.getByValueOrDefault(cp, cp));
                 }
             }
             break;
             case 2: { // traditional to simplified
-                String sim = this.wordT2S.get(s, offset, s.length());
-                if (sim != null) {
-                    sb.append(sim);
+                specification = this.wordT2S.longestMatches(src, off, src.length());
+                if (specification != null) {
+                    dst.append(specification.getValue());
+                    return off + specification.getKey();
                 } else {
-                    sb.appendCodePoint(this.T2S.getOrDefault(codePoint, codePoint));
+                    dst.appendCodePoint(this.T2S.getOrDefault(cp, cp));
                 }
             }
             break;
         }
+        return off + 1;
     }
 
     public String toTraditionalChinese(String s) {

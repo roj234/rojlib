@@ -25,16 +25,24 @@
  */
 package roj.asm.mapper;
 
+import roj.asm.cst.CstClass;
 import roj.asm.mapper.util.*;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.IClass;
+import roj.asm.tree.simple.MoFNode;
+import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.concurrent.SharedThreads;
 import roj.io.ZipUtil;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
+import roj.util.FastThreadLocal;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -42,6 +50,7 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -60,33 +69,266 @@ import java.util.zip.ZipOutputStream;
  * @since  2020/8/19 21:32
  */
 public final class Util {
-    static final ThreadLocal<Object[]> ThreadBasedCache = ThreadLocal.withInitial(() -> new Object[] {
-            new FlDesc("", ""),
-            new MtDesc("", "", ""),
-            new MyHashMap<>(),
-            new FirstCollection<>(null, null),
-            new CharList(),
-            new ArrayList<>()
-    });
+    private static final FastThreadLocal<Util> ThreadBasedCache = new FastThreadLocal<Util>() {
+        @Override
+        protected Util initialValue() {
+            return new Util();
+        }
+    };
 
-    static final boolean DEBUG_SUB_CLASSES = false;
+    private Util() {}
+
+    public final Desc sharedDC = new Desc("", "", "");
+    public final FirstIterator sharedFC = new FirstIterator(null, null);
+
+    final MyHashSet<String> notFoundClasses = new MyHashSet<>();
+    final MyHashMap<String, List<Class<?>>> cachedClassRef = new MyHashMap<>();
+    final MyHashMap<String, IClass> cachedClassMof = new MyHashMap<>();
+
+    private final CharList sharedCL = new CharList();
+    private final ArrayList<?> sharedAL = new ArrayList<>();
 
     static final int CPU = Runtime.getRuntime().availableProcessors();
 
-    public static FlDesc shareFD() {
-        return (FlDesc) ThreadBasedCache.get()[0];
+    public static Desc shareMD() {
+        return ThreadBasedCache.get().sharedDC;
     }
 
-    public static MtDesc shareMD() {
-        return (MtDesc) ThreadBasedCache.get()[1];
+    public static FirstIterator shareFC(String first, List<String> collection) {
+        return ((FirstIterator) Helpers.cast(ThreadBasedCache.get().sharedFC)).reset(first, collection);
     }
 
-    public static <T> FirstCollection<T> shareFC(T first, List<T> collection) {
-        FirstCollection<T> fc = Helpers.cast(ThreadBasedCache.get()[3]);
-        fc.first = first;
-        fc.target = collection;
-        return fc;
+    public static Util getInstance() {
+        return ThreadBasedCache.get();
     }
+
+    // region 各种可继承性的判断
+
+    public static boolean arePackagesSame(String packageA, String packageB) {
+        int ia = packageA.lastIndexOf('/');
+
+        if(packageB.lastIndexOf('/') != ia)
+            return false;
+        if(ia == -1)
+            return true;
+
+        return packageA.regionMatches(0, packageB, 0, ia);
+    }
+
+    public List<String> superClasses(String name, Map<String, List<String>> selfSupers) {
+        List<String> superItf = selfSupers.get(name);
+        if(superItf == null) {
+            ReflectClass rc = (ReflectClass) reflectClassInfo(name);
+            if(rc == null) return null;
+            superItf = rc.i_superClassAll();
+        }
+        return superItf;
+    }
+
+    /**
+     *   父类的方法被子类实现的接口使用
+     */
+    public MyHashSet<SubImpl> gatherSubImplements(List<Context> ctx, Map<String, List<String>> selfSupers) {
+        MyHashMap<String, IClass> methods = new MyHashMap<>();
+        for (int i = 0; i < ctx.size(); i++) {
+            ConstantData data = ctx.get(i).getData();
+            methods.put(data.name, data);
+        }
+
+        MyHashSet<SubImpl> dest = new MyHashSet<>();
+        SubImpl s_test = new SubImpl();
+
+        MyHashSet<NameAndType> duplicate = new MyHashSet<>();
+        NameAndType natCheck = new NameAndType();
+
+        for (int k = 0; k < ctx.size(); k++) {
+            ConstantData data = ctx.get(k).getData();
+            if("java/lang/Object".equals(data.parent)) continue;
+
+            List<String> superClasses = superClasses(data.parent, selfSupers);
+            if (superClasses == null) continue;
+
+            boolean one = false;
+            List<CstClass> itfs = data.interfaces;
+            for (int i = 0; i < itfs.size(); i++) {
+                CstClass itf = itfs.get(i);
+                String name = itf.getValue().getString();
+                if(!superClasses.contains(name)) {
+                    one = true;
+                    break;
+                }
+            }
+
+            if(!one) continue;
+
+            superClasses = superClasses(data.name, selfSupers);
+            for (int i = 0; i < superClasses.size(); i++) {
+                String parent = superClasses.get(i);
+                // 获取所有的方法
+                IClass clz = methods.get(parent);
+                if (clz == null) {
+                    clz = reflectClassInfo(parent);
+                }
+                if(clz == null) continue;
+
+                List<? extends MoFNode> nodes = clz.methods();
+                for (int j = 0; j < nodes.size(); j++) {
+                    MoFNode method = nodes.get(j);
+                    if((natCheck.name = method.name()).startsWith("<")) continue;
+                    natCheck.type = method.rawDesc();
+
+                    NameAndType get = duplicate.find(natCheck);
+                    if (get != natCheck) {
+                        // 父类存在方法
+
+                        if (parent.equals(get.owner)) {
+                            continue;
+                        }
+
+                        // 若存在继承关系，不是接口
+                        if (selfSupers.getOrDefault(get.owner, Collections.emptyList()).contains(parent)) {
+                            // 跳过当前class
+                            continue;
+                        }
+
+                        // 把新的复制，然后测试能不能找到存在的SI-NAT
+                        s_test.type = get;
+                        SubImpl s_get = dest.intern(s_test);
+                        s_get.owners.add(parent);
+
+                        // 至少有一个类不是要处理的类: 不能混淆
+                        if (!methods.containsKey(parent)) s_get.original = true;
+
+                        // 不存在
+                        if (s_get == s_test) {
+                            // 新的，所以nat没加里面
+                            s_test.owners.add(get.owner);
+
+                            s_test = new SubImpl();
+                        }
+                        // 存在, 啥事没有
+                    } else {
+                        NameAndType nat = natCheck.copy();
+                        // 没有，新增的
+                        // 补上空缺的owner字段, 上面要用
+                        nat.owner = parent;
+
+                        duplicate.add(nat);
+                    }
+                }
+            }
+            duplicate.clear();
+        }
+
+        return dest;
+    }
+
+    public IClass reflectClassInfo(String name) {
+        if (notFoundClasses.contains(name))
+            return null;
+        if(cachedClassMof.containsKey(name))
+            return cachedClassMof.get(name);
+
+        List<Class<?>> classes = cachedClassRef.get(name);
+        if(classes == null) {
+            try {
+                cachedClassRef.put(name,
+                                   classes = ReflectionUtils.getFathersAndItfOrdered(Class.forName(name.replace('/', '.'), false, Util.class.getClassLoader())));
+            } catch (Throwable e) {
+                if (!(e instanceof ClassNotFoundException) && !(e instanceof NoClassDefFoundError)) {
+                    System.err.println("Exception Loading " + name);
+                    e.printStackTrace();
+                }
+                notFoundClasses.add(name);
+                return null;
+            }
+        }
+
+        MyHashSet<ReflectMNode> o = new MyHashSet<>();
+        for (Class<?> clz1 : classes) {
+            try {
+                for (Method method : clz1.getDeclaredMethods()) {
+                    o.add(new ReflectMNode(method));
+                }
+            } catch (Throwable e) {
+                if (!(e instanceof NoClassDefFoundError)) {
+                    System.out.println("[Warn]Exception loading " + name);
+                    e.printStackTrace();
+                }
+            }
+        }
+        IClass list = new ReflectClass(classes.get(0), Helpers.cast(Arrays.asList(o.toArray())));
+        cachedClassMof.put(name, list);
+        return list;
+    }
+
+    public static final List<String> OBJECT_INHERIT = Collections.singletonList("java/lang/Object");
+    // 使用反射查找实现类，避免RT太大不好解析
+    public boolean isInherited(Desc k, Map<String, List<String>> selfSupers, boolean unableDefault) {
+        if(notFoundClasses.contains(k.owner))
+            return unableDefault;
+
+        Class<?>[] par;
+        List<Type> pars = ParamHelper.parseMethod(k.param);
+        pars.remove(pars.size() - 1);
+        par = new Class<?>[pars.size()];
+        for (int i = 0; i < pars.size(); i++) {
+            Type type = pars.get(i);
+
+            List<Class<?>> clz = cachedClassRef.get(type.owner);
+            if(clz != null) {
+                par[i] = clz.get(0);
+            } else {
+                if (notFoundClasses.contains(type.owner)) {
+                    return unableDefault;
+                }
+                try {
+                    par[i] = type.toJavaClass();
+                } catch (Throwable e) {
+                    String o = type.owner;
+                    if (!(e instanceof ClassNotFoundException) && !(e instanceof NoClassDefFoundError)) {
+                        System.err.println("Exception loading " + o);
+                        e.printStackTrace();
+                    }
+                    notFoundClasses.add(o);
+                    return unableDefault;
+                }
+                if(type.owner != null)
+                    cachedClassRef.put(type.owner, ReflectionUtils.getFathersAndItfOrdered(par[i]));
+            }
+        }
+
+        String s = k.owner;
+        List<Class<?>> pars2 = cachedClassRef.get(s);
+        if (pars2 == null) {
+            try {
+                cachedClassRef.put(s, pars2 = ReflectionUtils.getFathersAndItfOrdered(Class.forName(s.replace('/', '.'), false, Util.class.getClassLoader())));
+            } catch (Throwable e) {
+                if(!(e instanceof ClassNotFoundException) && ! (e instanceof NoClassDefFoundError)) {
+                    System.err.println("Exception loading " + s);
+                    e.printStackTrace();
+                }
+                notFoundClasses.add(s);
+                return unableDefault;
+            }
+        }
+
+        for (int j = 0; j < pars2.size(); j++) {
+            Class<?> clz = pars2.get(j);
+
+            try {
+                clz.getDeclaredMethod(k.name, par);
+                return true;
+            } catch (NoSuchMethodException ignored) {
+            } catch (NoClassDefFoundError e) {
+                notFoundClasses.add(e.getMessage());
+                return false;
+            }
+        }
+        return false;
+    }
+
+    // endregion
 
     public static void write(Collection<Context> contexts, ZipOutputStream zos, boolean close) throws IOException {
         for(Context ctx : contexts) {
@@ -133,16 +375,7 @@ public final class Util {
         }
     }
 
-    public static boolean arePackagesSame(String packageA, String packageB) {
-        int ia = packageA.lastIndexOf('/');
-
-        if(packageB.lastIndexOf('/') != ia)
-            return false;
-        if(ia == -1)
-            return true;
-
-        return packageA.regionMatches(0, packageB, 0, ia);
-    }
+    // region 映射各种名字
 
     public static String mapClassName(Map<String, String> classMap, String name) {
         // should indexOf(';') ?
@@ -161,7 +394,7 @@ public final class Util {
             return "";
         String b;
 
-        CharList cl = (CharList) ThreadBasedCache.get()[4];
+        CharList cl = ThreadBasedCache.get().sharedCL;
         cl.clear();
 
         if ((b = map.get(cl.append(name, s, e - s - (file ? 6 : 0)))) != null) {
@@ -215,23 +448,17 @@ public final class Util {
         cl.clear();
         if (dollar != -1 && (b = map.get(cl.append(name, s, dollar - s))) != null) {
             cl.clear();
-            if(DEBUG_SUB_CLASSES) {
-                System.out.println("P0 " + b);
-                System.out.println("P1 " + name.subSequence(dollar, e));
-                System.out.println("Ge " + name);
-            }
             return cl.append(b).append(name, dollar, e - dollar).toString();
         }
 
         return file ? name.subSequence(s, e).toString() : null;
     }
 
-    @SuppressWarnings("unchecked")
     public static String transformMethodParam(Map<String, String> classMap, String md) {
         if(md.length() <= 4) // min = ()La;
             return md;
 
-        ArrayList<Type> types = (ArrayList<Type>) ThreadBasedCache.get()[5];
+        ArrayList<Type> types = Helpers.cast(ThreadBasedCache.get().sharedAL);
         types.clear();
         ParamHelper.parseMethod(md, types);
 
@@ -252,26 +479,20 @@ public final class Util {
     }
 
     public static String transformFieldType(Map<String, String> classMap, String fd) {
-        //if(fd.length() <= 2) // min = La;
-        //    return fd;
-
         char first = fd.charAt(0);
-        if(first == '[') {
-            int pos = fd.lastIndexOf('[') + 1;
-            first = fd.charAt(pos);
+        // 数组
+        if(first == NativeType.ARRAY) {
+            first = fd.charAt(fd.lastIndexOf(NativeType.ARRAY) + 1);
         }
-        if(first != 'L')
+        // 不是object类型
+        if(first != NativeType.CLASS)
             return fd;
 
-        //Type type = ParamHelper.parseField(fd);
-        String str = mapOwner(classMap, fd/*type.owner*/, false);
-        //if(str != null) {
-            //type.owner = str;
-            //return ParamHelper.getField(type);
-        //}
-        return str == null ? fd : str;
+        return mapOwner(classMap, fd, false);
     }
 
+    // endregion
+    // region 准备上下文
 
     public static List<Context> ctxFromStream(Map<String, InputStream> streams) throws IOException {
         List<Context> ctx = new ArrayList<>(streams.size());
@@ -352,5 +573,21 @@ public final class Util {
         inputJar.close();
 
         return ctx;
+    }
+
+    // endregion
+
+    public static long libHash(List<File> list) {
+        long hash = 0;
+        for (int i = 0; i < list.size(); i++) {
+            File f = list.get(i);
+            if(f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
+                hash = 31 * hash + f.getName().hashCode();
+                hash = 31 * hash + (f.length() & 262143);
+                hash ^= f.lastModified();
+            }
+        }
+
+        return hash;
     }
 }

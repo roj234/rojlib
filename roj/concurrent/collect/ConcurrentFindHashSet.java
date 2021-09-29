@@ -43,6 +43,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ConcurrentFindHashSet<T> implements FindSet<T> {
     private final ConcurrentHashMap<T, T> set = new ConcurrentHashMap<>();
 
+    public ConcurrentFindHashSet() {}
+
     public ConcurrentFindHashSet(Collection<T> list) {
         addAll(list);
     }

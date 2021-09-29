@@ -25,8 +25,8 @@
  */
 package roj.asm.mapper;
 
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
+import roj.asm.mapper.util.MapperList;
 import roj.collect.*;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
@@ -34,8 +34,7 @@ import roj.text.TextUtil;
 import roj.util.ByteWriter;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Class Mapping
@@ -45,23 +44,23 @@ import java.util.Map;
  * @since  2020/8/28 19:18
  */
 public class Mapping {
-    Flippable<String, String> classMap = new HashBiMap<>(1000);
-    MyHashMap<FlDesc, String> fieldMap = new MyHashMap<>(1000);
-    MyHashMap<MtDesc, String> methodMap = new MyHashMap<>(1000);
-    TrieTree<String> packageMap = new TrieTree<>();
+    Flippable<String, String> classMap   = new HashBiMap<>(1000);
+    MyHashMap<Desc, String>   fieldMap   = new MyHashMap<>(1000);
+    MyHashMap<Desc, String>   methodMap  = new MyHashMap<>(1000);
+    TrieTree<String>          packageMap = new TrieTree<>();
 
     /**
      * Data parse
      */
-    public final void loadFrom(File path, boolean reverse) {
+    public final void loadMap(File path, boolean reverse) {
         try {
-            loadFrom(new FileInputStream(path), reverse);
+            loadMap(new FileInputStream(path), reverse);
         } catch (IOException e) {
-            throw new RuntimeException("Unable to read srg file", e);
+            throw new RuntimeException("Unable to read mapping file", e);
         }
     }
 
-    public final void loadFrom(InputStream is, boolean reverse) {
+    public final void loadMap(InputStream is, boolean reverse) {
         try(SimpleLineReader slr = new SimpleLineReader(is)) {
             CharList cl = new CharList(100);
             ArrayList<String> q = new ArrayList<>();
@@ -101,9 +100,9 @@ public class Mapping {
                         id2 = q.get(1).lastIndexOf("/");
 
                         if(reverse) {
-                            fieldMap.put(new FlDesc(q.get(1).substring(0, id2), q.get(1).substring(id2 + 1)), q.get(0).substring(id + 1));
+                            fieldMap.put(new Desc(q.get(1).substring(0, id2), q.get(1).substring(id2 + 1)), q.get(0).substring(id + 1));
                         } else {
-                            fieldMap.put(new FlDesc(q.get(0).substring(0, id), q.get(0).substring(id + 1)), q.get(1).substring(id2 + 1));
+                            fieldMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1)), q.get(1).substring(id2 + 1));
                         }
                         break;
                     case "MD":
@@ -111,9 +110,9 @@ public class Mapping {
                         id2 = q.get(2).lastIndexOf("/");
 
                         if(reverse) {
-                            methodMap.put(new MtDesc(q.get(2).substring(0, id2), q.get(2).substring(id2 + 1), q.get(3)), q.get(0).substring(id + 1));
+                            methodMap.put(new Desc(q.get(2).substring(0, id2), q.get(2).substring(id2 + 1), q.get(3)), q.get(0).substring(id + 1));
                         } else {
-                            methodMap.put(new MtDesc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
+                            methodMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
                         }
                         break;
                     case "FL":
@@ -123,9 +122,9 @@ public class Mapping {
                             throw new IllegalArgumentException("last[0] == null at line " + slr.index());
 
                         if(reverse) {
-                            fieldMap.put(new FlDesc(last1, q.get(1)), q.get(0));
+                            fieldMap.put(new Desc(last1, q.get(1)), q.get(0));
                         } else {
-                            fieldMap.put(new FlDesc(last0, q.get(0)), q.get(1));
+                            fieldMap.put(new Desc(last0, q.get(0)), q.get(1));
                         }
                         break;
                     case "ML":
@@ -134,10 +133,10 @@ public class Mapping {
 
                         if(reverse) {
                             // net/minecraft/client/renderer/entity/layers/LayerHeldItem[1] func_177141_a (Lnet/minecraft/entity/EntityLivingBase;FFFFFFF)V => doRenderLayer
-                            methodMap.put(new MtDesc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+                            methodMap.put(new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
                         } else {
                             // net/minecraft/client/renderer/entity/layers/LayerHeldItem[0] doRenderLayer (Lnet/minecraft/entity/EntityLivingBase;FFFFFFF)V => func_177141_a
-                            methodMap.put(new MtDesc(last0, q.get(0), q.get(1)), q.get(2));
+                            methodMap.put(new Desc(last0, q.get(0), q.get(1)), q.get(2));
                         }
                         break;
                     default:
@@ -149,12 +148,12 @@ public class Mapping {
         }
     }
 
-    public void saveToSrg(File target) throws IOException {
+    public void saveMap(File target) throws IOException {
         CharList ob = new CharList(1024 * 1024);
 
         MyHashMap<String, CharList> classFos = new MyHashMap<>(classMap.size());
 
-        for(Map.Entry<FlDesc, String> entry : fieldMap.entrySet()) {
+        for(Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
             String cn = entry.getKey().owner;
 
             CharList cl = classFos.get(cn);
@@ -165,8 +164,8 @@ public class Mapping {
             cl.append("FL: ").append(entry.getKey().name).append(' ').append(entry.getValue()).append('\n');
         }
 
-        for(Map.Entry<MtDesc, String> entry : methodMap.entrySet()) {
-            MtDesc desc = entry.getKey();
+        for(Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+            Desc desc = entry.getKey();
 
             String cn = desc.owner;
             CharList cl = classFos.get(cn);
@@ -190,6 +189,62 @@ public class Mapping {
         }
     }
 
+    public static void makeInheritMap(Map<String, List<String>> superMap, Map<String, String> filter) {
+        MapperList l = new MapperList();
+
+        ArrayList<String> self = new ArrayList<>();
+        ArrayList<String> next = new ArrayList<>();
+
+        // 从一级继承构建所有继承, note: 是所有输入
+        for (Iterator<Map.Entry<String, List<String>>> itr = superMap.entrySet().iterator(); itr.hasNext(); ) {
+            Map.Entry<String, List<String>> entry = itr.next();
+            if (entry.getValue().getClass() == MapperList.class) continue; // done
+
+            String name = entry.getKey();
+
+            self.addAll(entry.getValue());
+            ArrayList<String> tmp1;
+
+            /**
+             * excepted order:
+             *     fatherclass fatheritf grandclass granditf, etc...
+             */
+            Collection<String> tmp;
+            do {
+                l.addAll(self);
+                for (String s : self) {
+                    if ((tmp = superMap.get(s)) != null) {
+                        if (tmp.getClass() != MapperList.class) {
+                            next.addAll(tmp);
+                        } else {
+                            l.addAll(tmp);
+                        }
+                    }
+                }
+                tmp1 = self;
+                self = next;
+                next = tmp1;
+                next.clear();
+            } while (!self.isEmpty());
+
+            if (filter != null) {
+                for (int i = l.size() - 1; i >= 0; i--) {
+                    if (!filter.containsKey(l.get(i))) {
+                        l.remove(i); // 删除不存在映射的爹
+                    }
+                }
+            }
+
+            if (!l.isEmpty()) { // 若不是空的，则更新一个
+                l._init_();
+                entry.setValue(l);
+                l = new MapperList();
+            } else {
+                itr.remove();
+            }
+        }
+    }
+
     /**
      * SrgMap data
      */
@@ -197,11 +252,11 @@ public class Mapping {
         return classMap;
     }
 
-    public final Map<FlDesc, String> getFieldMap() {
+    public final Map<Desc, String> getFieldMap() {
         return fieldMap;
     }
 
-    public final FindMap<MtDesc, String> getMethodMap() {
+    public final FindMap<Desc, String> getMethodMap() {
         return methodMap;
     }
 }

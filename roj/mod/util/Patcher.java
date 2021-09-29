@@ -133,12 +133,14 @@ public final class Patcher {
         private static void copy(int off, int len, ByteList src, ByteList dst) {
             dst.ensureCapacity(dst.pos() + len);
             System.arraycopy(src.list, off, dst.list, dst.pos(), len);
+            dst.pos(dst.pos() + len);
         }
 
         private static void append(int len, ByteReader src, ByteList dst) {
             dst.ensureCapacity(dst.pos() + len);
             System.arraycopy(src.getBytes().list, src.index, dst.list, dst.pos(), len);
             src.index += len;
+            dst.pos(dst.pos() + len);
         }
     }
 

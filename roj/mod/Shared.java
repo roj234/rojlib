@@ -26,8 +26,7 @@
 package roj.mod;
 
 import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.collect.MyHashMap;
 import roj.concurrent.PrefixFactory;
 import roj.concurrent.TaskPool;
@@ -214,7 +213,6 @@ public final class Shared {
                     } catch (Exception e) {
                         CmdUtil.error("正向映射表加载失败", e);
                     }
-                    mapperFwd.backupLibSupers();
                 }
             }
         }
@@ -270,11 +268,11 @@ public final class Shared {
             Shared.initForwardMapper();
 
             ConstMapper fwd = mapperFwd;
-            for (Map.Entry<FlDesc, String> entry : fwd.getFieldMap().entrySet()) {
+            for (Map.Entry<Desc, String> entry : fwd.getFieldMap().entrySet()) {
                 srg2mcp.put(entry.getValue(), entry.getKey().name);
             }
 
-            for (Map.Entry<MtDesc, String> entry : fwd.getMethodMap().entrySet()) {
+            for (Map.Entry<Desc, String> entry : fwd.getMethodMap().entrySet()) {
                 srg2mcp.put(entry.getValue(), entry.getKey().name);
             }
         }

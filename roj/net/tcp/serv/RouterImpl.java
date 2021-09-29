@@ -82,7 +82,6 @@ public class RouterImpl implements Router {
             return new Reply(Code.SWITCHING_PROTOCOL, response);
         }
         // todo HTTP2.0
-        // todo MY SSL
         return null;
     }
 

@@ -653,7 +653,7 @@ public final class Interpreter {
                 pop(REFERENCE);
                 pop(INT);
                 final Var aArray = pop(REFERENCE);
-                if ('[' != aArray.owner.charAt(0) || ';' != aArray.owner.charAt(aArray.owner.length() - 1)) {
+                if ('[' != aArray.owner.charAt(0) || (';' != aArray.owner.charAt(aArray.owner.length() - 1) && '[' != aArray.owner.charAt(1))) {
                     throw new IllegalStateException("Unable assign " + aArray.owner + " to [L<any>");
                 }
                 break;

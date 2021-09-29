@@ -448,7 +448,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
             }
         }
 
-        return new AbstractMap.SimpleImmutableEntry<>(d, entry.value);
+        return entry.value == NOT_USING ? null : new AbstractMap.SimpleImmutableEntry<>(d, entry.value);
     }
 
     public List<V> valueMatches(CharSequence s, int limit) {

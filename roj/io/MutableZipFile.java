@@ -396,7 +396,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                         crc.update(bl.list, bl.offset(), bl.pos());
                         if ((int) crc.getValue() == attr.CRC32) {
                             // same length and checksum: same file, skip
-                            System.out.println("Skip unchanged " + file.file.name);
                             continue;
                         }
                         crc.reset();

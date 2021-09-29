@@ -27,8 +27,7 @@ package roj.mod.util;
 
 import roj.asm.mapper.Mapping;
 import roj.asm.mapper.Util;
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.FlagList;
 import roj.collect.FilterList;
@@ -65,8 +64,8 @@ public class MappingHelper {
 
     public final Map<String, String> classes;
 
-    public final Map<String, List<MtDesc>> methods = new MyHashMap<>(2000);
-    public final Map<String, List<FlDesc>> fields = new MyHashMap<>(2000);
+    public final Map<String, List<Desc>> methods = new MyHashMap<>(2000);
+    public final Map<String, List<Desc>> fields  = new MyHashMap<>(2000);
 
     public Map<String, List<Object[]>> revAll;
 
@@ -90,14 +89,14 @@ public class MappingHelper {
     public MappingHelper(Mapping mapping) {
         this.classes = mapping.getClassMap();
 
-        for(Map.Entry<FlDesc, String> entry : mapping.getFieldMap().entrySet()) {
-            FlDesc descriptor = entry.getKey().copy();
+        for(Map.Entry<Desc, String> entry : mapping.getFieldMap().entrySet()) {
+            Desc descriptor = entry.getKey().copy();
             descriptor.flags = null;
             fields.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(descriptor);
         }
 
-        for(Map.Entry<MtDesc, String> entry : mapping.getMethodMap().entrySet()) {
-            MtDesc descriptor = entry.getKey().copy();
+        for(Map.Entry<Desc, String> entry : mapping.getMethodMap().entrySet()) {
+            Desc descriptor = entry.getKey().copy();
             descriptor.flags = null;
             methods.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(descriptor);
         }
@@ -123,12 +122,12 @@ public class MappingHelper {
             if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("methods.csv:" + i + ": 未知标记: " + line);
             }
-            List<MtDesc> descriptors = methods.get(tmp.get(0));
+            List<Desc> descriptors = methods.get(tmp.get(0));
             if(descriptors == null)
                 System.out.println("methods.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
             else {
                 for (int j = 0; j < descriptors.size(); j++) {
-                    MtDesc descriptor = descriptors.get(j);
+                    Desc descriptor = descriptors.get(j);
                     descriptor.name = tmp.get(1);
                     descriptor.flags = NONNULL;
                 }
@@ -153,12 +152,12 @@ public class MappingHelper {
             if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
                 throw new IllegalArgumentException("fields.csv:" + i + ": 未知标记: " + line);
             }
-            List<FlDesc> descriptors = fields.get(tmp.get(0));
+            List<Desc> descriptors = fields.get(tmp.get(0));
             if (descriptors == null)
                 System.out.println("fields.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
             else {
                 for (int j = 0; j < descriptors.size(); j++) {
-                    FlDesc descriptor = descriptors.get(j);
+                    Desc descriptor = descriptors.get(j);
                     descriptor.name = tmp.get(1);
                     descriptor.flags = NONNULL;
                 }
@@ -236,10 +235,10 @@ public class MappingHelper {
         ob.ensureCapacity(MINIMUM_CAPACITY);
 
         Map<String, CharList> classFos = new MyHashMap<>(classes.size());
-        for(Map.Entry<String, List<FlDesc>> entry : fields.entrySet()) {
-            List<FlDesc> value = entry.getValue();
+        for(Map.Entry<String, List<Desc>> entry : fields.entrySet()) {
+            List<Desc> value = entry.getValue();
             for (int i = 0; i < value.size(); i++) {
-                FlDesc descriptor = value.get(i);
+                Desc descriptor = value.get(i);
                 String cn = classes.get(descriptor.owner);
                 String k = entry.getKey();
 
@@ -258,10 +257,10 @@ public class MappingHelper {
             }
         }
 
-        for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
-            List<MtDesc> value = entry.getValue();
+        for(Map.Entry<String, List<Desc>> entry : methods.entrySet()) {
+            List<Desc> value = entry.getValue();
             for (int i = 0; i < value.size(); i++) {
-                MtDesc descriptor = value.get(i);
+                Desc descriptor = value.get(i);
                 String cn = classes.get(descriptor.owner);
                 String k = entry.getKey();
 
@@ -350,7 +349,7 @@ public class MappingHelper {
                         }
                     }
 
-                    fields.computeIfAbsent(arr.get(1), Helpers.fnArrayList()).add(new FlDesc(ctx[0], arr.get(0)));
+                    fields.computeIfAbsent(arr.get(1), Helpers.fnArrayList()).add(new Desc(ctx[0], arr.get(0)));
                     if(revAll != null)
                         revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(arr.toArray());
                 } else if (arr.size() == 3) {
@@ -363,7 +362,7 @@ public class MappingHelper {
                         }
                     }
 
-                    methods.computeIfAbsent(arr.get(2), Helpers.fnArrayList()).add(new MtDesc(ctx[0], arr.get(0), arr.get(1)));
+                    methods.computeIfAbsent(arr.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], arr.get(0), arr.get(1)));
                     if(revAll != null)
                         revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(arr.toArray());
                 } else {
@@ -446,10 +445,10 @@ public class MappingHelper {
         ob.ensureCapacity(MINIMUM_CAPACITY);
 
         Map<String, CharList> classFos = new MyHashMap<>(forge2dest.size());
-        for(Map.Entry<String, List<FlDesc>> entry : fields.entrySet()) {
-            List<FlDesc> value = entry.getValue();
+        for(Map.Entry<String, List<Desc>> entry : fields.entrySet()) {
+            List<Desc> value = entry.getValue();
             for (int i = 0; i < value.size(); i++) {
-                FlDesc descriptor = value.get(i);
+                Desc descriptor = value.get(i);
                 final String key = forge2dest.get(descriptor.owner);
                 CharList cl = classFos.get(key);
                 if (cl == null) {
@@ -458,10 +457,10 @@ public class MappingHelper {
                 cl.append("FL: ").append(descriptor.name).append(' ').append(entry.getKey()).append('\n');
             }
         }
-        for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
-            List<MtDesc> value = entry.getValue();
+        for(Map.Entry<String, List<Desc>> entry : methods.entrySet()) {
+            List<Desc> value = entry.getValue();
             for (int i = 0; i < value.size(); i++) {
-                MtDesc descriptor = value.get(i);
+                Desc descriptor = value.get(i);
                 final String key = forge2dest.get(descriptor.owner);
                 CharList cl = classFos.get(key);
                 if (cl == null) {
@@ -503,7 +502,7 @@ public class MappingHelper {
         Map<String, String[]> ds = new MyHashMap<>(1000);
 
         // func_76663_a=[MD{axx.isEmpty ()Z, flags=Flag{}}]  func 理论不会重复
-        for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
+        for(Map.Entry<String, List<Desc>> entry : methods.entrySet()) {
             final String key = entry.getKey();
             if(!key.startsWith("func_"))
                 continue;
@@ -514,10 +513,10 @@ public class MappingHelper {
                 System.err.println("[Warn]Src参数不符合 " + key);
                 continue;
             }
-            Iterator<MtDesc> it = entry.getValue().iterator();
+            Iterator<Desc> it = entry.getValue().iterator();
             if (it.hasNext()) {
                 // aqb.onHarvest (Lamu;Let;Lawt;Laed;)Z
-                MtDesc descriptor = it.next();
+                Desc descriptor = it.next();
 
                 ds.put(tmp.get(1), new String[]{
                         /*classes.get(*/descriptor.owner, descriptor.name /* newName */ + '|' + Util.transformMethodParam(classes, descriptor.param),
@@ -657,7 +656,7 @@ public class MappingHelper {
                             }
                         }
 
-                        fields.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new MtDesc(ctx[0], list.get(0), list.get(1)));
+                        fields.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
                         if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
 
                         break;
@@ -682,7 +681,7 @@ public class MappingHelper {
                             }
                         }
 
-                        methods.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new MtDesc(ctx[0], list.get(0), list.get(1)));
+                        methods.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
                         if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
                         break;
                     default:
@@ -745,7 +744,7 @@ public class MappingHelper {
                             }
                         }
 
-                        fields.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new MtDesc(ctx[0], list.get(0), list.get(1)));
+                        fields.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
                         if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
 
                         break;
@@ -770,7 +769,7 @@ public class MappingHelper {
                             }
                         }
 
-                        methods.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new MtDesc(ctx[0], list.get(0), list.get(1)));
+                        methods.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
                         if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
                         break;
                     default:
@@ -805,10 +804,10 @@ public class MappingHelper {
             if (!readMojangMap(clientMap, elementMap)) return false;
             if (serverMap != null && !readMojangMap(serverMap, elementMap)) return false;
 
-            for(Map.Entry<String, List<MtDesc>> entry : methods.entrySet()) {
-                List<MtDesc> value = entry.getValue();
+            for(Map.Entry<String, List<Desc>> entry : methods.entrySet()) {
+                List<Desc> value = entry.getValue();
                 for (int i = 0; i < value.size(); i++) {
-                    MtDesc desc = value.get(i);
+                    Desc desc = value.get(i);
                     if (NTR.contains(desc.owner)) continue;
                     Map<String, String> methodNameMap = elementMap.get(desc.owner);
 
@@ -831,10 +830,10 @@ public class MappingHelper {
                 }
             }
 
-            for(Map.Entry<String, List<FlDesc>> entry : fields.entrySet()) {
-                List<FlDesc> value = entry.getValue();
+            for(Map.Entry<String, List<Desc>> entry : fields.entrySet()) {
+                List<Desc> value = entry.getValue();
                 for (int i = 0; i < value.size(); i++) {
-                    FlDesc desc = value.get(i);
+                    Desc desc = value.get(i);
                     if (NTR.contains(desc.owner)) continue;
                     Map<String, String> fieldNameMap = elementMap.get(desc.owner);
 
@@ -975,7 +974,7 @@ public class MappingHelper {
         }
     }
 
-    private static boolean isMCFunction(MtDesc desc) {
+    private static boolean isMCFunction(Desc desc) {
         return desc.name.startsWith("func_");
     }
 }

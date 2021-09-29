@@ -59,7 +59,7 @@ public final class Keyword {
     static {
         String[] keywords = Keyword.keywords;
         for (int i = 0; i < keywords.length; i++) {
-            indexOf.put(keywords[i], 10 + i);
+            indexOf.putInt(keywords[i], 10 + i);
         }
     }
 

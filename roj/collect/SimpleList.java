@@ -129,8 +129,10 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     }
 
     public void trimToSize() {
-        this.list = Arrays.copyOf(list, size);
-        this.length = size - 1;
+        if(length != size -1) {
+            this.list = Arrays.copyOf(list, size);
+            this.length = size - 1;
+        }
     }
 
     @Override
@@ -500,24 +502,28 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         size = 0;
     }
 
+    @Deprecated
     protected void handleRemove(int pos, E element) {
     }
 
+    @Deprecated
     protected void handleRemove(Object[] elements, int length) {
     }
 
+    @Deprecated
     protected void handleAdd(int pos, E[] elements, int offset, int length) {
     }
 
+    @Deprecated
     protected void handleAdd(int pos, E element) {
     }
 
-    public void _int_setSize(int i) {
+    public void i_setSize(int i) {
         this.size = i;
     }
 
-    protected class SimpleItr implements ListIterator<E> {
-        protected int index, prevId;
+    private final class SimpleItr implements ListIterator<E> {
+        private int index, prevId;
 
         public SimpleItr() {
         }

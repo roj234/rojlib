@@ -113,7 +113,7 @@ public final class KArray extends KBase implements roj.kscript.api.IArray {
                 SimpleList<KType> list = ((SimpleList<KType>) this.list);
                 list.ensureCapacity(index + 1);
                 Arrays.fill(list.getRawArray(), list.size(), index + 1, KUndefined.UNDEFINED);
-                list._int_setSize(index + 1);
+                list.i_setSize(index + 1);
             } else {
                 int i = index - list.size();
                 while (i-- >= 0) {

@@ -82,12 +82,12 @@ public final class MutableBigInteger {
         void mul(Object ptr, int y, Object z);
         int divideOneWord(Object ptr, int divisor, Object quotient);
         Object divide(Object ptr, Object b, Object quotient);
-        Object divide(Object ptr, Object b, Object quotient, boolean needRemainder);
+        Object divide1(Object ptr, Object b, Object quotient, boolean needRemainder);
         Object divideKnuth(Object ptr, Object b, Object quotient);
-        Object divideKnuth(Object ptr, Object b, Object quotient, boolean needRemainder);
+        Object divideKnuth1(Object ptr, Object b, Object quotient, boolean needRemainder);
         Object divideAndRemainderBurnikelZiegler(Object ptr, Object b, Object quotient);
         long bitLength(Object ptr);
-        long divide(Object ptr, long v, Object quotient);
+        long divide2(Object ptr, long v, Object quotient);
         long divWord(long n, int d);
         Object hybridGCD(Object ptr, Object b);
         int binaryGcd(int a, int b);
@@ -392,7 +392,7 @@ public final class MutableBigInteger {
     }
 
     public MutableBigInteger divide(MutableBigInteger b, MutableBigInteger quotient, boolean needRemainder) {
-        return fromPtr(o.divide(ptr, b.ptr, quotient.ptr, needRemainder));
+        return fromPtr(o.divide1(ptr, b.ptr, quotient.ptr, needRemainder));
     }
 
     /**
@@ -414,7 +414,7 @@ public final class MutableBigInteger {
      *
      */
     public MutableBigInteger divideKnuth(MutableBigInteger b, MutableBigInteger quotient, boolean needRemainder) {
-        return fromPtr(o.divideKnuth(ptr, b.ptr, quotient.ptr, needRemainder));
+        return fromPtr(o.divideKnuth1(ptr, b.ptr, quotient.ptr, needRemainder));
     }
 
     /**
@@ -445,7 +445,7 @@ public final class MutableBigInteger {
      * @return the remainder of the division will be returned.
      */
     public long divide(long v, MutableBigInteger quotient) {
-        return o.divide(ptr, v, quotient.ptr);
+        return o.divide2(ptr, v, quotient.ptr);
     }
 
     /**

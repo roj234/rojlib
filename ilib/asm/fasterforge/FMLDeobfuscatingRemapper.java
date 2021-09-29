@@ -26,22 +26,23 @@
 package ilib.asm.fasterforge;
 
 import LZMA.LzmaInputStream;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.patcher.ClassPatchManager;
 import org.objectweb.asm.commons.Remapper;
 import roj.asm.Parser;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.Mapping;
 import roj.asm.mapper.Util;
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.asm.tree.AccessData;
 import roj.asm.type.Signature;
 import roj.collect.Flippable;
 import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
 import roj.util.Helpers;
+
+import net.minecraft.launchwrapper.LaunchClassLoader;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.patcher.ClassPatchManager;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -65,7 +66,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
     public void setupLoadOnly(String deobfFileName, boolean loadAll) {
         Mapping mapping = this.mapping = new ConstMapper();
         try {
-            mapping.loadFrom(new LzmaInputStream(new FileInputStream(deobfFileName)), false);
+            mapping.loadMap(new LzmaInputStream(new FileInputStream(deobfFileName)), false);
         } catch (IOException e) {
             FMLLog.log.error("An error occurred loading the deobfuscation map data", e);
         }
@@ -82,9 +83,9 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
         try {
             if (prop == null || prop.isEmpty()) {
                 InputStream classData = this.getClass().getResourceAsStream(deobfFileName);
-                mapping.loadFrom(new LzmaInputStream(classData), false);
+                mapping.loadMap(new LzmaInputStream(classData), false);
             } else {
-                mapping.loadFrom(new FileInputStream(prop), false);
+                mapping.loadMap(new FileInputStream(prop), false);
             }
         } catch (IOException e) {
             FMLLog.log.error("An error occurred loading the deobfuscation map data", e);
@@ -130,9 +131,10 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
 
     public String mapFieldName(String owner, String name, @Nullable String desc) {
         if (this.classNameBiMap != null && !this.classNameBiMap.isEmpty()) {
-            FlDesc fd = Util.shareFD();
+            Desc fd = Util.shareMD();
             fd.owner = owner;
             fd.name = name;
+            fd.param = "";
             return mapping.getFieldMap().getOrDefault(fd, name);
         } else {
             return name;
@@ -157,7 +159,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
 
     public String mapMethodName(String owner, String name, String desc) {
         if (this.classNameBiMap != null && !this.classNameBiMap.isEmpty()) {
-            MtDesc shareMD = Util.shareMD();
+            Desc shareMD = Util.shareMD();
             shareMD.owner = owner;
             shareMD.name = name;
             shareMD.param = desc;

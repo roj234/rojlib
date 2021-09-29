@@ -25,6 +25,8 @@
  */
 package roj.collect;
 
+import org.jetbrains.annotations.ApiStatus.ScheduledForRemoval;
+
 import java.util.Set;
 
 /**
@@ -34,14 +36,15 @@ import java.util.Set;
  * @version 0.1
  * @since  2020/8/11 14:59
  */
+@Deprecated
+@ScheduledForRemoval
 public class FastSetList<T> extends SimpleList<T> implements Set<T> {
-    protected ToIntMap<T> indexer;
+    final ToIntMap<T> indexer;
     int refOps, slowOps, lastChk;
     byte enable;
 
     public FastSetList() {
         this(16);
-        indexer = new ToIntMap<>(16);
     }
 
     public FastSetList(int size) {

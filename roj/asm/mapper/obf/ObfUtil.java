@@ -23,7 +23,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper;
+package roj.asm.mapper.obf;
+
+import roj.collect.ToIntMap;
+import roj.kscript.ast.Context;
+
+import java.util.List;
+import java.util.Random;
 
 /**
  * Your description here
@@ -32,7 +38,12 @@ package roj.asm.mapper;
  * @version 0.1
  * @since 2021/7/30 22:17
  */
-public class ControlFlowFlattener {
+public class ObfUtil {
+    public static void StringEncode(List<Context> ctxs, ToIntMap<String> chance, Random rnd) {
+
+    }
+
+
     /*
     要想了解什么是控制流平坦化(control flow flatten)，可以找论文"obfuscating c++ programs via control flow flattening"了解。
     基本思想是让所有的基本块都有共同的前驱块，而该前驱块进行基本块的分发，分发用switch语句，依赖于switch变量进行分发。
@@ -152,4 +163,7 @@ public class ControlFlowFlattener {
 
 
      */
+    public static void ControlFlowFlat(List<Context> ctx, ToIntMap<String> chance, Random rnd) {
+        
+    }
 }

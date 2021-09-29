@@ -1,9 +1,8 @@
 package roj.asm.mapper;
 
-import roj.asm.mapper.obf.*;
+import roj.asm.mapper.obf.policy.*;
 import roj.asm.mapper.util.Context;
-import roj.asm.mapper.util.FlDesc;
-import roj.asm.mapper.util.MtDesc;
+import roj.asm.mapper.util.Desc;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.insn.InsnNode;
@@ -111,14 +110,16 @@ public final class SimpleObfuscator extends Obfuscator {
                 case "noPkg":
                     if(obf.clazz == null)
                         throw new IllegalArgumentException("noPkg选项要放在cType之后");
-                    if(!(obf.clazz instanceof SimpleNamer))
-                        throw new IllegalArgumentException("cType不支持");
-                    ((SimpleNamer) obf.clazz).setKeepPackage(false);
+                    obf.clazz.setKeepPackage(false);
                     obf.flags |= 2;
                     break;
                 case "excludes":
                     while (!args[++i].equals("---"))
                         obf.packageExclusions.add(args[i]);
+                    break;
+                case "keepClasses":
+                    while (!args[++i].equals("---"))
+                        obf.classExclusions.add(args[i]);
                     break;
                 case "flag":
                     obf.setFlags(Integer.parseInt(args[++i]));
@@ -133,9 +134,10 @@ public final class SimpleObfuscator extends Obfuscator {
                     for (CEntry entry : map.get("keep").asList()) {
                         CList list = entry.asList();
                         if(list.size() == 3) {
-                            obf.libMethods.add(new MtDesc(list.get(0).asString(), list.get(1).asString(), list.get(2).asString()));
+                            obf.libMethods.add(new Desc(list.get(0).asString(), list.get(1).asString(), list.get(2).asString()));
                         } else {
-                            obf.libFields.add(new FlDesc(list.get(0).asString(), list.get(1).asString()));
+                            // todo how to skip some fields
+                            //obf.libFields.add(new FlDesc(list.get(0).asString(), list.get(1).asString()));
                         }
                     }
                     obf.flags = map.getInteger("flag");
@@ -148,9 +150,7 @@ public final class SimpleObfuscator extends Obfuscator {
                     if(map.getBool("noPackage")) {
                         if(obf.clazz == null)
                             throw new IllegalArgumentException("noPkg选项要放在cType之后");
-                        if(!(obf.clazz instanceof SimpleNamer))
-                            throw new IllegalArgumentException("cType不支持noPkg");
-                        ((SimpleNamer) obf.clazz).setKeepPackage(false);
+                        obf.clazz.setKeepPackage(false);
                         obf.flags |= 2;
                     }
                     break;
@@ -211,14 +211,13 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     private static int resolveType(SimpleObfuscator o, String[] args, int i, int t) {
-        SimpleNamer fn = null;
-        NamingFunction fn2 = null;
+        NamingFunction fn;
         switch (args[++i]) {
             case "e":
-                fn2 = Equal.INSTANCE;
+                fn = Equal.INSTANCE;
                 break;
             case "c":
-                fn2 = new Compress();
+                fn = new Compress();
                 break;
             case "w":
                 fn = new WindowsReserved();
@@ -230,7 +229,7 @@ public final class SimpleObfuscator extends Obfuscator {
                 fn = new CharMixture(args[++i], 1, 7);
                 break;
             case "a":
-                fn = CharMixture.newABC(1, 7);
+                fn = new ClassicABC();
                 break;
             case "f":
                 try {
@@ -246,20 +245,17 @@ public final class SimpleObfuscator extends Obfuscator {
                 throw new IllegalArgumentException("Unknown " + args[i-1]);
         }
 
-        if(fn != null) {
-            fn.setKeepPackage(true).setFallback(CharMixture.newABC(1, 30).setKeepPackage(true));
-            fn2 = fn;
-        }
+        fn.setKeepPackage(true);
 
         switch (t) {
             case 0:
-                o.clazz = fn2;
+                o.clazz = fn;
                 break;
             case 1:
-                o.field = fn2;
+                o.field = fn;
                 break;
             case 2:
-                o.method = fn2;
+                o.method = fn;
                 break;
         }
         return i;
@@ -520,7 +516,7 @@ public final class SimpleObfuscator extends Obfuscator {
         if(packageExclusions.startsWith(origin) || classExclusions.contains(origin))
             return TREMINATE_THIS_CLASS;
         if(clazz == null)
-            return null;
+            return origin;
 
         tempF.clear();
         tempM.clear();
@@ -529,12 +525,12 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     @Override
-    public String obfMethodName(MtDesc desc) {
+    public String obfMethodName(Desc desc) {
         return method == null ? null : method.obfName(tempM, desc.param, rand);
     }
 
     @Override
-    public String obfFieldName(FlDesc desc) {
-        return field == null ? null : field.obfName(tempF, null, rand);
+    public String obfFieldName(Desc desc) {
+        return field == null ? null : field.obfName(tempF, desc.param, rand);
     }
 }

@@ -129,19 +129,6 @@ public final class HTTPHeaderLexer extends AbstLexer {
         return null;
     }
 
-    /**
-     * @return 其他字符
-     */
-    @Override
-    protected Word readSymbol() {
-        return null;
-    }
-
-    @Override
-    protected Word formNumberClip(byte flag, CharList temp, boolean negative) {
-        return null;
-    }
-
     public String content(String length, int max) throws ParseException {
         int index = this.index;
         final CharSequence input = this.input;

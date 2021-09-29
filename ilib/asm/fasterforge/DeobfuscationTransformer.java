@@ -25,16 +25,18 @@
  */
 package ilib.asm.fasterforge;
 
-import net.minecraft.launchwrapper.IClassNameTransformer;
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper;
 import roj.asm.Parser;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.util.Context;
 import roj.collect.TrieTreeSet;
 import roj.util.ByteList;
+
+import net.minecraft.launchwrapper.IClassNameTransformer;
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+
+import net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper;
 
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +62,7 @@ public class DeobfuscationTransformer implements IClassTransformer, IClassNameTr
         if (!shouldTransform(name))
             return bytes;
         ctxs.get(0).set(new ByteList(bytes));
-        mapper.remapStream(ctxs);
+        mapper.remapIncrement(ctxs);
         codeMapper.remap(true, ctxs);
         return Parser.toByteArray(Parser.parse(ctxs.get(0).get()));
     }
