@@ -36,6 +36,7 @@ import roj.config.data.CMapping;
 import roj.io.BOMInputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.misc.CpFilter;
 import roj.ui.CmdUtil;
 import roj.util.ByteWriter;
 import roj.util.FastLocalThread;
@@ -118,6 +119,9 @@ public final class Shared {
             MAIN_CONFIG.dotMode(true);
 
             DEBUG = MAIN_CONFIG.getBool("调试模式");
+            if(DEBUG) {
+                CpFilter.registerShutdownHook();
+            }
 
             CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
             // 4KB

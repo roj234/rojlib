@@ -123,7 +123,7 @@ public abstract class Obfuscator {
     }
 
     public void reset(List<File> libraries) {
-        m1.generateSuperMap(libraries);
+        m1.loadLibraries(libraries);
         genDataInherit(libraries);
     }
 
@@ -260,7 +260,7 @@ public abstract class Obfuscator {
             }
 
             desc.name = field.name.getString();
-            desc.param = "";//field.type.getString();
+            desc.param = field.type.getString();
             String fs = obfFieldName(desc);
             if (fs != null) {
                 t.fieldMap.put(desc, fs);

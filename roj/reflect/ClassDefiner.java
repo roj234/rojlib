@@ -26,8 +26,6 @@
 
 package roj.reflect;
 
-import roj.util.Helpers;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -44,14 +42,27 @@ import java.security.cert.Certificate;
  * @since 2021/6/16 1:31
  */
 public final class ClassDefiner extends ClassLoader {
-    static {
-        ClassLoader.registerAsParallelCapable();
+    private interface FastInvoke {
+        Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len,
+                ProtectionDomain protectionDomain);
+        Class<?> defineClass1(ClassLoader loader, String name, byte[] b, int off, int len,
+                ProtectionDomain protectionDomain, String source);
     }
 
-    private static final ClassLoader selfParent = getParentClassLoader(ClassDefiner.class);
-    public static volatile ClassDefiner INSTANCE = new ClassDefiner(selfParent);
+    private static final FastInvoke invoker;
+    static {
+        ClassLoader.registerAsParallelCapable();
+        FastInvoke fi = null;
+        try {
+            fi = DirectAccessor.builder(FastInvoke.class).delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1" }).build();
+        } catch (Throwable ignored) {}
+        invoker = fi;
+    }
 
-    private static volatile Method defineClassMethod, defineClass1Method;
+    private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
+    public static final ClassDefiner INSTANCE    = new ClassDefiner(SELF_LOADER);
+
+    private static Method defineClassMethod;
 
     public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
 
@@ -75,38 +86,31 @@ public final class ClassDefiner extends ClassLoader {
         }
         try {
             // 使用同样的加载器加载，保证Access
-            return (Class<?>) getDefineClassMethod().invoke(getParent(),
-                    new Object[]{name, bytes, off, len, getClass().getProtectionDomain()});
+            return invoker == null ?
+                    (Class<?>) getDefineClassMethod().invoke(getParent(), name, bytes, off, len, getClass().getProtectionDomain())
+                    : invoker.defineClass(getParent(), name, bytes, off, len, getClass().getProtectionDomain());
         } catch (Exception ignored) {
             // 使用自己加载（这样会没有protected的权限!）
         }
 
-        Exception e;
         try {
             return defineClass(name, bytes, off, len, getClass().getProtectionDomain());
         } catch (Exception e1) {
-            e = e1;
-            // 强制加载。。。
+            if(invoker == null)
+                throw e1;
         }
 
-        try {
-            ProtectionDomain pd = getClass().getProtectionDomain();
+        ProtectionDomain pd = getClass().getProtectionDomain();
 
-            Class<?> clazz = (Class<?>) getDefineClass1Method().invoke(this,
-                    new Object[]{name, bytes, off, len, pd, defineClassSourceLocation(pd)});
+        Class<?> clazz = invoker.defineClass1(getParent(), name, bytes, off, len, pd, defineClassSourceLocation(pd));
 
-            if (pd.getCodeSource() != null) {
-                Certificate[] certs = pd.getCodeSource().getCertificates();
-                if (certs != null)
-                    setSigners(clazz, certs);
-            }
-
-            return clazz;
-        } catch (Exception e1) {
-            e1.printStackTrace();
-            Helpers.throwAny(e);
-            throw (RuntimeException) e1;
+        if (pd.getCodeSource() != null) {
+            Certificate[] certs = pd.getCodeSource().getCertificates();
+            if (certs != null)
+                setSigners(clazz, certs);
         }
+
+        return clazz;
     }
 
     private static String defineClassSourceLocation(ProtectionDomain pd) {
@@ -134,17 +138,5 @@ public final class ClassDefiner extends ClassLoader {
             }
         }
         return defineClassMethod;
-    }
-
-    private static Method getDefineClass1Method() throws Exception {
-        if (defineClass1Method == null) {
-            defineClass1Method = ClassLoader.class.getDeclaredMethod("defineClass1",
-                    String.class, byte[].class, int.class, int.class, ProtectionDomain.class, String.class);
-            try {
-                defineClass1Method.setAccessible(true);
-            } catch (Exception ignored) {
-            }
-        }
-        return defineClass1Method;
     }
 }

@@ -81,7 +81,6 @@ public final class Util {
     private Util() {}
 
     public final Desc sharedDC = new Desc("", "", "");
-    public final FirstIterator sharedFC = new FirstIterator(null, null);
 
     final MyHashSet<String> notFoundClasses = new MyHashSet<>();
     final MyHashMap<String, List<Class<?>>> cachedClassRef = new MyHashMap<>();
@@ -92,10 +91,6 @@ public final class Util {
 
     public static Desc shareMD() {
         return ThreadBasedCache.get().sharedDC;
-    }
-
-    public static FirstIterator shareFC(String first, List<String> collection) {
-        return ThreadBasedCache.get().sharedFC.reset(first, collection);
     }
 
     public static Util getInstance() {

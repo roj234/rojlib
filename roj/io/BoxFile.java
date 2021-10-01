@@ -85,12 +85,13 @@ public class BoxFile implements Closeable {
     public void load() throws IOException {
         long len = rf.length();
         if(len < 2048) {
-            rf.seek(0);
             rf.setLength(2048);
+            rf.seek(0);
             rf.writeInt(MAGIC);
             rf.writeLong(2048 - 4 - 8);
+            return;
         }
-        rf.seek(12);
+        rf.seek(4);
         freeBytes = rf.readLong();
         len -= freeBytes;
         long pos = 12;

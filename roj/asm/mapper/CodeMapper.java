@@ -320,6 +320,8 @@ public final class CodeMapper extends Mapping {
              * Field Name
              */
             md.name = field.name.getString();
+            if(checkFieldType)
+                md.param = field.type.getString();
 
             String newName = fieldMap.get(md);
             if(newName != null) {

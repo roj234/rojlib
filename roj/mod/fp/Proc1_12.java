@@ -234,7 +234,7 @@ public final class Proc1_12 extends Processor {
         CmdUtil.info("服务端专属 " + merger.serverOnly  + ", 客户端专属 " + merger.clientOnly + ", 共用 " + merger.both);
         CmdUtil.info("合并了" + merger.mergedField + "个字段, " + merger.mergedMethod + "个方法, 覆盖了" + merger.replaceMethod + "个方法");
 
-        rmp.generateSuperMap(Arrays.asList(merged, arr[0], forgeJar));
+        rmp.loadLibraries(Arrays.asList(merged, arr[0], forgeJar));
 
         Arrays.fill(arr, null);
 

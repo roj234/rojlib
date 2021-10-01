@@ -27,9 +27,9 @@ package roj.asm.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
+import roj.asm.mapper.util.AccessFallbackHandler;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
-import roj.asm.mapper.util.FirstIterator;
 import roj.asm.mapper.util.MapperList;
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
@@ -75,8 +75,7 @@ public class ConstMapper extends Mapping {
     // 'CMPC': Const Remapper Cache
     public static final int FILE_HEADER = 0x634d5063;
 
-    private static final boolean DEBUG                  = false;
-    private static final boolean FILL_INSTEAD_OF_REMOVE = true;
+    private static final boolean DEBUG = true;
 
     /**
      * 来自依赖的数据
@@ -439,8 +438,7 @@ public class ConstMapper extends Mapping {
             for (int j = 0; j < parents.size(); j++) {
                 sp.owner = parents.get(j);
 
-                Map.Entry<Desc, String> entry = fieldMap.find(sp);
-                if (entry != null) {
+                if (fieldMap.containsKey(sp)) {
                     if (DEBUG)
                         System.out.println("[2F-" + data.name + "]: " + sp.owner + '.' + sp.name);
                     sp.owner = data.name;
@@ -532,20 +530,33 @@ public class ConstMapper extends Mapping {
             throw new IllegalArgumentException("METHOD_TYPE argument not found in class " + data.name);
         }
 
-        Desc sp = Util.shareMD();
+        Desc md = Util.shareMD();
 
-        String methodName = sp.name = dyn.getDesc().getName().getString();
-        String methodDesc = sp.param = mType.getValue().getString();
+        md.name = dyn.getDesc().getName().getString();
+        // FP: init / clinit
+        if(md.name.startsWith("<")) return;
+        md.param = mType.getValue().getString();
 
         String allDesc = dyn.getDesc().getType().getString();
-        String methodClass = ParamHelper.getReturn(allDesc).owner;
+        md.owner = ParamHelper.getReturn(allDesc).owner;
 
-        FirstIterator parents = resolveParentShared(methodClass);
-        while (parents.hasNext()) {
-            sp.owner = parents.next();
-            String d = methodMap.get(sp);
-            if (d != null) {
-                dyn.setDesc(data.writer.getDesc(d, allDesc));
+        String name = methodMap.get(md);
+        if (name != null) {
+            dyn.setDesc(data.writer.getDesc(name, allDesc));
+            return;
+        }
+
+        List<String> parents = selfSupers.getOrDefault(md.owner, Collections.emptyList());
+        for (int i = 0; i < parents.size(); i++) {
+            md.owner = parents.get(i);
+            if(selfSkipped.contains(md)) {
+                if(DEBUG)
+                    System.out.println("[3L-" + data.name + "]: " + (!md.owner.equals(data.name) ? md.owner + '.' : "") + md.name + md.param);
+                break;
+            }
+            name = methodMap.get(md);
+            if (name != null) {
+                dyn.setDesc(data.writer.getDesc(name, allDesc));
                 return;
             }
         }
@@ -570,9 +581,15 @@ public class ConstMapper extends Mapping {
             return;
         }
 
-        FirstIterator parents = resolveParentShared(ref.getClassName());
-        while (parents.hasNext()) {
-            md.owner = parents.next();
+        String name = methodMap.get(md);
+        if (name != null) {
+            setRefName(data, ref, name);
+            return;
+        }
+
+        List<String> parents = selfSupers.getOrDefault(ref.getClassName(), Collections.emptyList());
+        for (int i = 0; i < parents.size(); i++) {
+            md.owner = parents.get(i);
 
             if(selfSkipped.contains(md)) {
                 if(DEBUG)
@@ -580,9 +597,9 @@ public class ConstMapper extends Mapping {
                 break;
             }
 
-            Map.Entry<Desc, String> entry = methodMap.find(md);
-            if (entry != null) {
-                setRefName(data, ref, entry.getValue());
+            name = methodMap.get(md);
+            if (name != null) {
+                setRefName(data, ref, name);
                 break;
             }
         }
@@ -591,20 +608,26 @@ public class ConstMapper extends Mapping {
     /**
      * Map: use other(non-self) fields
      */
-    void mapField(Context ctx, ConstantData data, CstRef ref) {
+    private void mapField(Context ctx, ConstantData data, CstRef ref) {
         Desc fd = Util.shareMD().read(ref);
         if(!checkFieldType) {
             fd.param = "";
+        }
+
+        // FP
+        String name = fieldMap.get(fd);
+        if (name != null) {
+            setRefName(data, ref, name);
+            return;
         }
 
         /**
          * getstatic被傻逼javac继承过
          * 因为上面这点，才需要循环，否则一次get即可
          */
-
-        FirstIterator parents = resolveParentShared(ref.getClassName());
-        while (parents.hasNext()) {
-            fd.owner = parents.next();
+        List<String> parents = selfSupers.getOrDefault(ref.getClassName(), Collections.emptyList());
+        for (int i = 0; i < parents.size(); i++) {
+            fd.owner = parents.get(i);
 
             if(selfSkipped.contains(fd)) {
                 if(DEBUG)
@@ -612,9 +635,9 @@ public class ConstMapper extends Mapping {
                 break;
             }
 
-            Map.Entry<Desc, String> entry = fieldMap.find(fd);
-            if (entry != null) {
-                setRefName(data, ref, entry.getValue());
+            name = fieldMap.get(fd);
+            if (name != null) {
+                setRefName(data, ref, name);
                 break;
             }
         }
@@ -623,15 +646,19 @@ public class ConstMapper extends Mapping {
     // endregion
     // region 读取libraries
 
-    public final void generateSuperMap(File folder) {
+    public final void loadLibraries(File folder) {
         if(!folder.isDirectory()) {
             Helpers.throwAny(new NotDirectoryException(folder.getAbsolutePath()));
         }
 
-        generateSuperMap(FileUtil.findAllFiles(folder));
+        loadLibraries(FileUtil.findAllFiles(folder), null);
     }
 
-    public void generateSuperMap(List<?> files) {
+    public void loadLibraries(List<?> files) {
+        loadLibraries(files, null);
+    }
+
+    public void loadLibraries(List<?> files, AccessFallbackHandler fallback) {
         libSupers.clear();
         libSkipped.clear();
 
@@ -649,9 +676,12 @@ public class ConstMapper extends Mapping {
             flags.computeIfAbsent(dsc.owner, Helpers.cast(nhm)).put(dsc.name, dsc);
         }
 
+        if(fallback == null)
+            fallback = new WarningHandler();
+
         MyHashSet<IClass> classes = new MyHashSet<>();
 
-        FileReader cb = new FileReader(classes, flags);
+        FileReader cb = new FileReader(classes, flags, fallback);
 
         for (int i = 0; i < files.size(); i++) {
             Object o = files.get(i);
@@ -670,28 +700,6 @@ public class ConstMapper extends Mapping {
 
         for (String k : cb.emptyClasses) {
             classMap.remove(k);
-        }
-
-        if(!flags.isEmpty()) {
-            System.out.println("[CM-Warn] 缺少元素: ");
-            for (Map.Entry<String, Map<String, Desc>> entry : flags.entrySet()) {
-                System.out.print(entry.getKey());
-                System.out.print(": ");
-                Iterator<Desc> itr = entry.getValue().values().iterator();
-                while (true) {
-                    Desc desc = itr.next();
-                    System.out.print(desc.name);
-                    if(!desc.param.isEmpty()) {
-                        System.out.print(' ');
-                        System.out.print(desc.param);
-                    }
-                    if(!itr.hasNext()) {
-                        System.out.println();
-                        break;
-                    }
-                    System.out.print("  ");
-                }
-            }
         }
 
         makeInheritMap(libSupers, isMappingConstant ? classMap : null);
@@ -775,18 +783,7 @@ public class ConstMapper extends Mapping {
             visited.clear();
         }
 
-        // 下策
-        FlagList PUBLIC = cb.flagCache.computeIfAbsent((char) AccessFlag.PUBLIC, fl);
-        for (Map<String, Desc> map : flags.values()) {
-            for (Desc desc : map.values()) { // 将没有flag的全部填充为public
-                if(FILL_INSTEAD_OF_REMOVE) {
-                    desc.flags = PUBLIC;
-                } else {
-                    if (null == methodMap.remove(desc))
-                        fieldMap.remove(desc);
-                }
-            }
-        }
+        fallback.handleUnmatched(flags, cb.flagCache);
     }
 
     @SuppressWarnings("unchecked")
@@ -814,8 +811,8 @@ public class ConstMapper extends Mapping {
             else if(map instanceof ByteList) loadMap(((ByteList) map).asInputStream(), reverse);
 
             if(libPath != null) {
-                if(libPath instanceof File) generateSuperMap((File) libPath);
-                else generateSuperMap((List<Object>) libPath);
+                if(libPath instanceof File) loadLibraries((File) libPath);
+                else loadLibraries((List<Object>) libPath);
             }
             if(cacheFile != null)
                 saveCache(hash, cacheFile);
@@ -840,8 +837,8 @@ public class ConstMapper extends Mapping {
                     else if(map instanceof ByteList) loadMap(((ByteList) map).asInputStream(), reverse);
                 }
                 if(libPath != null && result != Boolean.TRUE) {
-                    if (libPath instanceof File) generateSuperMap((File) libPath);
-                    else generateSuperMap((List<Object>) libPath);
+                    if (libPath instanceof File) loadLibraries((File) libPath);
+                    else loadLibraries((List<Object>) libPath);
                 }
                 saveCache(hash, cacheFile);
             }
@@ -850,13 +847,6 @@ public class ConstMapper extends Mapping {
 
     // endregion
     // region 工具方法
-
-    /**
-     * 这个一定要有严格的顺序
-     */
-    final FirstIterator resolveParentShared(String name) {
-        return Util.shareFC(name, selfSupers.getOrDefault(name, Collections.emptyList()));
-    }
 
     /**
      * Set reference name
@@ -978,15 +968,57 @@ public class ConstMapper extends Mapping {
         private final MyHashMap<String, List<String>> map = new MyHashMap<>();
     }
 
+    private static final class WarningHandler implements AccessFallbackHandler {
+        public WarningHandler() {}
+
+        @Override
+        public boolean fillAccessFlags(Desc desc, CharMap<FlagList> interner) {
+            return false;
+        }
+
+        @Override
+        public void handleUnmatched(Map<String, Map<String, Desc>> rest, CharMap<FlagList> interner) {
+            if(!rest.isEmpty()) {
+                System.out.println("[CM-Warn] 缺少元素: ");
+                for (Map.Entry<String, Map<String, Desc>> entry : rest.entrySet()) {
+                    System.out.print(entry.getKey());
+                    System.out.print(": ");
+                    Iterator<Desc> itr = entry.getValue().values().iterator();
+                    while (true) {
+                        Desc desc = itr.next();
+                        System.out.print(desc.name);
+                        if(!desc.param.isEmpty()) {
+                            System.out.print(' ');
+                            System.out.print(desc.param);
+                        }
+                        if(!itr.hasNext()) {
+                            System.out.println();
+                            break;
+                        }
+                        System.out.print("  ");
+                    }
+                }
+                FlagList PUBLIC = interner.computeIfAbsent((char) AccessFlag.PUBLIC, fl);
+                for (Map<String, Desc> map : rest.values()) {
+                    for (Desc desc : map.values()) { // 将没有flag的全部填充为public
+                        desc.flags = PUBLIC;
+                    }
+                }
+            }
+        }
+    }
+
     private final class FileReader implements ZipUtil.ICallback {
         private final MyHashSet<IClass>              classes;
         private final Map<String, Map<String, Desc>> flags;
-        final MyHashSet<String>              emptyClasses = new MyHashSet<>();
+        private final AccessFallbackHandler          fallback;
+        final         MyHashSet<String>              emptyClasses = new MyHashSet<>();
         final CharMap<FlagList> flagCache = new CharMap<>();
 
-        public FileReader(MyHashSet<IClass> classes, Map<String, Map<String, Desc>> flags) {
+        public FileReader(MyHashSet<IClass> classes, Map<String, Map<String, Desc>> flags, AccessFallbackHandler fallback) {
             this.classes = classes;
             this.flags = flags;
+            this.fallback = fallback;
         }
 
         @Override
@@ -1039,6 +1071,14 @@ public class ConstMapper extends Mapping {
                     if (ent != null)
                         ent.flags = flagCache.computeIfAbsent((char) d.accessFlag2(), fl);
                 }
+
+                for (Iterator<Map.Entry<String, Desc>> itr = mds.entrySet().iterator(); itr.hasNext(); ) {
+                    Map.Entry<String, Desc> entry = itr.next();
+                    if (fallback.fillAccessFlags(entry.getValue(), flagCache)) {
+                        itr.remove();
+                    }
+                }
+
                 if (mds.isEmpty()) {
                     flags.remove(data.className());
                 }

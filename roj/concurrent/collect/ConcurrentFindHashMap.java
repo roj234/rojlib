@@ -125,7 +125,7 @@ public class ConcurrentFindHashMap<K, V> implements FindMap<K, V> {
     @Nonnull
     @Override
     public Set<K> keySet() {
-        throw new ConcurrentModificationException();
+        return map.keySet();
     }
 
     @Nonnull

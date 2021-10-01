@@ -220,7 +220,7 @@ public final class Proc1_16 extends Processor {
 
         ConstMapper rmp = new ConstMapper();
         rmp.loadMap(new File(BASE, "/util/mcp-srg.srg"), true);
-        rmp.generateSuperMap(Arrays.asList(mcJar, tmp));
+        rmp.loadLibraries(Arrays.asList(mcJar, tmp));
         CmdUtil.info("映射表已加载");
 
         List<Context>[] ctxs;
