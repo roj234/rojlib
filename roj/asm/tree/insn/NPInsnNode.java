@@ -26,7 +26,6 @@
 
 package roj.asm.tree.insn;
 
-import roj.asm.util.ConstantWriter;
 import roj.asm.util.NodeHelper;
 import roj.util.ByteWriter;
 
@@ -52,7 +51,7 @@ public final class NPInsnNode extends InsnNode {
     }
 
     @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        super.toByteArray(w);
+    public void toByteArray(ByteWriter w) {
+        w.writeByte(code);
     }
 }

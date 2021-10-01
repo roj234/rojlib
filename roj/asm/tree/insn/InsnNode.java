@@ -108,10 +108,7 @@ public abstract class InsnNode implements Helpers.Node {
         return true;
     }
 
-    @Internal
-    public void toByteArray(ByteWriter w) {
-        w.writeByte(code);
-    }
+    public abstract void toByteArray(ByteWriter w);
 
     /**
      * 在toBytearray之前调用，刷新index

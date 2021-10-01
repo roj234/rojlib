@@ -26,15 +26,15 @@
 package roj.mod.fp;
 
 import LZMA.LzmaInputStream;
-import roj.util.ByteList;
+import roj.asm.mapper.ConstMapper;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Enumeration;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * No description provided
@@ -44,20 +44,17 @@ import java.util.jar.JarFile;
  * @since  2020/8/29 8:54
  */
 final class Helper1_12 {
-    static ByteList forgeInit(File forgeFile) throws IOException {
-        JarFile jarFile = new JarFile(forgeFile);
-        Enumeration<JarEntry> enumeration = jarFile.entries();
-        JarEntry deobfData = null;
-        while (enumeration.hasMoreElements()) {
-            JarEntry entry = enumeration.nextElement();
+    static void forgeInit(File forgeFile, ConstMapper rmp) throws IOException {
+        ZipFile zf = new ZipFile(forgeFile);
+        Enumeration<? extends ZipEntry> en = zf.entries();
+        while (en.hasMoreElements()) {
+            ZipEntry entry = en.nextElement();
             if (!entry.isDirectory() && entry.getName().startsWith("deobfuscation_data-") && entry.getName().endsWith(".lzma")) {
-                deobfData = entry;
-                break;
+                rmp.loadMap(new BufferedInputStream(new LzmaInputStream(zf.getInputStream(entry))), false);
+                zf.close();
+                return;
             }
         }
-        try (InputStream is = new BufferedInputStream(new LzmaInputStream(jarFile.getInputStream(deobfData)))) {
-            return new ByteList().readStreamFully(is);
-        }
+        throw new FileNotFoundException("deobfuscation_data");
     }
-
 }

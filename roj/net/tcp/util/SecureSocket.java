@@ -229,7 +229,7 @@ public class SecureSocket extends InsecureSocket {
                         case OK:
                             switch (this.status) {
                                 case NOT_HANDSHAKING:
-                                    throw new IOException("Not handshaking during initial handshake");
+                                    throw new SSLException("Not handshaking during initial handshake");
 
                                 case NEED_TASK:
                                     this.status = doTasks();
@@ -261,7 +261,7 @@ public class SecureSocket extends InsecureSocket {
                             break;
 
                         default: //CLOSED:
-                            throw new IOException("Received" + result.getStatus() +
+                            throw new SSLException("Received" + result.getStatus() +
                                     "during initial handshaking");
                     }
                 }  // "needIO" block.
@@ -291,12 +291,12 @@ public class SecureSocket extends InsecureSocket {
                     }
                 } else {
                     // BUFFER_OVERFLOW/BUFFER_UNDERFLOW/CLOSED:
-                    throw new IOException("Received" + result.getStatus() + "during initial handshaking");
+                    throw new SSLException("Received " + result.getStatus() + " during initial handshaking");
                 }
                 break;
 
             default: // NOT_HANDSHAKING/NEED_TASK/FINISHED
-                throw new RuntimeException("Invalid Handshaking State" + this.status);
+                throw new SSLException("Invalid Handshaking State" + this.status);
         }
 
         return hsDone;
@@ -329,7 +329,7 @@ public class SecureSocket extends InsecureSocket {
         SSLEngineResult result;
 
         if (!hsDone) {
-            throw new IllegalStateException("Not handshake");
+            throw new SSLException("Not handshake");
         }
 
         int nread;
@@ -406,7 +406,7 @@ public class SecureSocket extends InsecureSocket {
             appInTmp.flip();
             if(mx > 0) {
                 if (buffer.readFrom(appInTmp, mx = Math.min(mx, result.bytesProduced())) != mx) {
-                    throw new IllegalStateException("result.bytesProduced() != appInTmp.remaining()");
+                    throw new SSLException("result.bytesProduced() != appInTmp.remaining()");
                 }
             }
             if (appInTmp.remaining() > 0)
@@ -420,7 +420,7 @@ public class SecureSocket extends InsecureSocket {
 
     public int write(ByteList src) throws IOException {
         if (!hsDone) {
-            throw new IllegalStateException("Not handshake");
+            throw new SSLException("Not handshake");
         }
 
         if (networkOut.hasRemaining() && !tryFlush(networkOut)) {

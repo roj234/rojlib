@@ -37,4 +37,6 @@ public interface IIndexInsnNode {
     byte getOpcode();
 
     int getIndex();
+
+    void setIndex(int index);
 }

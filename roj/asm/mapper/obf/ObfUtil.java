@@ -25,8 +25,21 @@
  */
 package roj.asm.mapper.obf;
 
+import roj.asm.Opcodes;
+import roj.asm.frame.CodeBlock;
+import roj.asm.frame.Interpreter;
+import roj.asm.mapper.util.Context;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.insn.LabelInsnNode;
+import roj.asm.tree.insn.NPInsnNode;
+import roj.asm.tree.insn.SwitchInsnNode;
+import roj.asm.tree.simple.MethodSimple;
+import roj.asm.util.InsnList;
+import roj.asm.util.NodeHelper;
 import roj.collect.ToIntMap;
-import roj.kscript.ast.Context;
+import roj.util.Helpers;
 
 import java.util.List;
 import java.util.Random;
@@ -163,7 +176,48 @@ public class ObfUtil {
 
 
      */
-    public static void ControlFlowFlat(List<Context> ctx, ToIntMap<String> chance, Random rnd) {
-        
+    public static void ControlFlowFlat(List<Context> ctx, ToIntMap<String> chance, Random rnd, int flag) {
+        int defaultChance = chance.getOrDefault(null, 0);
+        Interpreter intp = new Interpreter();
+        for (int i = 0; i < ctx.size(); i++) {
+            ConstantData cd = ctx.get(i).getData();
+            List<? extends MethodNode> methods = cd.methods;
+            for (int j = 0; j < methods.size(); j++) {
+                if(rnd.nextInt() < chance.getOrDefault(cd.name, defaultChance)) {
+                    MethodNode node = methods.get(j);
+                    if(node instanceof MethodSimple) {
+                        node = new Method(cd, (MethodSimple) node);
+                        methods.set(i, Helpers.cast(node));
+                    }
+                    Method m = (Method) node;
+                    intp.init(m);
+                    List<CodeBlock> codeBlocks = intp.gather(m.code);
+                    if(m.code.frames != null)
+                        m.code.computeFrames = true;
+                    flatControlFlow0(m, codeBlocks, rnd, flag);
+                }
+            }
+        }
+    }
+
+    private static void flatControlFlow0(Method method, List<CodeBlock> codeBlocks, Random rnd, int flag) {
+        // 首先，把所有变量的slot+1， 0位置用作switch的index
+        // 然后插入代码
+        InsnList prepend = new InsnList();
+        prepend.add(new NPInsnNode(Opcodes.ICONST_0));
+        prepend.add(new NPInsnNode(Opcodes.ISTORE_0));
+        SwitchInsnNode switcher = new SwitchInsnNode(Opcodes.LOOKUPSWITCH);
+        LabelInsnNode label = new LabelInsnNode();
+        prepend.add(label);
+        prepend.add(switcher);
+        InsnList insn = method.code.instructions;
+        for (int i = 0; i < insn.size(); i++) {
+            if(NodeHelper.isVarNode(insn.get(i))) {
+                throw new UnsupportedOperationException("todo!"
+                );
+            }
+        }
+        insn.addAll(0, prepend);
+
     }
 }

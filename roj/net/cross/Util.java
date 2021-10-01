@@ -35,7 +35,10 @@ import roj.util.FastThreadLocal;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
@@ -61,10 +64,8 @@ public class Util {
     public static final int FINALIZED   = 5;
     public static final int SHUTDOWN    = 6;
 
-    public static final int TIMEOUT_HEARTBEAT   = 5000;
-    public static final int TIMEOUT_CONNECT     = 5000;
-    public static final int TIMEOUT_ESTABLISHED = 20000;
-    public static final int TIMEOUT_TRANSFER    = 20000;
+    public static final int TIMEOUT_CONNECT     = 200000;
+    public static final int TIMEOUT_TRANSFER    = 200000;
 
     public static final int PS_HEARTBEAT         = 1;
     public static final int PS_CONNECT           = 2;
@@ -81,7 +82,7 @@ public class Util {
     public static final int PS_RESET             = 12;
     public static final int PS_LINK_OVERFLOW     = 255;
 
-    public static final String[] ERROR_NAMES = {"IO错误", "密码无效/房间不存在/房间已有房主", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
+    public static final String[] ERROR_NAMES = {"IO错误", "登录失败(密码无效/房间不存在/房间已有房主)", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
     public static final int PS_ERROR_IO = 0x20;
     public static final int PS_ERROR_AUTH = 0x21;
     public static final int PS_ERROR_CONNECTED = 0x22;
@@ -97,7 +98,7 @@ public class Util {
     public static final int PS_STATE_IO_ERROR = 1;
     public static final int PS_STATE_DISCARD = 2;
 
-    public static final int PROTOCOL_VERSION = 3_2;
+    public static final int PROTOCOL_VERSION = 3_3;
     public static final ByteList CLIENT_HALLO = new ByteList(new byte[] {
             'A','E','C','L','I','E','N','T','H','A','L','L','O'
     });

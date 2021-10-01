@@ -56,7 +56,7 @@ import java.util.Set;
  * @author Roj233
  * @since 2021/7/18 18:33
  */
-public abstract class Obfuscator extends Mapping {
+public abstract class Obfuscator {
     public static final String TREMINATE_THIS_CLASS = new String();
 
     public static final int ADD_SYNTHETIC = 1, ADD_PUBLIC = 2, REMOVE_SYNTHETIC = 4;
@@ -71,7 +71,7 @@ public abstract class Obfuscator extends Mapping {
     protected int flags;
 
     public Obfuscator() {
-        m1 = new ConstMapper();
+        m1 = new ConstMapper(true);
         m1.isMappingConstant = false;
         m2 = new CodeMapper(m1);
         m2.rewrite = true;

@@ -62,7 +62,7 @@ public final class Desc {
 
     @Override
     public String toString() {
-        return "Desc{" + owner + '.' + name + ' ' + param + '}';
+        return "{" + owner + '.' + name + ' ' + param + '}';
     }
 
     @Override

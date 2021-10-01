@@ -32,17 +32,15 @@ import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTreeSet;
-import roj.concurrent.task.CalculateTask;
-import roj.concurrent.task.ExecutionTask;
 import roj.io.DummyOutputStream;
 import roj.mod.FMDMain;
 import roj.mod.remap.ClassMerger;
 import roj.mod.util.MappingHelper;
 import roj.mod.util.Patcher;
-import roj.text.SimpleLineReader;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 import roj.util.Executable;
+import roj.util.Helpers;
 
 import java.io.*;
 import java.lang.reflect.InvocationTargetException;
@@ -52,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
@@ -103,119 +100,146 @@ public final class Proc1_12 extends Processor {
     }
 
     public int run0() {
-        ByteList n2sIn;
+        List<Context>[] arr = Helpers.cast(new List<?>[3]);
+        arr[0] = new ArrayList<>();
+
         Patcher patcher = new Patcher();
         try {
-            n2sIn = Helper1_12.forgeInit(forgeJar);
-
             ZipFile zf = new ZipFile(forgeJar);
             patcher.setup112(zf.getInputStream(zf.getEntry("binpatches.pack.lzma")));
             zf.close();
         } catch (Throwable e) {
-            StackTraceElement[] elements = e.getStackTrace();
-            for(StackTraceElement element : elements) {
-                if(element.getClassName().equals("roj.mod.processor.Proc1_12")) {
-                    switch (element.getLineNumber()) {
-                        case 106:
-                            CmdUtil.error("forgeHelper加载失败", e);
-                            return -1;
-                        case 109:
-                            CmdUtil.error("补丁失败!", e);
-                            return -1;
-                        case 108:
-                        case 110:
-                            CmdUtil.error("forge '" + forgeJar.getAbsolutePath() + "' 不是zip");
-                            return -1;
-                    }
-                }
-            }
-            CmdUtil.error("I/O异常! 无法加载forgeHelper 或者 补丁加载失败", e);
+            CmdUtil.error("补丁加载失败", e);
             return -1;
         }
 
-        CalculateTask<List<Context>> applyClientBinPatch = new CalculateTask<>(() -> {
-            List<Context> contexts = Util.ctxFromZip(mcJar, StandardCharsets.UTF_8);
+        Runnable applyClientBinPatch = () -> {
+            List<Context> contexts;
+            try {
+                contexts = Util.ctxFromZip(mcJar, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                CmdUtil.error("mcJar读取失败", e);
+                System.exit(-1);
+                return;
+            }
 
             if (DEBUG)
                 CmdUtil.info("[异步操作] 客户端文件数量: " + contexts.size());
 
             for (Context context : contexts) {
                 ByteList result = patcher.patchClient(context.getName(), context.get());
-                if (result != null)
+                if (result != null) {
+                    arr[0].add(new Context(context.getName(), context.get()));
                     context.set(result);
+                }
             }
 
             if (DEBUG)
                 CmdUtil.success("[异步操作] 应用了 " + patcher.clientSuccessCount + " 个客户端补丁！");
 
-            return contexts;
-        });
+            arr[1] = contexts;
+        };
 
-        CalculateTask<List<Context>> appleServerBinPatch = new CalculateTask<>(() -> {
+        Runnable appleServerBinPatch = () -> {
             TrieTreeSet set = new TrieTreeSet();
             FMDMain.readTextList(set::add, "FMD配置.忽略服务端jar中以以下文件名开头的文件");
 
-            List<Context> contexts = Util.ctxFromZip(mcServer, StandardCharsets.UTF_8, name -> !set.startsWith(name));
+            List<Context> contexts;
+            try {
+                contexts = Util.ctxFromZip(mcServer, StandardCharsets.UTF_8, name -> !set.startsWith(name));
+            } catch (IOException e) {
+                CmdUtil.error("mcServer读取失败", e);
+                System.exit(-1);
+                return;
+            }
 
             if (DEBUG)
                 CmdUtil.info("[异步操作] 服务端文件数量: " + contexts.size());
 
             for (Context context : contexts) {
                 ByteList result = patcher.patchServer(context.getName(), context.get());
-                if (result != null)
+                if (result != null) {
+                    arr[0].add(new Context(context.getName(), context.get()));
                     context.set(result);
+                }
             }
 
             if (DEBUG)
                 CmdUtil.success("[异步操作] 应用了 " + patcher.serverSuccessCount + " 个服务端补丁！");
 
-            return contexts;
-        });
-
-        threadWait(applyClientBinPatch, appleServerBinPatch);
-
-        List<Context> serverCtx;
-        List<Context> clientCtx;
-        try {
-            clientCtx = applyClientBinPatch.get();
-            serverCtx = appleServerBinPatch.get();
-        } catch (InterruptedException | ExecutionException e) {
-            CmdUtil.error("读取server/client文件时出现错误", e.getCause());
-            return -1;
-        }
+            arr[2] = contexts;
+        };
 
         ConstMapper rmp = new ConstMapper();
+        Runnable genMapping = () -> {
+            try {
+                // 获取 notch 到 srg
+                Helper1_12.forgeInit(forgeJar, rmp);
+            } catch (IOException e) {
+                CmdUtil.error("Helper1_12.forgeInit()失败", e);
+                System.exit(-1);
+                return;
+            }
+
+            File mcpSrgPath = new File(BASE, "/util/mcp-srg.srg");
+            if (mcpPackFile != null) {
+                Executable action = () -> {
+                    try {
+                        MappingHelper helper = new MappingHelper(rmp);
+                        Map<String, String> origPM = new MyHashMap<>(1000);
+                        helper.parseMCP(mcpPackFile, origPM);
+                        helper.MCP_optimizeParamMap(origPM, paramMap);
+                        helper.extractMcp2Srg_MCP(mcpSrgPath);
+                    } catch (IOException e) {
+                        CmdUtil.error("generateMcpSrg()失败", e);
+                        System.exit(-1);
+                    }
+                };
+
+                if(DEBUG) {
+                    File log = new File(BASE, "parse_mcp.log");
+                    try {
+                        FMDMain.redirectOutput(log, action);
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    }
+
+                    if (log.length() > 10)
+                        CmdUtil.warning("解析MCP时有一些警告, 查看 " + log.getAbsolutePath());
+                } else {
+                    PrintStream out = System.out;
+                    DummyOutputStream w = new DummyOutputStream();
+                    System.setOut(new PrintStream(w));
+
+                    action.execute();
+
+                    if(w.wrote > 10)
+                        CmdUtil.warning("解析MCP时有一些警告");
+
+                    System.setOut(out);
+                }
+            }
+
+            Mapping s2m = new Mapping();
+            s2m.loadMap(mcpSrgPath, true); // srg -> mcp
+
+            rmp.extend(s2m); // 转换为 notch -> mcp 的映射器 : 直接映射mc本体
+        };
+
+        threadWait(applyClientBinPatch, appleServerBinPatch, genMapping);
 
         ClassMerger merger = new ClassMerger();
-        List<Context> merged = new ArrayList<>(merger.process(clientCtx, serverCtx));
+        List<Context> merged = new ArrayList<>(merger.process(arr[1], arr[2]));
 
         CmdUtil.info("服务端专属 " + merger.serverOnly  + ", 客户端专属 " + merger.clientOnly + ", 共用 " + merger.both);
         CmdUtil.info("合并了" + merger.mergedField + "个字段, " + merger.mergedMethod + "个方法, 覆盖了" + merger.replaceMethod + "个方法");
 
-        try {
-            rmp.initEnv(n2sIn, Arrays.asList(mcJar, mcServer, forgeJar), null, false);
-            // 映射 notch 到 srg
+        rmp.generateSuperMap(Arrays.asList(merged, arr[0], forgeJar));
 
-            File mcpSrgPath = new File(BASE, "/util/mcp-srg.srg");
-            if (mcpPackFile != null)
-                generateMcpSrg(rmp, mcpPackFile, mcpSrgPath, paramMap); // 准备MCP映射
+        Arrays.fill(arr, null);
 
-            ConstMapper s2mRemapper = new ConstMapper();
-            s2mRemapper.initEnv(mcpSrgPath, null, null, true); // srg -> mcp
-
-            rmp.extend(s2mRemapper); // 转换为 notch -> mcp 的映射器 : 直接映射mc本体
-
-            if(DEBUG)
-                CmdUtil.info("[异步操作] 映射器已加载");
-
-            if (ConstMapper.DEBUG) {
-                CmdUtil.warning("检测到DEBUG开启, 转接STDOUT到remap.log");
-                System.setOut(new PrintStream(new FileOutputStream(new File(BASE, "remap.log"))));
-            }
-        } catch (IOException e) {
-            CmdUtil.error("准备映射时出现I/O错误", e);
-            return -1;
-        }
+        if(DEBUG)
+            CmdUtil.info("映射器已加载");
 
         CodeMapper nameRmp = new CodeMapper(rmp);
         nameRmp.setParamRemappingV2(paramMap);
@@ -223,43 +247,40 @@ public final class Proc1_12 extends Processor {
         if(DEBUG)
             CmdUtil.info("开始映射");
 
-        double start = System.currentTimeMillis();
-
-        ExecutionTask remapMerged = new ExecutionTask(() -> {
+        Runnable remapMerged = () -> {
             rmp.remap(true, merged);
             nameRmp.remap(true, merged);
-            if (DEBUG)
-                CmdUtil.success("合并cls处理完毕");
-        });
+        };
 
-        CalculateTask<List<Context>> remapForge = new CalculateTask<>(() -> {
-            List<Context> contexts = Util.ctxFromZip(forgeJar, StandardCharsets.UTF_8);
+        Runnable remapForge = () -> {
+            List<Context> contexts;
+            try {
+                contexts = Util.ctxFromZip(forgeJar, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                CmdUtil.error("Should not happen", e);
+                System.exit(-1);
+                return;
+            }
 
             new ConstMapper(rmp).remap(true, contexts);
             nameRmp.remap(true, contexts);
 
-            if (DEBUG)
-                CmdUtil.success("Forge处理完毕");
+            arr[0] = contexts;
+        };
 
-            return contexts;
-        });
+        long start = System.currentTimeMillis();
 
         threadWait(remapMerged, remapForge);
 
-        double last = System.currentTimeMillis();
+        long last = System.currentTimeMillis();
 
-        List<Context> fgResult;
-        try {
-            fgResult = remapForge.get();
-        } catch (InterruptedException | ExecutionException e) {
-            CmdUtil.error("forge文件映射失败", e);
-            return -1;
-        }
+        List<Context> fgResult = arr[0];
 
-        int fc = serverCtx.size() + clientCtx.size() + fgResult.size();
+        int fc = merged.size() + fgResult.size();
 
-        CmdUtil.success("映射成功, " + (last = ((last - start) / 1000d)) + "s");
-        CmdUtil.info("文件数: " + fc + " 平均: " + (int)(fc / last) + " 文件/s");
+        float cost;
+        CmdUtil.success("映射成功, " + (cost = ((last - start) / 1000f)) + "s");
+        CmdUtil.info("文件数: " + fc + " 平均: " + (int)(fc / cost) + " 文件/s");
 
         if(patcher.errorCount != 0)
             CmdUtil.warning("补丁失败数量: " + patcher.errorCount);
@@ -267,26 +288,27 @@ public final class Proc1_12 extends Processor {
         patcher.reset();
 
         //if(DEBUG) {
-            CmdUtil.info("验证class完整性");
+            CmdUtil.info("压缩class");
             for (Context ctx : merged) {
                 try {
-                    ctx.validateSelf();
+                    ctx.compress();
                 } catch (Throwable e) {
                     CmdUtil.warning(ctx.getName() + " 验证失败", e);
                 }
             }
             for (Context ctx : fgResult) {
                 try {
-                    ctx.validateSelf();
+                    ctx.compress();
                 } catch (Throwable e) {
                     CmdUtil.warning(ctx.getName() + " 验证失败", e);
                 }
             }
-            CmdUtil.info("验证完毕");
+            CmdUtil.info("压缩完毕");
         //}
 
         try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar")))) {
             Util.write(merged, zos, false);
+            merged.clear();
             Util.write(fgResult, zos, true);
 
             if (DEBUG)
@@ -296,43 +318,5 @@ public final class Proc1_12 extends Processor {
             return -1;
         }
         return 0;
-    }
-
-    private static void generateMcpSrg(Mapping mapping, File mcpPack, File mcpSrgPath, Map<String, Map<String, List<String>>> paramMap) throws IOException {
-        Executable action = () -> {
-            try {
-                MappingHelper helper = new MappingHelper(mapping);
-                Map<String, String> origPM = new MyHashMap<>(1000);
-                helper.parseMCP(mcpPack, origPM);
-                helper.MCP_optimizeParamMap(origPM, paramMap);
-                helper.extractMcp2Srg_MCP(mcpSrgPath);
-            } catch (IOException e) {
-                CmdUtil.warning("IO异常 ", e);
-            }
-        };
-
-        if(DEBUG) {
-            File log = new File(BASE, "parse_mcp.log");
-            FMDMain.redirectOutput(log, action);
-
-            int warnings = 1;
-            try (FileInputStream fis = new FileInputStream(log)) {
-                warnings = new SimpleLineReader(fis).size();
-            } catch (IOException ignored) {}
-
-            if (warnings > 2)
-                CmdUtil.warning("忽略了 " + (warnings - 2) + " 个警告, 详情查看 " + log.getAbsolutePath());
-        } else {
-            PrintStream out = System.out;
-            DummyOutputStream w = new DummyOutputStream();
-            System.setOut(new PrintStream(w));
-
-            action.execute();
-
-            if(w.wrote > 10)
-                CmdUtil.warning("解析MCP时有一些警告 (打开debug查看详细)");
-
-            System.setOut(out);
-        }
     }
 }

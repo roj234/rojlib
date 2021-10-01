@@ -38,9 +38,9 @@ import roj.util.ByteWriter;
  * @since 2021/5/24 23:21
  */
 public class U1InsnNode extends InsnNode implements IIndexInsnNode {
-    public U1InsnNode(byte code, short index) {
+    public U1InsnNode(byte code, int index) {
         super(code);
-        this.index = index;
+        this.index = (byte) index;
     }
 
     /**
@@ -55,15 +55,21 @@ public class U1InsnNode extends InsnNode implements IIndexInsnNode {
      * T_LONG	11
      */
 
-    public short index;
+    public byte index;
 
     public int getIndex() {
-        return index;
+        return index & 0xFF;
+    }
+
+    @Override
+    public void setIndex(int index) {
+        if(index < 0 || index > 255)
+            throw new IndexOutOfBoundsException("U1InsnNode supports [0,255]");
+        this.index = (byte) index;
     }
 
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeByte((byte) index);
+        w.writeByte(code).writeByte(index);
     }
 
     public String toString() {

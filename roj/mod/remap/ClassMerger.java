@@ -42,7 +42,6 @@ import roj.util.Helpers;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.ListIterator;
 
 /**
  * Merge client and server classes
@@ -52,8 +51,6 @@ import java.util.ListIterator;
  * @since  2020/8/30 13:23
  */
 public class ClassMerger {
-    private static final boolean DEBUG = false;
-
     public int serverOnly, clientOnly, both;
     public int mergedField, mergedMethod, replaceMethod;
 
@@ -72,9 +69,7 @@ public class ClassMerger {
 
             Context mc = byName.putIfAbsent(sc.getName(), sc);
             if (mc != null) {
-                if(processOne(mc, sc)) {
-                    mc.get();
-                }
+                processOne(mc, sc);
                 clientOnly--;
                 serverOnly--;
                 both++;
@@ -84,61 +79,48 @@ public class ClassMerger {
         return byName.values();
     }
 
-    private boolean processOne(Context main, Context sub) {
+    private void processOne(Context main, Context sub) {
         ConstantData subData = sub.getData();
         ConstantData mainData = main.getData();
 
-        boolean flag = false;
+        List<? extends MoFNode> subMs = subData.methods;
+        List<? extends MoFNode> mainMs = mainData.methods;
+        outer:
+        for (int i = 0; i < subMs.size(); i++) {
+            MoFNode sm = subMs.get(i);
+            for (int j = 0; j < mainMs.size(); j++) {
+                MoFNode mm = mainMs.get(j);
+                if (sm.name().equals(mm.name()) && sm.rawDesc().equals(mm.rawDesc())) {
+                    Method Mm = mm instanceof Method ? (Method) mm : new Method(mainData, (MethodSimple) mm);
 
-        List<? extends MoFNode> methods = subData.methods;
-        for (int i = 0; i < methods.size(); i++) {
-            MoFNode ms = methods.get(i);
-            MoFNode found = null;
-            int index = -1;
-            for (ListIterator<? extends MoFNode> iterator = mainData.methods.listIterator(); iterator.hasNext(); ) {
-                MoFNode ms2 = iterator.next();
-                if (ms.name().equals(ms2.name()) && ms.rawDesc().equals(ms2.rawDesc())) {
-                    found = ms2;
-                    index = iterator.nextIndex() - 1;
-                    break;
+                    Method v = detectPriority(mainData, Mm, subData, sm);
+                    if(v != Mm) {
+                        mainMs.set(j, Helpers.cast(v));
+                    }
+                    continue outer;
                 }
             }
-            if (found == null) {
-                mergedMethod++;
-                mainData.methods.add(Helpers.cast(ms instanceof Method ? ms : new Method(subData, (MethodSimple) ms)));
-                flag = true;
-            } else {
-                Method mm = found instanceof Method ? (Method) found : new Method(mainData, (MethodSimple) found);
-
-                Method v = detectPriority(mainData, mm, subData, ms);
-                if(v != mm) {
-                    mainData.methods.set(index, Helpers.cast(v));
-                    flag = true;
-                }
-            }
+            mergedMethod++;
+            mainMs.add(Helpers.cast(sm instanceof Method ? sm : new Method(subData, (MethodSimple) sm)));
         }
 
-        List<? extends MoFNode> fields = subData.fields;
-        for (int i = 0; i < fields.size(); i++) {
-            MoFNode fs = fields.get(i);
-            boolean found = false;
-            for (MoFNode fs2 : mainData.fields) {
+        List<? extends MoFNode> subFs = subData.fields;
+        List<? extends MoFNode> mainFs = mainData.fields;
+        outer:
+        for (int i = 0; i < subFs.size(); i++) {
+            MoFNode fs = subFs.get(i);
+            for (int j = 0; j < mainFs.size(); j++) {
+                MoFNode fs2 = mainFs.get(j);
                 if (fs.name().equals(fs2.name()) && fs.rawDesc().equals(fs2.rawDesc())) {
-                    found = true;
-                    break;
+                    continue outer;
                 }
             }
-            if (!found) {
-                mergedField++;
-                mainData.fields.add(Helpers.cast(fs instanceof Field ? fs : new Field(subData, (FieldSimple) fs)));
-                flag = true;
-            }
+            mergedField++;
+            mainData.fields.add(Helpers.cast(fs instanceof Field ? fs : new Field(subData, (FieldSimple) fs)));
         }
 
         processInnerClasses(mainData, subData);
         processItf(mainData, subData);
-
-        return flag;
     }
 
     private Method detectPriority(ConstantData cstM, Method mainMethod, ConstantData cstS, MoFNode sub) {
@@ -152,8 +134,7 @@ public class ClassMerger {
         if(mainMethod.code.instructions.size() != subMethod.code.instructions.size()) {
             replaceMethod++;
 
-            if(DEBUG)
-                CmdUtil.warning("同名同参方法覆盖!" + cstM.name + '.' + mainMethod.name() + mainMethod.rawDesc());
+            CmdUtil.warning("同名同参方法覆盖!" + cstM.name + '.' + mainMethod.name() + mainMethod.rawDesc());
         }
 
         // 指令合并太草了

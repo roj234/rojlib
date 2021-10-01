@@ -62,11 +62,6 @@ public class ByteWriter {
         return this;
     }
 
-    public ByteWriter writeUByte(short b) {
-        list.add((byte) b);
-        return this;
-    }
-
     public ByteWriter writeByte(byte b) {
         list.add(b);
         return this;

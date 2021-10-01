@@ -228,7 +228,7 @@ public class AEClient implements Runnable, Closeable {
                     ByteWriter w = new ByteWriter(buf);
 
                     w.writeByte((byte) PS_CONNECT).writeByte((byte) ByteWriter.byteCountUTF8(id)).writeByte((byte) ByteWriter.byteCountUTF8(token)).writeByte((byte) 0).writeAllUTF(id).writeAllUTF(token);
-                    if(writeAndFlush(channel, buf, TIMEOUT_ESTABLISHED) < 0) {
+                    if(writeAndFlush(channel, buf, TIMEOUT_TRANSFER) < 0) {
                         syncPrint(this + ": 连接数据包发送超时");
                         break conn;
                     }
@@ -348,6 +348,7 @@ public class AEClient implements Runnable, Closeable {
                                 } else {
                                     syncPrint(this + ": 未知数据包: " + buf);
                                 }
+                                buf.clear();
                                 break conn;
                         }
                         heart = T_CLIENT_HEARTBEAT_RECV;
@@ -382,7 +383,7 @@ public class AEClient implements Runnable, Closeable {
         ByteList buf = channel.buffer();
         int bc;
         if(buf.pos() == 1 && (bc = buf.getU(0) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
-            syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+            syncPrint(channel + ": 错误 " + ERROR_NAMES[bc]);
         } else {
             String msg = e.getMessage();
             if (!"Broken pipe".equals(msg) && !"Connection reset by peer".equals(msg)) {

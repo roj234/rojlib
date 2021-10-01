@@ -45,18 +45,23 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
         super(Opcodes.MULTIANEWARRAY);
     }
 
-    public MDArrayInsnNode(CstClass clazz, int length) {
+    public MDArrayInsnNode(CstClass clazz, int dimension) {
         super(Opcodes.MULTIANEWARRAY);
         this.name = clazz.getValue().getString();
-        this.length = length;
+        this.dimension = dimension;
     }
 
     private String name;
 
-    public int length;
+    public int dimension;
 
     public int getIndex() {
-        return length;
+        return dimension;
+    }
+
+    @Override
+    public void setIndex(int index) {
+        throw new UnsupportedOperationException("Cannot change dimension by setter, manually cast plz");
     }
 
     @Override
@@ -73,25 +78,25 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
         return name;
     }
 
-    private int cid;
+    private char cid;
 
     @Override
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort(cid)
-                .writeByte((byte) this.length);
+        w.writeByte(code)
+         .writeShort(cid)
+         .writeByte((byte) this.dimension);
     }
 
     @Override
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort(this.cid = pool.getClassId(name))
-                .writeByte((byte) this.length);
+        w.writeByte(code)
+         .writeShort(this.cid = (char) pool.getClassId(name))
+         .writeByte((byte) this.dimension);
     }
 
     public String toString() {
         StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(name);
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < dimension; i++) {
             sb.append("[]");
         }
         return sb.toString();

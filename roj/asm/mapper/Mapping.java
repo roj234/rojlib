@@ -44,10 +44,28 @@ import java.util.*;
  * @since  2020/8/28 19:18
  */
 public class Mapping {
-    Flippable<String, String> classMap   = new HashBiMap<>(1000);
-    MyHashMap<Desc, String>   fieldMap   = new MyHashMap<>(1000);
-    MyHashMap<Desc, String>   methodMap  = new MyHashMap<>(1000);
-    TrieTree<String>          packageMap = new TrieTree<>();
+    Flippable<String, String> classMap;
+    MyHashMap<Desc, String>   fieldMap, methodMap;
+    final TrieTree<String>          packageMap;
+    final boolean checkFieldType;
+
+    public Mapping() {
+        this(false);
+    }
+    public Mapping(boolean checkFieldType) {
+        this.checkFieldType = checkFieldType;
+        this.classMap = new HashBiMap<>(1000);
+        this.fieldMap = new MyHashMap<>(1000);
+        this.methodMap = new MyHashMap<>(1000);
+        this.packageMap = new TrieTree<>();
+    }
+    public Mapping(Mapping o) {
+        this.classMap = o.classMap;
+        this.fieldMap = o.fieldMap;
+        this.methodMap = o.methodMap;
+        this.packageMap = o.packageMap;
+        this.checkFieldType = o.checkFieldType;
+    }
 
     /**
      * Data parse
@@ -83,7 +101,6 @@ public class Mapping {
                             } else {
                                 packageMap.put(q.get(0), q.get(1));
                             }
-                            System.err.println("PK tag暂时不支持, 建议使用class tag, 即使会支持也是在另一个class里而不是 ConstMapper");
                         }
                         break;
                     case "CL": // class

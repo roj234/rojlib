@@ -141,7 +141,7 @@ public final class LoadConstInsnNode extends InsnNode {
 
     @Override
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
+        w.writeByte(code);
         if (this.code != Opcodes.LDC) {
             w.writeShort(this.cpi);
         } else {
@@ -151,7 +151,7 @@ public final class LoadConstInsnNode extends InsnNode {
 
     @Override
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        super.toByteArray(w);
+        w.writeByte(code);
 
         if ((this.cpi = (c = pool.reset(c)).getIndex()) == 0) {
             throw new NullPointerException("Invalid constant: " + pool.reset(c));

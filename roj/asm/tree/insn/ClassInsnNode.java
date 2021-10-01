@@ -79,25 +79,22 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         this.name = clazz;
     }
 
-    private int cid;
+    private char cid;
 
     @Override
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort(cid);
+        w.writeByte(code).writeShort(cid);
     }
 
     @Override
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        super.toByteArray(w);
-
         if(code == Opcodes.NEW) {
             if(name.startsWith("[")) {
                 throw new IllegalArgumentException("The new instruction cannot be used to create an array.");
             }
         }
 
-        w.writeShort(this.cid = pool.getClassId(name));
+        w.writeByte(code).writeShort(this.cid = (char) pool.getClassId(name));
     }
 
     @Override

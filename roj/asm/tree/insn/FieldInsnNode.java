@@ -105,16 +105,14 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
         return owner;
     }
 
-    private int fid;
+    private char fid;
 
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort(this.fid);
+        w.writeByte(code).writeShort(this.fid);
     }
 
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort(this.fid = pool.getFieldRefId(owner, name, ParamHelper.getField(type)));
+        w.writeByte(code).writeShort(this.fid = (char) pool.getFieldRefId(owner, name, ParamHelper.getField(type)));
     }
 
     @Override

@@ -154,11 +154,10 @@ public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, ICl
         return this.rawTypes;
     }
 
-    int mid;
+    char mid;
 
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort(mid);
+        w.writeByte(code).writeShort(mid);
     }
 
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
@@ -169,7 +168,7 @@ public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, ICl
         // But I will not limit this because they are VALID instructions, only those cause crashes does I will limit.
 
         params.add(returnType);
-        mid = pool.getMethodRefId(owner, name, ParamHelper.getMethod(params));
+        mid = (char) pool.getMethodRefId(owner, name, ParamHelper.getMethod(params));
         params.remove(params.size() - 1);
     }
 

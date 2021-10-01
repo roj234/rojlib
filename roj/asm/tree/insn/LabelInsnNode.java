@@ -25,7 +25,6 @@
  */
 package roj.asm.tree.insn;
 
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
 /**
@@ -41,7 +40,7 @@ public class LabelInsnNode extends InsnNode {
     }
 
     @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        throw new IllegalStateException("Unable write LABEL, check InsnList.add() ?");
+    public void toByteArray(ByteWriter w) {
+        throw new IllegalStateException("Unable write LABEL, check InsnList.add()");
     }
 }

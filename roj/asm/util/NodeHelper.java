@@ -129,7 +129,7 @@ public class NodeHelper {
                 return cached((byte) (ICONST_0 + number));
             default:
                 if((byte)number == number) {
-                    return new U1InsnNode(BIPUSH, (short) number);
+                    return new U1InsnNode(BIPUSH, number);
                 }
                 if((short)number == number) {
                     return new U2InsnNode(SIPUSH, number);
@@ -154,7 +154,7 @@ public class NodeHelper {
                 if (id <= 3) {
                     list.add(loadSore(base, id));
                 } else if (id <= 255) {
-                    list.add(new U1InsnNode(base, (short) id));
+                    list.add(new U1InsnNode(base, id));
                 } else if (id <= 65535) {
                     list.add(NPInsnNode.of(Opcodes.WIDE));
                     list.add(new U2InsnNode(base, id));
@@ -253,61 +253,61 @@ public class NodeHelper {
             case ASTORE_1:
             case ASTORE_2:
             case ASTORE_3:
-                return new U1InsnNode(ASTORE, (short) (node.getOpcode() - ASTORE_0));
+                return new U1InsnNode(ASTORE, (node.getOpcode() - ASTORE_0));
 
             case FSTORE_0:
             case FSTORE_1:
             case FSTORE_2:
             case FSTORE_3:
-                return new U1InsnNode(FSTORE, (short) (node.getOpcode() - FSTORE_0));
+                return new U1InsnNode(FSTORE, (node.getOpcode() - FSTORE_0));
 
             case ISTORE_0:
             case ISTORE_1:
             case ISTORE_2:
             case ISTORE_3:
-                return new U1InsnNode(ISTORE, (short) (node.getOpcode() - ISTORE_0));
+                return new U1InsnNode(ISTORE, (node.getOpcode() - ISTORE_0));
 
             case DSTORE_0:
             case DSTORE_1:
             case DSTORE_2:
             case DSTORE_3:
-                return new U1InsnNode(DSTORE, (short) (node.getOpcode() - DSTORE_0));
+                return new U1InsnNode(DSTORE, (node.getOpcode() - DSTORE_0));
 
             case LSTORE_0:
             case LSTORE_1:
             case LSTORE_2:
             case LSTORE_3:
-                return new U1InsnNode(LSTORE, (short) (node.getOpcode() - LSTORE_0));
+                return new U1InsnNode(LSTORE, (node.getOpcode() - LSTORE_0));
 
             case ALOAD_0:
             case ALOAD_1:
             case ALOAD_2:
             case ALOAD_3:
-                return new U1InsnNode(ALOAD, (short) (node.getOpcode() - ALOAD_0));
+                return new U1InsnNode(ALOAD, (node.getOpcode() - ALOAD_0));
 
             case FLOAD_0:
             case FLOAD_1:
             case FLOAD_2:
             case FLOAD_3:
-                return new U1InsnNode(FLOAD, (short) (node.getOpcode() - FLOAD_0));
+                return new U1InsnNode(FLOAD, (node.getOpcode() - FLOAD_0));
 
             case ILOAD_0:
             case ILOAD_1:
             case ILOAD_2:
             case ILOAD_3:
-                return new U1InsnNode(ILOAD, (short) (node.getOpcode() - ILOAD_0));
+                return new U1InsnNode(ILOAD, (node.getOpcode() - ILOAD_0));
 
             case DLOAD_0:
             case DLOAD_1:
             case DLOAD_2:
             case DLOAD_3:
-                return new U1InsnNode(DLOAD, (short) (node.getOpcode() - DLOAD_0));
+                return new U1InsnNode(DLOAD, (node.getOpcode() - DLOAD_0));
 
             case LLOAD_0:
             case LLOAD_1:
             case LLOAD_2:
             case LLOAD_3:
-                return new U1InsnNode(LLOAD, (short) (node.getOpcode() - LLOAD_0));
+                return new U1InsnNode(LLOAD, (node.getOpcode() - LLOAD_0));
 
             case ICONST_0:
             case ICONST_1:

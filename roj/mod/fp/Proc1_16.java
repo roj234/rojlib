@@ -32,7 +32,6 @@ import roj.asm.mapper.util.Context;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.OperationDone;
-import roj.concurrent.task.CalculateTask;
 import roj.concurrent.task.ExecutionTask;
 import roj.config.JSONParser;
 import roj.config.ParseException;
@@ -50,11 +49,13 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -181,7 +182,6 @@ public final class Proc1_16 extends Processor {
         }));
     }
 
-    @SuppressWarnings("unchecked")
     public Proc1_16(File mcServer, @Nullable Map<String, Map<String, List<String>>> paramMap, Object[] files) {
         super((File) files[0], mcServer);
         this.forgeJar = (File) files[1]; // normal
@@ -214,26 +214,17 @@ public final class Proc1_16 extends Processor {
             return -1;
         }
 
-        List<File> libPath = Arrays.asList(mcJar, tmp);
-
         Patcher patcher = new Patcher();
         patcher.setup113(serverLzmaInput, Collections.emptyMap()); // 读取服务端补丁，客户端打了
         CmdUtil.info("补丁已加载");
 
-        CalculateTask<ConstMapper> prepRmp = new CalculateTask<>(() -> {
-            if (ConstMapper.DEBUG) {
-                CmdUtil.warning("检测到DEBUG开启, 转接STDOUT到remap.log");
-                System.setOut(new PrintStream(new FileOutputStream(new File(BASE, "remap.log"))));
-            }
+        ConstMapper rmp = new ConstMapper();
+        rmp.loadMap(new File(BASE, "/util/mcp-srg.srg"), true);
+        rmp.generateSuperMap(Arrays.asList(mcJar, tmp));
+        CmdUtil.info("映射表已加载");
 
-            ConstMapper s2mRemapper = new ConstMapper();
-            s2mRemapper.initEnv(new File(BASE, "/util/mcp-srg.srg"), libPath, null, true); // srg 转换为 mcp
-            // s2mRemapper.clearLibs(); // 这个忘了干啥的，先注释掉
-            CmdUtil.info("映射表已加载");
-            return s2mRemapper;
-        });
-
-        CalculateTask<List<Context>[]> prepCtx = Helpers.cast(new CalculateTask<>(() -> {
+        List<Context>[] ctxs;
+        try {
             List<Context> servCtxs = Util.ctxFromZip(tmp, StandardCharsets.UTF_8);
 
             for (int i = 0; i < servCtxs.size(); i++) {
@@ -261,24 +252,15 @@ public final class Proc1_16 extends Processor {
                 CmdUtil.info("服务端文件数量: " + servCtxs.size());
                 CmdUtil.info("Forge文件数量: " + fgCtxs.size());
             }
-
-            // 客户端/forge 高版本都是 srg
-            return new List<?>[]{clientCtxs, servCtxs, fgCtxs};
-        }));
-
-        threadWait(prepRmp, prepCtx);
-
-        tmp.delete();
-
-        List<Context>[] ctxs;
-        ConstMapper rmp;
-        try {
-            ctxs = prepCtx.get();
-            rmp = prepRmp.get();
-        } catch (InterruptedException | ExecutionException e) {
-            CmdUtil.error("出现致命错误 " + e.getClass().getSimpleName(), e.getCause());
+            ctxs = Helpers.cast(new List<?>[] {
+                    clientCtxs, servCtxs, fgCtxs
+            });
+        } catch (IOException e) {
+            CmdUtil.error("IO", e);
             return -1;
         }
+
+        tmp.delete();
 
         CodeMapper nameRmp = new CodeMapper(rmp);
         nameRmp.setParamRemappingV2(paramMap);

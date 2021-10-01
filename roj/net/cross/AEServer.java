@@ -404,7 +404,7 @@ public class AEServer extends TCPServer {
 
                                     int code = server.handleConnect(this, r.readBoolean(), r.readUTF0(idLen), r.readUTF0(tokenLen));
                                     if (code != -1) {
-                                        syncPrint(this + ": 连接失败(协议): " + code);
+                                        syncPrint(this + ": 连接失败(协议): " + ERROR_NAMES[code - 0x20]);
                                         writeEx(channel, (byte) code);
                                         break conn;
                                     }

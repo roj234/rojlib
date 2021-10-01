@@ -30,7 +30,6 @@ import roj.asm.mapper.util.Desc;
 import roj.collect.MyHashMap;
 import roj.concurrent.PrefixFactory;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.ITask;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
@@ -39,6 +38,7 @@ import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.ui.CmdUtil;
 import roj.util.ByteWriter;
+import roj.util.FastLocalThread;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -57,7 +57,6 @@ import java.util.Map;
 public final class Shared {
     public static final boolean DEBUG;
     public static final Map<String, String> srg2mcp = new MyHashMap<>(1000, 1.5f);
-    static final boolean ENABLE_CONCURRENT = false;
 
     public static final String VERSION = "1.5.5";
 
@@ -231,23 +230,28 @@ public final class Shared {
         return mapperRev;
     }
 
-    public static void threadWait(ITask... tasks) {
-        if(!ENABLE_CONCURRENT) {
-            for (ITask task : tasks) {
-                try {
-                    task.calculate(null);
-                } catch (Exception e) {
-                    e.printStackTrace();
+    public static void threadWait(Runnable... run) {
+        if(Runtime.getRuntime().availableProcessors() > 2) {
+            Thread[] t = new Thread[run.length];
+            for (int i = 0; i < run.length; i++) {
+                Thread o = t[i] = new FastLocalThread(run[i]);
+                o.setDaemon(true);
+                o.start();
+            }
+            for (Thread thread : t) {
+                while (thread.isAlive()) {
+                    try {
+                        synchronized (thread) {
+                            thread.wait(0);
+                        }
+                    } catch (InterruptedException ignored) {}
                 }
             }
-            return;
+        } else {
+            for (Runnable runnable : run) {
+                runnable.run();
+            }
         }
-
-        for(ITask task : tasks) {
-            parallel.pushTask(task);
-        }
-
-        parallel.waitUntilFinish();
     }
 
     public static void saveForgeMapping() {

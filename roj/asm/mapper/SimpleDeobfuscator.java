@@ -105,7 +105,6 @@ public final class SimpleDeobfuscator extends Obfuscator {
     public int clazz, method, field;
 
     public SimpleDeobfuscator() {
-        m1.checkFieldType = true;
         reFlags = 1;
     }
 

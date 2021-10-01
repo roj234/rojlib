@@ -48,9 +48,13 @@ public class U4InsnNode extends InsnNode implements IIndexInsnNode {
         return index;
     }
 
+    @Override
+    public void setIndex(int index) {
+        this.index = index;
+    }
+
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeInt(index);
+        w.writeByte(code).writeInt(index);
     }
 
     public String toString() {

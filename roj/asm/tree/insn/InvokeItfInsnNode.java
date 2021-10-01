@@ -65,8 +65,6 @@ public class InvokeItfInsnNode extends InvokeInsnNode {
         super.verify(list, index, mainVer);
     }
 
-    public byte count;
-
     /**
      * indexbyte1
      * indexbyte2
@@ -76,26 +74,25 @@ public class InvokeItfInsnNode extends InvokeInsnNode {
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
         toByteArray(w);
 
-        // The fourth operand byte of each invokeinterface instruction must have the value zero.
-        // Thus, we ignore it.
-        int cnt = 1;
-        for (int i = 0; i < params.size(); i++) {
-            cnt += params.get(i).length();
-        }
-        count = (byte) cnt;
-
         // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary
         // to store the arguments to be passed to the interface method,
         // as implied by the descriptor of the CONSTANT_NameAndType_info structure
         // referenced by the CONSTANT_InterfaceMethodref constant pool entry.
 
         params.add(returnType);
-        mid = pool.getItfRefId(owner, name, ParamHelper.getMethod(params));
+        mid = (char) pool.getItfRefId(owner, name, ParamHelper.getMethod(params));
         params.remove(params.size() - 1);
     }
 
     public void toByteArray(ByteWriter w) {
         super.toByteArray(w);
-        w.writeByte(count).writeByte((byte) 0);
+
+        // The fourth operand byte of each invokeinterface instruction must have the value zero.
+        // Thus, we ignore it.
+        int cnt = 1;
+        for (int i = 0; i < params.size(); i++) {
+            cnt += params.get(i).length();
+        }
+        w.writeByte((byte) cnt).writeByte((byte) 0);
     }
 }

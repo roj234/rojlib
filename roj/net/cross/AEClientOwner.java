@@ -111,7 +111,7 @@ public final class AEClientOwner extends AEClient {
                 ByteWriter w = new ByteWriter(buf);
 
                 w.writeByte((byte) PS_CONNECT).writeByte((byte) ByteWriter.byteCountUTF8(id)).writeByte((byte) ByteWriter.byteCountUTF8(token)).writeByte((byte) 1).writeAllUTF(id).writeAllUTF(token);
-                if(writeAndFlush(channel, buf, TIMEOUT_ESTABLISHED) < 0) {
+                if(writeAndFlush(channel, buf, TIMEOUT_TRANSFER) < 0) {
                     syncPrint(this + ": 连接数据包发送超时");
                     break conn;
                 }

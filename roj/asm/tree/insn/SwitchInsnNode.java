@@ -78,7 +78,7 @@ public final class SwitchInsnNode extends InsnNode {
     public void preToByteArray(ConstantWriter pool, ByteWriter w) {
         if(pad == -1) {
             int len = w.list.pos() + 1;
-            this.pad = ((len & 3) == 0 ? 0 : 4 - (len & 3));
+            this.pad = (byte) ((len & 3) == 0 ? 0 : 4 - (len & 3));
         }
 
         int vl;
@@ -96,12 +96,10 @@ public final class SwitchInsnNode extends InsnNode {
             throw new IllegalStateException();
         }
 
-        super.toByteArray(w);
-
         ToIntFunction<InsnNode> pcRev = this.pcRev;
         int self = pcRev.applyAsInt(this);
 
-        w.list.pos(w.list.pos() + pad);
+        w.writeByte(code).list.pos(w.list.pos() + pad);
         if (this.code == Opcodes.TABLESWITCH) {
             long hl = calculateShouldUseTable();
             w.writeInt(pcRev.applyAsInt(validate(def)) - self)
@@ -122,7 +120,7 @@ public final class SwitchInsnNode extends InsnNode {
         this.pad = -1;
     }
 
-    public int pad = -1;
+    private byte pad = -1;
 
     private long calculateShouldUseTable() {
         int nlabels = mapping.size();

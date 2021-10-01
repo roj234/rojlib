@@ -28,7 +28,6 @@ package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.Opcodes;
-import roj.asm.util.ConstantWriter;
 import roj.collect.LinkedIntMap;
 import roj.util.ByteWriter;
 
@@ -64,10 +63,4 @@ public final class SwchPrimer extends InsnNode {
     public void toByteArray(ByteWriter w) {
         throw new UnsupportedOperationException();
     }
-
-    @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        throw new UnsupportedOperationException();
-    }
-
 }

@@ -67,13 +67,12 @@ public class InvokeDynInsnNode extends InsnNode implements IInvocationInsnNode {
     public List<Type> params;
     public Type returnType;
 
-    private int did;
+    private char did;
 
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
         // The third and fourth operand bytes of each invokedynamic instruction must have the value zero.
         // Thus, we ignore it again(Previous in InvokeItfInsnNode).
-        w.writeShort(this.did).writeShort(0);
+        w.writeByte(code).writeShort(this.did).writeShort(0);
     }
 
     /**
@@ -86,7 +85,7 @@ public class InvokeDynInsnNode extends InsnNode implements IInvocationInsnNode {
         toByteArray(w);
 
         params.add(returnType);
-        this.did = pool.getInvokeDynId((short) bootstrapTableIndex, name, ParamHelper.getMethod(params));
+        this.did = (char) pool.getInvokeDynId((short) bootstrapTableIndex, name, ParamHelper.getMethod(params));
         params.remove(params.size() - 1);
     }
 

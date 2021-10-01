@@ -39,18 +39,24 @@ import roj.util.ByteWriter;
 public class U2InsnNode extends InsnNode implements IIndexInsnNode {
     public U2InsnNode(byte code, int index) {
         super(code);
-        this.index = index;
+        this.index = (char) index;
     }
 
-    public int index;
+    public char index;
 
     public int getIndex() {
         return index;
     }
 
+    @Override
+    public void setIndex(int index) {
+        if(index < 0 || index > 65535)
+            throw new IndexOutOfBoundsException("U2InsnNode supports [0,65535]");
+        this.index = (char) index;
+    }
+
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        w.writeShort((short) index);
+        w.writeByte(code).writeShort(index);
     }
 
     public String toString() {

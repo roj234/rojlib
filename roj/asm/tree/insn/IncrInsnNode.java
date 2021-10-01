@@ -39,8 +39,8 @@ import roj.util.ByteWriter;
 public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     public IncrInsnNode(int variableId, int amount) {
         super(Opcodes.IINC);
-        this.variableId = variableId;
-        this.amount = amount;
+        this.variableId = (char) variableId;
+        this.amount = (short) amount;
     }
 
     @Override
@@ -48,7 +48,8 @@ public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
         return code == Opcodes.IINC;
     }
 
-    public int variableId, amount;
+    public char variableId;
+    public short amount;
 
     @Override
     public int getIndex() {
@@ -56,9 +57,22 @@ public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     @Override
+    public void setIndex(int index) {
+        if(index < 0 || index > 65535)
+            throw new IllegalArgumentException("IncrInsnNode supports [0,65535]");
+
+        if(variableId > 255) {
+            if(index < 255)
+                throw new IllegalArgumentException("Check [wide] node and manually set index");
+        } else if (index > 255)
+            throw new IllegalArgumentException("Check [wide] node and manually set index");
+        this.variableId = (char) index;
+    }
+
+    @Override
     public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-        if (variableId != (byte) variableId || amount != (byte) amount) {
+        w.writeByte(code);
+        if (variableId > 255 || amount != (byte) amount) {
             w.writeShort(variableId).writeShort(amount);
         } else {
             w.writeByte((byte) variableId).writeByte((byte) amount);

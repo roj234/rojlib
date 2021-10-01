@@ -42,7 +42,6 @@ import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
-import roj.collect.MyHashMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
@@ -65,10 +64,9 @@ public final class CodeMapper extends Mapping {
 
     public static final IBitSet HUMAN_READABLE_TOKENS = LongBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
 
-    private Map<String, ?> paramNameMap = null;
+    private Map<String, ?> paramNameMap;
     private byte paramNameType;
 
-    public boolean rewrite;
     private IBitSet validVarChars = HUMAN_READABLE_TOKENS;
 
     private final UnaryOperator<String> NAME_REMAPPER = (old) -> {
@@ -76,10 +74,14 @@ public final class CodeMapper extends Mapping {
         return now == null ? old : now;
     };
 
+    public boolean rewrite;
+
+    public CodeMapper(boolean checkFieldType) {
+        super(checkFieldType);
+    }
+
     public CodeMapper(CodeMapper o) {
-        this.classMap = o.classMap;
-        this.fieldMap = o.fieldMap;
-        this.methodMap = o.methodMap;
+        super(o);
         this.rewrite = o.rewrite;
         this.paramNameMap = o.paramNameMap;
         this.paramNameType = o.paramNameType;
@@ -87,14 +89,7 @@ public final class CodeMapper extends Mapping {
     }
 
     public CodeMapper(Mapping mapping) {
-        read(mapping);
-    }
-
-    public final CodeMapper read(Mapping mapping) {
-        this.classMap = mapping.getClassMap();
-        this.fieldMap = (MyHashMap<Desc, String>) mapping.getFieldMap();
-        this.methodMap = (MyHashMap<Desc, String>) mapping.getMethodMap();
-        return this;
+        super(mapping);
     }
 
     public void setValidVarChars(IBitSet valid) {
@@ -308,12 +303,10 @@ public final class CodeMapper extends Mapping {
                 mapSignature(data.cp, method.attributes);
                 max = Math.max(transform_LVT_LVTT_ST(data, method), max);
             } else {
-                // need test
-                ctx.compress();
+                ctx.get();
                 data = ctx.getData();
                 methods1 = data.methods;
                 i = 0;
-                System.err.println("ValidateSelf() test");
             }
         }
 

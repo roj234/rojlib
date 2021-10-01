@@ -444,11 +444,9 @@ public class ByteList {
      * 只写，加快速度
      */
     public final static class EmptyByteList extends ByteList {
-        static final byte[] ZERO = new byte[0];
-
         public EmptyByteList() {
             super();
-            this.list = ZERO;
+            this.list = EmptyArrays.BYTES;
         }
 
         @Override

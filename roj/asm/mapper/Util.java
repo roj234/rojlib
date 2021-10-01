@@ -76,6 +76,8 @@ public final class Util {
         }
     };
 
+    public static final int CPU = Runtime.getRuntime().availableProcessors();
+
     private Util() {}
 
     public final Desc sharedDC = new Desc("", "", "");
@@ -88,14 +90,12 @@ public final class Util {
     private final CharList sharedCL = new CharList();
     private final ArrayList<?> sharedAL = new ArrayList<>();
 
-    static final int CPU = Runtime.getRuntime().availableProcessors();
-
     public static Desc shareMD() {
         return ThreadBasedCache.get().sharedDC;
     }
 
     public static FirstIterator shareFC(String first, List<String> collection) {
-        return ((FirstIterator) Helpers.cast(ThreadBasedCache.get().sharedFC)).reset(first, collection);
+        return ThreadBasedCache.get().sharedFC.reset(first, collection);
     }
 
     public static Util getInstance() {
@@ -479,6 +479,7 @@ public final class Util {
     }
 
     public static String transformFieldType(Map<String, String> classMap, String fd) {
+        if(fd.length() == 0) return null;
         char first = fd.charAt(0);
         // 数组
         if(first == NativeType.ARRAY) {
@@ -577,10 +578,11 @@ public final class Util {
 
     // endregion
 
-    public static long libHash(List<File> list) {
+    public static long libHash(List<?> list) {
         long hash = 0;
         for (int i = 0; i < list.size(); i++) {
-            File f = list.get(i);
+            if(!(list.get(i) instanceof File)) continue;
+            File f = (File) list.get(i);
             if(f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
                 hash = 31 * hash + f.getName().hashCode();
                 hash = 31 * hash + (f.length() & 262143);

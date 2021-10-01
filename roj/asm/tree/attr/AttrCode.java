@@ -87,7 +87,6 @@ public class AttrCode extends Attribute {
     public int stackSize, localSize;
 
     public boolean computeFrames = false;
-    // goto 是跳到'那个'位置，也就是'之前'
     public List<Frame> frames;
     public final ArrayList<ExceptionEntry> exceptions = new ArrayList<>();
 
@@ -322,7 +321,7 @@ public class AttrCode extends Attribute {
         ft.init(owner);
 
         try {
-            frames.addAll(ft.collect(instructions, exceptions, pcRev));
+            frames.addAll(ft.compute(instructions, exceptions, pcRev));
         } catch (Throwable e) {
             e.printStackTrace();
         }

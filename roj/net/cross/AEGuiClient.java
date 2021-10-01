@@ -33,11 +33,13 @@ import roj.io.NonblockingUtil;
 import roj.text.TextUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteWriter;
+import roj.util.FastLocalThread;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -67,6 +69,10 @@ public class AEGuiClient extends JFrame {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }
+        if(args.length == 0 && new File("asc.json").isFile()) {
+            args = new String[] { "asc.json" };
+            System.out.println("检测到 asc.json");
+        }
         if(args.length > 0) {
             CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[0]))).asMap();
 
@@ -92,13 +98,22 @@ public class AEGuiClient extends JFrame {
                 JOptionPane.showMessageDialog(null, "服务器端口有误");
                 return;
             }
+            System.out.println("连接到 " + cfg.getString("url"));
+            System.out.println("本地端口 127.0.0.1:" + cfg.getInteger("port"));
+            System.out.println("使用SSL安全加密: " + cfg.getBool("ssl"));
+            System.out.println("启用访问日志: " + !cfg.getBool("no_log"));
+            System.out.println("房间号: " + cfg.getString("room"));
 
             if(!cfg.getBool("no_log"))
                 Util.out = System.out;
 
-            Thread.currentThread().setName("Client Thread");
+            Thread.currentThread().setName("Waiter");
             client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
-            client.run();
+            Thread runner = new FastLocalThread(client);
+            runner.setDaemon(true);
+            runner.setName("Client Thread");
+            runner.start();
+            JOptionPane.showMessageDialog(null, "按确认关闭客户端");
         } else {
             new AEGuiClient();
         }
