@@ -57,6 +57,7 @@ public final class JSONParser {
             right_m_bracket = 16,
             comma = 17,
             colon = 18;
+    public static final int NO_DUPLICATE_KEY = 1, LITERAL_KEY = 2, UNESCAPED_SINGLE_YH = 4, NO_EOF = 8;
 
     public static void main(String[] args) throws ParseException, IOException {
         String s = ByteReader.readUTF(new ByteList().readStreamArrayFully(new FileInputStream(args[0])));
@@ -102,7 +103,7 @@ public final class JSONParser {
 
         CEntry ce = jsonRead(l, (byte) flag);
 
-        if (wr.nextWord().type() != WordPresets.EOF) {
+        if ((flag & NO_EOF) == 0 && wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
         return ce;

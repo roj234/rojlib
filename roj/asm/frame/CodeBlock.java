@@ -23,43 +23,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper.util;
+package roj.asm.frame;
 
-import roj.collect.AbstractIterator;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.util.InsnList;
 
 import java.util.List;
 
 /**
- * X first iterator
+ * Your description here
  *
  * @author Roj233
  * @version 0.1
- * @since 2021/9/26 14:10
+ * @since 2021/8/24 13:22
  */
-public final class FirstIterator extends AbstractIterator<String> {
-    List<String> list;
-    int          i;
+public final class CodeBlock {
+    public List<InsnNode> nodesInRegion, nodesToHere, nodesLeaveHere;
 
-    public FirstIterator(String first, List<String> list) {
-        stage = CHECKED;
-        result = first;
-        this.list = list;
-    }
+    CodeBlock(InsnList list, BasicBlock s) {
 
-    @Override
-    public boolean computeNext() {
-        if (i < list.size()) {
-            result = list.get(i++);
-            return true;
-        }
-        return false;
-    }
-
-    public FirstIterator reset(String first, List<String> target) {
-        list = target;
-        stage = CHECKED;
-        result = first;
-        i = 0;
-        return this;
     }
 }

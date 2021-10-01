@@ -25,8 +25,6 @@
  */
 package ilib.util;
 
-import roj.asm.annotation.OpenAny;
-
 import net.minecraft.util.math.Vec3d;
 
 /**
@@ -36,9 +34,7 @@ import net.minecraft.util.math.Vec3d;
  * @version 0.1
  * @since  2020/8/22 19:45
  */
-@OpenAny(value = "net.minecraft.util.math.Vec3d", names = {
-        "field_72450_a", "field_72448_b", "field_72449_c" // should remove final
-})
+//!!AT [ "net.minecraft.util.math.Vec3d", ["field_72450_a", "field_72448_b", "field_72449_c"]]
 public final class MutableVec {
     public final Vec3d vec = new Vec3d(0, 0, 0);
 

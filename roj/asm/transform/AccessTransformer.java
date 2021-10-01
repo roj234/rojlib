@@ -151,14 +151,14 @@ public class AccessTransformer {
             if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
                 continue;
             FlagList list = field.accessFlag();
-            doAT(list, evenProtected);
+            doAT(list, evenProtected || !(names instanceof Universe));
             data.setFlagFor(field, list);
         }
         for (AccessData.MOF field : data.methods) {
             if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
                 continue;
             FlagList list = field.accessFlag();
-            doAT(list, evenProtected);
+            doAT(list, evenProtected || !(names instanceof Universe));
             data.setFlagFor(field, list);
         }
         return data.toByteArray();

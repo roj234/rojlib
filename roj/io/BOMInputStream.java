@@ -26,7 +26,6 @@
 package roj.io;
 
 import javax.annotation.Nonnull;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -37,11 +36,8 @@ import java.io.InputStream;
  * @version 0.1
  * @since  2021/3/7 11:58
  */
-public class BOMInputStream extends FilterInputStream {
+public class BOMInputStream extends PushbackInputStream {
     String encoding;
-
-    byte[] bomBuffer;
-    int bomPush = -1, bomOff = 0;
 
     public BOMInputStream(InputStream in) {
         this(in, "UTF-8");
@@ -50,7 +46,9 @@ public class BOMInputStream extends FilterInputStream {
     public BOMInputStream(InputStream in, String defaultEnc) {
         super(in);
         this.encoding = defaultEnc;
-        bomBuffer = new byte[4];
+        this.buffer = new byte[4];
+        this.bOff = -1;
+        this.bLen = 4;
     }
 
     public BOMInputStream(InputStream in, String defaultEnc, boolean autoInit) throws IOException {
@@ -67,19 +65,19 @@ public class BOMInputStream extends FilterInputStream {
     @Override
     public int available() throws IOException {
         init();
-        return super.available() + 4 - bomPush;
+        return super.available();
     }
 
     /**
      * Skip BOM bytes
      */
     protected void init() throws IOException {
-        if (bomPush != -1) {
+        if (bOff != -1) {
             return;
         }
 
-        byte[] bom = bomBuffer;
-        int n = in.read(bom, 0, bom.length);
+        byte[] bom = buffer;
+        int n = in.read(bom, 0, 4);
 
         int rev = 0;
 
@@ -118,46 +116,18 @@ public class BOMInputStream extends FilterInputStream {
             break;
         }
 
-        bomPush = rev;
+        bOff = rev;
     }
 
     @Override
     public int read(@Nonnull byte[] b, int off, int len) throws IOException {
         init();
-
-        int k = bomPush;
-        if(k < 4) {
-            if (len < k) {
-                bomPush += len;
-
-                while (len-- > 0) {
-                    b[off++] = bomBuffer[k++];
-                }
-
-                return len;
-            } else {
-                bomPush = 4;
-
-                int r = 4 - k;
-                len -= r;
-                while (k < 4) {
-                    b[off++] = bomBuffer[k++];
-                }
-                return super.read(b, off, len) + r;
-            }
-        } else {
-            return super.read(b, off, len);
-        }
+        return super.read(b, off, len);
     }
 
     @Override
     public int read() throws IOException {
         init();
-
-        if(bomPush < 4) {
-            return bomBuffer[bomPush++];
-        } else {
-            return super.read();
-        }
+        return super.read();
     }
 }

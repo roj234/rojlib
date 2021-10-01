@@ -47,8 +47,9 @@ import java.util.stream.IntStream;
 public class StreamingChars implements CharSequence {
     InputStream in;
     ByteList buffer;
-    public CharList cl;
-    int bufOff, max = -1;
+    public    CharList cl;
+    protected int      bufOff;
+    int max = -1;
 
     public StreamingChars() {
         this.cl = new CharList(128);
@@ -87,7 +88,7 @@ public class StreamingChars implements CharSequence {
 
     public void ensureRead(int required) {
         int start = bufOff;
-        if(start == -1)
+        if(start < 0)
             return;
         ByteList buf = this.buffer;
         try {

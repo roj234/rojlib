@@ -41,7 +41,6 @@ import net.minecraftforge.fml.client.IModGuiFactory;
 import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.ModMetadata;
 import net.minecraftforge.fml.common.versioning.ComparableVersion;
-import roj.asm.annotation.OpenAny;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
@@ -63,7 +62,7 @@ import java.util.Map;
  * @since  2020/10/1 15:06
  */
 @Nixim("net.minecraftforge.fml.client.GuiModList")
-@OpenAny(value = "net.minecraftforge.fml.client.GuiModList$Info", names = "<init>", compileOnly = true)
+//!!AT ["net.minecraftforge.fml.client.GuiModList$Info", ["init"]]
 public class CNModGui extends GuiModList {
     @Shadow("listWidth")
     private int listWidth;

@@ -25,7 +25,6 @@
  */
 package roj.mod;
 
-import roj.asm.annotation.AnnotationProcessor;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.TaskExecutor;
@@ -45,7 +44,9 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -210,7 +211,7 @@ public class FMDGui extends JFrame {
     private static void gc(ActionEvent event) {
         long free = Runtime.getRuntime().freeMemory();
         try {
-            AnnotationProcessor.gc();
+            ATHelper.gc();
         } catch (IOException e) {
             e.printStackTrace();
         }

@@ -34,14 +34,6 @@ import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
 import ilib.util.PinyinUtil;
-import org.lwjgl.input.Mouse;
-import roj.asm.annotation.OpenAny;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.FilterList;
-
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainerCreative;
@@ -55,6 +47,12 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
+import org.lwjgl.input.Mouse;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
+import roj.collect.FilterList;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -71,7 +69,7 @@ import java.util.List;
  */
 
 @Nixim(value = "net.minecraft.client.gui.inventory.GuiContainerCreative", copyItf = true)
-@OpenAny(value = "net.minecraft.client.gui.inventory.GuiContainerCreative", names = "func_147050_b", compileOnly = true)
+//!!AT ["net.minecraft.client.gui.inventory.GuiContainerCreative", ["func_147050_b"], true]
 abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, IContainerCreative {
     @Shadow("field_147058_w")
     static int selectedTabIndex;

@@ -146,11 +146,11 @@ public class Helpers {
         return cast(alwaystrue);
     }
 
-    static final Predicate<?> alwaystrue = (a) -> true;
-    static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
-    static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
-    static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();
-    static final Function<?, ?> myhashsetfn = (a) -> new MyHashSet<>();
+    public static final Predicate<?> alwaystrue = (a) -> true;
+    public static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
+    public static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
+    public static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();
+    public static final Function<?, ?> myhashsetfn = (a) -> new MyHashSet<>();
 
     public static <R,T> Function<R, List<T>> fnArrayList() {
         return cast(arraylistfn);

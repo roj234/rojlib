@@ -27,11 +27,6 @@ package ilib.asm.nixim;
 
 import ilib.asm.util.MCHooks;
 import ilib.util.PlayerUtil;
-import roj.asm.annotation.OpenAny;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.crash.CrashReport;
@@ -42,8 +37,10 @@ import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
-
 import net.minecraftforge.fml.common.FMLLog;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -53,9 +50,7 @@ import net.minecraftforge.fml.common.FMLLog;
  * @since 2021/4/21 22:51
  */
 @Nixim("net.minecraft.world.chunk.Chunk")
-@OpenAny(value = "net.minecraft.world.chunk.Chunk", names = {
-        "func_180700_a"
-}, compileOnly = true)
+//!!AT ["net.minecraft.world.chunk.Chunk", ["func_180700_a"], true]
 public abstract class NiximChunkLight extends Chunk {
     public NiximChunkLight(World worldIn, int x, int z) {
         super(worldIn, x, z);

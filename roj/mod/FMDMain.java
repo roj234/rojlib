@@ -26,7 +26,6 @@
 package roj.mod;
 
 import roj.asm.Parser;
-import roj.asm.annotation.AnnotationProcessor;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.ConstMapper.State;
@@ -131,11 +130,11 @@ public final class FMDMain {
 
             isCLI = true;
             Tokenizer tokenizer = new Tokenizer();
-            ArrayList<String> tmp = new ArrayList<>(48);
             Map<String, String> shortcuts = Helpers.cast(MAIN_CONFIG.getOrCreateMap("CLI Shortcuts").toNudeObject());
             if(shortcuts.isEmpty())
                 shortcuts = Collections.emptyMap();
 
+            ArrayList<String> tmp = new ArrayList<>(48);
             o:
             while (true) {
                 String input = UIUtil.userInput("> ");
@@ -226,7 +225,7 @@ public final class FMDMain {
             }
             break;
             case "gc":
-                AnnotationProcessor.gc();
+                ATHelper.gc();
                 System.runFinalization();
                 System.gc();
                 System.runFinalization();
@@ -279,7 +278,6 @@ public final class FMDMain {
         File mcpConfig = null;
         File mcpFile = null;
         {
-            String maybeVersion = null;
 
             if (args.length > 1) {
                 mcpConfig = new File(args[1]);
@@ -289,6 +287,7 @@ public final class FMDMain {
             }
             String path = mcpConfig.getAbsolutePath();
             int i = path.lastIndexOf('-');
+            String maybeVersion = null;
             if (i != -1) {
                 maybeVersion = path.substring(i + 1, path.lastIndexOf('.'));
             }
@@ -404,7 +403,6 @@ public final class FMDMain {
             }
         }
 
-        File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
         File jarFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
         File tmpFile;
         if(FileUtil.checkTotalWritePermission(jarFile)) {
@@ -413,6 +411,7 @@ public final class FMDMain {
             FileUtil.copyFile(jarFile, tmpFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.tmp"));
         }
 
+        File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
         if(!backupFile.isFile()) {
             FileUtil.copyFile(jarFile, backupFile);
         }
@@ -482,8 +481,6 @@ public final class FMDMain {
 
         for(Map.Entry<String, CEntry> entry : at.entrySet()) {
             String k = entry.getKey();
-            if(k.startsWith("#"))
-                continue;
 
             CEntry ce = entry.getValue();
             switch (ce.getType()) {
@@ -503,9 +500,6 @@ public final class FMDMain {
 
     private static String translateSeg(CEntry ce1) {
         String s = TextUtil.split(new ArrayList<>(2), new CharList(), ce1.asString(), ' ').get(0);
-        if(DEBUG)
-            System.out.println("AT Name " + s);
-
         int i = s.lastIndexOf('|');
         if(i != -1) {
             String s1 = s.substring(0, i);
@@ -731,7 +725,6 @@ public final class FMDMain {
         }
 
         boolean increment = args.containsKey("zl");
-        long stamp = binary.lastModified();
 
         // region 获取所有源文件并(可选的)检测AT
 
@@ -753,11 +746,12 @@ public final class FMDMain {
             FileFilter.state = 0;
         }
         if(files == null) {
-            files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_SRC : FileFilter.F_JAVA_OA));
+            files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, increment ? FileFilter.F_SRC : FileFilter.F_JAVA_ANNO));
         }
 
         // endregion
 
+        long stamp = binary.lastModified();
         incr:
         if(increment) {
             List<File> tmp = new ArrayList<>();
@@ -765,10 +759,10 @@ public final class FMDMain {
             for (int i = 0; i < files.size(); i++) {
                 File file = files.get(i);
                 if (file.lastModified() > stamp) {
-                    if (FileFilter.isOAMarked(file)) {
+                    if (FileFilter.checkATComments(file)) {
                         CmdUtil.warning("找到AT注解, 使用全量编译");
 
-                        files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC));
+                        files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_JAVA_ANNO));
                         increment = false;
 
                         break incr;
@@ -834,31 +828,45 @@ public final class FMDMain {
         }
 
         // OpenAny
-        FMDOAProc md = null;
-        if(FileFilter.state != 0) {
+        ATHelper h = null;
+        if(!FileFilter.cmtEntries.isEmpty()) {
             if(project.atName.isEmpty()) {
-                CmdUtil.error(project.name + ": 使用了OpenAny,却没有设置atConfig");
+                CmdUtil.error(project.name + ": 使用了AT注解系统,却没有设置atConfig");
                 return false;
             }
 
-            md = new FMDOAProc();
+            Map<String, Collection<String>> map = AccessTransformer.getTransforms();
 
-            Map<String, Collection<String>> atMap = AccessTransformer.getTransforms();
-            atMap.clear();
+            map.clear();
             loadPreAT(project);
 
-            String atPath = project.atConfigPathStr;
-
-            StringBuilder sb = null;
-            if (!atMap.isEmpty()) {
-                sb = new StringBuilder();
-                for (Map.Entry<String, Collection<String>> entry : atMap.entrySet()) {
-                    for (String val : entry.getValue()) {
-                        sb.append("public-f ").append(entry.getKey()).append(' ').append(val).append('\n');
-                    }
+            CharList atData = new CharList();
+            for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
+                for (String val : entry.getValue()) {
+                    atData.append("public-f ").append(entry.getKey()).append(' ').append(val).append('\n');
                 }
             }
-            md.internalInit(atPath, new File(BASE, "/class/"), sb);
+            map.clear();
+
+            List<FileFilter.CmtATEntry> cmt = FileFilter.cmtEntries;
+            for (int i = 0; i < cmt.size(); i++) {
+                FileFilter.CmtATEntry entry = cmt.get(i);
+                if (!entry.compile) {
+                    for (String val : entry.value) {
+                        atData.append("public-f ").append(entry.clazz).append(' ').append(val).append('\n');
+                    }
+                }
+                map.computeIfAbsent(entry.clazz, Helpers.fnMyHashSet()).addAll(entry.value);
+            }
+
+            ByteList val = ByteWriter.encodeUTF(atData);
+
+            try(FileOutputStream fos = new FileOutputStream(project.atConfigPathStr)) {
+                val.writeToStream(fos);
+            }
+
+            h = new ATHelper();
+            h.init(project.name, val, map);
         }
 
         Set<String> ignores = new MyHashSet<>();
@@ -899,6 +907,9 @@ public final class FMDMain {
 
         // 库文件
         CharList libBuf = new CharList(200).append(binaryStr).append(File.pathSeparatorChar);
+        if(h != null) {
+            libBuf.append(h.getFakeJarPath()).append(File.pathSeparatorChar);
+        }
         if(args.containsKey("_COMPILE_OUTPUT_SINCE_"))
             libBuf.append((CharSequence) args.get("_COMPILE_OUTPUT_SINCE_")).append(getLibClasses());
         else
@@ -907,11 +918,9 @@ public final class FMDMain {
         SimpleList<String> options = MAIN_CONFIG.get("编译参数").asList().asStringList();
         options.addAll("-d", binaryStr, "-cp", libBuf.toString(), "-encoding", project.charset.name());
 
-        if(Compiler.compile(options, files, System.out, ignores, args.containsKey("showErrorCode"), md)) {
+        if(Compiler.compile(options, files, System.out, ignores, args.containsKey("showErrorCode"), null)) {
             if(DEBUG)
                 System.out.println("编译完成 " + (System.currentTimeMillis() - time));
-
-            runHook();
 
             try {
                 task.get();
@@ -945,12 +954,8 @@ public final class FMDMain {
             // 想办法减少ZIP写入的I/O
             MyHashMap<String, byte[]> resources = project.resourceCache;
 
-            if (md != null) {
-                try {
-                    resources.put("META-INF/" + project.atName + ".cfg" , IOUtil.read(md.getAtPath()));
-                } catch (IOException e) {
-                    CmdUtil.warning("更新AT失败", e);
-                }
+            if (h != null) {
+                resources.put("META-INF/" + project.atName + ".cfg", h.getAtCfgBytes());
             }
 
             List<Context> list = Util.ctxFromStream(classes);
@@ -1077,8 +1082,6 @@ public final class FMDMain {
             return true;
         }
 
-        runHook();
-
         return false;
     }
 
@@ -1123,20 +1126,6 @@ public final class FMDMain {
         lastLibHash = Util.libHash(fs);
         sb.setIndex(sb.length() - 1);
         return sb;
-    }
-
-    static List<Runnable> hook = new ArrayList<>(2);
-
-    public static void runAtMainThread(Runnable runnable) {
-        hook.add(runnable);
-    }
-
-    public static void runHook() {
-        for (int i = 0; i < hook.size(); i++) {
-            hook.get(i).run();
-        }
-
-        hook.clear();
     }
 
     // endregion

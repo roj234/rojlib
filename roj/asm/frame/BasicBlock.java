@@ -37,7 +37,7 @@ import java.util.Arrays;
 final class BasicBlock {
     boolean done;
     int start;
-    public VarList localBegin = new VarList(), stackBegin = new VarList();
+    VarList localBegin = new VarList(), stackBegin = new VarList();
 
     int[] targets;
 

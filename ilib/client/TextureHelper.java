@@ -31,13 +31,10 @@ import ilib.ClientProxy;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.util.Reflection;
-import roj.asm.annotation.OpenAny;
-import roj.collect.SimpleList;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.*;
-
 import net.minecraftforge.fml.client.FMLClientHandler;
+import roj.collect.SimpleList;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
@@ -45,12 +42,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
-@OpenAny(value = "net.minecraft.client.resources:SimpleReloadableResourceManager", names = {
-        "domainResourceManagers", "field_110548_a"
-})
-@OpenAny(value = "net.minecraft.client.resources:FallbackResourceManager", names = {
-        "resourcePacks", "field_110540_a"
-})
+//!!AT [["net.minecraft.client.resources.SimpleReloadableResourceManager", ["field_110548_a"]], ["net.minecraft.client.resources.FallbackResourceManager", ["field_110540_a"]]]
 /**
  * No description provided
  *

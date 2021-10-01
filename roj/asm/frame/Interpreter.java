@@ -27,10 +27,8 @@
 package roj.asm.frame;
 
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstType;
-import roj.asm.tree.Clazz;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
@@ -43,23 +41,15 @@ import roj.asm.util.NodeHelper;
 import roj.collect.*;
 import roj.collect.Unioner.Range;
 import roj.collect.Unioner.Region;
-import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 import roj.text.CharList;
 import roj.util.Helpers;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.frame.VarType.*;
-/*
- * jsr/jsr_w:
- *  [local + stack].hasAny(type == uninitialized) && throw Error
- */
 /**
  * "Interpreter"
  *
@@ -68,14 +58,6 @@ import static roj.asm.frame.VarType.*;
  * @since 2021/6/18 9:51
  */
 public final class Interpreter {
-    public static void main(String[] args) throws IOException {
-        Clazz clazz = Parser.parse(IOUtil.read(new File(args[0])));
-        AttrCode code = clazz.methods.get(args.length == 1 ? 0 : Integer.parseInt(args[1])).code;
-        code.computeFrames = true;
-
-        ClassDefiner.INSTANCE.defineClass(clazz.name.replace('/', '.'), Parser.toByteArray(clazz)).getDeclaredMethods();
-    }
-
     public Interpreter() {}
 
     String clazz;
@@ -1051,61 +1033,127 @@ public final class Interpreter {
         }
     }
 
-    public List<Frame> collect(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
+
+    public List<CodeBlock> gather(AttrCode code) {
+        return gather(code.instructions, code.exceptions, null);
+    }
+
+    public List<CodeBlock> gather(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
         Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
         Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
         Unioner<Exc> byException = new Unioner<>();
 
-        int i = 0;
-        IntList il = new IntList(4);
-        while (i < list.size()) {
-            InsnNode node = list.get(i++);
-            if (node.isJumpSource()) {
-                if (node.getClass() == SwitchInsnNode.class) {
-                    SwitchInsnNode node1 = (SwitchInsnNode) node;
+        collectJumpNodes(list, exceptionEntries, bySource, byTarget, byException);
 
-                    BasicBlock pt = new BasicBlock(i - 1);
+        LongBitSet routines = new LongBitSet();
 
-                    List<InsnNode> lst1 = new ArrayList<>();
-                    il.add(list.indexOf(node = InsnNode.validate(node1.def)));
-                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+        MyHashSet<BasicBlock> visited = new MyHashSet<>();
+        MyHashSet<BasicBlock> visit1 = new MyHashSet<>();
+        MyHashSet<BasicBlock> visit2 = new MyHashSet<>();
 
-                    for (InsnNode node2 : node1.mapping.values()) {
-                        il.add(list.indexOf(node = InsnNode.validate(node2)));
-                        byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+        BasicBlock first = new BasicBlock(0);
+        first.targets = new int[] {0};
+        first.localBegin = new VarList().copyFrom(local);
+        first.stackBegin = new VarList().copyFrom(stack);
+        visit1.add(first);
+
+        InsnNode node;
+        while (!visit1.isEmpty()) {
+            for (BasicBlock bb : visit1) {
+                mainCyc:
+                for (int j : bb.targets) {
+                    if(!routines.add(j)) continue;
+
+                    local.copyFrom(bb.localBegin);
+                    stack.copyFrom(bb.stackBegin);
+
+                    Region rg = byException.findRegion(j);
+                    while (j < list.size()) {
+                        int flg;
+                        switch (flg = visitNode(node = list.get(j++))) {
+                            case 1:
+                            case 2:
+                            case 3:
+                                BasicBlock next = bySource.get(node);
+                                if (next != null) {
+                                    if(visited.add(next)) {
+                                        next.localBegin.copyFrom(local);
+                                        next.stackBegin.copyFrom(stack);
+                                        visit2.add(next);
+                                    } else {
+                                        if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
+                                            throw new RuntimeException(
+                                                    "从各点到达同一位置的跳转栈必须相同！\n" +
+                                                            "Block: " + next + "\n" +
+                                                            "ExcL: " + next.localBegin + "\n" +
+                                                            "ExcS: " + next.stackBegin + "\n" +
+                                                            "GotL: " + local + "\n" +
+                                                            "GotS: " + stack);
+                                        }
+                                        next.localBegin.removeTo(local.size);
+                                    }
+                                } else {
+                                    assert flg == 1;
+                                }
+                                // end of basic block
+                                continue mainCyc;
+                            case 4:
+                                checkWide(list.get(j));
+                                break;
+                        }
+                        if(rg != (rg = byException.findRegion(j))) {
+                            List<Exc> mv = rg.i_value();
+                            if(mv.isEmpty()) continue;
+                            BasicBlock next = mv.get(mv.size() - 1).bb;
+                            if(visited.add(next)) {
+                                next.localBegin.copyFrom(local);
+                                visit2.add(next);
+                                System.out.println(next);
+                            } else {
+                                if (!next.localBegin.sw(local)) {
+                                    throw new RuntimeException(
+                                            "[Ex]从各点到达同一位置的跳转栈必须相同！\n" +
+                                                    "Block: " + next + "\n" +
+                                                    "ExcL: " + next.localBegin + "\n" +
+                                                    "GotL: " + local);
+                                }
+                                next.localBegin.removeTo(local.size);
+                            }
+                        }
                     }
-
-                    pt.targets = il.toArray();
-                    bySource.put(node1, pt);
-                } else {
-                    GotoInsnNode node1 = (GotoInsnNode) node;
-
-                    BasicBlock pt = new BasicBlock(i - 1);
-                    il.add(list.indexOf(node = InsnNode.validate(node1.getTarget())));
-                    if(node1 instanceof IfInsnNode) {
-                        il.add(i);
-                    }
-                    pt.targets = il.toArray();
-
-                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
-                    bySource.put(node1, pt);
                 }
-                il.clear();
             }
+            MyHashSet<BasicBlock> tmp1 = visit2;
+            visit2 = visit1;
+            visit2.clear();
+            visit1 = tmp1;
         }
-        for (i = 0; i < exceptionEntries.size(); i++) {
-            ExceptionEntry entry = exceptionEntries.get(i);
-            Exc exc = new Exc();
-            exc.start = list.indexOf(InsnNode.validate(entry.start));
-            exc.end = list.indexOf(InsnNode.validate(entry.end));
-            byException.add(exc);
 
-            InsnNode node = InsnNode.validate(entry.handler);
-            BasicBlock pt = exc.bb = new BasicBlock(-1);
-            pt.targets = new int[] { list.indexOf(node) };
-            byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
-            pt.stackBegin.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
+        List<InsnNode> out = new ArrayList<>(byTarget.keySet());
+        if(pcRev != null)
+            out.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
+        else
+            out.sort((o1, o2) -> Integer.compare(list.indexOf(o1), list.indexOf(o2)));
+
+        for (int i = 0; i < out.size(); i++) {
+            BasicBlock bb = byTarget.get(out.get(i)).get(0);
+            assert bb.done;
+            out.set(i, Helpers.cast(new CodeBlock(list, bb)));
         }
+        return Helpers.cast(out);
+    }
+
+    @Deprecated
+    public List<Frame> compute(AttrCode code) {
+        return compute(code.instructions, code.exceptions, null);
+    }
+
+    public List<Frame> compute(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
+        Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
+        Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
+        Unioner<Exc> byException = new Unioner<>();
+
+        collectJumpNodes(list, exceptionEntries, bySource, byTarget, byException);
 
         LongBitSet routines = new LongBitSet();
 
@@ -1192,8 +1240,12 @@ public final class Interpreter {
         }
 
         List<InsnNode> frames0 = new ArrayList<>(byTarget.keySet());
-        frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
+        if(pcRev != null)
+            frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
+        else
+            frames0.sort((o1, o2) -> Integer.compare(list.indexOf(o1), list.indexOf(o2)));
 
+        int i;
         for (i = 0; i < frames0.size(); i++) {
             List<BasicBlock> bbs = byTarget.get(frames0.get(i));
             BasicBlock bb = bbs.get(0);
@@ -1289,6 +1341,60 @@ public final class Interpreter {
         }
         return max;
     }
+
+    private static void collectJumpNodes(InsnList list, List<ExceptionEntry> exceptionEntries, Map<InsnNode, BasicBlock> bySource, Map<InsnNode, List<BasicBlock>> byTarget, Unioner<Exc> byException) {
+        int i = 0;
+        IntList il = new IntList(4);
+        while (i < list.size()) {
+            InsnNode node = list.get(i++);
+            if (node.isJumpSource()) {
+                if (node.getClass() == SwitchInsnNode.class) {
+                    SwitchInsnNode node1 = (SwitchInsnNode) node;
+
+                    BasicBlock pt = new BasicBlock(i - 1);
+
+                    List<InsnNode> lst1 = new ArrayList<>();
+                    il.add(list.indexOf(node = InsnNode.validate(node1.def)));
+                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+
+                    for (InsnNode node2 : node1.mapping.values()) {
+                        il.add(list.indexOf(node = InsnNode.validate(node2)));
+                        byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+                    }
+
+                    pt.targets = il.toArray();
+                    bySource.put(node1, pt);
+                } else {
+                    GotoInsnNode node1 = (GotoInsnNode) node;
+
+                    BasicBlock pt = new BasicBlock(i - 1);
+                    il.add(list.indexOf(node = InsnNode.validate(node1.getTarget())));
+                    if (node1 instanceof IfInsnNode) {
+                        il.add(i);
+                    }
+                    pt.targets = il.toArray();
+
+                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+                    bySource.put(node1, pt);
+                }
+                il.clear();
+            }
+        }
+        for (i = 0; i < exceptionEntries.size(); i++) {
+            ExceptionEntry entry = exceptionEntries.get(i);
+            Exc exc = new Exc();
+            exc.start = list.indexOf(InsnNode.validate(entry.start));
+            exc.end = list.indexOf(InsnNode.validate(entry.end));
+            byException.add(exc);
+
+            InsnNode node = InsnNode.validate(entry.handler);
+            BasicBlock pt = exc.bb = new BasicBlock(-1);
+            pt.targets = new int[] {list.indexOf(node)};
+            byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+            pt.stackBegin.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
+        }
+    }
+
 
     private static void checkWide(InsnNode node) {
         switch (node.getOpcode()) {

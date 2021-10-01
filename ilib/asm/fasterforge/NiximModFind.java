@@ -25,17 +25,14 @@
  */
 package ilib.asm.fasterforge;
 
-import roj.asm.annotation.OpenAny;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.libraries.LibraryManager;
+import net.minecraftforge.fml.relauncher.libraries.ModList;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.MyHashSet;
-
-import net.minecraft.launchwrapper.Launch;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.libraries.LibraryManager;
-import net.minecraftforge.fml.relauncher.libraries.ModList;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -52,7 +49,7 @@ import java.util.Map;
  * @since  2021/1/2 13:44
  */
 @Nixim("net.minecraftforge.fml.relauncher.libraries.LibraryManager")
-@OpenAny(value = "net.minecraftforge.fml.relauncher.libraries.ModList", names = "cache", compileOnly = true)
+//!!AT ["net.minecraftforge.fml.relauncher.libraries.ModList", ["cache"], true]
 public class NiximModFind extends LibraryManager {
 
     @Shadow("MOD_FILENAME_FILTER")
