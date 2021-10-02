@@ -28,9 +28,9 @@ package ilib.command.sub;
 
 import ilib.ImpLib;
 import ilib.command.sub.we.ModificationCache;
+import ilib.math.Arena;
+import ilib.math.Section;
 import ilib.misc.SelectionCache;
-import ilib.util.math.Arena;
-import ilib.util.math.Section;
 import ilib.world.structure.ReplacementType;
 import ilib.world.structure.StructureAdvanced;
 import ilib.world.structure.schematic.Schematic;
@@ -50,7 +50,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

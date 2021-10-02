@@ -60,7 +60,6 @@ import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
-import roj.util.Executable;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -1697,13 +1696,13 @@ public final class FMDMain {
         }
     }
 
-    public static void redirectOutput(File file, Executable action) throws FileNotFoundException {
+    public static void redirectOutput(File file, Runnable action) throws FileNotFoundException {
         PrintStream out = System.out;
 
         PrintStream ps;
         System.setOut(ps = new PrintStream(new FileOutputStream(file)));
 
-        action.execute();
+        action.run();
 
         ps.flush();
         ps.close();

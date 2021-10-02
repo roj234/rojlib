@@ -51,18 +51,9 @@ import ilib.network.ProxyPacket;
 import ilib.network.SPacketSetPlayerId;
 import ilib.util.BlockHelper;
 import ilib.util.FakeAdvancementList;
-import ilib.util.MyImmutableMultimap;
 import ilib.util.PlayerUtil;
 import ilib.util.freeze.FreezeRegistryInjector;
 import ilib.util.hook.Hook;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import roj.collect.SimpleList;
-import roj.config.data.CEntry;
-import roj.reflect.IFieldAccessor;
-import roj.reflect.ReflectionUtils;
-import roj.text.TextUtil;
-
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementManager;
 import net.minecraft.advancements.AdvancementRewards;
@@ -78,7 +69,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.EnumTypeAdapterFactory;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.Style;
-
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
@@ -90,6 +80,13 @@ import net.minecraftforge.fml.common.discovery.JarDiscoverer;
 import net.minecraftforge.fml.common.event.*;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import roj.collect.SimpleList;
+import roj.config.data.CEntry;
+import roj.reflect.IFieldAccessor;
+import roj.reflect.ReflectionUtils;
+import roj.text.TextUtil;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
@@ -452,8 +449,8 @@ public class ImpLib {
                     if (map != null) {
                         logger().info("" + map.size() + " entries fixed");
 
-                        if (!(map instanceof ilib.util.MyImmutableMultimap)) {
-                            accessor.setObject(new MyImmutableMultimap(map));
+                        if (!(map instanceof ilib.collect.MyImmutableMultimap)) {
+                            accessor.setObject(new ilib.collect.MyImmutableMultimap(map));
                         }
                     }
                 }

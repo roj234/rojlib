@@ -149,6 +149,13 @@ public class BoxFile implements Closeable {
         return ByteReader.readUTF(bl);
     }
 
+    public long getOffset(String key) {
+        F arr = infoMap.get(key);
+        if(arr == null)
+            return -1;
+        return arr.offset;
+    }
+
     public boolean remove(String name) throws IOException {
         F fe = infoMap.remove(name);
         if(fe == null)

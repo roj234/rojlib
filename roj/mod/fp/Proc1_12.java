@@ -39,7 +39,6 @@ import roj.mod.util.MappingHelper;
 import roj.mod.util.Patcher;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
-import roj.util.Executable;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -183,7 +182,7 @@ public final class Proc1_12 extends Processor {
 
             File mcpSrgPath = new File(BASE, "/util/mcp-srg.srg");
             if (mcpPackFile != null) {
-                Executable action = () -> {
+                Runnable action = () -> {
                     try {
                         MappingHelper helper = new MappingHelper(rmp);
                         Map<String, String> origPM = new MyHashMap<>(1000);
@@ -211,7 +210,7 @@ public final class Proc1_12 extends Processor {
                     DummyOutputStream w = new DummyOutputStream();
                     System.setOut(new PrintStream(w));
 
-                    action.execute();
+                    action.run();
 
                     if(w.wrote > 10)
                         CmdUtil.warning("解析MCP时有一些警告");

@@ -27,10 +27,10 @@
 package ilib.util.hook;
 
 import roj.collect.MyHashMap;
-import roj.util.Executable;
 
 import java.util.Map;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -46,7 +46,7 @@ public final class Hook {
     public Hook() {
     }
 
-    public void add(String name, Executable func) {
+    public void add(String name, Runnable func) {
         FunctionList list = this.hooks.get(name);
         if (list == null) {
             list = new FunctionList(-1);

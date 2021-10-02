@@ -75,7 +75,7 @@ public class ConstMapper extends Mapping {
     // 'CMPC': Const Remapper Cache
     public static final int FILE_HEADER = 0x634d5063;
 
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     /**
      * 来自依赖的数据
@@ -430,7 +430,6 @@ public class ConstMapper extends Mapping {
         List<FieldSimple> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
             FieldSimple f = fields.get(i);
-            if(!f.accesses.hasAny(AccessFlag.STATIC)) continue;
 
             sp.name = f.name.getString();
             sp.param = checkFieldType ? f.type.getString() : "";
@@ -483,12 +482,12 @@ public class ConstMapper extends Mapping {
         int i = 0;
         List<CstRef> cst = ctx.getFieldConstants();
         for (; i < cst.size(); i++) {
-            mapField(ctx, data, cst.get(i));
+            mapRef(data, cst.get(i), false);
         }
 
         cst = ctx.getMethodConstants();
         for (i = 0; i < cst.size(); i++) {
-            mapMethod(ctx, data, cst.get(i));
+            mapRef(data, cst.get(i), true);
         }
 
         List<CstDynamic> lmd = ctx.getInvokeDynamic();
@@ -563,83 +562,47 @@ public class ConstMapper extends Mapping {
     }
 
     /**
-     * Map: use other(non-self) methods
+     * Map: use other(non-self) methods/fields
      */
-    private void mapMethod(Context ctx, ConstantData data, CstRef ref) {
-        // FP: init / clinit
-        if(ref.desc().getName().getString().startsWith("<")) return;
-
+    private void mapRef(ConstantData data, CstRef ref, boolean method) {
         Desc md = Util.shareMD().read(ref);
 
-        /**
-         * Fast path
-         */
-        String fpName = selfMethods.get(md);
+        if(method) {
+            // FP: init / clinit
+            if(ref.desc().getName().getString().startsWith("<")) return;
+            /**
+             * Fast path
+             */
+            String fpName = selfMethods.get(md);
 
-        if(fpName != null) {
-            setRefName(data, ref, fpName);
-            return;
+            if (fpName != null) {
+                setRefName(data, ref, fpName);
+                return;
+            }
+        } else {
+            if(!checkFieldType) {
+                md.param = "";
+            }
         }
 
-        String name = methodMap.get(md);
-        if (name != null) {
-            setRefName(data, ref, name);
-            return;
-        }
-
+        MyHashMap<Desc, String> map = method ? methodMap : fieldMap;
         List<String> parents = selfSupers.getOrDefault(ref.getClassName(), Collections.emptyList());
-        for (int i = 0; i < parents.size(); i++) {
-            md.owner = parents.get(i);
-
+        int i = 0;
+        while (true) {
             if(selfSkipped.contains(md)) {
                 if(DEBUG)
-                    System.out.println("[3M-" + data.name + "]: " + (!md.owner.equals(data.name) ? md.owner + '.' : "") + md.name + md.param);
+                    System.out.println("[3" + (method ? "M" : "F") + "-" + data.name + "]: " + (!md.owner.equals(data.name) ? md.owner + '.' : "") + md.name + md.param);
                 break;
             }
 
-            name = methodMap.get(md);
+            String name = map.get(md);
             if (name != null) {
                 setRefName(data, ref, name);
                 break;
             }
-        }
-    }
 
-    /**
-     * Map: use other(non-self) fields
-     */
-    private void mapField(Context ctx, ConstantData data, CstRef ref) {
-        Desc fd = Util.shareMD().read(ref);
-        if(!checkFieldType) {
-            fd.param = "";
-        }
-
-        // FP
-        String name = fieldMap.get(fd);
-        if (name != null) {
-            setRefName(data, ref, name);
-            return;
-        }
-
-        /**
-         * getstatic被傻逼javac继承过
-         * 因为上面这点，才需要循环，否则一次get即可
-         */
-        List<String> parents = selfSupers.getOrDefault(ref.getClassName(), Collections.emptyList());
-        for (int i = 0; i < parents.size(); i++) {
-            fd.owner = parents.get(i);
-
-            if(selfSkipped.contains(fd)) {
-                if(DEBUG)
-                    System.out.println("[3F-" + data.name + "]: " + (!fd.owner.equals(data.name) ? fd.owner + '.' : "") + fd.name);
-                break;
-            }
-
-            name = fieldMap.get(fd);
-            if (name != null) {
-                setRefName(data, ref, name);
-                break;
-            }
+            if(i == parents.size()) break;
+            md.owner = parents.get(i++);
         }
     }
 

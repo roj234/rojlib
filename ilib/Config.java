@@ -41,7 +41,10 @@ import roj.config.JSONConfiguration;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.reflect.*;
+import roj.reflect.ClassDefiner;
+import roj.reflect.IFieldAccessor;
+import roj.reflect.InstantiationUtil;
+import roj.reflect.ReflectionUtils;
 
 import java.io.File;
 import java.util.Iterator;
@@ -225,7 +228,10 @@ public final class Config extends JSONConfiguration {
         if (debug != 0)
             shrinkLog = false;
         dumpAnnotationInfo = (debug & 64) != 0;
-        DirectAccessor.DEBUG = (debug & 1024) != 0;
+        if((debug & 1024) != 0)
+            System.setProperty("roj.directaccessor.debug", "true");
+        // 适配launchwrapper
+        System.setProperty("roj.directaccessor.noAssignCheck", "true");
 
 
 

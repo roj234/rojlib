@@ -23,53 +23,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-package ilib.util.math;
+package ilib.math;
 
 import net.minecraft.util.math.BlockPos;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/1/2 15:22
+ * @since 2021/4/21 22:51
  */
-public class Arena {
-    protected BlockPos p1 = null;
-    protected BlockPos p2 = null;
+public interface PositionProvider {
+    Section getSection();
 
-    public Arena() {
+    int getWorld();
+
+    default boolean contains(BlockPos pos) {
+        return true;
     }
 
-    public Section toSection() {
-        if (isOK())
-            return new Section(p1, p2);
-        return null;
-    }
-
-    public int getSelectionSize() {
-        if (isOK())
-            return toSection().size();
-        return -1;
-    }
-
-    public boolean isOK() {
-        return p1 != null && p2 != null;
-    }
-
-    public BlockPos getP1() {
-        return p1;
-    }
-
-    public void setPos1(BlockPos p1) {
-        this.p1 = p1;
-    }
-
-    public BlockPos getP2() {
-        return p2;
-    }
-
-    public void setPos2(BlockPos p2) {
-        this.p2 = p2;
+    default void handle(FastPath<? extends PositionProvider> fastPath) {
     }
 }

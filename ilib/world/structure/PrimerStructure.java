@@ -27,8 +27,8 @@ package ilib.world.structure;
 
 import ilib.ImpLib;
 import ilib.api.world.IPrimeGenerator;
+import ilib.math.Section;
 import ilib.util.BlockHelper;
-import ilib.util.math.Section;
 import ilib.world.structure.schematic.Schematic;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;

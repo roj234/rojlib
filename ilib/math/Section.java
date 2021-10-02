@@ -24,11 +24,12 @@
  * THE SOFTWARE.
  */
 
-package ilib.util.math;
+package ilib.math;
 
 import net.minecraft.util.math.BlockPos;
 import roj.math.Rect3i;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

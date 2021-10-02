@@ -25,10 +25,10 @@
  */
 package ilib.world.structure.cascading;
 
+import ilib.math.FastPath;
+import ilib.math.PositionProvider;
+import ilib.math.Section;
 import ilib.util.BlockHelper;
-import ilib.util.math.FastPath;
-import ilib.util.math.PositionProvider;
-import ilib.util.math.Section;
 import ilib.world.structure.cascading.api.IGenerationData;
 import ilib.world.structure.cascading.api.IStructure;
 import net.minecraft.util.EnumFacing;

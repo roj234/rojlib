@@ -23,12 +23,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.misc;
+package ilib.math;
 
 import roj.collect.BSLowHeap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.math.Vec2i;
+import roj.math.Vec3i;
 import roj.util.ArrayUtil;
 
 import java.util.Comparator;
@@ -41,7 +41,7 @@ import java.util.List;
  * @version 0.1
  * @since  2021/2/2 18:44
  */
-public abstract class AStar2D {
+public abstract class AStar3D {
     private final int cacheSize;
     private final Point[] cache;
     private int cacheIdx = -1;
@@ -52,10 +52,10 @@ public abstract class AStar2D {
 
     protected final MyHashSet<Point> closed = new MyHashSet<>();
 
-    protected final Point retainP(int x, int y) {
+    protected final Point retainP(int x, int y, int z) {
         if (cacheIdx >= 0)
-            return (Point) cache[cacheIdx].set(x, y);
-        return new Point(null, x, y);
+            return (Point) cache[cacheIdx].set(x, y, z);
+        return new Point(null, x, y, z);
     }
 
     protected final void releaseP(Point pos) {
@@ -63,19 +63,21 @@ public abstract class AStar2D {
             cache[++cacheIdx] = pos;
     }
 
-    public AStar2D() {
-        this(128);
+    public AStar3D() {
+        this(256);
+        // todo test
     }
 
-    public AStar2D(int cache) {
+    public AStar3D(int cache) {
         cacheSize = cache - 1;
         this.cache = new Point[cache];
     }
 
-    protected int costYU = 6, costYD = 6,
-            costXU = 6, costXD = 6;
+    protected int costYU = 8, costYD = 8,
+            costXU = 6, costXD = 6,
+            costZU = 6, costZD = 6;
 
-    public final List<Point> find(int strX, int strY, int endX, int endY) {
+    public final List<Point> find(int strX, int strY, int strZ, int endX, int endY, int endZ) {
         result = null;
 
         BSLowHeap<Point> open = this.open;
@@ -87,10 +89,10 @@ public abstract class AStar2D {
 
         long startTime = System.currentTimeMillis();
 
-        Point str = retainP(strX, strY);
+        Point str = retainP(strX, strY, strZ);
         open.add(str);
 
-        Point end = retainP(endX, endY);
+        Point end = retainP(endX, endY, endZ);
 
         int i = 0;
         while (canWalk(i++)) {
@@ -99,8 +101,7 @@ public abstract class AStar2D {
                     releaseP(pos);
                 }
                 for (int j = 0; j < open.size(); j++) {
-                    Point pos = open.get(j);
-                    releaseP(pos);
+                    releaseP(open.get(j));
                 }
                 return result = resolvePath(open.get(0));
             }
@@ -113,10 +114,13 @@ public abstract class AStar2D {
                 Point pos = open.get(j);
                 int x = pos.x;
                 int y = pos.y;
-                check(pos, tmp, costYD, x, y - 1, end);
-                check(pos, tmp, costYU, x, y + 1, end);
-                check(pos, tmp, costXD, x - 1, y, end);
-                check(pos, tmp, costXU, x + 1, y, end);
+                int z = pos.z;
+                check(pos, tmp, costYD, x, y - 1, z, end);
+                check(pos, tmp, costYU, x, y + 1, z, end);
+                check(pos, tmp, costZD, x, y, z - 1, end);
+                check(pos, tmp, costZU, x, y, z + 1, end);
+                check(pos, tmp, costXD, x - 1, y, z, end);
+                check(pos, tmp, costXU, x + 1, y, z, end);
             }
 
             open.clear();
@@ -133,9 +137,9 @@ public abstract class AStar2D {
         return null;
     }
 
-    protected void check(Point parent, BSLowHeap<Point> list, int cost, int x, int y, Point end) {
-        if (valid(x, y)) {
-            final Point node = retainP(x, y);
+    protected final void check(Point parent, BSLowHeap<Point> list, int cost, int x, int y, int z, Point end) {
+        if (valid(x, y, z)) {
+            final Point node = retainP(x, y, z);
 
             node.parent = parent;
             node.cost = parent.cost + cost;
@@ -168,7 +172,7 @@ public abstract class AStar2D {
 
     public abstract boolean canWalk(int i);
 
-    public abstract boolean valid(int x, int y);
+    public abstract boolean valid(int x, int y, int z);
 
     protected static List<Point> resolvePath(Point node) {
         SimpleList<Point> path = new SimpleList<>();
@@ -189,13 +193,13 @@ public abstract class AStar2D {
         }
     }
 
-    public static class Point extends Vec2i {
+    public static class Point extends Vec3i {
         Point parent;
         int cost;
         double distant;
 
-        public Point(Point parent, int x, int y) {
-            super(x, y);
+        public Point(Point parent, int x, int y, int z) {
+            super(x, y, z);
             this.parent = parent;
         }
     }

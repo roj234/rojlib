@@ -25,7 +25,7 @@
  */
 package ilib.world.structure.cascading;
 
-import ilib.util.math.Section;
+import ilib.math.Section;
 import ilib.world.structure.cascading.api.IStructure;
 import ilib.world.structure.cascading.api.StructureGroup;
 import net.minecraft.util.math.BlockPos;

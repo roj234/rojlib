@@ -26,10 +26,11 @@
 
 package ilib.misc;
 
-import ilib.util.math.Arena;
+import ilib.math.Arena;
 import net.minecraft.util.math.BlockPos;
 import roj.collect.LongMap;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

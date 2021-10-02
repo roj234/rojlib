@@ -24,37 +24,53 @@
  * THE SOFTWARE.
  */
 
-package ilib.world.structure.cascading;
+package ilib.math;
 
-import ilib.math.Section;
-import ilib.world.structure.AbstractStructure;
-import ilib.world.structure.cascading.api.IStructure;
-import ilib.world.structure.schematic.Schematic;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
-import javax.annotation.Nonnull;
 
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/4/21 22:51
+ * @since 2021/1/2 15:22
  */
-public class SizedStructure extends AbstractStructure implements IStructure {
-    public SizedStructure(@Nonnull Schematic schematic) {
-        super(schematic);
+public class Arena {
+    protected BlockPos p1 = null;
+    protected BlockPos p2 = null;
+
+    public Arena() {
     }
 
-    @Override
-    public void generate(@Nonnull World world, @Nonnull GenerateContext context) {
-        generate(world, context.getCurrPos());
+    public Section toSection() {
+        if (isOK())
+            return new Section(p1, p2);
+        return null;
     }
 
-    @Override
-    @Nonnull
-    public Section getSection(@Nonnull BlockPos offset) {
-        return new Section(offset.getX(), offset.getY(), offset.getZ(), offset.getX() + schematic.width(), offset.getY() + schematic.height(), offset.getZ() + schematic.length());
+    public int getSelectionSize() {
+        if (isOK())
+            return toSection().size();
+        return -1;
+    }
+
+    public boolean isOK() {
+        return p1 != null && p2 != null;
+    }
+
+    public BlockPos getP1() {
+        return p1;
+    }
+
+    public void setPos1(BlockPos p1) {
+        this.p1 = p1;
+    }
+
+    public BlockPos getP2() {
+        return p2;
+    }
+
+    public void setPos2(BlockPos p2) {
+        this.p2 = p2;
     }
 }

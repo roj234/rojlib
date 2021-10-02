@@ -31,6 +31,16 @@ import ilib.asm.fasterforge.anc.JarInfo;
 import ilib.asm.fasterforge.transformers.FieldRedirect;
 import ilib.asm.transformers.*;
 import ilib.command.parser.CommandNeXt;
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,18 +55,6 @@ import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.reflect.IFieldAccessor;
 import roj.reflect.ReflectionUtils;
-
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -331,9 +329,6 @@ public class Loader implements IFMLLoadingPlugin {
         }
 
         if (!fullInit) {
-            list.removeIf(t -> t.getClass().getName().startsWith("$wrapper.ilib.asm"));
-            //list.removeIf(t -> t.getClass().getName().equals("ilib.asm.util.FxMixin"));
-
             /*if (Config.patchForge && foundFMLCorePlugins < 3*//*4*//*) {
                 int count = 0;
                 ListIterator<IClassTransformer> itr = list.listIterator();
@@ -448,7 +443,7 @@ public class Loader implements IFMLLoadingPlugin {
         //if (endIndex != -1 && endIndex < list.size()) {
         //    list.addAll(endIndex, endTransformers);
         //} else
-            list.addAll(endTransformers);
+            list.addAll(list.size() - 1, endTransformers);
 
         list.add(list.size() - 1, NiximProxy.instance);
 

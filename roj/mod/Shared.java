@@ -120,7 +120,9 @@ public final class Shared {
 
             DEBUG = MAIN_CONFIG.getBool("调试模式");
             if(DEBUG) {
-                CpFilter.registerShutdownHook();
+                try {
+                    CpFilter.registerShutdownHook();
+                } catch (NoClassDefFoundError ignored) {}
             }
 
             CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();

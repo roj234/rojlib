@@ -72,7 +72,8 @@ import static roj.collect.IntMap.NOT_USING;
  */
 public final class DirectAccessor<T> {
     public static final String  MAGIC_ACCESSOR_CLASS = "sun/reflect/MagicAccessorImpl";
-    public static boolean       DEBUG;
+    public static final boolean DEBUG                = System.getProperty("roj.directaccessor.debug") != null;
+    public static final boolean DISABLE_ASSIGN_CHECK = System.getProperty("roj.directaccessor.noAssignCheck") != null;
     public static final IBitSet EMPTY_BITS           = new SingleBitSet();
 
     static final AtomicInteger NEXT_ID = new AtomicInteger();
@@ -364,7 +365,7 @@ public final class DirectAccessor<T> {
             if (method == null) {
                 throw new IllegalArgumentException(owner.getName() + '.' + name + " 不存在或已被占用!");
             }
-            if (!method.getReturnType().isAssignableFrom(target)) {
+            if (!isAssignableFrom(method.getReturnType(), target)) {
                 throw new IllegalArgumentException(
                         owner.getName() + '.' + name + " 的返回值 (" + method.getReturnType()
                                                                          .getName() + ") 不兼容 " + target
@@ -551,7 +552,7 @@ public final class DirectAccessor<T> {
             return this;
         boolean useCache = cache != null;
         if(useCache) {
-            if (!cache.v.isAssignableFrom(target))
+            if (!isAssignableFrom(target, cache.v))
                 throw new IllegalArgumentException(
                         "使用了缓存的对象 '" + cache.v.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.v.getName() + "'.");
         }
@@ -612,7 +613,7 @@ public final class DirectAccessor<T> {
                         }
 
                         types = method.getParameterTypes();
-                        if(off1 == 1 && target.isAssignableFrom(types[0])) {
+                        if(off1 == 1 && isAssignableFrom(target, types[0])) {
                             throw new IllegalArgumentException("非缓存方法 " + owner.getName() + '.' + name + " 的第一个参数 (" + types[0].getName() + ") 不能转换为 " + target.getName());
                         }
                         if (found != -1) {
@@ -645,7 +646,7 @@ public final class DirectAccessor<T> {
                         "无法找到指定的方法: " + target.getName() + '.' + targetMethodName + " 参数 " + ParamHelper.classDescriptors(types, method.getReturnType()));
             }
 
-            if (!method.getReturnType().isAssignableFrom(targetMethods[i].getReturnType())) {
+            if (!isAssignableFrom(method.getReturnType(), targetMethods[i].getReturnType())) {
                 throw new IllegalArgumentException(
                         owner.getName() + '.' + name + " 的返回值 (" + method.getReturnType()
                                                                                   .getName() + ") 不兼容 " + target
@@ -716,11 +717,15 @@ public final class DirectAccessor<T> {
         return this;
     }
 
+    private static boolean isAssignableFrom(Class<?> a, Class<?> b) {
+        return a.isAssignableFrom(b) || DISABLE_ASSIGN_CHECK;
+    }
+
     private static Method findInheritLower(Method a, Method b) {
         Class<?> aClass = a.getDeclaringClass();
         Class<?> bClass = b.getDeclaringClass();
                     // b instanceof a
-        return aClass.isAssignableFrom(bClass) ? b : a;
+        return isAssignableFrom(aClass, bClass) ? b : a;
     }
 
     /**
@@ -755,7 +760,7 @@ public final class DirectAccessor<T> {
             return this;
         boolean useCache = cache != null;
         if(useCache) {
-            if (!cache.v.isAssignableFrom(target))
+            if (!isAssignableFrom(target, cache.v))
                 throw new IllegalArgumentException(
                         "使用了缓存的对象 '" + cache.v.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.v.getName() + "'.");
         }
@@ -792,7 +797,7 @@ public final class DirectAccessor<T> {
                 if(method.getParameterCount() != off)
                     throw new IllegalArgumentException(owner.getName() + '.' + getterName + " 是个 getter, " +
                                          "不应该有参数, got " + (method.getParameterCount() - off) + '!');
-                if(!method.getReturnType().isAssignableFrom(targetFields[i].getType()))
+                if(!isAssignableFrom(method.getReturnType(), targetFields[i].getType()))
                     throw new IllegalArgumentException(owner.getName() + '.' + getterName + " 是个 getter, " +
                                          "但是返回值不兼容 " + targetFields[i].getType().getName() + " (" + method.getReturnType() + ')');
                 getterMethods[i] = method;
@@ -807,7 +812,7 @@ public final class DirectAccessor<T> {
                 if(method.getParameterCount() != off + 1)
                     throw new IllegalArgumentException(owner.getName() + '.' + setterName + " 是个 setter, " +
                                                                "只因有1个参数, got " + method.getParameterCount() + '!');
-                if(!method.getParameterTypes()[off].isAssignableFrom(targetFields[i].getType()))
+                if(!isAssignableFrom(method.getParameterTypes()[off], targetFields[i].getType()))
                     throw new IllegalArgumentException(owner.getName() + '.' + getterName + " 是个 setter, " +
                                                                "但是参数[" + (off + 1) + "]不兼容 " + targetFields[i].getType().getName() + " (" + method.getReturnType() + ')');
                 if(method.getReturnType() != void.class)
@@ -886,7 +891,7 @@ public final class DirectAccessor<T> {
                     code.localSize = --code.stackSize;
                 }
                 insn.add(NodeHelper.X_LOAD_I(fieldType.nativeName().charAt(0), isStatic || useCache ? 1 : 2));
-                if (check && fieldType.type == CLASS && !field.getType().isAssignableFrom(setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
+                if (check && fieldType.type == CLASS && !isAssignableFrom(field.getType(), setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fieldType.owner));
                 insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, targetName, field.getName(), fieldType));
                 insn.add(NodeHelper.cached(Opcodes.RETURN));

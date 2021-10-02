@@ -29,7 +29,6 @@ import roj.collect.FindSet;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
-import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -72,19 +71,19 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
     @Nonnull
     @Override
     public Iterator<T> iterator() {
-        throw new ConcurrentModificationException();
+        return set.keySet().iterator();
     }
 
     @Nonnull
     @Override
     public Object[] toArray() {
-        throw new UnsupportedOperationException();
+        return set.keySet().toArray();
     }
 
     @Nonnull
     @Override
     public <T1> T1[] toArray(@Nonnull T1[] a) {
-        throw new UnsupportedOperationException();
+        return set.keySet().toArray(a);
     }
 
     @Override
@@ -117,7 +116,7 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
 
     @Override
     public boolean retainAll(@Nonnull Collection<?> c) {
-        throw new UnsupportedOperationException();
+        return set.keySet().retainAll(c);
     }
 
     @Override

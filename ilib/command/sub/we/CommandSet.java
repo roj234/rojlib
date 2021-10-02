@@ -27,9 +27,9 @@ package ilib.command.sub.we;
 
 import com.google.common.base.Predicates;
 import ilib.command.sub.AbstractSubCommand;
+import ilib.math.Arena;
+import ilib.math.Section;
 import ilib.misc.SelectionCache;
-import ilib.util.math.Arena;
-import ilib.util.math.Section;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.*;

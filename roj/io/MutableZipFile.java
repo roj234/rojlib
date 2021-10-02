@@ -172,22 +172,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                                 // not update EXT flag: not more I/O (moving)
                                 buffer.clear();
                                 new ByteWriter(buffer)
-                                        // U(ncompressed)Size
-                                        .writeIntR((int) inflater.getBytesWritten())
                                         // C(ompressed)Size
-                                        .writeIntR((int) inflater.getBytesRead());
+                                        .writeIntR((int) inflater.getBytesRead())
+                                        // U(ncompressed)Size
+                                        .writeIntR((int) inflater.getBytesWritten());
                                 zip.write(buf, 0, 8);
                             }
                             zip.seek(off + inflater.getBytesRead());
-                            zip.read(buf, 0, 4);
-                            int sig = (buf[3] & 0xFF) | (buf[2] & 0xFF) << 8 | (buf[1] & 0xFF) << 16 | (buf[0] & 0xFF) << 24;
-                            if (sig != HEADER_EXT) {
-                                zip.skipBytes(8);
-                                entry.ext = 12;
-                            } else {
-                                zip.skipBytes(12);
-                                entry.ext = 16;
-                            }
+                            skipExtHeader(entry);
                             break;
                         }
                         if (inflater.needsInput()) {
@@ -207,7 +199,19 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 inflater.reset();
             }
         } else {
-            zip.seek(off + /*entry.*/cSize);
+            zip.seek(off + cSize);
+            if((flags & 8) != 0)
+                skipExtHeader(entry);
+        }
+    }
+
+    private void skipExtHeader(EFile entry) throws IOException {
+        if (zip.readInt() != HEADER_EXT) {
+            zip.skipBytes(8);
+            entry.ext = 12;
+        } else {
+            zip.skipBytes(12);
+            entry.ext = 16;
         }
     }
 
@@ -509,7 +513,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             EFile file1 = file.file;
             // flag 8: 后面包含 EXT_SIGN (stream)
             file1.flags = (char) ((file1.flags & ~8) | 2048);
-            file1.offset = tmpFile.length() + 30 + file1.name.length() + file1.extra.length;
+            file1.offset = tmpFile.length() + 30 + ByteWriter.byteCountUTF8(file1.name) + file1.extra.length;
 
             Attr attr = file1.attr;
             attr.compressMethod = (char) (file.compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
@@ -777,7 +781,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         @Override
         public long startPos() {
-            return offset - 30 - name.length() - extra.length;
+            return offset - 30 - ByteWriter.byteCountUTF8(name) - extra.length;
         }
 
         @Override

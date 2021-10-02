@@ -510,6 +510,14 @@ public abstract class AbstLexer {
 
                     }
                     break;
+                case '-':
+                    if(exp != 2) {
+                        this.index = i;
+                        unexpected(String.valueOf(c));
+                    } else {
+                        temp.append(c);
+                    }
+                    break;
                 case 'E':
                 case 'e':
                     if(flag == 2) {

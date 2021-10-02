@@ -27,10 +27,10 @@
 package ilib.util.hook;
 
 import roj.collect.SimpleList;
-import roj.util.Executable;
 
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -38,7 +38,7 @@ import java.util.List;
  * @since 2021/4/21 22:51
  */
 public final class FunctionList {
-    private final List<Executable> functions = new SimpleList<>();
+    private final List<Runnable> functions = new SimpleList<>();
     private final int max;
     private int curr = 0;
 
@@ -46,12 +46,14 @@ public final class FunctionList {
         this.max = max;
     }
 
-    public void add(Executable fun) {
+    public void add(Runnable fun) {
         this.functions.add(fun);
     }
 
     public boolean call() {
-        functions.forEach(Executable::execute);
+        for (int i = 0; i < functions.size(); i++) {
+            functions.get(i).run();
+        }
         curr++;
         return max > 0 && curr > max;
     }

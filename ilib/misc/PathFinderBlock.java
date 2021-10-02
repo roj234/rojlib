@@ -25,6 +25,7 @@
  */
 package ilib.misc;
 
+import ilib.math.AStar3D;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
