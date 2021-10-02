@@ -23,21 +23,70 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.text.crypt;
+package roj.mod.compiler;
 
-import roj.util.ByteList;
-
-import java.security.DigestException;
+import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
+import java.util.Locale;
 
 /**
- * 【不】包含状态的密码算法
+ * Your description here
  *
- * @author Roj233
+ * @author solo6975
  * @version 0.1
- * @since 2021/9/7 13:07
+ * @since 2021/10/2 14:15
  */
-public interface ICrypt {
-    String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+public class MyDiagnostic implements Diagnostic<JavaFileObject> {
+    private final String msg;
+    private final Kind   kind;
+
+    MyDiagnostic(String msg, Kind kind) {
+        this.msg = msg;
+        this.kind = kind;
+    }
+
+    @Override
+    public Kind getKind() {
+        return kind;
+    }
+
+    @Override
+    public JavaFileObject getSource() {
+        return null;
+    }
+
+    @Override
+    public long getPosition() {
+        return -1;
+    }
+
+    @Override
+    public long getStartPosition() {
+        return 0;
+    }
+
+    @Override
+    public long getEndPosition() {
+        return 0;
+    }
+
+    @Override
+    public long getLineNumber() {
+        return -1;
+    }
+
+    @Override
+    public long getColumnNumber() {
+        return 0;
+    }
+
+    @Override
+    public String getCode() {
+        return "";
+    }
+
+    @Override
+    public String getMessage(Locale locale) {
+        return msg;
+    }
 }

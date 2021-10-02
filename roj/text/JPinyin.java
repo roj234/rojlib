@@ -254,7 +254,7 @@ public class JPinyin {
                 }
             }
 
-            char vowelChar = vowel.charAt(TextUtil.getNumber(s.charAt(s.length() - 1)) - 1);
+            char vowelChar = vowel.charAt(TextUtil.c2i(s.charAt(s.length() - 1)) - 1);
 
             return new CharList(s.length()).append(s, 0, i).append(vowelChar).append(s, i + 1, s.length() - 1).replace('v', 'ü').toString();
         } else {

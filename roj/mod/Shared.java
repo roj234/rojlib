@@ -59,7 +59,7 @@ public final class Shared {
     public static final boolean DEBUG;
     public static final Map<String, String> srg2mcp = new MyHashMap<>(1000, 1.5f);
 
-    public static final String VERSION = "1.5.5";
+    public static final String VERSION = "1.5.6";
 
     public static final File BASE, TMP_DIR, PROJ_CONF_DIR;
 
@@ -88,11 +88,6 @@ public final class Shared {
             base = new File("").getAbsoluteFile();
         }
         BASE = base;
-
-        Compiler.BASE_PATH = BASE.getAbsolutePath();
-        if(File.separatorChar != '/') {
-            Compiler.BASE_PATH = Compiler.BASE_PATH.replace(File.separatorChar, '/');
-        }
 
         TMP_DIR = new File(BASE, "tmp/");
 
@@ -212,6 +207,7 @@ public final class Shared {
             synchronized (mapperFwd) {
                 if(mapperFwd.getClassMap().isEmpty()) {
                     try {
+                        mapperFwd.flag = ConstMapper.FLAG_CONSTANTLY_MAP | ConstMapper.FLAG_CHECK_SUB_IMPL;
                         mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
                         if (DEBUG)
                             CmdUtil.success("正向映射表已加载");

@@ -230,8 +230,6 @@ public final class Config extends JSONConfiguration {
         dumpAnnotationInfo = (debug & 64) != 0;
         if((debug & 1024) != 0)
             System.setProperty("roj.directaccessor.debug", "true");
-        // 适配launchwrapper
-        System.setProperty("roj.directaccessor.noAssignCheck", "true");
 
 
 

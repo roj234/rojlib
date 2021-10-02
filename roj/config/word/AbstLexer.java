@@ -511,7 +511,7 @@ public abstract class AbstLexer {
                     }
                     break;
                 case '-':
-                    if(exp != 2) {
+                    if((exp & 2) == 0) {
                         this.index = i;
                         unexpected(String.valueOf(c));
                     } else {
@@ -528,6 +528,7 @@ public abstract class AbstLexer {
                     if ((flag == 0 || flag == 1) && temp.length() > 0 && (exp & 2) == 0) {
                         flag = 1;
                         exp |= 2;
+                        temp.append(c);
                         break;
                     }
 

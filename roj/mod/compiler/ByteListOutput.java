@@ -23,21 +23,43 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.text.crypt;
+package roj.mod.compiler;
 
 import roj.util.ByteList;
 
-import java.security.DigestException;
+import javax.tools.SimpleJavaFileObject;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
- * 【不】包含状态的密码算法
+ * Your description here
  *
- * @author Roj233
+ * @author solo6975
  * @version 0.1
- * @since 2021/9/7 13:07
+ * @since 2021/10/2 14:00
  */
-public interface ICrypt {
-    String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+public class ByteListOutput extends SimpleJavaFileObject {
+    private final String name;
+    private final ByteList output;
+
+    protected ByteListOutput(String className, String basePath) throws URISyntaxException {
+        super(new URI("file://" + basePath + className.replace('.', '/') + ".class"), Kind.CLASS);
+        this.output = new ByteList();
+        this.name = className.replace('.', '/') + ".class";
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public OutputStream openOutputStream() {
+        return output.asOutputStream();
+    }
+
+    public ByteList getOutput() {
+        return output;
+    }
 }

@@ -123,8 +123,8 @@ public final class Util {
     /**
      *   父类的方法被子类实现的接口使用
      */
-    public MyHashSet<SubImpl> gatherSubImplements(List<Context> ctx, Map<String, List<String>> selfSupers) {
-        MyHashMap<String, IClass> methods = new MyHashMap<>();
+    public MyHashSet<SubImpl> gatherSubImplements(List<Context> ctx, ConstMapper mapper, MyHashMap<String, IClass> methods) {
+        if(methods.isEmpty())
         for (int i = 0; i < ctx.size(); i++) {
             ConstantData data = ctx.get(i).getData();
             methods.put(data.name, data);
@@ -140,7 +140,7 @@ public final class Util {
             ConstantData data = ctx.get(k).getData();
             if("java/lang/Object".equals(data.parent)) continue;
 
-            List<String> superClasses = superClasses(data.parent, selfSupers);
+            List<String> superClasses = superClasses(data.parent, mapper.selfSupers);
             if (superClasses == null) continue;
 
             boolean one = false;
@@ -156,17 +156,34 @@ public final class Util {
 
             if(!one) continue;
 
-            superClasses = superClasses(data.name, selfSupers);
+            superClasses = superClasses(data.name, mapper.selfSupers);
             for (int i = 0; i < superClasses.size(); i++) {
                 String parent = superClasses.get(i);
+
+                List<? extends MoFNode> nodes;
                 // 获取所有的方法
+                // 首先尝试从self获取
                 IClass clz = methods.get(parent);
                 if (clz == null) {
+                    // 其次尝试用反射加载rt
                     clz = reflectClassInfo(parent);
+                    if (clz != null) {
+                        nodes = clz.methods();
+                    } else {
+                        // 最后尝试从mapper libraries获取 (因为可能不全)
+                        nodes = new ArrayList<>();
+                        for (Desc key : mapper.methodMap.keySet()) {
+                            if(key.owner.equals(parent)) {
+                                nodes.add(Helpers.cast(key));
+                            }
+                        }
+                        methods.put(parent, new ReflectClass(parent, Helpers.cast(nodes)));
+                        if(nodes.isEmpty()) continue;
+                    }
+                } else {
+                    nodes = clz.methods();
                 }
-                if(clz == null) continue;
 
-                List<? extends MoFNode> nodes = clz.methods();
                 for (int j = 0; j < nodes.size(); j++) {
                     MoFNode method = nodes.get(j);
                     if((natCheck.name = method.name()).startsWith("<")) continue;
@@ -176,12 +193,8 @@ public final class Util {
                     if (get != natCheck) {
                         // 父类存在方法
 
-                        if (parent.equals(get.owner)) {
-                            continue;
-                        }
-
                         // 若存在继承关系，不是接口
-                        if (selfSupers.getOrDefault(get.owner, Collections.emptyList()).contains(parent)) {
+                        if (mapper.selfSupers.getOrDefault(get.owner, Collections.emptyList()).contains(parent)) {
                             // 跳过当前class
                             continue;
                         }

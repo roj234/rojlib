@@ -29,14 +29,14 @@ package ilib.api.recipe.impl;
 import ilib.api.recipe.IDisplayableRecipeList;
 import ilib.api.recipe.IModifiableRecipeList;
 import ilib.api.recipe.IRecipe;
+import ilib.api.recipe.MultiInputRecipe;
 import ilib.fluid.handler.IFluidProvider;
 import ilib.util.CraftingMap;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import roj.collect.UnsortedMultiKeyMap;
 import roj.math.MathUtils;
 import roj.math.MutableBoolean;
-
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -61,7 +61,7 @@ public class AdvancedRecipeList implements IDisplayableRecipeList, IModifiableRe
 
     public void addRecipe(IRecipe recipe) {
         display.add(recipe);
-        if(recipe.isStandard()) {
+        if(recipe.isStandard() && !(recipe instanceof MultiInputRecipe)) {
             recipes.put(recipe.getInput(), recipe);
         } else {
             fallback.add(recipe);

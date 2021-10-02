@@ -36,7 +36,6 @@ package roj.config;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.util.ByteWriter;
-import roj.util.log.Logger;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -45,8 +44,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public abstract class JSONConfiguration {
-    static Logger logger = Logger.getLogger("JSONConf");
-
     final File config;
     CMapping map;
 
@@ -74,9 +71,9 @@ public abstract class JSONConfiguration {
             CMapping map = this.map = JSONParser.parse(new String(IOUtil.read(fis), StandardCharsets.UTF_8), 2).asMap();
             readConfig(map);
         } catch (IOException | ParseException | ClassCastException e) {
-            logger.catching(e);
+            e.printStackTrace();
             config.renameTo(new File(config.getPath() + ".broken." + System.currentTimeMillis()));
-            logger.warn("配置文件读取失败! 重新生成配置!");
+            System.err.println("配置文件 " + config + " 读取失败! 重新生成配置!");
             resetConfig(this.map = new CMapping(), config);
         }
     }
@@ -88,7 +85,7 @@ public abstract class JSONConfiguration {
         try (FileOutputStream fos = new FileOutputStream(config)) {
             ByteWriter.encodeUTF(map.toJSON()).writeToStream(fos);
         } catch (IOException e) {
-            logger.catching(e);
+            e.printStackTrace();
         }
     }
 
@@ -97,7 +94,7 @@ public abstract class JSONConfiguration {
         try (FileOutputStream fos = new FileOutputStream(config)) {
             fos.write(map.toJSON().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            logger.catching(e);
+            e.printStackTrace();
         }
     }
 

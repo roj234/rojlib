@@ -1,5 +1,5 @@
 /*
- * This file is a part of MoreItems
+ * This file is a part of MI
  *
  * The MIT License (MIT)
  *
@@ -23,21 +23,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.text.crypt;
+package roj.sound.record;
 
 import roj.util.ByteList;
 
-import java.security.DigestException;
-
 /**
- * 【不】包含状态的密码算法
+ * No description provided
  *
- * @author Roj233
+ * @author Roj234
  * @version 0.1
- * @since 2021/9/7 13:07
+ * @since  2020/12/19 22:56
  */
-public interface ICrypt {
-    String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+@FunctionalInterface
+public interface VoiceHandler {
+    void handle(ByteList buffer);
 }

@@ -12,6 +12,7 @@ import roj.config.data.CString;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
+import roj.mod.compiler.Compiler;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
@@ -21,10 +22,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
+import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,15 +59,16 @@ public final class Project extends JSONConfiguration {
     String version, atName;
     Charset charset;
     List<Project> dependencies;
+    final Compiler compiler;
 
     ConstMapper.State state;
-    String binaryPathStr, atConfigPathStr;
-    File source, resource, binary;
+    String atConfigPathStr;
+    File source, resource, stamp;
 
     static FileFilter resourceFilter = new FileFilter();
     MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
 
-    MutableZipFile mz;
+    MutableZipFile dstZip, stampZip;
 
     private Project(String name) {
         super(new File(BASE, "config/" + name + ".json"), false);
@@ -73,8 +77,34 @@ public final class Project extends JSONConfiguration {
         String abs = BASE.getAbsolutePath();
         resource = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "resources" + File.separatorChar);
         source = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "java" + File.separatorChar);
-        binaryPathStr = abs + File.separatorChar + "bin" + File.separatorChar + name + File.separatorChar;
-        binary = new File(binaryPathStr);
+        stamp = new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-src.jar");
+
+        Set<String> ignores = new MyHashSet<>();
+        FMDMain.readTextList(ignores::add, "忽略的编译错误码");
+        this.compiler = new Compiler(null, null, ignores, source.getAbsolutePath().replace(File.separatorChar, '/'));
+
+        try {
+            this.stampZip = new MutableZipFile(stamp);
+            if(stamp.length() == 0)
+                if(!stamp.setLastModified(0))
+                    CmdUtil.warning("无法初始化stampFileTime");
+            // 防止有别的进程修改，而本进程又可以修改
+            FileLock lock = stampZip.getFile().getChannel().tryLock(0, 0, true);
+            if(null == lock) {
+                CmdUtil.warning("无法初始化stampFileLock");
+            }
+        } catch (IOException e) {
+            CmdUtil.warning("无法初始化stampFileZip, 请尝试重新启动FMD, 若无效, 请删除 " + stamp.getAbsolutePath(), e);
+            if(stampZip != null) {
+                try {
+                    stampZip.close();
+                } catch (IOException ignored) {}
+            }
+            if(!stamp.delete())
+                stamp.deleteOnExit();
+            LockSupport.parkNanos(5_000_000_000L);
+            System.exit(-2);
+        }
 
         init();
     }
@@ -86,13 +116,13 @@ public final class Project extends JSONConfiguration {
         LinkedMyHashMap<Project, Void> projects = new LinkedMyHashMap<>();
 
         List<Project> dest = new ArrayList<>(this.dependencies);
-        List<Project> dest2 = new ArrayList<>(), tmp;
+        List<Project> dest2 = new ArrayList<>();
         while (!dest.isEmpty()) {
             for (int i = 0; i < dest.size(); i++) {
                 projects.put(dest.get(i), null);
                 dest2.addAll(dest.get(i).dependencies);
             }
-            tmp = dest;
+            List<Project> tmp = dest;
             dest = dest2;
             dest2 = tmp;
             dest2.clear();

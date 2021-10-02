@@ -43,17 +43,25 @@ import java.util.List;
  */
 public class ReflectClass implements IClass {
     private final Class<?> owner;
+    private final String className;
     private final List<MoFNode> nodes;
     private List<String> ci, cs;
 
     public ReflectClass(Class<?> owner, List<MoFNode> nodes) {
         this.owner = owner;
+        this.className = owner.getName().replace('.', '/');
+        this.nodes = nodes;
+    }
+
+    public ReflectClass(String owner, List<MoFNode> nodes) {
+        this.owner = null;
+        this.className = owner;
         this.nodes = nodes;
     }
 
     @Override
     public String className() {
-        return owner.getName().replace('.', '/');
+        return className;
     }
 
     @Override

@@ -151,7 +151,7 @@ public class TextRenderer {
                     int tColor = color;
                     if (HEX_CHAR.contains(c)) {
                         flag = 0;
-                        int index = TextUtil.getNumber(c);
+                        int index = TextUtil.c2i(c);
                         if(index == -1)
                             index = c - 'a' + 10;
 

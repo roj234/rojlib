@@ -29,7 +29,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 import roj.collect.ToIntMap;
-import roj.io.NonblockingUtil;
+import roj.io.IOUtil;
 import roj.opengl.util.Util;
 
 import java.awt.image.*;
@@ -95,7 +95,7 @@ public abstract class TextureManager {
             dst.put(entry.v);
         }
         GL11.glDeleteTextures(dst);
-        NonblockingUtil.clean(buffer);
+        IOUtil.clean(buffer);
     }
 
     private static final ByteBuffer UPLOADER = ByteBuffer.allocateDirect(4 * TEXTURE_SIZE * TEXTURE_SIZE).order(ByteOrder.BIG_ENDIAN);
@@ -115,7 +115,7 @@ public abstract class TextureManager {
                               buf);
 
             if(buf != UPLOADER) {
-                NonblockingUtil.clean(buf);
+                IOUtil.clean(buf);
             }
         }
 

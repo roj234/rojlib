@@ -37,6 +37,7 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.CharMap;
 import roj.collect.FindMap;
+import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
@@ -72,7 +73,7 @@ public abstract class Obfuscator {
 
     public Obfuscator() {
         m1 = new ConstMapper(true);
-        m1.isMappingConstant = false;
+        m1.flag = ConstMapper.FLAG_CONSTANTLY_MAP | ConstMapper.FLAG_CHECK_SUB_IMPL;
         m2 = new CodeMapper(m1);
         m2.rewrite = true;
     }
@@ -135,7 +136,7 @@ public abstract class Obfuscator {
         Context cur = null;
         try {
             for (int i = 0; i < arr.size(); i++) {
-                t.parse(cur = arr.get(i));
+                t.S1_parse(cur = arr.get(i));
             }
 
             t.initSelfSuperMap();
@@ -147,7 +148,7 @@ public abstract class Obfuscator {
             FindMap<Desc, String> methodMap = t.getMethodMap();
             if(!methodMap.isEmpty()) {
                 Desc finder = new Desc("", "", "");
-                MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(arr, t.selfSupers);
+                MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(arr, t, new MyHashMap<>(arr.size()));
                 for (SubImpl impl : subs) {
                     finder.name = impl.type.name;
                     finder.param = impl.type.type;
@@ -178,11 +179,11 @@ public abstract class Obfuscator {
             }
 
             for (int i = 0; i < arr.size(); i++) {
-                t.mapSelf(cur = arr.get(i));
+                t.S2_mapSelf(cur = arr.get(i));
             }
 
             for (int i = 0; i < arr.size(); i++) {
-                t.mapConstant(cur = arr.get(i));
+                t.S3_mapConstant(cur = arr.get(i));
             }
 
             beforeMapCode(arr);

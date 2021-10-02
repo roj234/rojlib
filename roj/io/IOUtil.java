@@ -30,8 +30,10 @@ import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.FastThreadLocal;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.*;
+import java.nio.Buffer;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
 
@@ -145,5 +147,14 @@ public class IOUtil {
             x[1] = new CharList(8192);
         }
         return cl.toString();
+    }
+
+    public static void clean(Buffer shared) {
+        try {
+            DirectBuffer db = (DirectBuffer) shared;
+            while (db.cleaner() == null)
+                db = (DirectBuffer) db.attachment();
+            db.cleaner().clean();
+        } catch (Throwable ignored) {}
     }
 }

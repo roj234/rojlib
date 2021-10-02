@@ -23,21 +23,53 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.text.crypt;
+package roj.sound.source;
 
 import roj.util.ByteList;
 
-import java.security.DigestException;
-
 /**
- * 【不】包含状态的密码算法
+ * Your description here
  *
  * @author Roj233
  * @version 0.1
- * @since 2021/9/7 13:07
+ * @since 2021/8/18 13:36
  */
-public interface ICrypt {
-    String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+public class ByteListSource implements Source {
+    private final byte[] array;
+    private final int offset, length;
+    private int index;
+
+    public ByteListSource(byte[] arr) {
+        this.array = arr;
+        this.offset = 0;
+        this.length = arr.length;
+    }
+
+    public ByteListSource(ByteList bytes) {
+        this.array = bytes.list;
+        this.offset = bytes.offset();
+        this.length = bytes.pos();
+    }
+
+    @Override
+    public void seek(long source) {
+        this.index = (int) source;
+    }
+
+    @Override
+    public int read(byte[] array, int offset, int length) {
+        System.arraycopy(array, index + this.offset, array, offset, length = Math.min(length, this.length - index - this.offset));
+        index += length;
+        return length;
+    }
+
+    @Override
+    public long length() {
+        return length;
+    }
+
+    @Override
+    public void close() {
+        //array = null;
+    }
 }

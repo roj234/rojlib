@@ -197,12 +197,16 @@ public class FMDGui extends JFrame {
                 "FMD - 快速mod开发环境 - 作者 Roj234\n" +
                         VERSION + "\n" +
                         "\n" +
-                        //"  混淆mod代码\n" +
-                        //"    详情查看config.json中相应配置项\n" +
-                        //"    此功能可能含有BUG, 出现错误可以在配置中关闭\n" +
                         "  修复不少bug\n" +
-                        "  CLI支持shortcut\n" +
-                        "  仍然有少量bug, 将尽快修复\n" +
+                        "  支持解决 “父类的方法被子类实现的接口使用”\n" +
+                        "    这个问题FG一直没修\n" +
+                        "    这会导致AbstractMethodError\n" +
+                        "      当你有一个Tile实现了一个接口\n" +
+                        "      里面包含诸如getWorld的抽象方法\n" +
+                        "      然后这个接口的调用者就会在生产环境出错\n" +
+                        "  支持自动混淆代码\n" +
+                        "    请在配置文件中配置\n" +
+                        "    可能还有BUG，见谅\n" +
                         "\n" +
                         "下一个版本更新: \n" +
                         "  可能会支持1.17的开发, 开发！\n", "关于FMD", INFORMATION_MESSAGE, icon);

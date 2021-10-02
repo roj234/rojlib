@@ -101,15 +101,9 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                         case "ENTRY_CREATE": {
                             @SuppressWarnings("unchecked")
                             String id = key.watchable().toString() + File.separatorChar + ((WatchEvent<Path>) event).context().toString();
-                            switch (csm.x) {
-                                case 0:
-                                    if(!id.endsWith(".class"))
-                                        break x;
-                                    break;
-                                case 2:
-                                    if(!id.endsWith(".java"))
-                                        break x;
-                                    break;
+                            if (csm.x == ID_SRC) {
+                                if (!id.endsWith(".java"))
+                                    break x;
                             }
                             s.add(id);
                             break;
@@ -117,15 +111,9 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                         case "ENTRY_DELETE": {
                             @SuppressWarnings("unchecked")
                             String id = key.watchable().toString() + File.separatorChar + ((WatchEvent<Path>) event).context().toString();
-                            switch (csm.x) {
-                                case 0:
-                                    if(!id.endsWith(".class"))
-                                        break x;
-                                    break;
-                                case 2:
-                                    if(!id.endsWith(".java"))
-                                        break x;
-                                    break;
+                            if (csm.x == ID_SRC) {
+                                if (!id.endsWith(".java"))
+                                    break x;
                             }
                             s.remove(id);
                             break;
@@ -198,8 +186,6 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         registeredProjects = null;
     }
 
-    static final int ID_BIN = 0, ID_RES = 1, ID_SRC = 2;
-
     public void register(Project proj) throws IOException {
         if(registeredProjects == null)
             return;
@@ -210,25 +196,19 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
             return;
         }
 
-        arr = new X[3];
-        WatchKey key = proj.binary.toPath().register(watcher, new WatchEvent.Kind<?>[]{
-                                                             StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE,
-                                                             StandardWatchEventKinds.ENTRY_MODIFY
-                                                     },
-                                                     ExtendedWatchEventModifier.FILE_TREE);
-        actions.put(key, arr[0] = new X(0));
-        key = proj.resource.toPath().register(watcher, new WatchEvent.Kind<?>[]{
+        arr = new X[2];
+        WatchKey key = proj.resource.toPath().register(watcher, new WatchEvent.Kind<?>[]{
                                                       StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE,
                                                       StandardWatchEventKinds.ENTRY_MODIFY
                                               },
                                               ExtendedWatchEventModifier.FILE_TREE);
-        actions.put(key, arr[1] = new X(1));
+        actions.put(key, arr[0] = new X(0));
         key = proj.source.toPath().register(watcher, new WatchEvent.Kind<?>[]{
                                                     StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE,
                                                     StandardWatchEventKinds.ENTRY_MODIFY
                                             },
                                             ExtendedWatchEventModifier.FILE_TREE);
-        actions.put(key, arr[2] = new X(2));
+        actions.put(key, arr[1] = new X(1));
         registeredProjects.put(proj.name, arr);
         if(registeredProjects.size() == 1) {
             synchronized (this) {

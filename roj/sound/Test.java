@@ -23,36 +23,40 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.util.log;
+package roj.sound;
 
-import org.jetbrains.annotations.ApiStatus;
+import roj.sound.mp3.Player;
+import roj.sound.source.RandomAccessFileSource;
+import roj.sound.util.JavaAudio;
+import roj.sound.util.PCMBuffer;
+import roj.util.ByteList;
 
-@Deprecated
-@ApiStatus.ScheduledForRemoval
+import java.io.IOException;
+
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/4/21 22:51
+ * @since  2020/12/19 15:12
  */
-public interface Logger {
-    static Logger getLogger(String name) {
-        try {
-            org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(name);
-            return new AP(log);
-        } catch (Throwable e) {
-            return STD.instance;
-        }
+public class Test {
+    public static void main(String[] args) throws IOException {
+        Player player = new Player(args.length > 1 ? new PCMBuffer() : new JavaAudio());
+        player.open(new RandomAccessFileSource(args[0]));
+        System.out.println("文件头部信息: " + player.getHeader());
+        System.out.println("文件附加信息: " + player.getID3Tag());
+        System.out.println("比特率: " + player.getHeader().getBitrate() + "Kbps");
+        System.out.println("采样率: " + player.getHeader().getSamplingRate() + "kHz");
+
+        long t = System.currentTimeMillis();
+        player.decode();
+        System.out.println("解码时间： " + (System.currentTimeMillis() - t) + "ms");
+        System.out.println("有多少帧： " + player.getHeader().getFrames());
+        System.out.println("解码长度: " + player.getHeader().getElapse() + "s");
+
+        System.out.println("开始测试");
+        ByteList buffer = ((PCMBuffer) player.audio).buf;
+
     }
-
-    void info(Object text);
-
-    void debug(Object text);
-
-    void warn(Object text);
-
-    void error(Object text);
-
-    void catching(Throwable throwable);
 }

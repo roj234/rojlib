@@ -114,6 +114,31 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
         return list;
     }
 
+    public static String readSingleLine(String keys, boolean clean, int line) {
+        CharList chars = new CharList(20);
+
+        for (int i = 0; i < keys.length(); i++) {
+            char c1 = keys.charAt(i);
+            switch (c1) {
+                case '\r':
+                    if (i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+                        i++;
+                case '\n':
+                    if (chars.length() > 0 || !clean) {
+                        if(line-- == 0) {
+                            return chars.toString();
+                        }
+                        chars.clear();
+                    }
+                    break;
+                default:
+                    chars.append(c1);
+            }
+        }
+
+        return line == 0 ? chars.toString() : null;
+    }
+
     public SimpleLineReader(List<String> list) {
         this.lines = list;
     }

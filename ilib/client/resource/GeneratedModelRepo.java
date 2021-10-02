@@ -28,11 +28,11 @@ package ilib.client.resource;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.client.TextureHelper;
+import net.minecraft.client.resources.AbstractResourcePack;
+import net.minecraft.client.resources.ResourcePackFileNotFoundException;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
-
-import net.minecraft.client.resources.AbstractResourcePack;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -101,9 +101,11 @@ public final class GeneratedModelRepo extends AbstractResourcePack {
     }
 
     @Override
-    protected InputStream getInputStreamByName(@Nonnull String name) {
+    protected InputStream getInputStreamByName(@Nonnull String name) throws ResourcePackFileNotFoundException {
         final byte[] buf = data.get(name);
-        return buf == null ? null : new ByteArrayInputStream(buf);
+        if(buf != null)
+            return new ByteArrayInputStream(buf);
+        throw new ResourcePackFileNotFoundException(new File("generated_model_repo"), name);
     }
 
     @Override

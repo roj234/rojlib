@@ -1,5 +1,5 @@
 /*
- * This file is a part of MoreItems
+ * This file is a part of MI
  *
  * The MIT License (MIT)
  *
@@ -23,21 +23,36 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.text.crypt;
+/*
+ * Audio.java -- 音频输出
+ */
+package roj.sound.util;
 
 import roj.util.ByteList;
 
-import java.security.DigestException;
-
 /**
- * 【不】包含状态的密码算法
- *
- * @author Roj233
- * @version 0.1
- * @since 2021/9/7 13:07
+ * 将解码得到的PCM数据写入音频设备（播放）。
  */
-public interface ICrypt {
-    String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+public class PCMBuffer implements IAudio {
+    public ByteList buf;
+
+    @Override
+    public boolean open(AudioConfig h) {
+        buf = new ByteList(1048576);
+        return true;
+    }
+
+    @Override
+    public int write(byte[] b, int size) {
+        buf.addAll(b, 0, size);
+        return size;
+    }
+
+    public void start(boolean b) {}
+
+    @Override
+    public void drain() {}
+
+    @Override
+    public void close() {}
 }

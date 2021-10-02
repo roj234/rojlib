@@ -4,7 +4,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.util.glu.GLU;
-import roj.io.NonblockingUtil;
+import roj.io.IOUtil;
 import roj.opengl.util.FboUtil;
 
 import javax.annotation.Nonnull;
@@ -171,7 +171,7 @@ public final class FrameBuffer {
     static IntBuffer buf;
     private static IntBuffer createIntBuffer(int size) {
         if(buf == null || buf.capacity() < size) {
-            NonblockingUtil.clean(buf);
+            IOUtil.clean(buf);
             buf = null;
             return buf = BufferUtils.createIntBuffer(size);
         } else {

@@ -23,31 +23,56 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.mod;
+package roj.io;
 
-import roj.collect.MyHashSet;
-
+import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 
 /**
- * Abstract Project Watcher
+ * Your description here
  *
  * @author solo6975
  * @version 0.1
- * @since 2021/7/28 20:34
+ * @since 2021/10/2 15:33
  */
-public class IProjectWatcher {
-    public void reset() {}
+public final class ChannelOutputStream extends OutputStream {
+    private final WritableByteChannel channel;
+    private ByteBuffer one, last;
+    private byte[] lastBuf;
 
-    public static final int ID_RES = 0, ID_SRC = 1;
-
-    public MyHashSet<String> getModified(Project proj, int id) {
-        MyHashSet<String> set = new MyHashSet<>(2);
-        set.add(null);
-        return set;
+    public ChannelOutputStream(WritableByteChannel channel1) {
+        channel = channel1;
     }
 
-    public void register(Project proj) throws IOException {}
+    @Override
+    public void write(int b) throws IOException {
+        if(one == null)
+            one = ByteBuffer.allocate(1);
+        one.put(0, (byte) b).position(0).limit(1);
+        channel.write(one);
+    }
 
-    public void terminate() {}
+    @Override
+    public void write(@Nonnull byte[] b, int off, int len) throws IOException {
+        if(b == lastBuf) {
+            last.position(off).limit(off + len);
+            channel.write(last);
+        } else
+            channel.write(last = ByteBuffer.wrap(lastBuf = b, off, len));
+    }
+
+    @Override
+    public void close() throws IOException {
+        last = null;
+        lastBuf = null;
+        one = null;
+        channel.close();
+    }
+
+    public WritableByteChannel getChannel() {
+        return channel;
+    }
 }

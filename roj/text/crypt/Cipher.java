@@ -30,14 +30,20 @@ import roj.util.ByteList;
 import java.security.DigestException;
 
 /**
- * 【不】包含状态的密码算法
+ * 【包含】状态的密码算法
  *
  * @author Roj233
  * @version 0.1
  * @since 2021/9/7 13:07
  */
-public interface ICrypt {
+public interface Cipher {
     String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+    void reset(int cryptFlags);
+    void setPassword(byte[] password);
+    default void setOption(String key, Object value) {}
+
+    /**
+     * @return out
+     */
+    ByteList crypt(ByteList in, ByteList out) throws DigestException;
 }

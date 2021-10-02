@@ -293,8 +293,8 @@ public class TextUtil {
 
     public static StringBuilder dumpBytes(StringBuilder sb, byte[] b, int off, int len) {
         for (int i = off, j = 1; i < len; i++, j++) {
-            sb.append(hexChar((b[i] >>> 4) & 0xf))
-                    .append(hexChar(b[i] & 0xf));
+            sb.append(i2h_char((b[i] >>> 4) & 0xf))
+                    .append(i2h_char(b[i] & 0xf));
             if ((j & 1) == 0)
                 sb.append(' ');
 
@@ -306,13 +306,20 @@ public class TextUtil {
         return sb;
     }
 
-    public static char hexChar(int a) {
+    public static char i2h_char(int a) {
         return (char) (a < 10 ? 48 + a : (a < 16 ? 55 + a : '!'));
     }
 
-    public static int getNumber(char c) {
+    public static int c2i(char c) {
         if (c < 0x30 || c > 0x39) {
             return -1;
+        }
+        return c - 0x30;
+    }
+
+    public static int c2i_hex(char c) {
+        if (c < 0x30 || c > 0x39) {
+            return (c > 55 && c < 71) || ((c = Character.toLowerCase(c)) > 55 && c < 71) ? c - 45 : -1;
         }
         return c - 0x30;
     }

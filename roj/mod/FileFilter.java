@@ -1,16 +1,12 @@
 package roj.mod;
 
-import roj.asm.Parser;
-import roj.collect.MyHashSet;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.Type;
-import roj.io.IOUtil;
 import roj.io.PushbackInputStream;
 import roj.io.StreamingChars;
-import roj.ui.CmdUtil;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -19,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
+import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.MAIN_CONFIG;
 
 /**
@@ -28,7 +25,7 @@ import static roj.mod.Shared.MAIN_CONFIG;
  * @since 2021/7/11 14:23
  */
 class FileFilter implements Predicate<File> {
-    public static final int F_CLASS = 0, F_SRC = 1, F_TIME = 2, F_CLASS_TIME = 3, F_JAVA_ANNO = 4, F_JAVA_TIME = 5, F_ALL = 6, F_CLASS_TIME_REMOVE = 7;
+    public static final int F_RES_TIME = 0, F_SRC_ANNO = 1, F_SRC_TIME = 2, F_RES = 3;
 
     public static final FileFilter INST = new FileFilter();
 
@@ -36,63 +33,23 @@ class FileFilter implements Predicate<File> {
 
     static final byte[]            buffer     = new byte[MAIN_CONFIG.getInteger("AT查找缓冲区大小")];
     static final List<CmtATEntry>  cmtEntries = new ArrayList<>();
-    static final MyHashSet<String> modified   = new MyHashSet<>();
-    static int state;
 
-    long stamp;
-    int mode;
+    private long stamp;
+    private int mode;
 
     @Override
     public boolean test(File file) {
         switch (mode) {
-            case F_CLASS:
-                return file.getName().endsWith(".class");
-            case F_SRC:
-                return file.getName().endsWith(".java");
-            case F_TIME:
+            case F_RES_TIME:
                 return file.lastModified() > stamp;
-            case F_CLASS_TIME: {
-                if (file.getName().endsWith(".class") && file.lastModified() > stamp) {
-                    try {
-                        modified.add(Parser.simpleData(IOUtil.read(file)).get(0));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    return true;
-                }
-                return false;
-            }
-            case F_CLASS_TIME_REMOVE: {
-                boolean is = file.getName().endsWith(".class");
-                if (is && file.lastModified() <= stamp) {
-                    if (!file.delete()) {
-                        CmdUtil.warning("无法删除过时的文件 " + file.getPath());
-                    }
-                    modified.add(file.getAbsolutePath());
-                    state++;
-                    return false;
-                }
-                return is;
-            }
-            case F_JAVA_TIME: {
+            case F_SRC_TIME:
+                return file.getName().endsWith(".java") && file.lastModified() > stamp;
+            case F_SRC_ANNO: {
                 boolean is = file.getName().endsWith(".java");
-                if (is && file.lastModified() > stamp) {
-                    try {
-                        modified.add(Parser.simpleData(IOUtil.read(file)).get(0));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+                if (is) checkATComments(file);
                 return is;
             }
-            case F_JAVA_ANNO: {
-                boolean is = file.getName().endsWith(".java");
-                if (is) {
-                    checkATComments(file);
-                }
-                return is;
-            }
-            case F_ALL:
+            case F_RES:
                 return true;
         }
 
@@ -102,8 +59,6 @@ class FileFilter implements Predicate<File> {
     public FileFilter reset(long stamp, int enable) {
         this.stamp = stamp;
         this.mode = enable;
-        state = 0;
-        modified.clear();
         cmtEntries.clear();
         return this;
     }
@@ -151,7 +106,7 @@ class FileFilter implements Predicate<File> {
                 }
             }
         } catch (IOException | ParseException e) {
-            System.out.println("文件: " + file.getPath().substring(Compiler.BASE_PATH.length()));
+            System.out.println("文件: " + file.getPath().substring(BASE.getAbsolutePath().length()));
             if(e instanceof ParseException) {
                 System.out.println(e);
             } else {

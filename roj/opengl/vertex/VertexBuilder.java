@@ -25,7 +25,7 @@
  */
 package roj.opengl.vertex;
 
-import roj.io.NonblockingUtil;
+import roj.io.IOUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -65,7 +65,7 @@ public class VertexBuilder {
             ByteBuffer newBuf = ByteBuffer.allocateDirect(newCap).order(ByteOrder.nativeOrder());
             buf.position(0);
             newBuf.put(buf).position(pos);
-            NonblockingUtil.clean(buf);
+            IOUtil.clean(buf);
             buf = newBuf;
         }
     }
@@ -298,7 +298,7 @@ public class VertexBuilder {
 
     public void free() {
         if(buf != null) {
-            NonblockingUtil.clean(buf);
+            IOUtil.clean(buf);
             buf = null;
         }
     }

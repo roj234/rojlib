@@ -151,8 +151,10 @@ public class CharList implements CharSequence {
     }
 
     public void setIndex(int id) {
-        if(list == null)
+        if(list == null) {
+            if(id == 0) return;
             throw new ArrayIndexOutOfBoundsException(id);
+        }
         if (id > list.length)
             throw new ArrayIndexOutOfBoundsException("Required " + id + " Current " + list.length);
         this.ptr = id;

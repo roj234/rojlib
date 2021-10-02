@@ -27,10 +27,7 @@ package roj.asm.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.mapper.util.AccessFallbackHandler;
-import roj.asm.mapper.util.Context;
-import roj.asm.mapper.util.Desc;
-import roj.asm.mapper.util.MapperList;
+import roj.asm.mapper.util.*;
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
@@ -72,8 +69,10 @@ import java.util.function.Predicate;
  * @since  2020/8/19 22:13
  */
 public class ConstMapper extends Mapping {
+    public static final int FLAG_CONSTANTLY_MAP = 1, FLAG_CHECK_SUB_IMPL = 2;
+
     // 'CMPC': Const Remapper Cache
-    public static final int FILE_HEADER = 0x634d5063;
+    private static final int FILE_HEADER = 0x634d5063;
 
     private static final boolean DEBUG = false;
 
@@ -90,7 +89,7 @@ public class ConstMapper extends Mapping {
     FindSet<Desc>             selfSkipped;
     Map<String, List<String>> selfSupers;
 
-    public boolean isMappingConstant = true;
+    public byte flag = FLAG_CONSTANTLY_MAP;
     private final List<State> extendedSuperList = new SimpleList<>();
 
     public ConstMapper() {
@@ -256,17 +255,19 @@ public class ConstMapper extends Mapping {
             Context curr = null;
             try {
                 for (int i = 0; i < arr.size(); i++) {
-                    parse(curr = arr.get(i));
+                    S1_parse(curr = arr.get(i));
                 }
 
                 initSelfSuperMap();
+                if((flag & FLAG_CHECK_SUB_IMPL) != 0)
+                    S15_ignoreSubImpl(arr);
 
                 for (int i = 0; i < arr.size(); i++) {
-                    mapSelf(curr = arr.get(i));
+                    S2_mapSelf(curr = arr.get(i));
                 }
 
                 for (int i = 0; i < arr.size(); i++) {
-                    mapConstant(curr = arr.get(i));
+                    S3_mapConstant(curr = arr.get(i));
                 }
 
             } catch (Throwable e) {
@@ -293,13 +294,15 @@ public class ConstMapper extends Mapping {
             if(!tmp.isEmpty())
                 splatted.add(tmp);
 
-            Util.concurrent("RV2WorkerP", this::parse, splatted);
+            Util.concurrent("RV2WorkerP", this::S1_parse, splatted);
 
             initSelfSuperMap();
+            if((flag & FLAG_CHECK_SUB_IMPL) != 0)
+                S15_ignoreSubImpl(arr);
 
-            Util.concurrent("RV2WorkerR", this::mapSelf, splatted);
+            Util.concurrent("RV2WorkerR", this::S2_mapSelf, splatted);
 
-            Util.concurrent("RV2WorkerW", this::mapConstant, splatted);
+            Util.concurrent("RV2WorkerW", this::S3_mapConstant, splatted);
         }
     }
 
@@ -316,22 +319,24 @@ public class ConstMapper extends Mapping {
         try {
             MyHashSet<String> modified = new MyHashSet<>();
             for (int i = 0; i < arr.size(); i++) {
-                parse(curr = arr.get(i));
+                S1_parse(curr = arr.get(i));
                 modified.add(curr.getData().name);
             }
 
             Predicate<Desc> rem = key -> modified.contains(key.owner);
             selfMethods.keySet().removeIf(rem);
             selfSkipped.removeIf(rem);
+            if((flag & FLAG_CHECK_SUB_IMPL) != 0)
+                S15_ignoreSubImpl(arr);
 
             initSelfSuperMap();
 
             for (int i = 0; i < arr.size(); i++) {
-                mapSelf(curr = arr.get(i));
+                S2_mapSelf(curr = arr.get(i));
             }
 
             for (int i = 0; i < arr.size(); i++) {
-                mapConstant(curr = arr.get(i));
+                S3_mapConstant(curr = arr.get(i));
             }
 
         } catch (Throwable e) {
@@ -344,7 +349,7 @@ public class ConstMapper extends Mapping {
     /**
      * Step 1 Prepare Super Mapping
      */
-    final void parse(Context c) {
+    public final void S1_parse(Context c) {
         ConstantData data = c.getData();
 
         ArrayList<String> list = new ArrayList<>();
@@ -364,9 +369,56 @@ public class ConstMapper extends Mapping {
     }
 
     /**
+     * Step 1.5 (Optional) Find and Ignore SubImpl types
+     */
+    public final List<Desc> S15_ignoreSubImpl(List<Context> ctxs) {
+        List<Desc> filled = new ArrayList<>();
+        MyHashMap<String, IClass> methods = new MyHashMap<>(ctxs.size());
+        MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(ctxs, this, methods);
+        for (SubImpl impl : subs) {
+            String targetName = null, foundClass = null;
+            Desc desc = new Desc("", impl.type.name, impl.type.type);
+            for (String owner : impl.owners) {
+                desc.owner = owner;
+                String name1 = methodMap.get(desc);
+                if (name1 != null) {
+                    if(targetName == null) {
+                        foundClass = owner;
+                        targetName = name1;
+                    } else if (!targetName.equals(name1)) {
+                        throw new IllegalStateException(impl + ": 同参方法映射后名称不同");
+                    }
+                }
+            }
+            if (targetName != null) {
+                for (String owner : impl.owners) {
+                    if(owner.equals(foundClass)) continue;
+                    desc.owner = owner;
+                    if (null == methodMap.putIfAbsent(desc, targetName)) {
+                        filled.add(desc);
+                        List<? extends MoFNode> methods1 = methods.get(desc.owner).methods();
+                        for (int i = 0; i < methods1.size(); i++) {
+                            MoFNode m = methods1.get(i);
+                            if (desc.param.equals(m.rawDesc()) && desc.name.equals(m.name())) {
+                                desc.flags = m.accessFlag();
+                                break;
+                            }
+                        }
+                        if (desc.flags == null) {
+                            throw new IllegalArgumentException(desc + ": 无法适配权限");
+                        }
+                        desc = desc.copy();
+                    }
+                }
+            }
+        }
+        return filled;
+    }
+
+    /**
      * Step 2 Map Inherited Methods
      */
-    final void mapSelf(Context ctx) {
+    public final void S2_mapSelf(Context ctx) {
         ConstantData data = ctx.getData();
 
         List<String> parents = selfSupers.get(data.name);
@@ -451,7 +503,7 @@ public class ConstMapper extends Mapping {
      * Step 2.5 (Optional) Field Name <br>
      *     Also implemented in CodeMapper
      */
-    public final void mapFieldName(ConstantData data) {
+    public final void S25_mapFieldName(ConstantData data) {
         Desc md = Util.shareMD();
         md.owner = data.name;
         List<FieldSimple> fields = data.fields;
@@ -476,7 +528,7 @@ public class ConstMapper extends Mapping {
     /**
      * Step 3
      */
-    final void mapConstant(Context ctx) {
+    public final void S3_mapConstant(Context ctx) {
         ConstantData data = ctx.getData();
 
         int i = 0;
@@ -589,15 +641,15 @@ public class ConstMapper extends Mapping {
         List<String> parents = selfSupers.getOrDefault(ref.getClassName(), Collections.emptyList());
         int i = 0;
         while (true) {
-            if(selfSkipped.contains(md)) {
-                if(DEBUG)
-                    System.out.println("[3" + (method ? "M" : "F") + "-" + data.name + "]: " + (!md.owner.equals(data.name) ? md.owner + '.' : "") + md.name + md.param);
-                break;
-            }
-
             String name = map.get(md);
             if (name != null) {
                 setRefName(data, ref, name);
+                break;
+            }
+
+            if(selfSkipped.contains(md)) {
+                if(DEBUG)
+                    System.out.println("[3" + (method ? "M" : "F") + "-" + data.name + "]: " + (!md.owner.equals(data.name) ? md.owner + '.' : "") + md.name + md.param);
                 break;
             }
 
@@ -665,7 +717,7 @@ public class ConstMapper extends Mapping {
             classMap.remove(k);
         }
 
-        makeInheritMap(libSupers, isMappingConstant ? classMap : null);
+        makeInheritMap(libSupers, (flag & FLAG_CONSTANTLY_MAP) != 0 ? classMap : null);
 
         // 下面这段的目的：用户类可能继承了映射中的方法
         // 并对这些方法做了修改，使得继承这些用户类的方法不能再映射
@@ -877,7 +929,7 @@ public class ConstMapper extends Mapping {
         libSkipped.clear();
     }
 
-    final void initSelfSuperMap() {
+    public final void initSelfSuperMap() {
         Map<String, List<String>> universe = new MyHashMap<>(this.libSupers);
         for (int i = 0; i < extendedSuperList.size(); i++) {
             universe.putAll(extendedSuperList.get(i).map);
@@ -885,10 +937,10 @@ public class ConstMapper extends Mapping {
         universe.putAll(this.selfSupers); // replace lib class
         this.selfSupers = universe;
 
-        makeInheritMap(universe, isMappingConstant ? classMap : null);
+        makeInheritMap(universe, (flag & (FLAG_CONSTANTLY_MAP | FLAG_CHECK_SUB_IMPL)) == FLAG_CONSTANTLY_MAP ? classMap : null);
     }
 
-    final void initSelf(int size) {
+    public final void initSelf(int size) {
         selfSkipped = new MyHashSet<>(libSkipped);
         selfSupers = new MyHashMap<>(size);
         selfMethods = new MyHashMap<>();

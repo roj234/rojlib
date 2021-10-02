@@ -23,21 +23,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.text.crypt;
+package roj.sound.source;
 
-import roj.util.ByteList;
-
-import java.security.DigestException;
+import java.io.Closeable;
+import java.io.IOException;
 
 /**
- * 【不】包含状态的密码算法
+ * Your description here
  *
  * @author Roj233
  * @version 0.1
- * @since 2021/9/7 13:07
+ * @since 2021/8/18 13:36
  */
-public interface ICrypt {
-    String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+public interface Source extends Closeable, AutoCloseable {
+    void seek(long source) throws IOException;
+    int read(byte[] array, int offset, int length) throws IOException;
+    long length() throws IOException;
 }

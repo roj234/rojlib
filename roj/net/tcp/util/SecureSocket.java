@@ -26,6 +26,7 @@
 package roj.net.tcp.util;
 
 
+import roj.io.IOUtil;
 import roj.io.NonblockingUtil;
 import roj.net.ssl.EngineAllocator;
 import roj.util.ByteList;
@@ -152,7 +153,7 @@ public class SecureSocket extends InsecureSocket {
         ByteBuffer bb = ByteBuffer.allocateDirect(netBufSize);
         networkIn.flip();
         bb.put(networkIn);
-        NonblockingUtil.clean(networkIn);
+        IOUtil.clean(networkIn);
         networkIn = bb;
     }
 

@@ -27,7 +27,10 @@ package roj.asm.mapper.util;
 
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstRef;
+import roj.asm.tree.simple.MoFNode;
+import roj.asm.util.ConstantWriter;
 import roj.asm.util.FlagList;
+import roj.util.ByteWriter;
 
 /**
  * 对象描述符
@@ -36,7 +39,7 @@ import roj.asm.util.FlagList;
  * @version 2.8
  * @since ?
  */
-public final class Desc {
+public final class Desc implements MoFNode {
     public String owner, name, param;
     public FlagList flags;
 
@@ -88,5 +91,30 @@ public final class Desc {
 
     public final Desc copy() {
         return new Desc(owner, name, param, flags);
+    }
+
+    @Override
+    public void toByteArray(ConstantWriter pool, ByteWriter w) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String name() {
+        return name;
+    }
+
+    @Override
+    public String rawDesc() {
+        return param;
+    }
+
+    @Override
+    public FlagList accessFlag() {
+        return flags;
+    }
+
+    @Override
+    public int type() {
+        return 5;
     }
 }
