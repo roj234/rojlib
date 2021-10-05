@@ -47,6 +47,20 @@ import java.util.function.ToIntFunction;
  * @since 2021/5/27 1:12
  */
 public abstract class InsnNode implements Helpers.Node {
+    public static final int T_OTHER      = 0;
+    public static final int T_LOAD_STORE = 1;
+    public static final int T_CLASS      = 2;
+    public static final int T_FIELD    = 3;
+    public static final int T_INVOKE = 4;
+    public static final int T_INVOKE_DYNAMIC = 5;
+    public static final int T_GOTO_IF        = 6;
+    public static final int T_LABEL        = 7;
+    public static final int T_LDC   = 8;
+    public static final int T_IINC  = 9;
+    public static final int T_TABLESWITCH  = 10;
+    public static final int T_LOOKUPSWITCH   = 11;
+    public static final int T_MULTIANEWARRAY = 12;
+
     protected InsnNode(byte code) {
         setOpcode(code);
     }
@@ -104,8 +118,16 @@ public abstract class InsnNode implements Helpers.Node {
         return code;
     }
 
+    public final int getOpcodeInt() {
+        return code & 0xFF;
+    }
+
     protected boolean validate() {
         return true;
+    }
+
+    public int nodeType() {
+        return T_OTHER;
     }
 
     public abstract void toByteArray(ByteWriter w);

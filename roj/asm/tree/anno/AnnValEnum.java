@@ -29,7 +29,6 @@ package roj.asm.tree.anno;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantWriter;
-import roj.text.StringPool;
 import roj.util.ByteWriter;
 
 /**
@@ -52,12 +51,6 @@ public final class AnnValEnum extends AnnVal {
     public void _toByteArray(ConstantWriter pool, ByteWriter w) {
         w.writeShort(pool.getUtfId(ParamHelper.getField(this.clazz)));
         w.writeShort(pool.getUtfId(value));
-    }
-
-    @Override
-    public void _toByteArray(StringPool pool, ByteWriter w) {
-        pool.writeString(w, ParamHelper.getField(this.clazz));
-        pool.writeString(w, value);
     }
 
     public String toString() {

@@ -25,7 +25,8 @@
  */
 
 package roj.asm.cst;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -34,11 +35,13 @@ package roj.asm.cst;
  */
 public final class CstRefMethod extends CstRef {
     public CstRefMethod(int classIndex, int nameAndTypeIndex) {
-        super(CstType.METHOD, classIndex, nameAndTypeIndex);
+        super(classIndex, nameAndTypeIndex);
     }
 
-    public CstRefMethod() {
-        super(CstType.METHOD);
-    }
+    public CstRefMethod() {}
 
+    @Override
+    public byte type() {
+        return CstType.METHOD;
+    }
 }

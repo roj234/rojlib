@@ -29,6 +29,7 @@ package roj.asm.tree.insn;
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantWriter;
 import roj.collect.IntMap;
+import roj.collect.LinkedIntMap;
 import roj.util.ByteWriter;
 
 import java.util.PrimitiveIterator;
@@ -44,13 +45,13 @@ import java.util.function.ToIntFunction;
 public final class SwitchInsnNode extends InsnNode {
     public SwitchInsnNode(byte code) {
         super(code);
-        this.mapping = new IntMap<>();
+        this.switcher = new LinkedIntMap<>();
     }
 
-    public SwitchInsnNode(byte code, InsnNode def, IntMap<InsnNode> mapping) {
+    public SwitchInsnNode(byte code, InsnNode def, LinkedIntMap<InsnNode> switcher) {
         super(code);
         this.def = def;
-        this.mapping = mapping;
+        this.switcher = switcher;
     }
 
     @Override
@@ -63,10 +64,15 @@ public final class SwitchInsnNode extends InsnNode {
         return false;
     }
 
-    public InsnNode def;
-    public IntMap<InsnNode> mapping;
+    @Override
+    public int nodeType() {
+        return code == Opcodes.TABLESWITCH ? T_TABLESWITCH : T_LOOKUPSWITCH;
+    }
 
-    ToIntFunction<InsnNode> pcRev;
+    public InsnNode         def;
+    public IntMap<InsnNode> switcher;
+
+    private ToIntFunction<InsnNode> pcRev;
 
     @Override
     public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
@@ -83,9 +89,9 @@ public final class SwitchInsnNode extends InsnNode {
 
         int vl;
         if (this.code == Opcodes.TABLESWITCH) {
-            vl = 1 + pad + 4 + 8 + mapping.size() * 4;
+            vl = 1 + pad + 4 + 8 + switcher.size() * 4;
         } else {
-            vl = 1 + pad + 8 + mapping.size() * 8;
+            vl = 1 + pad + 8 + switcher.size() * 8;
         }
         w.list.pos(w.list.pos() + vl);
     }
@@ -104,29 +110,28 @@ public final class SwitchInsnNode extends InsnNode {
             long hl = calculateShouldUseTable();
             w.writeInt(pcRev.applyAsInt(validate(def)) - self)
                     .writeInt((int) hl).writeInt((int) (hl >>> 32));
-            for (InsnNode node : mapping.values()) {
+            for (InsnNode node : switcher.values()) {
                 w.writeInt(pcRev.applyAsInt(validate(node)) - self);
             }
         } else {
             w.writeInt(pcRev.applyAsInt(validate(def)) - self)
-                    .writeInt(mapping.size());
-            for (IntMap.Entry<InsnNode> entry : mapping.entrySet()) {
+                    .writeInt(switcher.size());
+            for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
                 w.writeInt(entry.getKey())
                         .writeInt(pcRev.applyAsInt(validate(entry.getValue())) - self);
             }
         }
 
-        this.pcRev = null;
         this.pad = -1;
     }
 
     private byte pad = -1;
 
     private long calculateShouldUseTable() {
-        int nlabels = mapping.size();
+        int nlabels = switcher.size();
         int lo = Integer.MAX_VALUE;
         int hi = Integer.MIN_VALUE;
-        for (PrimitiveIterator.OfInt itr = mapping.keySet().iterator(); itr.hasNext(); ) {
+        for (PrimitiveIterator.OfInt itr = switcher.keySet().iterator(); itr.hasNext(); ) {
             int val = itr.nextInt();
             if (val > hi) hi = val;
             if (val < lo) lo = val;
@@ -142,7 +147,7 @@ public final class SwitchInsnNode extends InsnNode {
 
     public String toString() {
         StringBuilder sb = new StringBuilder(super.toString()).append(" {\n");
-        for (IntMap.Entry<InsnNode> entry : mapping.entrySet()) {
+        for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
             sb.append("               ").append(entry.getKey()).append(" : ").append(entry.getValue()).append('\n');
         }
         return sb.append("               default: ").append(def).append("\n            }").toString();

@@ -28,7 +28,6 @@ package roj.collect;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nullable;
 import java.util.*;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
@@ -37,11 +36,6 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
     public int getOrDefault(int key, int def) {
         Entry entry = getEntry(key);
         return entry == null ? def : entry.v;
-    }
-
-    public Integer getOrDefault(int key, @Nullable Integer def) {
-        Entry entry = getEntry(key);
-        return entry == null ? def : Integer.valueOf(entry.v);
     }
 
     public boolean isEmpty() {

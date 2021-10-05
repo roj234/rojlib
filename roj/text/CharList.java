@@ -78,7 +78,7 @@ public class CharList implements CharSequence {
 
     public void ensureCapacity(int required) {
         if (list == null || required > list.length) {
-            char[] newList = new char[Math.max((int) (required * 1.5), 32)];
+            char[] newList = new char[Math.max(((required * 3) >> 1), 32)];
             if (list != null && ptr > 0)
                 System.arraycopy(list, 0, newList, 0, Math.min(ptr, list.length));
             list = newList;

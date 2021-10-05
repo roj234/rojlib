@@ -27,7 +27,6 @@
 package roj.asm.tree.anno;
 
 import roj.asm.util.ConstantWriter;
-import roj.text.StringPool;
 import roj.util.ByteWriter;
 
 /**
@@ -44,11 +43,6 @@ public final class AnnValLong extends AnnVal {
     }
 
     public long value;
-
-    @Override
-    public void _toByteArray(StringPool pool, ByteWriter w) {
-        w.writeLong(value);
-    }
 
     public void _toByteArray(ConstantWriter pool, ByteWriter w) {
         w.writeShort(pool.getLongId(value));

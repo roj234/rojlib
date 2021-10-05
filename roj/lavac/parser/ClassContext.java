@@ -60,7 +60,7 @@ public final class ClassContext {
     }
 
     public void stage0Read() throws IOException {
-        wr = (JavaLexer) new JavaLexer().init(IOUtil.read(in));
+        wr = (JavaLexer) new JavaLexer().init(IOUtil.readUTF(in));
     }
 
     public void stage1Struct() throws ParseException {
@@ -122,7 +122,7 @@ public final class ClassContext {
 
         // ## 2.2 class type
         acc = getClass(wr, acc);
-        dest.accesses.flag = (short) acc;
+        dest.accesses.flag = (char) acc;
 
         // # 3.1 class name
         w = wr.readWord();

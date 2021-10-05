@@ -63,9 +63,7 @@ public abstract class Attribute {
         throw new InternalError("Subclasses should rewrite this: " + this.getClass().getName());
     }
 
-    public String toString() {
-        throw new InternalError("Subclasses should rewrite this: " + this.getClass().getName());
-    }
+    public abstract String toString();
 
     public ByteList getRawData() {
         return null;

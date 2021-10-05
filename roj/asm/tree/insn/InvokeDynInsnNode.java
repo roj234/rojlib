@@ -42,7 +42,7 @@ import java.util.List;
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class InvokeDynInsnNode extends InsnNode implements IInvocationInsnNode {
+public final class InvokeDynInsnNode extends InsnNode implements IInvocationInsnNode {
     public InvokeDynInsnNode() {
         super(Opcodes.INVOKEDYNAMIC);
     }
@@ -53,6 +53,11 @@ public class InvokeDynInsnNode extends InsnNode implements IInvocationInsnNode {
         this.name = ref.getDesc().getName().getString();
         this.params = ParamHelper.parseMethod(ref.getDesc().getType().getString());
         this.returnType = params.remove(params.size() - 1);
+    }
+
+    @Override
+    public int nodeType() {
+        return T_INVOKE_DYNAMIC;
     }
 
     @Override

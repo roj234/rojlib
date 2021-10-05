@@ -49,5 +49,5 @@ public @interface Nixim {
 
     boolean copyItf() default false;
 
-    //boolean replace() default false;
+    boolean checkBridge() default false;
 }

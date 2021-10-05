@@ -28,140 +28,64 @@ package roj.asm.util;
 
 import roj.asm.cst.*;
 import roj.collect.IntIterator;
-import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 import roj.text.TextUtil;
 import roj.util.ByteReader;
 import roj.util.Idx;
 
+import javax.annotation.Nonnull;
 import java.io.UTFDataFormatException;
-import java.util.Arrays;
 import java.util.List;
 
 import static roj.asm.cst.CstType.*;
 
 /**
- * No description provided
+ * 常量池
  *
  * @author Roj234
- * @version 0.1
+ * @version 2.0
  * @since 2021/5/29 17:16
  */
-public class ConstantPool {
+public final class ConstantPool {
     Constant[] cst;
-    int index = 1;
-
-    MyHashSet<Constant> uniquer;
+    final SimpleList<Constant> cstList;
+    int index;
 
     public ConstantPool(int len) {
-        this.cst = new Constant[len];
-        this.uniquer = new MyHashSet<>(len / 2);
+        this.cst = new Constant[(this.index = len) - 1];
+        this.cstList = new SimpleList<>();
+        this.cstList.setRawArray(cst);
+        this.cstList.i_setSize(len - 1);
     }
 
-    public int index() {
-        return index;
-    }
-
-    void addConstant(Constant c) {
-        if(c.getIndex() == 0)
-            c.setIndex(index);
-        cst[index++] = c;
-        switch (c.type()) {
-            case LONG:
-            case DOUBLE:
-                cst[index++] = CstTop.TOP;
-        }
-    }
-
-    @SuppressWarnings("fallthrough")
-    public void valid() {
-        if (uniquer == null)
-            throw new IllegalStateException("Already validated.");
-
-        MyHashSet<Constant> uniquer = this.uniquer;
-        uniquer.clear();
-
+    public void read(ByteReader r) {
         Constant[] cst = this.cst;
         Idx idx = new Idx(cst.length);
-        idx.add(0); // remove 0
 
-        IntIterator itr = idx.remains();
-        for (int pass = 0; pass < 3; pass++) {
-            while (itr.hasNext()) {
-                int i = itr.nextInt();
-                Constant c = cst[i];
-
-                try {
-                    if (validate(c, pass)) {
-                        cst[i] = uniquer.intern(c);
-                        idx.add(i);
-                    }
-                } catch (ClassCastException e) {
-                    Constant err = getReferTo(c, pass);
-                    throw new IllegalArgumentException("Constant " + c + " is referencing an invalid index " + err.getIndex() + " ( " + err + " )", e);
-                }
+        int i = 0;
+        while (i < cst.length) {
+            Constant c = readConstant(r);
+            cst[i++] = c;
+            c.setIndex(i);
+            switch (c.type()) {
+                case LONG:
+                case DOUBLE:
+                    idx.add(i - 1);
+                    idx.add(i);
+                    cst[i++] = CstTop.TOP;
+                    break;
+                case UTF:
+                case INT:
+                case FLOAT:
+                    idx.add(i - 1);
+                    break;
             }
-            itr.reset();
         }
 
-        uniquer.clear();
-        this.uniquer = null;
-    }
-
-    private Constant getReferTo(Constant c, int level) {
-        switch (level) {
-            case 1: {
-                switch (c.type()) {
-                    case METHOD_TYPE:
-                    case STRING:
-                    case CLASS: {
-                        CstRefUTF cz = (CstRefUTF) c;
-                        return cst[cz.getValueIndex()];
-                    }
-                    case NAME_AND_TYPE: {
-                        CstNameAndType cz = (CstNameAndType) c;
-                        Constant cst = this.cst[cz.getNameIndex()];
-                        if (!(cst instanceof CstUTF)) {
-                            return cst;
-                        }
-                        return this.cst[cz.getTypeIndex()];
-                    }
-                }
-            }
-            break;
-            case 2: {
-                switch (c.type()) {
-                    case FIELD:
-                    case METHOD:
-                    case INTERFACE: {
-                        CstRefField cz = (CstRefField) c;
-                        Constant cst = this.cst[cz.getClassIndex()];
-                        if (!(cst instanceof CstClass)) {
-                            return cst;
-                        }
-                        return this.cst[cz.getDescIndex()];
-                    }
-                    case INVOKE_DYNAMIC: {
-                        CstDynamic cz = (CstDynamic) c;
-                        return cst[cz.getDescIndex()];
-                    }
-                }
-            }
-            break;
-            case 3: {
-                if (c.type() == CstType.METHOD_HANDLE) {
-                    CstMethodHandle cz = (CstMethodHandle) c;
-                    return cst[cz.getRefIndex()];
-                }
-            }
-            break;
-        }
-        return new CstUTF("Impossible error at " + level + " of " + c);
-    }
-
-    private boolean validate(Constant c, int level) throws ClassCastException {
-        switch (level) {
-            case 0: {
+        for (IntIterator it = idx.remains(); it.hasNext(); ) {
+            Constant c = cst[it.nextInt()];
+            try {
                 switch (c.type()) {
                     case MODULE:
                     case PACKAGE:
@@ -169,53 +93,76 @@ public class ConstantPool {
                     case STRING:
                     case CLASS: {
                         CstRefUTF cz = (CstRefUTF) c;
-                        cz.setValue((CstUTF) cst[cz.getValueIndex()]);
+                        cz.setValue((CstUTF) cst[cz.getValueIndex() - 1]);
                     }
-                    return true;
+                    break;
                     case NAME_AND_TYPE: {
                         CstNameAndType cz = (CstNameAndType) c;
-                        cz.setName((CstUTF) cst[cz.getNameIndex()]);
-                        cz.setType((CstUTF) cst[cz.getTypeIndex()]);
+                        cz.setName((CstUTF) cst[cz.getNameIndex() - 1]);
+                        cz.setType((CstUTF) cst[cz.getTypeIndex() - 1]);
                     }
-                    return true;
-                    case UTF:
-                    case DOUBLE:
-                    case INT:
-                    case LONG:
-                    case FLOAT:
-                    case _TOP_:
-                        return true;
-                }
-            }
-            break;
-            case 1: {
-                switch (c.type()) {
+                    break;
                     case FIELD:
                     case METHOD:
                     case INTERFACE: {
                         CstRef cz = (CstRef) c;
-                        cz.setClazz((CstClass) cst[cz.getClassIndex()]);
-                        cz.desc((CstNameAndType) cst[cz.getDescIndex()]);
+                        cz.setClazz((CstClass) cst[cz.getClassIndex() - 1]);
+                        cz.desc((CstNameAndType) cst[cz.getDescIndex() - 1]);
                     }
-                    return true;
+                    break;
                     case INVOKE_DYNAMIC: {
                         CstDynamic cz = (CstDynamic) c;
-                        cz.setDesc((CstNameAndType) cst[cz.getDescIndex()]);
+                        cz.setDesc((CstNameAndType) cst[cz.getDescIndex() - 1]);
                     }
-                    return true;
+                    break;
+                    case METHOD_HANDLE: {
+                        CstMethodHandle cz = (CstMethodHandle) c;
+                        cz.setRef((CstRef) cst[cz.getRefIndex() - 1]);
+                    }
+                    break;
                 }
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException(c + " is referencing an invalid constant " + getReferTo(c), e);
             }
-            break;
-            case 2: {
-                if (c.type() == CstType.METHOD_HANDLE) {
-                    CstMethodHandle cz = (CstMethodHandle) c;
-                    cz.setRef((CstRef) cst[cz.getRefIndex()]);
-                    return true;
-                }
-            }
-            break;
         }
-        return false;
+    }
+
+    private Constant getReferTo(Constant c) {
+        switch (c.type()) {
+            case METHOD_TYPE:
+            case STRING:
+            case CLASS: {
+                CstRefUTF cz = (CstRefUTF) c;
+                return cst[cz.getValueIndex()];
+            }
+            case NAME_AND_TYPE: {
+                CstNameAndType cz = (CstNameAndType) c;
+                Constant cst = this.cst[cz.getNameIndex()];
+                if (!(cst instanceof CstUTF)) {
+                    return cst;
+                }
+                return this.cst[cz.getTypeIndex()];
+            }
+            case FIELD:
+            case METHOD:
+            case INTERFACE: {
+                CstRefField cz = (CstRefField) c;
+                Constant cst = this.cst[cz.getClassIndex()];
+                if (!(cst instanceof CstClass)) {
+                    return cst;
+                }
+                return this.cst[cz.getDescIndex()];
+            }
+            case INVOKE_DYNAMIC: {
+                CstDynamic cz = (CstDynamic) c;
+                return cst[cz.getDescIndex()];
+            }
+            case METHOD_HANDLE: {
+                CstMethodHandle cz = (CstMethodHandle) c;
+                return cst[cz.getRefIndex()];
+            }
+        }
+        return null;
     }
 
     private static Constant readConstant(ByteReader r) {
@@ -267,63 +214,31 @@ public class ConstantPool {
         throw OperationDone.NEVER;
     }
 
-    public Constant[] array() {
-        return cst;
+    public List<Constant> array() {
+        return cstList;
     }
 
+    // fucking inspection
+    @Nonnull
     public Constant array(int i) {
-        return cst[i];
+        return i == 0 ? null : cstList.get(i - 1);
     }
 
-    public void read(ByteReader r) {
-        if (uniquer == null)
-            throw new IllegalStateException("Already validated.");
-
-        int len = cst.length;
-        while (index < len) {
-            Constant c = readConstant(r);
-
-            switch (c.type()) {
-                case UTF:
-                case DOUBLE:
-                case INT:
-                case LONG:
-                case FLOAT:
-                    c = uniquer.intern(c);
-            }
-
-            addConstant(c);
-        }
-    }
-
+    // fucking inspection
+    @Nonnull
     public Constant get(ByteReader r) {
-        return cst[r.readUnsignedShort()];
+        int id = r.readUnsignedShort();
+        return id == 0 ? null : cstList.get(id - 1);
     }
 
     public String getName(ByteReader r) {
-        int id = r.readUnsignedShort();
+        int id = r.readUnsignedShort() - 1;
 
-        return id == 0 ? null : (uniquer == null ?
-                ((CstClass) (cst[id])).getValue() :
-                ((CstUTF) cst[((CstClass) cst[id]).getValueIndex()])).getString();
+        return id < 0 ? null : ((CstClass) cstList.get(id)).getValue().getString();
     }
 
     @Override
     public String toString() {
-        return "ConstantPool[" + index + "]= " + TextUtil.prettyPrint(Arrays.asList(cst));
-    }
-
-    public void reload(ConstantWriter writer) {
-        if(cst.length != writer.getIndex())
-            cst = new Constant[writer.getIndex()];
-        int i = 1;
-
-        List<Constant> csts = writer.getConstants();
-        for (int j = 0, max = csts.size(); j < max; j++) {
-            Constant c = csts.get(j);
-            cst[i++] = c;
-            if(c.type() == DOUBLE || c.type() == LONG)
-                cst[i++] = CstTop.TOP;
-        }
+        return "ConstantPool[" + (index + 1) + "]= " + TextUtil.prettyPrint(array());
     }
 }

@@ -26,6 +26,7 @@
 
 package roj.asm.nixim;
 
+import org.jetbrains.annotations.ApiStatus;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.SharedCache;
@@ -53,23 +54,18 @@ import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
-import roj.util.log.Logger;
 
 import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.logging.Logger;
 
 import static roj.asm.Opcodes.*;
 
-/**
- * No description provided
- *
- * @author Roj234
- * @version 0.1
- * @since 2021/6/18 9:51
- */
+@Deprecated
+@ApiStatus.ScheduledForRemoval
 public class NiximTransformer {
     protected static final Map<String, List<NiximData>> classRemapping = new MyHashMap<>();
 
@@ -110,7 +106,7 @@ public class NiximTransformer {
 
             Map<String, Method> methodRemapper = niximData.methodMap;
 
-            logger.info("NiximClass " + data.name);
+            logger.fine("NiximClass " + data.name);
 
             Int2IntMap i2i = new Int2IntMap();
 
@@ -121,7 +117,7 @@ public class NiximTransformer {
                     data.attributes.add(bootstrapMethods = new AttrBootstrapMethods());
 
                     if (debug)
-                        logger.info("Create BSM");
+                        logger.fine("Create BSM");
                 } else {
                     bootstrapMethods = new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.cp);
                     final ListIterator<Attribute> li = data.attributes.listIterator();
@@ -138,12 +134,12 @@ public class NiximTransformer {
                     bootstrapMethods.methods.add(info.bootstrapMethod);
 
                     if (debug)
-                        logger.info("Replace old BTIndex " + info.nodes.get(0).bootstrapTableIndex + " to " + newId);
+                        logger.fine("Replace old BTIndex " + info.nodes.get(0).bootstrapTableIndex + " to " + newId);
 
                     for (InvokeDynInsnNode node : info.nodes) {
                         node.bootstrapTableIndex = newId;
                         if (debug)
-                            logger.info("Affected node: " + node);
+                            logger.fine("Affected node: " + node);
                     }
                 }
             }
@@ -173,7 +169,7 @@ public class NiximTransformer {
                     fixInvokeVirtualSelf(replacement, /*types, */niximData.originalClassName, data.name);
 
                     if (debug)
-                        logger.info("NiximMethodIgnoreParam " + replacement.name);
+                        logger.fine("NiximMethodIgnoreParam " + replacement.name);
 
                     methodRemapper.remove(method.name.getString());
                     removed.add(serializable);
@@ -203,7 +199,7 @@ public class NiximTransformer {
                     fixInvokeVirtualSelf(replacement, /*types, */niximData.originalClassName, data.name);
 
                     if (debug)
-                        logger.info("NiximMethod " + replacement.name);
+                        logger.fine("NiximMethod " + replacement.name);
 
                     methodRemapper.remove(key);
                     removed.add(serializable);
@@ -225,7 +221,7 @@ public class NiximTransformer {
                     if (newName != null) {
 
                         if (debug)
-                            logger.info("ReplaceEntryMatch: " + ms.name() + '(' + ms.rawDesc() + ") -> " + newName);
+                            logger.fine("ReplaceEntryMatch: " + ms.name() + '(' + ms.rawDesc() + ") -> " + newName);
                         if (ms instanceof MethodSimple) {
                             ((MethodSimple) ms).name = data.writer.getUtf(newName);
                         } else {
@@ -257,29 +253,29 @@ public class NiximTransformer {
             }
 
             if (!methodRemapper.isEmpty()) {
-                logger.error("======Methods======");
+                logger.severe("======Methods======");
                 itr = Helpers.cast(data.methods.listIterator());
                 while (itr.hasNext()) {
                     MoFNode method = itr.next();
-                    logger.error(method.name() + " | " + method.rawDesc());
+                    logger.severe(method.name() + " | " + method.rawDesc());
                 }
-                logger.error("======Nixim entries======");
+                logger.severe("======Nixim entries======");
                 for (Map.Entry<String, Method> entry : methodRemapper.entrySet()) {
-                    logger.error(entry.getKey() + " -> " + entry.getValue().name + '|' + entry.getValue().rawDesc());
+                    logger.severe(entry.getKey() + " -> " + entry.getValue().name + '|' + entry.getValue().rawDesc());
                 }
                 throw new RuntimeException("NiximError: Nixim entries not hit!");
             }
 
             if (!niximData.methodRename.isEmpty()) {
-                logger.error("======Methods======");
+                logger.severe("======Methods======");
                 itr = Helpers.cast(removed.listIterator());
                 while (itr.hasNext()) {
                     MoFNode method = itr.next();
-                    logger.error(method.name() + " | " + method.rawDesc());
+                    logger.severe(method.name() + " | " + method.rawDesc());
                 }
-                logger.error("======Nixim entries======");
+                logger.severe("======Nixim entries======");
                 for (Map.Entry<String, String> entry : niximData.methodRename.entrySet()) {
-                    logger.error(entry.getKey() + " -> " + entry.getValue());
+                    logger.severe(entry.getKey() + " -> " + entry.getValue());
                 }
                 throw new RuntimeException("NiximError: Rename entries not hit!");
             }
@@ -332,7 +328,7 @@ public class NiximTransformer {
 
         InsnNode node = pcMap.get(pos);
         if (node == null) {
-            logger.warn("[" + data.name + "] Specified pos " + bytePos + " not found.");
+            logger.warning("[" + data.name + "] Specified pos " + bytePos + " not found.");
             return toReturn;
         }
         if (node.getOpcode() == opcode) {
@@ -347,7 +343,7 @@ public class NiximTransformer {
             }
             currList.addAll(currList.indexOf(node), insertList);
         } else {
-            logger.warn("Specify node mismatch! " + node.getOpcode());
+            logger.warning("Specify node mismatch! " + node.getOpcode());
             return toReturn;
         }
 
@@ -370,7 +366,7 @@ public class NiximTransformer {
     private static MoFNode fixInitMethod(NiximData niximData, ConstantData data, Method newInit, MethodSimple oldInit1) {
         if (niximData.methodRename.remove("<REPLACE_" + oldInit1.type.getString()) != null) {
             if (debug)
-                logger.info("Fix <init> in replace mode.");
+                logger.fine("Fix <init> in replace mode.");
 
             InvokeInsnNode node1 = null;
 
@@ -391,13 +387,13 @@ public class NiximTransformer {
             }
 
             if (debug)
-                logger.info("Found invokeSpecialNode " + node1);
+                logger.fine("Found invokeSpecialNode " + node1);
 
             while (list.get(1) != node1)
                 list.remove(1);
 
             if (debug)
-                logger.info("Set calling constructor to " + data.parent + ".<init>:()V");
+                logger.fine("Set calling constructor to " + data.parent + ".<init>:()V");
 
             node1.owner(data.parent);
             node1.rawTypes("()V");
@@ -409,7 +405,7 @@ public class NiximTransformer {
 
 
         if (debug)
-            logger.info("Fix <init> in inject at last mode.");
+            logger.fine("Fix <init> in inject at last mode.");
 
         Method oldInit = new Method(data, oldInit1);
 
@@ -418,7 +414,7 @@ public class NiximTransformer {
 
         int firstId = newCode.localSize;
 
-        newCode.localSize = Math.max(oldCode.localSize, newCode.localSize);
+        newCode.localSize = (char) Math.max(oldCode.localSize, newCode.localSize);
 
         for (Iterator<InsnNode> iterator = newCode.instructions.iterator(); iterator.hasNext(); ) {
             InsnNode node = iterator.next();
@@ -446,7 +442,7 @@ public class NiximTransformer {
         Object[] a = getClassArray(data, data.attrByName(ANNO_TYPE));
 
         if (a == null) {
-            logger.warn("Not @Nixim annotation found in " + data.name);
+            logger.warning("Not @Nixim annotation found in " + data.name);
             return false;
         }
 
@@ -456,7 +452,7 @@ public class NiximTransformer {
         String slashDestClass = destClass.replace('.', '/');
         String slashSelfClass = data.name.replace('.', '/');
 
-        logger.info("NiximReadClass " + data.name + " => " + destClass);
+        logger.fine("NiximReadClass " + data.name + " => " + destClass);
 
         Map<String, Method> niximMethods = new MyHashMap<>();
 
@@ -479,18 +475,18 @@ public class NiximTransformer {
                 String oName = field.name.getString() + '|' + descriptor;
                 fieldShadow.put(oName, remapName);
                 if (debug)
-                    logger.info("ShadowField " + descriptor + ':' + field.name.getString() + " -> " + remapName);
+                    logger.fine("ShadowField " + descriptor + ':' + field.name.getString() + " -> " + remapName);
             } else if (hasAnnotation(data.cp, field.attrByName(ANNO_TYPE), COPY_TYPE)) {
                 if (debug)
-                    logger.info("CopyField " + field.name.getString());
+                    logger.fine("CopyField " + field.name.getString());
                 copyField.add(new Field(data, field));
                 //copyMethodFind.add(field.name.getString() + '|' + field.type.getString());
             } else {
                 if (!field.accesses.hasAll(AccessFlag.STATIC)) {
-                    logger.warn("非static字段且没打@Copy / @Shadow, 可能会出错!");
+                    logger.warning("非static字段且没打@Copy / @Shadow, 可能会出错!");
                 } else {
                     if (debug)
-                        logger.info("Self field: " + field.name.getString() + '|' + field.type.getString());
+                        logger.fine("Self field: " + field.name.getString() + '|' + field.type.getString());
                     selfFields.add(field.name.getString() + '|' + field.type.getString());
                 }
             }
@@ -513,10 +509,10 @@ public class NiximTransformer {
                 String oName = method.name.getString() + '|' + descriptor;
                 methodShadow.put(oName, remapName);
                 if (debug)
-                    logger.info("ShadowMethod " + descriptor + ':' + method.name.getString() + " -> " + remapName);
+                    logger.fine("ShadowMethod " + descriptor + ':' + method.name.getString() + " -> " + remapName);
             } else if (hasAnnotation(data.cp, method.attrByName(ANNO_TYPE), COPY_TYPE)) {
                 if (debug)
-                    logger.info("CopyMethod " + method.name.getString());
+                    logger.fine("CopyMethod " + method.name.getString());
                 Method method1;
                 copyMethod.add(method1 = new Method(data, method));
                 copyMethodFind.put(method.name.getString() + '|' + method.type.getString(), null);
@@ -550,7 +546,7 @@ public class NiximTransformer {
                 if (data1.ignoreParam) {
                     niximMethods.put(remapName, replaceMethod);
                     if (debug)
-                        logger.info("[!]RemapIgnoreParamType [注意泛型桥接方法!!!]");
+                        logger.fine("[!]RemapIgnoreParamType [注意泛型桥接方法!!!]");
                     if (!data1.mustHit) {
                         // not must hit
                         properties.put("NHT:" + remapName, null);
@@ -559,7 +555,7 @@ public class NiximTransformer {
                     String key = remapName + '|' + method.type.getString();
                     niximMethods.put(key, replaceMethod);
                     if (data1.injectPos >= 0) {
-                        logger.warn("WIP Function injectAt applied!!!");
+                        logger.warning("WIP Function injectAt applied!!!");
                         properties.put("MTR:" + key, data1.injectPos + "|" + data1.codeAtPos);
                     }
                     if (!data1.mustHit) {
@@ -578,7 +574,7 @@ public class NiximTransformer {
 
                 replaceLVTandLVTT(slashSelfClass, slashDestClass, fieldShadow, replaceMethod);
                 if (debug)
-                    logger.info("RemapMethod " + method.type.getString() + ':' + method.name.getString() + " -> " + remapName);
+                    logger.fine("RemapMethod " + method.type.getString() + ':' + method.name.getString() + " -> " + remapName);
 
 
                 for (InsnNode node : replaceMethod.code.instructions) {
@@ -595,7 +591,7 @@ public class NiximTransformer {
                                 String fs = fieldShadow.get(desc);
                                 if (fs != null) {
                                     if (debug)
-                                        logger.info("FieldShadow[Code] " + fieldInsnNode.owner() + '.' + fieldInsnNode.name + " -> " + fs);
+                                        logger.fine("FieldShadow[Code] " + fieldInsnNode.owner() + '.' + fieldInsnNode.name + " -> " + fs);
                                     fieldInsnNode.owner(slashDestClass);
                                     fieldInsnNode.name = fs;
                                 } else if (!selfFields.contains(desc)) {
@@ -608,14 +604,14 @@ public class NiximTransformer {
                             InvokeInsnNode invNode = (InvokeInsnNode) node;
 
                             if (debug)
-                                logger.info("CallSuper[Code] " + invNode.owner() + '.' + invNode.name() + ':' + invNode.rawTypes() + " //////// " + slashDestClass);
+                                logger.fine("CallSuper[Code] " + invNode.owner() + '.' + invNode.name() + ':' + invNode.rawTypes() + " //////// " + slashDestClass);
 
                             if (invNode.owner().equals(slashDestClass)) {
                                 if (data1.useSuperInject) {
                                     String mn = invNode.name();
                                     if (!mn.equals("<init>")) {
                                         if (debug)
-                                            logger.info("SuperInject[Code] (" + node + ") " + slashDestClass + '.' + invNode.name() + ':' + invNode.rawTypes());
+                                            logger.fine("SuperInject[Code] (" + node + ") " + slashDestClass + '.' + invNode.name() + ':' + invNode.rawTypes());
 
                                         if (!data1.isRemapCopy) {
 
@@ -653,10 +649,10 @@ public class NiximTransformer {
             } else {
                 if (!method.accesses.hasAll(AccessFlag.PUBLIC) || !method.accesses.hasAll(AccessFlag.STATIC)) {
                     if (!method.name.getString().equals("<init>") && !method.name.getString().startsWith("lambda$"))
-                        logger.warn("非public static方法" + method.name.getString() + "且没打@Copy / @Shadow, 可能会出错!");
+                        logger.warning("非public static方法" + method.name.getString() + "且没打@Copy / @Shadow, 可能会出错!");
                     else {
                         if (debug)
-                            logger.info("public static method " + method.name.getString());
+                            logger.fine("public static method " + method.name.getString());
                         selfPSMethods.add(method.name.getString() + '|' + method.type.getString());
                     }
                 }
@@ -676,20 +672,20 @@ public class NiximTransformer {
                             String ms = methodShadow.get(desc);
                             if (ms != null) {
                                 if (debug)
-                                    logger.info("MethodShadow[Code] " + invNode.owner() + '.' + invNode.name() + " -> " + ms);
+                                    logger.fine("MethodShadow[Code] " + invNode.owner() + '.' + invNode.name() + " -> " + ms);
                                 invNode.owner(slashDestClass);
                                 invNode.name(ms);
                             } else if (copyMethodFind.containsKey(desc)) {
                                 invNode.owner(slashDestClass);
                                 if (debug)
-                                    logger.info("MethodCopy[Code] " + invNode.owner() + '.' + invNode.name());
+                                    logger.fine("MethodCopy[Code] " + invNode.owner() + '.' + invNode.name());
 
                                 if ((ms = copyMethodFind.get(desc)) != null)
                                     invNode.name(ms);
                             } else if (!selfPSMethods.contains(desc)) {
                                 invNode.owner(slashDestClass);
                                 if (debug)
-                                    logger.info("CompilerInherit[Code] " + invNode.owner() + '.' + desc);
+                                    logger.fine("CompilerInherit[Code] " + invNode.owner() + '.' + desc);
                             }
                         }
                     }
@@ -714,7 +710,7 @@ public class NiximTransformer {
                     node.returnType().owner = slashDestClass;
 
                 if (debug)
-                    logger.info("IDI: " + node);
+                    logger.fine("IDI: " + node);
             }
 
             List<Constant> args = info.bootstrapMethod.arguments;
@@ -735,7 +731,7 @@ public class NiximTransformer {
 
                     for (MethodSimple method : data.methods) {
                         if (method.name.equals(ref.desc().getName()) && method.type.equals(ref.desc().getType())) {
-                            if (debug) logger.info("Found lambda method " + method.name.getString());
+                            if (debug) logger.fine("Found lambda method " + method.name.getString());
 
                             Method method1 = new Method(data, method);
 
@@ -764,17 +760,17 @@ public class NiximTransformer {
 
                     if (!found) {
                         if (isSelfMethod) {
-                            logger.error("NiximReadClass: Error: Lambda not found!");
-                            logger.error("Method list below");
+                            logger.severe("NiximReadClass: Error: Lambda not found!");
+                            logger.severe("Method list below");
                             Iterator<MoFNode> itr = Helpers.cast(data.methods.listIterator());
                             while (itr.hasNext()) {
                                 MoFNode method = itr.next();
-                                logger.error(method.name() + "   |   " + method.rawDesc());
+                                logger.severe(method.name() + "   |   " + method.rawDesc());
                             }
-                            logger.error("Method list above");
+                            logger.severe("Method list above");
                             throw new IllegalArgumentException("Not found lambda method with this descriptor " + ref.desc());
                         } else {
-                            logger.info("NotSelf lambda: " + ref);
+                            logger.fine("NotSelf lambda: " + ref);
                         }
                     }
 
@@ -801,7 +797,7 @@ public class NiximTransformer {
                             String fs = fieldShadow.get(desc);
                             if (fs != null) {
                                 if (debug)
-                                    logger.info("FieldShadow[Code] " + fieldInsnNode.owner() + '.' + fieldInsnNode.name + " -> " + fs);
+                                    logger.fine("FieldShadow[Code] " + fieldInsnNode.owner() + '.' + fieldInsnNode.name + " -> " + fs);
                                 fieldInsnNode.owner(slashDestClass);
                                 fieldInsnNode.name = fs;
                             } else if (!selfFields.contains(desc)) {
@@ -822,20 +818,20 @@ public class NiximTransformer {
 
                             if (ms != null) {
                                 if (debug)
-                                    logger.info("MethodShadow[Code] " + invNode.owner() + '.' + invNode.name() + " -> " + ms);
+                                    logger.fine("MethodShadow[Code] " + invNode.owner() + '.' + invNode.name() + " -> " + ms);
                                 invNode.owner(slashDestClass);
                                 invNode.name(ms);
                             } else if (copyMethodFind.containsKey(desc)) {
                                 invNode.owner(slashDestClass);
                                 if (debug)
-                                    logger.info("CopyMethod[Code] " + invNode.owner() + '.' + desc);
+                                    logger.fine("CopyMethod[Code] " + invNode.owner() + '.' + desc);
 
                                 if ((ms = copyMethodFind.get(desc)) != null)
                                     invNode.name(ms);
                             } else if (!selfPSMethods.contains(desc)) {
                                 invNode.owner(slashDestClass);
                                 if (debug)
-                                    logger.info("CompilerInherit[Code] " + invNode.owner() + '.' + desc);
+                                    logger.fine("CompilerInherit[Code] " + invNode.owner() + '.' + desc);
                             }
                         }
                     }
@@ -851,7 +847,7 @@ public class NiximTransformer {
 
             return true;
         } else {
-            logger.warn("No nixim usage(s) found in " + data.name);
+            logger.warning("No nixim usage(s) found in " + data.name);
             return false;
         }
     }
@@ -871,7 +867,7 @@ public class NiximTransformer {
                 String fs = fieldShadow.get(entry.name + '|' + type.owner);
                 if (fs != null) {
                     if (debug)
-                        logger.info("FieldShadow[LVT] " + entry.name + " -> " + fs);
+                        logger.fine("FieldShadow[LVT] " + entry.name + " -> " + fs);
                     entry.name = fs;
                 }
             }
@@ -892,7 +888,7 @@ public class NiximTransformer {
                 String fs = fieldShadow.get(entry.name + '|' + realTypeName);
                 if (fs != null) {
                     if (debug)
-                        logger.info("FieldShadow[LVTT] " + entry.name + " -> " + fs);
+                        logger.fine("FieldShadow[LVTT] " + entry.name + " -> " + fs);
                     entry.name = fs;
                 }
             }
@@ -906,14 +902,14 @@ public class NiximTransformer {
                     if (slashSelfClass.equals(var.owner)) {
                         var.owner = slashDestClass;
                         if (debug)
-                            logger.info("Replaced StackMapEntry : " + var);
+                            logger.fine("Replaced StackMapEntry : " + var);
                     }
                 }
                 for (Var var : frame.stacks) {
                     if (slashSelfClass.equals(var.owner)) {
                         var.owner = slashDestClass;
                         if (debug)
-                            logger.info("Replaced StackMapEntry : " + var);
+                            logger.fine("Replaced StackMapEntry : " + var);
                     }
                 }
             }
@@ -1082,7 +1078,7 @@ public class NiximTransformer {
         LambdaInfo(AttrBootstrapMethods.BootstrapMethod bootstrapMethod) {
             this.bootstrapMethod = bootstrapMethod;
             if (debug)
-                logger.info("Lambda call found: " + bootstrapMethod.arguments.get(0));
+                logger.fine("Lambda call found: " + bootstrapMethod.arguments.get(0));
         }
     }
 
@@ -1121,7 +1117,7 @@ public class NiximTransformer {
                 }
                 if (method.code.attributes.removeByName("LocalVariableTypeTable")) {
                     if (debug)
-                        logger.info("Remove [copy] LVTT for " + method.name() + method.rawDesc());
+                        logger.fine("Remove [copy] LVTT for " + method.name() + method.rawDesc());
                 }
             }
             for (Method method : niximMethods.values()) {
@@ -1130,7 +1126,7 @@ public class NiximTransformer {
                 }
                 if (method.code.attributes.removeByName("LocalVariableTypeTable")) {
                     if (debug)
-                        logger.info("Remove LVTT for " + method.name() + method.rawDesc());
+                        logger.fine("Remove LVTT for " + method.name() + method.rawDesc());
                 }
             }
         }

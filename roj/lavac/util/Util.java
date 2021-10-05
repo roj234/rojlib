@@ -141,8 +141,8 @@ public final class Util {
      * other: can and write opcodes
      */
     public static int upperTypeOrWrap(Type from, Type to) {
-        char fc = from.type;
-        char tc = to.type;
+        byte fc = from.type;
+        byte tc = to.type;
 
         if (fc == tc && fc != '[' && fc != 'L')
             return -2;

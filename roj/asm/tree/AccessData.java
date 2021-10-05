@@ -49,7 +49,7 @@ public final class AccessData implements IClass {
     /**
      * Read only
      */
-    public short acc;
+    public char acc;
     private final int cao;
     private byte[] byteCode;
 
@@ -134,7 +134,7 @@ public final class AccessData implements IClass {
         /**
          * Read only
          */
-        public short acc;
+        public char acc;
         private final int dao;
 
         public MOF(String name, String desc, int dao) {
@@ -154,7 +154,7 @@ public final class AccessData implements IClass {
         }
 
         @Override
-        public short accessFlag2() {
+        public char accessFlag2() {
             return acc;
         }
 
@@ -185,14 +185,14 @@ public final class AccessData implements IClass {
 
     public void accessFlag(FlagList list) {
         acc = list.flag;
-        int val = list.flag & 65535;
+        int val = list.flag;
         byteCode[cao] = (byte) (val >>> 8);
         byteCode[cao + 1] = (byte) val;
     }
 
     public AccessData setFlagFor(MOF node, FlagList list) {
         node.acc = list.flag;
-        int val = list.flag & 65535;
+        int val = list.flag;
         byteCode[node.dao] = (byte) (val >>> 8);
         byteCode[node.dao + 1] = (byte) val;
         return this;

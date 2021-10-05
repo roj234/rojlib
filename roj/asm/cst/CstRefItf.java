@@ -25,7 +25,8 @@
  */
 
 package roj.asm.cst;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -34,11 +35,13 @@ package roj.asm.cst;
  */
 public final class CstRefItf extends CstRef {
     public CstRefItf(int classIndex, int nameAndTypeIndex) {
-        super(CstType.INTERFACE, classIndex, nameAndTypeIndex);
+        super(classIndex, nameAndTypeIndex);
     }
 
-    public CstRefItf() {
-        super(CstType.INTERFACE);
-    }
+    public CstRefItf() {}
 
+    @Override
+    public byte type() {
+        return CstType.INTERFACE;
+    }
 }

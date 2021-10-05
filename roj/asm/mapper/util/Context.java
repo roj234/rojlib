@@ -40,13 +40,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class Context {
+public final class Context {
     public static final int ID_METHOD = 0;
     public static final int ID_FIELD = 1;
     public static final int ID_CLASS = 2;
     public static final int ID_INVOKE_DYN = 3;
-
-    public static final int LAMBDA_INDEX = 0;
 
     private String name;
     private ConstantData data;
@@ -108,25 +106,7 @@ public class Context {
             typedTmp[1] = new ArrayList<>();
             typedTmp[2] = new ArrayList<>();
             typedTmp[3] = new ArrayList<>();
-            List<Constant> csts = getData().writer.getConstants();
-            for (int i = 0; i < csts.size(); i++) {
-                Constant c = csts.get(i);
-                switch (c.type()) {
-                    case CstType.INTERFACE:
-                    case CstType.METHOD:
-                        typedTmp[ID_METHOD].add(c);
-                        break;
-                    case CstType.CLASS:
-                        typedTmp[ID_CLASS].add(c);
-                        break;
-                    case CstType.FIELD:
-                        typedTmp[ID_FIELD].add(c);
-                        break;
-                    case CstType.INVOKE_DYNAMIC:
-                        typedTmp[ID_INVOKE_DYN].add(c);
-                        break;
-                }
-            }
+            refresh();
         }
     }
 
@@ -150,12 +130,16 @@ public class Context {
         return Helpers.cast(typedTmp[ID_CLASS]);
     }
 
-    public ByteList get() {
+    public ByteList get(boolean shared) {
         if(this.result == null) {
             if(this.data != null) {
                 try {
                     data.verify();
-                    this.result = new ByteList(Parser.toByteArrayShared(data).toByteArray());
+                    if (shared) {
+                        return Parser.toByteArrayShared(data);
+                    } else {
+                        this.result = data.getBytes();
+                    }
                 } catch (Throwable e) {
                     throw new IllegalArgumentException(name + " 写入失败", e);
                 }
@@ -166,6 +150,10 @@ public class Context {
             }
         }
         return this.result;
+    }
+
+    public ByteList get() {
+        return get(false);
     }
 
     private void clearData() {
@@ -221,26 +209,18 @@ public class Context {
         return this.name;
     }
 
-    public void validateSelf() {
+    public ByteList getCompressedShared() {
         try {
-            compress();
-            getData();
-        } catch (Throwable e) {
-            try {
-                try (FileOutputStream fos = new FileOutputStream(getName().replace('/', '_'))) {
-                    get().writeToStream(fos);
-                }
-            } catch (Throwable ignored) {}
-            throw e;
+            return Parser.toByteArrayShared(Parser.parse(get(true)));
+        } catch (Throwable t) {
+            try (FileOutputStream fos = new FileOutputStream(getName().replace('/', '_'))) {
+                get().writeToStream(fos);
+            } catch (IOException ignored) {}
+            throw t;
         }
     }
 
     public void compress() {
-        getData();
-        byte[] array = Parser.toByteArray(Parser.parse(get()));
-        if(result == null)
-            result = new ByteList(array);
-        else
-            result.setValue(array);
+        result = new ByteList(Parser.toByteArrayShared(Parser.parse(get(true))).toByteArray());
     }
 }

@@ -246,7 +246,7 @@ public class Util {
                 fc.setCurrentDirectory(new File("."));
                 fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
                 fc.setMultiSelectionEnabled(false);
-                if (fc.showOpenDialog(SslDialog.this) == JFileChooser.APPROVE_OPTION) {
+                if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                     inpCert.setText(fc.getSelectedFile().getAbsolutePath());
                 }
             });
@@ -303,14 +303,13 @@ public class Util {
 
     static void initSocketPref(Socket client) throws SocketException {
         client.setTcpNoDelay(true);
-        client.setPerformancePreferences(1, 1, 0);
         client.setTrafficClass(0b10010000);
     }
 
     static int handshakeClient(WrappedSocket channel) throws IOException {
         int wait = TIMEOUT_CONNECT;
         while (!channel.handShake()) {
-            LockSupport.parkNanos(50);
+            LockSupport.parkNanos(200);
             if(wait-- <= 0) {
                 return 1;
             }

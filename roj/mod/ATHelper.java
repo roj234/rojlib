@@ -91,8 +91,8 @@ public final class ATHelper {
         ZipUtil.close(zos);
     }
 
-    public byte[] getAtCfgBytes() {
-        return atCfg.toByteArray();
+    public ByteList getAtCfgBytes() {
+        return atCfg;
     }
 
     public String getFakeJarPath() {

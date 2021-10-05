@@ -32,6 +32,10 @@ import roj.asm.tree.Method;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
+import roj.asm.visitor.ClassAttributeVisitor;
+import roj.asm.visitor.CodeAttributeVisitor;
+import roj.asm.visitor.FieldAttributeVisitor;
+import roj.asm.visitor.MethodAttributeVisitor;
 import roj.collect.CharMap;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
@@ -58,12 +62,12 @@ public final class AttrTypeAnnotation extends Attribute {
 
     public AttrTypeAnnotation(boolean visible, ByteReader r, ConstantPool pool, Object source) {
         super(visible ? VISIBLE_NAME : INVISIBLE_NAME);
-        annotations = parse(pool, r, source);
+        annotations = parse(pool, r, source.getClass());
     }
 
     public AttrTypeAnnotation(String name, ByteReader r, ConstantPool pool, Object source) {
         super(name);
-        annotations = parse(pool, r, source);
+        annotations = parse(pool, r, source.getClass());
     }
 
     public List<TypeAnno> annotations;
@@ -91,7 +95,7 @@ public final class AttrTypeAnnotation extends Attribute {
      * } element_value_pairs[num_element_value_pairs];
      * }
      */
-    private static List<TypeAnno> parse(ConstantPool pool, ByteReader r, Object source) {
+    private static List<TypeAnno> parse(ConstantPool pool, ByteReader r, Class<?> source) {
         int annoLen = r.readUnsignedShort();
         List<TypeAnno> annos = new SimpleList<>(annoLen);
         for (int i = 0; i < annoLen; i++) {
@@ -102,7 +106,7 @@ public final class AttrTypeAnnotation extends Attribute {
              * 0x13	in field
              * 0x40-0x4B in AttrCode
              */
-            final byte type = TargetType.verify(r.readByte(), source.getClass());
+            final byte type = TargetType.verify(r.readByte(), source);
             switch (type) {
                 case TargetType.PARAM_CLZ: // type_parameter
                 case TargetType.PARAM_METHOD:
@@ -429,16 +433,16 @@ public final class AttrTypeAnnotation extends Attribute {
                 case 0x00:
                 case 0x10:
                 case 0x11:
-                    return type == Clazz.class;
+                    return type == Clazz.class || ClassAttributeVisitor.class.isAssignableFrom(type);
                 case 0x13:
-                    return type == Field.class;
+                    return type == Field.class || FieldAttributeVisitor.class.isAssignableFrom(type);
                 case 0x01:
                 case 0x12:
                 case 0x14:
                 case 0x15:
                 case 0x16:
                 case 0x17:
-                    return type == Method.class;
+                    return type == Method.class || MethodAttributeVisitor.class.isAssignableFrom(type);
                 case 0x40:
                 case 0x41:
                 case 0x42:
@@ -448,7 +452,7 @@ public final class AttrTypeAnnotation extends Attribute {
                 case 0x46:
                 case 0x47:
                 case 0x48:
-                    return type == AttrCode.class;
+                    return type == AttrCode.class || CodeAttributeVisitor.class.isAssignableFrom(type);
 
             }
             return false;

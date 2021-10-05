@@ -76,7 +76,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
         this.addAll(arr);
     }
 
-    public MyHashSet(Iterable<K> list) {
+    public MyHashSet(Iterable<? extends K> list) {
         for (K k : list) {
             add(k);
         }
@@ -91,7 +91,7 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
         ensureCapacity(size);
     }
 
-    public MyHashSet(Collection<K> list) {
+    public MyHashSet(Collection<? extends K> list) {
         ensureCapacity(list.size());
         this.addAll(list);
     }

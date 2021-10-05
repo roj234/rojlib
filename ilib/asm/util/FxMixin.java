@@ -33,6 +33,7 @@ import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * No description provided
@@ -54,13 +55,18 @@ public class FxMixin {
 
     private static byte[] getCode() throws IOException {
         ConstantData data = Parser.parseConstants(IOUtil.read("ilib/asm/util/mixin/Proxy.class"));
-        for (Constant constant : data.cp.array()) {
-            if (constant != null && constant.type() == CstType.UTF) {
-                CstUTF u = (CstUTF) constant;
+        List<Constant> array = data.cp.array();
+        for (int i = 0; i < array.size(); i++) {
+            Constant c = array.get(i);
+            if (c.type() == CstType.UTF) {
+                CstUTF u = (CstUTF) c;
                 final String s = u.getString();
                 if (s.length() >= 25) {
-                    u.setString(s.replace("ilib/asm/util/mixin/NVE_1", "org/spongepowered/asm/mixin/transformer/MixinTransformer"));
-                    u.setString(u.getString().replace("ilib/asm/util/mixin/Proxy", "org/spongepowered/asm/mixin/transformer/Proxy"));
+                    u.setString(s.replace("ilib/asm/util/mixin/NVE_1",
+                                          "org/spongepowered/asm/mixin/transformer/MixinTransformer"));
+                    u.setString(u.getString()
+                                 .replace("ilib/asm/util/mixin/Proxy",
+                                          "org/spongepowered/asm/mixin/transformer/Proxy"));
                 }
             }
         }

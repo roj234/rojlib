@@ -76,7 +76,7 @@ public final class AttrInnerClasses extends Attribute {
             // Otherwise, the item must be a Utf8
             String name = nameS == null ? null : nameS.getString();
 
-            classes.add(new InnerClass(selfName, outerName, name, r.readShort()));
+            classes.add(new InnerClass(selfName, outerName, name, r.readChar()));
         }
 
         return classes;
@@ -107,9 +107,9 @@ public final class AttrInnerClasses extends Attribute {
 
     public static class InnerClass {
         public String self, parent, name;
-        public short flags;
+        public char flags;
 
-        public InnerClass(String self, String parent, String name, short flags) {
+        public InnerClass(String self, String parent, String name, char flags) {
             this.self = self;
             this.parent = parent;
             this.name = name;

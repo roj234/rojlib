@@ -60,7 +60,7 @@ import java.util.function.UnaryOperator;
  */
 public final class CodeMapper extends Mapping {
     // 没有BUG了，有的话也是ASM的问题
-    public static final boolean DEBUG = false, REPLACE_DESC = false;
+    public static final boolean DEBUG = false;
 
     public static final IBitSet HUMAN_READABLE_TOKENS = LongBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
 
@@ -192,10 +192,7 @@ public final class CodeMapper extends Mapping {
                         String newCls = Util.transformMethodParam(classMap, oldCls);
 
                         if (!oldCls.equals(newCls)) {
-                            if (REPLACE_DESC)
-                                type.getValue().setString(newCls);
-                            else
-                                type.setValue(data.writer.getUtf(newCls));
+                            type.setValue(data.writer.getUtf(newCls));
                             if (DEBUG) {
                                 System.out.println("[" + data.name + "]BootstrapMethod " + i + "-" + j + ": " + oldCls + ' ' + newCls);
                             }
@@ -212,8 +209,6 @@ public final class CodeMapper extends Mapping {
 
         if(rewrite) {
             ctx.compress();
-        } else {
-            ctx.refresh();
         }
     }
 
@@ -231,7 +226,7 @@ public final class CodeMapper extends Mapping {
 
             au.value = generic.toGeneric();
         } else {
-            Signature generic = Signature.parse(((CstUTF) pool.array()[new ByteReader(a.getRawData()).readUnsignedShort()]).getString());
+            Signature generic = Signature.parse(((CstUTF) pool.array(new ByteReader(a.getRawData()).readUnsignedShort())).getString());
 
             generic.rename(NAME_REMAPPER);
 
@@ -245,7 +240,7 @@ public final class CodeMapper extends Mapping {
             data.nameCst.setValue(data.writer.getUtf(name));
 
         name = Util.mapOwner(classMap, data.parent, false);
-        if(name != null)
+        if(name != null) // noinspection all
             data.parentCst.setValue(data.writer.getUtf(name));
 
         List<CstClass> itf = data.interfaces;
@@ -264,7 +259,6 @@ public final class CodeMapper extends Mapping {
         List<?> methods1 = data.methods;
         Desc md = Util.shareMD();
         md.owner = data.name;
-        int max = 0;
         for (i = 0; i < methods1.size(); i++) {
             Object o = methods1.get(i);
             if(o instanceof MethodSimple) {
@@ -279,7 +273,7 @@ public final class CodeMapper extends Mapping {
                 String newName = methodMap.get(md);
                 if (newName != null) {
                     if (DEBUG) {
-                        System.out.println("[" + data.name + "]M-NAME: " + method.name + ' ' + newName);
+                        System.out.println("[" + data.name + "]M-NAME: " + method.name.getString() + ' ' + newName);
                     }
                     method.name = data.writer.getUtf(newName);
                 }
@@ -291,17 +285,13 @@ public final class CodeMapper extends Mapping {
                 newCls = Util.transformMethodParam(classMap, oldCls);
 
                 if(!oldCls.equals(newCls)) {
-                    if(REPLACE_DESC)
-                        method.type.setString(newCls);
-                    else
-                        method.type = data.writer.getUtf(newCls);
+                    method.type = data.writer.getUtf(newCls);
                     if(DEBUG) {
                         System.out.println("[" + data.name + "]M: " + oldCls + ' ' + newCls);
                     }
                 }
 
                 mapSignature(data.cp, method.attributes);
-                max = Math.max(transform_LVT_LVTT_ST(data, method), max);
             } else {
                 ctx.get();
                 data = ctx.getData();
@@ -326,7 +316,7 @@ public final class CodeMapper extends Mapping {
             String newName = fieldMap.get(md);
             if(newName != null) {
                 if (DEBUG) {
-                    System.out.println("[" + data.name + "]F-NAME: " + field.name + ' ' + newName);
+                    System.out.println("[" + data.name + "]F-NAME: " + field.name.getString() + ' ' + newName);
                 }
                 field.name = data.writer.getUtf(newName);
             }
@@ -338,10 +328,7 @@ public final class CodeMapper extends Mapping {
             newCls = Util.transformFieldType(classMap, oldCls);
 
             if(newCls != null) {
-                if(REPLACE_DESC)
-                    field.type.setString(newCls);
-                else
-                    field.type = data.writer.getUtf(newCls);
+                field.type = data.writer.getUtf(newCls);
 
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]F: " + oldCls + ' ' + newCls);
@@ -349,6 +336,11 @@ public final class CodeMapper extends Mapping {
             }
 
             mapSignature(data.cp, field.attributes);
+        }
+
+        // 十分不幸的是, field rename (when parameterized) 会被 LVT 工序影响
+        for (i = 0; i < methods1.size(); i++) {
+            transform_LVT_LVTT_ST(data, (MethodSimple) methods1.get(i));
         }
 
         List<CstRef> cst = ctx.getFieldConstants();
@@ -362,10 +354,7 @@ public final class CodeMapper extends Mapping {
             newCls = Util.transformFieldType(classMap, oldCls);
 
             if(newCls != null) {
-                if(REPLACE_DESC)
-                    field.desc().getType().setString(newCls);
-                else
-                    field.desc().setType(data.writer.getUtf(newCls));
+                field.desc().setType(data.writer.getUtf(newCls));
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]F-REF: " + oldCls + ' ' + newCls);
                 }
@@ -422,13 +411,9 @@ public final class CodeMapper extends Mapping {
                 }
             }
         }
-
-        if(max > 0)
-            data.cp.reload(data.writer);
     }
 
-    private int transform_LVT_LVTT_ST(ConstantData data, MethodSimple method) {
-        int max = 0;
+    private void transform_LVT_LVTT_ST(ConstantData data, MethodSimple method) {
         AttrUnknown au = (AttrUnknown) method.attributes.getByName("Code");
         if(au != null) {
             AttrCode_Simple sc = new AttrCode_Simple(new ByteReader(au.getRawData()), data.cp);
@@ -436,21 +421,21 @@ public final class CodeMapper extends Mapping {
             String methodDesc = method.name.getString() + '|' + method.rawDesc();
 
             if (sc.lvt != null) {
-                List<SimpleVar> list =sc.lvt.list;
+                List<SimpleVar> list = sc.lvt.list;
                 for (int i = 0; i < list.size(); i++) {
                     SimpleVar entry = list.get(i);
                     Type type = (Type) entry.type;
                     if (type.owner != null) {
                         String clazz = Util.mapOwner(classMap, type.owner, false);
-                        if (clazz != null) type.owner = clazz;
+                        if (clazz != null) {
+                            type.owner = clazz;
+                            entry.refType.setString(ParamHelper.getField(type));
+                        }
                     }
-                    entry.refType.setString(ParamHelper.getField(type));
 
                     String n = mapEntryName(data, methodDesc, entry, i);
                     if(!n.equals(entry.name.getString())) {
-                        int id = data.writer.getUtfId(n); // should use new cst pool
-
-                        max = Math.max(id, max);
+                        int id = data.writer.getUtfId(n);
 
                         ByteList bl = entry.bl;
                         byte[] arr = bl.list;
@@ -471,8 +456,6 @@ public final class CodeMapper extends Mapping {
                     if(!n.equals(entry.name.getString())) {
                         int id = data.writer.getUtfId(n);
 
-                        max = Math.max(id, max);
-
                         ByteList bl = entry.bl;
                         byte[] arr = bl.list;
                         int ni = entry.nameId;
@@ -482,8 +465,6 @@ public final class CodeMapper extends Mapping {
                 }
             }
         }
-
-        return max;
     }
 
     @SuppressWarnings("unchecked")

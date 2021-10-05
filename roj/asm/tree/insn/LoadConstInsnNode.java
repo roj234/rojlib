@@ -54,6 +54,11 @@ public final class LoadConstInsnNode extends InsnNode {
         this.c = c;
     }
 
+    @Override
+    public int nodeType() {
+        return T_LDC;
+    }
+
     public static void _verify(byte code, Constant c) {
         boolean dj = false;
         if(c.type() == DYNAMIC) {
@@ -157,7 +162,7 @@ public final class LoadConstInsnNode extends InsnNode {
             throw new NullPointerException("Invalid constant: " + pool.reset(c));
         }
 
-        if (this.code == Opcodes.LDC2_W || (this.code = (cpi == (byte) cpi) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
+        if (this.code == Opcodes.LDC2_W || (this.code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
             w.writeShort(cpi);
         } else {
             w.writeByte((byte) cpi);

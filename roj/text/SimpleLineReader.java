@@ -65,11 +65,11 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
     }
 
     private static CharSequence readAsUTF(InputStream stream) throws IOException {
-        CharList cl = new CharList();
-        ByteList buf = IOUtil.getSharedByteBuf();
-        ByteReader.decodeUTF(-1, cl, buf.readStreamArrayFully(stream));
-        buf.clear();
-        return cl;
+        ByteList in = IOUtil.getSharedByteBuf().readStreamArrayFully(stream);
+        CharList out = new CharList((in.pos() / 3) << 1);
+        ByteReader.decodeUTF(-1, out, in);
+        in.clear();
+        return out;
     }
 
     /**
@@ -114,6 +114,7 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
         return list;
     }
 
+    @SuppressWarnings("fallthrough")
     public static String readSingleLine(String keys, boolean clean, int line) {
         CharList chars = new CharList(20);
 

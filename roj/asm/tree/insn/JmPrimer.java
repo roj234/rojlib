@@ -23,24 +23,34 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.util.ConstantWriter;
+import roj.collect.LinkedIntMap;
 import roj.util.ByteWriter;
 
 import static roj.asm.Opcodes.*;
 
 @Internal
-public final class JumpPrimer extends InsnNode {
-    public JumpPrimer(byte code, int offset) {
+public final class JmPrimer extends InsnNode {
+    public JmPrimer(byte code, int def) {
         super(code);
-        this.targetIndex = offset;
+        this.def = def;
+        this.switcher = null;
+    }
+
+    public JmPrimer(byte code, int def, LinkedIntMap<Integer> switcher) {
+        super(code);
+        this.def = def;
+        this.switcher = switcher;
     }
 
     @Override
     protected boolean validate() {
         switch (code) {
+            case TABLESWITCH:
+            case LOOKUPSWITCH:
             case IFEQ:
             case IFNE:
             case IFLT:
@@ -64,16 +74,23 @@ public final class JumpPrimer extends InsnNode {
         return false;
     }
 
-    public int targetIndex;
+    @Override
+    public int nodeType() {
+        return 123;
+    }
+
+    public int selfIndex, arrayIndex;
+    public int                         def;
+    public final LinkedIntMap<Integer> switcher;
 
     @Override
-    public void toByteArray(ByteWriter w) {
-        throw new UnsupportedOperationException();
+    public String toString() {
+        return "Jump => " + def;
     }
 
     @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        throw new UnsupportedOperationException();
+    public void toByteArray(ByteWriter w) {
+        throw new UnsupportedOperationException("Why I am here?");
     }
 
     public InsnNode bake(InsnNode target) {

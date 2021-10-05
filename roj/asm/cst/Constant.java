@@ -41,11 +41,8 @@ public abstract class Constant {
 
     Constant() {}
 
-    public final void write(ByteWriter writer) {
-        write0(writer.writeByte(type()));
-    }
-
-    protected abstract void write0(ByteWriter writer);
+    @Internal
+    public abstract void write(ByteWriter writer);
 
     @Override
     public abstract boolean equals(Object o);

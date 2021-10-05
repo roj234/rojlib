@@ -25,29 +25,25 @@
  */
 package roj.asm.visitor;
 
-import roj.util.ByteList;
-
 /**
- * Your description here
+ * As-is Attribute Visitor !! Require NOT clearConstant mode
  *
- * @author Roj233
+ * @author solo6975
  * @version 0.1
- * @since 2021/8/16 18:11
+ * @since 2021/10/4 12:35
  */
-public class AsIsVisitor extends IVisitor {
-    public void visitNodes(int count) {
-        bw.writeShort(count);
+public final class AsIsAttributeVisitor extends AttributeVisitor {
+    public AsIsAttributeVisitor() {
+        super();
     }
 
-    public void visitNode(int acc, String name, String desc, int count) {
-        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(desc)).writeShort(count);
+    public AsIsAttributeVisitor(ClassVisitor cv) {
+        super(cv);
     }
 
-    public void visitAttribute(String name, ByteList data) {
-        bw.writeShort(cw.getUtfId(name)).writeInt(data.pos()).writeBytes(data);
+    @Override
+    public boolean visit(String name, int length) {
+        bw.writeShort(cw.getUtfId(name)).writeInt(length).writeBytes(br.getBytes().list, br.index, length);
+        return true;
     }
-
-    public void visitEndNode() {}
-
-    public void visitEndNodes() {}
 }

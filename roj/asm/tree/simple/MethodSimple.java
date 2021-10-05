@@ -31,7 +31,6 @@ import roj.asm.cst.CstUTF;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.FlagList;
 
 import java.util.List;
 
@@ -51,13 +50,8 @@ public final class MethodSimple extends SimpleComponent implements MethodNode {
         super(accesses, name, param);
     }
 
-    private String owner, parent;
+    private String owner;
     private List<Type> types;
-
-    @Override
-    public String parentClass() {
-        return parent;
-    }
 
     @Override
     public String ownerClass() {
@@ -78,15 +72,9 @@ public final class MethodSimple extends SimpleComponent implements MethodNode {
         return ParamHelper.getReturn(type.getString());
     }
 
-    @Override
-    public FlagList access() {
-        return this.accesses;
-    }
-
     @Internal
-    public void cn(String owner, String parent) {
+    public void cn(String owner) {
         this.owner = owner;
-        this.parent = parent;
     }
 
     @Override

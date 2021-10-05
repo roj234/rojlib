@@ -33,7 +33,6 @@ import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
-import roj.util.log.Logger;
 
 /**
  * No description provided
@@ -43,58 +42,46 @@ import roj.util.log.Logger;
  * @since 2021/5/29 17:16
  */
 public class ClassReplacer implements IClassTransformer {
-    static final Logger logger = Logger.getLogger("ClassReplacer");
-
-    public static final ClassReplacer INSTANCE = new ClassReplacer();
-    private static MyHashMap<String, byte[]> list = new MyHashMap<>();
+    public static final  ClassReplacer INSTANCE = new ClassReplacer();
+    private static final MyHashMap<String, byte[]> list = new MyHashMap<>();
 
     @Override
     public byte[] transform(String name, String transed, final byte[] basicClass) {
         Loader.tryPatch(this);
-        if (list == null || !list.containsKey(transed))
+        if (!list.containsKey(transed))
             return basicClass;
 
-        if ((Config.debug & 2) != 0)
-            logger.debug("Replaced class " + transed + "(" + name + ')');
+        if ((Config.debug & 2) != 0) {
+            System.out.println("Replaced class " + transed + "(" + name + ')');
+        }
 
-        byte[] arr = list.remove(transed);
-
-        if (list.isEmpty())
-            list = null;
-
-        return arr;
+        return list.remove(transed);
     }
 
 
     public static void addClass(String name, byte[] arr, String father) {
-        if (list != null) {
-            ConstantData data = Parser.parseConstants(arr);
+        ConstantData data = Parser.parseConstants(arr);
 
-            data.parentCst.getValue().setString(father);
+        data.parentCst.getValue().setString(father);
 
-            CstUTF value = data.nameCst.getValue();
+        CstUTF value = data.nameCst.getValue();
 
-            String tmp;
-            boolean eq = value.getString().equals(tmp = name.replace('.', '/'));
-            value.setString(tmp);
-            list.put(name, eq ? arr : Parser.toByteArray(data));
-        } else
-            logger.warn("Time too late!");
+        String tmp;
+        boolean eq = value.getString().equals(tmp = name.replace('.', '/'));
+        value.setString(tmp);
+        list.put(name, eq ? arr : Parser.toByteArray(data));
     }
 
     /**
      * using dot
      */
     public static void addClass(String name, byte[] arr) {
-        if (list != null) {
-            ConstantData data = Parser.parseConstants(arr);
-            CstUTF value = data.nameCst.getValue();
+        ConstantData data = Parser.parseConstants(arr);
+        CstUTF value = data.nameCst.getValue();
 
-            String tmp;
-            boolean eq = value.getString().equals(tmp = name.replace('.', '/'));
-            value.setString(tmp);
-            list.put(name, eq ? arr : Parser.toByteArray(data));
-        } else
-            logger.warn("Time too late!");
+        String tmp;
+        boolean eq = value.getString().equals(tmp = name.replace('.', '/'));
+        value.setString(tmp);
+        list.put(name, eq ? arr : Parser.toByteArray(data));
     }
 }

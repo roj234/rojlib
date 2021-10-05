@@ -39,7 +39,7 @@ public final class ExceptionEntry {
     public InsnNode start, end, handler;
     public String type;
 
-    public static final String ANY_TYPE = new String("[ANY]");
+    public static final String ANY_TYPE = ";";
 
     public ExceptionEntry(InsnNode start, InsnNode end, InsnNode handler, CstClass catchType) {
         this.start = start;

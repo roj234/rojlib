@@ -97,6 +97,11 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     @Override
+    public int nodeType() {
+        return T_FIELD;
+    }
+
+    @Override
     public void owner(String clazz) {
         this.owner = clazz;
     }

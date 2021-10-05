@@ -40,8 +40,8 @@ public final class CstTop extends Constant {
     private CstTop() {}
 
     @Override
-    protected void write0(ByteWriter writer) {
-        throw new IllegalArgumentException("CstTop is a placeholder class.");
+    public void write(ByteWriter w) {
+        // no-op so that needn't to filter in ConstantWriter#write
     }
 
     @Override

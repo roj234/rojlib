@@ -27,7 +27,6 @@
 package roj.asm.tree.anno;
 
 import roj.asm.util.ConstantWriter;
-import roj.text.StringPool;
 import roj.util.ByteWriter;
 
 /**
@@ -47,11 +46,6 @@ public final class AnnValAnnotation extends AnnVal {
 
     public void _toByteArray(ConstantWriter pool, ByteWriter w) {
         value.toByteArray(pool, w);
-    }
-
-    @Override
-    public void _toByteArray(StringPool pool, ByteWriter w) {
-        value.serialize(pool, w);
     }
 
     public String toString() {

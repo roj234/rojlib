@@ -145,6 +145,7 @@ public final class Patcher {
     }
 
     private Map<String, List<Patch>> clientPatches, serverPatches;
+    private final Adler32 adler321 = new Adler32(), adler322 = new Adler32();
 
     public int clientSuccessCount, serverSuccessCount, errorCount;
 
@@ -183,12 +184,13 @@ public final class Patcher {
                 if (input.pos() == 0) {
                     throw new RuntimeException("期待非空class " + patch.source);
                 }
-                Adler32 adler32 = new Adler32();
+                Adler32 adler32 = patchMap == serverPatches ? adler321 : adler322;
                 adler32.update(input.list, input.offset(), input.pos());
                 int inputChecksum = (int) adler32.getValue();
+                adler32.reset();
                 if (patch.checksum != inputChecksum) {
                     errorCount++;
-                    //CmdUtil.warning("类 " + patch.targetClassName + " 的效验码不正确.");// class: " + Integer.toHexString(inputChecksum) + ", 补丁: " + Integer.toHexString(patch.inputChecksum) + ".");
+                    CmdUtil.warning("类 " + patch.source + " 的效验码不正确.");
                     return null;
                 }
             }

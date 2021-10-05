@@ -267,7 +267,6 @@ public class Signature implements IType {
             }
         }
 
-        List<IGeneric> params = new ArrayList<>();
         boolean isMethod = generic.charAt(i) == '(';
         if (isMethod) {
             i++;
@@ -276,6 +275,7 @@ public class Signature implements IType {
         List<IGeneric> exceptions = new ArrayList<>();
 
         boolean returnVal = false;
+        List<IGeneric> params = new ArrayList<>();
         while (i < generic.length()) {
             switch (generic.charAt(i)) {
                 case '^':
@@ -348,7 +348,7 @@ public class Signature implements IType {
 
             final char c = s.charAt(i);
             if ((F & F_PRIMITIVE) != 0) {
-                if (NativeType.isValidate(c) && c != NativeType.CLASS) {
+                if (NativeType.isValid((byte) c) && c != NativeType.CLASS) {
                     mi.setValue(i + 1);
                     return new Type(c, arrayLevel);
                 }

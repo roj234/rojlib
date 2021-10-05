@@ -48,6 +48,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -165,7 +166,7 @@ public class Translator {
 
                 return formAlphabetClip(temp);
             }
-        }.init(IOUtil.read(new File(in)));
+        }.init(IOUtil.readUTF(new File(in)));
 
         while (wr.hasNext()) {
             Word w = wr.readWord();
@@ -268,10 +269,10 @@ public class Translator {
         if (map == null)
             return null;
 
-        Constant[] constants = data.cp.array();
+        List<Constant> constants = data.cp.array();
 
         for (IntMap.Entry<String> entry : map.entrySet()) {
-            final CstString string = (CstString) constants[entry.getKey()];
+            final CstString string = (CstString) constants.get(entry.getKey());
             //System.out.println(string.getValue().getString() + " to " + entry.getValue());
             string.setValue(data.writer.getUtf(entry.getValue()));
         }
@@ -310,8 +311,10 @@ public class Translator {
 
         IntMap<String> map = new IntMap<>();
 
-        for (Constant s : data.cp.array()) {
-            if (s != null && s.type() == CstType.STRING) {
+        List<Constant> array = data.cp.array();
+        for (int i = 0; i < array.size(); i++) {
+            Constant s = array.get(i);
+            if (s.type() == CstType.STRING) {
                 map.put(s.getIndex(), ((CstString) s).getValue().getString());
             }
         }

@@ -81,7 +81,7 @@ public class ChannelRouter extends ChannelRouterSync {
                         if (visited > 100) {
                             if (visited > 120) {
                                 reply = EmptyResponse.INSTANCE;
-                                if (visited % 128 == 0) logger.warn(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
+                                if (visited % 128 == 0) logger.warning(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
                                 if (visited > 300) {
                                     socket.shutdownInput();
                                     socket.shutdownOutput();

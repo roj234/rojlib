@@ -27,9 +27,7 @@ package roj.asm.visitor;
 
 import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 /**
@@ -39,32 +37,42 @@ import roj.util.Helpers;
  * @version 0.1
  * @since 2021/8/16 18:12
  */
-public abstract class IVisitor {
-    public ByteWriter     bw;
-    public ConstantWriter cw;
-    public ByteReader     br;
+public class IVisitor extends Holder {
+    private int amountIndex, attrAmountIndex;
+    protected int amount, attrAmount;
 
-    protected int amountIndex, amount;
-    protected int attrAmountIndex, attrAmount;
+    public AttributeVisitor attributeVisitor;
 
-    public void visit(ByteReader br, ConstantPool cp, ByteWriter bw, ConstantWriter cw) {
-        this.br = br;
-        this.bw = bw;
-        this.cw = cw;
+    public IVisitor() {}
 
-        int len = br.readUnsignedShort();
+    public IVisitor(ClassVisitor cv) {
+        super(cv);
+    }
+
+    public void preVisit(ClassVisitor cv) {
+        super.preVisit(cv);
+        if (attributeVisitor != null)
+            attributeVisitor.preVisit(cv);
+    }
+
+    public void visit(ConstantPool cp) {
+        this.cp = cp;
+        ByteReader r = this.br;
+
+        int len = r.readUnsignedShort();
         visitNodes(len);
         for (int i = 0; i < len; i++) {
-            int access = br.readUnsignedShort();
-            String name = ((CstUTF) cp.get(br)).getString();
-            String desc = ((CstUTF) cp.get(br)).getString();
-            int attr = br.readUnsignedShort();
+            int access = r.readUnsignedShort();
+            String name = ((CstUTF) cp.get(r)).getString();
+            String desc = ((CstUTF) cp.get(r)).getString();
+            int attr = r.readUnsignedShort();
             visitNode(access, name, desc, attr);
 
+            if (attributeVisitor != null) {
+                attributeVisitor.visitConstant(cp);
+            }
             for (int j = 0; j < attr; j++) {
-                String name0 = ((CstUTF) cp.get(br)).getString();
-                int len1 = br.readInt();
-                visitAttribute(name0, len1);
+                visitAttribute(((CstUTF) cp.get(r)).getString(), r.readInt());
             }
 
             visitEndNode();
@@ -72,6 +80,11 @@ public abstract class IVisitor {
         visitEndNodes();
     }
 
+    public void postVisit() {
+        super.postVisit();
+        if (attributeVisitor != null)
+            attributeVisitor.postVisit();
+    }
 
     public void visitNodes(int count) {
         amountIndex = bw.list.pos();
@@ -87,30 +100,35 @@ public abstract class IVisitor {
     }
 
     public void visitAttribute(String name, int length) {
-        bw.writeShort(cw.getUtfId(name)).writeInt(length).writeBytes(br.getBytes().list, br.index, length);
-        br.index += length;
-        attrAmount++;
+        int end = br.index + length;
+        if (attributeVisitor != null) {
+            if (attributeVisitor.visit(name, length)) {
+                attrAmount++;
+            }
+        }
+        br.index = end;
     }
 
     public void visitEndNode() {
-        int pos = bw.list.pos();
-        bw.list.pos(attrAmountIndex);
-        bw.writeShort(attrAmount);
-        bw.list.pos(pos);
+        if (attrAmount > 0) {
+            int pos = bw.list.pos();
+            bw.list.pos(attrAmountIndex);
+            bw.writeShort(attrAmount);
+            bw.list.pos(pos);
+        }
         amount++;
     }
 
     public void visitEndNodes() {
-        int pos = bw.list.pos();
-        bw.list.pos(amountIndex);
-        bw.writeShort(amount);
-        bw.list.pos(pos);
+        if (amount > 0) {
+            int pos = bw.list.pos();
+            bw.list.pos(amountIndex);
+            bw.writeShort(amount);
+            bw.list.pos(pos);
+        }
     }
 
     public void visitEndError(Throwable e) {
-        bw = null;
-        cw = null;
-        br = null;
         Helpers.throwAny(e);
     }
 }

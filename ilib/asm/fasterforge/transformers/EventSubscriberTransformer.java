@@ -52,13 +52,13 @@ public class EventSubscriberTransformer implements IClassTransformer {
                         String msg = "Cannot apply @SubscribeEvent to private method %s/%s%s";
                         throw new RuntimeException(String.format(msg, cz.name, mn.name.getString(), mn.type.getString()));
                     }
-                    mn.accesses.flag = (short) toPublic(mn.accesses.flag);
+                    mn.accesses.flag = (char) toPublic(mn.accesses.flag);
                     isSubscriber = true;
                 }
             }
         }
         if (isSubscriber) {
-            cz.accesses.flag = (short) toPublic(cz.accesses.flag);
+            cz.accesses.flag = (char) toPublic(cz.accesses.flag);
             return Parser.toByteArray(cz);
         }
         return basicClass;

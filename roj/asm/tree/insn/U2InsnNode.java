@@ -42,7 +42,13 @@ public class U2InsnNode extends InsnNode implements IIndexInsnNode {
         this.index = (char) index;
     }
 
-    public char index;
+    private char index;
+
+    @Override
+    public int nodeType() {
+        int c = code & 0xFF;
+        return (c >= 0x15 && c <= 0x19) || (c >= 0x36 && c <= 0x3a) ? T_LOAD_STORE : T_OTHER;
+    }
 
     public int getIndex() {
         return index;

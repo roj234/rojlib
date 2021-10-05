@@ -27,7 +27,8 @@
 package roj.asm.cst;
 
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -60,9 +61,10 @@ public final class CstDynamic extends Constant {
     }
 
     @Override
-    protected final void write0(ByteWriter w) {
-        w.writeShort(bootstrapTableIndex);
-        w.writeShort(getDescIndex());
+    public final void write(ByteWriter w) {
+        w.writeByte(type())
+         .writeShort(bootstrapTableIndex)
+         .writeShort(getDescIndex());
     }
 
     public final String toString() {

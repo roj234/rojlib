@@ -26,6 +26,7 @@
 
 package roj.asm;
 
+import roj.asm.cst.Constant;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.*;
@@ -35,6 +36,7 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
 import roj.asm.util.*;
+import roj.collect.CharMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
@@ -75,7 +77,6 @@ public final class Parser {
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         try {
             pool.read(r);
-            pool.valid();
         } catch (Exception e) {
             throw new RuntimeException("Corrupted constant pool: ", e);
         }
@@ -174,7 +175,6 @@ public final class Parser {
 
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         pool.read(r);
-        pool.valid();
 
         ConstantData result = new ConstantData(version, pool, r.length(), r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
@@ -207,7 +207,7 @@ public final class Parser {
         List<MethodSimple> methods = result.methods;
         for (int i = 0; i < len; i++) {
             MethodSimple method = new MethodSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
-            method.cn(result.name, result.parent);
+            method.cn(result.name);
 
             AttributeList attributes = method.attributes;
             int attrLen = r.readUnsignedShort();
@@ -264,7 +264,34 @@ public final class Parser {
         r.index += 4; // ver
 
         ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
-        pool.readNames(r);
+        pool.skip(r);
+        CharMap<Constant> map = pool.map;
+        r.index += 2;
+        map.put(r.readChar(), null);
+        map.put(r.readChar(), null);
+
+        int len = r.readUnsignedShort();
+        for (int i = 0; i < len; i++) {
+            map.put(r.readChar(), null);
+        }
+
+        for (int k = 0; k < 2; k++) {
+            len = r.readUnsignedShort();
+            for (int i = 0; i < len; i++) {
+                r.index += 2;
+                map.put(r.readChar(), null);
+                map.put(r.readChar(), null);
+
+                int attrs = r.readUnsignedShort();
+                for (int j = 0; j < attrs; j++) {
+                    r.index += 2;
+                    int ol = r.readInt();
+                    r.index += ol;
+                }
+            }
+        }
+
+        pool.init(r);
 
         int cfo = r.index; // acc
 
@@ -273,7 +300,7 @@ public final class Parser {
         String self = pool.getName(r);
         String parent = pool.getName(r);
 
-        int len = r.readUnsignedShort();  // itf
+        len = r.readUnsignedShort();  // itf
         List<String> itf = new ArrayList<>(len);
         for (int i = 0; i < len; i++) {
             itf.add(pool.getName(r));
@@ -286,7 +313,7 @@ public final class Parser {
             for (int i = 0; i < len; i++) {
                 int offset = r.index;
 
-                short acc = r.readShort();
+                char acc = r.readChar();
 
                 AccessData.MOF d = new AccessData.MOF(((CstUTF) pool.get(r)).getString(),
                                                       ((CstUTF) pool.get(r)).getString(), offset);
@@ -327,9 +354,18 @@ public final class Parser {
         r.index += 4; // ver
 
         ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
-        pool.readNames(r);
+        pool.skip(r);
+        CharMap<Constant> map = pool.map;
+        r.index += 2;
+        map.put(r.readChar(), null);
+        map.put(r.readChar(), null);
 
-        int cfo = r.index; // acc
+        int len = r.readUnsignedShort();
+        for (int i = 0; i < len; i++) {
+            map.put(r.readChar(), null);
+        }
+
+        pool.init(r);
 
         r.index += 2;
 
@@ -338,7 +374,7 @@ public final class Parser {
         list.add(pool.getName(r));
         list.add(pool.getName(r));
 
-        int len = r.readUnsignedShort();  // itf
+        len = r.readUnsignedShort();
         for (int i = 0; i < len; i++) {
             list.add(pool.getName(r));
         }

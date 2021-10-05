@@ -37,7 +37,7 @@ import roj.util.ByteWriter;
  * @version 0.1
  * @since 2021/5/24 23:21
  */
-public class U1InsnNode extends InsnNode implements IIndexInsnNode {
+public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
     public U1InsnNode(byte code, int index) {
         super(code);
         this.index = (byte) index;
@@ -54,8 +54,13 @@ public class U1InsnNode extends InsnNode implements IIndexInsnNode {
      * T_INT	10
      * T_LONG	11
      */
+    private byte index;
 
-    public byte index;
+    @Override
+    public int nodeType() {
+        int c = code & 0xFF;
+        return (c >= 0x15 && c <= 0x19) || (c >= 0x36 && c <= 0x3a) ? T_LOAD_STORE : T_OTHER;
+    }
 
     public int getIndex() {
         return index & 0xFF;

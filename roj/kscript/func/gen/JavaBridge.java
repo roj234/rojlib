@@ -100,8 +100,6 @@ public final class JavaBridge {
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "", "<init>", "(I)V"));
         insn.add(NodeHelper.cached(Opcodes.ARETURN));
 
-        insn.add(AttrCode.METHOD_END_MARK);
-
         roj.asm.tree.Method __init__ = new roj.asm.tree.Method(0, clz, "<init>", "(I)V");
         clz.methods.add(__init__);
         AttrCode code = __init__.code = new AttrCode(__init__);
@@ -115,8 +113,6 @@ public final class JavaBridge {
         insn.add(NodeHelper.cached(Opcodes.ILOAD_1));
         insn.add(new FieldInsnNode(Opcodes.PUTFIELD, clz, 0));
         insn.add(NodeHelper.cached(Opcodes.RETURN));
-
-        insn.add(AttrCode.METHOD_END_MARK);
 
         roj.asm.tree.Method gsObject = new roj.asm.tree.Method(0, clz, "get_set_Object", "(Ljava/lang/Object;)Ljava/lang/Object;");
         clz.methods.add(gsObject);
@@ -135,8 +131,6 @@ public final class JavaBridge {
 
         insn.add(NodeHelper.cached(Opcodes.ARETURN));
 
-        insn.add(AttrCode.METHOD_END_MARK);
-
         roj.asm.tree.Method __init_def__ = new roj.asm.tree.Method(0, clz, "<init>", "()V");
         clz.methods.add(__init_def__);
         code = __init_def__.code = new AttrCode(__init_def__);
@@ -147,8 +141,6 @@ public final class JavaBridge {
         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
         insn.add(NodeHelper.cached(Opcodes.RETURN));
-
-        insn.add(AttrCode.METHOD_END_MARK);
     }
 
     private void forReuse(String className, String methodOwner) {
@@ -159,7 +151,7 @@ public final class JavaBridge {
         InsnNode a = in.get(0), b = in.get(1), c = in.get(2), d = in.get(3), e = in.get(4);
         ((FieldInsnNode)b).owner = className;
         in.clear(); in.add(a); in.add(b); in.add(c); in.add(d); in.add(e);
-        ((SwitchInsnNode)c).mapping.clear();
+        ((SwitchInsnNode)c).switcher.clear();
 
         in = clz.methods.get(1).code.instructions;
         ((ClassInsnNode) in.get(0)).name = className;
@@ -233,7 +225,7 @@ public final class JavaBridge {
 
     private void addMethod(Method value, AttrCode call, int id) {
         InsnList insn = call.instructions;
-        IntMap<InsnNode> targets = ((SwitchInsnNode) insn.get(3)).mapping;
+        IntMap<InsnNode> targets = ((SwitchInsnNode) insn.get(3)).switcher;
 
         String types = ParamHelper.classDescriptors(value.getParameterTypes(), value.getReturnType());
 

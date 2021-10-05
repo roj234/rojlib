@@ -29,7 +29,6 @@ package roj.asm.tree.anno;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantWriter;
-import roj.text.StringPool;
 import roj.util.ByteWriter;
 
 /**
@@ -46,11 +45,6 @@ public final class AnnValClass extends AnnVal {
     }
 
     public Type value;
-
-    @Override
-    public void _toByteArray(StringPool pool, ByteWriter w) {
-        pool.writeString(w, ParamHelper.getField(value));
-    }
 
     public void _toByteArray(ConstantWriter pool, ByteWriter w) {
         w.writeShort(pool.getUtfId(ParamHelper.getField(value)));

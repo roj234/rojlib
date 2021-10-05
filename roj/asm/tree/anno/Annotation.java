@@ -32,7 +32,6 @@ import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.collect.MyHashMap;
-import roj.text.StringPool;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -61,27 +60,6 @@ public final class Annotation {
         this.type = another.type;
         this.rawDesc = another.rawDesc;
         this.values = another.values;
-    }
-
-
-    public static Annotation deserialize(StringPool pool, ByteReader r) {
-        String name = pool.readString(r);
-        int len = r.readVarInt(false);
-        Map<String, AnnVal> params = new MyHashMap<>(len);
-        for (int j = 0; j < len; j++) {
-            String key = pool.readString(r);
-            AnnVal value = AnnVal.deserialize(pool, r);
-            params.put(key, value);
-        }
-        return new Annotation(name, params);
-    }
-
-    public void serialize(StringPool pool, ByteWriter w) {
-        pool.writeString(w, ParamHelper.getField(type))
-                .writeVarInt(values.size(), false);
-        for (Map.Entry<String, AnnVal> e : values.entrySet()) {
-            e.getValue().toByteArray(pool, pool.writeString(w, e.getKey()));
-        }
     }
 
     public static Annotation deserialize(ConstantPool pool, ByteReader r) {

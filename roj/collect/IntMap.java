@@ -107,6 +107,11 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>> {
         public Entry<V> nextEntry() {
             return next;
         }
+
+        @Override
+        public String toString() {
+            return k + "=" + v + '\n';
+        }
     }
 
     protected Entry<?>[] entries;

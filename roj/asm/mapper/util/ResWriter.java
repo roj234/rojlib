@@ -25,15 +25,13 @@
  */
 package roj.asm.mapper.util;
 
-import roj.io.IOUtil;
+import roj.io.ZipFileWriter;
 import roj.util.ByteList;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * No description provided
@@ -43,12 +41,12 @@ import java.util.zip.ZipOutputStream;
  * @since 2021/5/29 16:43
  */
 public class ResWriter implements Runnable, Callable<Void> {
-    public ResWriter(ZipOutputStream zos, Map<String, ?> resources) {
-        this.zos = zos;
+    public ResWriter(ZipFileWriter zfw, Map<String, ?> resources) {
+        this.zfw = zfw;
         this.resources = resources;
     }
 
-    private final ZipOutputStream zos;
+    private final ZipFileWriter  zfw;
     private final Map<String, ?> resources;
 
     /**
@@ -65,22 +63,15 @@ public class ResWriter implements Runnable, Callable<Void> {
 
     @Override
     public Void call() throws IOException {
+        ByteList bl = new ByteList();
         for (Map.Entry<String, ?> entry : resources.entrySet()) {
-            ZipEntry ze = new ZipEntry(entry.getKey().replace('\\', '/'));
-            zos.putNextEntry(ze);
-            Object obj = entry.getValue();
-            if(obj instanceof InputStream) {
-                try (InputStream is = (InputStream) entry.getValue()) {
-                    zos.write(IOUtil.read(is));
-                }
-            } else if(obj instanceof byte[]) {
-                zos.write((byte[]) obj);
-            } else if(obj instanceof ByteList) {
-                ((ByteList) obj).writeToStream(zos);
-            } else {
-                throw new ClassCastException(obj.getClass().getName());
+            Object value = entry.getValue();
+            if (value instanceof InputStream) {
+                bl.readStreamArrayFully((InputStream) value);
+                value = bl;
             }
-            zos.closeEntry();
+            zfw.writeNamed(entry.getKey(), value instanceof ByteList ? (ByteList) value : bl.setValue((byte[]) value));
+            bl.clear();
         }
         return null;
     }

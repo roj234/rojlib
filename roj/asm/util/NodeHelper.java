@@ -140,7 +140,6 @@ public class NodeHelper {
 
     public static void compress(@Nonnull InsnList list, byte base, int id) {
         switch (base) {
-            // todo support ldc
             case ALOAD:
             case DLOAD:
             case ILOAD:
@@ -349,5 +348,10 @@ public class NodeHelper {
             default:
                 return node;
         }
+    }
+
+    public static boolean isReturn(int code) {
+        code &= 0xFF;
+        return code >= 0xAC && code <= 0xB1;
     }
 }

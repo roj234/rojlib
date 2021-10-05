@@ -30,6 +30,7 @@ import javax.annotation.Nonnull;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UTFDataFormatException;
 
 /**
  * No description provided
@@ -231,7 +232,7 @@ public class ByteWriter {
     }
 
     public static ByteList encodeUTF(CharSequence s) {
-        ByteList bl = new ByteList(s.length() > 1000 ? s.length() / 2 : byteCountUTF8(s));
+        ByteList bl = new ByteList(s.length() > 1000 ? (s.length() / 3) << 1 : byteCountUTF8(s));
         writeUTF(bl, s, -1);
         return bl;
     }
@@ -291,9 +292,8 @@ public class ByteWriter {
         int utfLen = 0;
 
         /* use charAt instead of copying String to char array */
-        int c;
         for (int i = 0; i < len; i++) {
-            c = str.charAt(i);
+            int c = str.charAt(i);
             if ((c >= 0x0001) && (c <= 0x007F)) {
                 utfLen++;
             } else if (c > 0x07FF) {
@@ -411,8 +411,12 @@ public class ByteWriter {
         }
 
         @Override
-        public void writeUTF(@Nonnull String str) {
-            ByteWriter.writeUTF(list, str, 0);
+        public void writeUTF(@Nonnull String str) throws UTFDataFormatException {
+            try {
+                ByteWriter.writeUTF(list, str, 0);
+            } catch (ArrayIndexOutOfBoundsException e) {
+                throw new UTFDataFormatException(e.getMessage());
+            }
         }
     }
 }

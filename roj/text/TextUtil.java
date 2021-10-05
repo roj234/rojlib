@@ -36,13 +36,13 @@ import roj.config.word.WordPresets;
 import roj.math.MathUtils;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.log.Logger;
 
 import java.io.UTFDataFormatException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /**
  * No description provided
@@ -59,7 +59,7 @@ public class TextUtil {
     public static String translate(int type, String key) {
         Map<String, String> map = langs.get(type);
         if (map == null) {
-            Logger.getLogger("TextUtil").warn("LangId " + type + " not found");
+            Logger.getLogger("TextUtil").warning("LangId " + type + " not found");
             return key;
         }
         return map.getOrDefault(key, key);
@@ -292,14 +292,22 @@ public class TextUtil {
     }
 
     public static StringBuilder dumpBytes(StringBuilder sb, byte[] b, int off, int len) {
-        for (int i = off, j = 1; i < len; i++, j++) {
+        sb.append("\n             0 1  2 3  4 5  6 7  8 9  a b  c d  e f\n0x00000000   ");
+        int j = 1, v = 0;
+        for (int i = off; i < len; i++, j++) {
             sb.append(i2h_char((b[i] >>> 4) & 0xf))
                     .append(i2h_char(b[i] & 0xf));
             if ((j & 1) == 0)
                 sb.append(' ');
 
-            if ((j & 7) == 0) {
-                sb.append('\n');
+            if ((j & 15) == 0) {
+                v += 32;
+                sb.append("\n0x");
+                String s = Integer.toHexString(v);
+                for (int k = 7 - s.length(); k >= 0; k--) {
+                    sb.append('0');
+                }
+                sb.append(s).append("   ");
             }
         }
 

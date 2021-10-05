@@ -43,7 +43,6 @@ import java.util.function.UnaryOperator;
  * @since 2021/5/24 23:26索引不变)
  */
 public class SimpleList<E> implements List<E>, RandomAccess {
-    public static final int MAX_EMPTY_CAPACITY = 128;
     protected Object[] list;
     protected int size, length;
 
@@ -56,7 +55,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
     public SimpleList(int size) {
         list = new Object[size];
-        this.length = size - 1;
+        length = size;
     }
 
     @SafeVarargs
@@ -79,7 +78,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
     public void ensureCapacity(int cap) {
         if (length < cap) {
-            int newCap = calculateCapacity(length, cap);
+            int newCap = calculateCapacity(cap);
             Object[] newList = new Object[newCap];
             if (size > 0)
                 System.arraycopy(list, 0, newList, 0, size);
@@ -88,7 +87,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         }
     }
 
-    protected int calculateCapacity(int length, int cap) {
+    protected int calculateCapacity(int cap) {
         switch (capacityType) {
             case -1:
                 throw new ArrayIndexOutOfBoundsException("ArraySize locked to " + length);
@@ -96,7 +95,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
             default:
                 return cap + 10;
             case 1:
-                return (int) (cap * 1.5);
+                return (cap * 3) >> 1;
             case 2:
                 return cap << 1;
         }
@@ -171,6 +170,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     @Deprecated
     public void setRawArray(Object[] arr) {
         list = arr;
+        length = arr.length;
     }
 
     public int size() {
@@ -179,8 +179,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
     public boolean add(E e) {
         ensureCapacity(size + 1);
-        list[size] = e; // [1,1,1,2]
-        handleAdd(size++, e);
+        list[size++] = e; // [1,1,1,2]
         return true; //[3]
     }
 
@@ -225,7 +224,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         if (size != index)
             System.arraycopy(list, index, list, index + len, size - index);
         System.arraycopy(collection, start, list, index, len);
-        handleAdd(size, collection, start, len);
         size += len;
         return true;
     }
@@ -243,7 +241,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
             final E e = collection[k];
             list[i++] = e;
         }
-        handleAdd(size, collection, 0, collection.length);
         size += collection.length;
         return true;
     }
@@ -262,11 +259,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     @SuppressWarnings("unchecked")
     public void replaceAll(UnaryOperator<E> operator) {
         for (int i = 0; i < size; i++) {
-            final E e = (E) list[i];
-            if ((list[i] = operator.apply(e)) != e) {
-                handleRemove(i, e);
-                handleAdd(i, (E) list[i]);
-            }
+            list[i] = operator.apply((E) list[i]);
         }
     }
 
@@ -282,9 +275,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
         Iterator<? extends E> it = collection.iterator();
         for (int j = index; j < index + collection.size(); j++) {
-            final E next = it.next();
-            handleAdd(j, next);
-            list[j] = next;
+            list[j] = it.next();
         }
         size += collection.size();
         return true;
@@ -363,7 +354,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         if (i != size)
             System.arraycopy(list, i, list, i + 1, size - i);
         list[i] = e;
-        handleAdd(i, e);
         size++;
     }
 
@@ -421,8 +411,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
                 System.arraycopy(list, index + 1, list, index, size - 1 - index);
             }
 
-            handleRemove(index, (E) o);
-
             list[--size] = null;
             return (E) o;
         }
@@ -475,47 +463,16 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         return (E) list[i]; // 2
     }
 
-    public void fill(E e) {
-        handleRemove(list, size);
-        for (int i = 0; i < size; i++) {
-            list[i] = e;
-            handleAdd(i, e);
-        }
-    }
-
     public void fastClear() {
-        handleRemove(list, size);
         size = 0;
     }
 
     public void clear() {
         if (list == null || size == 0) return;
-        handleRemove(list, size);
-        if (list.length <= MAX_EMPTY_CAPACITY) {
-            for (int i = 0; i < size; i++) {
-                list[i] = null;
-            }
-        } else {
-            list = new Object[MAX_EMPTY_CAPACITY];
-            length = MAX_EMPTY_CAPACITY;
+        for (int i = 0; i < size; i++) {
+            list[i] = null;
         }
         size = 0;
-    }
-
-    @Deprecated
-    protected void handleRemove(int pos, E element) {
-    }
-
-    @Deprecated
-    protected void handleRemove(Object[] elements, int length) {
-    }
-
-    @Deprecated
-    protected void handleAdd(int pos, E[] elements, int offset, int length) {
-    }
-
-    @Deprecated
-    protected void handleAdd(int pos, E element) {
     }
 
     public void i_setSize(int i) {

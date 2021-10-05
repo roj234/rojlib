@@ -40,7 +40,7 @@ import static roj.asm.type.NativeType.*;
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class Type implements IType, IGeneric {
+public final class Type implements IType, IGeneric {
     private static final CharMap<Type> STD = new CharMap<>(9);
 
     public static synchronized Type std(char c) {
@@ -57,7 +57,7 @@ public class Type implements IType, IGeneric {
     /**
      * Array正常不会出现
      */
-    public final char type;
+    public final byte type;
     public String owner;
     public int array;
 
@@ -117,11 +117,12 @@ public class Type implements IType, IGeneric {
     }
 
     public String nativeName() {
+        if (array > 0) return "A";
         switch (type) {
             case CLASS:
                 return "A";
             case VOID:
-                return "";//'V';
+                return "";
             case BOOLEAN:
             case BYTE:
             case CHAR:
@@ -168,5 +169,25 @@ public class Type implements IType, IGeneric {
                 return long.class;
         }
         throw new IllegalArgumentException("?");
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Type type1 = (Type) o;
+
+        if (type != type1.type) return false;
+        if (array != type1.array) return false;
+        return owner != null ? owner.equals(type1.owner) : type1.owner == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = type;
+        result = 31 * result + (owner != null ? owner.hashCode() : 0);
+        result = 31 * result + array;
+        return result;
     }
 }

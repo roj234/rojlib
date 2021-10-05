@@ -33,7 +33,7 @@ import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 
-import static roj.asm.tree.attr.AttrCode.METHOD_END_MARK;
+import static roj.asm.tree.insn.EndOfInsn.MARKER;
 
 /**
  * No description provided
@@ -69,54 +69,33 @@ public final class InsnList extends ArrayList<InsnNode> {
 
     public InsnNode remove(int pos) {
         InsnNode node = super.remove(pos);
-        node._i_replace(pos != size() ? get(pos) : METHOD_END_MARK);
+        node._i_replace(pos != size() ? get(pos) : MARKER);
         return node;
     }
 
     public IntBiMap<InsnNode> getPCMap() {
-        final InsnList insn = this;
-        ConstantWriter pool = new ConstantWriter();
+        InsnNode last = remove(size() - 1);
+        if (last != MARKER)
+            add(last);
 
-        InsnNode last = insn.remove(insn.size() - 1);
-        if (last != METHOD_END_MARK)
-            throw new IllegalArgumentException("End must be a METHOD_END_MARK");
-
+        ConstantWriterEmpty pool = new ConstantWriterEmpty();
         ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
         IntBiMap<InsnNode> pcRev = new IntBiMap<>(size());
 
-        InsnNode node;
-        pcRev.putByValue(0, node = insn.get(0));
+        for (int i = 0; i < size(); i++) {
+            InsnNode node = get(i);
+            pcRev.putByValue(w.list.pos(), node);
+            node.preToByteArray(pool, w);
+        }
 
-        int reccIdx = -1, reccPos = 0;
-        int i, j = 0;
+        pcRev.putByValue(w.list.pos(), MARKER);
 
-        do {
-            i = reccIdx + 1;
-            reccIdx = -1;
-            w.list.pos(reccPos);
-
-            for (int e = insn.size() - 1; i < e; i++) {
-                pcRev.putByValue(w.list.pos(), node);
-                node = insn.get(i);
-
-                // 简化的终止条件: 此轮node return false并且长度不变
-                if (node.handlePCRev(pcRev) && reccIdx == -1) {
-                    reccIdx = i - 1;
-                    reccPos = w.list.pos();
-                }
-
-                node.preToByteArray(pool, w);
-            }
-
-            if(j++ > 5) {
-                throw new IllegalArgumentException("Unable to correct bytecode order");
-            }
-        } while (reccIdx != -1 && insn.get(reccIdx + 1).handlePCRev(pcRev));
-
-        pcRev.putByValue(pcRev.getByValue(insn.get(insn.size() - 1)) + 1, METHOD_END_MARK);
-
-        add(METHOD_END_MARK);
+        add(MARKER);
 
         return pcRev;
+    }
+
+    public void removeRange(int fromIndex, int toIndex) {
+        super.removeRange(fromIndex, toIndex);
     }
 }

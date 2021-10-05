@@ -29,7 +29,6 @@ package roj.asm.tree.anno;
 import roj.asm.cst.*;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
-import roj.text.StringPool;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -45,10 +44,10 @@ import java.util.List;
  */
 public abstract class AnnVal {
     AnnVal(char type) {
-        this.type = type;
+        this.type = (byte) type;
     }
 
-    public final char type;
+    public final byte type;
 
     public static AnnVal parse(ConstantPool pool, ByteReader r) {
         char type = AnnotationType.verify(r.readUByte());
@@ -104,51 +103,9 @@ public abstract class AnnVal {
         return null;
     }
 
-    public static AnnVal deserialize(StringPool pool, ByteReader r) {
-        char type = AnnotationType.verify(r.readUByte());
-
-        switch (type) {
-            case AnnotationType.BOOLEAN:
-            case AnnotationType.BYTE:
-            case AnnotationType.SHORT:
-            case AnnotationType.CHAR:
-            case AnnotationType.INT:
-                return new AnnValInt(type, r.readVarInt());
-            case AnnotationType.DOUBLE:
-                return new AnnValDouble(r.readDouble());
-            case AnnotationType.FLOAT:
-                return new AnnValFloat(r.readFloat());
-            case AnnotationType.LONG:
-                return new AnnValLong(r.readLong());
-            case AnnotationType.STRING:
-                return new AnnValString(pool.readString(r));
-            case AnnotationType.CLASS:
-                return new AnnValClass(pool.readString(r));
-            case AnnotationType.ENUM:
-                return new AnnValEnum(pool.readString(r), pool.readString(r));
-            case AnnotationType.ANNOTATION:
-                return new AnnValAnnotation(Annotation.deserialize(pool, r));
-            case AnnotationType.ARRAY:
-                int len = r.readVarInt(false);
-                List<AnnVal> entries = new ArrayList<>(len);
-                while (len > 0) {
-                    entries.add(deserialize(pool, r));
-                    len--;
-                }
-                return new AnnValArray(entries);
-        }
-        return null;
-    }
-
     public final void toByteArray(ConstantWriter pool, ByteWriter w) {
-        _toByteArray(pool, w.writeByte((byte) type));
+        _toByteArray(pool, w.writeByte(type));
     }
-
-    public final void toByteArray(StringPool pool, ByteWriter w) {
-        _toByteArray(pool, w.writeByte((byte) type));
-    }
-
-    abstract void _toByteArray(StringPool pool, ByteWriter w);
 
     abstract void _toByteArray(ConstantWriter pool, ByteWriter w);
 

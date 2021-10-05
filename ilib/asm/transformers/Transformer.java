@@ -30,6 +30,8 @@ import ilib.Config;
 import ilib.api.IFasterClassTransformer;
 import ilib.asm.Loader;
 import ilib.client.api.ChangeWorldEvent;
+import net.minecraft.entity.Entity;
+import net.minecraftforge.common.MinecraftForge;
 import org.apache.logging.log4j.Logger;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -48,10 +50,7 @@ import roj.collect.WeakHashSet;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import net.minecraft.entity.Entity;
-
-import net.minecraftforge.common.MinecraftForge;
-
+import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
 
@@ -236,9 +235,9 @@ public class Transformer implements IFasterClassTransformer {
         ConstantData data = Parser.parseConstants(basicClass);
         if (!Config.title.equals("Minecraft 1.12.2")) {
             boolean found = false;
-            Constant[] array = data.cp.array();
-            for (int i = 1; i < array.length; i++) {
-                Constant c = array[i];
+            List<Constant> array = data.cp.array();
+            for (int i = 0; i < array.size(); i++) {
+                Constant c = array.get(i);
                 if (c.type() == CstType.UTF) {
                     CstUTF cstUTF = (CstUTF) c;
                     if ("Minecraft 1.12.2".equals(cstUTF.getString())) {

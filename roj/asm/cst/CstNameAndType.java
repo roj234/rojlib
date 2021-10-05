@@ -53,9 +53,10 @@ public final class CstNameAndType extends Constant {
     }
 
     @Override
-    protected final void write0(ByteWriter w) {
-        w.writeShort(getNameIndex())
-        .writeShort(getTypeIndex());
+    public final void write(ByteWriter w) {
+        w.writeByte(CstType.NAME_AND_TYPE)
+         .writeShort(getNameIndex())
+         .writeShort(getTypeIndex());
     }
 
     public final String toString() {

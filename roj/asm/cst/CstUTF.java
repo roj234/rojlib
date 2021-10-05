@@ -35,7 +35,7 @@ import roj.util.ByteWriter;
  * @version 0.1
  * @since 2021/5/29 17:16
  */
-public class CstUTF extends Constant {
+public final class CstUTF extends Constant {
     private String data;
 
     public CstUTF() {}
@@ -49,15 +49,13 @@ public class CstUTF extends Constant {
     }
 
     public void setString(String s) {
-        if (s == null) {
-            throw new NullPointerException("string");
-        }
-        this.data = s;
+        // noinspection all
+        this.data = s.toString();
     }
 
     @Override
-    protected void write0(ByteWriter w) {
-        w.writeJavaUTF(data);
+    public void write(ByteWriter w) {
+        w.writeByte(CstType.UTF).writeJavaUTF(data);
     }
 
     public String toString() {

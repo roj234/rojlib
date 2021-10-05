@@ -68,6 +68,7 @@ public final class Opcodes {
             FLOAD = 0x17,
             DLOAD = 0x18,
             ALOAD = 0x19,
+
             ILOAD_0 = 0x1a,
             ILOAD_1 = 0x1b,
             ILOAD_2 = 0x1c,

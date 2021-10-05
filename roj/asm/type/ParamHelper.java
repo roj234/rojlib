@@ -136,14 +136,13 @@ public final class ParamHelper {
                 String p1 = s.substring(pos);
                 Type param = parseOne(p1.charAt(0), p1);
                 if(param.owner == null)
-                    param = new Type(param.type, pos);
+                    param = new Type((char) param.type, pos);
                 else
                     param.array = pos;
                 return param;
             case CLASS:
                 if (!s.endsWith(";")) {
-                    System.err.println("Class name " + s + " does not endsWith ;");
-                    return new Type(s.substring(1), 0);
+                    throw new IllegalArgumentException("Class '" + s + "' not endsWith ';'");
                 }
                 return new Type(s.substring(1, s.length() - 1), 0);
             default:
@@ -169,7 +168,7 @@ public final class ParamHelper {
         if (type.type == NativeType.CLASS) {
             sb.append('L').append(type.owner).append(';');
         } else {
-            sb.append(type.type);
+            sb.append((char) type.type);
         }
     }
 
@@ -232,15 +231,15 @@ public final class ParamHelper {
      * ConstantClass
      */
     public static Type classType(String s) {
-        char c = NativeType.validate(s.charAt(0));
+        byte c = NativeType.validate(s.charAt(0));
         if (s.length() == 1)
-            return Type.std(c);
+            return Type.std((char) c);
         if (s.startsWith("[")) {
             int pos = s.lastIndexOf('[') + 1;
             String p1 = s.substring(pos);
             Type param = classType(p1);
             if(param.owner == null)
-                param = new Type(param.type, pos);
+                param = new Type((char) param.type, pos);
             else
                 param.array = pos;
             return param;

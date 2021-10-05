@@ -158,7 +158,7 @@ public class KParser implements ParseContext {
     /// region 解析
 
     public KFunction parse(File file) throws IOException, ParseException {
-        wr.init(IOUtil.read(file));
+        wr.init(IOUtil.readUTF(file));
         this.file = file.getName();
         return parse0();
     }
@@ -175,10 +175,9 @@ public class KParser implements ParseContext {
         tree = ASTree.builder(file);
         wr.setLineHandler(tree);
 
-        Word w;
         try {
             while (true) {
-                w = wr.nextWord();
+                Word w = wr.nextWord();
                 if (w.type() == WordPresets.EOF) {
                     break;
                 } else {
@@ -188,8 +187,6 @@ public class KParser implements ParseContext {
         } catch (NotStatementException e) {
             _onError(wr.err("statement.not"));
         }
-
-        //_checkDel();
 
         _checkUnused();
 
@@ -287,27 +284,25 @@ public class KParser implements ParseContext {
     private void parameters() throws ParseException {
         parameters.clear();
 
-        Word word;
-
         int i = 0;
         int flag = 0;
 
         o:
         while (true) {
-            word = wr.nextWord();
-            switch (word.type()) {
+            Word w = wr.nextWord();
+            switch (w.type()) {
                 case Symbol.right_s_bracket:
                     wr.retractWord();
                     break o;
                 case Symbol.equ:
                     if ((flag & 4) != 0)
-                        _onError(word, "rest.unable_default");
+                        _onError(w, "rest.unable_default");
                     if ((flag & 8) != 0)
-                        _onError(word, "duplicate:=");
+                        _onError(w, "duplicate:=");
                     flag |= 8;
                     Expression def = KScriptVM.retainExprParser(0).read(this, (short) 16);
                     if(def == null) {
-                        _onError(word = wr.readWord(), "unexpected:" + word.val() + ":type.expr");
+                        _onError(w = wr.readWord(), "unexpected:" + w.val() + ":type.expr");
                         wr.retractWord();
                     } else if(!def.isConstant()) {
                         _onWarning(wr.readWord(), "default_prefers_constant");
@@ -317,24 +312,24 @@ public class KParser implements ParseContext {
                     break;
                 case Symbol.rest:
                     if ((flag & 2) != 0)
-                        _onError(word, "duplicate:...");
+                        _onError(w, "duplicate:...");
                     flag |= 2;
                     break;
                 case WordPresets.LITERAL:
                     if ((flag & 1) != 0)
-                        _onError(word, "missing:,");
+                        _onError(w, "missing:,");
                     else if((flag & 4) != 0)
-                        _onError(word, "rest.last_formal_parameter");
+                        _onError(w, "rest.last_formal_parameter");
                     else if((flag & 2) != 0) {
                         flag |= 4;
                         ctx.setRestId(i);
                     }
-                    parameters.put(word.val(), i++);
+                    parameters.putInt(w.val(), i++);
                     flag |= 1;
                     break;
                 case Symbol.comma:
                     if ((flag & 1) == 0) {
-                        _onError(word, "unexpected:,:type.literal");
+                        _onError(w, "unexpected:,:type.literal");
                     }
                     flag &= ~9;
                     break;
@@ -351,10 +346,9 @@ public class KParser implements ParseContext {
 
         ctx.enterRegion();
 
-        Word w;
         o:
         while (true) {
-            w = wr.nextWord();
+            Word w = wr.nextWord();
             switch (w.type()) {
                 case WordPresets.EOF:
                 case Symbol.right_l_bracket:
@@ -861,11 +855,10 @@ public class KParser implements ParseContext {
         LabelNode continueTo = new LabelNode();
         tree.node0(continueTo);
 
-        boolean createdVar;
-
         except(Symbol.left_s_bracket);
 
         Word w = wr.nextWord();
+        boolean createdVar;
         switch (w.type()) {
             case Symbol.semicolon:
                 createdVar = false;
@@ -1166,13 +1159,12 @@ public class KParser implements ParseContext {
      */
     @SuppressWarnings("fallthrough")
     private void define(int type) throws ParseException {
-        Word w;
         String name = null;
         int first = 0;
 
         o:
         while (wr.hasNext()) {
-            w = wr.nextWord();
+            Word w = wr.nextWord();
             switch(w.type()) {
                 case Symbol.left_m_bracket:
 

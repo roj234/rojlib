@@ -32,11 +32,17 @@ import ilib.asm.Preloader;
 import ilib.asm.fasterforge.anc.ClassInfo;
 import ilib.asm.fasterforge.anc.ItfGet;
 import ilib.asm.fasterforge.anc.JarInfo;
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.type.Type;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.ConstantWriter;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
@@ -44,11 +50,6 @@ import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
-
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -85,13 +86,16 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                     return;
                 }
 
-                roj.text.StringPool pool = new roj.text.StringPool(reader);
-                System.err.println("Pool size " + pool.size());
+                StringPool pool = new StringPool(reader);
+                ConstantPool cp = new ConstantPool(reader.readUnsignedShort());
+                cp.read(reader);
+                // not need to init?
+                // cp.valid();
                 int len = reader.readVarInt(false);
                 store.ensureCapacity(len);
                 for (int i = 0; i < len; i++) {
                     String name = reader.readVString();
-                    JarInfo info = JarInfo.fromByteArray(reader, pool);
+                    JarInfo info = JarInfo.fromByteArray(reader, pool, cp);
 
                     store.put(name, info);
                 }
@@ -107,24 +111,29 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
         if (Config.cacheAnnotation) {
             File file = new File("modAnnotationCache.bin");
             try (FileOutputStream fos = new FileOutputStream(file)) {
-                roj.text.StringPool stringPool = new StringPool();
+                StringPool sp = new StringPool();
+                ConstantWriter cw = new ConstantWriter();
 
                 ByteWriter w = new ByteWriter(2333);
 
                 w.writeVarInt(store.size(), false);
                 for (Map.Entry<String, JarInfo> entry : store.entrySet()) {
                     w.writeVString(entry.getKey());
-                    entry.getValue().toByteArray(w, stringPool);
+                    entry.getValue().toByteArray(w, sp, cw);
                 }
 
                 fos.write(0x22);
                 fos.write(0x33);
                 fos.write(0x22);
                 fos.write(0x33);
-                System.err.println("Pool size " + stringPool.size());
-                stringPool.writePool(fos);
+                sp.writePool(fos);
+
+                ByteList list = w.list;
+                w.list = new ByteList();
+                cw.write(w);
 
                 w.list.writeToStream(fos);
+                list.writeToStream(fos);
             } catch (IOException e) {
                 e.printStackTrace();
             }

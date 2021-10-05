@@ -41,86 +41,74 @@ import java.util.Map;
 public final class AttributeList extends SimpleList<Attribute> {
     private Map<String, Attribute> byName;
 
-    public void putByName(Attribute attribute) {
-        putByName(attribute.name, attribute);
+    public AttributeList(AttributeList other) {
+        super(other);
     }
 
-    public void putByName(String name, Attribute attribute) {
+    public void putByName(Attribute attr) {
         int index = -1;
         for (int i = 0; i < size; i++) {
-            if (((Attribute) list[i]).name.equals(name)) {
+            if (((Attribute) list[i]).name.equals(attr.name)) {
                 index = i;
                 break;
             }
         }
         if (index == -1)
-            add(attribute);
+            add(attr);
         else
-            list[index] = attribute;
-        initMap().put(name, attribute);
+            list[index] = attr;
+        if (byName != null)
+            byName.put(attr.name, attr);
     }
 
     public Object getByName(String name) {
-        return initMap().get(name);
-    }
-
-    public boolean removeByName(String name) {
-        Object o = initMap().get(name);
-        if (o == null)
-            return false;
-        return remove(o);
-    }
-
-    @Override
-    public boolean add(Attribute attribute) {
-        Object attr = initMap().get(attribute.name);
-        if (attr != null) {
-            super.set(indexOf(attr), attribute);
-            return true;
-        } else {
-            return super.add(attribute);
-        }
-    }
-
-    private Map<String, Attribute> initMap() {
         if (byName == null) {
-            byName = new MyHashMap<>(size());
+            byName = new MyHashMap<>(size);
             for (int i = 0; i < size; i++) {
                 Attribute attr = (Attribute) list[i];
                 byName.put(attr.name, attr);
             }
+            return byName.get(name);
         }
-        return byName;
-    }
-
-    @Override
-    protected void handleAdd(int pos, Attribute element) {
-        if (byName != null)
-            byName.put(element.name, element);
-    }
-
-    @Override
-    protected void handleAdd(int pos, Attribute[] elements, int i, int length) {
-        if (byName != null) {
-            for (; i < length; i++) {
-                Attribute element = elements[i];
-                byName.put(element.name, element);
+        Object o = byName.get(name);
+        if (o == null) {
+            for (int i = 0; i < size; i++) {
+                if (((Attribute) list[i]).name.equals(name)) {
+                    byName.put(name, (Attribute) list[i]);
+                    return list[i];
+                }
             }
         }
+        return o;
     }
 
-    @Override
-    protected void handleRemove(int pos, Attribute element) {
-        if (byName != null)
-            byName.remove(element.name);
-    }
-
-    @Override
-    protected void handleRemove(Object[] elements, int length) {
-        if (byName != null) {
-            for (int i = 0; i < length; i++) {
-                byName.remove(elements[i]);
+    public boolean removeByName(String name) {
+        for (int i = 0; i < size; i++) {
+            if (((Attribute) list[i]).name.equals(name)) {
+                remove(i);
+                return true;
             }
+        }
+        return false;
+    }
+
+    @Override
+    public Attribute remove(int index) {
+        Attribute attr = super.remove(index);
+        byName.remove(attr.name);
+        return attr;
+    }
+
+    @Override
+    public boolean add(Attribute attribute) {
+        if (byName == null)
+            return super.add(attribute);
+        Attribute a1 = byName.put(attribute.name, attribute);
+        if (a1 != null) {
+            super.set(indexOfAddress(a1), attribute);
+            return true;
+        } else {
+            return super.add(attribute);
         }
     }
 

@@ -28,12 +28,10 @@ package roj.asm.util;
 
 import roj.asm.cst.*;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.text.TextUtil;
-import roj.util.ByteList;
 import roj.util.ByteWriter;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.cst.CstType.*;
@@ -46,10 +44,8 @@ import static roj.asm.cst.CstType.*;
  * @since 2021/5/29 17:16
  */
 public class ConstantWriter {
-    private static final boolean DEBUG = false;
-
-    private final List<Constant> constants;
-    private final MyHashSet<Constant> refMap;
+    private       SimpleList<Constant> constants;
+    private final MyHashSet<Constant>  refMap;
 
     // threadlocal needed?
     private final CstUTF fp0 = new CstUTF();
@@ -60,37 +56,29 @@ public class ConstantWriter {
     private final CstNameAndType fp5 = new CstNameAndType();
 
     private int index = 1;
-    private int duplicateEntry;
 
     public ConstantWriter() {
-        this.constants = new ArrayList<>(80);
+        this.constants = new SimpleList<>(80);
         this.refMap = new MyHashSet<>(80);
     }
 
     public ConstantWriter(ConstantPool pool) {
-        final Constant[] cst = pool.array();
+        final Constant[] cst = pool.cst;
 
-        this.constants = new ArrayList<>(cst.length);
+        this.constants = pool.cstList;
         this.refMap = new MyHashSet<>(cst.length);
         this.index = pool.index;
 
         for (int i = 1; i < cst.length; i++) {
             Constant c = cst[i];
             if (c == CstTop.TOP) continue;
-            if(!refMap.add(c)) {
-                if(c != refMap.find(c)) {
-                    duplicateEntry++;
-                    c.setIndex(refMap.find(c).getIndex());
-                }
+            if(c != (c = refMap.intern(c))) {
+                cst[i].setIndex(c.getIndex());
             }
-            this.constants.add(c);
         }
-
-        if(duplicateEntry > 0 && DEBUG)
-            new Throwable("Duplicate entry: " + duplicateEntry).printStackTrace();
     }
 
-    void addConstant(Constant c) {
+    private void addConstant(Constant c) {
         refMap.add(c);
         constants.add(c);
         c.setIndex(index++);
@@ -366,7 +354,15 @@ public class ConstantWriter {
 
     @SuppressWarnings("unchecked")
     public <T extends Constant> T reset(T c) {
+        if (c == null)
+            throw new NullPointerException("Check null before reset()!");
         switch (c.type()) {
+            case DYNAMIC:
+            case INVOKE_DYNAMIC: {
+                CstDynamic dyn = (CstDynamic) c;
+                dyn.setDesc(reset(dyn.getDesc()));
+            }
+            break;
             case STRING:
             case CLASS:
             case METHOD_TYPE: {
@@ -413,69 +409,40 @@ public class ConstantWriter {
     }
 
     public void init(ConstantPool pool) {
-        final Constant[] cst = pool.array();
-
-        this.constants.clear();
+        if (this.constants.getRawArray().length <= pool.cstList.getRawArray().length)
+            this.constants = pool.cstList;
+        else {
+            this.constants.clear();
+            this.constants.addAll(pool.cst);
+        }
         this.refMap.clear();
-        this.index = pool.index;
-        this.duplicateEntry = 0;
+        this.refMap.ensureCapacity(this.index = pool.index);
 
+        final Constant[] cst = pool.cst;
         for (int i = 1; i < cst.length; i++) {
             Constant c = cst[i];
             if (c == CstTop.TOP) continue;
-            if(!refMap.add(c)) {
-                if(c != refMap.find(c)) {
-                    duplicateEntry++;
-                    c.setIndex(refMap.find(c).getIndex());
-                }
+            if(c != (c = refMap.intern(c))) {
+                cst[i].setIndex(c.getIndex());
             }
-            this.constants.add(c);
         }
-
-        if(duplicateEntry > 0 && DEBUG)
-            new Throwable("Duplicate entry: " + duplicateEntry).printStackTrace();
-    }
-
-    public Constant get(int index) {
-        return constants.get(index);
     }
 
     public List<Constant> getConstants() {
-        return Collections.unmodifiableList(constants);
+        return constants;
     }
 
-    public void write(ByteWriter writer) {
+    public void write(ByteWriter w) {
+        w.writeShort(index);
         List<Constant> csts = this.constants;
         for (int i = 0; i < csts.size(); i++) {
-            csts.get(i).write(writer);
-        }
-    }
-
-    public void debugWrite() {
-        List<Constant> csts = this.constants;
-        System.out.println("ConstantWriter is " + getIndex() + " sizeReal = " + csts.size());
-        ByteWriter w = new ByteWriter(new ByteList());
-        for (int i = 0; i < csts.size(); i++) {
-            Constant cst = csts.get(i);
-            cst.write(w);
-            System.out.println("write " + cst);
-            System.out.println("  order " + i);
-            System.out.println("  content " + w.list);
-            w.list.clear();
+            csts.get(i).write(w);
         }
     }
 
     @Override
     public String toString() {
         return "ConstantWriter{" + "constants[" + index + "]=" + TextUtil.prettyPrint(constants) + '}';
-    }
-
-    public int hasDuplicateEntry() {
-        return duplicateEntry;
-    }
-
-    public int getIndex() {
-        return index;
     }
 
     public void clear() {

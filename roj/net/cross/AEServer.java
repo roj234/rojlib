@@ -661,7 +661,7 @@ public class AEServer extends TCPServer {
         private int handshake() throws IOException {
             int wait = TIMEOUT_CONNECT;
             while (!channel.handShake()) {
-                LockSupport.parkNanos(50);
+                LockSupport.parkNanos(200);
                 if(wait-- <= 0) {
                     return 1;
                 }

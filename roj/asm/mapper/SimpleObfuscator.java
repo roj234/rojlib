@@ -21,6 +21,7 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.io.ZipFileWriter;
 import roj.text.CharList;
 import roj.util.ByteWriter;
 
@@ -31,7 +32,6 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.zip.ZipOutputStream;
 
 /**
  * 混淆名与原名完全无关时使用我
@@ -90,10 +90,7 @@ public final class SimpleObfuscator extends Obfuscator {
                     "            用'/', 比如java/lang/\n" +
                     "            用 ‘---’ 结束\n" +
                     "      cs [xx]            => 文件编码\n" +
-                    "      cfg [file]         => 加载配置文件\n" +
-                    "\n" +
-                    "cfmType不选不混淆, 目录不输不保存\n" +
-                    "如果你觉得配置项不够多, 打开roj.asm.mapper包来和我一起play吧");
+                    "      cfg [file]         => 加载配置文件\n");
             return;
         }
 
@@ -185,9 +182,9 @@ public final class SimpleObfuscator extends Obfuscator {
 
         List<Context> arr = Util.ctxFromZip(new File(args[0]), charset, data);
 
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(new File(args[1])));
+        ZipFileWriter zfw = new ZipFileWriter(new File(args[1]));
 
-        Thread writer = Util.writeResourceAsync(zos, data);
+        Thread writer = Util.writeResourceAsync(zfw, data);
 
         obf.obfuscate(arr);
 
@@ -202,7 +199,11 @@ public final class SimpleObfuscator extends Obfuscator {
 
         writer.join();
 
-        Util.write(arr, zos, true);
+        for (int i = 0; i < arr.size(); i++) {
+            Context ctx = arr.get(i);
+            zfw.writeNamed(ctx.getName(), ctx.get(true));
+        }
+        zfw.finish();
 
         System.out.println("Mem: " + (Runtime.getRuntime().totalMemory() >> 20) + " MB");
         System.out.println("Time: " + (System.currentTimeMillis() - time) + "ms");
@@ -213,17 +214,17 @@ public final class SimpleObfuscator extends Obfuscator {
     private static int resolveType(SimpleObfuscator o, String[] args, int i, int t) {
         NamingFunction fn;
         switch (args[++i]) {
+            case "deobf":
+                fn = new Deobfuscate();
+                break;
             case "e":
                 fn = Equal.INSTANCE;
-                break;
-            case "c":
-                fn = new Compress();
                 break;
             case "w":
                 fn = new WindowsReserved();
                 break;
             case "i":
-                fn = CharMixture.newIII(7, 7);
+                fn = CharMixture.newIII(10, 10);
                 break;
             case "m":
                 fn = new CharMixture(args[++i], 1, 7);
@@ -526,11 +527,11 @@ public final class SimpleObfuscator extends Obfuscator {
 
     @Override
     public String obfMethodName(Desc desc) {
-        return method == null ? null : method.obfName(tempM, desc.param, rand);
+        return method == null ? null : method.obfName(tempM, desc, rand);
     }
 
     @Override
     public String obfFieldName(Desc desc) {
-        return field == null ? null : field.obfName(tempF, desc.param, rand);
+        return field == null ? null : field.obfName(tempF, desc, rand);
     }
 }

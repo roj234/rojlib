@@ -187,7 +187,6 @@ public final class DirectAccessor<T> {
             InsnList insn = code.instructions;
             insn.add(new LoadConstInsnNode(Opcodes.LDC, new CstString(sb.toString())));
             insn.add(NodeHelper.cached(Opcodes.ARETURN));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(toString);
             sb = null;
@@ -236,7 +235,6 @@ public final class DirectAccessor<T> {
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, type));
             insn.add(_set);
             insn.add(NodeHelper.cached(Opcodes.RETURN));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(set);
         }
@@ -256,7 +254,6 @@ public final class DirectAccessor<T> {
             insn.add(NodeHelper.cached(Opcodes.ACONST_NULL));
             insn.add(_set);
             insn.add(NodeHelper.cached(Opcodes.RETURN));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(clear);
         }
@@ -277,7 +274,6 @@ public final class DirectAccessor<T> {
             insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
             insn.add(_get);
             insn.add(NodeHelper.cached(Opcodes.ARETURN));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(get);
         }
@@ -458,11 +454,10 @@ public final class DirectAccessor<T> {
                 }
             }
 
-            code.stackSize = code.localSize = size + 1;
+            code.stackSize = code.localSize = (char) (size + 1);
 
             insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, targetName, "<init>", initParam));
             insn.add(NodeHelper.cached(Opcodes.ARETURN));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(invoke);
         }
@@ -706,12 +701,11 @@ public final class DirectAccessor<T> {
                 }
             }
 
-            code.stackSize = Math.max(size + isStatic, 1);
-            code.localSize = size + 1;
+            code.stackSize = (char) Math.max(size + isStatic, 1);
+            code.localSize = (char) (size + 1);
 
             insn.add(new InvokeInsnNode(isStatic == 1 ? Opcodes.INVOKESTATIC : (invokeType != null && invokeType.contains(i) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), targetName, method.getName(), desc));
             insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(method.getReturnType())));
-            insn.add(AttrCode.METHOD_END_MARK);
         }
         return this;
     }
@@ -838,12 +832,12 @@ public final class DirectAccessor<T> {
                 roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, getter.getName(), ParamHelper.classDescriptors(isStatic || useCache ? EmptyArrays.CLASSES : getter.getParameterTypes(), getter.getReturnType()));
                 AttrCode code = get.code = new AttrCode(get);
 
-                char type = fieldType.type;
-                code.stackSize = type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1;
+                byte type = fieldType.type;
+                code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1);
 
                 InsnList insn = code.instructions;
                 if(!isStatic) {
-                    code.localSize = useCache ? 1 : 2;
+                    code.localSize = (char) (useCache ? 1 : 2);
                     if (useCache) {
                         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
                         insn.add(cache.node);
@@ -858,7 +852,6 @@ public final class DirectAccessor<T> {
                     insn.add(new FieldInsnNode(Opcodes.GETSTATIC, targetName, field.getName(), fieldType));
                 }
                 insn.add(NodeHelper.X_RETURN(fieldType.nativeName()));
-                insn.add(AttrCode.METHOD_END_MARK);
 
                 var.methods.add(get);
             }
@@ -868,12 +861,12 @@ public final class DirectAccessor<T> {
                 roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC_ACCESS, var, setter.getName(), ParamHelper.classDescriptors(setter.getParameterTypes(), void.class));
                 AttrCode code = set.code = new AttrCode(set);
 
-                char type = fieldType.type;
-                code.stackSize = type == NativeType.DOUBLE || type == NativeType.LONG ? 3 : 2;
+                byte type = fieldType.type;
+                code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 3 : 2);
 
                 InsnList insn = code.instructions;
                 if(!isStatic) {
-                    code.localSize = code.stackSize + (useCache ? 0 : 1);
+                    code.localSize = (char) (code.stackSize + (useCache ? 0 : 1));
                     if(useCache) {
                         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
                         insn.add(cache.node);
@@ -890,7 +883,6 @@ public final class DirectAccessor<T> {
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fieldType.owner));
                 insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, targetName, field.getName(), fieldType));
                 insn.add(NodeHelper.cached(Opcodes.RETURN));
-                insn.add(AttrCode.METHOD_END_MARK);
 
                 var.methods.add(set);
             }
@@ -915,28 +907,11 @@ public final class DirectAccessor<T> {
         insn.add(new ClassInsnNode(Opcodes.NEW, targetName));
         insn.add(NodeHelper.cached(Opcodes.DUP));
 
-        int size = 1;
         List<Type> params = ParamHelper.parseMethod(initParam);
         params.remove(params.size() - 1);
+        int size = 1;
         for (int j = 0; j < params.size(); j++) {
-            char pf;
-            switch (params.get(j).type) {
-                case NativeType.CLASS:
-                    pf = 'A';
-                    break;
-                case NativeType.BOOLEAN:
-                case NativeType.BYTE:
-                case NativeType.CHAR:
-                case NativeType.SHORT:
-                    pf = 'I';
-                    break;
-                case NativeType.LONG:
-                    pf = 'L';
-                    break;
-                default:
-                    pf = params.get(j).type;
-            }
-            NodeHelper.compress(insn, NodeHelper.X_LOAD(pf), size++);
+            NodeHelper.compress(insn, NodeHelper.X_LOAD(params.get(j).nativeName().charAt(0)), size++);
             switch (params.get(j).type) {
                 case NativeType.DOUBLE:
                 case NativeType.LONG:
@@ -944,11 +919,10 @@ public final class DirectAccessor<T> {
             }
         }
 
-        code.stackSize = code.localSize = size + 1;
+        code.stackSize = code.localSize = (char) (size + 1);
 
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, targetName, "<init>", initParam));
         insn.add(NodeHelper.cached(Opcodes.ARETURN));
-        insn.add(AttrCode.METHOD_END_MARK);
 
         var.methods.add(invoke);
 
@@ -986,7 +960,7 @@ public final class DirectAccessor<T> {
         params.remove(params.size() - 1);
         int size = 1;
         for (Type param : params) {
-            NodeHelper.compress(insn, NodeHelper.X_LOAD(param.type), ++size);
+            NodeHelper.compress(insn, NodeHelper.X_LOAD((char) param.type), ++size);
             switch (param.type) {
                 case 'D':
                 case 'L':
@@ -994,12 +968,11 @@ public final class DirectAccessor<T> {
             }
         }
 
-        code.stackSize = Math.max(size + (isStatic ? 1 : 0), 1);
-        code.localSize = size + 1;
+        code.stackSize = (char) Math.max(size + (isStatic ? 1 : 0), 1);
+        code.localSize = (char) (size + 1);
 
         insn.add(new InvokeInsnNode(isStatic ? Opcodes.INVOKESTATIC : (isDirect ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), targetName, method.getName(), targetMethodDesc));
         insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(method.getReturnType())));
-        insn.add(AttrCode.METHOD_END_MARK);
 
         if(sb != null) {
             sb.append("\n  方法代理[不安全]: ").append(targetName).append("\n  方法:\n    ")
@@ -1023,15 +996,14 @@ public final class DirectAccessor<T> {
             roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "get", "()" + ParamHelper.classDescriptor(method.getReturnType()));
             AttrCode code = get.code = new AttrCode(get);
 
-            char type = get.getReturnType().type;
-            code.stackSize = type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1;
+            byte type = get.getReturnType().type;
+            code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1);
             code.localSize = 2;
 
             InsnList insn = code.instructions;
             insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
             insn.add(new FieldInsnNode(Opcodes.GETFIELD, targetName, targetFieldName, targetType));
             insn.add(NodeHelper.X_RETURN(targetType.nativeName()));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(get);
         }
@@ -1051,9 +1023,9 @@ public final class DirectAccessor<T> {
             roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "set", ParamHelper.classDescriptors(method.getParameterTypes(), void.class));
             AttrCode code = set.code = new AttrCode(set);
 
-            char type = set.getReturnType().type;
-            code.stackSize = type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1;
-            code.localSize = code.stackSize + 1;
+            byte type = set.getReturnType().type;
+            code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1);
+            code.localSize = (char) (code.stackSize + 1);
 
             InsnList insn = code.instructions;
             insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
@@ -1064,7 +1036,6 @@ public final class DirectAccessor<T> {
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetType.owner));
             insn.add(new FieldInsnNode(Opcodes.PUTFIELD, targetName, targetFieldName, targetType));
             insn.add(NodeHelper.cached(Opcodes.RETURN));
-            insn.add(AttrCode.METHOD_END_MARK);
 
             var.methods.add(set);
         }
@@ -1122,7 +1093,6 @@ public final class DirectAccessor<T> {
         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
         insn.add(NodeHelper.cached(Opcodes.RETURN));
-        insn.add(AttrCode.METHOD_END_MARK);
 
         clz.methods.add(init);
     }

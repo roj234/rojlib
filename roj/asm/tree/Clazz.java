@@ -215,7 +215,7 @@ public final class Clazz implements IClass {
         mainBuffer.ensureCapacity(poolBuffer.pos() + 10);
 
         // major, minor
-        ByteWriter _gl = new ByteWriter(mainBuffer).writeInt(0xcafebabe).writeShort(version).writeShort(version >>> 16).writeShort(pool.getIndex());
+        ByteWriter _gl = new ByteWriter(mainBuffer).writeInt(0xcafebabe).writeShort(version).writeShort(version >>> 16);
         pool.write(_gl);
         _gl.writeBytes(w);
 

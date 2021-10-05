@@ -25,11 +25,7 @@
  */
 package roj.asm.type;
 
-import roj.collect.CharMap;
-import roj.text.TextUtil;
-
-import java.util.ArrayList;
-import java.util.List;
+import javax.annotation.Nonnull;
 
 /**
  * No description provided
@@ -42,32 +38,75 @@ public final class NativeType {
     public static final char
             ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
 
-    private static final CharMap<String> toNameMap = new CharMap<>(16), toDescMap = new CharMap<>(16);
-
-    static {
-        final String s = "[LVZBCSIFDJ";
-        final List<String> s1 = TextUtil.split(new ArrayList<>(), "array class void boolean byte char short int float double long", ' ');
-        for (int i = 0; i < s.length(); i++) {
-            toNameMap.put(s.charAt(i), s1.get(i));
-            toDescMap.put(s.charAt(i), String.valueOf(s.charAt(i)));
+    @Nonnull
+    public static String toDesc(byte type) {
+        switch (type) {
+            case ARRAY:
+                return "[";
+            case CLASS:
+                return "L";
+            case VOID:
+                return "V";
+            case BOOLEAN:
+                return "Z";
+            case BYTE:
+                return "B";
+            case CHAR:
+                return "C";
+            case SHORT:
+                return "S";
+            case INT:
+                return "I";
+            case FLOAT:
+                return "F";
+            case DOUBLE:
+                return "D";
+            case LONG:
+                return "J";
         }
+        // noinspection all
+        return null;
     }
 
-    public static String toDesc(char type) {
-        return toDescMap.get(type);
+    @Nonnull
+    public static String toString(byte type) {
+        switch (type) {
+            case ARRAY:
+                return "array";
+            case CLASS:
+                return "class";
+            case VOID:
+                return "void";
+            case BOOLEAN:
+                return "boolean";
+            case BYTE:
+                return "byte";
+            case CHAR:
+                return "char";
+            case SHORT:
+                return "short";
+            case INT:
+                return "int";
+            case FLOAT:
+                return "float";
+            case DOUBLE:
+                return "double";
+            case LONG:
+                return "long";
+        }
+        // noinspection all
+        return null;
     }
 
-    public static String toString(char type) {
-        return toNameMap.get(type);
+    public static boolean isValid(byte c) {
+        // noinspection all
+        return toDesc(c) != null;
     }
 
-    public static boolean isValidate(char c) {
-        return toDescMap.containsKey(c);
-    }
-
-    public static char validate(char c) {
-        if (!toDescMap.containsKey(c))
+    public static byte validate(char c) {
+        // noinspection all
+        if (toDesc((byte) c) == null)
             throw new IllegalArgumentException("Illegal native type desc " + c);
-        return c;
+        return (byte) c;
     }
 }

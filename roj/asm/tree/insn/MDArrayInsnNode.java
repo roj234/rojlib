@@ -51,6 +51,11 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
         this.dimension = dimension;
     }
 
+    @Override
+    public int nodeType() {
+        return T_MULTIANEWARRAY;
+    }
+
     private String name;
 
     public int dimension;

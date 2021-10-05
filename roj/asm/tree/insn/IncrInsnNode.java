@@ -36,7 +36,7 @@ import roj.util.ByteWriter;
  * @version 0.1
  * @since 2021/5/24 23:21
  */
-public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
+public final class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     public IncrInsnNode(int variableId, int amount) {
         super(Opcodes.IINC);
         this.variableId = (char) variableId;
@@ -50,6 +50,11 @@ public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
 
     public char variableId;
     public short amount;
+
+    @Override
+    public int nodeType() {
+        return T_IINC;
+    }
 
     @Override
     public int getIndex() {
@@ -80,6 +85,6 @@ public class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return Opcodes.toString0(code, variableId, amount);
+        return Opcodes.toString0(code, (int) variableId, amount);
     }
 }

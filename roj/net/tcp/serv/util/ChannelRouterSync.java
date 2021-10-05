@@ -36,13 +36,13 @@ import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
 import roj.net.tcp.util.SharedConfig;
 import roj.net.tcp.util.WrappedSocket;
-import roj.util.log.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
+import java.util.logging.Logger;
 
 public class ChannelRouterSync implements ITaskNaCl {
     protected WrappedSocket channel;
@@ -81,7 +81,7 @@ public class ChannelRouterSync implements ITaskNaCl {
                 if (visited > 120) {
                     reply = EmptyResponse.INSTANCE;
                     if (visited % 128 == 0)
-                        logger.warn(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
+                        logger.warning(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
                     if (visited > 300) {
                         socket.shutdownInput();
                         socket.shutdownOutput();
@@ -129,7 +129,7 @@ public class ChannelRouterSync implements ITaskNaCl {
 
             while (reply.send(this.channel)) {
                 if (System.currentTimeMillis() - time >= timeout) {
-                    logger.warn("[Send] " + System.currentTimeMillis() + ": Timeout while sending " + reply + " to " + remote);
+                    logger.warning("[Send] " + System.currentTimeMillis() + ": Timeout while sending " + reply + " to " + remote);
                     break;
                 }
                 LockSupport.parkNanos(1000);
@@ -166,7 +166,7 @@ public class ChannelRouterSync implements ITaskNaCl {
             String msg = e.getMessage();
 
             if (!"Broken pipe".equals(msg) && !"Connection reset by peer".equals(msg)) {
-                logger.warn("Terminated: " + e);
+                logger.warning("Terminated: " + e);
             }
 
             try {

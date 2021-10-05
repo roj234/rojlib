@@ -26,13 +26,11 @@
 package ilib.asm.nixim;
 
 import ilib.asm.util.MCHooks.ItemStackMap;
+import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.FMLLog;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
-
-import net.minecraft.item.ItemStack;
-
-import net.minecraftforge.fml.common.FMLLog;
 
 import java.util.Map;
 
@@ -56,7 +54,7 @@ public abstract class NiximFastFurnace {
         this.experienceList = new ItemStackMap<>();
     }
 
-    @RemapTo("func_151395_a")
+    @RemapTo("func_151394_a")
     public void addSmeltingRecipe(ItemStack input, ItemStack stack, float experience) {
         ItemStack out = this.getSmeltingResult(input);
         if (out != ItemStack.EMPTY) {

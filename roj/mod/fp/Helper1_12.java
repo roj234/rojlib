@@ -28,7 +28,6 @@ package roj.mod.fp;
 import LZMA.LzmaInputStream;
 import roj.asm.mapper.ConstMapper;
 
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -50,7 +49,7 @@ final class Helper1_12 {
         while (en.hasMoreElements()) {
             ZipEntry entry = en.nextElement();
             if (!entry.isDirectory() && entry.getName().startsWith("deobfuscation_data-") && entry.getName().endsWith(".lzma")) {
-                rmp.loadMap(new BufferedInputStream(new LzmaInputStream(zf.getInputStream(entry))), false);
+                rmp.loadMap(new LzmaInputStream(zf.getInputStream(entry)), false);
                 zf.close();
                 return;
             }

@@ -70,7 +70,7 @@ public class CpFilter {
         MutableZipFile zf = new MutableZipFile(new File(args[0]));
 
         for (String entry : zf.getEntries().keySet()) {
-            if(!dt.contains(entry.substring(0, entry.length() - 6))) {
+            if(entry.endsWith("/") || !dt.contains(entry.substring(0, entry.length() - 6))) {
                 zf.setFileData(entry, null);
             }
         }

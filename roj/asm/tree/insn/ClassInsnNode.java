@@ -68,6 +68,11 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         }
     }
 
+    @Override
+    public int nodeType() {
+        return T_CLASS;
+    }
+
     public String name;
 
     public String owner() {

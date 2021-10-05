@@ -25,6 +25,8 @@
  */
 package roj.asm.nixim;
 
+import org.jetbrains.annotations.ApiStatus;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -35,6 +37,8 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
+@Deprecated
+@ApiStatus.ScheduledForRemoval
 public @interface RemapTo {
     /**
      * @return target method name

@@ -26,8 +26,8 @@
 
 package roj.asm.tree.attr;
 
-import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.cst.CstUTF;
+import roj.asm.tree.insn.EndOfInsn;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.type.LocalVariable;
 import roj.asm.type.ParamHelper;
@@ -35,7 +35,7 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
-import roj.collect.IntBiMap;
+import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -53,18 +53,17 @@ import static roj.asm.tree.insn.InsnNode.validate;
  * @since 2021/6/18 9:51
  */
 public final class AttrLocalVars extends Attribute implements ICodeAttribute {
+    public final List<LocalVariable> list;
+
     public AttrLocalVars(String name) {
         super(name);
         this.list = new ArrayList<>();
     }
 
-    public AttrLocalVars(String name, ConstantPool pool, ByteReader r, IntBiMap<InsnNode> pcCounter, int largestIndex) {
+    public AttrLocalVars(String name, ConstantPool pool, ByteReader r, IntMap<InsnNode> pcCounter, int largestIndex) {
         super(name);
 
-        this.list = readVar(pool, r, pcCounter, largestIndex, name.equals("LocalVariableTypeTable"));
-    }
-
-    private static List<LocalVariable> readVar(ConstantPool pool, ByteReader r, IntBiMap<InsnNode> pcCounter, int largestIndex, boolean generic) {
+        boolean generic = name.equals("LocalVariableTypeTable");
         final int len = r.readUnsignedShort();
         List<LocalVariable> list = new ArrayList<>(len);
 
@@ -77,25 +76,23 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
                 throw new NullPointerException("Couldn't found bytecode offset " + start);
             }
 
-            InsnNode endNode = endIndex >= largestIndex ? AttrCode.METHOD_END_MARK : pcCounter.get(endIndex);
+            InsnNode endNode = endIndex >= largestIndex ? EndOfInsn.MARKER : pcCounter.get(endIndex);
             if (endNode == null) {
                 throw new NullPointerException("Couldn't found bytecode offset " + endIndex + ", method lgi=" + largestIndex);
             }
 
             //The given local variable must have a value at indexes into the code array in the interval [start_pc, start_pc + length)
 
-            String name = ((CstUTF) pool.get(r)).getString();
+            name = ((CstUTF) pool.get(r)).getString();
             String desc = ((CstUTF) pool.get(r)).getString();
             list.add(new LocalVariable(r.readUnsignedShort(),
-                    name,
-                    generic ? Signature.parse(desc) : ParamHelper.parseField(desc),
-                    startNode, endNode
+                                       name,
+                                       generic ? Signature.parse(desc) : ParamHelper.parseField(desc),
+                                       startNode, endNode
             ));
         }
-        return list;
+        this.list = list;
     }
-
-    public final List<LocalVariable> list;
 
     public String toString() {
         StringBuilder sb = new StringBuilder("Slot\tType\tName\tStart\tEnd\n");
@@ -119,7 +116,6 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
         }
     */
     @Override
-    @Internal
     public void toByteArray(ConstantWriter pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
         w.writeShort(list.size());
         for (LocalVariable c : list) {

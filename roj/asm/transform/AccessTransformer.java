@@ -39,7 +39,6 @@ import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
 import roj.util.ByteReader;
 import roj.util.Helpers;
-import roj.util.log.Logger;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -55,8 +54,6 @@ import java.util.*;
  * @since 2021/5/29 16:43
  */
 public class AccessTransformer {
-    public static final Logger logger = Logger.getLogger("AccessTransformer");
-
     private static final Map<String, Collection<String>> transforms = new MyHashMap<>();
 
     public static void readAndParseAt(@Nonnull File file) {

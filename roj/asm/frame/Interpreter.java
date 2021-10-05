@@ -62,7 +62,7 @@ public final class Interpreter {
 
     String clazz;
 
-    char returnType;
+    byte returnType;
 
     final VarList stack = new VarList(),
                 local = new VarList();
@@ -313,7 +313,6 @@ public final class Interpreter {
 
     @SuppressWarnings("fallthrough")
     public int visitNode(InsnNode node) {
-        Var t1, t2, t3;
         int arg = -1;
         String clazz = null;
 
@@ -336,6 +335,7 @@ public final class Interpreter {
         }
 
         int flag = 0;
+        Var t1, t2, t3;
         switch (code) {
             case RETURN:
                 checkReturn(NativeType.VOID);
@@ -406,7 +406,7 @@ public final class Interpreter {
             case LDC2_W:
                 byte type1 = ((LoadConstInsnNode) node).c.type();
                 if(type1 == CstType.DYNAMIC)
-                    type1 = (byte) NativeType.validate(((CstDynamic)((LoadConstInsnNode) node).c).getDesc().getType().getString().charAt(0));
+                    type1 = NativeType.validate(((CstDynamic)((LoadConstInsnNode) node).c).getDesc().getType().getString().charAt(0));
 
                 switch (type1) {
                     case CstType.INT:
@@ -616,6 +616,7 @@ public final class Interpreter {
                     }
                     if (!s.equals(iArray.owner)) {
                         // boolean store
+                        // noinspection all
                         if (!iArray.owner.equals("[Z") || s != "[B") {
                             throw new IllegalStateException("Unable assign " + iArray.owner + " to " + s);
                         }
@@ -967,7 +968,7 @@ public final class Interpreter {
             for (int i = 0; i < arr; i++)
                 sb.append('[');
             if (type.owner == null)
-                sb.append(type.type);
+                sb.append((char) type.type);
             else
                 sb.append('L').append(type.owner).append(';');
             return obj(sb.toString());
@@ -996,7 +997,6 @@ public final class Interpreter {
             case -1:
                 throw new IllegalArgumentException("Illegal void in parameter type");
             case -2:
-            case -3:
                 return REFERENCE;
             default:
                 return (byte) t;
@@ -1033,11 +1033,11 @@ public final class Interpreter {
         }
     }
 
-
     public List<CodeBlock> gather(AttrCode code) {
         return gather(code.instructions, code.exceptions, null);
     }
 
+    // todo
     public List<CodeBlock> gather(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
         Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
         Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
@@ -1047,17 +1047,15 @@ public final class Interpreter {
 
         LongBitSet routines = new LongBitSet();
 
-        MyHashSet<BasicBlock> visited = new MyHashSet<>();
-        MyHashSet<BasicBlock> visit1 = new MyHashSet<>();
-        MyHashSet<BasicBlock> visit2 = new MyHashSet<>();
-
         BasicBlock first = new BasicBlock(0);
         first.targets = new int[] {0};
         first.localBegin = new VarList().copyFrom(local);
         first.stackBegin = new VarList().copyFrom(stack);
+        MyHashSet<BasicBlock> visit1 = new MyHashSet<>();
         visit1.add(first);
 
-        InsnNode node;
+        MyHashSet<BasicBlock> visited = new MyHashSet<>();
+        MyHashSet<BasicBlock> visit2 = new MyHashSet<>();
         while (!visit1.isEmpty()) {
             for (BasicBlock bb : visit1) {
                 mainCyc:
@@ -1070,6 +1068,7 @@ public final class Interpreter {
                     Region rg = byException.findRegion(j);
                     while (j < list.size()) {
                         int flg;
+                        InsnNode node;
                         switch (flg = visitNode(node = list.get(j++))) {
                             case 1:
                             case 2:
@@ -1098,7 +1097,7 @@ public final class Interpreter {
                                 // end of basic block
                                 continue mainCyc;
                             case 4:
-                                checkWide(list.get(j));
+                                checkWide(list.get(j).code);
                                 break;
                         }
                         if(rg != (rg = byException.findRegion(j))) {
@@ -1143,11 +1142,6 @@ public final class Interpreter {
         return Helpers.cast(out);
     }
 
-    @Deprecated
-    public List<Frame> compute(AttrCode code) {
-        return compute(code.instructions, code.exceptions, null);
-    }
-
     public List<Frame> compute(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
         Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
         Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
@@ -1157,16 +1151,15 @@ public final class Interpreter {
 
         LongBitSet routines = new LongBitSet();
 
-        MyHashSet<BasicBlock> visited = new MyHashSet<>();
-        MyHashSet<BasicBlock> toVisit = new MyHashSet<>();
-        MyHashSet<BasicBlock> tmp = new MyHashSet<>();
         BasicBlock first = new BasicBlock(0);
         first.targets = new int[] {0};
         first.localBegin = new VarList().copyFrom(local);
         first.stackBegin = new VarList().copyFrom(stack);
+        MyHashSet<BasicBlock> toVisit = new MyHashSet<>();
         toVisit.add(first);
 
-        InsnNode node;
+        MyHashSet<BasicBlock> visited = new MyHashSet<>();
+        MyHashSet<BasicBlock> tmp = new MyHashSet<>();
         while (!toVisit.isEmpty()) {
             for (BasicBlock bb : toVisit) {
                 mainCyc:
@@ -1180,6 +1173,7 @@ public final class Interpreter {
                     while (j < list.size()) {
                         maxStackSize = Math.max(maxStackSize, stack.size);
                         int flg;
+                        InsnNode node;
                         switch (flg = visitNode(node = list.get(j++))) {
                             case 1:
                             case 2:
@@ -1208,7 +1202,7 @@ public final class Interpreter {
                                 // end of basic block
                                 continue mainCyc;
                             case 4:
-                                checkWide(list.get(j));
+                                checkWide(list.get(j).code);
                                 break;
                         }
                         if(rg != (rg = byException.findRegion(j))) {
@@ -1303,6 +1297,7 @@ public final class Interpreter {
     }
 
     // todo ?
+    @SuppressWarnings("fallthrough")
     private int fixLastFrame(int j, InsnList list, int max) {
         int arg = -1;
         while (j < list.size()) {
@@ -1357,7 +1352,7 @@ public final class Interpreter {
                     il.add(list.indexOf(node = InsnNode.validate(node1.def)));
                     byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
 
-                    for (InsnNode node2 : node1.mapping.values()) {
+                    for (InsnNode node2 : node1.switcher.values()) {
                         il.add(list.indexOf(node = InsnNode.validate(node2)));
                         byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
                     }
@@ -1391,13 +1386,13 @@ public final class Interpreter {
             BasicBlock pt = exc.bb = new BasicBlock(-1);
             pt.targets = new int[] {list.indexOf(node)};
             byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+            // noinspection all
             pt.stackBegin.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
         }
     }
 
-
-    private static void checkWide(InsnNode node) {
-        switch (node.getOpcode()) {
+    public static void checkWide(byte code) {
+        switch (code) {
             case RET:
             case IINC:
             case ISTORE:
@@ -1412,7 +1407,7 @@ public final class Interpreter {
             case ALOAD:
                 break;
             default:
-                throw new IllegalStateException("Unable wide " + Opcodes.toString0(node.getOpcode()));
+                throw new IllegalStateException("Unable wide " + Opcodes.toString0(code));
         }
     }
 }

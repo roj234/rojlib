@@ -27,14 +27,13 @@ package roj.asm.mapper;
 
 import roj.asm.mapper.util.Context;
 import roj.collect.MyHashMap;
+import roj.io.ZipFileWriter;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Mapper 'main' entry
@@ -109,9 +108,9 @@ public class Main {
 
         arr = Util.ctxFromZip(input, charset, streams);
 
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(new File(output)));
+        ZipFileWriter zfw = new ZipFileWriter(new File(output));
 
-        Thread resourceWriter = Util.writeResourceAsync(zos, streams);
+        Thread resourceWriter = Util.writeResourceAsync(zfw, streams);
 
         remapper.remap(singleThread, arr);
 
@@ -121,7 +120,11 @@ public class Main {
 
         resourceWriter.join();
 
-        Util.write(arr, zos, true);
+        for (int i = 0; i < arr.size(); i++) {
+            Context ctx = arr.get(i);
+            zfw.writeNamed(ctx.getName(), ctx.get(true));
+        }
+        zfw.finish();
 
         System.out.println("Mem: " + (Runtime.getRuntime().totalMemory() >> 20) + " MB");
         System.out.println("Time: " + (System.currentTimeMillis() - time) + "ms");

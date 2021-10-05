@@ -29,31 +29,21 @@ import com.google.common.collect.ImmutableSetMultimap;
 import ilib.asm.util.MCHooks;
 import ilib.asm.util.MergedItr;
 import ilib.util.MutableVec;
-import org.apache.commons.lang3.mutable.MutableDouble;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.FastSetList;
-import roj.collect.FilterList;
-import roj.concurrent.OperationDone;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
-import net.minecraft.profiler.Profiler;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EntitySelectors;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
-import net.minecraft.world.WorldProvider;
 import net.minecraft.world.border.WorldBorder;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.storage.ISaveHandler;
-import net.minecraft.world.storage.WorldInfo;
-
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.event.ForgeEventFactory;
+import org.apache.commons.lang3.mutable.MutableDouble;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.RemapTo;
+import roj.collect.FilterList;
+import roj.concurrent.OperationDone;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -69,25 +59,8 @@ import java.util.List;
  */
 @Nixim("net.minecraft.world.World")
 public abstract class NiximSlowMethod extends World {
-    @Shadow("field_147482_g")
-    List<TileEntity> loadedTileEntityList;
-    @Shadow("field_175730_i")
-    List<TileEntity> tickableTileEntities;
-    @Shadow("field_147484_a")
-    List<TileEntity> addedTileEntityList;
-    @Shadow("field_147484_a")
-    List<Entity> loadedEntityList;
-    @Shadow("field_73010_i")
-    List<EntityPlayer> playerEntities;
-
-    //@RemapTo("<init>")
-    protected NiximSlowMethod(ISaveHandler p_i45749_1_, WorldInfo p_i45749_2_, WorldProvider p_i45749_3_, Profiler p_i45749_4_, boolean p_i45749_5_) {
-        super(p_i45749_1_, p_i45749_2_, p_i45749_3_, p_i45749_4_, p_i45749_5_);
-        loadedEntityList = new FastSetList<>();
-        loadedTileEntityList = new FastSetList<>();
-        tickableTileEntities = new FastSetList<>();
-        addedTileEntityList = new FastSetList<>();
-        playerEntities = new FastSetList<>();
+    NiximSlowMethod() {
+        super(null, null, null, null, false);
     }
 
     @RemapTo("func_191504_a")

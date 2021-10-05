@@ -27,7 +27,6 @@ package roj.asm.tree;
 
 import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.Type;
-import roj.asm.util.FlagList;
 
 import java.util.List;
 
@@ -39,17 +38,9 @@ import java.util.List;
  * @since 2021/6/18 9:51
  */
 public interface MethodNode extends MoFNode {
-    String parentClass();
-
     String ownerClass();
-
-    String name();
 
     List<Type> parameters();
 
     Type getReturnType();
-
-    FlagList access();
-
-    String rawDesc();
 }

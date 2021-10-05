@@ -223,7 +223,7 @@ public class ConstantData implements IClass {
         }
 
         mainBuffer.ensureCapacity(poolBuffer.pos() + 10);
-        ByteWriter _gl = new ByteWriter(mainBuffer).writeInt(0xcafebabe).writeShort(version).writeShort(version >>> 16).writeShort(writer.getIndex());
+        ByteWriter _gl = new ByteWriter(mainBuffer).writeInt(0xcafebabe).writeShort(version).writeShort(version >>> 16);
         writer.write(_gl);
         _gl.writeBytes(w);
 

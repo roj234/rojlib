@@ -27,7 +27,6 @@
 package roj.asm.tree.anno;
 
 import roj.asm.util.ConstantWriter;
-import roj.text.StringPool;
 import roj.util.ByteWriter;
 
 import java.util.List;
@@ -49,14 +48,6 @@ public final class AnnValArray extends roj.asm.tree.anno.AnnVal {
 
     public void _toByteArray(ConstantWriter pool, ByteWriter w) {
         w.writeShort((short) value.size());
-        for (roj.asm.tree.anno.AnnVal val : value) {
-            val.toByteArray(pool, w);
-        }
-    }
-
-    @Override
-    public void _toByteArray(StringPool pool, ByteWriter w) {
-        w.writeVarInt(value.size(), false);
         for (roj.asm.tree.anno.AnnVal val : value) {
             val.toByteArray(pool, w);
         }

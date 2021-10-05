@@ -421,8 +421,7 @@ public class ConstMapper extends Mapping {
     public final void S2_mapSelf(Context ctx) {
         ConstantData data = ctx.getData();
 
-        List<String> parents = selfSupers.get(data.name);
-        if(parents == null) return;
+        List<String> parents = selfSupers.getOrDefault(data.name, Collections.emptyList());
 
         Desc sp = Util.shareMD();
 
@@ -437,12 +436,12 @@ public class ConstMapper extends Mapping {
             }
             MethodSimple m = (MethodSimple) methods.get(i);
 
+            sp.owner = data.name;
             sp.name = m.name.getString();
             sp.param = m.type.getString();
 
-            for (int j = 0; j < parents.size(); j++) {
-                sp.owner = parents.get(j);
-
+            int j = 0;
+            while (true) {
                 Map.Entry<Desc, String> entry = methodMap.find(sp);
                 if (entry != null) {
                     FlagList flags = entry.getKey().flags;
@@ -451,8 +450,11 @@ public class ConstMapper extends Mapping {
                         if (DEBUG)
                             System.out.println(
                                     "[2M-" + data.name + "-I]: " + sp.owner + '.' + sp.name + sp.param);
-                        sp.owner = data.name;
-                        selfSkipped.add(sp.copy());
+                        // noinspection all
+                        if (sp.owner != data.name) {
+                            sp.owner = data.name;
+                            selfSkipped.add(sp.copy());
+                        }
                     } else if (flags.hasAny(AccessFlag.PUBLIC | AccessFlag.PROTECTED)) {
                         flags = null;
                     } else { // 包相同可以继承
@@ -460,8 +462,11 @@ public class ConstMapper extends Mapping {
                             if (DEBUG)
                                 System.out.println(
                                         "[2M-" + data.name + "-P]: " + sp.owner + '.' + sp.name + sp.param);
-                            sp.owner = data.name;
-                            selfSkipped.add(sp.copy());
+                            // noinspection all
+                            if (sp.owner != data.name) {
+                                sp.owner = data.name;
+                                selfSkipped.add(sp.copy());
+                            }
                         } else {
                             flags = null;
                         }
@@ -475,6 +480,9 @@ public class ConstMapper extends Mapping {
                     }
                     break;
                 }
+
+                if (j == parents.size()) break;
+                sp.owner = parents.get(j++);
             }
         }
 
@@ -483,18 +491,25 @@ public class ConstMapper extends Mapping {
         for (int i = 0; i < fields.size(); i++) {
             FieldSimple f = fields.get(i);
 
+            sp.owner = data.name;
             sp.name = f.name.getString();
             sp.param = checkFieldType ? f.type.getString() : "";
 
-            for (int j = 0; j < parents.size(); j++) {
-                sp.owner = parents.get(j);
-
+            int j = 0;
+            while (true) {
                 if (fieldMap.containsKey(sp)) {
                     if (DEBUG)
                         System.out.println("[2F-" + data.name + "]: " + sp.owner + '.' + sp.name);
-                    sp.owner = data.name;
-                    selfSkipped.add(sp.copy());
+                    // noinspection all
+                    if (sp.owner != data.name) {
+                        sp.owner = data.name;
+                        selfSkipped.add(sp.copy());
+                    }
+                    break;
                 }
+
+                if (j == parents.size()) break;
+                sp.owner = parents.get(j++);
             }
         }
     }
@@ -591,25 +606,23 @@ public class ConstMapper extends Mapping {
         String allDesc = dyn.getDesc().getType().getString();
         md.owner = ParamHelper.getReturn(allDesc).owner;
 
-        String name = methodMap.get(md);
-        if (name != null) {
-            dyn.setDesc(data.writer.getDesc(name, allDesc));
-            return;
-        }
-
         List<String> parents = selfSupers.getOrDefault(md.owner, Collections.emptyList());
-        for (int i = 0; i < parents.size(); i++) {
-            md.owner = parents.get(i);
+        int i = 0;
+        while (true) {
+            String name = methodMap.get(md);
+            if (name != null) {
+                dyn.setDesc(data.writer.getDesc(name, allDesc));
+                return;
+            }
+
             if(selfSkipped.contains(md)) {
                 if(DEBUG)
                     System.out.println("[3L-" + data.name + "]: " + (!md.owner.equals(data.name) ? md.owner + '.' : "") + md.name + md.param);
                 break;
             }
-            name = methodMap.get(md);
-            if (name != null) {
-                dyn.setDesc(data.writer.getDesc(name, allDesc));
-                return;
-            }
+
+            if(i == parents.size()) break;
+            md.owner = parents.get(i++);
         }
     }
 
@@ -1013,7 +1026,7 @@ public class ConstMapper extends Mapping {
                         System.out.print("  ");
                     }
                 }
-                FlagList PUBLIC = interner.computeIfAbsent((char) AccessFlag.PUBLIC, fl);
+                FlagList PUBLIC = interner.computeIfAbsent(AccessFlag.PUBLIC, fl);
                 for (Map<String, Desc> map : rest.values()) {
                     for (Desc desc : map.values()) { // 将没有flag的全部填充为public
                         desc.flags = PUBLIC;
@@ -1077,16 +1090,17 @@ public class ConstMapper extends Mapping {
                     MoFNode d = mofs.get(i);
                     Desc ent = mds.remove(d.name() + '|' + d.rawDesc());
                     if (ent != null)
-                        ent.flags = flagCache.computeIfAbsent((char) d.accessFlag2(), fl);
+                        ent.flags = flagCache.computeIfAbsent(d.accessFlag2(), fl);
                 }
                 mofs = data.fields();
                 for (int i = 0; i < mofs.size(); i++) {
                     MoFNode d = mofs.get(i);
                     Desc ent = mds.remove(d.name());
                     if (ent != null)
-                        ent.flags = flagCache.computeIfAbsent((char) d.accessFlag2(), fl);
+                        ent.flags = flagCache.computeIfAbsent(d.accessFlag2(), fl);
                 }
 
+                // noinspection all
                 for (Iterator<Map.Entry<String, Desc>> itr = mds.entrySet().iterator(); itr.hasNext(); ) {
                     Map.Entry<String, Desc> entry = itr.next();
                     if (fallback.fillAccessFlags(entry.getValue(), flagCache)) {

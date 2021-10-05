@@ -28,7 +28,7 @@ package roj.asm.tree.attr;
 
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.util.ConstantWriter;
-import roj.collect.IntBiMap;
+import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -43,9 +43,14 @@ import static roj.asm.tree.insn.InsnNode.validate;
  * @since 2021/4/30 19:27
  */
 public final class AttrLineNumber extends Attribute implements ICodeAttribute {
-    public ToIntMap<InsnNode> map;
+    public final ToIntMap<InsnNode> map;
 
-    public AttrLineNumber(ByteReader r, IntBiMap<InsnNode> pcCounter) {
+    public AttrLineNumber() {
+        super("LineNumberTable");
+        this.map = new ToIntMap<>();
+    }
+
+    public AttrLineNumber(ByteReader r, IntMap<InsnNode> pcCounter) {
         super("LineNumberTable");
 
         final int tableLen = r.readUnsignedShort();
@@ -56,7 +61,7 @@ public final class AttrLineNumber extends Attribute implements ICodeAttribute {
             InsnNode node = pcCounter.get(index);
             if (node == null)
                 throw new NullPointerException("Couldn't found bytecode offset for line number table: " + index);
-            map.put(node, r.readUnsignedShort());
+            map.putInt(node, r.readUnsignedShort());
         }
     }
 

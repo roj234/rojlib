@@ -101,6 +101,7 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                         case "ENTRY_CREATE": {
                             @SuppressWarnings("unchecked")
                             String id = key.watchable().toString() + File.separatorChar + ((WatchEvent<Path>) event).context().toString();
+                            if (new File(id).isDirectory()) break;
                             if (csm.x == ID_SRC) {
                                 if (!id.endsWith(".java"))
                                     break x;
@@ -111,6 +112,7 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                         case "ENTRY_DELETE": {
                             @SuppressWarnings("unchecked")
                             String id = key.watchable().toString() + File.separatorChar + ((WatchEvent<Path>) event).context().toString();
+                            if (new File(id).isDirectory()) break;
                             if (csm.x == ID_SRC) {
                                 if (!id.endsWith(".java"))
                                     break x;

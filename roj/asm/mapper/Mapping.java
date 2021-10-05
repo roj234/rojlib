@@ -220,16 +220,15 @@ public class Mapping {
             String name = entry.getKey();
 
             self.addAll(entry.getValue());
-            ArrayList<String> tmp1;
 
             /**
              * excepted order:
              *     fatherclass fatheritf grandclass granditf, etc...
              */
-            Collection<String> tmp;
             do {
                 l.addAll(self);
                 for (String s : self) {
+                    Collection<String> tmp;
                     if ((tmp = superMap.get(s)) != null) {
                         if (tmp.getClass() != MapperList.class) {
                             next.addAll(tmp);
@@ -238,7 +237,7 @@ public class Mapping {
                         }
                     }
                 }
-                tmp1 = self;
+                ArrayList<String> tmp1 = self;
                 self = next;
                 next = tmp1;
                 next.clear();

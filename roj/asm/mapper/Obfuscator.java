@@ -109,7 +109,7 @@ public abstract class Obfuscator {
                 }
                 m.name = method.name;
                 m.param = method.desc;
-                m.flags = byAcc.computeIfAbsent((char) method.acc, ConstMapper.fl);
+                m.flags = byAcc.computeIfAbsent(method.acc, ConstMapper.fl);
                 libMethods.add(m);
                 m = new Desc(data.name, "", "");
             }

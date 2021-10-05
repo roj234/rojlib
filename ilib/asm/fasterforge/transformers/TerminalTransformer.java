@@ -25,26 +25,23 @@
  */
 package ilib.asm.fasterforge.transformers;
 
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstRef;
 import roj.asm.type.ParamHelper;
-import roj.asm.visitor.AsIsVisitor;
-import roj.asm.visitor.ClassVisitor;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.MethodVisitor;
+import roj.asm.visitor.*;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-
-import net.minecraft.launchwrapper.IClassTransformer;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 
 public class TerminalTransformer extends CodeVisitor implements IClassTransformer {
-    ClassVisitor visitor;
+    ClassVisitor cv;
     public TerminalTransformer() {
-        visitor = new ClassVisitor();
-        visitor.fieldVisitor = new AsIsVisitor();
+        cv = new ClassVisitor();
+        AsIsAttributeVisitor aiav = new AsIsAttributeVisitor(cv);
+
+        cv.attributeVisitor = aiav;
+        cv.fieldVisitor = new IVisitor();
         MethodVisitor mv = new MethodVisitor() {
             @Override
             public void visitNode(int acc, String name, String desc, int count) {
@@ -52,15 +49,18 @@ public class TerminalTransformer extends CodeVisitor implements IClassTransforme
                 mDesc = desc;
             }
         };
-        visitor.methodVisitor = mv;
+        mv.attributeVisitor = aiav;
+        cv.methodVisitor = mv;
         mv.codeVisitor = this;
+        this.attributeVisitor = aiav;
+        preVisit(cv);
     }
 
     public byte[] transform(String name, String transformedName, byte[] basicClass) {
         if (basicClass == null)
             return null;
-        visit(name);
-        ByteList out = visitor.visit(clsName = name, new ByteReader(basicClass));
+        check(clsName = name);
+        ByteList out = cv.visit(new ByteList(basicClass));
 
         return dirty ? out.toByteArray() : basicClass;
     }
@@ -122,7 +122,7 @@ public class TerminalTransformer extends CodeVisitor implements IClassTransforme
 
     private static final String callbackOwner = ParamHelper.classDescriptor(TerminalTransformer.class);
 
-    public void visit(String clsName) {
+    public void check(String clsName) {
         warn = (!clsName.equals("net/minecraft/client/Minecraft") && !clsName.equals("net/minecraft/server/dedicated/DedicatedServer") && !clsName
                 .equals("net/minecraft/server/dedicated/ServerHangWatchdog") && !clsName.equals("net/minecraft/server/dedicated/ServerHangWatchdog$1") && !clsName
                 .equals("net/minecraftforge/fml/common/FMLCommonHandler") && !clsName.startsWith("com/jcraft/jogg/") && !clsName

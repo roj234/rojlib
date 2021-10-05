@@ -15,13 +15,16 @@ import roj.util.EmptyArrays;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.jar.Manifest;
 import java.util.zip.*;
 
 /**
- * 你别指望这东西能打开分卷压缩文件，没有ZIP64，也没有EXTTag
+ * 你别指望这东西能打开分卷压缩文件，没有ZIP64，也没有EXTTag <br>
+ *     对于非UTF-8编码的压缩文件只读，毕竟java的charset写的垃圾的很
  *
  * @author Roj233
  * @since 2021/7/10 17:09
@@ -29,14 +32,15 @@ import java.util.zip.*;
 public class MutableZipFile implements Closeable, AutoCloseable {
     public final File file;
     private RandomAccessFile zip;
-    private final MyHashMap<String, EFile> entries = new MyHashMap<>();
-    private final MyHashSet<ModFile> modified = new MyHashSet<>();
+    private final MyHashMap<String, EFile> entries;
+    private final MyHashSet<ModFile> modified;
     private final EEOF eof;
 
-    private final ByteList buffer = new ByteList();
-    private final Inflater inflater = new Inflater(true);
-    private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
-    private final CRC32 crc = new CRC32();
+    private final ByteList buffer;
+    private final Inflater inflater;
+    private final Deflater deflater;
+    private final CRC32 crc;
+    private final Charset charset;
 
     private final boolean killExtFlags;
 
@@ -50,15 +54,38 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     public static final int FLAG_KILL_EXT = 1;
     public static final int FLAG_VERIFY = 2;
 
+    public MutableZipFile(File file) throws IOException {
+        this(file, Deflater.DEFAULT_COMPRESSION, FLAG_KILL_EXT | FLAG_VERIFY, 0, StandardCharsets.UTF_8);
+    }
+
     public MutableZipFile(File file, int flag) throws IOException {
+        this(file, Deflater.DEFAULT_COMPRESSION, flag, 0, StandardCharsets.UTF_8);
+    }
+
+    public MutableZipFile(File file, int compressionLevel, int flag) throws IOException {
+        this(file, compressionLevel, flag, 0, StandardCharsets.UTF_8);
+    }
+
+    public MutableZipFile(File file, int compressionLevel, int flag, long offset) throws IOException {
+        this(file, compressionLevel, flag, 0, StandardCharsets.UTF_8);
+    }
+
+    public MutableZipFile(File file, int compressionLevel, int flag, long offset, Charset charset) throws IOException {
         this.file = file;
         if(!file.isFile() && !file.createNewFile())
             throw new IOException("Unable to create a new file");
+        entries = new MyHashMap<>();
+        modified = new MyHashSet<>();
         eof = new EEOF();
         eof.comment = "";
+        buffer = new ByteList(1024);
+        inflater = new Inflater(true);
+        deflater = new Deflater(compressionLevel, true);
+        crc = new CRC32();
         killExtFlags = (flag & FLAG_KILL_EXT) != 0;
         zip = new RandomAccessFile(file, "rw");
-        zip.seek(0);
+        zip.seek(offset);
+        this.charset = charset;
         try {
             readInternal();
         } catch (EOFException e) {
@@ -71,10 +98,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
         if((flag & FLAG_VERIFY) != 0)
             verify();
-    }
-
-    public MutableZipFile(File file) throws IOException {
-        this(file, FLAG_KILL_EXT | FLAG_VERIFY);
     }
 
     public RandomAccessFile getFile() {
@@ -101,7 +124,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     }
 
     private void readInternal() throws IOException {
-        buffer.ensureCapacity(64);
         CharList out = new CharList();
 
         long len = zip.length();
@@ -144,10 +166,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         buffer.ensureCapacity(nameLen);
         zip.read(buf = buffer.list, 0, nameLen);
 
-        buffer.pos(nameLen);
-        ByteReader.decodeUTF(-1, out, buffer);
-        entry.name = out.toString();
-        out.clear();
+        if (charset == StandardCharsets.UTF_8) {
+            buffer.pos(nameLen);
+            ByteReader.decodeUTF(-1, out, buffer);
+            entry.name = out.toString();
+            out.clear();
+        } else {
+            entry.name = new String(buf, 0, nameLen, charset);
+        }
 
         entries.put(entry.name, entry);
 
@@ -170,7 +196,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         // cSize == 0: killExtFlags
         if((flags & 8) != 0 && cSize == 0) {
             Inflater inflater = this.inflater;
-            buffer.ensureCapacity(1024);
             buf = buffer.list;
             try {
                 while (true) {
@@ -253,18 +278,24 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         buffer.ensureCapacity(Math.max(nameLen, commentLen));
         zip.read(buf = buffer.list, 0, nameLen);
 
-        buffer.pos(nameLen);
-        ByteReader.decodeUTF(-1, out, buffer);
-        String name/*entry.name*/ = out.toString();
-        out.clear();
+        String name;
+        if (charset == StandardCharsets.UTF_8) {
+            buffer.pos(nameLen);
+            ByteReader.decodeUTF(-1, out, buffer);
+            name/*entry.name*/ = out.toString();
+            out.clear();
+        } else {
+            name = new String(buf, 0, nameLen, charset);
+        }
 
-        if(commentLen > 0) {
-            zip.read(buf, 0, commentLen);
-            buffer.pos(commentLen);
+        zip.skipBytes(commentLen);
+        //if(commentLen > 0) {
+            //zip.read(buf, 0, commentLen);
+            //buffer.pos(commentLen);
             //ByteReader.decodeUTF(-1, out, buffer);
             //entry.comment = out.toString();
             //out.clear();
-        }
+        //}
 
         EFile file = entries.get(/*entry.name*/name);
         if(file == null)
@@ -312,10 +343,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             if(zip.read(buffer.list, 0, commentLen) < commentLen)
                 throw new EOFException();
 
-            buffer.pos(commentLen);
-            ByteReader.decodeUTF(-1, cl, buffer);
-            entry.comment = cl.toString();
-            cl.clear();
+            if (charset == StandardCharsets.UTF_8) {
+                buffer.pos(commentLen);
+                ByteReader.decodeUTF(-1, cl, buffer);
+                entry.comment = cl.toString();
+                cl.clear();
+            } else {
+                entry.comment = new String(buf, 0, commentLen, charset);
+            }
         } else {
             entry.comment = "";
         }
@@ -521,7 +556,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                         break;
                     }
 
-
                     len += begin;
                     begin = -1;
                 }
@@ -572,7 +606,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
                 ByteList buffer = this.buffer;
                 buffer.clear();
-                buffer.ensureCapacity(1024);
                 int off = 0;
                 while (!deflater.finished()) {
                     off += deflater.deflate(buffer.list, off, 1024);
@@ -640,6 +673,12 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         buffer.clear();
     }
 
+    public void clear() {
+        entries.clear();
+        modified.clear();
+        eof.cDirLen = eof.cDirOffset = 0;
+    }
+
     public void setManifest(Manifest mf) throws IOException {
         ByteList bl = new ByteList();
         mf.write(bl.asOutputStream());
@@ -647,7 +686,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     }
 
     public void read() throws IOException {
-        entries.clear();
+        clear();
         zip.seek(0);
         readInternal();
     }
@@ -676,7 +715,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         buffer.list = null;
     }
 
-    static void writeFile(OutputStream appender, ByteWriter util, EFile file) throws IOException {
+    private static void writeFile(OutputStream appender, ByteWriter util, EFile file) throws IOException {
         /*int elen = 0;
         int elenEXTT = 0;
         int flagEXTT = 0;
@@ -722,7 +761,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         util.list.clear();
     }
 
-    static void writeAttr(ByteWriter util, EFile file) {
+    private static void writeAttr(ByteWriter util, EFile file) {
         Attr attr = file.attr;
 
         util.writeInt(HEADER_ATTRIBUTE)
@@ -744,7 +783,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             .writeAllUTF(file.name);
     }
 
-    void writeEOF(ByteWriter util) {
+    private void writeEOF(ByteWriter util) {
         EEOF eof = this.eof;
 
         util.writeInt(HEADER_EOF)
@@ -769,15 +808,15 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     /**
      * Converts Java time to DOS time.
      */
-    public static long java2DosTime(int time) {
+    public static int java2DosTime(long time) {
         int[] arr = ACalendar.get1(time);
         int year = arr[ACalendar.YEAR] + 1900;
         if (year < 1980) {
             return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;
         }
-        return (year - 1980) << 25 | (arr[ACalendar.MONTH] + 1) << 21 |
-                arr[ACalendar.DAY] << 16 | arr[ACalendar.HOUR] << 11 | arr[ACalendar.MINUTE] << 5 |
-                arr[ACalendar.SECOND] >> 1;
+        return ((year - 1980) << 25) | ((arr[ACalendar.MONTH] + 1) << 21) |
+                (arr[ACalendar.DAY] << 16) | (arr[ACalendar.HOUR] << 11) | (arr[ACalendar.MINUTE] << 5) |
+                (arr[ACalendar.SECOND] >> 1);
     }
 
     public static class EFile implements Range {

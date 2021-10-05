@@ -53,7 +53,7 @@ public interface MoFNode {
 
     FlagList accessFlag();
 
-    default short accessFlag2() {
+    default char accessFlag2() {
         return accessFlag().flag;
     }
 

@@ -32,25 +32,29 @@ import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTreeSet;
-import roj.io.DummyOutputStream;
+import roj.io.ZipFileWriter;
 import roj.mod.FMDMain;
 import roj.mod.remap.ClassMerger;
+import roj.mod.util.DummyPrintStream;
 import roj.mod.util.MappingHelper;
 import roj.mod.util.Patcher;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static roj.mod.Shared.*;
 
@@ -125,12 +129,14 @@ public final class Proc1_12 extends Processor {
             if (DEBUG)
                 CmdUtil.info("[异步操作] 客户端文件数量: " + contexts.size());
 
-            for (Context context : contexts) {
+            for (int i = 0; i < contexts.size(); i++) {
+                Context context = contexts.get(i);
                 ByteList result = patcher.patchClient(context.getName(), context.get());
                 if (result != null) {
                     arr[0].add(new Context(context.getName(), context.get()));
                     context.set(result);
                 }
+                context.getData();
             }
 
             if (DEBUG)
@@ -155,12 +161,14 @@ public final class Proc1_12 extends Processor {
             if (DEBUG)
                 CmdUtil.info("[异步操作] 服务端文件数量: " + contexts.size());
 
-            for (Context context : contexts) {
+            for (int i = 0; i < contexts.size(); i++) {
+                Context context = contexts.get(i);
                 ByteList result = patcher.patchServer(context.getName(), context.get());
                 if (result != null) {
                     arr[0].add(new Context(context.getName(), context.get()));
                     context.set(result);
                 }
+                context.getData();
             }
 
             if (DEBUG)
@@ -206,16 +214,8 @@ public final class Proc1_12 extends Processor {
                     if (log.length() > 10)
                         CmdUtil.warning("解析MCP时有一些警告, 查看 " + log.getAbsolutePath());
                 } else {
-                    PrintStream out = System.out;
-                    DummyOutputStream w = new DummyOutputStream();
-                    System.setOut(new PrintStream(w));
-
+                    MappingHelper.OUT = new DummyPrintStream();
                     action.run();
-
-                    if(w.wrote > 10)
-                        CmdUtil.warning("解析MCP时有一些警告");
-
-                    System.setOut(out);
                 }
             }
 
@@ -286,30 +286,32 @@ public final class Proc1_12 extends Processor {
 
         patcher.reset();
 
-        //if(DEBUG) {
-            CmdUtil.info("压缩class");
-            for (Context ctx : merged) {
+        try (ZipFileWriter zfw = new ZipFileWriter(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar"))) {
+            FileTime time = FileTime.from(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+            for (int i = 0; i < merged.size(); i++) {
+                Context ctx = merged.get(i);
+                ByteList list;
                 try {
-                    ctx.compress();
+                    list = ctx.getCompressedShared();
                 } catch (Throwable e) {
                     CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    continue;
                 }
+                zfw.writeNamed(ctx.getName(), list);
             }
-            for (Context ctx : fgResult) {
-                try {
-                    ctx.compress();
-                } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
-                }
-            }
-            CmdUtil.info("压缩完毕");
-        //}
-
-        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar")))) {
-            Util.write(merged, zos, false);
             merged.clear();
-            Util.write(fgResult, zos, true);
-
+            for (int i = 0; i < fgResult.size(); i++) {
+                Context ctx = fgResult.get(i);
+                ByteList list;
+                try {
+                    list = ctx.getCompressedShared();
+                } catch (Throwable e) {
+                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    continue;
+                }
+                zfw.writeNamed(ctx.getName(), list);
+            }
+            fgResult.clear();
             if (DEBUG)
                 CmdUtil.success("I/O完毕");
         } catch (IOException e) {

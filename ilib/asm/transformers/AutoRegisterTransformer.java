@@ -195,8 +195,6 @@ public class AutoRegisterTransformer implements IClassTransformer {
         insn.add(new roj.asm.tree.insn.FieldInsnNode(Opcodes.PUTSTATIC, data.name, field.name.getString(), desc));
 
         insn.add(returnNode);
-
-        insn.add(AttrCode.METHOD_END_MARK);
     }
 
     private static byte[] transformTileEntity(ConstantData data, roj.asm.tree.anno.AnnValString value) {
@@ -214,8 +212,6 @@ public class AutoRegisterTransformer implements IClassTransformer {
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/autoreg/AutoRegHandler.registerTileEntity:(Ljava/lang/Class;Ljava/lang/String;)V"));
 
         insn.add(returnNode);
-
-        insn.add(AttrCode.METHOD_END_MARK);
 
         return Parser.toByteArray(data);
     }
@@ -284,8 +280,6 @@ public class AutoRegisterTransformer implements IClassTransformer {
 
         localVars.list.add(new LocalVariable(nextVariableId, "null", new Type("net/minecraft/block/Block", 0), startNode, endNode));
 
-        insn.add(AttrCode.METHOD_END_MARK);
-
         byte[] bytes = Parser.toByteArray(data);
         try (FileOutputStream fos = new FileOutputStream(new File(data.name.replace('/', '.') + ".class"))) {
             fos.write(bytes);
@@ -320,8 +314,6 @@ public class AutoRegisterTransformer implements IClassTransformer {
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/autoreg/AutoRegHandler.registerItem:(Lnet/minecraft/item/Item;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"));
 
         insn.add(returnNode);
-
-        insn.add(AttrCode.METHOD_END_MARK);
 
         return Parser.toByteArray(data);
     }
@@ -364,7 +356,6 @@ public class AutoRegisterTransformer implements IClassTransformer {
             ((List<MoFNode>) Helpers.cast(data.methods)).add(clInit);
             code = clInit.code = new AttrCode(clInit);
             code.instructions.add(new roj.asm.tree.insn.NPInsnNode(Opcodes.RETURN));
-            code.instructions.add(AttrCode.METHOD_END_MARK);
         } else {
             code = clInit.code;
         }

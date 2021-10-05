@@ -27,7 +27,8 @@
 package roj.asm.cst;
 
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -42,8 +43,8 @@ public final class CstFloat extends Constant {
     }
 
     @Override
-    protected final void write0(ByteWriter writer) {
-        writer.writeFloat(value);
+    public final void write(ByteWriter w) {
+        w.writeByte(CstType.FLOAT).writeFloat(value);
     }
 
     public final String toString() {

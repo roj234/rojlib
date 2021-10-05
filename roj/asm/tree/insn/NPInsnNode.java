@@ -51,6 +51,12 @@ public final class NPInsnNode extends InsnNode {
     }
 
     @Override
+    public int nodeType() {
+        int c = code & 0xFF;
+        return (c >= 0x1a && c <= 0x2d) || (c >= 0x3c && c <= 0x4e) ? T_LOAD_STORE : T_OTHER;
+    }
+
+    @Override
     public void toByteArray(ByteWriter w) {
         w.writeByte(code);
     }

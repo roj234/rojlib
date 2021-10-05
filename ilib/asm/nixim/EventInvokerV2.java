@@ -33,6 +33,10 @@ package ilib.asm.nixim;
  * @since  2020/11/14 16:15
  */
 
+import net.minecraftforge.fml.common.eventhandler.Event;
+import net.minecraftforge.fml.common.eventhandler.IEventListener;
+import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
@@ -54,11 +58,6 @@ import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.reflect.InstantiationUtil;
 import roj.util.ByteList;
-
-import net.minecraftforge.fml.common.eventhandler.Event;
-import net.minecraftforge.fml.common.eventhandler.IEventListener;
-import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.io.IOException;
 import java.lang.reflect.*;
@@ -133,7 +132,6 @@ public final class EventInvokerV2 implements IEventListener {
         insns.add(new FieldInsnNode(Opcodes.PUTFIELD, data, 0));
 
         insns.add(NodeHelper.cached(Opcodes.RETURN));
-        insns.add(AttrCode.METHOD_END_MARK);
 
         roj.asm.tree.Method invoke = new roj.asm.tree.Method(flags, data, "invoke", HANDLER_FUNC_DESC);
         data.methods.add(invoke);
@@ -185,7 +183,6 @@ public final class EventInvokerV2 implements IEventListener {
         if(label != null)
             insns.add(label);
         insns.add(NodeHelper.cached(Opcodes.RETURN));
-        insns.add(AttrCode.METHOD_END_MARK);
 
         ByteList list = Parser.toByteArrayShared(data);
 

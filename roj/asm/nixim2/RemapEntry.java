@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,36 +23,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.util.log;
+package roj.asm.nixim2;
 
-import org.jetbrains.annotations.ApiStatus;
+import roj.asm.cst.CstNameAndType;
+import roj.asm.cst.CstRef;
+import roj.asm.tree.simple.MoFNode;
 
-@Deprecated
-@ApiStatus.ScheduledForRemoval
 /**
- * No description provided
- *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since 2021/4/21 22:51
+ * @since 2021/10/3 20:59
  */
-public interface Logger {
-    static Logger getLogger(String name) {
-        try {
-            org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(name);
-            return new AP(log);
-        } catch (Throwable e) {
-            return STD.instance;
-        }
+class RemapEntry extends DescEntry {
+    String toClass, toName;
+
+    public final RemapEntry read(CstRef ref) {
+        CstNameAndType desc = ref.desc();
+        this.name = desc.getName().getString();
+        this.desc = desc.getType().getString();
+        return this;
     }
 
-    void info(Object text);
+    RemapEntry() {}
 
-    void debug(Object text);
-
-    void warn(Object text);
-
-    void error(Object text);
-
-    void catching(Throwable throwable);
+    RemapEntry(MoFNode node) {
+        super(node);
+    }
 }

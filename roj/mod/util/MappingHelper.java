@@ -41,6 +41,7 @@ import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
+import roj.util.ByteList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
 
@@ -58,6 +59,7 @@ import java.util.zip.ZipFile;
  * @since  2020/8/29 22:25
  */
 public class MappingHelper {
+    public static PrintStream OUT = System.out;
     // 4mb
     private static final int MINIMUM_CAPACITY = 512 * 1024 * 4;
     private static final FlagList NONNULL = new FlagList();
@@ -110,10 +112,10 @@ public class MappingHelper {
         SimpleLineReader slr = new SimpleLineReader(csv);
         String[] currentClass = null;
 
-        int i = 2;
         slr.index(1);
         CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
+        int i = 2;
         while (slr.hasNext()) {
             String line = slr.next();
             if (line.length() == 0 || line.startsWith("#")) continue;
@@ -124,7 +126,7 @@ public class MappingHelper {
             }
             List<Desc> descriptors = methods.get(tmp.get(0));
             if(descriptors == null)
-                System.out.println("methods.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
+                OUT.println("methods.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
             else {
                 for (int j = 0; j < descriptors.size(); j++) {
                     Desc descriptor = descriptors.get(j);
@@ -140,10 +142,10 @@ public class MappingHelper {
         SimpleLineReader slr = new SimpleLineReader(csv);
         String[] currentClass = null;
 
-        int i = 2;
         slr.index(1);
         CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
+        int i = 2;
         while (slr.hasNext()) {
             String line = slr.next();
             if (line.length() == 0 || line.startsWith("#")) continue;
@@ -154,7 +156,7 @@ public class MappingHelper {
             }
             List<Desc> descriptors = fields.get(tmp.get(0));
             if (descriptors == null)
-                System.out.println("fields.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
+                OUT.println("fields.csv:" + i + ": 不存在的SRG: " + tmp.get(0));
             else {
                 for (int j = 0; j < descriptors.size(); j++) {
                     Desc descriptor = descriptors.get(j);
@@ -170,10 +172,10 @@ public class MappingHelper {
         SimpleLineReader slr = new SimpleLineReader(csv);
         String[] currentClass = null;
 
-        int i = 2;
         slr.index(1);
         CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
+        int i = 2;
         while (slr.hasNext()) {
             String line = slr.next();
             if (line.length() == 0 || line.startsWith("#")) continue;
@@ -230,11 +232,10 @@ public class MappingHelper {
             throw new IllegalStateException("Not done yet or not read MCP");
         }
 
-        Set<String> failed = new MyHashSet<>();
-
         ob.ensureCapacity(MINIMUM_CAPACITY);
 
         Map<String, CharList> classFos = new MyHashMap<>(classes.size());
+        Set<String> failed = new MyHashSet<>();
         for(Map.Entry<String, List<Desc>> entry : fields.entrySet()) {
             List<Desc> value = entry.getValue();
             for (int i = 0; i < value.size(); i++) {
@@ -244,7 +245,7 @@ public class MappingHelper {
 
                 if (descriptor.flags == null) {
                     if (!NTR.contains(descriptor.owner)) // forge 自己搞的
-                        if (k.startsWith("field_") && failed.add(k)) System.out.println("缺少 " + k + " 的MCP名");
+                        if (k.startsWith("field_") && failed.add(k)) OUT.println("缺少 " + k + " 的MCP名");
                     continue;
                 }
 
@@ -266,7 +267,7 @@ public class MappingHelper {
 
                 if (descriptor.flags == null) {
                     if (!NTR.contains(descriptor.owner)) // forge 自己搞的
-                        if (k.startsWith("field_") && failed.add(k)) System.out.println("缺少 " + k + " 的MCP名");
+                        if (k.startsWith("field_") && failed.add(k)) OUT.println("缺少 " + k + " 的MCP名");
                     continue;
                 }
 
@@ -288,11 +289,23 @@ public class MappingHelper {
                 ob.append(list);
         }
 
+        writeOb(result);
+    }
+
+    private void writeOb(File result) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(result)) {
-            ByteWriter.encodeUTF(ob).writeToStream(fos);
+            ByteList output = new ByteList(66666);
+            int pos = 0;
+            while (pos < ob.length()) {
+                int len = Math.min(44444, ob.length() - pos);
+                ByteWriter.writeUTF(output, ob.subSequence(pos, len), -1);
+                output.writeToStream(fos);
+                output.clear();
+                pos += len;
+            }
+        } finally {
+            ob.clear();
         }
-        //CmdUtil.success("成功: 文件已保存为 " + result.getAbsolutePath());
-        ob.clear();
     }
 
     // section McpConfig 解析
@@ -427,11 +440,8 @@ public class MappingHelper {
             }
         }
 
-        try (FileOutputStream fos = new FileOutputStream(output)) {
-            ByteWriter.encodeUTF(ob).writeToStream(fos);
-        }
+        writeOb(output);
         //CmdUtil.success("成功: 文件已保存为 " + output.getAbsolutePath());
-        ob.clear();
     }
 
 
@@ -481,12 +491,8 @@ public class MappingHelper {
                 ob.append(list);
         }
 
-        try (FileOutputStream fos = new FileOutputStream(result)) {
-            ByteWriter.encodeUTF(ob).writeToStream(fos);
-        }
-
+        writeOb(result);
         //CmdUtil.success("成功: 文件已保存为 " + result.getAbsolutePath());
-        ob.clear();
 
         flag |= flagId;
     }
@@ -510,7 +516,7 @@ public class MappingHelper {
             TextUtil.split(tmp, cl, key, '_');
 
             if(tmp.size() < 3) {
-                System.err.println("[Warn]Src参数不符合 " + key);
+                OUT.println("[Warn]Src参数不符合 " + key);
                 continue;
             }
             Iterator<Desc> it = entry.getValue().iterator();
@@ -534,7 +540,7 @@ public class MappingHelper {
             String[] data = ds.remove(tmp.get(1));
             if(data == null) {
                 if(!tmp.get(1).startsWith("i"))
-                    System.out.println("[Warn]Src参数不存在 " + entry.getKey());
+                    OUT.println("[Warn]Src参数不存在 " + entry.getKey());
                 continue;
             }
 
@@ -548,7 +554,7 @@ public class MappingHelper {
         }
 
         //if(DEBUG)
-        //    System.out.println("[Debug] paramClassMap=" + paramClassMap);
+        //    OUT.println("[Debug] paramClassMap=" + paramClassMap);
     }
 
     /*private static int getRealId(byte[] datum, int i) {
@@ -821,7 +827,7 @@ public class MappingHelper {
                     if (tName == null) {
                         if (isMCFunction(desc)) {
                             CmdUtil.error("MCP与MC版本不匹配! 无法定位方法 " + desc.name + '|' + desc.param);
-                            System.out.println(methodNameMap);
+                            OUT.println(methodNameMap);
                         }
                     } else {
                         desc.name = tName;
@@ -847,7 +853,7 @@ public class MappingHelper {
 
                     if (tName == null) {
                         CmdUtil.error("MCP与MC版本不匹配! 无法定位字段 " + desc.name);
-                        System.out.println(fieldNameMap);
+                        OUT.println(fieldNameMap);
                     } else {
                         desc.name = tName;
                     }

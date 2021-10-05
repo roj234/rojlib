@@ -107,6 +107,11 @@ public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, ICl
     public Type returnType;
 
     @Override
+    public final int nodeType() {
+        return T_INVOKE;
+    }
+
+    @Override
     public String owner() {
         return owner;
     }

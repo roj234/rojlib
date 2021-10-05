@@ -33,7 +33,7 @@ package roj.asm.cst;
  * @version 0.1
  * @since 2021/5/29 17:16
  */
-public class CstMethodType extends CstRefUTF {
+public final class CstMethodType extends CstRefUTF {
     public CstMethodType(int valueIndex) {
         super(valueIndex);
     }

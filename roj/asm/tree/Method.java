@@ -48,41 +48,26 @@ import java.util.PrimitiveIterator;
  * @since 2021/6/18 9:51
  */
 public final class Method implements MethodNode, MoFNode {
-    public Method(int accesses, Clazz owner, String name, String desc) {
-        this(AccessFlag.of((short) accesses), owner.name, owner.parent, name, desc);
+    public Method(int accesses, IClass owner, String name, String desc) {
+        this(AccessFlag.of((short) accesses), owner.className(), name, desc);
     }
 
-    public Method(FlagList accesses, Clazz owner, String name, String desc) {
-        this(accesses, owner.name, owner.parent, name, desc);
+    public Method(FlagList accesses, IClass owner, String name, String desc) {
+        this(accesses, owner.className(), name, desc);
     }
 
-
-
-    public Method(int accesses, ConstantData owner, String name, String desc) {
-        this(AccessFlag.of((short) accesses), owner.name, owner.parent, name, desc);
-    }
-
-    public Method(FlagList accesses, ConstantData owner, String name, String desc) {
-        this(accesses, owner.name, owner.parent, name, desc);
-    }
-
-
-
-    public Method(FlagList accesses, String owner, String parent, String name, String desc) {
+    public Method(FlagList accesses, String owner, String name, String desc) {
         this.accesses = accesses;
         this.owner = owner;
-        this.parent = parent;
         this.name = name;
         this.desc = desc;
         this.attributes = new AttributeList();
     }
 
 
-
     public Method(ConstantData data, MethodSimple method) {
         this.accesses = method.accesses.copy();
         this.owner = data.name;
-        this.parent = data.parent;
         this.name = method.name.getString();
         this.desc = method.type.getString();
         this.attributes = new AttributeList(method.attributes.size());
@@ -107,6 +92,14 @@ public final class Method implements MethodNode, MoFNode {
                 attributes.add(attr);
             }
         }
+    }
+
+    public Method(IClass owner, Method method) {
+        this.accesses = method.accesses.copy();
+        this.owner = owner.className();
+        this.name = method.name;
+        this.desc = method.rawDesc();
+        this.attributes = new AttributeList(method.attributes);
     }
 
     public void initAttributes(ConstantPool pool, ByteReader r) {
@@ -173,8 +166,7 @@ public final class Method implements MethodNode, MoFNode {
         attributes.add(attr);
     }
 
-    public String owner, parent,
-            name;
+    public String owner, name;
     private String desc;
 
     private List<Type> parameters;
@@ -285,11 +277,6 @@ public final class Method implements MethodNode, MoFNode {
     }
 
     @Override
-    public String parentClass() {
-        return parent;
-    }
-
-    @Override
     public String ownerClass() {
         return owner;
     }
@@ -340,11 +327,6 @@ public final class Method implements MethodNode, MoFNode {
             parameters = ParamHelper.parseMethod(desc);
             returnType = parameters.remove(parameters.size() - 1);
         }
-    }
-
-    @Override
-    public FlagList access() {
-        return accesses;
     }
 
     public String rawDesc() {

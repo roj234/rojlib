@@ -165,8 +165,9 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
                 sb.set(sb.length() - 1, '^');
                 sb.append('\n');
             }
-        } else if(showErrorCode)
-            err.println(diag.getCode());
+            if(showErrorCode)
+                err.println(diag.getCode());
+        }
     }
 
     private static String getNearCode(JavaFileObject source, long lineNumber) {

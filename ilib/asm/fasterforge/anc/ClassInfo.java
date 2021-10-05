@@ -28,6 +28,8 @@ package ilib.asm.fasterforge.anc;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import roj.asm.tree.anno.Annotation;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.ConstantWriter;
 import roj.text.StringPool;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -61,7 +63,7 @@ public class ClassInfo {
         this.annotations = annotations;
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool) {
+    public void toByteArray(ByteWriter w, StringPool pool, ConstantWriter cw) {
         pool.writeString(w, internalName);
         w.writeVarInt(interfaces.size(), false);
         for (String s : interfaces) {
@@ -70,15 +72,15 @@ public class ClassInfo {
         w.writeVarInt(annotations.size(), false);
         for (Map.Entry<String, Collection<Annotation>> entry : annotations.asMap().entrySet()) {
             pool.writeString(w, entry.getKey());
-            Collection<Annotation> collection = entry.getValue();
-            w.writeVarInt(collection.size(), false);
-            for (Annotation annotationValue : collection) {
-                annotationValue.serialize(pool, w);
+            Collection<Annotation> as = entry.getValue();
+            w.writeVarInt(as.size(), false);
+            for (Annotation annotation : as) {
+                annotation.toByteArray(cw, w);
             }
         }
     }
 
-    public static ClassInfo fromByteArray(ByteReader r, StringPool pool) {
+    public static ClassInfo fromByteArray(ByteReader r, StringPool pool, ConstantPool cp) {
         String internalName = pool.readString(r);
         int len = r.readVarInt(false);
         List<String> list = new ArrayList<>(len);
@@ -91,9 +93,7 @@ public class ClassInfo {
             String key = pool.readString(r);
             int len2 = r.readVarInt(false);
             for (int j = 0; j < len2; j++) {
-                Annotation map1 = Annotation.deserialize(pool, r);
-
-                map.put(key, map1);
+                map.put(key, Annotation.deserialize(cp, r));
             }
         }
         return new ClassInfo(internalName, list, map);

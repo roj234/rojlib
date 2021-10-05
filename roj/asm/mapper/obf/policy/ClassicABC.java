@@ -1,5 +1,6 @@
 package roj.asm.mapper.obf.policy;
 
+import roj.asm.mapper.util.Desc;
 import roj.collect.ToIntMap;
 import roj.text.CharList;
 
@@ -23,8 +24,8 @@ public final class ClassicABC implements NamingFunction {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
     };
 
-    private CharList buf = new CharList();
-    private boolean keepPackage;
+    private final CharList buf = new CharList();
+    private       boolean  keepPackage;
 
     @Override
     public ClassicABC setKeepPackage(boolean keepPackage) {
@@ -46,8 +47,15 @@ public final class ClassicABC implements NamingFunction {
         return getABC(++i);
     }
 
+    private int ld = 0;
+
     @Override
-    public String obfName(Set<String> noDuplicate, String param, Random rand) {
+    public String obfName(Set<String> noDuplicate, Desc desc, Random rand) {
+        if (noDuplicate.size() < ld)
+            params.clear();
+        ld = noDuplicate.size();
+
+        String param = desc.param;
         int v = params.getOrDefault(param, 1);
         params.putInt(param, v + 1);
         buf.clear();

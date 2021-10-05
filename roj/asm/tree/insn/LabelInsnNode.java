@@ -34,9 +34,14 @@ import roj.util.ByteWriter;
  * @version 0.1
  * @since 2021/6/27 13:36
  */
-public class LabelInsnNode extends InsnNode {
+public final class LabelInsnNode extends InsnNode {
     public LabelInsnNode() {
         super((byte) 0);
+    }
+
+    @Override
+    public int nodeType() {
+        return T_LABEL;
     }
 
     @Override

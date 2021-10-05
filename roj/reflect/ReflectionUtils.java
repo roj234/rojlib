@@ -318,7 +318,7 @@ public final class ReflectionUtils {
             case CLASS:
                 return "Object";
             default:
-                StringBuilder s = new StringBuilder(NativeType.toDesc(c));
+                StringBuilder s = new StringBuilder(NativeType.toDesc((byte) c));
                 s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
                 return s.toString();
         }

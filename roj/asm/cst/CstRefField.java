@@ -25,7 +25,8 @@
  */
 
 package roj.asm.cst;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -34,11 +35,13 @@ package roj.asm.cst;
  */
 public final class CstRefField extends CstRef {
     public CstRefField(int classIndex, int nameAndTypeIndex) {
-        super(CstType.FIELD, classIndex, nameAndTypeIndex);
+        super(classIndex, nameAndTypeIndex);
     }
 
-    public CstRefField() {
-        super(CstType.FIELD);
-    }
+    public CstRefField() {}
 
+    @Override
+    public byte type() {
+        return CstType.FIELD;
+    }
 }

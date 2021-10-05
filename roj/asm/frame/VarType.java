@@ -49,7 +49,7 @@ public final class VarType {
 
     public static int ofType(Type type) {
         if(type.array > 0)
-            return -3;
+            return -2;
         switch (type.type) {
             case NativeType.VOID:
                 return -1;
@@ -67,8 +67,6 @@ public final class VarType {
                 return 4;
             case NativeType.CLASS:
                 return -2;
-            case NativeType.ARRAY:
-                return -3;
         }
         throw OperationDone.NEVER;
     }

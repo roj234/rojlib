@@ -33,7 +33,7 @@ package roj.asm.util;
  * @since 2021/5/11 0:59
  */
 public class AccessFlag {
-    public static final short
+    public static final char
             PUBLIC = 0x0001,
             PRIVATE = 0x0002,
             PROTECTED = 0x0004,
@@ -49,11 +49,11 @@ public class AccessFlag {
             SYNTHETIC = 0x1000,
             ANNOTATION = 0x2000,
             ENUM = 0x4000,
-            MODULE = (short) 0x8000;
+            MODULE = 0x8000;
 
-    public static final short
+    public static final char
         M_OPEN = 0x0020,
-        M_MANDATED = (short) 0x8000,
+        M_MANDATED = 0x8000,
         M_TRANSITIVE = 0x0020,
         M_STATIC_PHASE = 0x0040;
 

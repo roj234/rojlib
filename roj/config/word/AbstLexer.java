@@ -30,10 +30,6 @@ import roj.collect.LongBitSet;
 import roj.config.ParseException;
 import roj.math.MathUtils;
 import roj.text.CharList;
-import roj.util.ByteList;
-import roj.util.ByteReader;
-
-import java.io.UTFDataFormatException;
 
 /**
  * No description provided
@@ -71,26 +67,6 @@ public abstract class AbstLexer {
     // region 初始化
 
     public AbstLexer() {}
-
-    public AbstLexer(CharSequence str) {
-        this.input = str;
-    }
-
-    public AbstLexer(byte[] bytes) {
-        init(bytes);
-    }
-
-    public AbstLexer(char[] str) {
-        this.input = new CharList(str);
-    }
-
-    public AbstLexer init(byte[] bytes) {
-        try {
-            return init(ByteReader.readUTF(new ByteList(bytes)));
-        } catch (UTFDataFormatException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
     public AbstLexer init(CharSequence charList) {
         this.index = 0;
@@ -281,7 +257,7 @@ public abstract class AbstLexer {
         while (i < in.length()) {
             char c = in.charAt(i++);
             if (slash) {
-                i = slashHandler(input, c, v, i);
+                i = slashHandler(input, c, v, i, end);
                 slash = false;
             } else {
                 if(end == c) {
@@ -313,10 +289,13 @@ public abstract class AbstLexer {
     /**
      * 转义符处理
      */
-    protected static int slashHandler(CharSequence input, char c, CharList temp, int index) throws ParseException {
+    @SuppressWarnings("fallthrough")
+    protected static int slashHandler(CharSequence input, char c, CharList temp, int index, char end) throws ParseException {
         switch (c) {
             case '\'':
             case '"':
+                if (end != 0 && end != c)
+                    throw new ParseException(input, "无效的转义 \\" + c, index - 1, null);
             case '\\':
                 temp.append(c);
                 break;
@@ -350,7 +329,7 @@ public abstract class AbstLexer {
                 temp.append((char) uIndex);
                 break;
             default:
-                throw new ParseException(input, "Unexpected \\" + c, index - 1, null);
+                throw new ParseException(input, "无效的转义 " + c, index - 1, null);
         }
         return index;
     }
@@ -363,7 +342,7 @@ public abstract class AbstLexer {
         while (i < in.length()) {
             char c = in.charAt(i++);
             if (slash) {
-                i = slashHandler(in, c, output, i);
+                i = slashHandler(in, c, output, i, '\0');
                 slash = false;
             } else {
                 if(c == '\\') {
@@ -552,7 +531,14 @@ public abstract class AbstLexer {
             unexpected(String.valueOf(last));
         }
 
-        return formNumberClip(flag, temp, negative);
+        if ((exp & 2) != 0 && (last == 'e' || last == 'E'))
+            unexpected("exp后的终止");
+
+        try {
+            return formNumberClip(flag, temp, negative);
+        } catch (NumberFormatException e) {
+            throw err("非法的数字 '" + temp.toString() + "': " + e.getMessage());
+        }
     }
 
     /**
@@ -682,7 +668,9 @@ public abstract class AbstLexer {
         this.index = i;
 
         if (temp.length() == 0) {
-            return eof();
+            if(i == input.length())
+                return eof();
+            unexpected(String.valueOf(input.charAt(i)));
         }
 
         char last = temp.charAt(temp.length() - 1);
@@ -691,7 +679,14 @@ public abstract class AbstLexer {
             unexpected(String.valueOf(last));
         }
 
-        return formNumberClip(flag, temp, negative);
+        if ((exp & 2) != 0 && (last == 'e' || last == 'E'))
+            unexpected("exp后的终止");
+
+        try {
+            return formNumberClip(flag, temp, negative);
+        } catch (NumberFormatException e) {
+            throw err("非法的数字 '" + temp.toString() + "': " + e.getMessage());
+        }
     }
 
     protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {

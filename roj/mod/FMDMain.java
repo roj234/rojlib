@@ -38,7 +38,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AbstractExecutionTask;
-import roj.concurrent.task.CalculateTask;
+import roj.concurrent.task.ExecutionTask;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
@@ -76,7 +76,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static roj.mod.Shared.*;
 
@@ -338,10 +337,9 @@ public final class FMDMain {
             String path = file.getAbsolutePath();
             int index = path.lastIndexOf('.');
             File out = index == -1 ? new File(path + "-结果") : new File(path.substring(0, index) + "-结果.jar");
-            ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(out));
+            ZipFileWriter zfw = new ZipFileWriter(out);
 
-            CalculateTask<Void> task = new CalculateTask<>(new ResWriter(zos, res));
-            parallel.pushTask(task);
+            ExecutionTask task = parallel.pushRunnable(new ResWriter(zfw, res));
 
             rev.remap(DEBUG, list);
             rev.getExtendedSuperList().add(rev.snapshot(state));
@@ -356,7 +354,11 @@ public final class FMDMain {
                 e.printStackTrace();
             }
 
-            Util.write(list, zos, true);
+            for (int j = 0; j < list.size(); j++) {
+                Context ctx = list.get(j);
+                zfw.writeNamed(ctx.getName(), ctx.get(true));
+            }
+            zfw.finish();
 
             res.clear();
         }
@@ -925,30 +927,41 @@ public final class FMDMain {
                 list.add(new Context(out.getName(), out.getOutput()));
             }
             MutableZipFile stampZip = project.stampZip;
-            if (!increment)
-                stampZip.getEntries().clear();
-            for (int i = 0; i < outputs.size(); i++) {
-                ByteListOutput out = outputs.get(i);
-                stampZip.setFileData(out.getName(), out.getOutput()).compress = false;
-            }
-            // compress all ?
-            stampZip.store();
-            if(!canIncrementWrite) {
-                MyHashSet<String> changed = new MyHashSet<>(list.size());
-                for (int i = 0; i < list.size(); i++) {
-                    changed.add(list.get(i).getName());
+            if (!increment) {
+                ZipFileWriter zfw = new ZipFileWriter(stampZip.file);
+                for (int i = 0; i < outputs.size(); i++) {
+                    ByteListOutput out = outputs.get(i);
+                    zfw.writeNamed(out.getName(), out.getOutput(), ZipEntry.STORED);
                 }
-                for (MutableZipFile.EFile file : stampZip.getEntries().values()) {
-                    if(!changed.contains(file.getName()))
-                        list.add(new Context(file.getName(), stampZip.getFileData(file.getName())));
+                zfw.setComment("This is 'DEV' version of your mod\n" +
+                                       "Powered by Roj234's FMDv" + VERSION);
+                zfw.finish();
+
+                stampZip.read();
+            } else {
+                for (int i = 0; i < outputs.size(); i++) {
+                    ByteListOutput out = outputs.get(i);
+                    stampZip.setFileData(out.getName(), out.getOutput()).compress = false;
+                }
+                // compress all ?
+                stampZip.store();
+
+                if(!canIncrementWrite) {
+                    MyHashSet<String> changed = new MyHashSet<>(list.size());
+                    for (int i = 0; i < list.size(); i++) {
+                        changed.add(list.get(i).getName());
+                    }
+                    for (MutableZipFile.EFile file : stampZip.getEntries().values()) {
+                        if(!changed.contains(file.getName()))
+                            list.add(new Context(file.getName(), stampZip.getFileData(file.getName())));
+                    }
                 }
             }
 
-            // 想办法减少ZIP写入的I/O
-            MyHashMap<String, byte[]> resources = project.resourceCache;
+            MyHashMap<String, ?> resources = project.resourceCache;
 
             if (h != null) {
-                resources.put("META-INF/" + project.atName + ".cfg", h.getAtCfgBytes());
+                resources.put("META-INF/" + project.atName + ".cfg", Helpers.cast(h.getAtCfgBytes()));
             }
 
             if(DEBUG)
@@ -1022,9 +1035,8 @@ public final class FMDMain {
                     }
                 }
 
-                ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(jarFile));
-                CalculateTask<Void> rw = new CalculateTask<>(new ResWriter(zos, resources));
-                parallel.pushTask(rw);
+                ZipFileWriter zfw = new ZipFileWriter(jarFile);
+                ExecutionTask rw = parallel.pushRunnable(new ResWriter(zfw, resources));
 
                 mapperFwd.remap(DEBUG, list);
                 project.state = mapperFwd.snapshot(project.state);
@@ -1042,7 +1054,12 @@ public final class FMDMain {
                     CmdUtil.warning("资源写入失败", e);
                 }
 
-                Util.write(list, zos, true);
+                for (int i = 0; i < list.size(); i++) {
+                    Context ctx = list.get(i);
+                    zfw.writeNamed(ctx.getName(), ctx.get(true));
+                }
+                zfw.setComment("Powered by Roj234's FMDv" + VERSION);
+                zfw.finish();
 
                 args.remove("_HOT_RELOAD_ENABLE_");
             }
@@ -1458,10 +1475,8 @@ public final class FMDMain {
         if(code != 0)
             return code;
 
-        File merged = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
-        File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
         try {
-            FileUtil.copyFile(merged, backupFile);
+            FileUtil.copyFile(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar"), new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak"));
         } catch (IOException e) {
             CmdUtil.warning("备份失败", e);
         }
@@ -1583,8 +1598,7 @@ public final class FMDMain {
     private static void mergeLibraries(File mcBase, Collection<String> libraries, BiConsumer<Integer, File> biConsumer, boolean is113) throws IOException {
         File dest = new File(BASE,"class/[noread]merged_lib.jar");
 
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(dest));
-        ByteList list = new ByteList(1024 * 128);
+        ZipFileWriter zfw = new ZipFileWriter(dest, false);
 
         MyHashMap<String, String> names = new MyHashMap<>();
 
@@ -1611,12 +1625,9 @@ public final class FMDMain {
                     continue;
                 }
 
-                ZipFile zf = new ZipFile(file);
-
-                Enumeration<? extends ZipEntry> itr = zf.entries();
-                while (itr.hasMoreElements()) {
-                    ZipEntry entry = itr.nextElement();
-                    if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
+                MutableZipFile mzf = new MutableZipFile(file, 0);
+                for (MutableZipFile.EFile entry : mzf.getEntries().values()) {
+                    if (entry.getName().endsWith(".class")) {
                         String prevPkg = names.get(entry.getName());
                         if(prevPkg != null) {
                             if (!pkg.equals(prevPkg)) {
@@ -1625,29 +1636,20 @@ public final class FMDMain {
                                 CmdUtil.warning("重复的 " + entry.getName() + " 在 " + prevPkg + " 和 " + pkg, true);
                             }
                         } else {
-                            ZipEntry ze1 = new ZipEntry(entry);
-                            ze1.setCompressedSize(-1);
-                            ze1.setMethod(ZipEntry.DEFLATED);
-                            zos.putNextEntry(ze1);
-                            list.clear();
-                            InputStream in = zf.getInputStream(entry);
-                            list.readStreamArrayFully(in).writeToStream(zos);
-                            in.close();
-                            zos.closeEntry();
+                            zfw.write(mzf, entry);
 
                             names.put(entry.getName(), pkg);
                         }
                     }
                 }
-
-                zf.close();
+                mzf.close();
             }
         }
 
-        ZipUtil.close(zos);
+        zfw.finish();
     }
 
-    private static final boolean _USE_PATCHY = System.getProperty("fmd.usePatchy", "false").equalsIgnoreCase("true");
+    private static final boolean _USE_PATCHY = false;
 
     // endregion
     // region Common.Util

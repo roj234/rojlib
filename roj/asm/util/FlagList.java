@@ -39,16 +39,12 @@ import java.util.PrimitiveIterator;
  * @since 2021/4/21 22:51
  */
 public class FlagList implements Iterable<Integer> {
-    public short flag;
+    public char flag;
 
     public FlagList() {}
 
     public FlagList(int flag) {
-        this.flag = (short) flag;
-    }
-
-    public boolean isEmpty() {
-        return flag == 0;
+        this.flag = (char) flag;
     }
 
     public boolean hasAny(int o) {
@@ -72,25 +68,11 @@ public class FlagList implements Iterable<Integer> {
         this.flag &= ~o;
     }
 
-    public void clear() {
-        this.flag = 0;
-    }
-
     public FlagList copy() {
         return new FlagList(flag);
     }
 
-    public String toAcc(String[] arr) {
-        if (flag == 0)
-            return "";
-        StringBuilder sb = new StringBuilder();
-        for (PrimitiveIterator.OfInt itr = iterator(); itr.hasNext(); ) {
-            sb.append(AccessFlag.get(itr.nextInt(), arr)).append(' ');
-        }
-        return sb.deleteCharAt(sb.length() - 1).toString();
-    }
-
-    public static class FlagIterator implements PrimitiveIterator.OfInt {
+    static final class FlagIterator implements PrimitiveIterator.OfInt {
         private byte pos;
         private final FlagList fl;
 

@@ -45,9 +45,8 @@ public @interface Shadow {
      */
     String value();
 
-    boolean direction() default false;
-
-    // todo
-    boolean MAP_SELF_TO_VALUE = false;
-    boolean MAP_VALUE_TO_SELF = true;
+    /**
+     * @return field class name, default: @Nixim.target
+     */
+    String owner() default "";
 }

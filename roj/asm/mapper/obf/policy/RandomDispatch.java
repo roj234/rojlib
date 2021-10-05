@@ -1,5 +1,7 @@
 package roj.asm.mapper.obf.policy;
 
+import roj.asm.mapper.util.Desc;
+
 import java.util.Random;
 import java.util.Set;
 
@@ -29,7 +31,7 @@ public final class RandomDispatch implements NamingFunction {
     }
 
     @Override
-    public final String obfName(Set<String> noDuplicate, String param, Random rand) {
+    public final String obfName(Set<String> noDuplicate, Desc param, Random rand) {
         return functions[rand.nextInt(functions.length)].obfName(noDuplicate, param, rand);
     }
 }

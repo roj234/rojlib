@@ -163,10 +163,10 @@ public final class ByteReader implements DataInput {
             return null;
         if (count == 0)
             return "";
-        final ByteList bytes = readBytesDelegated(count);
         try {
-            return decodeUTFC(count, bytes);
+            return DUC(count, bytes, index);
         } catch (UTFDataFormatException e) {
+            index += count;
             return bytes.getString();
         }
     }
@@ -181,10 +181,10 @@ public final class ByteReader implements DataInput {
         if (count > max) {
             throw new RuntimeException("The string received is larger than maximum allowed " + max);
         }
-        final ByteList bytes = readBytesDelegated(count);
         try {
-            return decodeUTFC(count, bytes);
+            return DUC(count, bytes, index);
         } catch (UTFDataFormatException e) {
+            index += count;
             return bytes.getString();
         }
     }
@@ -195,10 +195,10 @@ public final class ByteReader implements DataInput {
             throw new NegativeArraySizeException(String.valueOf(count));
         if (count == 0)
             return "";
-        final ByteList bytes = readBytesDelegated(count);
         try {
-            return decodeUTFC(count, bytes);
+            return DUC(count, bytes, index);
         } catch (UTFDataFormatException e) {
+            index += count;
             return bytes.getString();
         }
     }
@@ -326,17 +326,23 @@ public final class ByteReader implements DataInput {
 
     @Override
     public String readUTF() throws UTFDataFormatException {
-        return readUTF0(readUnsignedShort());
+        return DUC(readUnsignedShort(), bytes, index);
     }
 
     public String readUTF0(int len) throws UTFDataFormatException {
-        return decodeUTFC(len, readBytesDelegated(len));
+        return DUC(len, bytes, index);
     }
 
-    public static String readUTF(ByteList list) throws UTFDataFormatException {
-        CharList cl = new CharList(list.pos());
-        decodeUTF(-1, cl, list);
-        return cl.toString();
+    private CharList cache;
+    private String DUC(int len, ByteList bytes, int srcOffset) throws UTFDataFormatException {
+        if (this.cache == null) {
+            this.cache = new CharList(len);
+        }
+        decodeUTF0(len + srcOffset, cache, bytes, srcOffset, 0);
+        index += len;
+        String s = cache.toString();
+        cache.clear();
+        return s;
     }
 
     public ByteList readZeroEnd(int max) {
@@ -345,9 +351,16 @@ public final class ByteReader implements DataInput {
             if(bytes.get(i++) == 0) {
                 ByteList sub = bytes.subList(index, i - index);
                 index = i;
+                return sub;
             }
         }
         return null;
+    }
+
+    public static String readUTF(ByteList list) throws UTFDataFormatException {
+        CharList cl = new CharList(list.pos());
+        decodeUTF(-1, cl, list);
+        return cl.toString();
     }
 
     public static void decodeUTF(int max, CharList out, ByteList in) throws UTFDataFormatException {
@@ -357,34 +370,19 @@ public final class ByteReader implements DataInput {
         // The number of chars produced may be less than length
         out.ensureCapacity(max);
 
-        decode0(max, out, in, 0, 0);
-    }
-
-    public static int decodeUTFPartial(int inputOff, int max, CharList out, ByteList in) throws UTFDataFormatException {
-        if (max < 0)
-            max = in.pos();
-
-        return decode0(max, out, in, inputOff, 1) - inputOff;
-    }
-
-    public static void decodeUTFExternal(int max, CharList out, ByteList in) throws UTFDataFormatException {
-        if (max < 0)
-            max = in.pos();
-
-        out.ensureCapacity(max);
-
-        decode0(max, out, in, 0, 2);
+        decodeUTF0(max, out, in, 0, 0);
     }
 
     public static int decodeUTFPartialExternal(int inputOff, int max, CharList out, ByteList in) throws UTFDataFormatException {
         if (max < 0)
             max = in.pos();
 
-        return decode0(max, out, in, inputOff, 3) - inputOff;
+        return decodeUTF0(max, out, in, inputOff, FLAG_EXTERNAL | FLAG_PARTIAL) - inputOff;
     }
 
+    public static final int FLAG_PARTIAL = 1, FLAG_EXTERNAL = 2;
     @SuppressWarnings("fallthrough")
-    private static int decode0(int max, CharList out, ByteList in, int i, int flag) throws UTFDataFormatException {
+    public static int decodeUTF0(int max, CharList out, ByteList in, int i, int flag) throws UTFDataFormatException {
         int c;
         while (i < max) {
             c = in.getU(i);
@@ -519,17 +517,6 @@ public final class ByteReader implements DataInput {
             out.appendCodePoint(k);
         else
             out.append((char) k);
-    }
-
-    private CharList cc;
-    public String decodeUTFC(int len, ByteList bytes) throws UTFDataFormatException {
-        if (this.cc == null) {
-            this.cc = new CharList(len);
-        }
-        decodeUTF(len, cc, bytes);
-        String s = cc.toString();
-        cc.clear();
-        return s;
     }
 
     @Override

@@ -36,7 +36,7 @@ import roj.util.ByteWriter;
  * @since 2021/4/21 22:51
  */
 public final class EndOfInsn extends InsnNode {
-    public static final EndOfInsn INSTANCE = new EndOfInsn();
+    public static final EndOfInsn MARKER = new EndOfInsn();
 
     private EndOfInsn() {
         super(Opcodes.NOP);
@@ -57,7 +57,7 @@ public final class EndOfInsn extends InsnNode {
 
     @Override
     public boolean equals(Object obj) {
-        return obj == INSTANCE;
+        return obj == MARKER;
     }
 
     public String toString() {

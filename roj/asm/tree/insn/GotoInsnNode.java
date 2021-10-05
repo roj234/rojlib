@@ -42,6 +42,10 @@ import static roj.asm.Opcodes.*;
  * @since 2021/5/24 23:21
  */
 public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
+    public GotoInsnNode() {
+        super(Opcodes.GOTO);
+    }
+
     public GotoInsnNode(InsnNode target) {
         super(Opcodes.GOTO);
         setTarget(target);
@@ -62,6 +66,11 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
         return false;
     }
 
+    @Override
+    public final int nodeType() {
+        return T_GOTO_IF;
+    }
+
     public InsnNode target;
 
     @Override
@@ -76,50 +85,28 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
 
     int delta;
 
-    private int cache_id_4_verify;
-
     @Override
     public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
-        int i = pcRev.applyAsInt(target = validate(target));
-
-        cache_id_4_verify = i;
-
-        if(i == -1) {
-            delta = 0;
-            return true;
-        }
-
-        int od = delta;
-        int nd = delta = (i - pcRev.applyAsInt(this));
-        return ( ((short) od) == od ) != ( ((short) nd) == nd );
+        return (code == GOTO) != ((delta = (pcRev.applyAsInt(target = validate(target)) - pcRev.applyAsInt(this))) == ((short) delta));
     }
 
     @Override
     public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
-        if(cache_id_4_verify > 0 && list.get(cache_id_4_verify - 1).code == WIDE)
+        index = list.indexOf(validate(target));
+        if(index > 0 && list.get(index - 1).code == WIDE)
             throw new IllegalArgumentException("Jump target must not \"after\" wide instruction");
     }
 
     public void toByteArray(ByteWriter w) {
         int delta = this.delta;
-
-        byte code = this.code;
-        if (((short) delta) != delta && code == Opcodes.GOTO) {
-            code = Opcodes.GOTO_W;
-        } else if (code == Opcodes.GOTO_W) {
-            code = Opcodes.GOTO;
-        }
-
-        w.writeByte(code);
-
         if (((short) delta) != delta) {
-            w.writeInt(delta);
+            w.writeByte(this.code = GOTO_W).writeInt(delta);
         } else {
-            w.writeShort(delta);
+            w.writeByte(this.code = GOTO).writeShort(delta);
         }
     }
 
     public String toString() {
-        return super.toString() + " => " + target;
+        return super.toString() + " => " + (delta == 0 ? target : "offset " + delta);
     }
 }

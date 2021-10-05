@@ -111,7 +111,7 @@ public class Loader implements IFMLLoadingPlugin {
 
         if (Config.removePatchy) {
             for (File patchy : FileUtil.findAllFiles(new File("."), file -> file.getName().startsWith("patchy-") && file.getName().endsWith(".jar"))) {
-                File mark = new File(patchy, "-mark");
+                File mark = new File(patchy + "-mark");
                 if (mark.isFile()) continue;
 
                 try(MutableZipFile mz = new MutableZipFile(patchy)) {
@@ -189,7 +189,7 @@ public class Loader implements IFMLLoadingPlugin {
         NiximTransformer.read(IOUtil.read("ilib/asm/fasterforge/NiximModFind.class"));
 
         NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/FastDismount.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/GhostBlock.class"));
+        //NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/GhostBlock.class"));
         NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/CrashDispenser.class"));
 
         NiximTransformer.read(IOUtil.read("ilib/asm/nixim/FastTileConst.class"));

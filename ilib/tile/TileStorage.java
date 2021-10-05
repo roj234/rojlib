@@ -33,7 +33,8 @@ import roj.collect.Int2IntMap;
 
 import javax.annotation.Nonnull;
 
-@AutoRegTile("mi:storage")/**
+@AutoRegTile("mi:storage")
+/**
  * No description provided
  *
  * @author Roj234
@@ -64,7 +65,7 @@ public class TileStorage extends TileBase {
     }
 
     public Integer get(int id) {
-        return data.getOrDefault(id, null);
+        return data.get(id);
     }
 
     public void set(int id, int value) {

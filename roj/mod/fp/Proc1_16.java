@@ -32,11 +32,11 @@ import roj.asm.mapper.util.Context;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.OperationDone;
-import roj.concurrent.task.ExecutionTask;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.FileUtil;
+import roj.io.ZipFileWriter;
 import roj.mod.FMDMain;
 import roj.mod.MCLauncher;
 import roj.mod.remap.ClassMerger;
@@ -50,20 +50,20 @@ import roj.util.Helpers;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.attribute.FileTime;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static roj.mod.Shared.*;
 
 /**
- * 1.12 or upper File Processor
+ * 1.13 or upper File Processor
  *
  * @author Roj234
  * @version 0.1
@@ -78,7 +78,7 @@ public final class Proc1_16 extends Processor {
     Map<String, Map<String, List<String>>> paramMap;
 
     public static Object[] find116Files(File librariesPath, Collection<String> values) {
-        File srgCli, specialSource;
+        File specialSource;
         CharList forge = new CharList();
 
         for (String s : values) {
@@ -103,7 +103,7 @@ public final class Proc1_16 extends Processor {
         if (len == 0)
             throw new IllegalArgumentException("未找到net/minecraftforge/forge/xxx/forge-xxx.jar");
 
-        srgCli = new File(librariesPath, forge.append("-client.jar").toString());
+        File srgCli = new File(librariesPath, forge.append("-client.jar").toString());
 
         File forgeInstaller;
         try {
@@ -262,47 +262,52 @@ public final class Proc1_16 extends Processor {
 
         tmp.delete();
 
-        CodeMapper nameRmp = new CodeMapper(rmp);
-        nameRmp.setParamRemappingV2(paramMap);
-        nameRmp.rewrite = true;
-
-        ExecutionTask remapClient = new ExecutionTask(com(rmp, nameRmp, 0, ctxs));
-        ExecutionTask remapServer = new ExecutionTask(com(new ConstMapper(rmp), nameRmp, 1, ctxs));
-        ExecutionTask remapForge = new ExecutionTask(com(new ConstMapper(rmp), nameRmp, 2, ctxs));
-
-        threadWait(remapClient, remapServer, remapForge);
-
         ClassMerger merger = new ClassMerger();
-        Collection<Context> mergedCtx = merger.process(ctxs[0], ctxs[1]);
+        ctxs[1] = new ArrayList<>(merger.process(ctxs[0], ctxs[1]));
+        ctxs[0].clear();
+        ctxs[0] = null;
 
         CmdUtil.info("服务端专属 " + merger.serverOnly  + ", 客户端专属 " + merger.clientOnly + ", 共用 " + merger.both);
         CmdUtil.info("合并了" + merger.mergedField + "个字段, " + merger.mergedMethod + "个方法, 覆盖了" + merger.replaceMethod + "个方法");
 
-        if(DEBUG) {
-            CmdUtil.info("验证class完整性");
-        }
-        for (Context ctx : mergedCtx) {
-            try {
-                ctx.validateSelf();
-            } catch (Throwable e) {
-                CmdUtil.warning(ctx.getName() + " 验证失败", e);
-            }
-        }
-        for (Context ctx : ctxs[2]) {
-            try {
-                ctx.validateSelf();
-            } catch (Throwable e) {
-                CmdUtil.warning(ctx.getName() + " 验证失败", e);
-            }
-        }
+        CodeMapper nameRmp = new CodeMapper(rmp);
+        nameRmp.setParamRemappingV2(paramMap);
+        nameRmp.rewrite = true;
 
-        File merged = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
-        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(merged))) {
-            Util.write(mergedCtx, zos, false);
-            Util.write(ctxs[2], zos, true); // forge
+        threadWait(com(rmp, nameRmp, 1, ctxs),
+                   com(new ConstMapper(rmp), nameRmp, 2, ctxs));
 
-            if(DEBUG)
-                CmdUtil.success("文件写入完毕");
+        try (ZipFileWriter zfw = new ZipFileWriter(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar"))) {
+            FileTime time = FileTime.from(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+            List<Context> merged = ctxs[1];
+            for (int i = 0; i < merged.size(); i++) {
+                Context ctx = merged.get(i);
+                ByteList list;
+                try {
+                    list = ctx.getCompressedShared();
+                } catch (Throwable e) {
+                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    continue;
+                }
+                zfw.writeNamed(ctx.getName(), list);
+            }
+            List<Context> fgResult = ctxs[2];
+            merged.clear();
+            for (int i = 0; i < fgResult.size(); i++) {
+                Context ctx = fgResult.get(i);
+                ByteList list;
+                try {
+                    list = ctx.getCompressedShared();
+                } catch (Throwable e) {
+                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    continue;
+                }
+                zfw.writeNamed(ctx.getName(), list);
+            }
+            fgResult.clear();
+
+            if (DEBUG)
+                CmdUtil.success("I/O完毕");
         } catch (IOException e) {
             CmdUtil.error("文件写入失败", e);
             return -1;
@@ -331,7 +336,6 @@ public final class Proc1_16 extends Processor {
                 InputStream in = zf.getInputStream(zn);
                 Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
                 in.close();
-                c.getData();
                 bl.clear();
                 ctx.add(c);
             }
@@ -352,7 +356,6 @@ public final class Proc1_16 extends Processor {
                 InputStream in = zf.getInputStream(zn);
                 Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
                 in.close();
-                c.getData();
                 bl.clear();
                 ctx.add(c);
             }

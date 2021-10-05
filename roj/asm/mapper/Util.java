@@ -36,11 +36,10 @@ import roj.asm.type.Type;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.SharedThreads;
-import roj.io.ZipUtil;
+import roj.io.ZipFileWriter;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
 import roj.util.ByteList;
 import roj.util.FastThreadLocal;
 import roj.util.Helpers;
@@ -57,9 +56,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Mapper Util
@@ -228,6 +225,9 @@ public final class Util {
             duplicate.clear();
         }
 
+        // 加上一步工序, 删除找得到的“找不到的”class
+        notFoundClasses.removeAll(methods.keySet());
+
         return dest;
     }
 
@@ -241,7 +241,8 @@ public final class Util {
         if(classes == null) {
             try {
                 cachedClassRef.put(name,
-                                   classes = ReflectionUtils.getFathersAndItfOrdered(Class.forName(name.replace('/', '.'), false, Util.class.getClassLoader())));
+                                   // use boot class loader
+                                   classes = ReflectionUtils.getFathersAndItfOrdered(Class.forName(name.replace('/', '.'), false, null)));
             } catch (Throwable e) {
                 if (!(e instanceof ClassNotFoundException) && !(e instanceof NoClassDefFoundError)) {
                     System.err.println("Exception Loading " + name);
@@ -276,10 +277,9 @@ public final class Util {
         if(notFoundClasses.contains(k.owner))
             return unableDefault;
 
-        Class<?>[] par;
         List<Type> pars = ParamHelper.parseMethod(k.param);
         pars.remove(pars.size() - 1);
-        par = new Class<?>[pars.size()];
+        Class<?>[] par = new Class<?>[pars.size()];
         for (int i = 0; i < pars.size(); i++) {
             Type type = pars.get(i);
 
@@ -338,26 +338,8 @@ public final class Util {
 
     // endregion
 
-    public static void write(Collection<Context> contexts, ZipOutputStream zos, boolean close) throws IOException {
-        for(Context ctx : contexts) {
-            ZipEntry ze = new ZipEntry(ctx.getName());
-            try {
-                zos.putNextEntry(ze);
-                ctx.get().writeToStream(zos);
-                zos.closeEntry();
-            } catch (Throwable e) {
-                if(e instanceof ZipException && e.getMessage().startsWith("duplicate entry")) {
-                    CmdUtil.warning("重复的文件名! " + ctx.getName());
-                } else throw e;
-            }
-        }
-
-        if(close)
-            ZipUtil.close(zos);
-    }
-
-    public static Thread writeResourceAsync(@Nonnull ZipOutputStream zos, @Nonnull Map<String, ?> resources) {
-        Thread writer = new Thread(new ResWriter(zos, resources), "Resource Writer");
+    public static Thread writeResourceAsync(@Nonnull ZipFileWriter zfw, @Nonnull Map<String, ?> resources) {
+        Thread writer = new Thread(new ResWriter(zfw, resources), "Resource Writer");
         writer.setDaemon(true);
         writer.start();
         return writer;
@@ -400,11 +382,11 @@ public final class Util {
     private static String mapClassName(Map<? extends CharSequence, String> map, CharSequence name, boolean file, int s, int e) {
         if (e == 0)
             return "";
-        String b;
 
         CharList cl = ThreadBasedCache.get().sharedCL;
         cl.clear();
 
+        String b;
         if ((b = map.get(cl.append(name, s, e - s - (file ? 6 : 0)))) != null) {
             return file ? (b + ".class") : b;
         }
@@ -471,9 +453,9 @@ public final class Util {
         ParamHelper.parseMethod(md, types);
 
         boolean gt0 = false;
-        String str;
         for (int i = 0; i < types.size(); i++) {
             Type type = types.get(i);
+            String str;
             if ((str = mapOwner(classMap, type.owner, false)) != null) {
                 type.owner = str;
                 gt0 = true;
@@ -541,7 +523,6 @@ public final class Util {
                 InputStream in = inputJar.getInputStream(zn);
                 Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
                 in.close();
-                c.getData();
                 bl.clear();
                 ctx.add(c);
             }

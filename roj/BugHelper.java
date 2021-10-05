@@ -103,10 +103,10 @@ public class BugHelper {
                 bl.readStreamArrayFully(in);
 
                     ConstantData cd = Parser.parseConstants(bl);
-                    Constant[] cc = cd.cp.array();
-                    for (int i = 1; i < cc.length; i++) {
-                        if(cc[i].type() == CstType.UTF) {
-                            String cn = ((CstUTF) cc[i]).getString();
+                    List<Constant> cc = cd.cp.array();
+                    for (int i = 0; i < cc.size(); i++) {
+                        if(cc.get(i).type() == CstType.UTF) {
+                            String cn = ((CstUTF) cc.get(i)).getString();
                             if(cn.endsWith("readItemStack")) {
                                 System.out.println(">> In " + zf.getName());
                                 System.out.println("> Inheritor '" + key.getKey() + "'");

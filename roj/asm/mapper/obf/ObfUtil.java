@@ -26,9 +26,11 @@
 package roj.asm.mapper.obf;
 
 import roj.asm.Opcodes;
+import roj.asm.Parser;
 import roj.asm.frame.CodeBlock;
 import roj.asm.frame.Interpreter;
 import roj.asm.mapper.util.Context;
+import roj.asm.tree.Clazz;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
@@ -39,8 +41,10 @@ import roj.asm.tree.simple.MethodSimple;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.collect.ToIntMap;
+import roj.io.IOUtil;
 import roj.util.Helpers;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 
@@ -52,10 +56,125 @@ import java.util.Random;
  * @since 2021/7/30 22:17
  */
 public class ObfUtil {
-    public static void StringEncode(List<Context> ctxs, ToIntMap<String> chance, Random rnd) {
-
+    static Method textXOR_A, textXOR_B;
+    static {
+        try {
+            Clazz total = Parser.parse(IOUtil.read("roj/asm/mapper/obf/ObfUtil.class"));
+            Method txa = total.methods.get(total.getMethodByName("TextXORA"));
+            txa.code.attributes.clear();
+            textXOR_A = txa;
+            Method txb = total.methods.get(total.getMethodByName("TextXORB_dec"));
+            txb.code.attributes.clear();
+            textXOR_B = txb;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
+    public static void StringEncode(List<Context> ctx, ToIntMap<String> chance, Random rnd, float decoderChance, int maxDecoder) {
+        for (int i = 0; i < ctx.size(); i++) {
+            ConstantData cd = ctx.get(i).getData();
+            if (rnd.nextFloat() < decoderChance) {
+                //Method md = new Method();
+                //cd.methods.add(Helpers.cast(md));
+            }
+            if (maxDecoder == 0) break;
+        }
+        int defaultChance = chance.getOrDefault(null, 0);
+        for (int i = 0; i < ctx.size(); i++) {
+            ConstantData cd = ctx.get(i).getData();
+            List<? extends MethodNode> methods = cd.methods;
+            for (int j = 0; j < methods.size(); j++) {
+                if(rnd.nextInt() < chance.getOrDefault(cd.name, defaultChance)) {
+                    MethodNode node = methods.get(j);
+                    if(node instanceof MethodSimple) {
+                        node = new Method(cd, (MethodSimple) node);
+                        methods.set(i, Helpers.cast(node));
+                    }
+                    Method m = (Method) node;
+
+
+                }
+            }
+        }
+    }
+
+    private static String TextXORA(String origin, String key) {
+        char[] array = origin.toCharArray();
+        char[] box = key.toCharArray();
+        int j = 0;
+        for (int i = 0; i < array.length; i++) {
+            int boxIdx1 = i % box.length;
+            char tmp = box[boxIdx1];
+            box[boxIdx1] = box[j];
+            box[j] = tmp;
+            j = (j + tmp) % box.length;
+
+            array[i] ^= (box[(box[boxIdx1] + tmp) % box.length]);
+        }
+
+        return new String(array);
+    }
+
+    // will copy it
+    private static String TextXORB_dec(String origin, String key) {
+        StackTraceElement[] t = new Throwable().getStackTrace();
+        char[] array = origin.toCharArray();
+        int x = t.length;
+        StringBuilder sb = new StringBuilder(key.length() > 0 ? key.length() << 1 : array.length)
+                .append(t[x-- - 2].getClassName())
+                .append(t[x-1].getLineNumber())
+                .append(key);
+        if (key != null)
+            sb.append(t[x].getMethodName());
+        char[] box = new char[sb.length()];
+        if ((x = box.length) < 0)
+            sb.getChars(0, sb.length() - 2, box, 0);
+        else
+            sb.append(t[--x].getMethodName());
+        if (box.length == 0)
+            sb.getChars(0, sb.length() - 1, box, 1);
+        else if(x-- != 0)
+            sb.getChars(0, sb.length(), box, 0);
+        int j = 0;
+        if (j == ++x)
+            return new String(array, 0, array.length - key.length() / 2);
+        for (int i = 0; i < array.length; i++) {
+            int boxIdx1 = i % x;
+            char tmp = box[boxIdx1];
+            box[boxIdx1] = box[j];
+            box[j] = tmp;
+            j = (j + tmp) % box.length;
+
+            array[i] ^= (box[(box[boxIdx1] + tmp) % box.length]);
+        }
+
+        return new String(array);
+    }
+
+    private static String TextXORB_enc(String origin, String key, String cn, int ln, String mn, String emn) {
+        char[] array = origin.toCharArray();
+        StringBuilder sb = new StringBuilder()
+                .append(cn)
+                .append(ln)
+                .append(key)
+                .append(emn)
+                .append(mn);
+        char[] box = new char[sb.length()];
+        sb.getChars(0, sb.length(), box, 0);
+        int j = 0;
+        for (int i = 0; i < array.length; i++) {
+            int boxIdx1 = i % box.length;
+            char tmp = box[boxIdx1];
+            box[boxIdx1] = box[j];
+            box[j] = tmp;
+            j = (j + tmp) % box.length;
+
+            array[i] ^= (box[(box[boxIdx1] + tmp) % box.length]);
+        }
+
+        return new String(array);
+    }
 
     /*
     要想了解什么是控制流平坦化(control flow flatten)，可以找论文"obfuscating c++ programs via control flow flattening"了解。

@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,44 +23,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package roj.asm.nixim2;
 
-package roj.asm.tree.insn;
+import roj.asm.tree.simple.MoFNode;
 
-import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.Opcodes;
-import roj.collect.LinkedIntMap;
-import roj.util.ByteWriter;
-
-@Internal
 /**
- * No description provided
- *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since 2021/2/19 14:33
+ * @since 2021/10/3 20:59
  */
-public final class SwchPrimer extends InsnNode {
-    public SwchPrimer(byte code, int defaultValue, LinkedIntMap<Integer> mapping) {
-        super(code);
-        this.defaultValue = defaultValue;
-        this.mapping = mapping;
-    }
+final class ShadowCheck extends RemapEntry {
+    byte flag;
 
-    @Override
-    protected boolean validate() {
-        switch (code) {
-            case Opcodes.TABLESWITCH:
-            case Opcodes.LOOKUPSWITCH:
-                return true;
-        }
-        return false;
-    }
-
-    public int defaultValue;
-    public LinkedIntMap<Integer> mapping;
-
-    @Override
-    public void toByteArray(ByteWriter w) {
-        throw new UnsupportedOperationException();
+    public ShadowCheck(MoFNode node) {
+        super(node);
     }
 }

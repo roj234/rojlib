@@ -1,6 +1,7 @@
 package roj.asm.visitor;
 
 import roj.asm.cst.CstUTF;
+import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteList;
@@ -8,35 +9,52 @@ import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
+ * Class visitor
+ * 默认实现都是As-is的，你需要自己修改
  *
  * @author Roj233
  * @since 2021/7/21 2:28
  */
 public class ClassVisitor {
-    public ConstantWriter cw = new ConstantWriter();
-    public ByteWriter bw = new ByteWriter();
+    protected final ConstantWriter cw = new ConstantWriter();
+    protected final ByteWriter     bw = new ByteWriter();
+    protected final ByteReader     br = new ByteReader();
 
-    public ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
+    protected final ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
 
-    public IVisitor fieldVisitor;
-    public IVisitor methodVisitor;
+    public IVisitor fieldVisitor, methodVisitor;
+    public AttributeVisitor attributeVisitor;
+    public boolean clearConstant;
 
-    protected int attrAmountIndex, attrAmount;
+    private int attrAmountIndex;
+    protected int attrAmount;
 
-    public ByteList visit(String clazz, ByteReader r) {
+    public void preVisit() {
+        fieldVisitor.preVisit(this);
+        methodVisitor.preVisit(this);
+        if (attributeVisitor != null)
+            attributeVisitor.preVisit(this);
+    }
+
+    public ByteList visit(ByteList b) {
+        ByteReader r = this.br;
+        r.refresh(b);
+
         ByteList pb = bw.list = this.poolBuf;
         pb.ensureCapacity(r.length());
         pb.clear();
+
+        if (r.readInt() != 0xcafebabe) {
+            throw new IllegalArgumentException("Illegal header");
+        }
 
         visitBegin(r.readUnsignedShort(), r.readUnsignedShort());
 
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         pool.read(r);
-        pool.valid();
 
-        cw.init(pool);
+        if (!clearConstant)
+            cw.init(pool);
 
         visitConstants(pool);
 
@@ -45,42 +63,59 @@ public class ClassVisitor {
         kb.clear();
 
         int acc = r.readUnsignedShort();
-        String ccc = ((CstUTF) pool.get(r)).getString();
-        int t = r.readUnsignedShort();
-        String parent = t == 0 ? null : ((CstUTF) pool.array(t)).getString();
+        String self = pool.getName(r);
+
+        boolean module = (acc & AccessFlag.MODULE) != 0;
+        if(module && acc != AccessFlag.MODULE)
+            throw new IllegalArgumentException("Module should only have 'module' flag");
+
+        String parent = pool.getName(r);
+        if (parent == null && (!"java/lang/Object".equals(self) || module)) {
+            throw new IllegalArgumentException("No father found");
+        }
 
         int len0 = r.readUnsignedShort();
         String[] arr = new String[len0];
         for (int i = 0; i < arr.length; i++) {
             arr[i] = ((CstUTF) pool.get(r)).getString();
         }
-        visitClass(acc, ccc, parent, arr);
+        visitClass(acc, self, parent, arr);
 
         try {
-            fieldVisitor.visit(r, pool, bw, cw);
+            fieldVisitor.visit(pool);
         } catch (Throwable e) {
             fieldVisitor.visitEndError(e);
         }
         try {
-            methodVisitor.visit(r, pool, bw, cw);
+            methodVisitor.visit(pool);
         } catch (Throwable e) {
             methodVisitor.visitEndError(e);
         }
 
         int attrLen = r.readUnsignedShort();
 
-        for (int j = 0; j < attrLen; j++) {
-            String name0 = ((CstUTF) pool.get(r)).getString();
-            int len1 = r.readInt();
-            visitAttribute(name0, r.readBytesDelegated(len1));
+        visitAttributes();
+        if (attributeVisitor != null) {
+            attributeVisitor.visitConstant(pool);
         }
+        for (int j = 0; j < attrLen; j++) {
+            visitAttribute(((CstUTF) pool.get(r)).getString(), r.readInt());
+        }
+        visitEnd();
 
-        kb.addAll(r.getBytes(), r.index, r.remain());
         bw.list = pb;
         cw.write(bw);
         cw.clear();
         pb.addAll(kb, 0, kb.pos());
         return pb;
+    }
+
+    public void postVisit() {
+        fieldVisitor.postVisit();
+        methodVisitor.postVisit();
+        if (attributeVisitor != null)
+            attributeVisitor.postVisit();
+        cw.clear();
     }
 
     /**
@@ -106,9 +141,9 @@ public class ClassVisitor {
      * @param interfaces 接口
      */
     public void visitClass(int acc, String name, String parent, String[] interfaces) {
-        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(parent)).writeShort(interfaces.length);
+        bw.writeShort(acc).writeShort(cw.getClassId(name)).writeShort(cw.getClassId(parent)).writeShort(interfaces.length);
         for(String s : interfaces)
-            bw.writeShort(cw.getUtfId(s));
+            bw.writeShort(cw.getClassId(s));
     }
 
     public void visitAttributes() {
@@ -117,8 +152,14 @@ public class ClassVisitor {
         bw.writeShort(0);
     }
 
-    public void visitAttribute(String name, ByteList data) {
-        bw.writeShort(cw.getUtfId(name)).writeInt(data.pos()).writeBytes(data);
+    public void visitAttribute(String name, int length) {
+        int end = br.index + length;
+        if (attributeVisitor != null) {
+            if (attributeVisitor.visit(name, length)) {
+                attrAmount++;
+            }
+        }
+        br.index = end;
     }
 
     public void visitEnd() {

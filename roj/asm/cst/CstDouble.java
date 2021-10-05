@@ -27,7 +27,8 @@
 package roj.asm.cst;
 
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -42,8 +43,8 @@ public final class CstDouble extends Constant {
     }
 
     @Override
-    protected void write0(ByteWriter writer) {
-        writer.writeDouble(value);
+    public void write(ByteWriter w) {
+        w.writeByte(CstType.DOUBLE).writeDouble(value);
     }
 
     @Override

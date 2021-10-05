@@ -28,6 +28,8 @@ package roj.asm.tree.insn;
 
 import roj.util.ByteWriter;
 
+import java.util.function.ToIntFunction;
+
 import static roj.asm.Opcodes.*;
 
 /**
@@ -63,6 +65,12 @@ public final class IfInsnNode extends GotoInsnNode {
             case IFNONNULL:
                 return true;
         }
+        return false;
+    }
+
+    @Override
+    public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
+        delta = (pcRev.applyAsInt(target = validate(target)) - pcRev.applyAsInt(this));
         return false;
     }
 

@@ -27,7 +27,8 @@
 package roj.asm.cst;
 
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -35,31 +36,23 @@ import roj.util.ByteWriter;
  * @since 2021/5/29 17:16
  */
 public abstract class CstRef extends Constant {
-    private short classIndex, descIndex;
-    private final byte type;
+    private char classIndex, descIndex;
 
     private CstClass clazz;
     private CstNameAndType desc;
 
-    CstRef(byte type, int classIndex, int descIndex) {
-        this(type);
-        this.classIndex = (short) classIndex;
-        this.descIndex = (short) descIndex;
+    CstRef(int classIndex, int descIndex) {
+        this.classIndex = (char) classIndex;
+        this.descIndex = (char) descIndex;
     }
 
-    CstRef(byte type) {
-        this.type = type;
-    }
+    CstRef() {}
 
     @Override
-    public final byte type() {
-        return type;
-    }
-
-    @Override
-    protected final void write0(ByteWriter writer) {
-        writer.writeShort(getClassIndex())
-                .writeShort(getDescIndex());
+    public final void write(ByteWriter w) {
+        w.writeByte(type())
+         .writeShort(getClassIndex())
+         .writeShort(getDescIndex());
     }
 
     public final String toString() {
@@ -75,7 +68,7 @@ public abstract class CstRef extends Constant {
             throw new NullPointerException("clazz");
         }
         this.clazz = clazz;
-        this.classIndex = (short) clazz.getIndex();
+        this.classIndex = (char) clazz.getIndex();
     }
 
     public final void desc(CstNameAndType desc) {
@@ -83,11 +76,11 @@ public abstract class CstRef extends Constant {
             throw new NullPointerException("desc");
         }
         this.desc = desc;
-        this.descIndex = (short) desc.getIndex();
+        this.descIndex = (char) desc.getIndex();
     }
 
     public final int hashCode() {
-        return clazz.hashCode() << 16 ^ desc.hashCode() ^ getClass().hashCode();
+        return (clazz.hashCode() << 16) ^ desc.hashCode() ^ getClass().hashCode();
     }
 
     public final boolean equals(Object o) {
@@ -103,11 +96,11 @@ public abstract class CstRef extends Constant {
     }
 
     public final int getClassIndex() {
-        return clazz == null ? classIndex & 0xFFFF : clazz.getIndex();
+        return clazz == null ? classIndex : clazz.getIndex();
     }
 
     public final int getDescIndex() {
-        return desc == null ? descIndex & 0xFFFF : desc.getIndex();
+        return desc == null ? descIndex : desc.getIndex();
     }
 
     public CstClass getClazz() {

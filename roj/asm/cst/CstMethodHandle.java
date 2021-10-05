@@ -27,7 +27,8 @@
 package roj.asm.cst;
 
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -51,9 +52,10 @@ public final class CstMethodHandle extends Constant {
     }
 
     @Override
-    protected final void write0(ByteWriter w) {
-        w.writeByte(kind);
-        w.writeShort(getRefIndex());
+    public final void write(ByteWriter w) {
+        w.writeByte(CstType.METHOD_HANDLE)
+         .writeByte(kind)
+         .writeShort(getRefIndex());
     }
 
     public final String toString() {

@@ -44,39 +44,27 @@ import static roj.asm.cst.CstType.*;
  * @version 0.1
  * @since 2021/5/29 17:16
  */
-public class ConstantNamePool {
-    CharMap<Constant> map;
-    int index = 1, len;
+public final class ConstantNamePool {
+    public final CharMap<Constant> map;
+    private final int len;
+    private int begin;
 
     public ConstantNamePool(int length) {
         this.map = new CharMap<>();
         this.len = length;
     }
 
-    public int index() {
-        return index;
-    }
-
-    void addConstant(Constant c) {
-        c.setIndex(index);
-        map.put((char) index++, c);
-    }
-
-    public void readNames(ByteReader r) {
+    public void skip(ByteReader r) {
+        this.begin = r.index;
+        int i = 1;
         int len = this.len;
-        while (index < len) {
-            Constant c = null;
-
+        while (i < len) {
             int b = r.readUnsignedByte();
             if (CstType.toString(b) == null)
                 throw new IllegalArgumentException("Illegal constant type " + b);
             switch (b) {
                 case UTF:
-                    try {
-                        c = new CstUTF(r.readUTF());
-                    } catch (UTFDataFormatException e) {
-                        throw new RuntimeException(e);
-                    }
+                    r.index = r.readUnsignedShort() + r.index;
                     break;
                 case INT:
                 case INVOKE_DYNAMIC:
@@ -90,19 +78,72 @@ public class ConstantNamePool {
 
                 case LONG:
                 case DOUBLE:
-                    index++;
+                    i++;
                     r.index += 8;
                     break;
 
                 case METHOD_TYPE:
                 case STRING:
-                case MODULE: // may
-                case PACKAGE: // may
+                case MODULE:
+                case PACKAGE:
+                case CLASS:
+                    r.index += 2;
+                    break;
+
+                case METHOD_HANDLE:
+                    r.index += 3;
+                    break;
+            }
+            i++;
+        }
+    }
+
+    public void init(ByteReader r) {
+        r.index = begin;
+        int i = 1;
+        while (i < len) {
+            switch (r.readUnsignedByte()) {
+                case UTF:
+                    if (map.containsKey((char) i)) {
+                        try {
+                            map.put((char) i, new CstUTF(r.readUTF()));
+                        } catch (UTFDataFormatException e) {
+                            throw new RuntimeException(e);
+                        }
+                    } else
+                        r.index = r.readUnsignedShort() + r.index;
+                    break;
+                case INT:
+                case INVOKE_DYNAMIC:
+                case METHOD:
+                case FIELD:
+                case FLOAT:
+                case INTERFACE:
+                case NAME_AND_TYPE:
+                    r.index += 4;
+                    break;
+
+                case LONG:
+                case DOUBLE:
+                    i++;
+                    r.index += 8;
+                    break;
+
+                case METHOD_TYPE:
+                case STRING:
+                case MODULE:
+                case PACKAGE:
                     r.index += 2;
                     break;
 
                 case CLASS:
-                    c = new CstClass(r.readUnsignedShort());
+                    if (map.containsKey((char) i)) {
+                        int idx = r.readUnsignedShort();
+                        if (!map.containsKey((char) idx))
+                            map.put((char) idx, null);
+                        map.put((char) i, new CstClass(idx));
+                    } else
+                        r.index += 2;
                     break;
 
                 case METHOD_HANDLE:
@@ -110,10 +151,48 @@ public class ConstantNamePool {
                     break;
             }
 
-            if (c != null)
-                addConstant(c);
-            else
-                index++;
+            i++;
+        }
+        r.index = begin;
+        i = 1;
+        while (i < len) {
+            switch (r.readUnsignedByte()) {
+                case UTF:
+                    if (map.containsKey((char) i) && map.get((char) i) == null) {
+                        try {
+                            map.put((char) i, new CstUTF(r.readUTF()));
+                        } catch (UTFDataFormatException e) {
+                            throw new RuntimeException(e);
+                        }
+                    } else
+                        r.index = r.readUnsignedShort() + r.index;
+                    break;
+                case INT:
+                case INVOKE_DYNAMIC:
+                case METHOD:
+                case FIELD:
+                case FLOAT:
+                case INTERFACE:
+                case NAME_AND_TYPE:
+                    r.index += 4;
+                    break;
+                case LONG:
+                case DOUBLE:
+                    i++;
+                    r.index += 8;
+                    break;
+                case METHOD_TYPE:
+                case STRING:
+                case MODULE:
+                case PACKAGE:
+                case CLASS:
+                    r.index += 2;
+                    break;
+                case METHOD_HANDLE:
+                    r.index += 3;
+                    break;
+            }
+            i++;
         }
     }
 

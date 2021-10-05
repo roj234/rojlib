@@ -25,13 +25,9 @@
  */
 package roj.asm.visitor;
 
-import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
-
 /**
- * Your description here
+ * Method visitor
+ * 默认实现都是As-is的，你需要自己修改
  *
  * @author Roj233
  * @version 0.1
@@ -40,20 +36,34 @@ import roj.util.ByteWriter;
 public class MethodVisitor extends IVisitor {
     public CodeVisitor codeVisitor;
 
-    @Override
-    public void visit(ByteReader br, ConstantPool cp, ByteWriter bw, ConstantWriter cw) {
-        codeVisitor.preVisit(bw, cw, br, cp);
-        super.visit(br, cp, bw, cw);
+    public MethodVisitor() {}
+
+    public MethodVisitor(ClassVisitor cv) {
+        super(cv);
     }
 
-    public boolean parseCode() {
+    @Override
+    public void preVisit(ClassVisitor cv) {
+        super.preVisit(cv);
+        if (codeVisitor != null)
+            codeVisitor.preVisit(cv);
+    }
+
+    @Override
+    public void postVisit() {
+        super.postVisit();
+        if (codeVisitor != null)
+            codeVisitor.postVisit();
+    }
+
+    protected boolean parseCode() {
         return true;
     }
 
     @Override
     public void visitAttribute(String name, int length) {
         if(name.equals("Code") && parseCode()) {
-            codeVisitor.visit();
+            codeVisitor.visit(cp);
             attrAmount++;
         } else {
             super.visitAttribute(name, length);

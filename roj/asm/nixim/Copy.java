@@ -40,4 +40,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD, ElementType.FIELD})
 public @interface Copy {
+    String newName() default "";
+
+    String staticInitializer() default "";
+
+    boolean targetIsFinal() default false;
 }
