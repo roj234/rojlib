@@ -873,7 +873,7 @@ public final class Interpreter {
             case INVOKESPECIAL:
             case INVOKESTATIC:
             case INVOKEINTERFACE: {
-                IInvocationInsnNode inv = ((IInvocationInsnNode) node);
+                IInvokeInsnNode inv = ((IInvokeInsnNode) node);
 
                 List<Type> l = inv.parameters();
                 for (int i = l.size() - 1; i >= 0; i--) {
@@ -882,7 +882,7 @@ public final class Interpreter {
                 }
 
                 if (code != Opcodes.INVOKESTATIC) {
-                    if (code == Opcodes.INVOKESPECIAL && inv.name().equals("<init>")) {
+                    if (code == Opcodes.INVOKESPECIAL && inv.name.equals("<init>")) {
                         initialize(pop(UNINITIAL), clazz);
                     } else {
                         pop(REFERENCE);
@@ -892,9 +892,8 @@ public final class Interpreter {
                 pushType(inv.returnType());
             }
             break;
-            // no break
             case INVOKEDYNAMIC: {
-                IInvocationInsnNode inv = ((IInvocationInsnNode) node);
+                IInvokeInsnNode inv = ((IInvokeInsnNode) node);
 
                 List<Type> l = inv.parameters();
                 for (int i = l.size() - 1; i >= 0; i--) {

@@ -298,7 +298,7 @@ public class MappingHelper {
             int pos = 0;
             while (pos < ob.length()) {
                 int len = Math.min(44444, ob.length() - pos);
-                ByteWriter.writeUTF(output, ob.subSequence(pos, len), -1);
+                ByteWriter.writeUTF(output, ob.subSequence(pos, pos + len), -1);
                 output.writeToStream(fos);
                 output.clear();
                 pos += len;
@@ -933,10 +933,9 @@ public class MappingHelper {
                         }
                     }
 
-                    List<String> arr;
                     if (mb.get()) {
                         list.clear();
-                        arr = TextUtil.split(list, tmp0, val, ' ', 2);
+                        List<String> arr = TextUtil.split(list, tmp0, val, ' ', 2);
                         final String s = arr.get(1);
                         int index = s.indexOf(" -> ");
 
@@ -946,12 +945,12 @@ public class MappingHelper {
 
                         int j = arr20.indexOf('(');
 
-                        String name = arr20.substring(0, j);
                         String param = ParamHelper.dehumanize(arr20.substring(j + 1, arr20.length() - 1), arr.get(0));
                         param = Util.transformMethodParam(mcClz.flip(), param);
                         // ' -> '.length
                         String targetName = s.substring(index + 4);
 
+                        String name = arr20.substring(0, j);
                         if (!name.equals(targetName)) {
                             elementMap.computeIfAbsent(currentClass[1], Helpers.fnMyHashMap()).put(targetName + '|' + param, name);
                         }

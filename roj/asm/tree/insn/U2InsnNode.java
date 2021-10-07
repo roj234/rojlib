@@ -27,6 +27,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
+import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
 /**
@@ -36,13 +37,13 @@ import roj.util.ByteWriter;
  * @version 0.1
  * @since 2021/5/24 23:21
  */
-public class U2InsnNode extends InsnNode implements IIndexInsnNode {
+public final class U2InsnNode extends InsnNode implements IIndexInsnNode {
     public U2InsnNode(byte code, int index) {
         super(code);
         this.index = (char) index;
     }
 
-    private char index;
+    public char index;
 
     @Override
     public int nodeType() {
@@ -61,11 +62,16 @@ public class U2InsnNode extends InsnNode implements IIndexInsnNode {
         this.index = (char) index;
     }
 
-    public void toByteArray(ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         w.writeByte(code).writeShort(index);
     }
 
+    @Override
+    public int nodeSize() {
+        return 3;
+    }
+
     public String toString() {
-        return Opcodes.toString0(code, index);
+        return Opcodes.toString0(code, (int) index);
     }
 }

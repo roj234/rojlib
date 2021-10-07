@@ -100,9 +100,9 @@ public final class Project extends JSONConfiguration {
                     stampZip.close();
                 } catch (IOException ignored) {}
             }
-            if(!stamp.delete())
-                stamp.deleteOnExit();
-            LockSupport.parkNanos(5_000_000_000L);
+            // noinspection all
+            stamp.delete();
+            LockSupport.parkNanos(3_000_000_000L);
             System.exit(-2);
         }
 

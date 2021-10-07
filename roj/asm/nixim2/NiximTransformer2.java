@@ -301,6 +301,14 @@ public class NiximTransformer2 {
             case "HEAD": {
                 Method tm = new Method(data, (MethodSimple) methods.get(index));
                 InsnList insn = tm.code.instructions;
+                int superBegin = 0;
+                while (superBegin < insn.size()) {
+                    InsnNode node = insn.get(superBegin++);
+                    if (node.nodeType() == InsnNode.T_INVOKE) {
+                        InvokeInsnNode iin = (InvokeInsnNode) node;
+                        if (iin.name.equals("<init>"));
+                    }
+                }
 
                 InsnNode entryPoint = insn.get(0);
                 List<GotoInsnNode> gotos = s.gotos();
@@ -692,7 +700,7 @@ public class NiximTransformer2 {
                 switch (node.code) {
                     case INVOKESPECIAL: {
                         InvokeInsnNode inv = (InvokeInsnNode) node;
-                        if (remap.name.equals("<init>") && inv.owner().equals("//MARKER")) {
+                        if (remap.name.equals("<init>") && inv.owner.equals("//MARKER")) {
                             state.superCallEnd = i + 1;
                         }
                     }

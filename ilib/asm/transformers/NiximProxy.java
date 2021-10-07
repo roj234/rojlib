@@ -30,8 +30,6 @@ import ilib.api.IFasterClassTransformer;
 import roj.asm.nixim.NiximTransformer;
 import roj.util.ByteList;
 
-import java.util.List;
-
 /**
  * No description provided
  *
@@ -43,19 +41,10 @@ public final class NiximProxy extends NiximTransformer implements IFasterClassTr
     public static final NiximProxy instance = new NiximProxy();
     public static boolean alreadyAtDeobfEnv;
 
-    public NiximProxy() {}
+    private NiximProxy() {}
 
     @Override
     public ByteList transform(String name, String transformedName, ByteList basicClass) {
-        if (transformedName == null) {
-            return basicClass;
-        }
-
-        List<NiximData> niximDatas = classRemapping.remove(transformedName);
-
-        if (niximDatas == null)
-            return basicClass;
-
-        return nixim(transformedName, basicClass, niximDatas);
+        return null;
     }
 }

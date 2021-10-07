@@ -101,7 +101,7 @@ public class ClassDecompiler {
                     String targetInstance = opStack.pop();
 
                     StringBuilder line = new StringBuilder();
-                    line.append(targetInstance).append('.').append(node1.name());
+                    line.append(targetInstance).append('.').append(node1.name);
                     buildMethodParam(paramNames, line);
 
                     opStack.push(line.toString());
@@ -113,7 +113,7 @@ public class ClassDecompiler {
                     String[] paramNames = getParam(opStack, node1);
 
                     StringBuilder line = new StringBuilder();
-                    line.append(node1.owner()).append('.').append(node1.name());
+                    line.append(node1.owner).append('.').append(node1.name);
                     buildMethodParam(paramNames, line);
 
                     opStack.push(line.toString());
@@ -148,7 +148,7 @@ public class ClassDecompiler {
                     break;
                 case NEW: {
                     roj.asm.tree.insn.ClassInsnNode node1 = (roj.asm.tree.insn.ClassInsnNode) node;
-                    opStack.push(node1.owner().replace('/', '.'));
+                    opStack.push(node1.owner.replace('/', '.'));
                     break;
                 }
                 case DUP:

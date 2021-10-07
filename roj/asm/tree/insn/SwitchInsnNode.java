@@ -66,7 +66,7 @@ public final class SwitchInsnNode extends InsnNode {
 
     @Override
     public int nodeType() {
-        return code == Opcodes.TABLESWITCH ? T_TABLESWITCH : T_LOOKUPSWITCH;
+        return T_SWITCH;
     }
 
     public InsnNode         def;
@@ -74,30 +74,25 @@ public final class SwitchInsnNode extends InsnNode {
 
     private ToIntFunction<InsnNode> pcRev;
 
-    @Override
-    public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
+    private byte pad = -1;
+
+    public void pad(int codeLength, ToIntFunction<InsnNode> pcRev) {
+        this.pad = (byte) (3 - (codeLength & 3));
         this.pcRev = pcRev;
-        return false;
     }
 
     @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
+    public int nodeSize() {
         if(pad == -1) {
-            int len = w.list.pos() + 1;
-            this.pad = (byte) ((len & 3) == 0 ? 0 : 4 - (len & 3));
+            throw new IllegalStateException();
         }
-
-        int vl;
-        if (this.code == Opcodes.TABLESWITCH) {
-            vl = 1 + pad + 4 + 8 + switcher.size() * 4;
-        } else {
-            vl = 1 + pad + 8 + switcher.size() * 8;
-        }
-        w.list.pos(w.list.pos() + vl);
+        return code == Opcodes.TABLESWITCH ?
+                1 + pad + 4 + 8 + (switcher.size() << 2) :
+                1 + pad + 8 + (switcher.size() << 3);
     }
 
     @Override
-    public void toByteArray(ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         if(pad == -1) {
             throw new IllegalStateException();
         }
@@ -107,9 +102,15 @@ public final class SwitchInsnNode extends InsnNode {
 
         w.writeByte(code).list.pos(w.list.pos() + pad);
         if (this.code == Opcodes.TABLESWITCH) {
-            long hl = calculateShouldUseTable();
+            int lo = Integer.MAX_VALUE;
+            int hi = Integer.MIN_VALUE;
+            for (PrimitiveIterator.OfInt itr = switcher.keySet().iterator(); itr.hasNext(); ) {
+                int val = itr.nextInt();
+                if (val > hi) hi = val;
+                if (val < lo) lo = val;
+            }
             w.writeInt(pcRev.applyAsInt(validate(def)) - self)
-                    .writeInt((int) hl).writeInt((int) (hl >>> 32));
+                    .writeInt(lo).writeInt(hi);
             for (InsnNode node : switcher.values()) {
                 w.writeInt(pcRev.applyAsInt(validate(node)) - self);
             }
@@ -122,27 +123,8 @@ public final class SwitchInsnNode extends InsnNode {
             }
         }
 
+        this.pcRev = null;
         this.pad = -1;
-    }
-
-    private byte pad = -1;
-
-    private long calculateShouldUseTable() {
-        int nlabels = switcher.size();
-        int lo = Integer.MAX_VALUE;
-        int hi = Integer.MIN_VALUE;
-        for (PrimitiveIterator.OfInt itr = switcher.keySet().iterator(); itr.hasNext(); ) {
-            int val = itr.nextInt();
-            if (val > hi) hi = val;
-            if (val < lo) lo = val;
-        }
-
-        return ((((long)hi) & 0xFFFFFFFFL) << 32) | (((long)lo) & 0xFFFFFFFFL);
-        //long table_space_cost = 4 + 8 * ((long) hi - lo + 1); // words
-        //long table_time_cost = 3; // comparisons
-        //long lookup_space_cost = 8 * (long) nlabels;
-        //return nlabels > 0 && table_space_cost + 3 * table_time_cost <= lookup_space_cost + 3 * (long) nlabels;
-
     }
 
     public String toString() {

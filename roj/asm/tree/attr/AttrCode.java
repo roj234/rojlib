@@ -145,16 +145,16 @@ public class AttrCode extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantWriter cw, ByteWriter w) {
         w.writeShort(this.stackSize).writeShort(this.localSize).writeInt(0);
 
         final ByteList list = w.list;
         int lenIdx = list.pos();
 
-        ToIntMap<InsnNode> pcRev = reIndex(pool);
+        ToIntMap<InsnNode> pcRev = reIndex(cw);
         InsnList insn = this.instructions;
         for (int i = 0; i < insn.size(); i++) {
-            insn.get(i).toByteArray(w);
+            insn.get(i).toByteArray(cw, w);
         }
 
         int cp = list.pos();
@@ -172,7 +172,7 @@ public class AttrCode extends Attribute {
             w.writeShort(pcRev.getInt(ex.start))
              .writeShort(pcRev.getInt(ex.end))
              .writeShort(pcRev.getInt(ex.handler))
-             .writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : pool.getClassId(ex.type));
+             .writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : cw.getClassId(ex.type));
         }
 
         final AttributeList attrs = this.attributes;
@@ -180,26 +180,26 @@ public class AttrCode extends Attribute {
         for (int i = 0; i < attrs.size(); i++) {
             Attribute attribute = attrs.get(i);
             if(attribute instanceof ICodeAttribute) {
-                w.writeShort(pool.getUtfId(attribute.name)).writeInt(0);
+                w.writeShort(cw.getUtfId(attribute.name)).writeInt(0);
 
                 lenIdx = list.pos();
-                ((ICodeAttribute) attribute).toByteArray(pool, w, pcRev);
+                ((ICodeAttribute) attribute).toByteArray(cw, w, pcRev);
                 cp = list.pos();
                 list.pos(lenIdx - 4);
                 w.writeInt(cp - lenIdx).list.pos(cp);
             } else {
-                attribute.toByteArray(pool, w);
+                attribute.toByteArray(cw, w);
             }
         }
 
         if (this.frames != null) {
-            w.writeShort(pool.getUtfId("StackMapTable")).writeInt(0);
+            w.writeShort(cw.getUtfId("StackMapTable")).writeInt(0);
 
             if (computeFrames)
                 recalculateFrames(pcRev);
 
             lenIdx = list.pos();
-            writeFrames(pool, w.writeShort(frames.size()), pcRev);
+            writeFrames(cw, w.writeShort(frames.size()), pcRev);
 
             cp = list.pos();
             list.pos(lenIdx - 4);
@@ -212,9 +212,9 @@ public class AttrCode extends Attribute {
     /**
      * 重新计算node的index并预先获得常量池索引
      *
-     * @param pool 常量池
+     * @param cw 常量池
      */
-    public ToIntMap<InsnNode> reIndex(ConstantWriter pool) {
+    public ToIntMap<InsnNode> reIndex(ConstantWriter cw) {
         final InsnList insn = this.instructions;
 
         InsnNode last = insn.remove(insn.size() - 1);
@@ -222,6 +222,7 @@ public class AttrCode extends Attribute {
             insn.add(last);
         }
 
+        int pos = 0;
         ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
         ToIntMap<InsnNode> pcRev = new ToIntMap<InsnNode>(insn.size()) {
             @Override
@@ -242,16 +243,34 @@ public class AttrCode extends Attribute {
             int i;
             for (i = 0; i < insn.size(); i++) {
                 InsnNode node = insn.get(i);
-                pcRev.putInt(node, w.list.pos());
-                node.preToByteArray(pool, w);
+                pcRev.putInt(node, pos);
+
+                switch (node.nodeType()) {
+                    case InsnNode.T_SWITCH:
+                        ((SwitchInsnNode) node).pad(pos, pcRev);
+                        break;
+                    case InsnNode.T_LDC:
+                        node.toByteArray(cw, w);
+                        pos += w.list.pos();
+                        w.list.pos(0);
+                        break;
+                    default:
+                        int t = node.nodeSize();
+                        if (t <= 0)
+                            throw new IllegalArgumentException("Node " + node + " (A " + node.getClass().getName() + ") is not a writable node");
+                        pos += t;
+                }
             }
             for (i = 0; i < insn.size(); i++) {
-                // code length changed
-                if (insn.get(i).handlePCRev(pcRev)) {
-                    w.list.pos(0);
-                    if (j-- == 0)
-                        throw new IllegalStateException("Unable to satisfy goto(_w) calls");
-                    continue o;
+                InsnNode node = insn.get(i);
+                if (node.nodeType() == InsnNode.T_GOTO_IF) {
+                    GotoInsnNode gin = (GotoInsnNode) node;
+                    if (gin.review(pcRev)) {
+                        pos = 0;
+                        if (j-- == 0)
+                            throw new IllegalStateException("Unable to satisfy goto(_w) calls");
+                        continue o;
+                    }
                 }
             }
             break;
@@ -260,7 +279,7 @@ public class AttrCode extends Attribute {
         if (j != 3) {
             System.err.println("Recursion cycle " + (3 - j));
         }
-        pcRev.putInt(EndOfInsn.MARKER, w.list.pos());
+        pcRev.putInt(EndOfInsn.MARKER, pos);
 
         return pcRev;
     }

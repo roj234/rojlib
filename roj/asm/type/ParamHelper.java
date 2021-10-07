@@ -101,6 +101,42 @@ public final class ParamHelper {
         params.add(returns);
     }
 
+    public static int paramSize(String desc) {
+        int cnt = 0;
+        int end = desc.indexOf(")");
+
+        int clz = 0;
+        for (int i = 1; i < end; i++) {
+            char c = desc.charAt(i);
+            switch (c) {
+                case ';':
+                    if((clz & 1) == 0) {
+                        throw new IllegalArgumentException(desc);
+                    } else {
+                        cnt++;
+                        clz = 0;
+                    }
+                    break;
+                case '[':
+                    break;
+                case 'L':
+                    clz = 1;
+                    break;
+                default:
+                    if((clz & 1) == 0) {
+                        if (c == NativeType.DOUBLE || c == NativeType.LONG) {
+                            cnt += 2;
+                        } else {
+                            cnt ++;
+                            clz = 0;
+                        }
+                    }
+                    break;
+            }
+        }
+        return cnt;
+    }
+
     public static String getMethod(List<Type> list) {
         CharList sb = sharedBuffer.get();
         sb.clear();

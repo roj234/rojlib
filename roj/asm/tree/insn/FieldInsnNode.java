@@ -37,12 +37,8 @@ import roj.util.ByteWriter;
 
 import static roj.asm.Opcodes.*;
 
-//getstatic
-//putstatic
-//getfield
-//putfield
 /**
- * No description provided
+ * getstatic putstatic getfield putfield
  *
  * @author Roj234
  * @version 0.1
@@ -64,25 +60,25 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     // net/xxx/abc.DEF:LXXXX javap
     public FieldInsnNode(byte code, String desc) {
         super(code);
-        int index = desc.indexOf(".");
-        String tmp = desc.substring(index + 1);
-        int index2 = tmp.indexOf(":");
+        int cIdx = desc.indexOf(".");
 
-        this.owner = desc.substring(0, index);
-        this.name = tmp.substring(0, index2);
-        if (name.contains("\"")) {
+        this.owner = desc.substring(0, cIdx);
+
+        int nIdx = desc.indexOf(":", cIdx + 1);
+        String name = desc.substring(cIdx + 1, nIdx);
+        if (name.charAt(0) == '"') {
             name = name.substring(1, name.length() - 1);
         }
+        this.name = name;
 
-        this.type = ParamHelper.parseField(tmp.substring(index2 + 1));
+        this.type = ParamHelper.parseField(desc.substring(nIdx + 1));
     }
 
     public FieldInsnNode(byte code, CstRefField ref) {
         super(code);
         this.owner = ref.getClassName();
         this.name = ref.desc().getName().getString();
-        String s = ref.desc().getType().getString();
-        this.type = ParamHelper.parseField(s);
+        this.type = ParamHelper.parseField(ref.desc().getType().getString());
     }
 
     public String owner, name;
@@ -103,26 +99,26 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
 
     @Override
     public void owner(String clazz) {
-        this.owner = clazz;
+        // noinspection all
+        this.owner = clazz.toString();
     }
 
     public String owner() {
         return owner;
     }
 
-    private char fid;
-
-    public void toByteArray(ByteWriter w) {
-        w.writeByte(code).writeShort(this.fid);
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        w.writeByte(code).writeShort(cw.getFieldRefId(owner, name, ParamHelper.getField(type)));
     }
 
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        w.writeByte(code).writeShort(this.fid = (char) pool.getFieldRefId(owner, name, ParamHelper.getField(type)));
+    @Override
+    public int nodeSize() {
+        return 3;
     }
 
     @Override
     protected boolean validate() {
-        switch (getOpcode()) {
+        switch (code) {
             case GETFIELD:
             case GETSTATIC:
             case PUTFIELD:

@@ -31,8 +31,6 @@ import roj.asm.cst.CstClass;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
-import java.util.Objects;
-
 /**
  * No description provided
  *
@@ -47,7 +45,7 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
 
     public MDArrayInsnNode(CstClass clazz, int dimension) {
         super(Opcodes.MULTIANEWARRAY);
-        this.name = clazz.getValue().getString();
+        this.owner = clazz.getValue().getString();
         this.dimension = dimension;
     }
 
@@ -56,8 +54,7 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
         return T_MULTIANEWARRAY;
     }
 
-    private String name;
-
+    public String owner;
     public int dimension;
 
     public int getIndex() {
@@ -76,31 +73,28 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
 
     @Override
     public void owner(String clazz) {
-        this.name = Objects.requireNonNull(clazz, "className");
+        // noinspection all
+        this.owner = clazz.toString();
     }
 
     public String owner() {
-        return name;
+        return owner;
     }
 
-    private char cid;
-
     @Override
-    public void toByteArray(ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         w.writeByte(code)
-         .writeShort(cid)
+         .writeShort(cw.getClassId(owner))
          .writeByte((byte) this.dimension);
     }
 
     @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        w.writeByte(code)
-         .writeShort(this.cid = (char) pool.getClassId(name))
-         .writeByte((byte) this.dimension);
+    public int nodeSize() {
+        return 4;
     }
 
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(name);
+        StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(owner);
         for (int i = 0; i < dimension; i++) {
             sb.append("[]");
         }

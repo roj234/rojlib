@@ -27,11 +27,11 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
+import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
-// bipush / newarray
 /**
- * No description provided
+ * bipush / newarray / etc
  *
  * @author Roj234
  * @version 0.1
@@ -54,7 +54,7 @@ public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
      * T_INT	10
      * T_LONG	11
      */
-    private byte index;
+    public byte index;
 
     @Override
     public int nodeType() {
@@ -73,8 +73,13 @@ public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
         this.index = (byte) index;
     }
 
-    public void toByteArray(ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         w.writeByte(code).writeByte(index);
+    }
+
+    @Override
+    public int nodeSize() {
+        return 2;
     }
 
     public String toString() {

@@ -30,11 +30,8 @@ import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
-import roj.util.ByteList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
-
-import java.util.function.ToIntFunction;
 
 /**
  * QUESTION: native.hashCode好慢？
@@ -57,9 +54,8 @@ public abstract class InsnNode implements Helpers.Node {
     public static final int T_LABEL        = 7;
     public static final int T_LDC   = 8;
     public static final int T_IINC  = 9;
-    public static final int T_TABLESWITCH  = 10;
-    public static final int T_LOOKUPSWITCH   = 11;
-    public static final int T_MULTIANEWARRAY = 12;
+    public static final int T_SWITCH = 10;
+    public static final int T_MULTIANEWARRAY = 11;
 
     protected InsnNode(byte code) {
         setOpcode(code);
@@ -68,9 +64,11 @@ public abstract class InsnNode implements Helpers.Node {
     public byte code;
 
     public void setOpcode(byte code) {
+        byte o = this.code;
         this.code = code;
         if (!validate()) {
-            throw new IllegalArgumentException("Unsupported opcode " + Integer.toHexString(this.code & 0xFF));
+            this.code = o;
+            throw new IllegalArgumentException("Unsupported opcode 0x" + Integer.toHexString(code & 0xFF));
         }
     }
 
@@ -88,7 +86,7 @@ public abstract class InsnNode implements Helpers.Node {
         while (node.next != null) {
             node = node.next;
 
-            if(i++ > 32) {
+            if(i++ > 10) {
                 if(Helpers.hasCircle(node)) {
                     throw new IllegalStateException("Circular reference: " + node);
                 } else {
@@ -102,7 +100,7 @@ public abstract class InsnNode implements Helpers.Node {
     protected InsnNode next = null;
 
     public boolean isJumpSource() {
-        return this instanceof IJumpInsnNode || getClass() == SwitchInsnNode.class;
+        return false;
     }
 
     /**
@@ -130,24 +128,11 @@ public abstract class InsnNode implements Helpers.Node {
         return T_OTHER;
     }
 
-    public abstract void toByteArray(ByteWriter w);
+    public abstract void toByteArray(ConstantWriter cw, ByteWriter w);
 
-    /**
-     * 在toBytearray之前调用，刷新index
-     *
-     * @param pool 常量池
-     * @param w    只写的ByteWriter (由{@link ByteList.EmptyByteList}构造)
-     */
-    @Internal
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        toByteArray(w);
-    }
+    public int nodeSize() { return -1; }
 
     public String toString() {
         return Opcodes.toString0(code);
-    }
-
-    public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
-        return false;
     }
 }

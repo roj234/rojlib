@@ -34,20 +34,14 @@ import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
-import java.util.ArrayList;
-import java.util.List;
-
-// invokevirtual
-// invokespecial
-// invokestatic
 /**
- * No description provided
+ * invokevirtual invokespecial invokestatic
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, IClassInsnNode {
+public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
     public InvokeInsnNode(byte code) {
         super(code);
     }
@@ -61,16 +55,14 @@ public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, ICl
         super(code);
         this.owner = owner;
         this.name = name;
-        rawTypes(types);
+        this.rawParam = types;
     }
 
     public InvokeInsnNode(byte code, CstRef ref) {
         super(code);
         this.owner = ref.getClassName();
         this.name = ref.desc().getName().getString();
-        this.params = ParamHelper.parseMethod(this.rawTypes = ref.desc().getType().getString());
-        this.returnType = params.remove(params.size() - 1);
-        // Only class file version 52.0 or above, can supports CONSTANT_Interface Methodref (CstRefItf).
+        this.rawParam = ref.desc().getType().getString();
     }
 
     @Override
@@ -102,9 +94,7 @@ public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, ICl
         }
     }
 
-    public String owner, name;
-    public List<Type> params;
-    public Type returnType;
+    public String owner;
 
     @Override
     public final int nodeType() {
@@ -112,99 +102,57 @@ public class InvokeInsnNode extends InsnNode implements IInvocationInsnNode, ICl
     }
 
     @Override
-    public String owner() {
+    public final String owner() {
         return owner;
     }
 
     @Override
-    public void owner(String clazz) {
-        this.owner = clazz;
+    public final void owner(String clazz) {
+        // noinspection all
+        this.owner = clazz.toString();
+    }
+
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        if (params != null) {
+            params.add(returnType);
+            rawParam = ParamHelper.getMethod(params);
+            params.remove(params.size() - 1);
+        }
+        w.writeByte(code).writeShort(cw.getMethodRefId(owner, name, rawParam));
     }
 
     @Override
-    public Type returnType() {
-        return returnType;
+    public int nodeSize() {
+        return 3;
     }
 
     @Override
-    public void returnType(Type returnType) {
-        this.returnType = returnType;
-    }
+    public final void rawDesc(String desc) {
+        int cIdx = desc.indexOf(".");
 
-    @Override
-    public String name() {
-        return name;
-    }
+        this.owner = desc.substring(0, cIdx);
 
-    @Override
-    public void name(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public List<Type> parameters() {
-        return params;
-    }
-
-    @Override
-    public void rawTypes(String rawParam) {
-        this.params = ParamHelper.parseMethod(this.rawTypes = rawParam);
-        this.returnType = params.remove(params.size() - 1);
-    }
-
-    private String rawTypes;
-
-    @Override
-    public String rawTypes() {
-        return this.rawTypes;
-    }
-
-    char mid;
-
-    public void toByteArray(ByteWriter w) {
-        w.writeByte(code).writeShort(mid);
-    }
-
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        toByteArray(w);
-
-        // Only the invokespecial instruction is allowed to invoke an instance initialization method (§2.9.1).
-        // No other method whose name begins with the character '<' ('\u003c') may be called by the method invocation instructions. In particular, the class or interface initialization method specially named <clinit> is never called explicitly from Java Virtual Machine instructions, but only implicitly by the Java Virtual Machine itself.
-        // But I will not limit this because they are VALID instructions, only those cause crashes does I will limit.
-
-        params.add(returnType);
-        mid = (char) pool.getMethodRefId(owner, name, ParamHelper.getMethod(params));
-        params.remove(params.size() - 1);
-    }
-
-    /**
-     * miasm/util/ByteWriter.writeShort:(I)Lmiasm/util/ByteWriter;
-     *
-     * @param descriptor javap descriptor
-     */
-    @Override
-    public void rawDesc(String descriptor) {
-        int index = descriptor.indexOf(".");
-        String tmp = descriptor.substring(index + 1);
-        int index2 = tmp.indexOf(":");
-
-        this.owner = descriptor.substring(0, index);
-        String name = tmp.substring(0, index2);
-        if (name.contains("\"")) {
+        int nIdx = desc.indexOf(":", cIdx + 1);
+        String name = desc.substring(cIdx + 1, nIdx);
+        if (name.charAt(0) == '"') {
             name = name.substring(1, name.length() - 1);
         }
         this.name = name;
 
-        List<Type> methodTypes = this.params == null ? (this.params = new ArrayList<>()) : this.params;
-        methodTypes.clear();
-        methodTypes.addAll(ParamHelper.parseMethod(this.rawTypes = tmp.substring(index2 + 1)));
-        this.returnType = methodTypes.remove(methodTypes.size() - 1);
+        this.rawParam = desc.substring(nIdx + 1);
+        if (params != null) {
+            params.clear();
+            ParamHelper.parseMethod(rawParam, params);
+            returnType = params.remove(params.size() - 1);
+        }
     }
 
-    public String toString() {
+    public final String toString() {
+        initPar();
         StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(returnType).append(' ').append(owner.substring(owner.lastIndexOf('/') + 1)).append('.').append(name).append('(');
         if (!params.isEmpty()) {
-            for (Type par : params) {
+            for (int i = 0; i < params.size(); i++) {
+                Type par = params.get(i);
                 sb.append(par).append(", ");
             }
             sb.delete(sb.length() - 2, sb.length());

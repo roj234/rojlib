@@ -34,9 +34,6 @@ package roj.asm.tree.insn;
  * @since 2021/1/1 23:12
  */
 public interface IIndexInsnNode {
-    byte getOpcode();
-
     int getIndex();
-
     void setIndex(int index);
 }

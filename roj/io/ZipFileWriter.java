@@ -131,18 +131,24 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         buf.clear();
         long endOffset = file.getFilePointer();
 
-        Deflater def = this.deflater;
-        def.setInput(data.list, data.offset(), data.limit());
-        def.finish();
-        buf.ensureCapacity(8192);
-        while (!def.finished()) {
-            int off = deflater.deflate(buf.list, 0, 8192);
-            file.write(buf.list, 0, off);
-        }
+        int cSize;
+        if (method == ZipEntry.DEFLATED) {
+            Deflater def = this.deflater;
+            def.setInput(data.list, data.offset(), data.limit());
+            def.finish();
+            buf.ensureCapacity(8192);
+            while (!def.finished()) {
+                int off = deflater.deflate(buf.list, 0, 8192);
+                file.write(buf.list, 0, off);
+            }
 
-        // obviously < 2G
-        int cSize = (int) def.getBytesWritten();
-        def.reset();
+            // obviously < 2G
+            cSize = (int) def.getBytesWritten();
+            def.reset();
+        } else {
+            cSize = data.pos();
+            file.write(data.list, data.offset(), data.limit());
+        }
 
         long curr = file.getFilePointer();
         if (curr > Integer.MAX_VALUE)

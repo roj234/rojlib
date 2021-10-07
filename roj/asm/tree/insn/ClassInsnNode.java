@@ -29,12 +29,10 @@ package roj.asm.tree.insn;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstClass;
 import roj.asm.util.ConstantWriter;
-import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
-// new / instanceof
 /**
- * No description provided
+ * new / checkcast / instanceof / anewarray
  *
  * @author Roj234
  * @version 0.1
@@ -45,14 +43,14 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         super(code);
     }
 
-    public ClassInsnNode(byte code, String name) {
+    public ClassInsnNode(byte code, String owner) {
         super(code);
-        this.name = name;
+        this.owner = owner;
     }
 
     public ClassInsnNode(byte code, CstClass clazz) {
         super(code);
-        this.name = clazz.getValue().getString();
+        this.owner = clazz.getValue().getString();
     }
 
     @Override
@@ -73,41 +71,32 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         return T_CLASS;
     }
 
-    public String name;
+    public String owner;
 
     public String owner() {
-        return name;
+        return owner;
     }
 
     @Override
     public void owner(String clazz) {
-        this.name = clazz;
-    }
-
-    private char cid;
-
-    @Override
-    public void toByteArray(ByteWriter w) {
-        w.writeByte(code).writeShort(cid);
+        // noinspection all
+        this.owner = clazz.toString();
     }
 
     @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        if(code == Opcodes.NEW) {
-            if(name.startsWith("[")) {
-                throw new IllegalArgumentException("The new instruction cannot be used to create an array.");
-            }
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        if (code == Opcodes.NEW && owner.startsWith("[")) {
+            throw new IllegalArgumentException("The new instruction cannot be used to create an array.");
         }
-
-        w.writeByte(code).writeShort(this.cid = (char) pool.getClassId(name));
+        w.writeByte(code).writeShort(cw.getClassId(owner));
     }
 
     @Override
-    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
-
+    public int nodeSize() {
+        return 3;
     }
 
     public String toString() {
-        return Opcodes.toString0(code, name.substring(name.lastIndexOf('/') + 1));
+        return Opcodes.toString0(code, owner.substring(owner.lastIndexOf('/') + 1));
     }
 }

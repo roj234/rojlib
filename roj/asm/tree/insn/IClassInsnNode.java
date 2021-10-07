@@ -34,11 +34,6 @@ package roj.asm.tree.insn;
  * @since 2021/1/1 23:12
  */
 public interface IClassInsnNode {
-    byte getOpcode();
-
-    void setOpcode(byte opcode);
-
     String owner();
-
     void owner(String clazz);
 }

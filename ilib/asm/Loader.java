@@ -403,23 +403,9 @@ public class Loader implements IFMLLoadingPlugin {
                 endTransformers.add(new AutoRegisterTransformer());
                 endTransformers.add(new Transformer());
 
-                NiximProxy.alreadyAtDeobfEnv = true;
                 fullInit = true;
             }
         }
-
-        /*if (!foundModApi) {
-            int i = 0;
-            for (ListIterator<IClassTransformer> iterator = list.listIterator(); iterator.hasNext(); ) {
-                IClassTransformer modApi = iterator.next();
-                if (modApi.getClass() == net.minecraftforge.fml.common.asm.transformers.ModAPITransformer.class) {
-                    foundModApi = true;
-                    iterator.set(new ModAPITransformer());
-                    break;
-                }
-                i++;
-            }
-        }*/
 
         HashSet<IClassTransformer> transformerSet = new LinkedHashSet<>(list);
 

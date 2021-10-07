@@ -34,13 +34,13 @@ import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
+ * Invoke interface method
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class InvokeItfInsnNode extends InvokeInsnNode {
+public final class InvokeItfInsnNode extends InvokeInsnNode {
     public InvokeItfInsnNode() {
         super(Opcodes.INVOKEINTERFACE);
     }
@@ -60,39 +60,41 @@ public class InvokeItfInsnNode extends InvokeInsnNode {
 
     @Override
     public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+        // Only class file version 52.0 or above, can supports (CstRefItf).
         if(mainVer < 52)
             throw new IllegalArgumentException("Interface supported since version 53");
         super.verify(list, index, mainVer);
     }
 
     /**
-     * indexbyte1
-     * indexbyte2
-     * count
-     * 0
+     * index1 index2 count 0
      */
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        toByteArray(w);
-
-        // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary
-        // to store the arguments to be passed to the interface method,
-        // as implied by the descriptor of the CONSTANT_NameAndType_info structure
-        // referenced by the CONSTANT_InterfaceMethodref constant pool entry.
-
-        params.add(returnType);
-        mid = (char) pool.getItfRefId(owner, name, ParamHelper.getMethod(params));
-        params.remove(params.size() - 1);
+    @Override
+    public int nodeSize() {
+        return 5;
     }
 
-    public void toByteArray(ByteWriter w) {
-        super.toByteArray(w);
-
-        // The fourth operand byte of each invokeinterface instruction must have the value zero.
-        // Thus, we ignore it.
-        int cnt = 1;
-        for (int i = 0; i < params.size(); i++) {
-            cnt += params.get(i).length();
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        if (params != null) {
+            params.add(returnType);
+            rawParam = ParamHelper.getMethod(params);
+            params.remove(params.size() - 1);
         }
-        w.writeByte((byte) cnt).writeByte((byte) 0);
+        w.writeByte(code).writeShort(cw.getItfRefId(owner, name, rawParam));
+
+        // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary
+        // to store the arguments to be passed to the interface method.
+        int cnt = 1;
+        if (params != null) {
+            for (int i = 0; i < params.size(); i++) {
+                cnt += params.get(i).length();
+            }
+        } else {
+            cnt += ParamHelper.paramSize(rawParam);
+        }
+        w.writeByte((byte) cnt)
+         // The fourth operand byte of each invokeinterface instruction must have the value zero.
+         // Thus, we ignore it.
+         .writeByte((byte) 0);
     }
 }

@@ -142,31 +142,25 @@ public final class LoadConstInsnNode extends InsnNode {
     }
 
     public Constant c;
-    private int cpi;
 
     @Override
-    public void toByteArray(ByteWriter w) {
-        w.writeByte(code);
-        if (this.code != Opcodes.LDC) {
-            w.writeShort(this.cpi);
-        } else {
-            w.writeByte((byte) this.cpi);
-        }
-    }
-
-    @Override
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         w.writeByte(code);
 
-        if ((this.cpi = (c = pool.reset(c)).getIndex()) == 0) {
-            throw new NullPointerException("Invalid constant: " + pool.reset(c));
+        int cpi = (c = cw.reset(c)).getIndex();
+        if (cpi == 0) {
+            throw new NullPointerException("Invalid constant: " + c);
         }
-
         if (this.code == Opcodes.LDC2_W || (this.code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
             w.writeShort(cpi);
         } else {
             w.writeByte((byte) cpi);
         }
+    }
+
+    @Override
+    public int nodeSize() {
+        return code == Opcodes.LDC ? 2 : 3;
     }
 
     public String toString() {

@@ -933,7 +933,7 @@ public final class FMDMain {
                     ByteListOutput out = outputs.get(i);
                     zfw.writeNamed(out.getName(), out.getOutput(), ZipEntry.STORED);
                 }
-                zfw.setComment("This is 'DEV' version of your mod\n" +
+                zfw.setComment("This is 'DEV' version of your mod\r\n" +
                                        "Powered by Roj234's FMDv" + VERSION);
                 zfw.finish();
 

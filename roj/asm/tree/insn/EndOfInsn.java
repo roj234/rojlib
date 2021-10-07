@@ -26,6 +26,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
+import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
 /**
@@ -46,8 +47,8 @@ public final class EndOfInsn extends InsnNode {
     public void _i_replace(InsnNode now) {}
 
     @Override
-    public void toByteArray(ByteWriter w) {
-        throw new InternalError("方法结束标识 should not be written");
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        throw new UnsupportedOperationException();
     }
 
     @Override

@@ -33,8 +33,6 @@ import roj.asm.type.Type;
 import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
-import java.util.List;
-
 /**
  * No description provided
  *
@@ -42,7 +40,7 @@ import java.util.List;
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public final class InvokeDynInsnNode extends InsnNode implements IInvocationInsnNode {
+public final class InvokeDynInsnNode extends IInvokeInsnNode {
     public InvokeDynInsnNode() {
         super(Opcodes.INVOKEDYNAMIC);
     }
@@ -51,8 +49,7 @@ public final class InvokeDynInsnNode extends InsnNode implements IInvocationInsn
         super(Opcodes.INVOKEDYNAMIC);
         this.bootstrapTableIndex = ref.bootstrapTableIndex;
         this.name = ref.getDesc().getName().getString();
-        this.params = ParamHelper.parseMethod(ref.getDesc().getType().getString());
-        this.returnType = params.remove(params.size() - 1);
+        this.rawParam = ref.getDesc().getType().getString();
     }
 
     @Override
@@ -68,82 +65,41 @@ public final class InvokeDynInsnNode extends InsnNode implements IInvocationInsn
      * bootstrap table index
      */
     public int bootstrapTableIndex;
-    public String name;
-    public List<Type> params;
-    public Type returnType;
-
-    private char did;
-
-    public void toByteArray(ByteWriter w) {
-        // The third and fourth operand bytes of each invokedynamic instruction must have the value zero.
-        // Thus, we ignore it again(Previous in InvokeItfInsnNode).
-        w.writeByte(code).writeShort(this.did).writeShort(0);
-    }
 
     /**
-     * indexbyte1
-     * indexbyte2
-     * 0
-     * 0
+     * The third and fourth operand bytes of each invokedynamic instruction must have the value zero. <br>
+     * Thus, we ignore it again(Previous in InvokeItfInsnNode).
      */
-    public void preToByteArray(ConstantWriter pool, ByteWriter w) {
-        toByteArray(w);
+    @Override
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        if (params != null) {
+            params.add(returnType);
+            rawParam = ParamHelper.getMethod(params);
+            params.remove(params.size() - 1);
+        }
+        w.writeByte(code).writeShort(cw.getInvokeDynId(0xFFFF & bootstrapTableIndex, name, rawParam)).writeShort(0);
+    }
 
-        params.add(returnType);
-        this.did = (char) pool.getInvokeDynId((short) bootstrapTableIndex, name, ParamHelper.getMethod(params));
-        params.remove(params.size() - 1);
+    @Override
+    public int nodeSize() {
+        return 5;
     }
 
     public String toString() {
+        initPar();
         StringBuilder sb = new StringBuilder(super.toString()).append(" #").append(bootstrapTableIndex).append(' ').append(returnType).append(" ?").append('.').append(name).append('(');
-        for (Type par : params) {
-            sb.append(par).append(", ");
-        }
-        if (!params.isEmpty())
+        if (!params.isEmpty()) {
+            for (int i = 0; i < params.size(); i++) {
+                Type par = params.get(i);
+                sb.append(par).append(", ");
+            }
             sb.delete(sb.length() - 2, sb.length());
+        }
         return sb.append(')').toString();
     }
 
     @Override
-    public String name() {
-        return name;
-    }
-
-    @Override
-    public void name(String methodName) {
-        this.name = methodName;
-    }
-
-    @Override
-    public Type returnType() {
-        return returnType;
-    }
-
-    @Override
-    public void returnType(Type returnType) {
-        this.returnType = returnType;
-    }
-
-    @Override
-    public List<Type> parameters() {
-        return params;
-    }
-
-    @Override
-    public void rawTypes(String rawParam) {
-        this.params = ParamHelper.parseMethod(this.rawParam = rawParam);
-        this.returnType = params.remove(params.size() - 1);
-    }
-
-    private String rawParam;
-
-    @Override
-    public String rawTypes() {
-        return this.rawParam;
-    }
-
-    @Override
-    public void rawDesc(String descriptor) {
+    public void rawDesc(String desc) {
         throw new UnsupportedOperationException("InvokeDyn does not support 'classed' descriptor");
     }
 }

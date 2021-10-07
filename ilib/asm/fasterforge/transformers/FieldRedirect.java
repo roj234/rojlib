@@ -100,9 +100,9 @@ public class FieldRedirect implements IClassTransformer {
                     // GETFIELD
                     if (fieldRef.name.getString().equals(fi.name) && fi.code == Opcodes.GETFIELD) {
                         InvokeInsnNode replace = new InvokeInsnNode(Opcodes.INVOKEVIRTUAL);
-                        replace.owner(classNode.name);
-                        replace.name(getMethod.name.getString());
-                        replace.rawTypes(getMethod.type.getString());
+                        replace.owner = classNode.name;
+                        replace.name = getMethod.name.getString();
+                        replace.setParameters(getMethod.type.getString());
                         it.set(replace);
                     }
                 }

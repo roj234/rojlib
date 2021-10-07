@@ -27,6 +27,7 @@
 package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
+import roj.asm.util.ConstantWriter;
 import roj.collect.LinkedIntMap;
 import roj.util.ByteWriter;
 
@@ -89,13 +90,15 @@ public final class JmPrimer extends InsnNode {
     }
 
     @Override
-    public void toByteArray(ByteWriter w) {
-        throw new UnsupportedOperationException("Why I am here?");
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+        throw new UnsupportedOperationException();
     }
 
     public InsnNode bake(InsnNode target) {
-        if(code == GOTO || code == GOTO_W)
-            return new GotoInsnNode(code, target);
-        return new IfInsnNode(code, target);
+        GotoInsnNode gin = code == GOTO || code == GOTO_W ?
+                new GotoInsnNode(code, target) :
+                new IfInsnNode(code, target);
+        gin.delta = def;
+        return gin;
     }
 }

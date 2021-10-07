@@ -27,6 +27,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
+import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
@@ -41,7 +42,7 @@ import static roj.asm.Opcodes.*;
  * @version 0.1
  * @since 2021/5/24 23:21
  */
-public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
+public class GotoInsnNode extends InsnNode {
     public GotoInsnNode() {
         super(Opcodes.GOTO);
     }
@@ -73,31 +74,38 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
 
     public InsnNode target;
 
-    @Override
-    public InsnNode getTarget() {
+    public final InsnNode getTarget() {
         return this.target = validate(target);
     }
 
-    @Override
-    public void setTarget(InsnNode target) {
+    public final void setTarget(InsnNode target) {
         this.target = target;
+    }
+
+    @Override
+    public final boolean isJumpSource() {
+        return true;
     }
 
     int delta;
 
-    @Override
-    public boolean handlePCRev(ToIntFunction<InsnNode> pcRev) {
+    public boolean review(ToIntFunction<InsnNode> pcRev) {
         return (code == GOTO) != ((delta = (pcRev.applyAsInt(target = validate(target)) - pcRev.applyAsInt(this))) == ((short) delta));
     }
 
     @Override
-    public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
+    public final int nodeSize() {
+        return code == GOTO_W ? 5 : 3;
+    }
+
+    @Override
+    public final void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
         index = list.indexOf(validate(target));
         if(index > 0 && list.get(index - 1).code == WIDE)
             throw new IllegalArgumentException("Jump target must not \"after\" wide instruction");
     }
 
-    public void toByteArray(ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         int delta = this.delta;
         if (((short) delta) != delta) {
             w.writeByte(this.code = GOTO_W).writeInt(delta);
@@ -106,7 +114,7 @@ public class GotoInsnNode extends InsnNode implements IJumpInsnNode {
         }
     }
 
-    public String toString() {
+    public final String toString() {
         return super.toString() + " => " + (delta == 0 ? target : "offset " + delta);
     }
 }

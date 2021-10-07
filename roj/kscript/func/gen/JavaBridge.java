@@ -154,7 +154,7 @@ public final class JavaBridge {
         ((SwitchInsnNode)c).switcher.clear();
 
         in = clz.methods.get(1).code.instructions;
-        ((ClassInsnNode) in.get(0)).name = className;
+        ((ClassInsnNode) in.get(0)).owner = className;
         ((InvokeInsnNode) in.get(3)).owner = className;
 
         ((FieldInsnNode)clz.methods.get(2).code.instructions.get(4)).owner = className;
@@ -168,7 +168,7 @@ public final class JavaBridge {
         fn = ((FieldInsnNode) in.get(5));
         fn.owner = className; fn.type = ct;
 
-        ((ClassInsnNode) in.get(4)).name = methodOwner;
+        ((ClassInsnNode) in.get(4)).owner = methodOwner;
 
         clz.fields.get(0).type = ct;
     }

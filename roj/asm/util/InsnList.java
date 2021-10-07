@@ -78,14 +78,19 @@ public final class InsnList extends ArrayList<InsnNode> {
         if (last != MARKER)
             add(last);
 
-        ConstantWriterEmpty pool = new ConstantWriterEmpty();
+        ConstantWriterEmpty cw = new ConstantWriterEmpty();
         ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
         IntBiMap<InsnNode> pcRev = new IntBiMap<>(size());
 
         for (int i = 0; i < size(); i++) {
             InsnNode node = get(i);
             pcRev.putByValue(w.list.pos(), node);
-            node.preToByteArray(pool, w);
+            int size = node.nodeSize();
+            if (size <= 0) {
+                node.toByteArray(cw, w);
+            } else {
+                w.list.pos(w.list.pos() + size);
+            }
         }
 
         pcRev.putByValue(w.list.pos(), MARKER);

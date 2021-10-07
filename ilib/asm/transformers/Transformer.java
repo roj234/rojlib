@@ -103,7 +103,7 @@ public class Transformer implements IFasterClassTransformer {
                     node1.code = Opcodes.INVOKESTATIC;
                     node1.owner = "ilib/asm/util/MCHooks";
                     node1.name = "playerAnvilClick";
-                    node1.rawTypes("(Lnet/minecraft/entity/player/EntityPlayer;I)V");
+                    node1.setParameters("(Lnet/minecraft/entity/player/EntityPlayer;I)V");
                     break;
                 }
             }
@@ -174,7 +174,7 @@ public class Transformer implements IFasterClassTransformer {
             InsnNode node = iterator.next();
             if (node.getOpcode() == Opcodes.INVOKEVIRTUAL) {
                 InvokeInsnNode node1 = (InvokeInsnNode) node;
-                if (node1.name().equals("beginMinecraftLoading")) {
+                if (node1.name.equals("beginMinecraftLoading")) {
                     iterator.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/ImpLib", "onPreInitDone", "()V"));
                     logger.debug("Found beginLoad mark");
                     break;
@@ -190,15 +190,15 @@ public class Transformer implements IFasterClassTransformer {
             switch (node.getOpcode()) {
                 case Opcodes.NEW: {
                     ClassInsnNode node1 = (ClassInsnNode) node;
-                    if (node1.owner().equals("net/minecraft/client/util/SearchTree")) {
-                        node1.owner("ilib/asm/nixim/FastSearchTree");
+                    if (node1.owner.equals("net/minecraft/client/util/SearchTree")) {
+                        node1.owner = "ilib/asm/nixim/FastSearchTree";
                         logger.debug("Found Tree New");
                     }
                 }
                 break;
                 case Opcodes.INVOKESPECIAL: {
                     InvokeInsnNode node1 = (InvokeInsnNode) node;
-                    if (node1.owner().equals("net/minecraft/client/util/SearchTree") && node1.name().equals("<init>")) {
+                    if (node1.owner.equals("net/minecraft/client/util/SearchTree") && node1.name.equals("<init>")) {
                         node1.owner("ilib/asm/nixim/FastSearchTree");
                         logger.debug("Found Tree Init");
                         break;
@@ -215,7 +215,7 @@ public class Transformer implements IFasterClassTransformer {
             InsnNode node = iterator.previous();
             if (node.getOpcode() == Opcodes.INVOKESTATIC) {
                 InvokeInsnNode node1 = (InvokeInsnNode) node;
-                if (node1.owner().equals("java/lang/System") && node1.name().equals("gc")) {
+                if (node1.owner.equals("java/lang/System") && node1.name.equals("gc")) {
                     node1.rawDesc("ilib/asm/transformers/Transformer.redirectGC:()V");
                     logger.debug("Found GC mark");
                     break;

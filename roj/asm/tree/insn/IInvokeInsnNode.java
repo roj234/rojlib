@@ -26,44 +26,67 @@
 
 package roj.asm.tree.insn;
 
-import roj.asm.Opcodes;
-import roj.asm.util.ConstantWriter;
-import roj.util.ByteWriter;
+import roj.asm.type.ParamHelper;
+import roj.asm.type.Type;
+
+import java.util.List;
 
 /**
- * No description provided
+ * 抽象，方法执行
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/5/24 23:21
+ * @since 2021/6/18 9:51
  */
-public final class U4InsnNode extends InsnNode implements IIndexInsnNode {
-    public U4InsnNode(byte code, int index) {
+public abstract class IInvokeInsnNode extends InsnNode {
+    public IInvokeInsnNode(byte code) {
         super(code);
-        this.index = index;
     }
 
-    public int index;
+    public String name;
+    String rawParam;
+    List<Type> params;
+    Type returnType;
 
-    public int getIndex() {
-        return index;
+    final void initPar() {
+        if (params == null) {
+            params = ParamHelper.parseMethod(rawParam);
+            returnType = params.remove(params.size() - 1);
+        }
     }
 
-    @Override
-    public void setIndex(int index) {
-        this.index = index;
+    public final Type returnType() {
+        initPar();
+        return returnType;
     }
 
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
-        w.writeByte(code).writeInt(index);
+    public final List<Type> parameters() {
+        initPar();
+        return params;
     }
 
-    @Override
-    public int nodeSize() {
-        return 5;
+    public final String rawParameters() {
+        return this.rawParam;
     }
 
-    public String toString() {
-        return Opcodes.toString0(code, index);
+    /**
+     * (I)Lasm/util/ByteWriter;
+     *
+     * @param param java规范中的方法参数描述符
+     */
+    public final void setParameters(String param) {
+        this.rawParam = param;
+        if (params != null) {
+            params.clear();
+            ParamHelper.parseMethod(param, params);
+            returnType = params.remove(params.size() - 1);
+        }
     }
+
+    /**
+     * asm/util/ByteWriter.writeShort:(I)Lasm/util/ByteWriter;
+     *
+     * @param desc javap格式的描述符
+     */
+    public abstract void rawDesc(String desc);
 }

@@ -27,6 +27,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
+import roj.asm.util.ConstantWriter;
 import roj.util.ByteWriter;
 
 /**
@@ -75,13 +76,18 @@ public final class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     @Override
-    public void toByteArray(ByteWriter w) {
+    public void toByteArray(ConstantWriter cw, ByteWriter w) {
         w.writeByte(code);
         if (variableId > 255 || amount != (byte) amount) {
             w.writeShort(variableId).writeShort(amount);
         } else {
             w.writeByte((byte) variableId).writeByte((byte) amount);
         }
+    }
+
+    @Override
+    public int nodeSize() {
+        return variableId > 255 || amount != (byte) amount ? 5 : 3;
     }
 
     public String toString() {

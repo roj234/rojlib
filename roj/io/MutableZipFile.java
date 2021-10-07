@@ -340,7 +340,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         if(commentLen > 0) {
             buffer.ensureCapacity(commentLen);
-            if(zip.read(buffer.list, 0, commentLen) < commentLen)
+            if(zip.read(buf = buffer.list, 0, commentLen) < commentLen)
                 throw new EOFException();
 
             if (charset == StandardCharsets.UTF_8) {
