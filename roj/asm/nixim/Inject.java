@@ -47,9 +47,9 @@ public @interface Inject {
 
     int flags() default 0;
 
-    int injectMiddlePosition() default -1;
+    String occurrence() default "";
 
     enum At {
-        HEAD, MIDDLE_MATCHING, MIDDLE_ORDINAL, TAIL, REPLACE, OLD_SUPER_INJECT
+        HEAD, MIDDLE, TAIL, REPLACE, OLD_SUPER_INJECT
     }
 }

@@ -51,7 +51,6 @@ import roj.util.EmptyArrays;
 import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
@@ -77,6 +76,11 @@ public final class DirectAccessor<T> {
 
     static final AtomicInteger NEXT_ID = new AtomicInteger();
     static final FlagList      PUBLIC_ACCESS    = new FlagList(AccessFlag.PUBLIC);
+
+    private static final ThreadLocal<Object> ACCESSOR_TMP = new ThreadLocal<>();
+    private static void syncCallback(Object handle) {
+        ACCESSOR_TMP.set(handle);
+    }
 
     private final MyHashMap<String, Method> methodByName;
     private final MyCustomMap caches;
@@ -130,7 +134,8 @@ public final class DirectAccessor<T> {
                 continue;
 
             // skip 'internal' methods
-            if ("toString".equals(method.getName()) && method.getParameterCount() == 0) continue;
+            if (("toString".equals(method.getName()) ||
+                    "clone".equals(method.getName())) && method.getParameterCount() == 0) continue;
 
             if(methodByName.put(method.getName(), method) != null) {
                 throw new IllegalArgumentException("方法名重复: '" + method.getName() + "' in " + deClass.getName());
@@ -140,7 +145,7 @@ public final class DirectAccessor<T> {
         caches = new MyCustomMap();
         String clsName = packageName + "DAB$" + NEXT_ID.getAndIncrement();
         makeHeader(clsName, deClass.getName().replace('.', '/'), var);
-        addInit(var, PUBLIC_ACCESS);
+        addInit(var);
         if(DEBUG)
             this.sb = new CharList().append("实现类: ").append(deClass.getName()).append("\n自身: ").append(var.name);
     }
@@ -157,24 +162,29 @@ public final class DirectAccessor<T> {
         writeDebugInfo();
         methodByName.clear();
 
+        ByteList list = var.getBytes();
+        ClassDefiner.INSTANCE.defineClassC(var.name.replace('/', '.'), list.list, 0, list.pos());
         try {
-            ByteList list = var.getBytes();
-            Class<?> clz = ClassDefiner.INSTANCE.defineClassC(var.name.replace('/', '.'), list.list, 0, list.pos());
-            return instance = (T) InstantiationUtil.createClass(clz);
-        } catch (ClassFormatError | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-            throw new RuntimeException("不该发生的内部错误", e);
+            Class.forName(var.name.replace('/', '.'), true, ClassDefiner.INSTANCE);
+            if (null == (instance = (T) ACCESSOR_TMP.get())) {
+                throw new IllegalStateException("内部错误: ACCESSOR_TMP.get() == null");
+            }
+        } catch (Throwable e) {
+            throw new IllegalStateException("内部错误: 初始化失败", e);
         }
+        ACCESSOR_TMP.set(null);
+        return instance;
     }
 
     public String getClassName() {
         return var.name;
     }
 
-    public synchronized byte[] toByteArray() {
-        writeDebugInfo();
-        methodByName.clear();
-
-        return var.getBytes().toByteArray();
+    public DirectAccessor<T> cloneable() {
+        if (!var.interfaces.contains("java/lang/Cloneable")) {
+            cloneable(var);
+        }
+        return this;
     }
 
     private void writeDebugInfo() {
@@ -667,7 +677,7 @@ public final class DirectAccessor<T> {
 
             String desc = ParamHelper.classDescriptors(params, method.getReturnType());
 
-            String selfDesc = objectModes == null ? desc : objectDescriptors(params, method.getReturnType(), false);
+            String selfDesc = objectModes == null ? desc : objectDescriptors(params, method.getReturnType(), true);
             roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, selfMethodNames[i], selfDesc);
             AttrCode code;
             invoke.code = code = new AttrCode(invoke);
@@ -682,9 +692,9 @@ public final class DirectAccessor<T> {
                     insn.add(cache.node);
                 } else {
                     insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
-                    if (check)
+                    if (objectModes == null && check)
                         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
-                    invoke.parameters().add(0, new Type("java/lang/Object"));
+                    invoke.parameters().add(0, new Type(objectModes == null ? target.getName().replace('.', '/') : "java/lang/Object"));
                 }
             }
 
@@ -1077,21 +1087,54 @@ public final class DirectAccessor<T> {
         return dest;
     }
 
+    static void cloneable(Clazz clz) {
+        roj.asm.tree.Method cl = new roj.asm.tree.Method(PUBLIC_ACCESS, clz, "clone", "()Ljava/lang/Object;");
+        AttrCode code = cl.code = new AttrCode(cl);
+
+        code.stackSize = 1;
+        code.localSize = 1;
+        InsnList insn = code.instructions;
+        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "java/lang/Object",
+                                    "clone", "()Ljava/lang/Object;"));
+        insn.add(new ClassInsnNode(Opcodes.CHECKCAST, clz.name));
+        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+
+        clz.interfaces.add("java/lang/Cloneable");
+        clz.methods.add(cl);
+    }
+
     /**
      * <init>
      * constructor
      */
-    static void addInit(Clazz clz, FlagList publicAccess) {
+    static void addInit(Clazz clz) {
         AttrCode code;
 
-        roj.asm.tree.Method init = new roj.asm.tree.Method(publicAccess, clz, "<init>", "()V");
+        roj.asm.tree.Method init = new roj.asm.tree.Method(PUBLIC_ACCESS, clz, "<init>", "()V");
         init.code = code = new AttrCode(init);
 
         code.stackSize = 1;
         code.localSize = 1;
-        final InsnList insn = code.instructions;
+        InsnList insn = code.instructions;
         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
+        insn.add(NodeHelper.cached(Opcodes.RETURN));
+
+        clz.methods.add(init);
+
+        init = new roj.asm.tree.Method(AccessFlag.PUBLIC | AccessFlag.STATIC, clz, "<clinit>", "()V");
+        code = init.code = new AttrCode(init);
+
+        code.stackSize = 2;
+        code.localSize = 0;
+        insn = code.instructions;
+        insn.add(new ClassInsnNode(Opcodes.NEW, clz.name));
+        insn.add(NodeHelper.cached(Opcodes.DUP));
+        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.name, "<init>", "()V"));
+        insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC,
+                                    DirectAccessor.class.getName().replace('.', '/'),
+                                    "syncCallback", "(Ljava/lang/Object;)V"));
         insn.add(NodeHelper.cached(Opcodes.RETURN));
 
         clz.methods.add(init);

@@ -23,19 +23,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.nixim2;
+package roj.asm.nixim;
 
-import roj.asm.tree.simple.MoFNode;
+import roj.asm.tree.attr.AttrBootstrapMethods;
+import roj.asm.tree.insn.InvokeDynInsnNode;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author solo6975
  * @version 0.1
- * @since 2021/10/3 20:59
+ * @since 2021/10/3 23:25
  */
-final class ShadowCheck extends RemapEntry {
-    byte flag;
+final class LambdaInfo {
+    final AttrBootstrapMethods.BootstrapMethod bootstrapMethod;
+    final List<InvokeDynInsnNode>              nodes = new ArrayList<>();
 
-    public ShadowCheck(MoFNode node) {
-        super(node);
+    LambdaInfo(AttrBootstrapMethods.BootstrapMethod bm) {
+        this.bootstrapMethod = bm;
     }
 }

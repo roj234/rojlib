@@ -1012,7 +1012,7 @@ public final class Interpreter {
         }
         if(load && local.size < id)
             throw new IllegalArgumentException("Access #" + id + " before assign");
-        maxLocalSize = Math.max(maxLocalSize, id);
+        maxLocalSize = Math.max(maxLocalSize, id + 1);
     }
 
     // endregion
@@ -1290,7 +1290,6 @@ public final class Interpreter {
             }
             frames0.set(i, Helpers.cast(build(frames0.get(i))));
         }
-        System.out.println("Max Stack Size: " + maxStackSize + ", Max Local Size: " + maxLocalSize);
         System.out.println(frames0);
         return Helpers.cast(frames0);
     }

@@ -24,22 +24,18 @@
  * THE SOFTWARE.
  */
 
-package roj.asm.nixim2;
+package roj.asm.nixim;
 
 import roj.asm.OpcodesInt;
 import roj.asm.cst.*;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
-import roj.asm.nixim.*;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Field;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.*;
-import roj.asm.tree.attr.AttrAnnotation;
-import roj.asm.tree.attr.AttrBootstrapMethods;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.attr.*;
 import roj.asm.tree.insn.*;
 import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
@@ -48,10 +44,7 @@ import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.*;
 import roj.asm.visitor.CodeVisitor;
-import roj.collect.Int2IntMap;
-import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
+import roj.collect.*;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -73,11 +66,11 @@ import static roj.asm.Opcodes.*;
  * @version 2.0
  * @since 2021/10/3 13:49
  */
-public class NiximTransformer2 {
+public class NiximSystem {
     public static void main(String[] args) throws IOException, NiximException {
-        NiximTransformer2 nt2 = new NiximTransformer2();
-        nt2.read(IOUtil.read("roj/asm/nixim/Example.class"));
-        ByteList sharedOutput = nt2.nixim("roj/asm/nixim2/TestTarget", new ByteList(IOUtil.read("roj/asm/nixim2/TestTarget.class")));
+        NiximSystem nt2 = new NiximSystem();
+        nt2.load(IOUtil.read("roj/asm/nixim/Example.class"));
+        ByteList sharedOutput = nt2.nixim("roj/asm/nixim/TestTarget", new ByteList(IOUtil.read("roj/asm/nixim/TestTarget.class")));
         try (FileOutputStream fos = new FileOutputStream("Example.class")) {
             sharedOutput.writeToStream(fos);
         }
@@ -85,12 +78,9 @@ public class NiximTransformer2 {
 
     protected final Map<String, NiximData> registry = new MyHashMap<>();
 
-    public static final String SPEC_M_RETVAL = "$$$RETURN_VAL";
-    public static final String SPEC_M_CONTINUE = "$$$CONTINUE";
-
     public static boolean debug = false;
 
-    public final boolean removeByClass(String target, String source) {
+    public final boolean remove(String target, String source) {
         NiximData nx = registry.get(target);
         NiximData prev = null;
         while (nx != null) {
@@ -107,11 +97,17 @@ public class NiximTransformer2 {
         return false;
     }
 
-    public final boolean removeByClass(String target) {
+    public final boolean remove(String target) {
         return registry.remove(target) != null;
     }
 
     // region 应用
+
+    public static final String SPEC_M_RETVAL = "$$$RETURN_VAL";
+    public static final String SPEC_M_INSN_MATCHER = "$$$MATCHER";
+    public static final String SPEC_M_CONTINUE = "$$$CONTINUE";
+    public static final String SPEC_M_CONSTRUCTOR = "$$$CONSTRUCTOR";
+    public static final String SPEC_M_CONSTRUCTOR_THIS = "$$$CONSTRUCTOR_THIS";
 
     public ByteList nixim(String className, ByteList in) throws NiximException {
         return nixim(new Context(className, in), registry.remove(className));
@@ -246,7 +242,7 @@ public class NiximTransformer2 {
                             methods.add(Helpers.cast(clinit));
                         }
                         AttrCode code = clinit.code;
-                        code.computeFrames = true;
+                        code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
                         do {
                             code.localSize = (char) Math.max(val.localSize, code.localSize);
                             code.stackSize = (char) Math.max(val.stackSize, code.stackSize);
@@ -295,55 +291,121 @@ public class NiximTransformer2 {
         if (!methods.get(index).rawDesc().equals(s.method.rawDesc()))
             throw new NiximException("目标与Nixim方法返回值不匹配 " + methods.get(index));
         switch (s.at) {
-            case "REPLACE":
+            case "REPLACE": {
+                st:
+                if (s.method.name.equals("<init>")) {
+                    InvokeInsnNode iin = (InvokeInsnNode) s.method.code.instructions.get(s.superCallEnd);
+                    if (iin.name.startsWith(SPEC_M_CONSTRUCTOR_THIS)) {
+                        iin.owner = data.name;
+                        for (int i = 0; i < methods.size(); i++) {
+                            MethodNode mn = methods.get(i);
+                            if (mn.rawDesc().equals(iin.rawParameters()))
+                                break st;
+                        }
+                        throw new NiximException("覆盖的构造器不存在:S");
+                    } else {
+                        // 无法检查上级构造器是否存在, 但是Object还是可以查一下
+                        iin.owner = data.parent;
+                        if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.rawParameters()))
+                            throw new NiximException("覆盖的构造器不存在:O");
+                    }
+                    iin.name = "<init>";
+                }
                 methods.set(index, Helpers.cast(s.method));
-                break;
+            }
+            break;
             case "HEAD": {
                 Method tm = new Method(data, (MethodSimple) methods.get(index));
                 InsnList insn = tm.code.instructions;
                 int superBegin = 0;
-                while (superBegin < insn.size()) {
-                    InsnNode node = insn.get(superBegin++);
-                    if (node.nodeType() == InsnNode.T_INVOKE) {
-                        InvokeInsnNode iin = (InvokeInsnNode) node;
-                        if (iin.name.equals("<init>"));
+                if (methods.get(index).name().equals("<init>")) {
+                    while (superBegin < insn.size()) {
+                        InsnNode node = insn.get(superBegin++);
+                        if (node.nodeType() == InsnNode.T_INVOKE) {
+                            InvokeInsnNode iin = (InvokeInsnNode) node;
+                            if (iin.name.equals("<init>") &&
+                                    (iin.owner.equals(data.parent) || iin.owner.equals(data.name))) {
+                                break;
+                            }
+                        }
                     }
+                    if (superBegin == insn.size())
+                        throw new NiximException(data.name + " 存在错误: 无法找到上级/自身初始化的调用");
                 }
 
-                InsnNode entryPoint = insn.get(0);
+                int pl = computeParamLength(tm, null);
+                InsnList insn2 = s.method.code.instructions;
+                InsnNode entryPoint;
+                if (s.assignId != null) {
+                    int size = insn2.size();
+                    for (Int2IntMap.Entry entry : s.assignId.entrySet()) {
+                        // todo check key index?
+                        int tKey = entry.getKey() - 1 + pl;
+                        NodeHelper.compress(insn2, (byte) (entry.v - (ISTORE - ILOAD)), tKey);
+                        NodeHelper.compress(insn2, (byte) entry.v, entry.getKey());
+                    }
+                    entryPoint = insn2.get(size);
+                } else {
+                    entryPoint = insn.get(0);
+                }
+
                 List<GotoInsnNode> gotos = s.gotos();
                 for (int i = 0; i < gotos.size(); i++) {
                     gotos.get(i).setTarget(entryPoint);
                 }
 
-                int pl = computeParamLength(tm, null);
-                InsnList insn2 = s.method.code.instructions;
-                // 恢复备份的变量 todo
-                if (s.assignId != null) {
-                    for (Int2IntMap.Entry entry : s.assignId.entrySet()) {
-                        int tKey = entry.getKey() - 1 + pl;
-                        NodeHelper.compress(insn2, (byte) entry.v, tKey);
-                        byte tCode = (byte) (entry.v + (ISTORE - ILOAD));
-                        NodeHelper.compress(insn2, tCode, entry.getKey());
-                    }
-                }
-                insn.addAll(0, insn2);
-                tm.code.computeFrames = true;
-                tm.code.reIndex(new ConstantWriterEmpty());
-                System.out.println(tm.code);
+                insn.addAll(superBegin, insn2);
+                tm.code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
                 methods.set(index, Helpers.cast(tm));
             }
             break;
-            case "MIDDLE_MATCHING":
-            case "MIDDLE_ORDINAL":
-                throw new NiximException("qing");
+            case "MIDDLE": {
+
+            }
+            break;
             case "TAIL": {
-                System.err.println("TAIL NOT OK YET");
                 Method tm = new Method(data, (MethodSimple) methods.get(index));
                 Int2IntMap assignedLV = new Int2IntMap();
-                int pl = computeParamLength(tm, assignedLV);
+                int pl = tm.accesses.hasAny(AccessFlag.STATIC) ? -1 : 0;
+                // 和tail用到的变量取交集
+                if (s.assignId != null) {
+                    computeParamLength(tm, assignedLV);
+                    // noinspection all
+                    for (Iterator<Int2IntMap.Entry> itr = assignedLV.entrySet().iterator(); itr.hasNext(); ) {
+                        Int2IntMap.Entry entry = itr.next();
+                        if (!s.assignId.containsKey(entry.getKey())) itr.remove();
+                        else pl = Math.max(entry.getKey(), pl);
+                    }
+                }
+                pl++;
+
+                byte base = NodeHelper.X_LOAD(ParamHelper.getReturn(tm.rawDesc()).nativeName().charAt(0));
+                byte type;
+                InsnList targetInsn = s.method.code.instructions;
+                List<Integer> retVal = s.retVal();
+                if (retVal.size() == 0) {
+                    type = 0;
+                } else if (retVal.size() == 1 && retVal.get(0) == 0) {
+                    targetInsn.remove(0);
+                    type = 1;
+                    if (NodeHelper.getIndex(targetInsn.get(0)) == pl) {
+                        targetInsn.remove(0);
+                        type |= 4; // same var id
+                    }
+                } else {
+                    for (int i : retVal) {
+                        _compress(pl, base, targetInsn, i);
+                    }
+                    type = 2;
+                }
+                retVal.clear();
+
+                InsnNode FIRST = targetInsn.get(0);
+                int accessedMax = 0;
 
                 InsnList insn = tm.code.instructions;
+                insn.remove(insn.size() - 1);
+
                 for (int i = 0; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
                     // 检测参数的assign然后做备份
@@ -357,30 +419,53 @@ public class NiximTransformer2 {
                                     code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
                                 entry.v = code;
                             }
-                            // needn't check assign: was loaded
+                            // needn't check assign: 他们是正常的class
                         }
+                        accessedMax = Math.max(accessedMax, i2);
                     } else if (i > 0 && NodeHelper.isReturn(node.code)) {
-                        GotoInsnNode Goto = new GotoInsnNode();
-                        s.gotos().add(Goto);
                         // 将返回值（如果存在）存放到指定的变量
                         // 将目标方法中return替换成goto开头
-                        // X_STORE, then goto... todo
-                        insn.set(i, Goto);
+                        switch (type & 3) {
+                            case 0: // 没有使用的
+                                insn.set(i, NPInsnNode.of(POP));
+                                break;
+                            case 1: // 只有一个，而且是第一个使用了
+                                if (i == insn.size() - 1) {
+                                    insn.remove(i)._i_replace(FIRST);
+                                } else {
+                                    GotoInsnNode Goto = new GotoInsnNode();
+                                    Goto.setTarget(FIRST);
+                                    insn.set(i, Goto);
+                                }
+                                if (type == 5) { // todo 测试
+                                    insn.remove(i - 1);
+                                }
+                                break;
+                            case 2:
+                                if (i == insn.size() - 1) {
+                                    _compress(pl, base, insn, i);
+                                } else {
+                                    GotoInsnNode Goto = new GotoInsnNode();
+                                    Goto.setTarget(FIRST);
+                                    insn.add(_compress(pl, base, insn, i), Goto);
+                                }
+                                break;
+                        }
                     }
                 }
-                // 这里只是修改的，还要和tail用到的取交集 todo
                 // 计算tail用到的参数id，若目标方法修改过value则暂存到新的变量id中然后再恢复
                 if (!assignedLV.isEmpty()) {
                     InsnList prepend = new InsnList();
                     for (Iterator<Int2IntMap.Entry> itr = assignedLV.entrySet().iterator(); itr.hasNext(); ) {
                         Int2IntMap.Entry entry = itr.next();
                         if (entry.v != 0) {
-                            NodeHelper.compress(prepend, (byte) entry.v, entry.getKey());
-                            int tKey = entry.getKey() - 1 + pl;
-                            byte tCode = (byte) (entry.v + (ISTORE - ILOAD));
-                            NodeHelper.compress(prepend, tCode, tKey);
+                            byte tCode = (byte) (entry.v - (ISTORE - ILOAD));
+                            NodeHelper.compress(prepend, tCode, entry.getKey());
+                            int tKey = ++accessedMax;
+                            NodeHelper.compress(prepend, (byte) entry.v, tKey);
                             // re-load 加上恢复用的指令
-                            NodeHelper.compress(insn, (byte) entry.v, tKey);
+                            NodeHelper.compress(insn, tCode, tKey);
+                            NodeHelper.compress(insn, (byte) entry.v, entry.getKey());
                         } else {
                             itr.remove();
                         }
@@ -389,21 +474,35 @@ public class NiximTransformer2 {
                         insn.addAll(0, prepend);
                     }
                 }
-                insn.addAll(s.method.code.instructions);
+                insn.addAll(targetInsn);
+                tm.code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
+                methods.set(index, Helpers.cast(tm));
             }
             break;
-            case "OLD_SUPER_INJECT": {
+            case "OLD_SUPER_INJECT":
                 ((MethodSimple) methods.get(index)).name = data.writer.getUtf(s.sijName);
                 methods.add(Helpers.cast(s.method));
-            }
             break;
         }
+    }
+
+    private static int _compress(int varId, byte base, InsnList targetInsn, int i) {
+        if (varId <= 3) {
+            targetInsn.set(i, NodeHelper.loadSore(base, varId));
+        } else if (varId <= 255) {
+            targetInsn.set(i, new U1InsnNode(base, varId));
+        } else if (varId <= 65535) {
+            targetInsn.set(i, NPInsnNode.of(WIDE));
+            targetInsn.add(i + 1, new U2InsnNode(base, varId));
+            return i + 2;
+        }
+        return i + 1;
     }
 
     // endregion
     // region 读取
 
-    public void read(@Nonnull final byte[] bytes) throws NiximException {
+    public void load(@Nonnull final byte[] bytes) throws NiximException {
         Context ctx = new Context("", bytes);
 
         System.out.println("NiximRead " + ctx.getData().name);
@@ -444,14 +543,20 @@ public class NiximTransformer2 {
         for (int i = methods.size() - 1; i >= 0; i--) {
             MethodSimple method = methods.get(i);
             String name = method.name();
-            if (name.startsWith(SPEC_M_CONTINUE) || name.startsWith(SPEC_M_RETVAL)) {
+            if (name.startsWith("$$$")) {
                 if (method.attrByName(A_BASE) != null) {
-                    throw new NiximException("特殊方法($$$)不能包含注解");
+                    throw new NiximException("特殊方法(" + name + ")不能包含注解");
                 }
-                if (!method.accesses.hasAny(AccessFlag.STATIC))
-                    throw new NiximException("特殊方法($$$)必须是static的");
-                if (!method.rawDesc().contains("()"))
-                    throw new NiximException("特殊方法($$$)不能有参数");
+                if (!name.startsWith(SPEC_M_CONSTRUCTOR)) {
+                    if (!method.accesses.hasAny(AccessFlag.STATIC))
+                        throw new NiximException("特殊方法(" + name + ")必须是static的");
+                    if (!method.rawDesc().startsWith("()")) {
+                        throw new NiximException("特殊方法(" + name + ")不能有参数");
+                    }
+                } else if (!method.rawDesc().endsWith(")V")) {
+                    throw new NiximException("构造器调用标记(" + name + ")必须为void返回");
+                } else if (method.accesses.hasAny(AccessFlag.STATIC))
+                    throw new NiximException("构造器调用标记(" + name + ")不能是static的");
             }
             if (!keepBridge && method.accesses.hasAny(AccessFlag.VOLATILE_OR_BRIDGE)) {
                 methods.remove(i);
@@ -532,6 +637,7 @@ public class NiximTransformer2 {
                 entry.toName = remapName;
                 entries.add(entry);
 
+                map.put("value", new AnnValString(method.name()));
                 method.name = data.writer.getUtf(remapName);
                 tmpInjects.put(method, map);
                 methods.remove(i);
@@ -688,7 +794,6 @@ public class NiximTransformer2 {
             Map<String, AnnVal> map = entry.getValue();
 
             Method remap = new Method(data, ms);
-            remap.name = ((AnnValString) map.get("value")).value;
 
             postProcNxMd(destClass, remap);
 
@@ -729,7 +834,7 @@ public class NiximTransformer2 {
                 }
             }
 
-            processInject(state);
+            processInject(state, destClass);
 
             nx.injectMethod.put(new DescEntry(remap), state);
         }
@@ -770,17 +875,54 @@ public class NiximTransformer2 {
     }
 
     // 核心之一 (2/4)
-    private static void processInject(InjectState s) throws NiximException {
+    private static void processInject(InjectState s, String destClass) throws NiximException {
         Method method = s.method;
+        sw:
         switch (s.at) {
-            // 替换无需修改
-            case "REPLACE":
-                return;
+            case "REPLACE": {
+                if (method.name.equals("<init>")) {
+                    boolean selfInit = s.originName.equals("<init>");
+                    InsnList insn = method.code.instructions;
+                    for (int i = 0; i < insn.size(); i++) {
+                        InsnNode node = insn.get(i);
+                        if (node.nodeType() == InsnNode.T_INVOKE) {
+                            InvokeInsnNode iin = (InvokeInsnNode) node;
+                            // 使用 $$$CONSTRUCT来假装使用了初始化器
+                            if (selfInit ? (iin.name.equals("<init>") && iin.owner.equals(destClass)) : iin.name.startsWith(SPEC_M_CONSTRUCTOR)) {
+                                iin.setOpcode(INVOKESPECIAL);
+                                s.superCallEnd = i;
+                                s.method.attributes.removeByName("LocalVariableTable");
+                                s.method.attributes.removeByName("LocalVariableTypeTable");
+                                AttrLineNumber ln = (AttrLineNumber) s.method.attributes.getByName("LineNumberTable");
+                                if (ln != null) {
+                                    for (Iterator<ToIntMap.Entry<InsnNode>> itr = ln.map.selfEntrySet().iterator(); itr.hasNext(); ) {
+                                        ToIntMap.Entry<InsnNode> entry = itr.next();
+                                        for (int j = 0; j < i; j++) {
+                                            if (insn.get(j) == entry.k) {
+                                                itr.remove();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                break sw;
+                            }
+                        }
+                    }
+                    throw new NiximException("替换构造器 " + method.name + ' ' + method.rawDesc() + " 未发现使用 " + SPEC_M_CONSTRUCTOR + " 作为初始化器的标记");
+                } else {
+                    s.superCallEnd = -1;
+                }
+            }
+            break;
             case "HEAD": {
                 Int2IntMap assignedLV = new Int2IntMap();
                 int paramLength = computeParamLength(method, assignedLV);
                 InsnList insn = method.code.instructions;
                 insn.remove(insn.size() - 1);
+                if (s.superCallEnd > 0)
+                    insn.removeRange(0, s.superCallEnd);
+
                 for (int i = 0; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
                     // 检测参数的assign然后做备份
@@ -794,7 +936,7 @@ public class NiximTransformer2 {
                                     code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
                                 entry.v = code;
                             } else if (index < paramLength)
-                                throw new NiximException("无效的assign " + method + "# " + insn.get(i));
+                                throw new NiximException("无效的assign " + method + "# " + insn.get(i) + " i " + index + " " + assignedLV);
                         }
                     } else if (i > 0 && NodeHelper.isReturn(node.code)) {
                         node = insn.get(i - 1);
@@ -816,11 +958,10 @@ public class NiximTransformer2 {
                     for (Iterator<Int2IntMap.Entry> itr = assignedLV.entrySet().iterator(); itr.hasNext(); ) {
                         Int2IntMap.Entry entry = itr.next();
                         if (entry.v != 0) {
-                            NodeHelper.compress(prepend, (byte) entry.v, entry.getKey());
+                            byte tCode = (byte) (entry.v - (ISTORE - ILOAD));
+                            NodeHelper.compress(prepend, tCode, entry.getKey());
                             int tKey = entry.getKey() - 1 + paramLength;
-                            byte tCode = (byte) (entry.v + (ISTORE - ILOAD));
-                            System.out.println(toString0(tCode));
-                            NodeHelper.compress(prepend, tCode, tKey);
+                            NodeHelper.compress(prepend, (byte) entry.v, tKey);
                         } else {
                             itr.remove();
                         }
@@ -832,14 +973,17 @@ public class NiximTransformer2 {
                 }
             }
             break;
-            case "MIDDLE_MATCHING":
-            case "MIDDLE_ORDINAL":
-                throw new NiximException("wait");
+            case "MIDDLE": {
+                if (true)
+                    throw new NiximException("暂未支持...");
+            }
+            break;
             case "TAIL": {
                 Int2IntMap assignedLV = new Int2IntMap();
                 int paramLength = computeParamLength(method, assignedLV);
                 InsnList insn = method.code.instructions;
                 insn.remove(insn.size() - 1);
+
                 for (int i = s.superCallEnd; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
                     int index = NodeHelper.getIndex(node);
@@ -852,8 +996,8 @@ public class NiximTransformer2 {
                                 if (code >= ILOAD_0)
                                     code = (byte) (((code - ILOAD_0) / 4) + ILOAD);
                                 entry.v = code;
-                            }// else if (index < paramLength)
-                             //   throw new NiximException("无效的assign " + method + "# " + insn.get(i));
+                            } else if (index < paramLength)
+                                throw new NiximException("无效的assign " + method + "# " + insn.get(i));
                         } else if (i > 0 && code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
                             node = insn.get(i - 1);
                             if (node.code == INVOKESTATIC) {
@@ -861,7 +1005,6 @@ public class NiximTransformer2 {
                                 // 将返回值（如果存在）存放到指定的变量，用特殊的字段名(startWith: $$$RETURN_VAL)指定
                                 if (iin.name.startsWith(SPEC_M_RETVAL)) {
                                     s.retVal().add(i - 1);
-                                    System.out.println("(todo)Replacing getField at " + i);
                                 }
                             }
                         }
@@ -885,7 +1028,6 @@ public class NiximTransformer2 {
             case "OLD_SUPER_INJECT": {
                 List<InvokeInsnNode> sd = s.delegations();
                 if (sd.isEmpty()) {
-                    System.out.println("No super call found");
                     s.at = "REPLACE";
                     return;
                 }
@@ -896,18 +1038,15 @@ public class NiximTransformer2 {
             }
             break;
         }
-        if (s.superCallEnd != 0) {
-            method.code.instructions.removeRange(0, s.superCallEnd);
-        }
     }
 
     private static int computeParamLength(Method method, Int2IntMap assigned) {
-        int paramLength = !method.accesses.hasAny(AccessFlag.STATIC) ? 1 : 0;
+        int paramLength = method.accesses.hasAny(AccessFlag.STATIC) ? 0 : 1;
         List<Type> params = method.parameters();
         for (int i = 0; i < params.size(); i++) {
             Type t = params.get(i);
             if (assigned != null)
-                assigned.putInt(paramLength + 1, 0);
+                assigned.putInt(paramLength, 0);
             paramLength += t.length();
         }
         return paramLength;
@@ -1050,7 +1189,7 @@ public class NiximTransformer2 {
 
     static final class InjectState {
         final  Method method;
-        String at;
+        String at, originName;
         final  int    flags, pos;
 
         int superCallEnd;
@@ -1085,6 +1224,7 @@ public class NiximTransformer2 {
             avi = (AnnValInt) map.get("injectMiddlePosition");
             this.pos = avi == null ? -1 : avi.value;
             this.nodeList = new ArrayList<>();
+            this.originName = ((AnnValString) map.get("value")).value;
         }
     }
 
@@ -1166,7 +1306,7 @@ public class NiximTransformer2 {
         private void checkInvokeTarget(CstRef ref) {
             if (ref.getClassName().equals(destClass) && tester.read(ref).equals(tester2)) {
                 int id = data.writer.getMethodRefId("//MARKER", ref.desc().getName().getString(), ref.desc().getType().getString());
-                br.getBytes().set(br.index - 2, (byte) ((byte) id >> 8));
+                br.getBytes().set(br.index - 2, (byte) (id >> 8));
                 br.getBytes().set(br.index - 1, (byte) id);
             }
         }

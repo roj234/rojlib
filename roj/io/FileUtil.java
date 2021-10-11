@@ -45,6 +45,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
@@ -86,7 +87,7 @@ public final class FileUtil {
 
     public static String USER_AGENT = "FileUtil-2.4.0";
     public static int MIN_ASYNC_SIZE = 1024 * 512;
-    public static boolean ENABLE_ENDPOINT_RECOVERY = true;
+    public static boolean ENABLE_ENDPOINT_RECOVERY = true, CHECK_ETAG = true;
     public static int BUFFER_SIZE = 1024 * 4;
     public static int TIMEOUT = 10 * 1000;
 
@@ -370,36 +371,33 @@ public final class FileUtil {
                     return;
                 }
 
-                File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
-                BoxFile aoc = new BoxFile(tagFile);
-                aoc.load();
-                if(!aoc.contains("ETag")) {
-                    aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
-                    aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));
-                } else {
-                    String ck = conn.getHeaderField("ETag");
-                    if (!aoc.getUTF("ETag").equals(ck)) {
-                        if(!fInfoFile.delete()) {
+                if (CHECK_ETAG) {
+                    File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
+                    BoxFile aoc = new BoxFile(tagFile);
+                    aoc.load();
+                    if (!conn.getHeaderField("ETag").equals(aoc.getUTF("ETag")) || !conn.getHeaderField("Last-Modified").equals(aoc.getUTF("Last-Modified"))) {
+                        if (aoc.contains("ETag") && !fInfoFile.delete()) {
                             throw new IOException("fInfoFile文件已被占用");
                         }
-                    } else {
-                        ck = conn.getHeaderField("Last-Modified");
-                        if (!aoc.getUTF("Last-Modified").equals(ck)) {
-                            if(!fInfoFile.delete()) {
-                                throw new IOException("fInfoFile文件已被占用");
-                            }
-                        }
+                        aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
+                        aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));
                     }
+                    aoc.close();
                 }
-                aoc.close();
-
                 conn.disconnect();
 
                 long length = conn.getContentLengthLong();
                 if (tempFile.length() != length) {
-                    RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
-                    raf.setLength(length); // alloc
-                    raf.close();
+                    if (!tempFile.isFile() || tempFile.length() == 0) {
+                        tempFile.delete();
+                        FileChannel fc = FileChannel.open(tempFile.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE).position(length - 1);
+                        fc.write(ByteBuffer.wrap(new byte[1]));
+                        fc.close();
+                    } else {
+                        RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
+                        raf.setLength(length); // alloc
+                        raf.close();
+                    }
                 }
 
                 int remain = threadMax;
@@ -499,6 +497,36 @@ public final class FileUtil {
             }
         }
         return i;
+    }
+
+    public static long transferFileSelf(FileChannel cf, long fOffset, long tOffset, long length) throws IOException {
+        if (fOffset == tOffset || length == 0) return length;
+        if (fOffset > tOffset ?
+                tOffset + length <= fOffset :
+                fOffset + length <= tOffset) { // 区间不交叉
+            return cf.transferTo(fOffset, length, cf.position(tOffset));
+        }
+        long pos = cf.position();
+        try {
+            if (length <= 1048576) {
+                ByteBuffer direct = ByteBuffer.allocateDirect((int) length);
+                direct.position(0).limit((int) length);
+                cf.read(direct, fOffset);
+                direct.position(0);
+                int amount = cf.position(tOffset).write(direct);
+                IOUtil.clean(direct);
+                return amount;
+            } else {
+                File tmpFile = new File("FUT~" + (System.nanoTime() % 1000000) + ".tmp");
+                FileChannel ct = FileChannel.open(tmpFile.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE);
+                cf.transferTo(fOffset, length, ct.position(0));
+                long amount = ct.transferTo(0, length, cf.position(tOffset));
+                ct.close();
+                return amount;
+            }
+        } finally {
+            cf.position(pos);
+        }
     }
 
     private static class MTD implements WaitingIOFuture {

@@ -112,8 +112,6 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
                 this.info.setLength(8 * pid + 8);
             info.seek(8 * pid);
             this.downloaded = info.readLong();
-            //if (downloaded > 0)
-            //    System.out.println("断点: " + TextUtil.getScaledNumber(downloaded).toUpperCase() + 'B');
             if (downloaded >= length)
                 downloaded = -1;
             if (downloaded == -1) {
@@ -178,7 +176,6 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
         conn.setReadTimeout(FileUtil.TIMEOUT);
         conn.setRequestProperty("User-Agent", FileUtil.USER_AGENT);
         conn.setRequestProperty("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
-        //System.out.println(this);
         return conn.getInputStream();
     }
 

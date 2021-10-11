@@ -34,6 +34,7 @@ import roj.asm.tree.Clazz;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.tree.insn.SwitchInsnNode;
@@ -312,7 +313,7 @@ public class ObfUtil {
                     intp.init(m);
                     List<CodeBlock> codeBlocks = intp.gather(m.code);
                     if(m.code.frames != null)
-                        m.code.computeFrames = true;
+                        m.code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
                     flatControlFlow0(m, codeBlocks, rnd, flag);
                 }
             }

@@ -115,6 +115,6 @@ public class GotoInsnNode extends InsnNode {
     }
 
     public final String toString() {
-        return super.toString() + " => " + (delta == 0 ? target : "offset " + delta);
+        return super.toString() + " => " + target + "- off " + delta;
     }
 }

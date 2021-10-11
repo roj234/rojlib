@@ -187,4 +187,8 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
         super.clear();
         tail = head._next = head;
     }
+
+    public int indexOf(V fe) {
+        return 0;
+    }
 }

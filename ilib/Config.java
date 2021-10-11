@@ -35,7 +35,7 @@ package ilib;
 
 import ilib.asm.Loader;
 import ilib.event.PowershotEvent;
-import roj.asm.nixim.NiximTransformer;
+import roj.asm.nixim.NiximSystem;
 import roj.collect.MyHashSet;
 import roj.config.JSONConfiguration;
 import roj.config.data.CEntry;
@@ -43,7 +43,6 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.reflect.ClassDefiner;
 import roj.reflect.IFieldAccessor;
-import roj.reflect.InstantiationUtil;
 import roj.reflect.ReflectionUtils;
 
 import java.io.File;
@@ -55,7 +54,7 @@ public final class Config extends JSONConfiguration {
     public static boolean reloadSound, replaceOIM, replaceEntityList, isTrashEnable, fastLeaveDecay, mobSpawnFullBlock, noticeItemChange, dumpAnnotationInfo, cacheAnnotation, noRepairCost, enchantOverload,
             jumpAttack, enableMissingItemCreation, fixFont, noShitSound, enableTPSChange, betterSlider, fixMinecart, fastRecipe, shrinkLog,
             noDuplicateLogin, commandEverywhere, logChat, registerItem, autoClimb, noAutoJump, disablePotionShift,
-             betterDCA, noSoManyBlockPos, fastLightCheck, fastMethod, lootR, otherWorldChange, cacheBox2, miscPickaxeOptimize,
+            noSoManyBlockPos, fastLightCheck, fastMethod, lootR, otherWorldChange, cacheBox2, miscPickaxeOptimize,
             showDPS, moreEggs, portalCache, betterRenderGlobal, disableGlobalTESR, enablePinyinSearch, searchNameOnly, entityAabbCache,
             noAdvancement, eventInvoker, removePatchy, slabHelper, eventInvokerMost, packetBufferInfinity, IwantLight, noRecipeBook,
             fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax;
@@ -166,7 +165,6 @@ public final class Config extends JSONConfiguration {
 
         isTrashEnable = map.putIfAbsent("Optimize.Memory.启用清理垃圾功能", true);
         replaceOIM = map.putIfAbsent("Optimize.Memory.替换ObjectIdentityMap为IntMap(如果你有很多带meta的方块就关闭)", false);
-        betterDCA = map.putIfAbsent("Optimize.Memory.替换DCA/DMA/DFA的反射为native方法, 降低内存消耗", true);
 
         aabbCache = map.putIfAbsent("Optimize.Efficiency.getEntitiesInAABB()的缓存时长(ms), 0关闭", 0);
         cacheAnnotation = map.putIfAbsent("Optimize.Efficiency.缓存mod注解", false);
@@ -223,7 +221,7 @@ public final class Config extends JSONConfiguration {
 
 
         debug = map.putIfAbsent("Debug.出现BUG时设为2047, 生成更详细的数据，请带好logs/debug\\.log发送给作者", 0);
-        NiximTransformer.debug = (debug & 4) != 0;
+        NiximSystem.debug = (debug & 4) != 0;
         ClassDefiner.debug = (debug & 128) != 0;
         if (debug != 0)
             shrinkLog = false;
@@ -310,13 +308,5 @@ public final class Config extends JSONConfiguration {
         packetBufferInfinity = map.putIfAbsent("Misc.PacketBuffer解除所有限制!", false);
         //IwantLight = map.computeIfAbsent("Misc.替换原版光照系统", false);
         //IwantLight = map.computeIfAbsent("Misc.重写WIP区块", false);
-
-        if (betterDCA) {
-            try {
-                InstantiationUtil.doSunReflectCache();
-            } catch (Throwable e) {
-                Loader.logger().warn("无法替换DMA的native!", e);
-            }
-        }
     }
 }

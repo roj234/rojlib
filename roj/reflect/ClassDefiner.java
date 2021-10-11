@@ -49,22 +49,23 @@ public final class ClassDefiner extends ClassLoader {
                 ProtectionDomain protectionDomain, String source);
     }
 
+    private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
+    public static final ClassDefiner INSTANCE    = new ClassDefiner(SELF_LOADER);
+
+    private static Method defineClassMethod;
+    public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
+
     private static final FastInvoke invoker;
     static {
         ClassLoader.registerAsParallelCapable();
         FastInvoke fi = null;
         try {
             fi = DirectAccessor.builder(FastInvoke.class).delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1" }).build();
-        } catch (Throwable ignored) {}
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
         invoker = fi;
     }
-
-    private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
-    public static final ClassDefiner INSTANCE    = new ClassDefiner(SELF_LOADER);
-
-    private static Method defineClassMethod;
-
-    public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
 
     private ClassDefiner(ClassLoader parent) {
         super(parent);

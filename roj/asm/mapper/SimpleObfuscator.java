@@ -1,5 +1,7 @@
 package roj.asm.mapper;
 
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstRef;
 import roj.asm.mapper.obf.policy.*;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
@@ -11,6 +13,7 @@ import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.*;
 import roj.asm.util.AttributeList;
 import roj.asm.util.IGeneric;
+import roj.asm.visitor.CodeVisitor;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToIntMap;
@@ -173,6 +176,8 @@ public final class SimpleObfuscator extends Obfuscator {
                 case "mType":
                     i = resolveType(obf, args, i, 2);
                     break;
+                case "evaluate":
+                    obf.eval = true;
                 default:
                     throw new IllegalArgumentException("未知 " + args[i]);
             }
@@ -272,6 +277,7 @@ public final class SimpleObfuscator extends Obfuscator {
     public NamingFunction clazz, method, field, param;
     final MyHashSet<String> tempF = new MyHashSet<>(), tempM = new MyHashSet<>(), classes = new MyHashSet<>();
     public CharList lineLog;
+    public boolean eval;
 
     public SimpleObfuscator() {
         this.rand = new Random();
@@ -318,6 +324,25 @@ public final class SimpleObfuscator extends Obfuscator {
             for (int i = 0; i < arr.size(); i++) {
                 codeSign(arr.get(i).getData());
             }
+        if (eval) {
+            // todo: find signature with (Ljava/lang/String;)Ljava/lang/String; and replace(delegate) to a custom Class
+            // todo then collect them (use code visitor) and replace
+        }
+    }
+
+    static class MyCodeVisitor extends CodeVisitor {
+        int ldcPos;
+        Constant ldcStr;
+
+        @Override
+        public void ldc(byte code, Constant c) {
+            super.ldc(code, c);
+        }
+
+        @Override
+        public void invoke(byte code, CstRef method) {
+            super.invoke(code, method);
+        }
     }
 
     static final List<IGeneric>                   fake  = Collections.singletonList(Type.std(NativeType.INT));

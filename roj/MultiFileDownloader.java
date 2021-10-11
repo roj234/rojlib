@@ -158,7 +158,7 @@ public final class MultiFileDownloader {
                             FileUtil.downloadFile(s, saveTo, downloadInfo, handler, offset1, false);
                             break;
                         } catch (Throwable e) {
-                            CmdUtil.warning("Failure when downloading " + saveTo.getName() + " - " + e.getLocalizedMessage());
+                            CmdUtil.warning("Failure downloading " + saveTo.getName() + " - " + e.getLocalizedMessage());
                             CmdUtil.warning("Retry " + (3 - retry) + "/3");
                         }
                     } while (retry-- > 0);

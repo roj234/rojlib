@@ -25,10 +25,10 @@
  */
 package lac.server;
 
+import ilib.asm.transformers.NiximProxy;
 import ilib.command.MasterCommand;
 import lac.common.pkt.PktLogin;
 import lac.server.util.EncodeUtil;
-import roj.asm.nixim.NiximTransformer;
 import roj.io.IOUtil;
 
 import net.minecraftforge.common.MinecraftForge;
@@ -58,7 +58,7 @@ public class LACMod {
         PktLogin.register();
         MinecraftForge.EVENT_BUS.register(LACMod.class);
         EncodeUtil.initBase64Chars();
-        NiximTransformer.read(IOUtil.read(LACMod.class, "lac/server/util/ModListServer.class"));
+        NiximProxy.read(IOUtil.read(LACMod.class, "lac/server/util/ModListServer.class"));
     }
 
     @Mod.EventHandler

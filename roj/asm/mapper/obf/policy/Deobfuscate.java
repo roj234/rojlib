@@ -18,7 +18,7 @@ public final class Deobfuscate extends SimpleNamer {
 
     @Override
     public String obfName0(Random rand) {
-        return "class_" + a++;
+        return "Klass_" + a++;
     }
 
     @Override

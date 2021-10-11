@@ -33,10 +33,6 @@ package ilib.asm.nixim;
  * @since  2020/11/14 16:15
  */
 
-import net.minecraftforge.fml.common.eventhandler.Event;
-import net.minecraftforge.fml.common.eventhandler.IEventListener;
-import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
@@ -58,6 +54,11 @@ import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.reflect.InstantiationUtil;
 import roj.util.ByteList;
+
+import net.minecraftforge.fml.common.eventhandler.Event;
+import net.minecraftforge.fml.common.eventhandler.IEventListener;
+import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.io.IOException;
 import java.lang.reflect.*;
@@ -142,7 +143,7 @@ public final class EventInvokerV2 implements IEventListener {
         insns = code.instructions;
         LabelInsnNode label = null;
         if(ignoreCancelled) {
-            code.computeFrames = true;
+            code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
             insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
             insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraftforge/fml/common/eventhandler/Event", "isCanceled", "()Z"));
             insns.add(new IfInsnNode(Opcodes.IFNE, label = new LabelInsnNode()));

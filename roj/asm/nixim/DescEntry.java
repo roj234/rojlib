@@ -23,30 +23,47 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.nixim2;
+package roj.asm.nixim;
 
-import roj.asm.cst.CstNameAndType;
-import roj.asm.cst.CstRef;
 import roj.asm.tree.simple.MoFNode;
 
 /**
+ * N/D Descriptor
+ *
  * @author solo6975
  * @version 0.1
  * @since 2021/10/3 20:59
  */
-class RemapEntry extends DescEntry {
-    String toClass, toName;
+class DescEntry {
+    String name, desc;
 
-    public final RemapEntry read(CstRef ref) {
-        CstNameAndType desc = ref.desc();
-        this.name = desc.getName().getString();
-        this.desc = desc.getType().getString();
-        return this;
+    public DescEntry() {}
+
+    public DescEntry(MoFNode node) {
+        name = node.name();
+        desc = node.rawDesc();
     }
 
-    RemapEntry() {}
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof DescEntry)) return false;
 
-    RemapEntry(MoFNode node) {
-        super(node);
+        DescEntry entry = (DescEntry) o;
+
+        if (!name.equals(entry.name)) return false;
+        return desc.equals(entry.desc);
+    }
+
+    @Override
+    public final int hashCode() {
+        int result = name.hashCode();
+        result = 31 * result + desc.hashCode();
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return name + ' ' + desc;
     }
 }

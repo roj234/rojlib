@@ -31,23 +31,12 @@ import ilib.asm.fasterforge.anc.JarInfo;
 import ilib.asm.fasterforge.transformers.FieldRedirect;
 import ilib.asm.transformers.*;
 import ilib.command.parser.CommandNeXt;
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.spongepowered.asm.mixin.MixinEnvironment;
-import roj.asm.nixim.NiximTransformer;
 import roj.asm.transform.AccessTransformer;
 import roj.io.DummyOutputStream;
 import roj.io.FileUtil;
@@ -55,6 +44,18 @@ import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.reflect.IFieldAccessor;
 import roj.reflect.ReflectionUtils;
+
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -138,25 +139,25 @@ public class Loader implements IFMLLoadingPlugin {
         }
 
         if(Config.noCollision) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/coll/NiximEntColl.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/coll/NiximEntLiveColl.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/coll/NiximWorldColl.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/coll/NiximEntColl.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/coll/NiximEntLiveColl.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/coll/NiximWorldColl.class"));
         }
 
         if(Config.packetBufferInfinity || Config.nbtMaxLength != 2097152) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximPacketBuffer.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximPacketBuffer.class"));
         }
 
         if(Config.noAttackCD) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NoAttackCD.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NoAttackCD.class"));
         }
 
         if(Config.noEnchantTax) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NoEnchantTax.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NoEnchantTax.class"));
         }
 
         if(Config.noRecipeBook) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximRecipeBook.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximRecipeBook.class"));
         }
 
         if(Config.IwantLight) {
@@ -171,112 +172,112 @@ public class Loader implements IFMLLoadingPlugin {
         }
 
         if (Config.eventInvoker) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximEventBus.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximEventBus.class"));
         }
 
         if (Config.replaceOIM) {
             ClassReplacer.addClass("net.minecraft.util.ObjectIntIdentityMap",
                                    IOUtil.read("META-INF/nixim/ObjectIntIdentityMap.class"));
-            NiximTransformer.read(IOUtil.read("META-INF/nixim/MapClear.class"));
-            NiximTransformer.read(IOUtil.read("META-INF/nixim/MapGet.class"));
+            NiximProxy.read(IOUtil.read("META-INF/nixim/MapClear.class"));
+            NiximProxy.read(IOUtil.read("META-INF/nixim/MapGet.class"));
         }
 
         ClassReplacer.addClass("net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper", IOUtil.read("ilib/asm/fasterforge/FMLDeobfuscatingRemapper.class"));
         ClassReplacer.addClass("net.minecraftforge.fml.common.asm.transformers.DeobfuscationTransformer", IOUtil.read("ilib/asm/fasterforge/DeobfuscationTransformer.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/fasterforge/JarDiscoverer.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/fasterforge/NiximASMModParser.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/fasterforge/NiximModContainerFactory.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/fasterforge/NiximModFind.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/JarDiscoverer.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/NiximASMModParser.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/NiximModContainerFactory.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/NiximModFind.class"));
 
-        NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/FastDismount.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/nixim/bug/FastDismount.class"));
         //NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/GhostBlock.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/nixim/bug/CrashDispenser.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/nixim/bug/CrashDispenser.class"));
 
-        NiximTransformer.read(IOUtil.read("ilib/asm/nixim/FastTileConst.class"));
-        NiximTransformer.read(IOUtil.read("ilib/asm/nixim/FastEntityConst.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/nixim/FastTileConst.class"));
+        NiximProxy.read(IOUtil.read("ilib/asm/nixim/FastEntityConst.class"));
 
         if (Config.aabbCache > 0) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximAABB.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximAABB.class"));
         }
         if (Config.entityAabbCache) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximRelAABB.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximRelAABB.class"));
         }
 
         if (Config.fastRecipe) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximFastFurnace.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximFastWorkbench.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximInvCrafting.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximFastFurnace.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximFastWorkbench.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximInvCrafting.class"));
         }
 
         if (Config.miscPickaxeOptimize) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximPickaxe.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximPickaxe.class"));
         }
 
         if (Config.portalCache) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximTeleporter.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximTeleporter.class"));
         }
 
         if (isClient != Boolean.FALSE) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/CustomCreativeTab.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/FakeTabsSupply.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/CustomCreativeTab.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/FakeTabsSupply.class"));
 
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/bug/ElytraRender.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/bug/GroupNPE.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/bug/SliderApply.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/bug/ElytraRender.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/bug/GroupNPE.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/bug/SliderApply.class"));
 
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/bug/LocalOnline.class"));
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/CNModGui.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/bug/LocalOnline.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/CNModGui.class"));
 
             if (Config.betterRenderGlobal) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximRenderGlobal.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximRenderGlobal.class"));
             }
 
             if (Config.enablePinyinSearch) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximPinyinSearch.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximPinyinSearch.class"));
             }
             if (Config.commandEverywhere) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximNPFix.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximNPFix.class"));
             }
             if (!Config.logChat || Config.chatLength != 100) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximChatGui.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximChatGui.class"));
             }
             if (Config.changeWorldSpeed > 1) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximEntityClient.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximEntityClient.class"));
             }
             if (!Config.clientBrand.equals("disable")) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximClientBrand.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximClientBrand.class"));
             }
             if (Config.noShitSound) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximNoShitSound.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximNoShitSound.class"));
             }
             if (Config.maxParticleCountPerLayer != 16384) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/client/NiximParticleManager.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/client/NiximParticleManager.class"));
             }
         }
         if (isClient != Boolean.TRUE) {
             if (Config.noDuplicateLogin) {
-                NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximPlayerList.class"));
+                NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximPlayerList.class"));
             }
         }
 
         if (Config.noSoManyBlockPos) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximCreateBlockPos.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximCreateBlockPos.class"));
         }
 
         if (Config.fastLightCheck) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximChunkLight.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximChunkLight.class"));
         }
 
         if (Config.fastMethod) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximSlowMethod.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximSlowMethod.class"));
         }
 
         if (Config.otherWorldChange) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximWorldServer.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximWorldServer.class"));
         }
 
         if (Config.cacheBox2) {
-            NiximTransformer.read(IOUtil.read("ilib/asm/nixim/NiximVillage.class"));
+            NiximProxy.read(IOUtil.read("ilib/asm/nixim/NiximVillage.class"));
         }
     }
 

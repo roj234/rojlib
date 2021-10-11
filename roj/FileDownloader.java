@@ -26,11 +26,11 @@
 package roj;
 
 import roj.io.FileUtil;
+import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.ExecutionException;
 
 /**
  * No description provided
@@ -40,44 +40,39 @@ import java.util.concurrent.ExecutionException;
  * @since  2020/10/3 16:50
  */
 public final class FileDownloader {
-    public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
+    public static void main(String[] args) throws IOException {
         if (args.length == 0) {
             System.out.println("FileDownloader <saveTo> <url>");
             return;
         }
 
         FileUtil.ENABLE_ENDPOINT_RECOVERY = true;
+        FileUtil.CHECK_ETAG = false;
         FileUtil.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
-        String ua = UIUtil.userInput("UA(可选): ");
-        if (!ua.equals("")) {
-            FileUtil.USER_AGENT = ua;
-        }
 
-        System.out.print("线程数[0, 500](0为自动): ");
-        int threadCount = UIUtil.getNumberInRange(0, 501);
-        if (threadCount == 0) {
-            threadCount = Runtime.getRuntime().availableProcessors() << 1;
+        int threadCount;
+        if (args.length < 3) {
+            System.out.print("线程数[0, 500](0为自动): ");
+            threadCount = UIUtil.getNumberInRange(0, 501);
+            if (threadCount == 0) {
+                threadCount = Runtime.getRuntime().availableProcessors() << 1;
+            }
+        } else {
+            threadCount = Integer.parseInt(args[2]);
         }
         FileUtil.MIN_ASYNC_SIZE = 0;
 
-        int delay = 3;
-        do {
-            System.out.println(delay + "秒后开始下载");
-            Thread.sleep(1000);
-        } while (--delay > 0);
-
         File saveTo = new File(args[0]);
 
-        FileUtil.downloadFileAsync(args[1], saveTo, threadCount).waitFor();
-        /*int retry = 2;
+        int retry = 2;
         do {
             try {
-                // xxx
+                FileUtil.downloadFileAsync(args[1], saveTo, threadCount).waitFor();
                 break;
             } catch (Throwable e) {
-                CmdUtil.warning("Failure when downloading " + saveTo.getName() + " - " + e.getLocalizedMessage());
+                CmdUtil.warning("Failure downloading " + saveTo.getName() + " - " + e.getLocalizedMessage());
                 CmdUtil.warning("Retry " + (3 - retry) + "/3");
             }
-        } while (retry-- > 0);*/
+        } while (retry-- > 0);
     }
 }

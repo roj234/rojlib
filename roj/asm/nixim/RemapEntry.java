@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,23 +23,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package roj.asm.nixim;
 
-import org.jetbrains.annotations.ApiStatus;
+import roj.asm.cst.CstNameAndType;
+import roj.asm.cst.CstRef;
+import roj.asm.tree.simple.MoFNode;
 
-import javax.annotation.Nonnull;
+/**
+ * @author solo6975
+ * @version 0.1
+ * @since 2021/10/3 20:59
+ */
+class RemapEntry extends DescEntry {
+    String toClass, toName;
 
-@Deprecated
-@ApiStatus.ScheduledForRemoval
-public class NiximTransformer {
-    public static boolean debug = false;
-
-    public static boolean read(@Nonnull final byte[] basicClass) {
-        throw new NoSuchMethodError();
+    public final RemapEntry read(CstRef ref) {
+        CstNameAndType desc = ref.desc();
+        this.name = desc.getName().getString();
+        this.desc = desc.getType().getString();
+        return this;
     }
 
-    public static boolean removeByClass(String target) {
-        throw new NoSuchMethodError();
+    RemapEntry() {}
+
+    RemapEntry(MoFNode node) {
+        super(node);
     }
 }

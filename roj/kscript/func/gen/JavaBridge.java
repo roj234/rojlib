@@ -79,7 +79,7 @@ public final class JavaBridge {
 
         roj.asm.tree.Method call = new roj.asm.tree.Method(AccessFlag.PUBLIC, clz, "invoke", "(Lroj/kscript/data/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;");
         clz.methods.add(call);
-        (call.code = new AttrCode(call)).computeFrames = true;
+        (call.code = new AttrCode(call)).interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
         InsnList insn = call.code.instructions;
         insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
         insn.add(new FieldInsnNode(Opcodes.GETFIELD, clz, 0));
@@ -92,7 +92,7 @@ public final class JavaBridge {
 
         roj.asm.tree.Method copyAs = new roj.asm.tree.Method(0, clz, "copyAs", "(I)Lroj/kscript/func/gen/KFuncJava;");
         clz.methods.add(copyAs);
-        (copyAs.code = new AttrCode(copyAs)).computeFrames = true;
+        (copyAs.code = new AttrCode(copyAs)).interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
         insn = copyAs.code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, ""));
         insn.add(NodeHelper.cached(Opcodes.DUP));

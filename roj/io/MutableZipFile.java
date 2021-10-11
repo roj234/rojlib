@@ -630,13 +630,15 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         // write ALL CDir header
         eof.cDirOffset = cf.position();
-        ByteList bl = writer.list;
 
         // 排序CDir属性
         uFile.reuseClear();
         for (EFile file : entries.values()) {
             uFile.add(file);
         }
+
+        ByteList bl = writer.list;
+        bl.ensureCapacity(1024);
         int v = Math.max((int) (bl.list.length * 0.8f), 1024);
         for (Unioner.Region region : uFile) {
             Point node = region.node();

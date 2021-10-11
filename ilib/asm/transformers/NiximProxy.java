@@ -27,8 +27,12 @@
 package ilib.asm.transformers;
 
 import ilib.api.IFasterClassTransformer;
-import roj.asm.nixim.NiximTransformer;
+import roj.asm.nixim.NiximException;
+import roj.asm.nixim.NiximSystem;
 import roj.util.ByteList;
+import roj.util.Helpers;
+
+import javax.annotation.Nonnull;
 
 /**
  * No description provided
@@ -37,14 +41,31 @@ import roj.util.ByteList;
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public final class NiximProxy extends NiximTransformer implements IFasterClassTransformer {
+public final class NiximProxy extends NiximSystem implements IFasterClassTransformer {
     public static final NiximProxy instance = new NiximProxy();
     public static boolean alreadyAtDeobfEnv;
+
+    public static void read(@Nonnull final byte[] basicClass) {
+        try {
+            instance.load(basicClass);
+        } catch (NiximException e) {
+            Helpers.throwAny(e);
+        }
+    }
+
+    public static boolean removeByClass(String target) {
+        return instance.remove(target);
+    }
 
     private NiximProxy() {}
 
     @Override
     public ByteList transform(String name, String transformedName, ByteList basicClass) {
-        return null;
+        try {
+            return nixim(name, basicClass);
+        } catch (NiximException e) {
+            Helpers.throwAny(e);
+            return basicClass;
+        }
     }
 }

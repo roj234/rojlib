@@ -162,12 +162,12 @@ public class NodeHelper {
                 }
                 break;
             default:
-                throw new IllegalArgumentException("Unsupported base " + base);
+                throw new IllegalArgumentException("Unsupported base 0x" + Integer.toHexString(base));
         }
     }
 
     @Nonnull
-    private static NPInsnNode loadSore(byte base, int id) {
+    public static NPInsnNode loadSore(byte base, int id) {
         return NPInsnNode.of((byte) ((base <= 25 ? ((base - 0x15) * 4 + 0x1a) : ((base - 0x36) * 4 + 0x3b)) + id));
     }
 

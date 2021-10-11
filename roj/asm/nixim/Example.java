@@ -25,19 +25,20 @@
  */
 package roj.asm.nixim;
 
-import roj.asm.nixim2.TestTarget;
 import roj.mod.util.IntCallable;
 
 /**
  * Nixim示例， 灰色已做好
  */
-@Nixim(value = "roj.asm.nixim2.TestTarget")
+@Nixim(value = "roj.asm.nixim.TestTarget")
 abstract class Example extends TestTarget {
     /*
      * 对特殊field/method检测，不能有Nixim注解存在
      */
     private static int $$$CONTINUE_I() {return 0;}
     private static int $$$RETURN_VAL_I() {return 0;}
+    private static void $$$MATCHING_FLAG() {}
+    private void $$$CONSTRUCTOR() {}
 
     /*
      * 使用shadow调用上级的方法或字段
@@ -46,15 +47,15 @@ abstract class Example extends TestTarget {
      *     2. 是否static要统一
      *  + 可以换到别的类，不过这时无法检测了
      */
-    @Shadow(value = "superField123123")
+    @Shadow(value = "superField123123"/*, owner = "roj/asm/YYYY"*/)
     private int myField;
 
     /*
      * 对于private方法的shadow要检测方法在上级是否直接存在
      *    + 否则抛异常
      */
-//    @Shadow(value = "superMethod23333")
-//    private void myMethod() {}
+    @Shadow(value = "superMethod23333")
+    private void myMethod() {}
 
     /*
      * 使用copy将这个方法或字段复制到目标类
@@ -65,20 +66,20 @@ abstract class Example extends TestTarget {
      *    + 检测，方法不能使用 staticInitializer 属性，来一个警告
      *    + 可以用newName改名字
      */
-//    @Copy(newName = "superMethod23333")
-//    private void copyMethod() {}
-//
-//    @Copy(staticInitializer = "IloveObjectInitializer", targetIsFinal = true)
-//    private static Object IloveObject;
-//    private static void IloveObjectInitializer() {
-//        IloveObject = IloveObject == null ? new Object() : IloveObject;
-//    }
-//
-//    @Copy(newName = "ahaha", staticInitializer = "IloveObjectInitializer2", targetIsFinal = true)
-//    private static Object IloveObject2;
-//    private static void IloveObjectInitializer2() {
-//        IloveObject2 = IloveObject2 == null ? new Object() : IloveObject2;
-//    }
+    //@Copy(newName = "superMethod23333")
+    private void copyMethod() {}
+
+    @Copy(staticInitializer = "IloveObjectInitializer", targetIsFinal = true)
+    private static Object IloveObject;
+    private static void IloveObjectInitializer() {
+        IloveObject = IloveObject == null ? new Object() : IloveObject;
+    }
+
+    @Copy(newName = "ahaha", staticInitializer = "IloveObjectInitializer2", targetIsFinal = true)
+    private static Object IloveObject2;
+    private static void IloveObjectInitializer2() {
+        IloveObject2 = IloveObject2 == null ? new Object() : IloveObject2;
+    }
 
     /*
      * head: 将原方法中return替换成goto目标开头
@@ -116,7 +117,7 @@ abstract class Example extends TestTarget {
      * MIDDLE_ORDINAL:  根据指定的pos找到这一段
      *
      */
-    //@Inject(value = "test2", at = Inject.At.MIDDLE_MATCHING)
+    //@Inject(value = "test2", at = At.MIDDLE)
     public int testInjectAtMiddle(int superLocal1, int superLocal2) {
         if (superLocal1 == 1) {
             try {
@@ -133,7 +134,7 @@ abstract class Example extends TestTarget {
      *     + 将返回值（如果存在）存放到指定的变量，用特殊的字段名(startWith: $$$RETURN_VAL)指定, 类型不匹配抛异常
      *     + 计算tail用到的参数id，若目标方法修改过value则暂存到新的变量id中然后再恢复
      */
-    //@Inject(value = "test3", at = Inject.At.TAIL)
+    @Inject(value = "test3", at = Inject.At.TAIL)
     public int testInjectAtTail(int myParam) {
         int returnValue = $$$RETURN_VAL_I();
         return returnValue + myParam;
@@ -141,30 +142,37 @@ abstract class Example extends TestTarget {
 
     /*
      * replace: 替换目标方法，没啥说的
+     * $$$CONSTRUCTOR用于在非构造器中标记上级构造器的调用
+     * 以及~_THIS标记自身构造器的调用
      */
-//    @Inject(value = "test4", at = Inject.At.REPLACE)
-//    public int testInjectReplace(int myParam) {
-//        myMethod();
-//        return 0;
-//    }
+    @Inject(value = "test4", at = Inject.At.REPLACE)
+    public int testInjectReplace(int myParam) {
+        myMethod();
+        return 0;
+    }
+    //@Inject(value = "<init>", at = Inject.At.REPLACE)
+    public  /*testInjectSuper*/  void xxx() {
+        $$$CONSTRUCTOR();
+        myField = 9999;
+    }
 
     /*
      * old_super_inject: 只能差在头部或结尾，否则不行
      * 两者可以同时
      */
-//    @Inject(value = "test5", at = Inject.At.OLD_SUPER_INJECT)
-//    public Class<?> testInjectSIJ(int myTest233) {
-//        // 头部，测试
-//        if (myTest233 == 0) {
-//            return super.getClass();
-//        }
-//
-//        // 结尾测试
-//        Class<?> toModify = super.test5(13);
-//        if (toModify == null)
-//            return Class.class;
-//        return super.test5(12);
-//    }
+    @Inject(value = "test5", at = Inject.At.OLD_SUPER_INJECT)
+    public Class<?> testInjectSIJ(int myTest233) {
+        // 头部，测试
+        if (myTest233 == 0) {
+            return super.getClass();
+        }
+
+        // 结尾测试
+        Class<?> toModify = super.test5(13);
+        if (toModify == null)
+            return Class.class;
+        return super.test5(12);
+    }
 
     /*
      * FLAG_OPTIONAL: 找不到时丢warning而不是异常

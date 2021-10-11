@@ -23,47 +23,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.nixim2;
-
-import roj.asm.tree.simple.MoFNode;
+package roj.asm.nixim;
 
 /**
- * N/D Descriptor
+ * Indices that your Nixim config is wrong or target class not suitable for your Nixim
  *
  * @author solo6975
  * @version 0.1
- * @since 2021/10/3 20:59
+ * @since 2021/10/3 20:54
  */
-class DescEntry {
-    String name, desc;
-
-    public DescEntry() {}
-
-    public DescEntry(MoFNode node) {
-        name = node.name();
-        desc = node.rawDesc();
+public final class NiximException extends Exception {
+    public NiximException(String msg) {
+        super(msg);
     }
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof DescEntry)) return false;
-
-        DescEntry entry = (DescEntry) o;
-
-        if (!name.equals(entry.name)) return false;
-        return desc.equals(entry.desc);
-    }
-
-    @Override
-    public final int hashCode() {
-        int result = name.hashCode();
-        result = 31 * result + desc.hashCode();
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return name + ' ' + desc;
+    public NiximException(String msg, Throwable cause) {
+        super(msg, cause);
     }
 }

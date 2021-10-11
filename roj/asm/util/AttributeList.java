@@ -95,7 +95,8 @@ public final class AttributeList extends SimpleList<Attribute> {
     @Override
     public Attribute remove(int index) {
         Attribute attr = super.remove(index);
-        byName.remove(attr.name);
+        if (byName != null)
+            byName.remove(attr.name);
         return attr;
     }
 

@@ -56,6 +56,7 @@ import static roj.asm.Opcodes.*;
  * @since 2021/6/18 9:51
  */
 public class AttrCode extends Attribute {
+    public static final byte COMPUTE_FRAMES = 1, COMPUTE_SIZES = 2;
     @Nonnull
     private final MethodNode owner;
 
@@ -63,7 +64,7 @@ public class AttrCode extends Attribute {
 
     public char stackSize, localSize;
 
-    public boolean computeFrames = false;
+    public byte interpretFlags;
     public List<Frame> frames;
     public final ArrayList<ExceptionEntry> exceptions = new ArrayList<>();
 
@@ -192,11 +193,11 @@ public class AttrCode extends Attribute {
             }
         }
 
+        if (interpretFlags != 0)
+            recalculateFrames(pcRev);
+        interpretFlags = 0;
         if (this.frames != null) {
             w.writeShort(cw.getUtfId("StackMapTable")).writeInt(0);
-
-            if (computeFrames)
-                recalculateFrames(pcRev);
 
             lenIdx = list.pos();
             writeFrames(cw, w.writeShort(frames.size()), pcRev);
@@ -770,9 +771,27 @@ public class AttrCode extends Attribute {
         Interpreter ft = new Interpreter();
         ft.init(owner);
 
-        List<Frame> compute = ft.compute(instructions, exceptions, pcRev);
-        frames.clear();
-        frames.addAll(compute);
+        List<Frame> compute;
+        try {
+            compute = ft.compute(instructions, exceptions, pcRev);
+        } catch (Throwable e) {
+            throw new RuntimeException("At: " + owner.ownerClass() + '.' + owner.name() + ": " + this, e);
+        }
+        if ((interpretFlags & COMPUTE_FRAMES) != 0) {
+            if (compute.isEmpty()) {
+                if (frames != null)
+                    frames.clear();
+                frames = null;
+            } else {
+                if (frames == null) frames = new ArrayList<>();
+                else frames.clear();
+                frames.addAll(compute);
+            }
+        }
+        if ((interpretFlags & COMPUTE_SIZES) != 0) {
+            stackSize = (char) ft.maxStackSize;
+            localSize = (char) ft.maxLocalSize;
+        }
 
         // later, maybe less than a year, will change to CodeBlock methods
         ft.init(owner);
