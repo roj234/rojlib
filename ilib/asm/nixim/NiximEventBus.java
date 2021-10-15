@@ -27,8 +27,8 @@ package ilib.asm.nixim;
 
 import ilib.asm.util.InvokerCompressor;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.MyHashMap;
 import roj.reflect.ReflectionUtils;
@@ -61,7 +61,7 @@ public abstract class NiximEventBus {
     @Shadow("busID")
     private int busID;
 
-    @RemapTo("register")
+    @Inject("register")
     public void register(Object target) {
         if (!this.listeners.containsKey(target)) {
             ModContainer active = Loader.instance().activeModContainer();
@@ -111,7 +111,7 @@ public abstract class NiximEventBus {
     @Copy
     static ListenerList DEFAULT_LISTENER_LIST;
 
-    @RemapTo("register")
+    @Inject("register")
     private void register(Class<?> eventType, Object target, Method method, final ModContainer owner) {
         try {
             ListenerList list;

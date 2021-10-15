@@ -46,7 +46,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     }
 
     protected int core, max, addThr, maxThr;
-    protected volatile int running;
+    protected int running;
 
     protected final AtomicInteger lock = new AtomicInteger();
 
@@ -80,6 +80,9 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     @Override
     @Async.Schedule
     public void pushTask(ITask task) {
+        if (running == -1) {
+            throw new RejectedExecutionException("TaskPool was shutdown.");
+        }
         int minPending = Integer.MAX_VALUE;
         TaskExecutor th = null;
 
@@ -144,10 +147,13 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     }
 
     private static void untilCas(AtomicInteger lock, int from, int to) {
+        int i = 0;
         while (!lock.compareAndSet(from, to)) {
             Thread.yield();
             if (lock.compareAndSet(from, to)) break;
-            LockSupport.parkNanos(2);
+            LockSupport.parkNanos(20);
+            if (i++ > 1000)
+                throw new Error("Failed to get lock " + from + " => " + to + ": " + lock.getAndSet(0));
         }
     }
 
@@ -161,7 +167,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
 
             ov = lock.get();
             if (ov < 0) {
-                LockSupport.parkNanos(2);
+                LockSupport.parkNanos(20);
             } else {
                 untilCas(lock, ov, ov + 1);
                 break;
@@ -179,6 +185,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
 
     @Override
     public void clearTasks() {
+        if (running == -1) return;
         final TaskExecutor[] processors = this.thread;
 
         int ov = lightLock(lock);

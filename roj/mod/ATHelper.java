@@ -26,7 +26,7 @@
 
 package roj.mod;
 
-import roj.asm.transform.AccessTransformer;
+import roj.asm.AccessTransformer;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;

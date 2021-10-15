@@ -26,11 +26,12 @@
 package ilib.asm.nixim.bug;
 
 import ilib.util.EntityHelper;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * No description provided
@@ -46,7 +47,7 @@ abstract class FastDismount extends EntityLivingBase {
     }
 
     @Override
-    @RemapTo("func_110145_l")
+    @Inject("func_110145_l")
     public void dismountEntity(Entity entityIn) {
         EntityHelper.dismountEntity(this, entityIn);
     }

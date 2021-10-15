@@ -26,8 +26,8 @@
 package ilib.asm.nixim;
 
 import com.mojang.authlib.GameProfile;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
@@ -45,7 +45,7 @@ abstract class NoAttackCD extends EntityPlayer {
         super(worldIn, gameProfileIn);
     }
 
-    @RemapTo("func_184825_o")
+    @Inject("func_184825_o")
     public float getCooledAttackStrength(float adjustTicks) {
         return 1f;
     }

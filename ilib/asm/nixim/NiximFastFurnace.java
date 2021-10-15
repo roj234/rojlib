@@ -26,11 +26,13 @@
 package ilib.asm.nixim;
 
 import ilib.asm.util.MCHooks.ItemStackMap;
-import net.minecraft.item.ItemStack;
-import net.minecraftforge.fml.common.FMLLog;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
+
+import net.minecraft.item.ItemStack;
+
+import net.minecraftforge.fml.common.FMLLog;
 
 import java.util.Map;
 
@@ -48,13 +50,13 @@ public abstract class NiximFastFurnace {
     @Shadow("field_77605_c")
     private Map<ItemStack, Float> experienceList;
 
-    @RemapTo("<init>")
+    @Inject("<init>")
     public NiximFastFurnace() {
         this.smeltingList = new ItemStackMap<>();
         this.experienceList = new ItemStackMap<>();
     }
 
-    @RemapTo("func_151394_a")
+    @Inject("func_151394_a")
     public void addSmeltingRecipe(ItemStack input, ItemStack stack, float experience) {
         ItemStack out = this.getSmeltingResult(input);
         if (out != ItemStack.EMPTY) {
@@ -68,12 +70,12 @@ public abstract class NiximFastFurnace {
     /**
      * HashMap的实现: comparableItemStack.equals(storedStack)
      */
-    @RemapTo("func_151395_a")
+    @Inject("func_151395_a")
     public ItemStack getSmeltingResult(ItemStack stack) {
         return smeltingList.getOrDefault(stack, ItemStack.EMPTY);
     }
 
-    @RemapTo("func_151398_b")
+    @Inject("func_151398_b")
     public float getSmeltingExperience(ItemStack stack) {
         float ret = stack.getItem().getSmeltingExperience(stack);
         if (ret != -1) {

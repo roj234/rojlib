@@ -25,6 +25,11 @@
  */
 package ilib.asm.nixim;
 
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
@@ -44,10 +49,6 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 import javax.annotation.Nullable;
 import java.util.Iterator;
@@ -70,7 +71,7 @@ public abstract class NiximWorldServer extends WorldServer {
     @Shadow("field_73063_M")
     private PlayerChunkMap playerChunkMap;
 
-    @RemapTo("func_147456_g")
+    @Inject("func_147456_g")
     protected void updateBlocks() {
         this.playerCheckLight();
         if (this.worldInfo.getTerrainType() == WorldType.DEBUG_ALL_BLOCK_STATES) {
@@ -178,7 +179,7 @@ public abstract class NiximWorldServer extends WorldServer {
         return (EntityPlayer) getEntityFromUuid(uuid);
     }
 
-    @RemapTo("func_184162_i")
+    @Inject("func_184162_i")
     protected void playerCheckLight() {
         this.profiler.startSection("playerCheckLight");
         if (!this.playerEntities.isEmpty()) {

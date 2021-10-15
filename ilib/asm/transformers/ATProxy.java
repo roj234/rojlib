@@ -27,9 +27,11 @@
 package ilib.asm.transformers;
 
 import ilib.asm.Loader;
+import roj.asm.AccessTransformer;
+
 import net.minecraft.launchwrapper.IClassTransformer;
-import roj.asm.transform.AccessTransformer;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234

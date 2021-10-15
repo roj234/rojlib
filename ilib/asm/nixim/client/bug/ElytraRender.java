@@ -25,6 +25,10 @@
  */
 package ilib.asm.nixim.client.bug;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Inject.At;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.renderer.GlStateManager;
@@ -32,8 +36,6 @@ import net.minecraft.client.renderer.entity.RenderLivingBase;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * No description provided
@@ -49,7 +51,7 @@ abstract class ElytraRender extends RenderLivingBase<AbstractClientPlayer> {
     }
 
     @Override
-    @RemapTo(value = "func_77043_a", useSuperInject = false)
+    @Inject(value = "func_77043_a", at = At.REPLACE)
     protected void applyRotations(AbstractClientPlayer player, float x, float y, float z) {
         if (player.isEntityAlive() && player.isPlayerSleeping()) {
             GlStateManager.rotate(player.getBedOrientationInDegrees(), 0.0F, 1.0F, 0.0F);

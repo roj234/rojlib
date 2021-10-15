@@ -31,6 +31,7 @@ import roj.asm.cst.CstFloat;
 import roj.asm.cst.CstInt;
 import roj.asm.cst.CstLong;
 import roj.asm.tree.insn.*;
+import roj.asm.type.Type;
 import roj.collect.CharMap;
 
 import javax.annotation.Nonnull;
@@ -47,16 +48,16 @@ import static roj.asm.Opcodes.*;
 public class NodeHelper {
     private static final CharMap<NPInsnNode> NP_CACHE = new CharMap<>();
 
-    public static final boolean ENABLE_CACHE = true;
+    public static void insertDebug(InsnList list) {
+        list.add(npc(DUP));
+        list.add(new FieldInsnNode(GETSTATIC, "java/lang/System", "out", new Type("java/lang/PrintStream")));
+        list.add(npc(SWAP));
+        list.add(new InvokeInsnNode(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;"));
+        list.add(new InvokeInsnNode(INVOKEVIRTUAL, "java/lang/PrintStream", "println", "(Ljava/lang/String;)V"));
+    }
 
-    /**
-     * 从缓存中获取
-     *
-     * @param code The code
-     * @return The node
-     */
-    public static NPInsnNode cached(byte code) {
-        return ENABLE_CACHE ? NP_CACHE.computeIfAbsent((char) code, (i) -> new NPInsnNode((byte) i)) : NPInsnNode.of(code);
+    public static NPInsnNode npc(byte code) {
+        return NP_CACHE.computeIfAbsent((char) code, (i) -> new NPInsnNode((byte) i));
     }
 
     private static NPInsnNode getNode(char x, byte base) {
@@ -126,7 +127,7 @@ public class NodeHelper {
             case 3:
             case 4:
             case 5:
-                return cached((byte) (ICONST_0 + number));
+                return npc((byte) (ICONST_0 + number));
             default:
                 if((byte)number == number) {
                     return new U1InsnNode(BIPUSH, number);
@@ -171,7 +172,7 @@ public class NodeHelper {
         return NPInsnNode.of((byte) ((base <= 25 ? ((base - 0x15) * 4 + 0x1a) : ((base - 0x36) * 4 + 0x3b)) + id));
     }
 
-    public static int getIndex(InsnNode node) {
+    public static int getVarId(InsnNode node) {
         switch (node.getOpcode()) {
             case ALOAD_0:
             case FLOAD_0:
@@ -240,10 +241,6 @@ public class NodeHelper {
             default:
                 return -1;
         }
-    }
-
-    public static boolean isVarNode(InsnNode node) {
-        return getIndex(node) > -1;
     }
 
     public static InsnNode decompress(InsnNode node) {

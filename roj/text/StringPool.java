@@ -68,7 +68,7 @@ public class StringPool {
     }
 
     public ByteWriter writeString(ByteWriter w, String string) {
-        int id = list.getByValue(string);
+        int id = list.getInt(string);
         if (id == -1) {
             list.putByValue(id = list.size(), string);
             ordered.add(string);
@@ -89,7 +89,7 @@ public class StringPool {
     }
 
     public int add(String string) {
-        int id = list.getByValue(string);
+        int id = list.getInt(string);
         if (id == -1) {
             list.putByValue(id = list.size(), string);
             ordered.add(string);

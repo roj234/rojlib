@@ -129,6 +129,16 @@ public class CMapping extends CEntry {
         }
     }
 
+    public CEntry put(@Nonnull String key, long entry) {
+        CEntry prev = get(key);
+        if (prev.getType() == Type.LONG) {
+            ((CLong) prev).value = entry;
+            return null;
+        } else {
+            return put(key, new CLong(entry));
+        }
+    }
+
     public CEntry put(@Nonnull String key, boolean entry) {
         return put(key, CBoolean.valueOf(entry));
     }

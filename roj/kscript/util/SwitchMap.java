@@ -81,7 +81,7 @@ public class SwitchMap extends MyHashMap<KType, Node> {
             if (entry == null)
                 continue;
             while (entry != null) {
-                List<Unioner.Wrap<Variable>> dest = var.i_collect(idx.getByValue(entry.v));
+                List<Unioner.Wrap<Variable>> dest = var.i_collect(idx.getInt(entry.v));
                 if(dest != self) {
                     entry.diff = NodeUtil.calcDiff(self, dest);
                 }

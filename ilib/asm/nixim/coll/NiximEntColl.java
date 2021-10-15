@@ -25,10 +25,11 @@
  */
 package ilib.asm.nixim.coll;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * Remove Collision
@@ -44,7 +45,7 @@ public abstract class NiximEntColl extends Entity {
     }
 
     @Override
-    @RemapTo("func_70108_f")
+    @Inject("func_70108_f")
     public void applyEntityCollision(Entity entityIn) {
 
     }

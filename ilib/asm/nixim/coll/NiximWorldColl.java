@@ -25,6 +25,9 @@
  */
 package ilib.asm.nixim.coll;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -32,8 +35,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -53,7 +54,7 @@ public abstract class NiximWorldColl extends World {
     }
 
     @Override
-    @RemapTo("func_184144_a")
+    @Inject("func_184144_a")
     public List<AxisAlignedBB> getCollisionBoxes(@Nullable Entity entityIn, AxisAlignedBB aabb) {
         return Collections.emptyList();
     }

@@ -29,9 +29,8 @@ package roj.asm.tree.insn;
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantWriter;
 import roj.asm.util.InsnList;
+import roj.collect.IIntMap;
 import roj.util.ByteWriter;
-
-import java.util.function.ToIntFunction;
 
 import static roj.asm.Opcodes.*;
 
@@ -89,8 +88,8 @@ public class GotoInsnNode extends InsnNode {
 
     int delta;
 
-    public boolean review(ToIntFunction<InsnNode> pcRev) {
-        return (code == GOTO) != ((delta = (pcRev.applyAsInt(target = validate(target)) - pcRev.applyAsInt(this))) == ((short) delta));
+    public boolean review(IIntMap<InsnNode> pcRev) {
+        return (code == GOTO) != ((delta = (pcRev.getInt(target = validate(target)) - pcRev.getInt(this))) == ((short) delta));
     }
 
     @Override

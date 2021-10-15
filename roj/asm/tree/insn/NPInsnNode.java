@@ -39,7 +39,7 @@ import roj.util.ByteWriter;
  */
 public final class NPInsnNode extends InsnNode {
     /**
-     * 推荐使用{@link NodeHelper#cached(byte)}
+     * 推荐使用{@link NodeHelper#npc(byte)}
      *
      * @param code The code
      */

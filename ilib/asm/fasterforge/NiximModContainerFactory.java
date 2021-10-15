@@ -26,8 +26,8 @@
 package ilib.asm.fasterforge;
 
 import org.objectweb.asm.Type;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.type.ParamHelper;
@@ -58,7 +58,7 @@ public class NiximModContainerFactory {
     public static Map<Type, Constructor<? extends ModContainer>> modTypes;
 
     @Nullable
-    @RemapTo("build")
+    @Inject("build")
     public ModContainer build(ASMModParser modParser, File modSource, ModCandidate container) {
         String className = modParser.getASMType().getClassName();
         LinkedList<Annotation> i = Helpers.cast(modParser.getAnnotations());

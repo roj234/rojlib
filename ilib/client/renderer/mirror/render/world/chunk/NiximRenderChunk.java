@@ -26,6 +26,10 @@
 package ilib.client.renderer.mirror.render.world.chunk;
 
 import ilib.client.util.RenderUtils;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.collect.MyHashSet;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.BlockRendererDispatcher;
@@ -45,12 +49,10 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.ChunkCache;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
+
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraftforge.fml.client.FMLClientHandler;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.RemapTo;
-import roj.collect.MyHashSet;
 
 import javax.annotation.Nullable;
 import java.util.Iterator;
@@ -71,7 +73,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
     @Copy
     private ChunkCompileTaskGenerator optiCompileTask;
 
-    @RemapTo("<init>")
+    @Inject("<init>")
     public NiximRenderChunk(World worldIn, RenderGlobal renderGlobalIn, int indexIn) {
         super(worldIn, renderGlobalIn, indexIn);
         this.pos = BlockPos.ORIGIN;
@@ -95,7 +97,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
     }
 
     @Override
-    @RemapTo("func_178581_b")
+    @Inject("func_178581_b")
     public void rebuildChunk(float x, float y, float z, ChunkCompileTaskGenerator generator) {
         wasCulled = false;
         CompiledChunk cc = new CompiledChunk();
@@ -252,7 +254,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
     }
 
     @Override
-    @RemapTo("func_178578_b")
+    @Inject("func_178578_b")
     protected void finishCompileTask() {
         if (!Ivsb.hasOptifine) {
             super.finishCompileTask();
@@ -272,7 +274,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
     }
 
     @Override
-    @RemapTo("func_178574_d")
+    @Inject("func_178574_d")
     public ChunkCompileTaskGenerator makeCompileTaskChunk() {
         if (!Ivsb.hasOptifine) {
             return super.makeCompileTaskChunk();
@@ -299,7 +301,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
 
     @Nullable
     @Override
-    @RemapTo("func_178582_e")
+    @Inject("func_178582_e")
     public ChunkCompileTaskGenerator makeCompileTaskTransparency() {
         if (!Ivsb.hasOptifine) {
             return super.makeCompileTaskTransparency();

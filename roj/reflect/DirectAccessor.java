@@ -26,6 +26,7 @@
 package roj.reflect;
 
 import roj.asm.Opcodes;
+import roj.asm.Parser;
 import roj.asm.cst.CstString;
 import roj.asm.tree.Clazz;
 import roj.asm.tree.attr.AttrCode;
@@ -162,22 +163,27 @@ public final class DirectAccessor<T> {
         writeDebugInfo();
         methodByName.clear();
 
-        ByteList list = var.getBytes();
+        return instance = (T) i_build(var);
+    }
+
+    public static Object i_build(Clazz var) {
+        Object obj;
+        ByteList list = Parser.toByteArrayShared(var);
         ClassDefiner.INSTANCE.defineClassC(var.name.replace('/', '.'), list.list, 0, list.pos());
         try {
             Class.forName(var.name.replace('/', '.'), true, ClassDefiner.INSTANCE);
-            if (null == (instance = (T) ACCESSOR_TMP.get())) {
+            if (null == (obj = ACCESSOR_TMP.get())) {
                 throw new IllegalStateException("内部错误: ACCESSOR_TMP.get() == null");
             }
         } catch (Throwable e) {
             throw new IllegalStateException("内部错误: 初始化失败", e);
         }
         ACCESSOR_TMP.set(null);
-        return instance;
+        return obj;
     }
 
-    public String getClassName() {
-        return var.name;
+    public Clazz getInternal() {
+        return var;
     }
 
     public DirectAccessor<T> cloneable() {
@@ -196,7 +202,7 @@ public final class DirectAccessor<T> {
             code.localSize = 1;
             InsnList insn = code.instructions;
             insn.add(new LoadConstInsnNode(Opcodes.LDC, new CstString(sb.toString())));
-            insn.add(NodeHelper.cached(Opcodes.ARETURN));
+            insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
             var.methods.add(toString);
             sb = null;
@@ -239,12 +245,12 @@ public final class DirectAccessor<T> {
             code.stackSize = 2;
             code.localSize = 2;
             insn = code.instructions;
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
             if(check)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, type));
             insn.add(_set);
-            insn.add(NodeHelper.cached(Opcodes.RETURN));
+            insn.add(NodeHelper.npc(Opcodes.RETURN));
 
             var.methods.add(set);
         }
@@ -260,10 +266,10 @@ public final class DirectAccessor<T> {
             code.localSize = 1;
 
             insn = code.instructions;
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
-            insn.add(NodeHelper.cached(Opcodes.ACONST_NULL));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+            insn.add(NodeHelper.npc(Opcodes.ACONST_NULL));
             insn.add(_set);
-            insn.add(NodeHelper.cached(Opcodes.RETURN));
+            insn.add(NodeHelper.npc(Opcodes.RETURN));
 
             var.methods.add(clear);
         }
@@ -281,9 +287,9 @@ public final class DirectAccessor<T> {
 
 
             insn = code.instructions;
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
             insn.add(_get);
-            insn.add(NodeHelper.cached(Opcodes.ARETURN));
+            insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
             var.methods.add(get);
         }
@@ -323,6 +329,7 @@ public final class DirectAccessor<T> {
      * @see #construct(Class, String[], List)
      */
     public DirectAccessor<T> construct(Class<?> target, String... methodNames) {
+        if (methodNames.length == 0) throw new IllegalArgumentException("Wrong call");
         return construct(target, methodNames, null);
     }
 
@@ -330,6 +337,7 @@ public final class DirectAccessor<T> {
      * @see #construct(Class, String[], List)
      */
     public DirectAccessor<T> construct(Class<?> target, String methodName, Class<?>... methodTypes) {
+        if (methodTypes.length == 0) throw new IllegalArgumentException("Wrong call");
         return construct(target, new String[] { methodName }, Collections.singletonList(methodTypes));
     }
 
@@ -337,6 +345,7 @@ public final class DirectAccessor<T> {
      * @see #construct(Class, String[], List)
      */
     public DirectAccessor<T> constructFuzzy(Class<?> target, String... methodNames) {
+        if (methodNames.length == 0) throw new IllegalArgumentException("Wrong call");
         return construct(target, methodNames, Collections.emptyList());
     }
 
@@ -449,7 +458,7 @@ public final class DirectAccessor<T> {
 
             InsnList insn = code.instructions;
             insn.add(new ClassInsnNode(Opcodes.NEW, targetName));
-            insn.add(NodeHelper.cached(Opcodes.DUP));
+            insn.add(NodeHelper.npc(Opcodes.DUP));
 
             int size = 1;
             for (Class<?> param : params) {
@@ -467,7 +476,7 @@ public final class DirectAccessor<T> {
             code.stackSize = code.localSize = (char) (size + 1);
 
             insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, targetName, "<init>", initParam));
-            insn.add(NodeHelper.cached(Opcodes.ARETURN));
+            insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
             var.methods.add(invoke);
         }
@@ -495,6 +504,7 @@ public final class DirectAccessor<T> {
      * @see #delegate(Class, String[], IBitSet, String[], List)
      */
     public DirectAccessor<T> delegate(Class<?> target, String... methodNames) {
+        if (methodNames.length == 0) throw new IllegalArgumentException("Wrong call");
         return delegate(target, methodNames, EMPTY_BITS, methodNames, null);
     }
 
@@ -532,6 +542,7 @@ public final class DirectAccessor<T> {
      * @see #delegate(Class, String[], IBitSet, String[], List)
      */
     public DirectAccessor<T> delegate_o(Class<?> target, String methodName, String selfName, Class<?>... paramType) {
+        if (paramType.length == 0) throw new IllegalArgumentException("Wrong call");
         return delegate(target, new String[]{ methodName }, EMPTY_BITS, new String[]{ selfName },
                         Collections.singletonList(paramType));
     }
@@ -688,10 +699,10 @@ public final class DirectAccessor<T> {
             int isStatic = (method.getModifiers() & AccessFlag.STATIC) != 0 ? 1 : 0;
             if (isStatic == 0) {
                 if (useCache) {
-                    insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+                    insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
                     insn.add(cache.node);
                 } else {
-                    insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                    insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
                     if (objectModes == null && check)
                         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     invoke.parameters().add(0, new Type(objectModes == null ? target.getName().replace('.', '/') : "java/lang/Object"));
@@ -849,10 +860,10 @@ public final class DirectAccessor<T> {
                 if(!isStatic) {
                     code.localSize = (char) (useCache ? 1 : 2);
                     if (useCache) {
-                        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+                        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
                         insn.add(cache.node);
                     } else {
-                        insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                        insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
                         if (check)
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     }
@@ -878,10 +889,10 @@ public final class DirectAccessor<T> {
                 if(!isStatic) {
                     code.localSize = (char) (code.stackSize + (useCache ? 0 : 1));
                     if(useCache) {
-                        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+                        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
                         insn.add(cache.node);
                     } else {
-                        insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                        insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
                         if (check)
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
                     }
@@ -892,7 +903,7 @@ public final class DirectAccessor<T> {
                 if (check && fieldType.type == CLASS && !field.getType().isAssignableFrom(setter.getParameterTypes()[isStatic || useCache ? 0 : 1])) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fieldType.owner));
                 insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, targetName, field.getName(), fieldType));
-                insn.add(NodeHelper.cached(Opcodes.RETURN));
+                insn.add(NodeHelper.npc(Opcodes.RETURN));
 
                 var.methods.add(set);
             }
@@ -915,7 +926,7 @@ public final class DirectAccessor<T> {
 
         InsnList insn = code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, targetName));
-        insn.add(NodeHelper.cached(Opcodes.DUP));
+        insn.add(NodeHelper.npc(Opcodes.DUP));
 
         List<Type> params = ParamHelper.parseMethod(initParam);
         params.remove(params.size() - 1);
@@ -932,7 +943,7 @@ public final class DirectAccessor<T> {
         code.stackSize = code.localSize = (char) (size + 1);
 
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, targetName, "<init>", initParam));
-        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+        insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
         var.methods.add(invoke);
 
@@ -962,7 +973,7 @@ public final class DirectAccessor<T> {
         InsnList insn = code.instructions;
 
         if (!isStatic) {
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
             invoke.parameters().add(0, new Type("java/lang/Object"));
         }
 
@@ -1011,7 +1022,7 @@ public final class DirectAccessor<T> {
             code.localSize = 2;
 
             InsnList insn = code.instructions;
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
             insn.add(new FieldInsnNode(Opcodes.GETFIELD, targetName, targetFieldName, targetType));
             insn.add(NodeHelper.X_RETURN(targetType.nativeName()));
 
@@ -1038,14 +1049,14 @@ public final class DirectAccessor<T> {
             code.localSize = (char) (code.stackSize + 1);
 
             InsnList insn = code.instructions;
-            insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
             if (check)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetName));
             insn.add(NodeHelper.X_LOAD_I(targetType.nativeName().charAt(0), 2));
             if (check && targetType.type == CLASS)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, targetType.owner));
             insn.add(new FieldInsnNode(Opcodes.PUTFIELD, targetName, targetFieldName, targetType));
-            insn.add(NodeHelper.cached(Opcodes.RETURN));
+            insn.add(NodeHelper.npc(Opcodes.RETURN));
 
             var.methods.add(set);
         }
@@ -1094,11 +1105,11 @@ public final class DirectAccessor<T> {
         code.stackSize = 1;
         code.localSize = 1;
         InsnList insn = code.instructions;
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "java/lang/Object",
                                     "clone", "()Ljava/lang/Object;"));
         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, clz.name));
-        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+        insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
         clz.interfaces.add("java/lang/Cloneable");
         clz.methods.add(cl);
@@ -1117,9 +1128,9 @@ public final class DirectAccessor<T> {
         code.stackSize = 1;
         code.localSize = 1;
         InsnList insn = code.instructions;
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
-        insn.add(NodeHelper.cached(Opcodes.RETURN));
+        insn.add(NodeHelper.npc(Opcodes.RETURN));
 
         clz.methods.add(init);
 
@@ -1130,12 +1141,12 @@ public final class DirectAccessor<T> {
         code.localSize = 0;
         insn = code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, clz.name));
-        insn.add(NodeHelper.cached(Opcodes.DUP));
+        insn.add(NodeHelper.npc(Opcodes.DUP));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.name, "<init>", "()V"));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC,
                                     DirectAccessor.class.getName().replace('.', '/'),
                                     "syncCallback", "(Ljava/lang/Object;)V"));
-        insn.add(NodeHelper.cached(Opcodes.RETURN));
+        insn.add(NodeHelper.npc(Opcodes.RETURN));
 
         clz.methods.add(init);
     }

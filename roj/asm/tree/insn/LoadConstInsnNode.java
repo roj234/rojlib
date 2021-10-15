@@ -145,16 +145,11 @@ public final class LoadConstInsnNode extends InsnNode {
 
     @Override
     public void toByteArray(ConstantWriter cw, ByteWriter w) {
-        w.writeByte(code);
-
         int cpi = (c = cw.reset(c)).getIndex();
-        if (cpi == 0) {
-            throw new NullPointerException("Invalid constant: " + c);
-        }
         if (this.code == Opcodes.LDC2_W || (this.code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
-            w.writeShort(cpi);
+            w.writeByte(code).writeShort(cpi);
         } else {
-            w.writeByte((byte) cpi);
+            w.writeByte(code).writeByte((byte) cpi);
         }
     }
 

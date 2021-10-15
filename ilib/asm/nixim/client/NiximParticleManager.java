@@ -26,14 +26,15 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleEmitter;
 import net.minecraft.client.particle.ParticleManager;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 import java.util.ArrayDeque;
 import java.util.Iterator;
@@ -63,7 +64,7 @@ public class NiximParticleManager extends ParticleManager {
     private void updateEffectLayer(int layer) {
     }
 
-    @RemapTo("func_78868_a")
+    @Inject("func_78868_a")
     public void updateEffects() {
         for (int i = 0; i < 4; ++i) {
             this.updateEffectLayer(i);

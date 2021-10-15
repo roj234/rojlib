@@ -26,6 +26,7 @@
 package roj.net.cross;
 
 import roj.collect.MyHashSet;
+import roj.concurrent.task.ITaskNaCl;
 import roj.io.NonblockingUtil;
 import roj.net.ssl.EngineAllocator;
 import roj.net.ssl.SslConfig;
@@ -46,8 +47,6 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
@@ -60,11 +59,14 @@ import static roj.net.cross.Util.*;
  * @since 2021/8/18 0:09
  */
 public class AEClient implements Runnable, Closeable {
-    static EngineAllocator AE_SSL;
+    static final EngineAllocator AE_SSL;
 
     static {
+        EngineAllocator alloc = null;
         try {
-            AE_SSL = SslEngineFactory.getSslFactory(new SslConfig() {
+            InputStream stream = AEClient.class.getResourceAsStream("/META-INF/client.ks");
+            if (stream != null)
+            alloc = SslEngineFactory.getSslFactory(new SslConfig() {
                 @Override
                 public boolean isServerSide() {
                     return false;
@@ -77,7 +79,7 @@ public class AEClient implements Runnable, Closeable {
 
                 @Override
                 public InputStream getCaPath() {
-                    return AEClient.class.getResourceAsStream("/META-INF/client.ks");
+                    return stream;
                 }
 
                 @Override
@@ -88,6 +90,7 @@ public class AEClient implements Runnable, Closeable {
         } catch (IOException | GeneralSecurityException e) {
             e.printStackTrace();
         }
+        AE_SSL = alloc;
     }
 
     boolean ssl;
@@ -95,10 +98,12 @@ public class AEClient implements Runnable, Closeable {
 
     ServerSocket      local;
     InetSocketAddress localServer, server;
+
     final MyHashSet<Worker> workers;
-    private final List<Worker> free;
-    boolean           shutdownRequested;
-    int maxFreeThreads;
+    final TaskRunner task;
+    int freeThreads, maxWorkers, error;
+
+    boolean shutdownRequested;
 
     AEClient(String roomId, String roomToken, InetSocketAddress server, InetSocketAddress local, boolean ssl, int magic) {
         this.id = roomId;
@@ -106,7 +111,8 @@ public class AEClient implements Runnable, Closeable {
         this.server = server;
         this.ssl = ssl;
         this.workers = new MyHashSet<>();
-        this.free = new ArrayList<>(this.maxFreeThreads = 10);
+        this.maxWorkers = 32;
+        this.task = new TaskRunner();
         if(local != null)
             this.localServer = local;
     }
@@ -115,7 +121,7 @@ public class AEClient implements Runnable, Closeable {
         this(roomId, roomToken, server, null, ssl, 0);
         ServerSocket socket = this.local = new ServerSocket();
         socket.setReuseAddress(true);
-        socket.bind(local, 32);
+        socket.bind(local, maxWorkers);
     }
 
     public void close() throws IOException {
@@ -140,6 +146,7 @@ public class AEClient implements Runnable, Closeable {
     }
 
     public void run() {
+        long t = System.currentTimeMillis();
         while (true) {
             Socket client;
             try {
@@ -147,70 +154,86 @@ public class AEClient implements Runnable, Closeable {
             } catch (IOException e) {
                 break;
             }
+            if (error > (System.currentTimeMillis() - t) / 10) {
+                break;
+            }
+            t = System.currentTimeMillis();
+            error = 0;
             try {
+                if (workers.size() >= maxWorkers) {
+                    client.close();
+                    syncPrint("连接数超限! " + workers.size() + "/" + maxWorkers);
+                }
                 initSocketPref(client);
                 InsecureSocket client1 = new InsecureSocket(client, NonblockingUtil.fd(client));
-                Worker w = null;
-                if(free.size() > 0) {
-                    synchronized (free) {
-                        if(free.size() > 0) {
-                            w = free.remove(free.size() - 1);
+                x:
+                synchronized (workers) {
+                    if (freeThreads > 0) {
+                        for (Worker wx : workers) {
+                            if (wx.client == null) {
+                                wx.client = client1;
+                                LockSupport.unpark(wx.self);
+                                freeThreads--;
+                                break x;
+                            }
                         }
                     }
-                }
-                if(w == null) {
-                    w = new Worker(client1);
-                    synchronized (workers) {
-                        workers.add(w);
-                    }
-                    w.start();
-                } else {
-                    //syncPrint(w + ": 重用");
-                    w.client = client1;
+                    task.pushTask(new Worker(client1));
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+        try {
+            local.close();
+        } catch (IOException ignored) {}
     }
 
-    class Worker extends FastLocalThread {
+    class Worker extends FastLocalThread implements ITaskNaCl {
         Worker(WrappedSocket client) {
             setDaemon(true);
             this.client = client;
             this.ob = new ByteList();
         }
 
+        Thread self;
         WrappedSocket client;
-        long     lastHeart;
         ByteList ob;
+
+        // 子机ID
+        int slaveId;
+        long lastConnect;
+
+        // 统计信息
+        long lastHeart;
 
         @Override
         public String toString() {
-            return String.valueOf(client);
+            return client + " #" + slaveId;
         }
 
         @Override
         public void run() {
+            self = this;
             try {
                 run1();
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            synchronized (free) {
-                free.remove(this);
-            }
             synchronized (workers) {
                 workers.remove(this);
             }
+            slaveId = -1;
         }
 
         void run1() throws IOException {
+            self.setName("SW " + this);
             Socket remote = new Socket();
             try {
                 remote.connect(server);
             } catch (ConnectException e) {
                 syncPrint("无法连接至服务器");
+                error++;
                 return;
             }
             WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), AE_SSL, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
@@ -234,12 +257,12 @@ public class AEClient implements Runnable, Closeable {
                     }
                     buf.clear();
 
-                    int heart = T_CLIENT_HEARTBEAT_INIT;
+                    int heart = 0;
                     int except = -1;
                     while (!shutdownRequested) {
                         while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
-                            if(heart-- <= 0) {
-                                if(heart == -1 || heart == -500) {
+                            if(--heart <= 0) {
+                                if(heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
                                     if (writeEx(channel, (byte) PS_HEARTBEAT) < 0) {
                                         syncPrint(this + ": 心跳发送失败");
                                     }
@@ -250,7 +273,7 @@ public class AEClient implements Runnable, Closeable {
                             }
                             if(shutdownRequested) break conn;
                             int r1 = client == null ? 0 : client.read();
-                            if(r1 != 0) {
+                            if (r1 != 0) {
                                 if(r1 > 0) {
                                     ByteList ob = this.ob;
                                     ob.clear();
@@ -267,20 +290,32 @@ public class AEClient implements Runnable, Closeable {
                                     ob.clear();
                                 } else {
                                     //syncPrint(this + ": 下级断开连接");
-                                    synchronized (free) {
-                                        if(free.size() < maxFreeThreads) {
-                                            free.add(this);
-                                        } else {
+                                    if (freeThreads < maxWorkers) {
+                                        synchronized (workers) {
+                                            freeThreads++;
+                                        }
+                                        syncPrint(this + ": free idle 30");
+                                        client = null;
+                                        // 连接保留30s
+                                        lastConnect = System.currentTimeMillis();
+                                        if(writeEx(channel, (byte) PS_RESET) < 0) {
+                                            syncPrint(this + ": 重置发送失败");
                                             break conn;
                                         }
+                                    } else {
+                                        syncPrint(this + ": 断开(释放)");
+                                        break conn;
                                     }
-                                    if(writeEx(channel, (byte) PS_RESET) < 0) {
-                                        syncPrint(this + ": 重置发送失败");
-                                    }
-                                    client = null;
                                 }
                             } else {
                                 LockSupport.parkNanos(20);
+                                if (client == null && System.currentTimeMillis() - lastConnect > 30000) {
+                                    syncPrint(this + ": 断开(释放,超时)");
+                                    synchronized (workers) {
+                                        freeThreads--;
+                                    }
+                                    break conn;
+                                }
                             }
                         }
                         if (read < 0 || shutdownRequested) {
@@ -301,7 +336,8 @@ public class AEClient implements Runnable, Closeable {
                                 }
                                 except = -1;
                                 r.index = 1;
-                                syncPrint(this + ": 登录成功 #" + r.readInt());
+                                slaveId = r.readInt();
+                                syncPrint(this + ": 登录成功 #" + slaveId);
                                 buf.clear();
                                 break;
                             case PS_DISCONNECT:
@@ -342,6 +378,7 @@ public class AEClient implements Runnable, Closeable {
                                 buf.clear();
                                 break;
                             default:
+                                error++;
                                 int bc = buf.getU(0) - 0x20;
                                 if(buf.pos() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
                                     syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
@@ -351,7 +388,7 @@ public class AEClient implements Runnable, Closeable {
                                 buf.clear();
                                 break conn;
                         }
-                        heart = T_CLIENT_HEARTBEAT_RECV;
+                        heart = T_CLIENT_HEARTBEAT_TIME;
                     }
                 }
                 if(read < 0) {
@@ -376,6 +413,27 @@ public class AEClient implements Runnable, Closeable {
             } catch (Throwable e) {
                 onError(channel, e);
             }
+        }
+
+        @Override
+        public void calculate(Thread thread) throws Exception {
+            // noinspection all
+            interrupted();
+            self = thread;
+            try {
+                run1();
+            } finally {
+                self.setName("SW Idle");
+                synchronized (workers) {
+                    workers.remove(this);
+                }
+            }
+            slaveId = -1;
+        }
+
+        @Override
+        public boolean isDone() {
+            return slaveId == -1;
         }
     }
 

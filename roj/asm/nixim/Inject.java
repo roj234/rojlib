@@ -43,13 +43,13 @@ public @interface Inject {
      */
     String value();
 
-    At at();
+    At at() default At.OLD_SUPER_INJECT;
 
     int flags() default 0;
 
     String occurrence() default "";
 
     enum At {
-        HEAD, MIDDLE, TAIL, REPLACE, OLD_SUPER_INJECT
+        HEAD, MIDDLE, TAIL, REPLACE, OLD_SUPER_INJECT, REMOVE
     }
 }

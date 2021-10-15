@@ -82,7 +82,7 @@ public class UnionFindSet {
         Node px = find(a);
         Node py = find(b);
         if (px != py) {
-            px.parent = nodes.getByValue(py);
+            px.parent = nodes.getInt(py);
         }
     }
 }

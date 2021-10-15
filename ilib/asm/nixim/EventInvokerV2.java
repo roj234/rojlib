@@ -125,14 +125,14 @@ public final class EventInvokerV2 implements IEventListener {
         code.stackSize = code.localSize = 2;
         InsnList insns = code.instructions;
 
-        insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectAccessor.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
 
-        insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
-        insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
+        insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
         insns.add(new FieldInsnNode(Opcodes.PUTFIELD, data, 0));
 
-        insns.add(NodeHelper.cached(Opcodes.RETURN));
+        insns.add(NodeHelper.npc(Opcodes.RETURN));
 
         roj.asm.tree.Method invoke = new roj.asm.tree.Method(flags, data, "invoke", HANDLER_FUNC_DESC);
         data.methods.add(invoke);
@@ -144,7 +144,7 @@ public final class EventInvokerV2 implements IEventListener {
         LabelInsnNode label = null;
         if(ignoreCancelled) {
             code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
-            insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
             insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraftforge/fml/common/eventhandler/Event", "isCanceled", "()Z"));
             insns.add(new IfInsnNode(Opcodes.IFNE, label = new LabelInsnNode()));
         }
@@ -161,29 +161,29 @@ public final class EventInvokerV2 implements IEventListener {
 
             if(obj == null) {
                 if(!ready) {
-                    insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+                    insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
                     insns.add(new FieldInsnNode(Opcodes.GETFIELD, data, 0));
                     ready = true;
                     //缓存array
                 }
-                insns.add(NodeHelper.cached(Opcodes.DUP));
+                insns.add(NodeHelper.npc(Opcodes.DUP));
                 insns.add(NodeHelper.loadInt(i));
-                insns.add(NodeHelper.cached(Opcodes.AALOAD));
-                insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                insns.add(NodeHelper.npc(Opcodes.AALOAD));
+                insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
                 insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, clz, method.getName(), signature));
             } else {
-                insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
+                insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
                 insns.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, clz, method.getName(), signature));
             }
         }
 
         if(ready) {
-            insns.add(NodeHelper.cached(Opcodes.POP));
+            insns.add(NodeHelper.npc(Opcodes.POP));
         }
 
         if(label != null)
             insns.add(label);
-        insns.add(NodeHelper.cached(Opcodes.RETURN));
+        insns.add(NodeHelper.npc(Opcodes.RETURN));
 
         ByteList list = Parser.toByteArrayShared(data);
 
@@ -257,14 +257,14 @@ public final class EventInvokerV2 implements IEventListener {
             code.stackLength = code.localLength = 2;
             InsnList insns = code.instructions;
 
-            insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
             insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectMethodAccess.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
 
-            insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
-            insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
+            insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
             insns.add(new FieldInsnNode(Opcodes.PUTFIELD, clazz, 0));
 
-            insns.add(NodeHelper.cached(Opcodes.RETURN));
+            insns.add(NodeHelper.npc(Opcodes.RETURN));
             insns.add(AttrCode.METHOD_END_MARK);
 
             roj.asm.struct.Method invoke = new roj.asm.struct.Method(flags, clazz, "invoke", HANDLER_FUNC_DESC);
@@ -275,12 +275,12 @@ public final class EventInvokerV2 implements IEventListener {
             code.localLength = 2;
             insns = code.instructions;
 
-            insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
             insns.add(new FieldInsnNode(Opcodes.GETFIELD, clazz, 0));
-            insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
+            insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
             insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "hl", "mn", "(Lcn;)V"));
 
-            insns.add(NodeHelper.cached(Opcodes.RETURN));
+            insns.add(NodeHelper.npc(Opcodes.RETURN));
             insns.add(AttrCode.METHOD_END_MARK);
 
             try (FileOutputStream fos = new FileOutputStream(new File("object.class"))) {
@@ -301,10 +301,10 @@ public final class EventInvokerV2 implements IEventListener {
         code.stackLength = code.localLength = 1;
         InsnList insns = code.instructions;
 
-        insns.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectMethodAccess.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
 
-        insns.add(NodeHelper.cached(Opcodes.RETURN));
+        insns.add(NodeHelper.npc(Opcodes.RETURN));
         insns.add(AttrCode.METHOD_END_MARK);
 
         roj.asm.struct.Method invoke = new roj.asm.struct.Method(flags, clazz, "invoke", HANDLER_FUNC_DESC);
@@ -315,10 +315,10 @@ public final class EventInvokerV2 implements IEventListener {
         code.localLength = 2;
         insns = code.instructions;
 
-        insns.add(NodeHelper.cached(Opcodes.ALOAD_1));
+        insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
         insns.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "hl", "mn", "(Lcn;)V"));
 
-        insns.add(NodeHelper.cached(Opcodes.RETURN));
+        insns.add(NodeHelper.npc(Opcodes.RETURN));
         insns.add(AttrCode.METHOD_END_MARK);
 
         try (FileOutputStream fos = new FileOutputStream(new File("static.class"))) {

@@ -142,8 +142,9 @@ public final class Context {
                     }
                 } catch (Throwable e) {
                     throw new IllegalArgumentException(name + " 写入失败", e);
+                } finally {
+                    clearData();
                 }
-                clearData();
             } else {
                 this.result = read0(stream);
                 this.stream = null;
@@ -204,7 +205,7 @@ public final class Context {
         if(data == null)
             return name;
         String realName = data.nameCst.getValue().getString();
-        if(!realName.equals(data.name))
+        if(!realName.equals(name))
             this.name = new CharList(realName.length() + 6).append(realName).append(".class").toString();
         return this.name;
     }
@@ -215,7 +216,7 @@ public final class Context {
         } catch (Throwable t) {
             try (FileOutputStream fos = new FileOutputStream(getName().replace('/', '_'))) {
                 get().writeToStream(fos);
-            } catch (IOException ignored) {}
+            } catch (Throwable ignored) {}
             throw t;
         }
     }

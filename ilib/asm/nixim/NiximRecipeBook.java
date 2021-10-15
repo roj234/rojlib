@@ -25,13 +25,14 @@
  */
 package ilib.asm.nixim;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.play.server.SPacketRecipeBook;
 import net.minecraft.stats.RecipeBookServer;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import java.util.List;
 
@@ -45,17 +46,17 @@ import java.util.List;
 @Nixim("net.minecraft.stats.RecipeBookServer")
 public class NiximRecipeBook extends RecipeBookServer {
 
-    @RemapTo("func_194081_a")
+    @Inject("func_194081_a")
     private void sendPacket(SPacketRecipeBook.State state, EntityPlayerMP player, List<IRecipe> recipesIn) {
 
     }
 
-    @RemapTo("func_192824_e")
+    @Inject("func_192824_e")
     public NBTTagCompound write() {
         return new NBTTagCompound();
     }
 
-    @RemapTo("func_192825_a")
+    @Inject("func_192825_a")
     public void read(NBTTagCompound tag) {
 
     }

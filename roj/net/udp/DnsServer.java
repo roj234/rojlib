@@ -270,12 +270,7 @@ public class DnsServer implements Router {
 
         @Override
         public String toString() {
-            return new StringBuilder().append(addr)
-                                      .append(':')
-                                      .append((int) port)
-                                      .append('#')
-                                      .append((int) id)
-                                      .toString();
+            return String.valueOf(addr) + ':' + (int) port + '#' + (int) id;
         }
     }
 

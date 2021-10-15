@@ -30,8 +30,8 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import ilib.Config;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.profiler.Profiler;
@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Nixim("net.minecraft.world.World")
 public abstract class NiximAABB extends World {
-    @RemapTo("<init>")
+    @Inject("<init>")
     /**
      * 1. 如果不使用SIJ，这个通不过编译，因为没法调用World的上级<init>除非参数一样
      *   也就是说， 没法replace构造器？
@@ -83,7 +83,7 @@ public abstract class NiximAABB extends World {
     @Copy
     public Cache<AxisAlignedBB, List<Entity>> eeCache;
 
-    @RemapTo("func_184144_a")
+    @Inject("func_184144_a")
     public List<AxisAlignedBB> getCollisionBoxes_patch(Entity entity, AxisAlignedBB bb) {
         List<AxisAlignedBB> list = this.boxCache.getIfPresent(bb);
         if (list == null) {
@@ -93,7 +93,7 @@ public abstract class NiximAABB extends World {
         return list;
     }
 
-    @RemapTo("func_175674_a")
+    @Inject("func_175674_a")
     public List<Entity> getEntitiesInAABBexcluding_Patch(Entity entityIn, AxisAlignedBB boundingBox, Predicate<? super Entity> predicate) {
         List<Entity> entities = this.eeCache.getIfPresent(boundingBox);
         if (entities != null) {
@@ -114,7 +114,7 @@ public abstract class NiximAABB extends World {
         return entities;
     }
 
-    @RemapTo("func_175647_a")
+    @Inject("func_175647_a")
     @SuppressWarnings("unchecked")
     public <T extends Entity> List<T> performant_getEntitiesWithinAABB(Class<? extends T> clazz, AxisAlignedBB aabb, Predicate<? super T> filter) {
         List<T> entities = (List<T>) this.eeCache.getIfPresent(aabb);

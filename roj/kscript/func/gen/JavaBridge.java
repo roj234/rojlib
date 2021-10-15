@@ -81,24 +81,24 @@ public final class JavaBridge {
         clz.methods.add(call);
         (call.code = new AttrCode(call)).interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
         InsnList insn = call.code.instructions;
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insn.add(new FieldInsnNode(Opcodes.GETFIELD, clz, 0));
         SwitchInsnNode swch = new SwitchInsnNode(Opcodes.TABLESWITCH);
         insn.add(swch);
-        InsnNode def = NodeHelper.cached(Opcodes.ACONST_NULL);
+        InsnNode def = NodeHelper.npc(Opcodes.ACONST_NULL);
         swch.def = def;
         insn.add(def);
-        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+        insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
         roj.asm.tree.Method copyAs = new roj.asm.tree.Method(0, clz, "copyAs", "(I)Lroj/kscript/func/gen/KFuncJava;");
         clz.methods.add(copyAs);
         (copyAs.code = new AttrCode(copyAs)).interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
         insn = copyAs.code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, ""));
-        insn.add(NodeHelper.cached(Opcodes.DUP));
-        insn.add(NodeHelper.cached(Opcodes.ILOAD_1));
+        insn.add(NodeHelper.npc(Opcodes.DUP));
+        insn.add(NodeHelper.npc(Opcodes.ILOAD_1));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "", "<init>", "(I)V"));
-        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+        insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
         roj.asm.tree.Method __init__ = new roj.asm.tree.Method(0, clz, "<init>", "(I)V");
         clz.methods.add(__init__);
@@ -107,12 +107,12 @@ public final class JavaBridge {
         code.localSize = 1;
 
         insn = code.instructions;
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
-        insn.add(NodeHelper.cached(Opcodes.ILOAD_1));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ILOAD_1));
         insn.add(new FieldInsnNode(Opcodes.PUTFIELD, clz, 0));
-        insn.add(NodeHelper.cached(Opcodes.RETURN));
+        insn.add(NodeHelper.npc(Opcodes.RETURN));
 
         roj.asm.tree.Method gsObject = new roj.asm.tree.Method(0, clz, "get_set_Object", "(Ljava/lang/Object;)Ljava/lang/Object;");
         clz.methods.add(gsObject);
@@ -121,15 +121,15 @@ public final class JavaBridge {
         code.localSize = 1;
 
         insn = code.instructions;
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insn.add(new FieldInsnNode(Opcodes.GETFIELD, clz, 1));
 
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_1));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, ""));
         insn.add(new FieldInsnNode(Opcodes.PUTFIELD, clz, 1));
 
-        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+        insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
         roj.asm.tree.Method __init_def__ = new roj.asm.tree.Method(0, clz, "<init>", "()V");
         clz.methods.add(__init_def__);
@@ -138,9 +138,9 @@ public final class JavaBridge {
         code.localSize = 1;
 
         insn = code.instructions;
-        insn.add(NodeHelper.cached(Opcodes.ALOAD_0));
+        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
-        insn.add(NodeHelper.cached(Opcodes.RETURN));
+        insn.add(NodeHelper.npc(Opcodes.RETURN));
     }
 
     private void forReuse(String className, String methodOwner) {
@@ -238,7 +238,7 @@ public final class JavaBridge {
         if(types.endsWith("V"))
             // todo make wrapper
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/VMUtil", "toJavaObject", "(Ljava/lang/Object;)Lroj/kscript/type/KJavaObject;"));
-        insn.add(NodeHelper.cached(Opcodes.ARETURN));
+        insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
     }
 

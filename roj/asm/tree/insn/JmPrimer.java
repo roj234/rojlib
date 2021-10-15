@@ -86,7 +86,7 @@ public final class JmPrimer extends InsnNode {
 
     @Override
     public String toString() {
-        return "Jump => " + def;
+        return "Jump => " + def + " / " + switcher;
     }
 
     @Override
@@ -95,10 +95,8 @@ public final class JmPrimer extends InsnNode {
     }
 
     public InsnNode bake(InsnNode target) {
-        GotoInsnNode gin = code == GOTO || code == GOTO_W ?
+        return code == GOTO || code == GOTO_W ?
                 new GotoInsnNode(code, target) :
                 new IfInsnNode(code, target);
-        gin.delta = def;
-        return gin;
     }
 }

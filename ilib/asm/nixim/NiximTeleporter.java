@@ -27,6 +27,10 @@ package ilib.asm.nixim;
 
 import ilib.util.PortalCache;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.block.state.pattern.BlockPattern;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -38,8 +42,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.Teleporter;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * No description provided
@@ -55,13 +57,13 @@ public class NiximTeleporter extends Teleporter {
     }
 
     @Override
-    @RemapTo(value = "isVanilla", isRemapCopy = true)
+    @Copy
     public boolean isVanilla() {
         return false;
     }
 
     @Override
-    @RemapTo("func_180620_b")
+    @Inject("func_180620_b")
     public boolean placeInExistingPortal(Entity entityIn, float rotationYaw) {
         double minDist = -1.0D;
         boolean doCache = true;
@@ -202,7 +204,7 @@ public class NiximTeleporter extends Teleporter {
     }
 
     @Override
-    @RemapTo("func_85189_a")
+    @Inject("func_85189_a")
     public void removeStalePortalLocations(long worldTime) {
         if (worldTime % 100L == 0L) {
             long i = worldTime - 300L;

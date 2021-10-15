@@ -23,9 +23,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.transform;
+package roj.asm;
 
-import roj.asm.Parser;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstString;
 import roj.asm.cst.CstType;
@@ -38,7 +37,7 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
-import roj.io.ZipUtil;
+import roj.io.MutableZipFile;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -52,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 /**
  * No description provided
@@ -231,9 +229,8 @@ public class Translator {
     }
 
     public static void applyZipFile(File f) throws IOException {
-        ByteList bl = new ByteList((int) f.length());
-        ZipOutputStream zos = new ZipOutputStream(bl.asOutputStream());
-        zos.setComment("Powered by Roj-ASM class file translator");
+        MutableZipFile mzf = new MutableZipFile(f);
+        mzf.getEOF().comment = "Powered by Roj-ASM class file translator";
 
         ZipFile zf = new ZipFile(f);
         String fn = f.getName() + '/';
@@ -241,25 +238,21 @@ public class Translator {
 
         while (e.hasMoreElements()) {
             ZipEntry ze = e.nextElement();
-            if (!ze.isDirectory() && ze.getName().endsWith(".class")) {
-
-                final byte[] bc = IOUtil.read(zf.getInputStream(ze));
-                byte[] bytes = applyClass(fn, bc);
-                if (bytes != null)
-                    System.out.println("已修改的内容: " + fn + ze.getName());
-
-                zos.putNextEntry(new ZipEntry(ze.getName()));
-                zos.write(bytes == null ? bc : bytes);
-                zos.closeEntry();
+            if (!ze.isDirectory()) {
+                if (ze.getName().endsWith(".class")) {
+                    byte[] bytes = applyClass(fn, IOUtil.read(zf.getInputStream(ze)));
+                    if (bytes != null) {
+                        System.out.println("已修改的内容: " + fn + ze.getName());
+                        mzf.setFileData(ze.getName(), new ByteList(bytes));
+                    }
+                }
+            } else {
+                mzf.setFileData(ze.getName(), null);
             }
         }
 
         zf.close();
-        ZipUtil.close(zos);
-
-        try (FileOutputStream fos = new FileOutputStream(f)) {
-            bl.writeToStream(fos);
-        }
+        mzf.store();
     }
 
     public static byte[] applyClass(String path, byte[] bc) {

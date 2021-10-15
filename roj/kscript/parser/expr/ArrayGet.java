@@ -114,7 +114,7 @@ public final class ArrayGet implements LoadExpression {
         index.toVMCode(ctx, false);
         if(index.type() != 2) {
             if(index.type() == -1) {
-                list.add(NodeHelper.cached(Opcodes.DUP));
+                list.add(NodeHelper.npc(Opcodes.DUP));
                 list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/type/KType", "isInt", "()Z"));
                 LabelInsnNode label = new LabelInsnNode();
                 list.add(new IfInsnNode(Opcodes.IFNE, label));

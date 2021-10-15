@@ -58,7 +58,7 @@ public class DottedStringPool extends StringPool {
             tmp = new ArrayList<>();
         else
             tmp.clear();
-        int id = dottedList.getByValue(string);
+        int id = dottedList.getInt(string);
         if(id != -1) {
             return w.writeVarInt(id, false);
         }
@@ -66,7 +66,7 @@ public class DottedStringPool extends StringPool {
         w.writeByte((byte) 0).writeByte((byte) clipped.size());
         for (int i = 0; i < clipped.size() - 1; i++) {
             String string1;
-            id = list.getByValue(string1 = clipped.get(i));
+            id = list.getInt(string1 = clipped.get(i));
             if (id == -1) {
                 list.putByValue(id = list.size(), string1);
                 ordered.add(string1);

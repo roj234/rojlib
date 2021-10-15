@@ -26,13 +26,15 @@
 package ilib.network;
 
 import ilib.ImpLib;
-import net.minecraft.network.INetHandler;
-import net.minecraftforge.fml.relauncher.Side;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
+
+import net.minecraft.network.INetHandler;
+
+import net.minecraftforge.fml.relauncher.Side;
 
 import javax.annotation.Nonnull;
 import java.util.function.Supplier;
@@ -79,7 +81,8 @@ public class ChannelCodec {
         if (!validPacket(packet)) return;
         ByteReader payload = packet.payload();
         if (payload.isFinished()) {
-            ImpLib.logger().error("Packet decoder {} received an empty packet!}", channel);
+            ImpLib.logger().error("Packet decoder {} received an empty packet!", channel);
+            return;
         }
         int id = payload.readVarInt(false);
         if (id == 0) {

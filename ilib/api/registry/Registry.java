@@ -82,6 +82,6 @@ public class Registry<T extends Indexable> implements IRegistry<T> {
     }
 
     public int idFor(T t) {
-        return values.getByValue(t);
+        return values.getInt(t);
     }
 }

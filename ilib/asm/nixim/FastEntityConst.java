@@ -26,11 +26,12 @@
 package ilib.asm.nixim;
 
 import ilib.util.EntityHelper;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 import java.util.function.Function;
 
@@ -48,7 +49,7 @@ class FastEntityConst {
     @Shadow("cls")
     Class<? extends Entity> cls;
 
-    @RemapTo("init")
+    @Inject("init")
     protected void init() {
         this.factory = EntityHelper.createEntityFactory(this.cls);
     }

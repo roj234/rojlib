@@ -25,10 +25,11 @@
  */
 package ilib.asm.nixim.coll;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * Remove Collision
@@ -49,11 +50,11 @@ public abstract class NiximEntLiveColl extends EntityLivingBase {
     //}
 
     @Override
-    @RemapTo("func_85033_bc")
+    @Inject("func_85033_bc")
     protected void collideWithNearbyEntities() {}
 
     @Override
-    @RemapTo("func_70067_L")
+    @Inject("func_70067_L")
     public boolean canBeCollidedWith() {
         return false;
     }

@@ -30,8 +30,6 @@ import ilib.Config;
 import ilib.api.IFasterClassTransformer;
 import ilib.asm.Loader;
 import ilib.client.api.ChangeWorldEvent;
-import net.minecraft.entity.Entity;
-import net.minecraftforge.common.MinecraftForge;
 import org.apache.logging.log4j.Logger;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -49,6 +47,10 @@ import roj.collect.IntBiMap;
 import roj.collect.WeakHashSet;
 import roj.util.ByteList;
 import roj.util.Helpers;
+
+import net.minecraft.entity.Entity;
+
+import net.minecraftforge.common.MinecraftForge;
 
 import java.util.List;
 import java.util.ListIterator;

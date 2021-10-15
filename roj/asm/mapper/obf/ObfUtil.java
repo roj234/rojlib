@@ -332,7 +332,7 @@ public class ObfUtil {
         prepend.add(switcher);
         InsnList insn = method.code.instructions;
         for (int i = 0; i < insn.size(); i++) {
-            if(NodeHelper.isVarNode(insn.get(i))) {
+            if(NodeHelper.getVarId(insn.get(i)) >= 0) {
                 throw new UnsupportedOperationException("todo!"
                 );
             }

@@ -45,6 +45,9 @@ import roj.asm.type.Type;
 import roj.asm.util.*;
 import roj.asm.visitor.CodeVisitor;
 import roj.collect.*;
+import roj.config.JSONParser;
+import roj.config.ParseException;
+import roj.config.data.CList;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -291,6 +294,9 @@ public class NiximSystem {
         if (!methods.get(index).rawDesc().equals(s.method.rawDesc()))
             throw new NiximException("目标与Nixim方法返回值不匹配 " + methods.get(index));
         switch (s.at) {
+            case "REMOVE":
+                methods.remove(index);
+                break;
             case "REPLACE": {
                 st:
                 if (s.method.name.equals("<init>")) {
@@ -388,7 +394,7 @@ public class NiximSystem {
                 } else if (retVal.size() == 1 && retVal.get(0) == 0) {
                     targetInsn.remove(0);
                     type = 1;
-                    if (NodeHelper.getIndex(targetInsn.get(0)) == pl) {
+                    if (NodeHelper.getVarId(targetInsn.get(0)) == pl) {
                         targetInsn.remove(0);
                         type |= 4; // same var id
                     }
@@ -409,7 +415,7 @@ public class NiximSystem {
                 for (int i = 0; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
                     // 检测参数的assign然后做备份
-                    int i2 = NodeHelper.getIndex(node);
+                    int i2 = NodeHelper.getVarId(node);
                     if (i2 >= 0) {
                         int code = node.getOpcodeInt();
                         if (code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
@@ -480,7 +486,7 @@ public class NiximSystem {
             }
             break;
             case "OLD_SUPER_INJECT":
-                ((MethodSimple) methods.get(index)).name = data.writer.getUtf(s.sijName);
+                ((MethodSimple) methods.get(index)).name = data.writer.getUtf(s.name);
                 methods.add(Helpers.cast(s.method));
             break;
         }
@@ -815,8 +821,10 @@ public class NiximSystem {
                     case INVOKESTATIC: {
                         InvokeInsnNode inv = (InvokeInsnNode) node;
                         if (inv.owner.equals("//MARKER")) {
-                            if (state.at.equals("OLD_SUPER_INJECT"))
-                                state.delegations().add(inv);
+                            if (state.at.equals("OLD_SUPER_INJECT")) {
+                                inv.name = state.name;
+                                state.flags |= FLAG_HAS_INVOKE;
+                            }
                             inv.owner = destClass;
                         }
                     }
@@ -879,9 +887,12 @@ public class NiximSystem {
         Method method = s.method;
         sw:
         switch (s.at) {
-            case "REPLACE": {
+            case "REMOVE": // 删除的话就节省点空间吧
+                s.method = null;
+            break;
+            case "REPLACE":
                 if (method.name.equals("<init>")) {
-                    boolean selfInit = s.originName.equals("<init>");
+                    boolean selfInit = s.name.equals("<init>");
                     InsnList insn = method.code.instructions;
                     for (int i = 0; i < insn.size(); i++) {
                         InsnNode node = insn.get(i);
@@ -910,10 +921,7 @@ public class NiximSystem {
                         }
                     }
                     throw new NiximException("替换构造器 " + method.name + ' ' + method.rawDesc() + " 未发现使用 " + SPEC_M_CONSTRUCTOR + " 作为初始化器的标记");
-                } else {
-                    s.superCallEnd = -1;
                 }
-            }
             break;
             case "HEAD": {
                 Int2IntMap assignedLV = new Int2IntMap();
@@ -926,7 +934,7 @@ public class NiximSystem {
                 for (int i = 0; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
                     // 检测参数的assign然后做备份
-                    int index = NodeHelper.getIndex(node);
+                    int index = NodeHelper.getVarId(node);
                     if (index >= 0) {
                         int code = node.getOpcodeInt();
                         if (code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
@@ -986,7 +994,7 @@ public class NiximSystem {
 
                 for (int i = s.superCallEnd; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
-                    int index = NodeHelper.getIndex(node);
+                    int index = NodeHelper.getVarId(node);
                     if (index >= 0) {
                         int code = node.getOpcodeInt();
                         if (code >= OpcodesInt.ILOAD && code <= OpcodesInt.ALOAD_3) {
@@ -1025,17 +1033,10 @@ public class NiximSystem {
             }
             break;
             // 注入super方法
-            case "OLD_SUPER_INJECT": {
-                List<InvokeInsnNode> sd = s.delegations();
-                if (sd.isEmpty()) {
+            case "OLD_SUPER_INJECT":
+                if ((s.flags & FLAG_HAS_INVOKE) == 0) {
                     s.at = "REPLACE";
-                    return;
                 }
-                String sijName = s.sijName = method.name + "_" + (System.nanoTime() % 10000);
-                for (int i = 0; i < sd.size(); i++) {
-                    sd.get(i).name = sijName;
-                }
-            }
             break;
         }
     }
@@ -1086,8 +1087,10 @@ public class NiximSystem {
     }
 
     private static boolean postProcNxMd(String dst, Method m) throws NiximException {
-        if(m.code == null)
+        if (m.code == null)
             throw new NiximException("方法不能是抽象的: " + m.owner + '.' + m.name + ' ' + m.rawDesc());
+        if (m.name.equals("<init>") && !m.rawDesc().endsWith(")V"))
+            throw new NiximException("构造器映射返回必须是void: " + m.owner + '.' + m.name + ' ' + m.rawDesc());
 
         if (m.rawDesc().contains(m.owner)) {
             List<Type> params = m.parameters();
@@ -1187,44 +1190,63 @@ public class NiximSystem {
     // endregion
     // region 工具人
 
+    static final int FLAG_HAS_INVOKE = 262144;
+
     static final class InjectState {
-        final  Method method;
-        String at, originName;
-        final  int    flags, pos;
+        // 注解的信息
+        String at;
+        int flags;
+
+        // replace模式: 方法原名, 检测 $$$CONSTRUCTOR调用
+        // super inject模式: SIJ方法名
+        String name;
+
+        Method method;
 
         int superCallEnd;
-        List<?> nodeList;
+        final List<?> nodeList;
 
         // Head
-        Int2IntMap         assignId;
+        Int2IntMap assignId;
         @SuppressWarnings("unchecked")
         public List<GotoInsnNode> gotos() {
             return (List<GotoInsnNode>) nodeList;
         }
-        // Head
+        // Middle
+        CList occurrence;
         // Tail
         @SuppressWarnings("unchecked")
         public List<Integer> retVal() {
             return (List<Integer>) nodeList;
         }
-        // Tail
-        // SuperInject
-        String               sijName;
-        @SuppressWarnings("unchecked")
-        public List<InvokeInsnNode> delegations() {
-            return (List<InvokeInsnNode>) nodeList;
-        }
-        // SuperInject
 
-        InjectState(Method method, Map<String, AnnVal> map) {
+        InjectState(Method method, Map<String, AnnVal> map) throws NiximException {
             this.method = method;
+
             this.at = ((AnnValEnum) map.get("at")).value;
             AnnValInt avi = (AnnValInt) map.get("flags");
             this.flags = avi == null ? 0 : avi.value;
-            avi = (AnnValInt) map.get("injectMiddlePosition");
-            this.pos = avi == null ? -1 : avi.value;
-            this.nodeList = new ArrayList<>();
-            this.originName = ((AnnValString) map.get("value")).value;
+
+            AnnValString avs = (AnnValString) map.get("occurrence");
+            try {
+                this.occurrence = avs == null ? null : JSONParser.parse(avs.value, JSONParser.LITERAL_KEY).asList();
+            } catch (ParseException e) {
+                throw new NiximException("无法解析occurrence matcher JSON", e);
+            }
+
+            switch (at) {
+                case "HEAD":
+                case "TAIL":
+                case "OLD_SUPER_INJECT":
+                    this.nodeList = new ArrayList<>();
+                    break;
+                default:
+                    this.nodeList = null;
+                    break;
+            }
+            this.name = at.equals("OLD_SUPER_INJECT") ?
+                    method.name + '_' + (System.nanoTime() % 10000) :
+                    ((AnnValString) map.get("value")).value;
         }
     }
 

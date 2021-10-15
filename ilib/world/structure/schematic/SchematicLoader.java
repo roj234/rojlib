@@ -170,7 +170,7 @@ public final class SchematicLoader {
                     blockPalette.appendTag(tag);
                 }
 
-                blocks[i] = map.getByValue(block);
+                blocks[i] = map.getInt(block);
             } else {
                 blocks[i] = -1;
             }

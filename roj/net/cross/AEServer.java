@@ -27,9 +27,7 @@ package roj.net.cross;
 
 import roj.collect.IntMap;
 import roj.collect.IntSet;
-import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskHandler;
-import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CMapping;
@@ -45,6 +43,7 @@ import roj.util.FastLocalThread;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
@@ -54,6 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Function;
 
 import static roj.net.cross.Util.*;
 
@@ -68,8 +68,11 @@ public class AEServer extends TCPServer {
     ConcurrentHashMap<Worker, Object> workers = new ConcurrentHashMap<>();
     ConcurrentHashMap<String, Room> rooms = new ConcurrentHashMap<>();
 
-    int maxConn;
-    Watcher watcher = new Watcher();
+    int        maxConn, maxConnPerIp = 128;
+    static final Function<InetAddress, AtomicInteger> CCNT = (x) -> new AtomicInteger();
+    ConcurrentHashMap<InetAddress, AtomicInteger> ipConnections = new ConcurrentHashMap<>();
+
+    TaskRunner watcher = new TaskRunner();
 
     public AEServer(InetSocketAddress address, int maxConnection, String keyStoreFile, char[] keyPassword) throws
             IOException, GeneralSecurityException {
@@ -95,10 +98,12 @@ public class AEServer extends TCPServer {
             while (!room.master.shutdown()) {
                 LockSupport.parkNanos(1000);
             }
-            room.master.close();
+        } finally {
+            try {
+                room.master.close();
+            } catch (IOException ignored) {}
             room.master = null;
             rooms.remove(room.id);
-        } finally {
             room.set(0);
         }
     }
@@ -108,12 +113,20 @@ public class AEServer extends TCPServer {
         if(workers.size() >= maxConn) {
             try {
                 client.getOutputStream().write(PS_LINK_OVERFLOW);
-                client.getOutputStream().flush();
             } finally {
                 client.close();
             }
             return null;
         } else {
+            AtomicInteger counter = ipConnections.computeIfAbsent(client.getInetAddress(), CCNT);
+            if (counter.get() > maxConnPerIp) {
+                try {
+                    client.getOutputStream().write(PS_LINK_OVERFLOW);
+                } finally {
+                    client.close();
+                }
+                return null;
+            }
             FileDescriptor fd = NonblockingUtil.fd(client);
             initSocketPref(client);
 
@@ -150,19 +163,18 @@ public class AEServer extends TCPServer {
 
     public void shutdown() {
         if(watcher == null) return;
-        watcher.shutdown();
         try {
             socket.close();
         } catch (IOException ignored) {}
-        LockSupport.parkNanos(1000);
         for (Room room : rooms.values()) {
             room.master = null;
         }
         rooms.clear();
+        watcher.interruptAll();
         for (Worker w : workers.keySet()) {
             int state = w.state;
             w.state = SHUTDOWN;
-            LockSupport.unpark(w);
+            LockSupport.unpark(w.self);
             switch (state) {
                 case CONNECTED:
                 case ESTABLISHED:
@@ -178,11 +190,11 @@ public class AEServer extends TCPServer {
                         w.channel.close();
                     } catch (IOException ignored) {}
             }
-            w.interrupt();
+            w.self.interrupt();
         }
         for (Worker w : workers.keySet()) {
             try {
-                w.join(50);
+                w.self.join(50);
             } catch (InterruptedException ignored) {}
         }
         workers.clear();
@@ -231,16 +243,17 @@ public class AEServer extends TCPServer {
         public void mainThread() {
             if(packets.size() > 0) {
                 int trys = 10;
-                while (!compareAndSet(0, -1) && trys-- > 0) {
+                while (!compareAndSet(0, -2) && trys-- > 0) {
                     LockSupport.parkNanos(10);
                 }
                 if(trys == 0) return;
 
                 for (int i = 0; i < packets.size(); i++) {
                     WrappedSocket channel = packets.get(i).channel;
+                    if (channel == null) continue;
                     try {
                         writeAndFlush(master, channel.buffer(), 200);
-                        LockSupport.unpark(packets.get(i));
+                        LockSupport.unpark(packets.get(i).self);
                     } catch (Throwable e) {
                         e.printStackTrace();
                         System.out.println("Error at #" + i);
@@ -258,17 +271,17 @@ public class AEServer extends TCPServer {
                 }
 
                 for (int i = 0; i < packets.size(); i++) {
-                    LockSupport.unpark(packets.get(i));
+                    LockSupport.unpark(packets.get(i).self);
                 }
                 packets.clear();
-                set(0);
             }
         }
 
         public void register(Worker worker) {
+            if(worker.state == SHUTDOWN || master == null || get() == -1) return;
             while (!compareAndSet(0, 1)) {
                 LockSupport.parkNanos(10);
-                if(worker.state == SHUTDOWN || master == null) return;
+                if(worker.state == SHUTDOWN || master == null || get() == -1) return;
             }
             packets.add(worker);
             set(0);
@@ -276,9 +289,10 @@ public class AEServer extends TCPServer {
         }
 
         public void kick(int id) {
+            if(master == null || get() == -1) return;
             while (!compareAndSet(0, 1)) {
                 LockSupport.parkNanos(10);
-                if(master == null) return;
+                if(master == null || get() == -1) return;
             }
             kicked.add(id);
             set(0);
@@ -315,6 +329,7 @@ public class AEServer extends TCPServer {
         Room room;
         int roomIndex;
         AtomicInteger busy;
+        Thread self;
 
         volatile int state;
 
@@ -333,8 +348,9 @@ public class AEServer extends TCPServer {
             this.creation = System.currentTimeMillis() / 1000;
             this.state = WAIT;
             this.busy = new AtomicInteger(3);
+            this.self = this;
             setDaemon(true);
-            setName("Worker " + channel.socket().getRemoteSocketAddress());
+            setName("SW " + channel.socket().getRemoteSocketAddress());
         }
 
         @Override
@@ -356,7 +372,7 @@ public class AEServer extends TCPServer {
                     ByteReader r = new ByteReader(buf);
                     ByteWriter w = new ByteWriter(buf);
 
-                    heart = T_SERVER_HEARTBEAT_INIT;
+                    heart = T_SERVER_HEART_TIME;
                     int except = -1;
                     while (state != SHUTDOWN) {
                         if (chkRoomState()) break;
@@ -366,13 +382,13 @@ public class AEServer extends TCPServer {
                             checkBusy(true);
                             LockSupport.parkNanos(20);
                             checkBusy(false);
-                            if (heart-- <= 0) {
+                            if (heart-- < 0) {
                                 syncPrint(this + ": 心跳超时");
-                                if(T_SERVER_HEARTBEAT) {
+                                if (T_SERVER_HEARTBEAT) {
                                     writeEx(channel, (byte) PS_ERROR_TIMEOUT);
                                     break conn;
                                 } else {
-                                    heart = T_SERVER_HEARTBEAT_RECV;
+                                    heart = T_SERVER_HEART_TIME;
                                 }
                             }
                             if (state == SHUTDOWN) break conn;
@@ -382,25 +398,22 @@ public class AEServer extends TCPServer {
                             case PS_HEARTBEAT:
                                 lastHeart = System.currentTimeMillis();
                                 writeEx(channel, (byte) PS_HEARTBEAT);
-                                buf.clear();
                                 break;
                             case PS_CONNECT:
                                 if (state == CONNECTED) {
                                     if (buf.pos() < 4) { // PKT VL VL XL
                                         except = 4;
-                                        break;
+                                        continue;
                                     }
                                     r.index = 1;
-                                    int value = r.readUByte() + r.readUByte();
-                                    if (buf.pos() < value + 4) {
-                                        except = value + 4;
-                                        break;
-                                    }
-                                    r.index = 1;
-                                    except = -1;
 
                                     int idLen = r.readUByte();
                                     int tokenLen = r.readUByte();
+                                    if (buf.pos() < idLen + tokenLen + 4) {
+                                        except = idLen + tokenLen + 4;
+                                        continue;
+                                    }
+                                    except = -1;
 
                                     int code = server.handleConnect(this, r.readBoolean(), r.readUTF0(idLen), r.readUTF0(tokenLen));
                                     if (code != -1) {
@@ -440,12 +453,11 @@ public class AEServer extends TCPServer {
                                     w.writeInt(this.roomIndex);
                                     room.register(this);
                                 }
-                                buf.clear();
                                 break;
                             case PS_KICK_SLAVE:
                                 if (buf.pos() < 5) {
                                     except = 5;
-                                    break;
+                                    continue;
                                 }
                                 except = -1;
                                 if (state != ESTABLISHED) {
@@ -456,25 +468,23 @@ public class AEServer extends TCPServer {
                                     r.index = 1;
                                     room.kick(r.readInt());
                                 }
-                                buf.clear();
                                 break;
                             case PS_DATA:
-                                if (state != ESTABLISHED) {
-                                    writeEx(channel, (byte) PS_ERROR_NOT_CONNECT);
-                                    break;
-                                }
-
                                 r.index = 1;
                                 if (buf.pos() < 5) {
                                     except = 5;
-                                    break;
+                                    continue;
                                 }
                                 int value = r.readInt();
                                 if (buf.pos() < value + 5) {
                                     except = value + 5;
-                                    break;
+                                    continue;
                                 }
                                 except = -1;
+                                if (state != ESTABLISHED) {
+                                    writeEx(channel, (byte) PS_ERROR_NOT_CONNECT);
+                                    break;
+                                }
 
                                 Worker wk = null;
                                 AtomicInteger targetLock;
@@ -483,17 +493,17 @@ public class AEServer extends TCPServer {
                                 if (room.master == this.channel) {
                                     // from ClientOwner: PKT LEN LEN LEN [len - 4] TO TO TO TO
                                     r.index = buf.pos() - 4;
+                                    int id = r.readInt();
                                     synchronized (room.slaves) {
-                                        wk = room.slaves.get(r.readInt());
+                                        wk = room.slaves.get(id);
                                     }
                                     if (wk == null || (target = wk.channel) == null) {
                                         r.index = buf.pos() - 4;
-                                        syncPrint(this + ": 没有接受者 " + r.readInt());
+                                        syncPrint(this + ": 没有接受者 " + id);
                                         buf.clear();
                                         buf.add((byte) PS_STATE);
                                         buf.add((byte) PS_STATE_DISCARD);
                                         writeAndFlush(channel, buf, 200);
-                                        buf.clear();
                                         break;
                                     }
                                     targetLock = wk.busy;
@@ -504,7 +514,14 @@ public class AEServer extends TCPServer {
                                     buf.pos(pos);
                                     //syncPrint(this + " => '" + room.id + "'[" + id + "]");
                                     // 拿到写入锁
-                                    if (!acquireWriteLock(targetLock)) break conn;
+                                    int i = checkWriteLock(targetLock);
+                                    // 我死了
+                                    if (i == -1) break conn;
+                                    // 他死了
+                                    if (i == 1) {
+                                        syncPrint(this + "'" + room.id + "'[" + id + "]: 接收者掉线");
+                                        break;
+                                    }
                                     // 等待线程停车
                                     while (targetLock.get() != 1) {
                                         LockSupport.parkNanos(10);
@@ -530,11 +547,23 @@ public class AEServer extends TCPServer {
                                     targetLock = room;
                                     //syncPrint(this + " => '" + room.id + "'[0]");
                                     // 拿到写入锁
-                                    if (!acquireWriteLock(targetLock)) break conn;
+                                    int i = checkWriteLock(targetLock);
+                                    // 我死了
+                                    if (i == -1) break conn;
+                                    // 他死了
+                                    if (i == 1) {
+                                        syncPrint(this + "'" + room.id + "'[0]: 接收者掉线");
+                                        break;
+                                    }
                                     room.up.add(value);
                                     up += value;
                                 }
-                                int v = writeAndFlush(target, buf, TIMEOUT_TRANSFER);
+                                int v;
+                                try {
+                                    v = writeAndFlush(target, buf, TIMEOUT_TRANSFER);
+                                } catch (IOException e) {
+                                    v = -1;
+                                }
                                 buf.clear();
                                 if (v == -7) {
                                     buf.add((byte) PS_STATE);
@@ -547,7 +576,7 @@ public class AEServer extends TCPServer {
                                 if (buf.pos() > 0) writeAndFlush(channel, buf, 200);
 
                                 if(room.master == channel) {
-                                    LockSupport.unpark(wk);
+                                    LockSupport.unpark(wk.self);
                                 } else {
                                     targetLock.set(0);
                                 }
@@ -562,7 +591,8 @@ public class AEServer extends TCPServer {
                                 }
                                 break conn;
                         }
-                        heart = T_SERVER_HEARTBEAT_RECV;
+                        heart = T_SERVER_HEART_TIME;
+                        buf.clear();
                     }
                 }
 
@@ -617,23 +647,32 @@ public class AEServer extends TCPServer {
                     room.register(this);
                 }
             }
+            if (0 == server.ipConnections.get(channel.socket().getInetAddress()).decrementAndGet())
+                server.ipConnections.remove(channel.socket().getInetAddress());
+
             channel = null;
             server.workers.remove(this);
+            busy.set(-1);
 
             synchronized (this) {
                 notify();
             }
         }
 
-        private boolean acquireWriteLock(AtomicInteger targetLock) {
+        private int checkWriteLock(AtomicInteger targetLock) {
+            int tr = 20;
             while (!targetLock.compareAndSet(0, 2)) {
                 if(room.master == channel) room.mainThread();
-                LockSupport.parkNanos(10);
+                LockSupport.parkNanos(20);
                 if(state == SHUTDOWN ||
                         room.master == null ||
-                        room.kicked.remove(roomIndex)) return false;
+                        room.kicked.remove(roomIndex)) return -1;
+                if (targetLock.get() == -1) return 1;
+                if (tr-- == 0) {
+                    throw new IllegalArgumentException("Failed to get write lock " + targetLock.getClass().getName() + ": " + targetLock.get());
+                }
             }
-            return true;
+            return 0;
         }
 
         private void checkBusy(boolean state) {
@@ -705,7 +744,7 @@ public class AEServer extends TCPServer {
             json.put("ip", channel.socket().getRemoteSocketAddress().toString());
             json.put("state", STATE_NAMES[state]);
             json.put("time", creation);
-            json.put("heart", lastHeart);
+            json.put("heart", lastHeart / 1000);
             json.put("up", up);
             json.put("down", down);
             return json;
@@ -713,30 +752,19 @@ public class AEServer extends TCPServer {
 
         @Override
         public void calculate(Thread thread) {
+            self = thread;
+            self.setName("SW " + channel.socket().getRemoteSocketAddress());
+            // clear interrupt flag
+            // noinspection all
+            interrupted();
+            // noinspection all
             run();
+            self.setName("SW Idle");
         }
 
         @Override
         public boolean isDone() {
             return channel == null;
-        }
-    }
-
-    static final class Watcher extends TaskPool {
-        public Watcher() {
-            super(1, Integer.parseInt(System.getProperty("ae.server.threads", "10")), 1, 1, pool -> new TaskExecutor(pool, "Worker", 120000));
-        }
-
-        @Override
-        public void pushTask(ITask task) {
-            if(task == null) return;
-            super.pushTask(task);
-        }
-
-        @Override
-        protected void onReject(ITask task, int minPending) {
-            Worker w = (Worker) task;
-            w.start();
         }
     }
 }

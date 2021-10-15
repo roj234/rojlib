@@ -3,8 +3,6 @@ package roj.misc;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
-import roj.reflect.IFieldAccessor;
-import roj.reflect.ReflectionUtils;
 import roj.text.SimpleLineReader;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
@@ -12,6 +10,9 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.util.HashSet;
 import java.util.Vector;
 
 /**
@@ -30,16 +31,13 @@ public class CpFilter {
         try {
             File dst = new File("classList.txt");
             // 取并集
-            MyHashSet<String> dt = new MyHashSet<>();
-            if(dst.isFile())
-            try (SimpleLineReader s = new SimpleLineReader(IOUtil.readUTF(dst))) {
-                for (String ss : s) {
-                    dt.add(ss);
-                }
+            HashSet<String> dt = new HashSet<>();
+            if(dst.isFile()) {
+                dt.addAll(Files.readAllLines(dst.toPath()));
             }
-            IFieldAccessor f = ReflectionUtils.accessField(ClassLoader.class.getDeclaredField("classes"));
-            f.setInstance(CpFilter.class.getClassLoader());
-            Vector<Class<?>> vector = Helpers.cast(f.getObject());
+            Field f = ClassLoader.class.getDeclaredField("classes");
+            f.setAccessible(true);
+            Vector<Class<?>> vector = Helpers.cast(f.get(CpFilter.class.getClassLoader()));
             for (int i = 0; i < vector.size(); i++) {
                 Class<?> classes = vector.get(i);
                 dt.add(classes.getName().replace('.', '/'));

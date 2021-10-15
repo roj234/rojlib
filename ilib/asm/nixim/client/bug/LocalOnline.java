@@ -28,12 +28,13 @@ package ilib.asm.nixim.client.bug;
 import com.mojang.authlib.GameProfileRepository;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.integrated.IntegratedServer;
 import net.minecraft.server.management.PlayerProfileCache;
 import net.minecraft.world.WorldSettings;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import java.io.IOException;
 
@@ -50,7 +51,7 @@ abstract class LocalOnline extends IntegratedServer {
         super(clientIn, folderNameIn, worldNameIn, worldSettingsIn, authServiceIn, sessionServiceIn, profileRepoIn, profileCacheIn);
     }
 
-    @RemapTo("func_71197_b")
+    @Inject("func_71197_b")
     public boolean init() throws IOException {
         boolean result = super.init();
         this.setOnlineMode(false);

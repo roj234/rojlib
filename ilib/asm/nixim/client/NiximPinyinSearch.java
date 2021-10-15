@@ -27,8 +27,8 @@ package ilib.asm.nixim.client;
 
 import ilib.asm.nixim.FastSearchTree;
 import ilib.asm.util.MCHooks;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.FilterList;
 import roj.collect.MyHashSet;
@@ -68,7 +68,7 @@ public class NiximPinyinSearch extends Minecraft {
     SearchTreeManager searchTreeManager;
 
     @Override
-    @RemapTo("func_193986_ar")
+    @Inject("func_193986_ar")
     public void populateSearchTreeManager() {
         SearchTree<ItemStack> stackTree = new FastSearchTree<>(MCHooks::getItemInformation, (stack) -> Collections.singleton(Item.REGISTRY.getNameForObject(stack.getItem())));
 

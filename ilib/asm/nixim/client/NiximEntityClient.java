@@ -26,10 +26,11 @@
 package ilib.asm.nixim.client;
 
 import ilib.util.BlockHelper;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * No description provided
@@ -44,7 +45,7 @@ public abstract class NiximEntityClient extends Entity {
         super(worldIn);
     }
 
-    @RemapTo("func_70065_x")
+    @Inject("func_70065_x")
     protected void preparePlayerToSpawn() {
         if (this.world != null) {
             if (this.posY > 0 && this.posY < 256) {

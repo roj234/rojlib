@@ -1,8 +1,8 @@
 package lac.server.util;
 
 import io.netty.buffer.ByteBuf;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.text.CharList;
 import roj.text.crypt.Base64;
@@ -23,7 +23,7 @@ public class ModListServer extends FMLHandshakeMessage {
     @Shadow("modTags")
     private Map<String, String> modTags;
 
-    @RemapTo("fromBytes")
+    @Inject("fromBytes")
     public void fromBytes(ByteBuf buffer) {
         int modCount = ByteBufUtils.readVarInt(buffer, 2);
 

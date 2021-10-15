@@ -25,11 +25,10 @@
  */
 package roj.asm.util;
 
+import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.collect.IntBiMap;
-import roj.util.ByteList;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 
@@ -74,30 +73,7 @@ public final class InsnList extends ArrayList<InsnNode> {
     }
 
     public IntBiMap<InsnNode> getPCMap() {
-        InsnNode last = remove(size() - 1);
-        if (last != MARKER)
-            add(last);
-
-        ConstantWriterEmpty cw = new ConstantWriterEmpty();
-        ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
-        IntBiMap<InsnNode> pcRev = new IntBiMap<>(size());
-
-        for (int i = 0; i < size(); i++) {
-            InsnNode node = get(i);
-            pcRev.putByValue(w.list.pos(), node);
-            int size = node.nodeSize();
-            if (size <= 0) {
-                node.toByteArray(cw, w);
-            } else {
-                w.list.pos(w.list.pos() + size);
-            }
-        }
-
-        pcRev.putByValue(w.list.pos(), MARKER);
-
-        add(MARKER);
-
-        return pcRev;
+        return AttrCode.reIndex(this, new ConstantWriterEmpty(), new IntBiMap<>());
     }
 
     public void removeRange(int fromIndex, int toIndex) {

@@ -28,12 +28,12 @@ package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantWriter;
+import roj.collect.IIntMap;
 import roj.collect.IntMap;
 import roj.collect.LinkedIntMap;
 import roj.util.ByteWriter;
 
 import java.util.PrimitiveIterator;
-import java.util.function.ToIntFunction;
 
 /**
  * No description provided
@@ -72,11 +72,11 @@ public final class SwitchInsnNode extends InsnNode {
     public InsnNode         def;
     public IntMap<InsnNode> switcher;
 
-    private ToIntFunction<InsnNode> pcRev;
+    private IIntMap<InsnNode> pcRev;
 
     private byte pad = -1;
 
-    public void pad(int codeLength, ToIntFunction<InsnNode> pcRev) {
+    public void pad(int codeLength, IIntMap<InsnNode> pcRev) {
         this.pad = (byte) (3 - (codeLength & 3));
         this.pcRev = pcRev;
     }
@@ -97,10 +97,16 @@ public final class SwitchInsnNode extends InsnNode {
             throw new IllegalStateException();
         }
 
-        ToIntFunction<InsnNode> pcRev = this.pcRev;
-        int self = pcRev.applyAsInt(this);
+        IIntMap<InsnNode> pcRev = this.pcRev;
+        int self = pcRev.getInt(this);
 
-        w.writeByte(code).list.pos(w.list.pos() + pad);
+        // 共享... 问题在这
+        byte[] data = w.writeByte(code).list.list;
+        int pos = w.list.pos();
+        w.list.pos(pos + pad);
+        for (int i = 0; i < pad; i++) {
+            data[pos++] = 0;
+        }
         if (this.code == Opcodes.TABLESWITCH) {
             int lo = Integer.MAX_VALUE;
             int hi = Integer.MIN_VALUE;
@@ -109,17 +115,21 @@ public final class SwitchInsnNode extends InsnNode {
                 if (val > hi) hi = val;
                 if (val < lo) lo = val;
             }
-            w.writeInt(pcRev.applyAsInt(validate(def)) - self)
+
+            if (hi <= lo)
+                throw new IllegalArgumentException();
+
+            w.writeInt(pcRev.getInt(validate(def)) - self)
                     .writeInt(lo).writeInt(hi);
             for (InsnNode node : switcher.values()) {
-                w.writeInt(pcRev.applyAsInt(validate(node)) - self);
+                w.writeInt(pcRev.getInt(validate(node)) - self);
             }
         } else {
-            w.writeInt(pcRev.applyAsInt(validate(def)) - self)
+            w.writeInt(pcRev.getInt(validate(def)) - self)
                     .writeInt(switcher.size());
             for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
                 w.writeInt(entry.getKey())
-                        .writeInt(pcRev.applyAsInt(validate(entry.getValue())) - self);
+                        .writeInt(pcRev.getInt(validate(entry.getValue())) - self);
             }
         }
 

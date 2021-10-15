@@ -25,14 +25,16 @@
  */
 package ilib.asm.fasterforge;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+import roj.collect.MyHashSet;
+
 import net.minecraft.launchwrapper.Launch;
+
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.libraries.LibraryManager;
 import net.minecraftforge.fml.relauncher.libraries.ModList;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.MyHashSet;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -57,7 +59,7 @@ public class NiximModFind extends LibraryManager {
     @Shadow("FILE_NAME_SORTER_INSENSITVE")
     private static Comparator<File> FILE_NAME_SORTER_INSENSITVE;
 
-    @RemapTo("gatherLegacyCanidates")
+    @Inject("gatherLegacyCanidates")
     @SuppressWarnings("unchecked")
     public static List<File> gatherLegacyCanidates(File mcDir) {
         MyHashSet<File> list = new MyHashSet<>();

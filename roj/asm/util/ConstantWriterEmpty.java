@@ -25,6 +25,9 @@
  */
 package roj.asm.util;
 
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstUTF;
+
 /**
  * 空着的ConstWriterr
  *
@@ -106,5 +109,15 @@ public final class ConstantWriterEmpty extends ConstantWriter {
     @Override
     public int getUtfId(String msg) {
         return 1;
+    }
+
+    @Override
+    public <T extends Constant> T reset(T c) {
+        return c;
+    }
+
+    @Override
+    public CstUTF getUtf(String msg) {
+        return super.getUtf(msg);
     }
 }

@@ -32,7 +32,7 @@ package roj.asm.visitor;
  * @version 0.1
  * @since 2021/10/4 12:35
  */
-public final class AsIsAttributeVisitor extends AttributeVisitor {
+public class AsIsAttributeVisitor extends AttributeVisitor {
     public AsIsAttributeVisitor() {
         super();
     }

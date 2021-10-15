@@ -27,8 +27,8 @@ package ilib.asm.nixim;
 
 import ilib.asm.util.MCHooks;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 
 import net.minecraft.command.CommandResultStats;
@@ -84,7 +84,7 @@ public abstract class NiximRelAABB extends Entity {
         return list;
     }
 
-    @RemapTo("func_189511_e")
+    @Inject("func_189511_e")
     public NBTTagCompound writeToNBT(NBTTagCompound tag) {
         try {
             MCHooks.writeAABB(this, tag);
@@ -164,7 +164,7 @@ public abstract class NiximRelAABB extends Entity {
         }
     }
 
-    @RemapTo("func_70020_e")
+    @Inject("func_70020_e")
     public void readFromNBT(NBTTagCompound tag) {
         try {
             NBTTagList pos = tag.getTagList("Pos", 6);

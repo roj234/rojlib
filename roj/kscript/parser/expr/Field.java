@@ -81,7 +81,7 @@ public class Field implements LoadExpression {
         ctx.list.add(new LoadConstInsnNode(Opcodes.LDC, new CstUTF("name")));
         if(delete) {
             ctx.list.add(NodeCache.a_field_0());
-            ctx.list.add(noRet ? NodeHelper.cached(Opcodes.POP) : NodeCache.a_asBool_1());
+            ctx.list.add(noRet ? NodeHelper.npc(Opcodes.POP) : NodeCache.a_asBool_1());
         } else {
             ctx.list.add(NodeCache.a_field_1());
         }

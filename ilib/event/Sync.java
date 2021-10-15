@@ -32,13 +32,6 @@ import ilib.network.IMessageHandler;
 import ilib.network.MessageContext;
 import ilib.util.TextHelperM;
 import ilib.util.TimeUtil;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent;
-import net.minecraftforge.fml.relauncher.Side;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToLongMap;
@@ -46,6 +39,15 @@ import roj.io.FileUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.util.text.TextComponentString;
+
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent;
+import net.minecraftforge.fml.relauncher.Side;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -99,8 +101,8 @@ public class Sync {
 
         if(ImpLib.isClient) return;
         MinecraftForge.EVENT_BUS.register(this);
-        SYNC.registerMessage(packetMD5 = new FileMD5(this), FileMD5.class, FileMD5::new, 0, Side.CLIENT);
-        SYNC.registerMessage(new RequestFile(this), RequestFile.class, RequestFile::new, 1, null);
+        SYNC.registerMessage(packetMD5 = new FileMD5(this), FileMD5.class, 1, Side.CLIENT);
+        SYNC.registerMessage(new RequestFile(this), RequestFile.class, 2, null);
     }
 
     MyHashSet<EntityPlayer> replied = new MyHashSet<>();

@@ -26,18 +26,19 @@
 package ilib.asm.nixim.client;
 
 import ilib.asm.util.IFontRenderer;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.client.settings.GameSettings;
-import net.minecraft.util.ResourceLocation;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.opengl.text.FontTex;
 import roj.opengl.text.TextRenderer;
 import roj.opengl.vertex.VertexBuilder;
 import roj.text.TextUtil;
+
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.texture.TextureManager;
+import net.minecraft.client.settings.GameSettings;
+import net.minecraft.util.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,18 +61,18 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
     @Shadow("field_78293_l")
     boolean unicodeFlag;
 
-    @RemapTo("<init>")
+    @Inject("<init>")
     public NiximFontRenderer(GameSettings g, ResourceLocation l, TextureManager tx, boolean u) {
         super(g, l, tx, u);
         setFont(new FontTex("黑体-20"));
     }
 
-    @RemapTo("func_78255_a")
+    @Inject("func_78255_a")
     private void renderStringAtPos(String text, boolean shadow) {
         posX = rojTextRender.i_render(text, shadow, posX, posY);
     }
 
-    @RemapTo("func_78255_a")
+    @Inject("func_78255_a")
     public int getStringWidth(String text) {
         if (text == null || text.length() == 0) {
             return 0;
@@ -103,17 +104,17 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
         }
     }
 
-    @RemapTo("func_78263_a")
+    @Inject("func_78263_a")
     public int getCharWidth(char c) {
         return rojTextRender.getCharWidth(c);
     }
 
-    @RemapTo("func_181559_a")
+    @Inject("func_181559_a")
     private float renderChar(char ch, boolean italic) {
         throw new NoSuchMethodError();
     }
 
-    @RemapTo("func_78266_a")
+    @Inject("func_78266_a")
     protected float renderDefaultChar(int ch, boolean italic) {
         return rojTextRender.i_renderChar((char) ch, italic ? 1 : 0);
     }
@@ -123,17 +124,17 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
         throw new NoSuchMethodError();
     }
 
-    @RemapTo("func_78277_a")
+    @Inject("func_78277_a")
     protected float renderUnicodeChar(char ch, boolean italic) {
         return rojTextRender.i_renderChar(ch, italic ? 1 : 0);
     }
 
-    @RemapTo("doDraw")
+    @Inject("doDraw")
     protected void doDraw(float f) {
         throw new NoSuchMethodError();
     }
 
-    @RemapTo("func_78271_c")
+    @Inject("func_78271_c")
     public List<String> listFormattedStringToWidth(String str, int wrapWidth) {
         List<String> list = new ArrayList<>();
         wrapFormattedStringToWidth__IL(str, wrapWidth, list);
@@ -157,7 +158,7 @@ public class NiximFontRenderer extends FontRenderer implements IFontRenderer {
         }
     }
 
-    @RemapTo("func_78280_d")
+    @Inject("func_78280_d")
     String wrapFormattedStringToWidth(String str, int wrapWidth) {
         StringBuilder sb = new StringBuilder();
 

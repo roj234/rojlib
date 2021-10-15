@@ -26,7 +26,7 @@
 package ilib.asm.nixim.client;
 
 import org.lwjgl.opengl.GL11;
-import roj.asm.nixim.RemapTo;
+import roj.asm.nixim.Inject;
 
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -55,7 +55,7 @@ public abstract class NiximSelectionBox extends RenderGlobal {
     }
 
     @Override
-    @RemapTo("func_72731_b")
+    @Inject("func_72731_b")
     public void drawSelectionBox(final EntityPlayer player, final RayTraceResult result, final int subID, final float partialTicks) {
         final World world = player.world;
         if (subID == 0 && result.typeOfHit == RayTraceResult.Type.BLOCK) {

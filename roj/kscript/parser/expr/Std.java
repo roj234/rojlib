@@ -94,7 +94,7 @@ public final class Std implements Expression {
             throw new NotStatementException();
 
         // $this, argList
-        ctx.list.add(NodeHelper.cached(type == 1 ? Opcodes.ALOAD_1 : Opcodes.ALOAD_2));
+        ctx.list.add(NodeHelper.npc(type == 1 ? Opcodes.ALOAD_1 : Opcodes.ALOAD_2));
     }
 
     @Override

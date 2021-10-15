@@ -40,7 +40,7 @@ import java.util.function.Supplier;
  * @version 0.1
  * @since 2021/4/21 22:51
  */
-public class IntMap<V> implements CItrMap<IntMap.Entry<V>> {
+public class IntMap<V> implements CItrMap<IntMap.Entry<V>>, IIntMap<V> {
     public static final Object NOT_USING = new Object() {
         @Override
         public String toString() {

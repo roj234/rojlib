@@ -35,14 +35,14 @@ import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.NOT_USING;
 
-public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
+public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V>, IIntMap<V> {
     public void setNullId(int nullId) {
         this.nullId = nullId;
     }
 
     @Override
     public int applyAsInt(V value) {
-        return getByValue(value);
+        return getInt(value);
     }
 
     public static class Entry<V> extends IntMap.Entry<V> {
@@ -61,68 +61,7 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
         }
     }
 
-    public static final class Inverse<x> {
-        private final IntBiMap<x> parent;
-
-        private Inverse(IntBiMap<x> parent) {
-            this.parent = parent;
-        }
-
-        public int size() {
-            return parent.size();
-        }
-
-        public boolean isEmpty() {
-            return parent.isEmpty();
-        }
-
-        public boolean containsKey(x key) {
-            return parent.containsValue(key);
-        }
-
-        public boolean containsValue(int key) {
-            return parent.containsKey(key);
-        }
-
-        public int get(x key) {
-            return parent.getByValue(key);
-        }
-
-        public int put(x key, int value) {
-            return parent.putByValue(value, key);
-        }
-
-        public int forcePut(x key, int value) {
-            return parent.forcePutByValue(value, key);
-        }
-
-        public int remove(x key) {
-            return parent.removeByValue(key);
-        }
-
-        public void clear() {
-            parent.clear();
-        }
-
-        public Set<x> keySet() {
-            return new Values<>(parent);
-        }
-
-        public Collection<Integer> values() {
-            return new KeySet<>(parent);
-        }
-
-        public Set<Entry<x>> entrySet() {
-            throw new UnsupportedOperationException();
-        }
-
-        public IntBiMap<x> flip() {
-            return parent;
-        }
-    }
-
-    protected Entry<?>[] entries;
-    protected Entry<?>[] valueEntries;
+    protected Entry<?>[] entries, valueEntries;
 
     protected int size = 0;
 
@@ -130,10 +69,6 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
 
     float loadFactor = 0.8f;
     int nullId = -1;
-
-    boolean unmodifiable = false;
-
-    private final Inverse<V> inverse = new Inverse<>(this);
 
     public IntBiMap() {
         this(16);
@@ -152,7 +87,7 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
     }
 
     public V find(V v) {
-        return getOrDefault(getByValue(v), v);
+        return getOrDefault(getInt(v), v);
     }
 
     public V getOrDefault(int key, V v) {
@@ -160,20 +95,8 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
         return entry == null ? v : entry.v;
     }
 
-    public Inverse<V> flip() {
-        return this.inverse;
-    }
-
     public boolean isEmpty() {
         return size == 0;
-    }
-
-    public void unmodifiable() {
-        this.unmodifiable = true;
-    }
-
-    @Deprecated
-    public void setNoRefreshList(boolean flag) {
     }
 
     public Set<Entry<V>> entrySet() {
@@ -271,8 +194,6 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
     }
 
     private int putByValue0(V v, int key, boolean replace) {
-        if (unmodifiable)
-            throw new IllegalStateException("Try to modify an unmodifiable map");
         if (size > length * loadFactor) {
             length <<= 1;
             mask = length - 1;
@@ -334,8 +255,6 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
     }
 
     private V put0(int key, V v, boolean replace) {
-        if (unmodifiable)
-            throw new IllegalStateException("Try to modify an unmodifiable map");
         if (size > length * loadFactor) {
             length <<= 1;
             mask = length - 1;
@@ -388,8 +307,6 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
     }
 
     public V remove(int id) {
-        if (unmodifiable)
-            throw new IllegalStateException("Try to modify an unmodifiable map");
         Entry<V> entry = getKeyEntry(id);
         if (entry == null)
             return null;
@@ -398,8 +315,6 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
     }
 
     public int removeByValue(V v) {
-        if (unmodifiable)
-            throw new IllegalStateException("Try to modify an unmodifiable map");
         Entry<V> entry = getValueEntry(v);
         if (entry == null)
             return nullId;
@@ -407,7 +322,7 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
         return entry.k;
     }
 
-    public int getByValue(V key) {
+    public int getInt(V key) {
         Entry<V> entry = getValueEntry(key);
         return entry == null ? nullId : entry.k;
     }
@@ -425,8 +340,11 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
         return getValueEntry(v) != null;
     }
 
-    public void modifiable() {
-        this.unmodifiable = false;
+    @Override
+    @Deprecated
+    public Integer putInt(V key, int e) {
+        int i = putByValue0(key, e, false);
+        return i == nullId ? null : i;
     }
 
     public String toString() {
@@ -441,8 +359,6 @@ public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V> {
     }
 
     public void clear() {
-        if (unmodifiable)
-            throw new IllegalStateException("Try to modify an unmodifiable map");
         if (size == 0)
             return;
         size = 0;

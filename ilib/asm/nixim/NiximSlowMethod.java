@@ -29,6 +29,12 @@ import com.google.common.collect.ImmutableSetMultimap;
 import ilib.asm.util.MCHooks;
 import ilib.asm.util.MergedItr;
 import ilib.util.MutableVec;
+import org.apache.commons.lang3.mutable.MutableDouble;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.collect.FilterList;
+import roj.concurrent.OperationDone;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.init.Blocks;
@@ -37,13 +43,9 @@ import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 import net.minecraft.world.border.WorldBorder;
 import net.minecraft.world.chunk.Chunk;
+
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.event.ForgeEventFactory;
-import org.apache.commons.lang3.mutable.MutableDouble;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.collect.FilterList;
-import roj.concurrent.OperationDone;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -63,7 +65,7 @@ public abstract class NiximSlowMethod extends World {
         super(null, null, null, null, false);
     }
 
-    @RemapTo("func_191504_a")
+    @Inject("func_191504_a")
     private boolean getCollisionBoxes(@Nullable Entity entityIn, AxisAlignedBB aabb, boolean canOutWorld, @Nullable List<AxisAlignedBB> outList) {
         if (outList == null)
             throw new NullPointerException("outList");
@@ -130,7 +132,7 @@ public abstract class NiximSlowMethod extends World {
         }
     }
 
-    @RemapTo("func_184143_b")
+    @Inject("func_184143_b")
     public boolean collidesWithAnyBlock(AxisAlignedBB aabb) {
         int minX = MathHelper.floor(aabb.minX) - 1;
         int maxX = MathHelper.ceil(aabb.maxX) + 1;
@@ -178,7 +180,7 @@ public abstract class NiximSlowMethod extends World {
         }
     }
 
-    @RemapTo("func_72917_a")
+    @Inject("func_72917_a")
     public boolean checkNoEntityCollision(AxisAlignedBB aabb, @Nullable Entity entityIn) {
         int minX = MathHelper.floor((aabb.minX - MAX_ENTITY_RADIUS) / 16);
         int maxX = MathHelper.ceil((aabb.maxX + MAX_ENTITY_RADIUS) / 16);
@@ -202,7 +204,7 @@ public abstract class NiximSlowMethod extends World {
         return true;
     }
 
-    @RemapTo("func_72842_a")
+    @Inject("func_72842_a")
     public float getBlockDensity(Vec3d vec, AxisAlignedBB bb) {
         final double dx = bb.maxX - bb.minX;
         final double dy = bb.maxY - bb.minY;
@@ -243,7 +245,7 @@ public abstract class NiximSlowMethod extends World {
     }
 
     @Override
-    @RemapTo("getPersistentChunkIterable")
+    @Inject("getPersistentChunkIterable")
     public Iterator<Chunk> getPersistentChunkIterable(Iterator<Chunk> chunkIterator) {
         ImmutableSetMultimap<ChunkPos, ForgeChunkManager.Ticket> persistentChunksFor = getPersistentChunks();
         Chunk[] chunks;
@@ -268,7 +270,7 @@ public abstract class NiximSlowMethod extends World {
     }
 
     @Nullable
-    @RemapTo("func_72857_a")
+    @Inject("func_72857_a")
     public <T extends Entity> T findNearestEntityWithinAABB(Class<? extends T> entityType, AxisAlignedBB aabb, T closestTo) {
         int minX = MathHelper.floor((aabb.minX - MAX_ENTITY_RADIUS) / 16);
         int maxX = MathHelper.ceil((aabb.maxX + MAX_ENTITY_RADIUS) / 16);

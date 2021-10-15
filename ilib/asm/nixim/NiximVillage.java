@@ -25,6 +25,12 @@
  */
 package ilib.asm.nixim;
 
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+import roj.collect.ToIntMap;
+
 import net.minecraft.entity.monster.EntityIronGolem;
 import net.minecraft.entity.passive.EntityVillager;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -32,11 +38,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.village.Village;
 import net.minecraft.village.VillageDoorInfo;
 import net.minecraft.world.World;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.ToIntMap;
 
 import java.util.List;
 import java.util.Map;
@@ -51,13 +52,13 @@ import java.util.UUID;
  */
 @Nixim("net.minecraft.village.Village")
 public class NiximVillage extends Village {
-    @RemapTo("<init>")
+    @Inject("<init>")
     public NiximVillage() {
         super();
         this.playerReputation = new ToIntMap<>();
     }
 
-    @RemapTo("<init>")
+    @Inject("<init>")
     public NiximVillage(World worldIn) {
         super(worldIn);
         this.playerReputation = new ToIntMap<>();
@@ -83,7 +84,7 @@ public class NiximVillage extends Village {
     @Copy
     AxisAlignedBB cacheBox;
 
-    @RemapTo("func_75572_i")
+    @Inject("func_75572_i")
     private void updateNumVillagers() {
         if (cacheBox == null) {
             cacheBox = new AxisAlignedBB(this.center.getX() - this.villageRadius, this.center.getY() - 4, this.center.getZ() - this.villageRadius,
@@ -97,7 +98,7 @@ public class NiximVillage extends Village {
         }
     }
 
-    @RemapTo("func_75579_h")
+    @Inject("func_75579_h")
     private void updateNumIronGolems() {
         if (cacheBox == null) {
             cacheBox = new AxisAlignedBB(this.center.getX() - this.villageRadius, this.center.getY() - 4, this.center.getZ() - this.villageRadius,
@@ -108,7 +109,7 @@ public class NiximVillage extends Village {
         this.numIronGolems = list.size();
     }
 
-    @RemapTo("func_75573_l")
+    @Inject("func_75573_l")
     private void updateVillageRadiusAndCenter() {
         int i = this.villageDoorInfoList.size();
         if (i == 0) {

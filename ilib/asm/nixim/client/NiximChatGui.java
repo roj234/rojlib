@@ -26,18 +26,19 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ChatLine;
 import net.minecraft.client.gui.GuiNewChat;
 import net.minecraft.client.gui.GuiUtilRenderComponents;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.text.ITextComponent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 import java.util.Iterator;
 import java.util.List;
@@ -69,7 +70,7 @@ public abstract class NiximChatGui extends GuiNewChat {
     @Shadow("field_146247_f")
     Minecraft mc;
 
-    @RemapTo("func_146237_a")
+    @Inject("func_146237_a")
     private void setChatLine(ITextComponent text, int newId, int updateCounter, boolean noHistory) {
         if (newId != 0) {
             this.deleteChatLine(newId);

@@ -31,8 +31,9 @@ import org.objectweb.asm.Type;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Inject.At;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.anno.Annotation;
@@ -72,9 +73,16 @@ public class NiximASMModParser extends ASMModParser implements ItfGet {
     @Shadow("interfaces")
     private Set<String> interfaces;
 
-    @RemapTo(value = "<init>", useSuperInject = false)
-    public NiximASMModParser(InputStream stream) throws IOException {
+    NiximASMModParser() throws IOException {
         super(null);
+    }
+
+    void $$$CONSTRUCTOR() {}
+
+    @Inject(value = "<init>", at = At.REPLACE)
+    public void remapInit(InputStream stream) throws IOException {
+        $$$CONSTRUCTOR();
+
         annotations1 = new LinkedList<>();
         interfaces = new HashSet<>();
         named = new HashMap<>();
@@ -148,12 +156,12 @@ public class NiximASMModParser extends ASMModParser implements ItfGet {
         return this.named;
     }
 
-    @RemapTo("toString")
+    @Inject("toString")
     public String toString() {
         return MoreObjects.toStringHelper("MIASMAnnotationDiscover").add("className", this.asmType.getClassName()).add("classVersion", this.classVersion).add("superName", this.asmSuperType.getClassName()).add("annotations", this.annotations1).toString();
     }
 
-    @RemapTo("sendToTable")
+    @Inject("sendToTable")
     public void sendToTable(ASMDataTable table, ModCandidate candidate) {
         String normName = asmType.getClassName();
         for (Map.Entry<String, List<Annotation>> entry : named.entrySet()) {
@@ -165,7 +173,7 @@ public class NiximASMModParser extends ASMModParser implements ItfGet {
             table.addASMData(candidate, intf, asmType.getInternalName(), null, null);
     }
 
-    @RemapTo("getAnnotations")
+    @Inject("getAnnotations")
     @Override
     public LinkedList<ModAnnotation> getAnnotations() {
         LinkedList<Annotation> list = new LinkedList<>(this.annotations1);

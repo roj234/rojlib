@@ -26,15 +26,16 @@
 package ilib.asm.nixim.client.bug;
 
 import ilib.ClientProxy;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.math.MathHelper;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -71,7 +72,7 @@ class SliderApply extends GuiButton {
         }
     }
 
-    @RemapTo("func_146119_b")
+    @Inject("func_146119_b")
     protected void mouseDragged(Minecraft mc, int mouseX, int mouseZ) {
         if (this.visible) {
             if (this.dragging) {
@@ -87,7 +88,7 @@ class SliderApply extends GuiButton {
         }
     }
 
-    @RemapTo("func_146116_c")
+    @Inject("func_146116_c")
     public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
         if (super.mousePressed(mc, mouseX, mouseY)) {
             float sliderValue = (float) (mouseX - (this.x + 4)) / (float) (this.width - 8);

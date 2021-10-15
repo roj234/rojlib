@@ -25,12 +25,13 @@
  */
 package ilib.asm.nixim;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.item.Item;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -44,7 +45,7 @@ class NiximPickaxe {
     @Shadow("field_77862_b")
     Item.ToolMaterial toolMaterial;
 
-    @RemapTo("func_150897_b")
+    @Inject("func_150897_b")
     public boolean canHarvestBlock(IBlockState state) {
         if ("pickaxe".equals(state.getBlock().getHarvestTool(state)) &&
                 state.getBlock().getHarvestLevel(state) >= this.toolMaterial.getHarvestLevel())

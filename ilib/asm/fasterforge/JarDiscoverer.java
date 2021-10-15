@@ -32,13 +32,9 @@ import ilib.asm.Preloader;
 import ilib.asm.fasterforge.anc.ClassInfo;
 import ilib.asm.fasterforge.anc.ItfGet;
 import ilib.asm.fasterforge.anc.JarInfo;
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
@@ -50,6 +46,11 @@ import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -154,7 +155,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
     @Copy
     static Matcher myMatcher;
 
-    @RemapTo("discover")
+    @Inject("discover")
     public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table) {
         if (!init) {
             init();

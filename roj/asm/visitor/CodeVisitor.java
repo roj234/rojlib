@@ -102,6 +102,12 @@ public class CodeVisitor extends Holder {
         codeAttrAmountIndex = bw.list.pos();
     }
 
+    protected void visitCodeNoWrap(int stackSize, int localSize) {
+        codeIndex = 0;
+        bw.writeShort(stackSize).writeShort(localSize).writeInt(0);
+        codeAttrAmountIndex = bw.list.pos();
+    }
+
     public void visitBytecode(int len) {
         ByteReader r = this.br;
         ConstantPool pool = this.cp;
@@ -238,9 +244,12 @@ public class CodeVisitor extends Holder {
                     }
                     break;
                 case TABLESWITCH:
+                    // align
+                    r.index += (4 - ((r.index - begin) & 3)) & 3;
                     parse_table_switch(r);
                     break;
                 case LOOKUPSWITCH:
+                    r.index += (4 - ((r.index - begin) & 3)) & 3;
                     parse_lookup_switch(r);
                     break;
                 default:
@@ -271,9 +280,9 @@ public class CodeVisitor extends Holder {
     public void ldc(byte code, Constant c) {
         int cpi = cw.reset(c).getIndex();
         if (code == Opcodes.LDC2_W || (code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
-            bw.writeByte(code).writeShort(c.getIndex());
+            bw.writeByte(code).writeShort(cpi);
         } else {
-            bw.writeByte(code).writeByte((byte) c.getIndex());
+            bw.writeByte(code).writeByte((byte) cpi);
         }
     }
 
@@ -319,9 +328,6 @@ public class CodeVisitor extends Holder {
     }
 
     public void parse_table_switch(ByteReader r) {
-        while ((r.index & 3) != 0) {
-            r.index++;
-        }
         align_out();
 
         int def = r.readInt();
@@ -345,15 +351,10 @@ public class CodeVisitor extends Holder {
 
     public void align_out() {
         ByteList out = bw.list;
-        while ((out.pos() & 3) != 0) {
-            out.pos(out.pos() + 1);
-        }
+        out.pos(out.pos() + (3 - ((out.pos() - codeAttrAmountIndex - 4) & 3)));
     }
 
     public void parse_lookup_switch(ByteReader r) {
-        while ((r.index & 3) != 0) {
-            r.index++;
-        }
         align_out();
 
         int def = r.readInt();
@@ -417,8 +418,10 @@ public class CodeVisitor extends Holder {
         bw.list.pos(codeAttrAmountIndex);
         bw.writeShort(codeAttrAmount);
 
-        bw.list.pos(codeIndex - 4);
-        bw.writeInt(pos - codeIndex);
+        if (codeIndex > 0) {
+            bw.list.pos(codeIndex - 4);
+            bw.writeInt(pos - codeIndex);
+        }
         bw.list.pos(pos);
     }
 }

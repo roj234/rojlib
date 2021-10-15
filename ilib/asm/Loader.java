@@ -37,7 +37,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.spongepowered.asm.mixin.MixinEnvironment;
-import roj.asm.transform.AccessTransformer;
+import roj.asm.AccessTransformer;
 import roj.io.DummyOutputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;

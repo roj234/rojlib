@@ -27,6 +27,10 @@ package ilib.asm.nixim;
 
 import ilib.asm.util.MCHooks;
 import ilib.util.PlayerUtil;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.crash.CrashReport;
@@ -37,10 +41,8 @@ import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
+
 import net.minecraftforge.fml.common.FMLLog;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -91,7 +93,7 @@ public abstract class NiximChunkLight extends Chunk {
 
     }
 
-    @RemapTo("func_150809_p")
+    @Inject("func_150809_p")
     public void checkLight() {
         int depth = MCHooks.getStackDepth();
         if (depth > 100) {
@@ -147,7 +149,7 @@ public abstract class NiximChunkLight extends Chunk {
 
     }
 
-    @RemapTo("func_76603_b")
+    @Inject("func_76603_b")
     public void generateSkylightMap() {
         int i = this.getTopFilledSegment();
         this.heightMapMinimum = 2147483647;
@@ -198,7 +200,7 @@ public abstract class NiximChunkLight extends Chunk {
         this.dirty = true;
     }
 
-    @RemapTo("func_180700_a")
+    @Inject("func_180700_a")
     public void checkLightSide(EnumFacing facing) {
         if (this.isTerrainPopulated) {
             int l;
@@ -231,7 +233,7 @@ public abstract class NiximChunkLight extends Chunk {
         }
     }
 
-    @RemapTo("func_150803_c")
+    @Inject("func_150803_c")
     private void recheckGaps(boolean onlyOne) {
         this.world.profiler.startSection("recheckGaps");
         if (this.world.isAreaLoaded(new BlockPos(this.x * 16 + 8, 0, this.z * 16 + 8), 16)) {
@@ -272,7 +274,7 @@ public abstract class NiximChunkLight extends Chunk {
         this.world.profiler.endSection();
     }
 
-    @RemapTo("func_76599_g")
+    @Inject("func_76599_g")
     private void checkSkylightNeighborHeight(int x, int z, int maxValue) {
         int y = this.world.getHeight(x, z);
         if (y > maxValue) {
@@ -282,7 +284,7 @@ public abstract class NiximChunkLight extends Chunk {
         }
     }
 
-    @RemapTo("func_76609_d")
+    @Inject("func_76609_d")
     private void updateSkylightNeighborHeight(int x, int z, int startY, int endY) {
         BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain(x, 0, z);
         if (endY > startY && this.world.isAreaLoaded(pos, 16)) {
@@ -295,7 +297,7 @@ public abstract class NiximChunkLight extends Chunk {
         pos.release();
     }
 
-    @RemapTo("func_76615_h")
+    @Inject("func_76615_h")
     private void relightBlock(int x, int y, int z) {
         int cachedY = this.heightMap[z << 4 | x] & 255;
         int y1 = cachedY;
@@ -389,7 +391,7 @@ public abstract class NiximChunkLight extends Chunk {
 
     }
 
-    @RemapTo("func_177440_h")
+    @Inject("func_177440_h")
     public BlockPos getPrecipitationHeight(BlockPos pos) {
         int dx = pos.getX() & 15;
         int dz = pos.getZ() & 15;
@@ -420,7 +422,7 @@ public abstract class NiximChunkLight extends Chunk {
         return new BlockPos(pos.getX(), this.precipitationHeightMap[i], pos.getZ());
     }
 
-    @RemapTo("func_150808_b")
+    @Inject("func_150808_b")
     private int getBlockLightOpacity(int x, int y, int z) {
         IBlockState state = this.getBlockState(x, y, z);
         if (!this.loaded) {
@@ -433,7 +435,7 @@ public abstract class NiximChunkLight extends Chunk {
         }
     }
 
-    @RemapTo("func_76594_o")
+    @Inject("func_76594_o")
     public void enqueueRelightChecks() {
         if (this.queuedLightChecks < 4096) {
             BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain();

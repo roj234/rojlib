@@ -25,14 +25,16 @@
  */
 package ilib.asm.nixim.client;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Inject.At;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.profiler.Profiler;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 /**
  * No description provided
@@ -47,9 +49,6 @@ public abstract class NiximNoShitSound extends World {
         super(p_i45749_1_, p_i45749_2_, p_i45749_3_, p_i45749_4_, p_i45749_5_);
     }
 
-    @RemapTo(value = "func_147467_a", useSuperInject = false)
-    protected void playMoodSoundAndCheckLight(int p_147467_1_, int p_147467_2_, Chunk chunkIn) {
-        super.playMoodSoundAndCheckLight(p_147467_1_, p_147467_2_, chunkIn);
-    }
-
+    @Inject(value = "func_147467_a", at = At.REMOVE)
+    protected void playMoodSoundAndCheckLight(int p_147467_1_, int p_147467_2_, Chunk chunkIn) {}
 }

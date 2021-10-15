@@ -1,18 +1,23 @@
 package roj.asm.mapper;
 
-import roj.asm.cst.Constant;
-import roj.asm.cst.CstRef;
+import roj.asm.Opcodes;
+import roj.asm.Parser;
+import roj.asm.cst.*;
 import roj.asm.mapper.obf.policy.*;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
+import roj.asm.tree.Clazz;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.insn.LoadConstInsnNode;
+import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.tree.simple.FieldSimple;
 import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.*;
-import roj.asm.util.AttributeList;
-import roj.asm.util.IGeneric;
+import roj.asm.util.*;
 import roj.asm.visitor.CodeVisitor;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -25,7 +30,11 @@ import roj.config.data.CMapping;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.ZipFileWriter;
+import roj.reflect.ClassDefiner;
+import roj.reflect.DirectAccessor;
 import roj.text.CharList;
+import roj.util.ByteList;
+import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
 import java.io.File;
@@ -133,12 +142,8 @@ public final class SimpleObfuscator extends Obfuscator {
                     obf.classExclusions.addAll(map.get("keepClasses").asList().asStringList());
                     for (CEntry entry : map.get("keep").asList()) {
                         CList list = entry.asList();
-                        if(list.size() == 3) {
-                            obf.libMethods.add(new Desc(list.get(0).asString(), list.get(1).asString(), list.get(2).asString()));
-                        } else {
-                            // todo how to skip some fields
-                            //obf.libFields.add(new FlDesc(list.get(0).asString(), list.get(1).asString()));
-                        }
+                        Desc key = new Desc(list.get(0).asString(), list.get(1).asString(), list.get(2).asString());
+                        (key.param.indexOf('(') > 0 ? obf.m1.getMethodMap() : obf.m1.getFieldMap()).put(key, key.name);
                     }
                     obf.flags = map.getInteger("flag");
                     if(map.containsKey("seed"))
@@ -178,6 +183,7 @@ public final class SimpleObfuscator extends Obfuscator {
                     break;
                 case "evaluate":
                     obf.eval = true;
+                    break;
                 default:
                     throw new IllegalArgumentException("未知 " + args[i]);
             }
@@ -206,7 +212,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
         for (int i = 0; i < arr.size(); i++) {
             Context ctx = arr.get(i);
-            zfw.writeNamed(ctx.getName(), ctx.get(true));
+            zfw.writeNamed(ctx.getName(), ctx.getCompressedShared());
         }
         zfw.finish();
 
@@ -302,6 +308,7 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     public void obfuscate(List<Context> arr) {
+        m2.rewrite = false;
         classes.clear();
         super.obfuscate(arr);
     }
@@ -314,8 +321,125 @@ public final class SimpleObfuscator extends Obfuscator {
             }
     }
 
+    static StackTraceElement[] syncStackTrace = new StackTraceElement[2];
+    public static StackTraceElement[] _syncGetStackTrace() {
+        return syncStackTrace;
+    }
+
     @Override
     protected void afterMapCode(List<Context> arr) {
+        eva:
+        if (eval) {
+            MyCodeVisitor mcv = new MyCodeVisitor();
+            for (int i = 0; i < arr.size(); i++) {
+                ConstantData data = arr.get(i).getData();
+                List<MethodSimple> methods = data.methods;
+
+                for (int j = 0; j < methods.size(); j++) {
+                    MethodSimple m = methods.get(j);
+                    AttrUnknown code0 = (AttrUnknown) m.attributes.getByName("Code");
+                    if(code0 == null) continue;
+                    mcv.initNil(code0.getRawData());
+                    mcv.visit(data.cp);
+                }
+            }
+            if (mcv.methods.isEmpty()) {
+                System.out.println("没有找到疑似字符串解密方法");
+                break eva;
+            }
+            Desc desc = new Desc("", "");
+            desc.param = "(Ljava/lang/String;)Ljava/lang/String;";
+            for (int i = 0; i < arr.size(); i++) {
+                ConstantData data = arr.get(i).getData();
+                List<MethodSimple> methods = data.methods;
+
+                desc.owner = m1.classMap.getOrDefault(data.name, data.name);
+                for (int j = methods.size() - 1; j >= 0; j--) {
+                    MethodSimple m = methods.get(j);
+                    if (!m.type.getString().equals("(Ljava/lang/String;)Ljava/lang/String;")) continue;
+                    desc.name = m.name.getString();
+                    if (mcv.methods.containsKey(desc)) {
+                        Clazz dg = new Clazz(data.version, AccessFlag.PUBLIC | AccessFlag.SUPER_OR_SYNC,
+                                             "roj/reflect/gen" + Math.abs(System.nanoTime() % 9999999),
+                                             "java/lang/Object");
+                        dg.methods.add(new Method(data, m));
+                        InsnList ins = dg.methods.get(0).code.instructions;
+                        for (int k = 0; k < ins.size(); k++) {
+                            InsnNode node = ins.get(k);
+                            if(node.nodeType() == InsnNode.T_INVOKE) {
+                                InvokeInsnNode cin = (InvokeInsnNode) node;
+                                if (cin.owner.equals("java/lang/Throwable") || (
+                                        cin.owner.startsWith("java/lang/") &&
+                                        cin.owner.endsWith("Exception"))) {
+                                    if (cin.name.equals("getStackTrace")) {
+                                        cin.code = Opcodes.INVOKESTATIC;
+                                        cin.owner = SimpleObfuscator.class.getName().replace('.', '/');
+                                        cin.name = "_syncGetStackTrace";
+                                        ins.add(k, NPInsnNode.of(Opcodes.POP));
+                                        System.out.println("找到stack trace 调用！");
+                                    }
+                                }
+                            }
+                        }
+                        ByteList sh = Parser.toByteArrayShared(dg);
+                        Class<?> df = ClassDefiner.INSTANCE.defineClassC(
+                                dg.name.replace('/', '.'),
+                                sh.list, 0, sh.pos());
+                        Decoder dar = DirectAccessor.builder(Decoder.class)
+                                .delegate(df, desc.name, "decode").build();
+                        mcv.methods.put(desc, dar);
+                        // 在这里删除了解密方法，也许可以不用删？
+                        methods.remove(j);
+                    }
+                }
+            }
+
+            MyHashSet<String> done = new MyHashSet<>();
+            boolean ch;
+            for (int i = 0; i < arr.size(); i++) {
+                ConstantData data = arr.get(i).getData();
+                List<MethodSimple> methods = data.methods;
+
+                ch = false;
+                for (int j = 0; j < methods.size(); j++) {
+                    MethodSimple m = methods.get(j);
+                    AttrUnknown code0 = (AttrUnknown) m.attributes.getByName("Code");
+                    if(code0 == null) continue;
+                    AttrCode code = new AttrCode(m, code0.getRawData(), data.cp);
+                    InsnList insn = code.instructions;
+                    for (int k = 0; k < insn.size(); k++) {
+                        InsnNode node = insn.get(k);
+                        if (node.nodeType() == InsnNode.T_LDC) {
+                            LoadConstInsnNode ldc = (LoadConstInsnNode) node;
+                            if (ldc.c.type() == CstType.STRING) {
+                                InsnNode next = insn.get(k + 1);
+                                if (next.nodeType() == InsnNode.T_INVOKE) {
+                                    InvokeInsnNode iin = (InvokeInsnNode) next;
+                                    if (iin.code == Opcodes.INVOKESTATIC && iin.rawParameters().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+                                        CstUTF utf = ((CstString) ldc.c).getValue();
+                                        if (!done.contains(utf.getString())) {
+                                            String value = mcv.tryDecode(iin, null, utf);
+                                            if (value != null) {
+                                                done.add(value);
+                                                utf.setString(value);
+                                            } else {
+                                                continue;
+                                            }
+                                        }
+                                        ch = true;
+                                        insn.remove(++k)._i_replace(ldc);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (ch) {
+                        m.attributes.putByName(code);
+                    }
+                }
+                done.clear();
+            }
+        }
         if((flags & FAKE_SIGN) != 0)
             for (int i = 0; i < arr.size(); i++) {
                 fakeSign(arr.get(i).getData());
@@ -324,24 +448,62 @@ public final class SimpleObfuscator extends Obfuscator {
             for (int i = 0; i < arr.size(); i++) {
                 codeSign(arr.get(i).getData());
             }
-        if (eval) {
-            // todo: find signature with (Ljava/lang/String;)Ljava/lang/String; and replace(delegate) to a custom Class
-            // todo then collect them (use code visitor) and replace
-        }
+    }
+
+    interface Decoder {
+        String decode(String str);
     }
 
     static class MyCodeVisitor extends CodeVisitor {
+        MyCodeVisitor() {
+            this.bw = new ByteWriter(null);
+            this.br = new ByteReader();
+            this.methods = new MyHashMap<>();
+            this.tmp = new Desc("", "");
+        }
+
+        public void initNil(ByteList data) {
+            this.br.refresh(data);
+            this.cw = new ConstantWriterEmpty();
+            this.bw.list = new ByteList.EmptyByteList();
+        }
+
         int ldcPos;
-        Constant ldcStr;
+        Desc tmp;
+        MyHashMap<Desc, Decoder> methods;
 
         @Override
         public void ldc(byte code, Constant c) {
-            super.ldc(code, c);
+            if (c.type() == CstType.STRING) {
+                ldcPos = br.index;
+            }
         }
 
         @Override
         public void invoke(byte code, CstRef method) {
-            super.invoke(code, method);
+            if (code == Opcodes.INVOKESTATIC && method.desc().getType().getString().equals("(Ljava/lang/String;)Ljava/lang/String;") && br.index == ldcPos + 3) {
+                methods.putIfAbsent(tmp.read(method).copy(), null);
+            }
+        }
+
+        public String tryDecode(InvokeInsnNode iin, MethodSimple caller, CstUTF utf) {
+            if (caller != null) {
+                syncStackTrace[syncStackTrace.length - 1] = new StackTraceElement(iin.owner.replace('/', '.'), iin.name, "SourceFile", -1);
+                // 如果用到了line的话那只好自己再弄啦，也就是麻烦一点，多读取一些属性的事
+                syncStackTrace[syncStackTrace.length - 2] = new StackTraceElement(caller.ownerClass().replace('/', '.'), caller.name(), "SourceFile", -1);
+            }
+            tmp.owner = iin.owner;
+            tmp.name = iin.name;
+            tmp.param = iin.rawParameters();
+            Decoder dec = methods.get(tmp);
+            if (dec != null)
+                try {
+                    return dec.decode(utf.getString());
+                } catch (Throwable e) {
+                    System.err.println("解密失败: ");
+                    e.printStackTrace();
+                }
+            return null;
         }
     }
 

@@ -318,11 +318,11 @@ public final class Interpreter {
 
         byte code = node.code;
         if (code >= ILOAD && code <= ALOAD_3) {
-            arg = NodeHelper.getIndex(node);
+            arg = NodeHelper.getVarId(node);
             if (code >= ILOAD_0)
                 code = (byte) (((code - ILOAD_0) / 4) + ILOAD);
         } else if (code >= ISTORE && code <= ASTORE_3) {
-            arg = NodeHelper.getIndex(node);
+            arg = NodeHelper.getVarId(node);
             if (code >= ISTORE_0)
                 code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
         } else {
@@ -1303,11 +1303,11 @@ public final class Interpreter {
 
             byte code = node.code;
             if (code >= ILOAD && code <= ALOAD_3) {
-                arg = NodeHelper.getIndex(node);
+                arg = NodeHelper.getVarId(node);
                 if (code >= ILOAD_0)
                     code = (byte) (((code - ILOAD_0) / 4) + ILOAD);
             } else if (code >= ISTORE && code <= ASTORE_3) {
-                arg = NodeHelper.getIndex(node);
+                arg = NodeHelper.getVarId(node);
                 if (code >= ISTORE_0)
                     code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
             } else {

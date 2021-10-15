@@ -93,7 +93,7 @@ public final class AEClientOwner extends AEClient {
         w.state = 4;
     }
 
-    public void run1() throws IOException {
+    private void run1() throws IOException {
         Socket remote = new Socket();
         remote.connect(server);
         WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), AE_SSL, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
@@ -117,7 +117,7 @@ public final class AEClientOwner extends AEClient {
                 }
                 buf.clear();
 
-                int heart = T_CLIENT_HEARTBEAT_INIT;
+                int heart = 0;
                 int except = -1;
                 Worker wk;
                 while (!shutdownRequested) {
@@ -132,7 +132,7 @@ public final class AEClientOwner extends AEClient {
                                 break conn;
                             }
                         }
-                        if(shutdownRequested) break conn;
+                        if(shutdownRequested || read < 0) break conn;
 
                         ByteList ob = this.ob;
                         for (Iterator<Worker> itr = channelById.values().iterator(); itr.hasNext(); ) {
@@ -216,11 +216,11 @@ public final class AEClientOwner extends AEClient {
                                     LockSupport.parkNanos(10);
                                 if(wk.lock.get() != ST_HANGUP) {
                                     // kill
-                                    r.index = 0;
+                                    r.index = 1;
                                     channelById.remove(r.readInt());
                                     buf.set(0, (byte) PS_KICK_SLAVE);
                                     writeAndFlush(channel, buf, 200);
-                                    syncPrint("错误! #" + wk.slaveId);
+                                    syncPrint("错误" + wk.lock.get() + " " + wk.alive + " #" + wk.slaveId);
                                 }
 
                                 wk.client.dataFlush();
@@ -286,7 +286,7 @@ public final class AEClientOwner extends AEClient {
                             workers.add(wk);
                             cb_onClientJoin(wk);
                             channelById.put(index, wk);
-                            wk.start();
+                            task.pushTask(wk);
                             syncPrint("分机连接 #" + index + ", " + wk.remoteIp);
                             buf.clear();
                             break;
@@ -348,7 +348,7 @@ public final class AEClientOwner extends AEClient {
                             }
                             break conn;
                     }
-                    heart = T_CLIENT_HEARTBEAT_RECV;
+                    heart = T_CLIENT_HEARTBEAT_TIME;
                 }
             }
             if(read < 0) {
@@ -375,7 +375,6 @@ public final class AEClientOwner extends AEClient {
     static final int ST_HANGUP         = 3;
 
     final class Worker extends AEClient.Worker {
-        int           slaveId;
         AtomicInteger lock;
         volatile boolean alive;
 
@@ -398,7 +397,7 @@ public final class AEClientOwner extends AEClient {
 
         @Override
         public String toString() {
-            return "Worker{" + "id=" + slaveId + ", ip='" + remoteIp + '\'' + '}';
+            return remoteIp + " #" + slaveId;
         }
 
         Worker(int slaveId, String remoteIp, WrappedSocket client) {

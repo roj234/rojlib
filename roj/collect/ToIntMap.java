@@ -35,7 +35,7 @@ import java.util.function.ToIntFunction;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
-public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>, ToIntFunction<K> {
+public class ToIntMap<K> implements CItrMap<ToIntMap.Entry<K>>, Map<K, Integer>, ToIntFunction<K>, IIntMap<K> {
     public int getInt(K key) {
         return getOrDefault(key, 0);
     }

@@ -25,6 +25,9 @@
  */
 package ilib.asm.nixim.bug;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -39,10 +42,9 @@ import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
+
 import net.minecraftforge.common.util.BlockSnapshot;
 import net.minecraftforge.event.ForgeEventFactory;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import javax.annotation.Nullable;
 
@@ -59,7 +61,7 @@ abstract class CrashDispenser extends World {
         super(saveHandlerIn, info, providerIn, profilerIn, client);
     }
 
-    @RemapTo("func_190527_a")
+    @Inject("func_190527_a")
     public boolean mayPlace(Block blockIn, BlockPos pos, boolean skipCollisionCheck, EnumFacing sidePlacedOn, @Nullable Entity placer) {
         if(!this.isValid(pos) || this.isOutsideBuildHeight(pos))
             return false;

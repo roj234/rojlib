@@ -25,6 +25,7 @@
  */
 package roj.mod;
 
+import roj.asm.AccessTransformer;
 import roj.asm.Parser;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
@@ -32,7 +33,6 @@ import roj.asm.mapper.ConstMapper.State;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.ResWriter;
-import roj.asm.transform.AccessTransformer;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;

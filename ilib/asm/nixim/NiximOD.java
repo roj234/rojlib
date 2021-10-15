@@ -26,8 +26,8 @@
 package ilib.asm.nixim;
 
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.IntList;
 import roj.collect.IntMap;
@@ -71,7 +71,7 @@ public class NiximOD extends OreDictionary {
     @Shadow("EMPTY_LIST")
     public static NonNullList<ItemStack> EMPTY_LIST;
 
-    @RemapTo("registerOreImpl")
+    @Inject("registerOreImpl")
     private static void registerOreImpl(String name, @Nonnull ItemStack ore) {
         if (!"Unknown".equals(name)) {
             if (ore.isEmpty()) {
@@ -108,7 +108,7 @@ public class NiximOD extends OreDictionary {
         }
     }
 
-    @RemapTo("rebakeMap")
+    @Inject("rebakeMap")
     public static void rebakeMap() {
         stackToId_1.clear();
 
@@ -143,12 +143,12 @@ public class NiximOD extends OreDictionary {
         return EMPTY_LIST;
     }
 
-    @RemapTo("getOres")
+    @Inject("getOres")
     public static NonNullList<ItemStack> getOres(String name, boolean alwaysCreateEntry) {
         return alwaysCreateEntry || nameToId_1.containsKey(name) ? getOres(getOreID(name)) : EMPTY_LIST;
     }
 
-    @RemapTo("getOreID")
+    @Inject("getOreID")
     public static int getOreID(String name) {
         int val = nameToId_1.getOrDefault(name, -1);
         if (val == -1) {
@@ -163,7 +163,7 @@ public class NiximOD extends OreDictionary {
         return val;
     }
 
-    @RemapTo("getOreIDs")
+    @Inject("getOreIDs")
     public static int[] getOreIDs(@Nonnull ItemStack stack) {
         if (stack.isEmpty()) {
             throw new IllegalArgumentException("Stack can not be invalid!");

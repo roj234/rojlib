@@ -35,10 +35,7 @@ import roj.util.FastThreadLocal;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
@@ -55,6 +52,12 @@ import java.util.concurrent.locks.LockSupport;
  * @since 2021/9/12 5:25
  */
 public class Util {
+    static {
+        try {
+            roj.misc.CpFilter.registerShutdownHook();
+        } catch (Error ignored) {}
+    }
+
     public static final String[] STATE_NAMES = {"握手", "连接", "运行", "错误", "断开", "结束", "cleanup"};
     public static final int WAIT        = 0;
     public static final int CONNECTED   = 1;
@@ -104,13 +107,11 @@ public class Util {
     });
 
     public static final boolean T_SERVER_HEARTBEAT = System.getProperty("ae.noHeartbeat") == null;
-    public static final int T_SERVER_HEARTBEAT_INIT = 5000;
-    public static final int T_SERVER_HEARTBEAT_RECV = 600000;
+    public static final int T_SERVER_HEART_TIME     = 10000;
 
-    public static final int T_CLIENT_HEARTBEAT_INIT = 5;
-    public static final int T_CLIENT_HEARTBEAT_RECV = 800;
-    public static final int T_CLIENT_HEARTBEAT_RETRY = 800;
-    public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 6000;
+    public static final int T_CLIENT_HEARTBEAT_TIME  = 2000;
+    public static final int T_CLIENT_HEARTBEAT_RETRY = 1000;
+    public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 2000;
 
     public static class SslDialog extends JDialog {
         private final JPasswordField inpPass;

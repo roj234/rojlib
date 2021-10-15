@@ -26,15 +26,16 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.stats.RecipeBook;
 import net.minecraft.stats.StatisticsManager;
 import net.minecraft.world.World;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 @Nixim("net.minecraft.client.entity.EntityPlayerSP")
 public abstract class NiximNPFix extends EntityPlayerSP {
@@ -50,7 +51,7 @@ public abstract class NiximNPFix extends EntityPlayerSP {
     /**
      * @author Nakido
      */
-    @RemapTo(value = "func_70636_d")
+    @Inject(value = "func_70636_d")
     public void onLivingUpdate() {
         if (Config.commandEverywhere) {
             this.inPortal = false;

@@ -248,8 +248,8 @@ public final class ASTree implements LineHandler {
                 Variable v = lets.get(j);
                 // cf: start include and end exclude
                 if (v.end != null) {
-                    cf.add(new Unioner.Wrap<>(v, v.start == null ? 0 : indexer.getByValue(v.start.replacement()),
-                                                  indexer.getByValue(v.end.replacement()) + 1));
+                    cf.add(new Unioner.Wrap<>(v, v.start == null ? 0 : indexer.getInt(v.start.replacement()),
+                                                  indexer.getInt(v.end.replacement()) + 1));
                 }
             }
 

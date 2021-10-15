@@ -163,6 +163,7 @@ public class AEGuiClientOwn extends JFrame {
     }
 
     public AEGuiClientOwn() {
+        UIUtil.setLogo(this, "logo.png");
         final JPanel panel1 = new JPanel();
         panel1.setLayout(new GridBagLayout());
         panel1.setBorder(

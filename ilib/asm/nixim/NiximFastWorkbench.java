@@ -29,8 +29,8 @@ import ilib.asm.util.MCHooks;
 import ilib.asm.util.MCHooks.RecipeCache;
 import ilib.util.PlayerUtil;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
@@ -50,7 +50,7 @@ import java.util.List;
  */
 @Nixim("net.minecraft.item.crafting.CraftingManager")
 public abstract class NiximFastWorkbench extends CraftingManager {
-    @RemapTo("func_82787_a")
+    @Inject("func_82787_a")
     public static ItemStack findMatchingResult(InventoryCrafting inv, World world) {
         IRecipe recipe = ((RecipeCache) inv).getRecipe();
 
@@ -63,7 +63,7 @@ public abstract class NiximFastWorkbench extends CraftingManager {
         return recipe == null ? null : recipe.getCraftingResult(inv);
     }
 
-    @RemapTo("func_192413_b")
+    @Inject("func_192413_b")
     public static IRecipe findMatchingRecipe(InventoryCrafting inv, World world) {
         IRecipe recipe = ((RecipeCache) inv).getRecipe();
 
@@ -76,7 +76,7 @@ public abstract class NiximFastWorkbench extends CraftingManager {
         return recipe;
     }
 
-    @RemapTo("func_180303_b")
+    @Inject("func_180303_b")
     public static NonNullList<ItemStack> getRemainingItems(InventoryCrafting inv, World world) {
         IRecipe recipe = ((RecipeCache) inv).getRecipe();
 

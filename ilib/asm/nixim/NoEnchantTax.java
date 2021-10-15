@@ -27,8 +27,8 @@ package ilib.asm.nixim;
 
 import com.mojang.authlib.GameProfile;
 import ilib.asm.util.MCHooks;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
@@ -47,7 +47,7 @@ abstract class NoEnchantTax extends EntityPlayer {
         super(worldIn, gameProfileIn);
     }
 
-    @RemapTo("func_192024_a")
+    @Inject("func_192024_a")
     public void onEnchant(ItemStack stack, int cost) {
         if(this.experienceLevel > 30 && cost == 30) {
              addScore(-MCHooks.ench30s);

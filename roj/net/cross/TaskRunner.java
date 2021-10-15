@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,23 +23,33 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.asm.nixim.client;
+package roj.net.cross;
 
-import ilib.Config;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
+import roj.concurrent.TaskExecutor;
+import roj.concurrent.TaskPool;
+import roj.concurrent.task.ITask;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2020/8/20 22:55
+ * @since 2021/10/13 0:16
  */
-@Nixim("net.minecraft.client.ClientBrandRetriever")
-public class NiximClientBrand {
-    @Inject("getClientModName")
-    public static String getClientModName() {
-        return Config.clientBrand;
+final class TaskRunner extends TaskPool {
+    public TaskRunner() {
+        super(1, Integer.parseInt(System.getProperty("ae.pooled_threads", "10")), 1, 1, pool -> new TaskExecutor(pool, "Worker-Idle", 120000));
+    }
+
+    @Override
+    public void pushTask(ITask task) {
+        if (task == null) return;
+        super.pushTask(task);
+    }
+
+    @Override
+    protected void onReject(ITask task, int minPending) {
+        Thread w = (Thread) task;
+        w.start();
     }
 }

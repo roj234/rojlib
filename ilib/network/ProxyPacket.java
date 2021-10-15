@@ -27,14 +27,15 @@ package ilib.network;
 
 import ilib.ATHandler;
 import ilib.ImpLib;
+import org.apache.logging.log4j.Level;
+import roj.util.ByteReader;
+
 import net.minecraft.network.EnumConnectionState;
 import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.network.play.INetHandlerPlayServer;
 import net.minecraft.util.text.TextComponentString;
-import org.apache.logging.log4j.Level;
-import roj.util.ByteReader;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;
@@ -64,19 +65,24 @@ public class ProxyPacket implements Packet<INetHandler> {
 
     @Override
     public void readPacketData(final PacketBuffer buffer) {
-        byte[] arr = new byte[buffer.readByte()];
-        buffer.readBytes(arr);
-        this.channel = new String(arr);
-        arr = new byte[buffer.readVarInt()];
-        buffer.readBytes(arr);
-        this.payload = arr;
+        char[] arr = new char[buffer.readByte()];
+        for (int i = 0; i < arr.length; i++) {
+            arr[i] = (char) buffer.readByte();
+        }
+        channel = new String(arr);
+
+        byte[] arr2 = new byte[buffer.readVarInt()];
+        buffer.readBytes(arr2);
+        this.payload = arr2;
     }
 
     @Override
     public void writePacketData(final PacketBuffer buffer) {
-        byte[] arr = this.channel.getBytes();
-        buffer.writeByte((byte) arr.length);
-        buffer.writeBytes(arr);
+        buffer.writeByte(channel.length());
+        buffer.ensureWritable(channel.length() + 1);
+        for (int i = 0; i < channel.length(); i++) {
+            buffer.writeByte(channel.charAt(i));
+        }
         buffer.writeVarInt(this.payload.length);
         buffer.writeBytes(this.payload);
     }

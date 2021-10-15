@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,23 +23,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.asm.nixim.client;
-
-import ilib.Config;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
+package roj.collect;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2020/8/20 22:55
+ * @since 2021/10/14 18:41
  */
-@Nixim("net.minecraft.client.ClientBrandRetriever")
-public class NiximClientBrand {
-    @Inject("getClientModName")
-    public static String getClientModName() {
-        return Config.clientBrand;
-    }
+public interface IIntMap<V> {
+    default V put(int key, V e) { putInt(e, key); return null; }
+    default V get(int key) { throw new UnsupportedOperationException(); }
+    default Integer putInt(V key, int e) { put(e, key); return null; }
+    default int getInt(V key) { throw new UnsupportedOperationException(); }
 }

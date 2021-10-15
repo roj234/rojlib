@@ -36,7 +36,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
     ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
     final ThreadStateMonitor monitor;
     final int timeout;
-    boolean sleeping;
+    volatile boolean busy;
 
     public TaskExecutor() {
         this(ThreadStateMonitor.EVER);
@@ -57,57 +57,57 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
     }
 
     public boolean sleeping() {
-        return sleeping;
+        return busy;
     }
     
     @Override
     public void run() {
         out:
         while (!tasks.isEmpty() || monitor.working()) {
-            if (tasks.isEmpty()) {
-                synchronized (this) {
-                    notifyAll();
-                }
-
-                sleeping = true;
-                try {
-                    Thread.sleep(timeout);
-                } catch (InterruptedException e) {
-                    // maybe there's something to do now.
-                }
-                sleeping = false;
-
-                if (tasks.isEmpty()) {
+            ITask task;
+            do {
+                task = tasks.peek();
+                if (task == null) {
                     synchronized (this) {
                         notifyAll();
                     }
-                    if (tasks.isEmpty() && monitor.threadDeath(this)) {
-                        break;
-                    }
-                }
-            } else {
-                ITask task;
-                while (true) {
-                    task = tasks.peek();
-                    if (task == null) continue out;
-                    if (task.isCancelled()) {
-                        tasks.poll();
-                    } else {
-                        break;
-                    }
-                }
 
-                try {
-                    task.calculate(this);
-                    if (task.continueExecuting()) {
-                        tasks.add(task);
+                    try {
+                        Thread.sleep(timeout);
+                    } catch (InterruptedException e) {
+                        // maybe there's something to do now.
                     }
-                } catch (Throwable e) {
-                    if(!(e instanceof InterruptedException))
-                        e.printStackTrace();
-                }
 
-                tasks.poll();
+                    if (tasks.isEmpty()) {
+                        synchronized (this) {
+                            notifyAll();
+                        }
+                        if (monitor.threadDeath(this)) {
+                            break out;
+                        }
+                    }
+                } else if (task.isCancelled()) {
+                    tasks.poll();
+                } else {
+                    break;
+                }
+            } while (true);
+
+            busy = true;
+            try {
+                task.calculate(this);
+            } catch (Throwable e) {
+                if(!(e instanceof InterruptedException))
+                    e.printStackTrace();
+            }
+            busy = false;
+            tasks.poll();
+            try {
+                if (task.continueExecuting()) {
+                    tasks.add(task);
+                }
+            } catch (Throwable e) {
+                e.printStackTrace();
             }
         }
     }
@@ -117,8 +117,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
         task.onJoin();
         tasks.add(task);
 
-        final State state = getState();
-        if(state == State.TIMED_WAITING || state == State.RUNNABLE) {
+        if (!busy) {
             // wake this thread up.
             interrupt();
         }
@@ -137,8 +136,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
         }
         queue.clear();
 
-        final State state = getState();
-        if(state == State.TIMED_WAITING || state == State.RUNNABLE) {
+        if (!busy) {
             // wake this thread up.
             interrupt();
         }

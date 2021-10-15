@@ -26,11 +26,12 @@
 package ilib.asm.nixim;
 
 import com.mojang.authlib.GameProfile;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerList;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import java.net.SocketAddress;
 import java.util.UUID;
@@ -48,7 +49,7 @@ public abstract class NiximPlayerList extends PlayerList {
         super(p_i1500_1_);
     }
 
-    @RemapTo("func_148542_a")
+    @Inject("func_148542_a")
     public String allowUserToConnect(SocketAddress address, GameProfile profile) {
         String result = super.allowUserToConnect(address, profile);
         if (result != null)

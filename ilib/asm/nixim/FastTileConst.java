@@ -30,8 +30,8 @@ import ilib.ImpLib;
 import ilib.asm.util.TileEntityCreator;
 import ilib.util.freeze.FreezedTileEntity;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 import roj.collect.MyHashMap;
 import roj.reflect.DirectAccessor;
@@ -44,7 +44,6 @@ import net.minecraft.world.World;
 
 import net.minecraftforge.fml.common.FMLLog;
 
-import javax.annotation.Nullable;
 import java.util.Map;
 
 /**
@@ -62,7 +61,7 @@ abstract class FastTileConst extends TileEntity {
     @Shadow("field_190562_f")
     private static RegistryNamespaced<ResourceLocation, Class<? extends TileEntity>> REGISTRY;
 
-    @RemapTo("func_190560_a")
+    @Inject("func_190560_a")
     public static void register(String id, Class<? extends TileEntity> clazz) {
         if (tileEntityCreator == null) {
             tileEntityCreator = new MyHashMap<>();
@@ -79,8 +78,7 @@ abstract class FastTileConst extends TileEntity {
                              .build();
     }
 
-    @Nullable
-    @RemapTo(value = "func_190200_a", useSuperInject = false)
+    @Inject("func_190200_a")
     public static TileEntity create(World worldIn, NBTTagCompound compound) {
         TileEntity tile = null;
         String id = compound.getString("id");

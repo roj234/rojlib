@@ -31,8 +31,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTSizeTracker;
@@ -56,7 +56,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         super(wrapped);
     }
 
-    @RemapTo("func_189425_b")
+    @Inject("func_189425_b")
     public byte[] readByteArray(int maxLength) {
         int i = this.readVarInt();
         if (i > maxLength) {
@@ -74,7 +74,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         }
     }
 
-    @RemapTo("func_189424_c")
+    @Inject("func_189424_c")
     public int[] readVarIntArray(int maxLength) {
         int i = this.readVarInt();
         if (i > maxLength) {
@@ -96,7 +96,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         }
     }
 
-    @RemapTo("func_189423_a")
+    @Inject("func_189423_a")
     public long[] readLongArray(@Nullable long[] array, int maxLength) {
         int i = this.readVarInt();
         if (array == null || array.length != i) {
@@ -120,7 +120,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         return array;
     }
 
-    @RemapTo("func_150789_c")
+    @Inject("func_150789_c")
     public String readString(int maxLength) {
         int i = this.readVarInt();
         if (i > maxLength * 4) {
@@ -154,7 +154,7 @@ public class NiximPacketBuffer extends PacketBuffer {
         }
     }
 
-    @RemapTo("func_150793_b")
+    @Inject("func_150793_b")
     public NBTTagCompound readCompoundTag() {
         int i = this.readerIndex();
         byte b0 = this.readByte();

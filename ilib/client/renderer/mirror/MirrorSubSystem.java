@@ -27,11 +27,13 @@ package ilib.client.renderer.mirror;
 
 import ilib.ImpLib;
 import ilib.network.ILChannel;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.projectile.EntityArrow;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -116,7 +118,7 @@ public class MirrorSubSystem {
                     }
                 }
             }
-        }, PktEntityData::new, 0, null);
+        }, PktEntityData.class, 1, null);
 
         ImpLib.HOOK.add("ServerShutdown", EventHandler.monitoredEntities[1]::clear);
     }

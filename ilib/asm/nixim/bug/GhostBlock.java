@@ -25,15 +25,16 @@
  */
 package ilib.asm.nixim.bug;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Inject.At;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.network.play.server.SPacketBlockChange;
 import net.minecraft.server.management.PlayerInteractionManager;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import roj.asm.Opcodes;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -48,21 +49,13 @@ abstract class GhostBlock extends PlayerInteractionManager {
         super(p_i1524_1_);
     }
 
-    /**
-     * For non-void-return methods, use this to tell Nixim that this 'return' is not a really return, just continue run next part. <BR>
-     * For void-return methods, call _return_void is needed, too. <BR>
-     * This method must be static.
-     */
-    @Shadow("<RETURN>")
-    public static void _return_some() {
-    }
-
     @Shadow("field_180240_f")
     private BlockPos destroyPos;
 
-    @RemapTo(value = "func_180784_a", injectPos = 465, codeAtPos = Opcodes.ALOAD_0)
+    @Inject(value = "func_180784_a", at = At.TAIL, occurrence = "['aload_0', 'iload', " +
+            "['putfield', 'net/minecraft/server/management/PlayerInteractionManager', 'durabilityRemainingOnBlock', 'I'], " +
+            "'return']")
     public void onBlockClicked(BlockPos pos, EnumFacing side) {
         this.player.connection.sendPacket(new SPacketBlockChange(world, this.destroyPos));
-        _return_some();
     }
 }

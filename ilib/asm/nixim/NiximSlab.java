@@ -25,6 +25,10 @@
  */
 package ilib.asm.nixim;
 
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.block.BlockSlab;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -35,9 +39,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import java.util.Random;
 
@@ -58,7 +59,7 @@ abstract class NiximSlab extends BlockSlab {
     private boolean breaking;
 
     @Override
-    @RemapTo("removedByPlayer")
+    @Inject("removedByPlayer")
     public boolean removedByPlayer(IBlockState state, World world, BlockPos pos, EntityPlayer player, boolean willHarvest) {
         this.onBlockHarvested(world, pos, state, player);
 
@@ -104,7 +105,7 @@ abstract class NiximSlab extends BlockSlab {
         else return relativeY >= 0.5;
     }
 
-    @RemapTo("func_149745_a")
+    @Inject("func_149745_a")
     public final int quantityDropped(Random random) {
         if (breaking) {
             breaking = false;

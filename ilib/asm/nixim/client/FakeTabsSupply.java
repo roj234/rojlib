@@ -26,12 +26,14 @@
 package ilib.asm.nixim.client;
 
 import ilib.api.client.FakeTab;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Inject.At;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.enchantment.EnumEnchantmentType;
 import net.minecraft.item.ItemStack;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
 
 /**
  * No description provided
@@ -57,9 +59,15 @@ abstract class FakeTabsSupply extends CreativeTabs {
     @Shadow("field_78033_n")
     int index;
 
-    @RemapTo(value = "<init>", useSuperInject = false)
-    public FakeTabsSupply(int index, String label) {
-        super(index, null);
+    FakeTabsSupply() {
+        super(null);
+    }
+
+    void $$$CONSTRUCTOR() {}
+
+    @Inject(value = "<init>", at = At.REPLACE)
+    public void remapToInit(int index, String label) {
+        $$$CONSTRUCTOR();
 
         this.tabLabel = label;
 

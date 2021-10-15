@@ -32,10 +32,7 @@ import roj.asm.frame.*;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.insn.*;
 import roj.asm.util.*;
-import roj.collect.IntBiMap;
-import roj.collect.IntMap;
-import roj.collect.LinkedIntMap;
-import roj.collect.ToIntMap;
+import roj.collect.*;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -152,7 +149,18 @@ public class AttrCode extends Attribute {
         final ByteList list = w.list;
         int lenIdx = list.pos();
 
-        ToIntMap<InsnNode> pcRev = reIndex(cw);
+        ToIntMap<InsnNode> pcRev = reIndex(instructions, cw, new ToIntMap<InsnNode>(instructions.size()) {
+            @Override
+            public int getInt(InsnNode key) {
+                int v = super.getOrDefault(key, -1);
+                if(v == -1) {
+                    System.out.println("Self " + this);
+                    System.out.println("Insn " + instructions);
+                    throw new IllegalArgumentException("Couldn't find bci for " + key);
+                }
+                return v;
+            }
+        });
         InsnList insn = this.instructions;
         for (int i = 0; i < insn.size(); i++) {
             insn.get(i).toByteArray(cw, w);
@@ -215,9 +223,7 @@ public class AttrCode extends Attribute {
      *
      * @param cw 常量池
      */
-    public ToIntMap<InsnNode> reIndex(ConstantWriter cw) {
-        final InsnList insn = this.instructions;
-
+    public static <T extends IIntMap<InsnNode>> T reIndex(InsnList insn, ConstantWriter cw, T pcRev) {
         InsnNode last = insn.remove(insn.size() - 1);
         if (last != EndOfInsn.MARKER) {
             insn.add(last);
@@ -225,60 +231,59 @@ public class AttrCode extends Attribute {
 
         int pos = 0;
         ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
-        ToIntMap<InsnNode> pcRev = new ToIntMap<InsnNode>(insn.size()) {
-            @Override
-            public int getInt(InsnNode key) {
-                int v = super.getOrDefault(key, -1);
-                if(v == -1) {
-                    System.out.println("Self " + this);
-                    System.out.println("Insn " + AttrCode.this);
-                    throw new IllegalArgumentException("Couldn't find bci for " + key);
-                }
-                return v;
+
+        for (int i = 0; i < insn.size(); i++) {
+            InsnNode node = insn.get(i);
+            if (node.nodeType() == InsnNode.T_LDC) {
+                node.toByteArray(cw, w);
             }
-        };
+        }
+        w.list.pos(0);
 
         int j = 3;
         o:
-        while (true) {
-            int i;
-            for (i = 0; i < insn.size(); i++) {
+        do {
+            boolean lciRf = false;
+            for (int i = 0; i < insn.size(); i++) {
                 InsnNode node = insn.get(i);
                 pcRev.putInt(node, pos);
 
                 switch (node.nodeType()) {
+                    case InsnNode.T_LDC:
+                        int t = node.nodeSize();
+                        node.toByteArray(cw, w);
+                        if (w.list.pos() != t) {
+                            lciRf = true;
+                        }
+                        w.list.pos(0);
+                        break;
                     case InsnNode.T_SWITCH:
                         ((SwitchInsnNode) node).pad(pos, pcRev);
                         break;
-                    case InsnNode.T_LDC:
-                        node.toByteArray(cw, w);
-                        pos += w.list.pos();
-                        w.list.pos(0);
-                        break;
-                    default:
-                        int t = node.nodeSize();
-                        if (t <= 0)
-                            throw new IllegalArgumentException("Node " + node + " (A " + node.getClass().getName() + ") is not a writable node");
-                        pos += t;
                 }
+                int t = node.nodeSize();
+                if (t <= 0)
+                    throw new IllegalArgumentException("Node " + node + " (A " + node.getClass().getName() + ") is not writable");
+                pos += t;
             }
-            for (i = 0; i < insn.size(); i++) {
+            for (int i = 0; i < insn.size(); i++) {
                 InsnNode node = insn.get(i);
                 if (node.nodeType() == InsnNode.T_GOTO_IF) {
                     GotoInsnNode gin = (GotoInsnNode) node;
-                    if (gin.review(pcRev)) {
+                    if (gin.review(pcRev) || lciRf) {
                         pos = 0;
+                        // idea又出错了
+                        // noinspection all
                         if (j-- == 0)
                             throw new IllegalStateException("Unable to satisfy goto(_w) calls");
                         continue o;
                     }
                 }
             }
-            break;
-        }
+        } while (false);
 
         if (j != 3) {
-            System.err.println("Recursion cycle " + (3 - j));
+            System.err.println("Recursion " + (3 - j));
         }
         pcRev.putInt(EndOfInsn.MARKER, pos);
 
@@ -471,15 +476,13 @@ public class AttrCode extends Attribute {
         return pci;
     }
 
-    private static InsnNode validateJump(IntMap<InsnNode> pci, int index, JmPrimer self) {
+    private InsnNode validateJump(IntMap<InsnNode> pci, int index, JmPrimer self) {
         InsnNode node = pci.get(index - 1);
         if(node != null && node.getOpcode() == WIDE)
             throw new IllegalArgumentException("Jump target must not \"after\" wide");
         node = pci.get(index);
         if (node == null) {
-            System.err.println("SELF: " + self);
-            System.err.println(pci.entrySet());
-            throw new NullPointerException("Jumping to NULL (bci:" + index + ")");
+            throw new NullPointerException("At " + owner.ownerClass() + "." + owner.name() +  "\nSELF: " + self + "\nJumping to NULL (bci:" + index + ")\n" + pci.entrySet());
         }
         return node;
     }
@@ -499,8 +502,8 @@ public class AttrCode extends Attribute {
         int hig = r.readInt();
         int count = hig - low + 1;
 
-        if(count > 100000)
-            throw new IllegalArgumentException("length > 100000");
+        if(count <= 0 || count > 100000)
+            throw new IllegalArgumentException("length err " + count);
 
         LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count + 5);
         int i = 0;
@@ -515,8 +518,8 @@ public class AttrCode extends Attribute {
         int def = r.readInt();
         int count = r.readInt();
 
-        if(count > 100000)
-            throw new IllegalArgumentException("length > 100000");
+        if(count <= 0 || count > 100000)
+            throw new IllegalArgumentException("length err " + count);
 
         LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count + 5);
         while (count > 0) {
@@ -816,7 +819,7 @@ public class AttrCode extends Attribute {
         IntBiMap<InsnNode> pci = instructions.getPCMap();
         for (int i = 0; i < instructions.size(); i++) {
             InsnNode n = instructions.get(i);
-            sb.append("    ").append(pci.getByValue(n)).append(' ').append(n).append('\n');
+            sb.append("    ").append(pci.getInt(n)).append(' ').append(n).append('\n');
         }
         if (!exceptions.isEmpty()) {
             sb.append("    Exception Handlers: \n");

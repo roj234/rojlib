@@ -28,8 +28,8 @@ package ilib.asm.nixim;
 import ilib.asm.util.MCHooks;
 import ilib.util.PlayerUtil;
 import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 import roj.asm.nixim.Shadow;
 
 import net.minecraft.block.Block;
@@ -236,7 +236,7 @@ public abstract class NiximCreateBlockPos extends World {
         }
     }*/
 
-    @RemapTo("func_175721_c")
+    @Inject("func_175721_c")
     public int getLight(BlockPos pos, boolean checkNeighbors) {
         if (pos.getX() >= -30000000 && pos.getZ() >= -30000000 && pos.getX() < 30000000 && pos.getZ() < 30000000) {
             if (checkNeighbors && this.getBlockState(pos).useNeighborBrightness()) {
@@ -267,7 +267,7 @@ public abstract class NiximCreateBlockPos extends World {
         }
     }
 
-    @RemapTo("func_175676_y")
+    @Inject("func_175676_y")
     public int getStrongPower(BlockPos pos) {
         int red = 0;
 
@@ -284,7 +284,7 @@ public abstract class NiximCreateBlockPos extends World {
         return red;
     }
 
-    @RemapTo("canBlockFreezeBody")
+    @Inject("canBlockFreezeBody")
     public boolean canBlockFreezeBody(BlockPos pos, boolean noWaterAdj) {
         Biome biome = this.getBiome(pos);
         float f = biome.getTemperature(pos);
@@ -309,7 +309,7 @@ public abstract class NiximCreateBlockPos extends World {
         return false;
     }
 
-    @RemapTo("func_175666_e")
+    @Inject("func_175666_e")
     public void updateComparatorOutputLevel(BlockPos pos, Block blockIn) {
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
         for (EnumFacing face : EnumFacing.VALUES) {
@@ -329,7 +329,7 @@ public abstract class NiximCreateBlockPos extends World {
         pos1.release();
     }
 
-    @RemapTo("func_175687_A")
+    @Inject("func_175687_A")
     public int getRedstonePowerFromNeighbors(BlockPos pos) {
         int cur = 0;
 
@@ -349,7 +349,7 @@ public abstract class NiximCreateBlockPos extends World {
         return cur;
     }
 
-    @RemapTo("func_175640_z")
+    @Inject("func_175640_z")
     public boolean isBlockPowered(BlockPos pos) {
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
         for (EnumFacing face : EnumFacing.VALUES) {
@@ -364,7 +364,7 @@ public abstract class NiximCreateBlockPos extends World {
     }
 
     @SideOnly(Side.CLIENT)
-    @RemapTo(value = "func_175705_a", mustHit = false)
+    @Inject(value = "func_175705_a", flags = roj.asm.nixim.Inject.FLAG_OPTIONAL)
     public int getLightFromNeighborsFor(EnumSkyBlock type, BlockPos pos) {
         if (!this.provider.hasSkyLight() && type == EnumSkyBlock.SKY) {
             return 0;
@@ -403,7 +403,7 @@ public abstract class NiximCreateBlockPos extends World {
         }
     }
 
-    @RemapTo("func_175695_a")
+    @Inject("func_175695_a")
     public void notifyNeighborsOfStateExcept(BlockPos pos, Block blockType, EnumFacing skipSide) {
         EnumSet<EnumFacing> directions = EnumSet.allOf(EnumFacing.class);
         directions.remove(skipSide);
@@ -416,7 +416,7 @@ public abstract class NiximCreateBlockPos extends World {
         }
     }
 
-    @RemapTo("func_190522_c")
+    @Inject("func_190522_c")
     public void updateObservingBlocksAt(BlockPos pos, Block blockType) {
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
         for (EnumFacing facing : EnumFacing.VALUES) {
@@ -491,7 +491,7 @@ public abstract class NiximCreateBlockPos extends World {
 
     }
 
-    /*@RemapTo("func_175685_c")
+    /*@Inject("func_175685_c")
     public void notifyNeighborsOfStateChange(BlockPos pos, Block blockType, boolean updateObservers) {
         EnumSet<EnumFacing> directions = EnumSet.allOf(EnumFacing.class);
         if (!ForgeEventFactory.onNeighborNotify(this, pos, this.getBlockState(pos), directions, updateObservers).isCanceled()) {
@@ -513,7 +513,7 @@ public abstract class NiximCreateBlockPos extends World {
         }
     }*/
 
-    @RemapTo("func_72975_g")
+    @Inject("func_72975_g")
     public void markBlocksDirtyVertical(int x, int z, int y1, int y2) {
         int tmp;
         if (y1 > y2) {
@@ -534,7 +534,7 @@ public abstract class NiximCreateBlockPos extends World {
         this.markBlockRangeForRenderUpdate(x, y1, z, x, y2, z);
     }
 
-    @RemapTo("func_184141_c")
+    @Inject("func_184141_c")
     public IBlockState getGroundAboveSeaLevel(BlockPos pos) {
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain(pos);
         pos1.setY(getSeaLevel());
@@ -549,7 +549,7 @@ public abstract class NiximCreateBlockPos extends World {
         return state;
     }
 
-    @RemapTo("func_175710_j")
+    @Inject("func_175710_j")
     public boolean canBlockSeeSky(BlockPos pos) {
         if (pos.getY() >= this.getSeaLevel()) {
             return this.canSeeSky(pos);
@@ -577,7 +577,7 @@ public abstract class NiximCreateBlockPos extends World {
         }
     }
 
-    @RemapTo("func_175672_r")
+    @Inject("func_175672_r")
     public BlockPos getTopSolidOrLiquidBlock(BlockPos pos) {
         Chunk chunk = this.getChunk(pos);
 
@@ -602,7 +602,7 @@ public abstract class NiximCreateBlockPos extends World {
         return imm;
     }
 
-    @RemapTo("func_147470_e")
+    @Inject("func_147470_e")
     public boolean isFlammableWithin(AxisAlignedBB bb) {
         int xMin = MathHelper.floor(bb.minX);
         int xMax = MathHelper.ceil(bb.maxX);
@@ -635,7 +635,7 @@ public abstract class NiximCreateBlockPos extends World {
         return false;
     }
 
-    @RemapTo("func_180500_c")
+    @Inject("func_180500_c")
     public boolean checkLightFor(EnumSkyBlock lightType, BlockPos pos) {
         if (!this.isAreaLoaded(pos, 16, false)) {
             return false;

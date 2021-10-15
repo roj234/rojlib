@@ -24,9 +24,8 @@
  * THE SOFTWARE.
  */
 
-package roj.asm.transform;
+package roj.asm;
 
-import roj.asm.Parser;
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.AttrInnerClasses;
@@ -169,7 +168,7 @@ public class AccessTransformer {
         return transforms;
     }
 
-    private static class Universe extends AbstractCollection<String> {
+    private static final class Universe extends AbstractCollection<String> {
         @Override
         public boolean contains(Object o) {
             return true;

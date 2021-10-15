@@ -32,6 +32,16 @@ import ilib.ImpLib;
 import ilib.util.DimensionHelper;
 import ilib.util.PlayerUtil;
 import ilib.util.TimeUtil;
+import org.apache.logging.log4j.Level;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.insn.ClassInsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.util.InsnList;
+import roj.collect.MyHashMap;
+import roj.reflect.DirectAccessor;
+import roj.util.ByteWriter;
+import roj.util.Helpers;
+
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.entity.Entity;
@@ -43,19 +53,15 @@ import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.apache.logging.log4j.Level;
-import roj.collect.MyHashMap;
-import roj.util.ByteWriter;
-import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 public class ILChannel implements ITickable {
@@ -74,6 +80,8 @@ public class ILChannel implements ITickable {
         TimeUtil.registerTickHandler(this);
     }
 
+    static Clazz oneKey;
+    static AtomicInteger xx = new AtomicInteger();
     /**
      * 注册一个消息
      *
@@ -83,29 +91,21 @@ public class ILChannel implements ITickable {
      * @param side    接收方
      * @param <M>     消息类型
      */
-    @Deprecated
+    @SuppressWarnings("unchecked")
     public <M extends IMessage> void registerMessage(@Nonnull IMessageHandler<M> handler, Class<M> clazz, int id, Side side) {
-        Supplier<M> supplier = () -> {
-            try {
-                return clazz.newInstance();
-            } catch (InstantiationException | IllegalAccessException e) {
-                return null;
-            }
-        };
+        if (oneKey == null) {
+            oneKey = DirectAccessor.builder(Supplier.class).constructFuzzy(clazz, "get").getInternal();
+        } else {
+            oneKey.name = "ilib/network/GCA$" + xx.getAndIncrement();
+            String name = clazz.getName().replace('.', '/');
+            InsnList x = oneKey.methods.get(2).code.instructions;
+            ClassInsnNode _new = (ClassInsnNode) x.get(0);
+            _new.owner = name;
+            InvokeInsnNode _init = (InvokeInsnNode) x.get(2);
+            _init.owner = name;
+        }
+        Supplier<M> supplier = (Supplier<M>) DirectAccessor.i_build(oneKey);
         registerMessage(handler, clazz, supplier, id, side);
-    }
-
-    /**
-     * 注册一个消息
-     *
-     * @param handler  消息处理程序
-     * @param supplier 消息提供者
-     * @param id       ID，不一定要连续
-     * @param side     接收方
-     * @param <M>      消息类型
-     */
-    public <M extends IMessage> void registerMessage(@Nonnull IMessageHandler<M> handler, @Nonnull Supplier<M> supplier, int id, @Nullable Side side) {
-        registerMessage(handler, Helpers.cast(supplier.get().getClass()), supplier, id, side);
     }
 
     /**
@@ -119,7 +119,7 @@ public class ILChannel implements ITickable {
      * @param <M>      消息类型
      */
     public <M extends IMessage> void registerMessage(@Nonnull IMessageHandler<M> handler, @Nonnull Class<M> clazz, @Nonnull Supplier<M> supplier, int id, @Nullable Side side) {
-        if (id < 0)
+        if (id <= 0)
             throw new IllegalArgumentException("Id must be positive");
         id += 1;
         if (side == Side.SERVER) {
@@ -140,7 +140,12 @@ public class ILChannel implements ITickable {
      * 发送到玩家
      */
     public void sendTo(@Nonnull IMessage message, @Nonnull EntityPlayerMP player) {
-        pending.computeIfAbsent(player, (k) -> new ArrayList<>()).add(message);
+        List<IMessage> pkts = pending.computeIfAbsent(player, Helpers.fnArrayList());
+        pkts.add(message);
+        if (pkts.size() > 5 || pending.size() > 5) {
+            timer = 0;
+            sendAllPending();
+        }
     }
 
     private int timer = 0;
@@ -152,11 +157,12 @@ public class ILChannel implements ITickable {
         }
     }
 
-    private final WeakHashMap<EntityPlayerMP, List<IMessage>> pending = new WeakHashMap<>();
+    private final MyHashMap<EntityPlayerMP, List<IMessage>> pending = new MyHashMap<>();
     // todo 尽可能发送大块数据，避免网络中充斥着许多小数据块
 
     public void sendAllPending() {
         for (Map.Entry<EntityPlayerMP, List<IMessage>> entry : pending.entrySet()) {
+            if (entry.getKey().connection == null) continue;
             List<IMessage> list = entry.getValue();
             if (list.size() == 1) {
                 sendTo(serverCodec.encode(list.get(0)), entry.getKey());
@@ -283,7 +289,11 @@ public class ILChannel implements ITickable {
     }
 
     public void sendToAllTrackingChunk(@Nonnull IMessage message, @Nonnull World world, int x, int z) {
-        PlayerUtil.getAllPlayersWatchingChunk(world, x, z).forEach((player) -> sendTo(message, player));
+        List<EntityPlayerMP> chunk = PlayerUtil.getAllPlayersWatchingChunk(world, x, z);
+        for (int i = 0; i < chunk.size(); i++) {
+            EntityPlayerMP player = chunk.get(i);
+            sendTo(message, player);
+        }
     }
 
     public void sendToAllTracking(@Nonnull IMessage message, Entity entity) {
@@ -295,7 +305,11 @@ public class ILChannel implements ITickable {
     }
 
     public void sendToDimension(@Nonnull IMessage message, int dimensionId) {
-        PlayerUtil.getAllPlayersInDimension(dimensionId).forEach((player) -> sendTo(message, player));
+        List<EntityPlayerMP> dimension = PlayerUtil.getAllPlayersInDimension(dimensionId);
+        for (int i = 0; i < dimension.size(); i++) {
+            EntityPlayerMP player = dimension.get(i);
+            sendTo(message, player);
+        }
     }
 
     @SideOnly(Side.CLIENT)

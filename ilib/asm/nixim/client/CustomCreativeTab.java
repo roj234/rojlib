@@ -34,6 +34,13 @@ import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
 import ilib.util.PinyinUtil;
+import org.lwjgl.input.Mouse;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+import roj.collect.FilterList;
+
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainerCreative;
@@ -47,12 +54,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.input.Mouse;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
-import roj.asm.nixim.Shadow;
-import roj.collect.FilterList;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -114,7 +115,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     }
 
     @Override
-    @RemapTo("func_73864_a")
+    @Inject("func_73864_a")
     protected void mouseClicked(int mouseX1, int mouseY1, int mouseButton) throws IOException {
         super.mouseClicked(mouseX1, mouseY1, mouseButton);
         if (components == null) return;
@@ -128,7 +129,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     }
 
     @Override
-    @RemapTo("func_146286_b")
+    @Inject("func_146286_b")
     protected void mouseReleased(int mouseX1, int mouseY1, int state) {
         super.mouseReleased(mouseX1, mouseY1, state);
         if (components == null) return;
@@ -141,8 +142,8 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         }
     }
 
-    //@Override
-    @RemapTo(value = "func_146273_a", isRemapCopy = true)
+    @Override
+    @Copy(newName = "func_146273_a")
     protected void mouseClickMove(int mouseX1, int mouseY1, int clickedMouseButton, long timeSinceLastClick) {
         super.mouseClickMove(mouseX1, mouseY1, clickedMouseButton, timeSinceLastClick);
         if (components == null) return;
@@ -156,7 +157,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     }
 
     @Override
-    @RemapTo("func_146274_d")
+    @Inject("func_146274_d")
     public void handleMouseInput() throws IOException {
         super.handleMouseInput();
         if (components == null) return;
@@ -170,7 +171,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     }
 
     @Override
-    @RemapTo("func_73869_a")
+    @Inject("func_73869_a")
     protected void keyTyped(char typedChar, int keyCode) throws IOException {
         super.keyTyped(typedChar, keyCode);
         if (components == null) return;
@@ -179,7 +180,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         }
     }
 
-    @RemapTo("func_146979_b")
+    @Inject("func_146979_b")
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         //GlStateManager.pushMatrix();
         super.drawGuiContainerForegroundLayer(mouseX, mouseY);
@@ -197,7 +198,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         //GlStateManager.popMatrix();
     }
 
-    @RemapTo("func_146976_a")
+    @Inject("func_146976_a")
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         //GlStateManager.pushMatrix();
         super.drawGuiContainerBackgroundLayer(partialTicks, mouseX, mouseY);
@@ -222,7 +223,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         GlStateManager.popMatrix();
     }
 
-    @RemapTo("func_147050_b")
+    @Inject("func_147050_b")
     public void setCurrentCreativeTab(CreativeTabs tab) {
         super.setCurrentCreativeTab(tab);
 
@@ -240,7 +241,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         }
     }
 
-    @RemapTo(value = "func_191948_b", isRemapCopy = true)
+    @Copy(newName = "func_191948_b")
     protected void drawHoveredTooltip(int mouseX, int mouseY) {
         if (this.mc.player.inventory.getItemStack().isEmpty() && this.hoveredSlot != null && this.hoveredSlot.getHasStack()) {
             this.renderToolTip(this.hoveredSlot.getStack(), mouseX, mouseY);
@@ -252,7 +253,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         }
     }
 
-    @RemapTo("func_147053_i")
+    @Inject("func_147053_i")
     private void updateCreativeSearch() {
         GuiContainerCreative.ContainerCreative container = (GuiContainerCreative.ContainerCreative) this.inventorySlots;
         final NonNullList<ItemStack> list = container.itemList;

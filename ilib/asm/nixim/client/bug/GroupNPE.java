@@ -32,11 +32,12 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.network.EnumPacketDirection;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.util.LazyLoadBase;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.RemapTo;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -54,7 +55,7 @@ abstract class GroupNPE extends NetworkManager {
         super(p_i46004_1_);
     }
 
-    @RemapTo("func_181124_a")
+    @Inject("func_181124_a")
     public static NetworkManager createNetworkManagerAndConnect(InetAddress address, int port, boolean useEPollIO) {
         if (address instanceof Inet6Address) {
             System.setProperty("java.net.preferIPv4Stack", "false");

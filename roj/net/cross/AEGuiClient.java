@@ -35,16 +35,15 @@ import roj.ui.UIUtil;
 import roj.util.ByteWriter;
 import roj.util.FastLocalThread;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.awt.event.*;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.UnknownHostException;
 
 import static roj.net.cross.Util.PROTOCOL_VERSION;
@@ -98,8 +97,17 @@ public class AEGuiClient extends JFrame {
                 JOptionPane.showMessageDialog(null, "服务器端口有误");
                 return;
             }
+            int port = cfg.getString("port").equals("random") ? Math.abs((int)System.nanoTime() % 60000) + 2000 : cfg.getInteger("port");
+            do {
+                try (ServerSocket local = new ServerSocket(port, 1)) {
+                    local.isBound();
+                    break;
+                } catch (IOException ignored) {}
+                port = (Math.abs((int)System.nanoTime() % 60000)) + 2000;
+                System.out.println("检测到端口重复，自动重新分配了 " + port);
+            } while (true);
             System.out.println("连接到 " + cfg.getString("url"));
-            System.out.println("本地端口 127.0.0.1:" + cfg.getInteger("port"));
+            System.out.println("本地端口 127.0.0.1:" + port);
             System.out.println("使用SSL安全加密: " + cfg.getBool("ssl"));
             System.out.println("启用访问日志: " + !cfg.getBool("no_log"));
             System.out.println("房间号: " + cfg.getString("room"));
@@ -108,18 +116,25 @@ public class AEGuiClient extends JFrame {
                 Util.out = System.out;
 
             Thread.currentThread().setName("Waiter");
-            client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), cfg.getInteger("port")), cfg.getBool("ssl"));
+            client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), cfg.getBool("ssl"));
             Thread runner = new FastLocalThread(client);
             runner.setDaemon(true);
             runner.setName("Client Thread");
             runner.start();
-            JOptionPane.showMessageDialog(null, "按确认关闭客户端");
+
+            String title = cfg.containsKey("title") ? cfg.getString("title") : "AE客户端 v" + PROTOCOL_VERSION;
+            InputStream stream = UIUtil.class.getClassLoader().getResourceAsStream("logo.png");
+            Icon logo = new ImageIcon(ImageIO.read(stream));
+            JOptionPane.showOptionDialog(null,
+                                         "本地端口: " + port, title, JOptionPane.DEFAULT_OPTION,
+                                         JOptionPane.INFORMATION_MESSAGE, logo, new String[] { "退出" }, null);
         } else {
             new AEGuiClient();
         }
     }
 
     public AEGuiClient() {
+        UIUtil.setLogo(this, "logo.png");
         final JPanel panel1 = new JPanel();
         panel1.setLayout(new GridBagLayout());
         panel1.setBorder(
