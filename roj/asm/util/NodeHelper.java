@@ -135,7 +135,7 @@ public class NodeHelper {
                 if((short)number == number) {
                     return new U2InsnNode(SIPUSH, number);
                 }
-                return new LoadConstInsnNode(LDC, new CstInt(number));
+                return new LdcInsnNode(LDC, new CstInt(number));
         }
     }
 
@@ -312,24 +312,24 @@ public class NodeHelper {
             case ICONST_4:
             case ICONST_5:
             case ICONST_M1:
-                return new LoadConstInsnNode(LDC, new CstInt(node.getOpcode() - ICONST_0));
+                return new LdcInsnNode(LDC, new CstInt(node.getOpcode() - ICONST_0));
 
             case LCONST_0:
             case LCONST_1:
-                return new LoadConstInsnNode(Opcodes.LDC2_W, new CstLong(node.getOpcode() - LCONST_0));
+                return new LdcInsnNode(Opcodes.LDC2_W, new CstLong(node.getOpcode() - LCONST_0));
 
             case FCONST_0:
             case FCONST_1:
             case FCONST_2:
-                return new LoadConstInsnNode(Opcodes.LDC, new CstFloat(node.getOpcode() - FCONST_0));
+                return new LdcInsnNode(Opcodes.LDC, new CstFloat(node.getOpcode() - FCONST_0));
 
             case DCONST_0:
             case DCONST_1:
-                return new LoadConstInsnNode(Opcodes.LDC2_W, new CstDouble(node.getOpcode() - DCONST_0));
+                return new LdcInsnNode(Opcodes.LDC2_W, new CstDouble(node.getOpcode() - DCONST_0));
 
             case BIPUSH:
             case SIPUSH:
-                return new LoadConstInsnNode(Opcodes.LDC, new CstInt(((IIndexInsnNode) node).getIndex()));
+                return new LdcInsnNode(Opcodes.LDC, new CstInt(((IIndexInsnNode) node).getIndex()));
 
             case ALOAD:
             case DLOAD:

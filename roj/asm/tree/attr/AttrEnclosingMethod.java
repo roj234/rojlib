@@ -30,7 +30,7 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstNameAndType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 import java.util.List;
@@ -63,7 +63,7 @@ public final class AttrEnclosingMethod extends Attribute {
     public Type returnType;
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         w.writeShort(pool.getClassId(this.owner));
         if (PREDEFINED == this.name) {
             w.writeShort(0);
@@ -75,6 +75,8 @@ public final class AttrEnclosingMethod extends Attribute {
     }
 
     public String toString() {
+        if (PREDEFINED == this.name)
+            return "EnclosingMethod: " + "Immediately";
         final StringBuilder sb = new StringBuilder().append("EnclosingMethod: ").append(returnType).append(' ').append(this.owner).append('.').append(name).append('(');
         for (Type par : parameters) {
             sb.append(par).append(", ");

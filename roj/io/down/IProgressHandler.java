@@ -37,22 +37,15 @@ public interface IProgressHandler {
         return new Notify(notify);
     }
 
-    default void handleJoin(Downloader downloader) {}
+    default void handleJoin(Downloader dn) {}
 
-    default void handleProgress(Downloader thread, long downloaded, long deltaDone) {}
+    default void handleProgress(Downloader dn, long downloaded, long deltaDone) {}
 
-    default void handleReconnect(Downloader thread, long downloaded) {}
+    default void handleReconnect(Downloader dn, long downloaded) {}
 
-    default void handleDone(Downloader thread) {}
+    default void handleDone(Downloader dn) {}
 
     default void onReturn() {}
-
-    /**
-     * only for multi thread
-     *
-     * @param i count
-     */
-    default void onInitial(int i) {}
 
     void errorCaught();
 

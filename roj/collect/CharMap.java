@@ -35,7 +35,7 @@ import java.util.function.IntFunction;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
-public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> {
+public final class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> {
     @SuppressWarnings("unchecked")
     public void putAll(CharMap<V> map) {
         if (map.entries == null) return;
@@ -63,10 +63,10 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
     }
 
     public static class Entry<V> implements EntryIterable<Entry<V>>, Map.Entry<Character, V> {
-        protected char k;
-        protected Object v;
+        char k;
+        Object v;
 
-        protected Entry(char k, Object v) {
+        Entry(char k, Object v) {
             this.k = k;
             this.v = v;
         }
@@ -92,7 +92,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
             return (V) v;
         }
 
-        protected Entry<V> next;
+        Entry<V> next;
 
         @Override
         public Entry<V> nextEntry() {
@@ -100,10 +100,10 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         }
     }
 
-    protected Entry<?>[] entries;
-    protected int size = 0;
+    Entry<?>[] entries;
+    int size = 0;
 
-    protected Entry<V> notUsing = null;
+    Entry<V> notUsing = null;
 
     int length = 1;
     float loadFactor = 0.8f;
@@ -212,9 +212,6 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         remove(vEntry.k);
     }
 
-    void afterPut(Entry<V> entry) {
-    }
-
     @Nonnull
     public V computeIfAbsent(char k, @Nonnull IntFunction<V> supplier) {
         V v = get(k);
@@ -225,8 +222,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
     }
 
     @SuppressWarnings("unchecked")
-    protected void resize() {
-        //System.err.println("扩容为: "+ DELIM);
+    private void resize() {
         Entry<?>[] newEntries = new Entry<?>[length];
         Entry<V> entry;
         Entry<V> next;
@@ -256,47 +252,37 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         V oldV = entry.setValue(e);
         if (oldV == NOT_USING) {
             oldV = null;
-            afterPut(entry);
             size++;
         }
         return oldV;
     }
 
-    void afterRemove(Entry<V> entry) {
-    }
-
     @SuppressWarnings("unchecked")
     public V remove(char id) {
         Entry<V> prevEntry = null;
-        Entry<V> toRemove = null;
-        {
-            Entry<V> entry = getEntryFirst(id, false);
-            while (entry != null) {
-                if (entry.k == id) {
-                    toRemove = entry;
-                    break;
-                }
-                prevEntry = entry;
-                entry = entry.next;
+        Entry<V> entry = getEntryFirst(id, false);
+        while (entry != null) {
+            if (entry.k == id) {
+                break;
             }
+            prevEntry = entry;
+            entry = entry.next;
         }
 
-        if (toRemove == null)
+        if (entry == null)
             return null;
-
-        afterRemove(toRemove);
 
         this.size--;
 
         if (prevEntry != null) {
-            prevEntry.next = toRemove.next;
+            prevEntry.next = entry.next;
         } else {
-            this.entries[indexFor(id)] = toRemove.next;
+            this.entries[indexFor(id)] = entry.next;
         }
 
-        V v = (V) toRemove.v;
+        V v = (V) entry.v;
 
-        putRemovedEntry(toRemove);
+        putRemovedEntry(entry);
 
         return v;
     }
@@ -311,7 +297,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
     }
 
     @SuppressWarnings("unchecked")
-    Entry<V> getEntry(V v) {
+    private Entry<V> getEntry(V v) {
         if (entries == null)
             return null;
         for (int i = 0; i < length; i++) {
@@ -328,7 +314,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         return null;
     }
 
-    Entry<V> getEntry(char id) {
+    private Entry<V> getEntry(char id) {
         Entry<V> entry = getEntryFirst(id, false);
         while (entry != null) {
             if (entry.k == id)
@@ -338,7 +324,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         return null;
     }
 
-    Entry<V> getOrCreateEntry(char id) {
+    private Entry<V> getOrCreateEntry(char id) {
         Entry<V> entry = getEntryFirst(id, true);
         while (true) {
             if (entry.k == id)
@@ -351,7 +337,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         return entry.next = getCachedEntry(id, NOT_USING);
     }
 
-    protected Entry<V> getCachedEntry(char id, Object value) {
+    private Entry<V> getCachedEntry(char id, Object value) {
         Entry<V> cached = this.notUsing;
         if (cached != null) {
             cached.k = id;
@@ -364,7 +350,7 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         return createEntry(id, value);
     }
 
-    protected void putRemovedEntry(Entry<V> entry) {
+    private void putRemovedEntry(Entry<V> entry) {
         if (notUsing != null && notUsing.k > MAX_NOT_USING) {
             return;
         }
@@ -373,16 +359,16 @@ public class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> 
         notUsing = entry;
     }
 
-    int indexFor(int id) {
+    private int indexFor(int id) {
         return (id ^ (id >>> 16)) & (length - 1);
     }
 
-    protected Entry<V> createEntry(char id, Object value) {
+    static <V> Entry<V> createEntry(char id, Object value) {
         return new Entry<>(id, value);
     }
 
     @SuppressWarnings("unchecked")
-    Entry<V> getEntryFirst(char k, boolean create) {
+    private Entry<V> getEntryFirst(char k, boolean create) {
         int id = indexFor(k);
         if (entries == null) {
             if (!create)

@@ -41,7 +41,7 @@ public final class CstTop extends Constant {
 
     @Override
     public void write(ByteWriter w) {
-        // no-op so that needn't to filter in ConstantWriter#write
+        // no-op so that needn't to filter in ConstantPool#write
     }
 
     @Override
@@ -57,5 +57,10 @@ public final class CstTop extends Constant {
     @Override
     public byte type() {
         return CstType._TOP_;
+    }
+
+    @Override
+    public final Constant clone() {
+        return this;
     }
 }

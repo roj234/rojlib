@@ -29,7 +29,7 @@ import roj.asm.cst.CstClass;
 import roj.asm.mapper.util.*;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
-import roj.asm.tree.simple.MoFNode;
+import roj.asm.tree.MoFNode;
 import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;

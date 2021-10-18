@@ -29,7 +29,6 @@ package roj.asm.tree.attr;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstRefUTF;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -54,7 +53,7 @@ public final class AttrUTFRef extends Attribute {
     public CstRefUTF cst;
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         w.writeShort(pool.reset(cst).getIndex());
     }
 

@@ -28,7 +28,6 @@ package roj.io;
 import roj.collect.MyHashSet;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
-import roj.util.EmptyArrays;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -67,7 +66,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     private final MyHashSet<String> duplicate;
 
     private boolean finish;
-    private byte[] comment;
+    private final EEOF eof;
 
     public ZipFileWriter(File file) throws IOException {
         this(file, Deflater.DEFAULT_COMPRESSION, true);
@@ -84,16 +83,17 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         this.buffer = new ByteList();
         this.bw = new ByteWriter(buffer);
         this.crc = new CRC32();
-        this.comment = DEFAULT_COMMENT;
+        this.eof = new EEOF();
+        this.eof.setComment(DEFAULT_COMMENT);
         this.duplicate = checkDuplicate ? new MyHashSet<>() : null;
     }
 
     public void setComment(String comment) {
-        this.comment = comment == null ? EmptyArrays.BYTES : ByteWriter.encodeUTF(comment).toByteArray();
+        eof.setComment(comment);
     }
 
     public void setComment(byte[] comment) {
-        this.comment = comment == null ? EmptyArrays.BYTES : comment;
+        eof.setComment(comment);
     }
 
     public void writeNamed(String name, ByteList data) throws IOException {
@@ -103,8 +103,6 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     public void writeNamed(String name, ByteList data, int method) throws IOException {
         if (entry != null)
             closeEntry();
-        if (file.getFilePointer() > Integer.MAX_VALUE)
-            throw new ZipException("Zip64 is required, while ZFW not support it yet");
         if (name.endsWith("/"))
             throw new ZipException("ZipEntry couldn't be directory");
         if (duplicate != null && !duplicate.add(name))
@@ -151,15 +149,14 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         }
 
         long curr = file.getFilePointer();
-        if (curr > Integer.MAX_VALUE)
-            throw new ZipException("Zip64 is required, while ZFW not support it yet");
         file.seek(beginOffset + 18);
         file.writeInt(Integer.reverseBytes(cSize));
         file.seek(curr);
 
+        boolean attrZip64 = beginOffset >= U32_MAX;
         bw.writeInt(HEADER_ATTRIBUTE)
-          .writeShortR(20)
-          .writeShortR(20)
+          .writeShortR(attrZip64 ? 45 : 20)
+          .writeShortR(attrZip64 ? 45 : 20)
           .writeShortR(2048)
           .writeShortR(method)
           .writeIntR(time)
@@ -169,8 +166,11 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
           .writeShortR(ByteWriter.byteCountUTF8(name))
           .writeLong(0) // 四个short 0
           .writeIntR(0)
-          .writeIntR((int) beginOffset)
+          .writeIntR((int) (attrZip64 ? U32_MAX : beginOffset))
           .writeAllUTF(name);
+        if (attrZip64) {
+            bw.writeShortR(1).writeShortR(8).writeLongR(entryBeginOffset);
+        }
         attrList.add(buf.toByteArray());
         buf.clear();
 
@@ -181,30 +181,15 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         if (this.entry != null)
             closeEntry();
         long entryBeginOffset = file.getFilePointer();
-        if (entryBeginOffset > Integer.MAX_VALUE)
-            throw new ZipException("Zip64 is required, while ZFW not support it yet");
         if (duplicate != null && !duplicate.add(entry.name))
             throw new ZipException("Duplicate entry " + entry.name);
         owner.getFile().getChannel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), file.getChannel());
 
-        Attr attr = entry.attr;
-        bw.writeInt(HEADER_ATTRIBUTE)
-          .writeShortR(20)
-          .writeShortR(20)
-          .writeShortR(entry.flags) // EFS
-          .writeShortR(attr.compressMethod)
-          .writeIntR(attr.modTime)
-          .writeIntR(attr.CRC32)
-          .writeIntR(attr.cSize)
-          .writeIntR(attr.uSize)
-          .writeShortR(ByteWriter.byteCountUTF8(entry.name))
-          .writeShortR(0) // ext
-          .writeShortR(0) // comment
-          .writeShortR(0) // disk
-          .writeShortR(0) // attrIn
-          .writeIntR(0) // attrEx
-          .writeIntR((int) entryBeginOffset)
-          .writeAllUTF(entry.name);
+        long delta = entryBeginOffset - entry.startPos();
+        // zip64 supporting
+        entry.offset += delta;
+        MutableZipFile.writeAttr(bw, entry);
+        entry.offset -= delta;
         attrList.add(buffer.toByteArray());
         buffer.clear();
     }
@@ -216,9 +201,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         if (entry != null)
             closeEntry();
         if (ze.isDirectory())
-            throw new ZipException("ZipEntry couldn't be directory");
-        if (file.getFilePointer() > Integer.MAX_VALUE)
-            throw new ZipException("Zip64 is required, while ZFW not support it yet");
+            throw new ZipException("Roj234: I don't want to support directories.");
         if (duplicate != null && !duplicate.add(ze.getName()))
             throw new ZipException("Duplicate entry " + ze.getName());
         entry = ze;
@@ -298,21 +281,22 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
                     f.write(buf.list, 0, off);
                 }
             }
-            if (def.getBytesRead() > Integer.MAX_VALUE)
-                throw new ZipException("Zip64 is required, while ZFW not support it yet");
+            // 没等于号，毕竟也可能正好是这个数
+            if (def.getBytesRead() > U32_MAX)
+                throw new ZipException("Zip64(of LOC header) is required, while ZFW not(want to) support it yet(for space reason)");
         }
 
         long curr = f.getFilePointer();
-        if (curr - entryEndOffset > Integer.MAX_VALUE)
-            throw new ZipException("Zip64 is required, while ZFW not support it yet");
         int cSize = (int) (curr - entryEndOffset);
+        if (curr - entryEndOffset > U32_MAX)
+            throw new ZipException("Zip64(of LOC header) is required, while ZFW not(want to) support it yet(for space reason)");
         int uSize = entry.getMethod() == ZipEntry.STORED ? cSize : (int) deflater.getBytesRead();
         deflater.reset();
 
-        byte[] extra = entry.getExtra();
+        boolean attrZip64 = entryBeginOffset >= U32_MAX;
         bw.writeInt(HEADER_ATTRIBUTE)
-          .writeShortR(20)
-          .writeShortR(20)
+          .writeShortR(attrZip64 ? 45 : 20)
+          .writeShortR(attrZip64 ? 45 : 20)
           .writeShortR(2048) // EFS
           .writeShortR(entry.getMethod())
           .writeIntR(MutableZipFile.java2DosTime(entry.getTime()))
@@ -320,15 +304,16 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
           .writeIntR(cSize)
           .writeIntR(uSize)
           .writeShortR(ByteWriter.byteCountUTF8(entry.getName()))
-          .writeShortR(extra == null ? 0 : extra.length) // ext
+          .writeShortR(attrZip64 ? 12 : 0) // ext
           .writeShortR(0) // comment
           .writeShortR(0) // disk
           .writeShortR(0) // attrIn
           .writeIntR(0) // attrEx
-          .writeIntR((int) entryBeginOffset)
+          .writeIntR((int) (attrZip64 ? U32_MAX : entryBeginOffset))
           .writeAllUTF(entry.getName());
-        if (extra != null)
-            buffer.addAll(extra);
+        if (attrZip64) {
+            bw.writeShortR(1).writeShortR(8).writeLongR(entryBeginOffset);
+        }
         attrList.add(buffer.toByteArray());
 
         f.seek(entryBeginOffset + 14);
@@ -346,22 +331,14 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
             closeEntry();
         RandomAccessFile f = this.file;
         long cDirOffset = f.getFilePointer();
-        if (cDirOffset > Integer.MAX_VALUE)
-            throw new ZipException("Zip64 is required, while ZFW not support it yet");
         List<byte[]> attrs = this.attrList;
         for (int i = 0; i < attrs.size(); i++) {
             f.write(attrs.get(i));
         }
 
-        bw.writeInt(HEADER_EOF)
-          .writeShortR(0)
-          .writeShortR(0)
-          .writeShortR(attrs.size())
-          .writeShortR(attrs.size())
-          .writeIntR((int) (f.getFilePointer() - cDirOffset))
-          .writeIntR((int) cDirOffset)
-          .writeShortR(comment.length)
-          .writeBytes(comment);
+        eof.cDirOffset = cDirOffset;
+        eof.cDirLen = f.getFilePointer() - cDirOffset;
+        MutableZipFile.writeEOF(bw, eof, attrs.size(), f.getFilePointer());
         f.write(buffer.list, 0, buffer.pos());
 
         attrList.clear();
@@ -375,11 +352,6 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
 
     @Override
     public void close() throws IOException {
-        finish();
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
         finish();
     }
 }

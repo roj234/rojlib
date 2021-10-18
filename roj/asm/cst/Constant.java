@@ -30,14 +30,12 @@ import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
  */
-public abstract class Constant {
-    private char index;
+public abstract class Constant implements Cloneable {
+    char index;
 
     Constant() {}
 
@@ -64,4 +62,12 @@ public abstract class Constant {
     }
 
     public abstract byte type();
+
+    @Override
+    public Constant clone() {
+        try {
+            return (Constant) super.clone();
+        } catch (CloneNotSupportedException unable) {}
+        return null;
+    }
 }

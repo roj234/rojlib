@@ -26,42 +26,44 @@
 
 package roj.asm.tree.anno;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/1/9 14:23
  */
-public final class AnnValArray extends roj.asm.tree.anno.AnnVal {
-    public AnnValArray(List<roj.asm.tree.anno.AnnVal> value) {
-        super(AnnotationType.ARRAY);
+public final class AnnValArray extends AnnVal {
+    public AnnValArray(List<AnnVal> value) {
         this.value = value;
     }
 
-    public List<roj.asm.tree.anno.AnnVal> value;
+    public List<AnnVal> value;
 
-    public void _toByteArray(ConstantWriter pool, ByteWriter w) {
-        w.writeShort((short) value.size());
-        for (roj.asm.tree.anno.AnnVal val : value) {
-            val.toByteArray(pool, w);
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
+        w.writeByte((byte) ARRAY).writeShort(value.size());
+        for (int i = 0; i < value.size(); i++) {
+            value.get(i).toByteArray(pool, w);
         }
     }
 
     public String toString() {
         StringBuilder sb = new StringBuilder("{");
-        for (AnnVal val : value) {
-            sb.append(val).append(", ");
-        }
-        if (value.size() > 0)
+        if (value.size() > 0) {
+            for (int i = 0; i < value.size(); i++) {
+                AnnVal val = value.get(i);
+                sb.append(val).append(", ");
+            }
             sb.delete(sb.length() - 2, sb.length());
-        sb.append('}');
+        }
+        return sb.append('}').toString();
+    }
 
-        return sb.toString();
+    @Override
+    public byte type() {
+        return ARRAY;
     }
 }

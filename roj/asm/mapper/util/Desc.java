@@ -27,8 +27,8 @@ package roj.asm.mapper.util;
 
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.simple.MoFNode;
-import roj.asm.util.ConstantWriter;
+import roj.asm.tree.MoFNode;
+import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.util.ByteWriter;
 
@@ -94,7 +94,7 @@ public final class Desc implements MoFNode {
     }
 
     @Override
-    public void toByteArray(ConstantWriter pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
         throw new UnsupportedOperationException();
     }
 

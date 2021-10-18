@@ -26,8 +26,7 @@
 package roj.asm.mapper.util;
 
 import roj.asm.tree.IClass;
-import roj.asm.tree.simple.MoFNode;
-import roj.asm.util.AttributeList;
+import roj.asm.tree.MoFNode;
 import roj.asm.util.FlagList;
 import roj.reflect.ReflectionUtils;
 
@@ -65,18 +64,8 @@ public class ReflectClass implements IClass {
     }
 
     @Override
-    public void className(String n) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
     public String parentName() {
         return owner.getSuperclass().getName().replace('.', '/');
-    }
-
-    @Override
-    public void parentName(String n) {
-        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
@@ -112,11 +101,6 @@ public class ReflectClass implements IClass {
 
     @Override
     public int getFieldByName(String name) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
-    public AttributeList attributes() {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

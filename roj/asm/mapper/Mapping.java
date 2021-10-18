@@ -221,21 +221,31 @@ public class Mapping {
 
             self.addAll(entry.getValue());
 
+            int cycle = 0;
             /**
              * excepted order:
              *     fatherclass fatheritf grandclass granditf, etc...
              */
             do {
+                if (cycle++ > 30)
+                    throw new IllegalStateException("Probably circular reference for " + name + " " + l);
                 l.addAll(self);
-                for (String s : self) {
+                if ((cycle & 3) == 0)
+                    l.preClean();
+                for (int i = 0; i < self.size(); i++) {
+                    String s = self.get(i);
                     Collection<String> tmp;
                     if ((tmp = superMap.get(s)) != null) {
                         if (tmp.getClass() != MapperList.class) {
                             next.addAll(tmp);
+                            if (cycle > 15 && tmp.contains(s))
+                                throw new IllegalStateException("Circular reference in " + s);
                         } else {
                             l.addAll(tmp);
                         }
                     }
+                    if (cycle > 15 && next.contains(s))
+                        throw new IllegalStateException("Circular reference in " + s);
                 }
                 ArrayList<String> tmp1 = self;
                 self = next;

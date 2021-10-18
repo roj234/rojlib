@@ -27,7 +27,6 @@ package roj.io;
 
 import roj.collect.MyHashMap;
 import roj.concurrent.PrefixFactory;
-import roj.concurrent.Ref;
 import roj.concurrent.TaskPool;
 import roj.concurrent.WaitingIOFuture;
 import roj.concurrent.task.AbstractCalcTask;
@@ -39,7 +38,6 @@ import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
-import roj.util.Operation;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -50,10 +48,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 
@@ -87,7 +82,7 @@ public final class FileUtil {
 
     public static String USER_AGENT = "FileUtil-2.4.0";
     public static int MIN_ASYNC_SIZE = 1024 * 512;
-    public static boolean ENABLE_ENDPOINT_RECOVERY = true, CHECK_ETAG = true;
+    public static boolean CHECK_ETAG = true;
     public static int BUFFER_SIZE = 1024 * 4;
     public static int TIMEOUT = 10 * 1000;
 
@@ -182,21 +177,14 @@ public final class FileUtil {
     }
 
     public static byte[] downloadFileToMemory(String url) throws IOException {
-        Ref<byte[]> ref = Ref.from();
-
-        try {
-            process302(new URL(url), (httpConn) -> {
-                try (InputStream is = httpConn.getInputStream()) {
-                    int length = httpConn.getContentLength();
-
-                    ref.set(new ByteList(length).readStreamArrayFully(is).toByteArray());
-                }
-            }, false);
-        } catch (UnknownHostException e) {
-            throw new FileNotFoundException("网址不存在: " + url);
+        HttpURLConnection con = process302(new URL(url), false);
+        try (InputStream in = con.getInputStream()) {
+            int length = con.getContentLength();
+            ByteList buf = IOUtil.getSharedByteBuf();
+            buf.clear();
+            buf.ensureCapacity(length);
+            return buf.readStreamArrayFully(in).toByteArray();
         }
-
-        return ref.get();
     }
 
     /**
@@ -205,242 +193,166 @@ public final class FileUtil {
      * @param url  文件的网络地址
      * @param file 保存的文件地址
      */
-    public static void downloadFile(String url, File file) throws IOException {
-        downloadFile(url, file, new File(file.getAbsolutePath() + ".nfo"), new STDProgress(), 0, true);
+    public static WaitingIOFuture downloadFile(String url, File file) throws IOException {
+        return downloadFile(url, file, new File(file.getAbsolutePath() + ".down.nfo"), new STDProgress(), 0, true);
     }
 
-    public static void downloadFile(String url, File file, File infoFile, IProgressHandler handler, int pid, boolean deleteInfo) throws IOException {
-        if (file.isFile())
-            throw new IOException("文件已存在");
-
-        final File parent = file.getParentFile();
-        if (!parent.isDirectory() && !parent.mkdirs())
-            throw new IOException("无法创建目录");
-
-        File tempFile = new File(file.getAbsolutePath() + ".downing");
-
-        boolean flag = infoFile.isFile();
-
-        if (!flag || !ENABLE_ENDPOINT_RECOVERY) {
-            if (!tempFile.isFile() && !(tempFile.delete() || tempFile.createNewFile())) {
-                //lockFile.delete();
-                throw new IOException("无法创建文件");
-            }
-            if (!ENABLE_ENDPOINT_RECOVERY)
-                infoFile = null;
-        }
-
-        if(infoFile != null && infoFile.isFile()) {
-            File lockTest = new File(infoFile.getAbsolutePath() + System.currentTimeMillis());
-            if(!infoFile.renameTo(lockTest) || !lockTest.renameTo(infoFile))
-                throw new IOException("文件已被占用");
-        }
-
-        File fInfoFile = infoFile;
-
-        try {
-
-            process302(new URL(url), (httpConn) -> {
-                singleThread0(file, handler, pid, deleteInfo, tempFile, fInfoFile, httpConn);
-            }, false);
-
-        } catch (UnknownHostException e) {
-            throw new FileNotFoundException("网址不存在: " + url);
-        }
-    }
-
-    private static void singleThread0(File file, IProgressHandler handler, int pid, boolean deleteInfo, File tempFile, File fInfoFile, HttpURLConnection httpConn) throws IOException {
-        long length = httpConn.getContentLengthLong();
-
-        httpConn.disconnect();
-
-        if (tempFile.length() != length) {
-            RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
-            raf.setLength(length);
-            raf.close();
-        }
-
-        final Downloader downloader = new Downloader(pid, tempFile, fInfoFile, httpConn.getURL(), 0, length, handler);
-        handler.onInitial(1);
-        downloader.waitFor();
-        handler.onReturn();
-
-        StringBuilder err = new StringBuilder();
-
-        if (!tempFile.renameTo(file)) {
-            err.append("文件重命名失败, 请手动把 ").append(tempFile.getName()).append(" 重命名为 ").append(file.getName());
-        }
-        if (deleteInfo && (fInfoFile != null && !fInfoFile.delete())) {
-            err.append("; 下载进度删除失败 ").append(fInfoFile.getName());
-        }
-
-        if(err.length() > 0)
-            throw new IOException(err.toString());
-    }
-
-    /**
-     * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
-     */
-    public static WaitingIOFuture downloadFileAsync(String address, File file, IProgressHandler handler) throws IOException {
-        return downloadFileAsync(address, file, new File(file.getAbsolutePath() + ".mtd.nfo"), handler, 0, true);
-    }
-
-    /**
-     * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
-     */
-    public static WaitingIOFuture downloadFileAsync(String address, File file) throws IOException {
-        return downloadFileAsync(address, file, new File(file.getAbsolutePath() + ".mtd.nfo"), new MTDProgress(), 0, true);
-    }
-
-    /**
-     * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
-     */
-    public static WaitingIOFuture downloadFileAsync(String address, File file, int max) throws IOException {
-        return downloadFileAsync(address, file, new File(file.getAbsolutePath() + ".mtd.nfo"), new MTDProgress(), 0, true, max);
-    }
-
-    /**
-     * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
-     */
-    public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler) throws IOException {
-        return downloadFileAsync(address, file, infoFile, handler, 0, true);
-    }
-
-    /**
-     * @see #downloadFileAsync(String, File, File, IProgressHandler, int, boolean, int)
-     */
-    public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler, int startPid, boolean deleteInfoFile) throws IOException {
-        return downloadFileAsync(address, file, infoFile, handler, startPid, deleteInfoFile, Runtime.getRuntime().availableProcessors() << 2);
-    }
-
-    /**
-     * 多线程下载文件
-     *
-     * @param address        文件的网络地址
-     * @param file           保存的文件地址
-     * @param infoFile       下载进度文件
-     * @param handler        进度条处理器
-     * @param startPid       线程起始ID
-     * @param deleteInfo 完成后删除进度
-     * @param threadMax      最大线程数
-     */
-    public static WaitingIOFuture downloadFileAsync(String address, File file, File infoFile, IProgressHandler handler, int startPid, boolean deleteInfo, final int threadMax) throws IOException {
+    public static WaitingIOFuture downloadFile(String url, File file, File info, IProgressHandler handler, int pid, boolean deleteInfo) throws IOException {
         if(file.isFile()) {
             return new ImmediateFuture("done");
         }
 
-        final File parent = file.getParentFile();
+        File parent = file.getParentFile();
         if (parent != null && !parent.isDirectory() && !parent.mkdirs())
-            throw new IOException("无法创建目录");
+            throw new IOException("无法创建下载目录");
 
-        File tempFile = new File(file.getAbsolutePath() + ".downloading");
-
-        URL url = new URL(address);
-
-        boolean flag = infoFile.isFile() && ENABLE_ENDPOINT_RECOVERY;
-
-        if (!flag && tempFile.isFile() && !tempFile.delete()) {
-            //lockFile.delete();
-            throw new IOException("无法删除零食文件");
-        }
-        if (!ENABLE_ENDPOINT_RECOVERY) {
-            infoFile = null;
+        if(info.isFile() && !checkTotalWritePermission(info)) {
+            throw new IOException("下载进度文件无法写入");
         }
 
-        if(infoFile != null && infoFile.isFile()) {
-            if(!checkTotalWritePermission(infoFile)) {
-                throw new IOException("文件已被占用");
+        return singleThread0(file, handler, pid, deleteInfo ? DFLAG_KEEP_INFO_FILE : 0, info, process302(new URL(url), false));
+    }
+
+    private static WaitingIOFuture singleThread0(File file, IProgressHandler handler, int pid, int flag, File info, HttpURLConnection conn) throws IOException {
+        long length = conn.getContentLengthLong();
+        conn.disconnect();
+
+        File tmp = new File(file.getAbsolutePath() + ".down");
+        if (tmp.length() != length) {
+            allocSparseFile(tmp, length);
+        }
+
+        Downloader dn = new Downloader(pid, tmp, info, conn.getURL(), 0, length, handler);
+        ioPool.pushTask(dn);
+
+        return new DOWN(Collections.singletonList(dn), handler, file, flag).infoSpecified(info);
+    }
+
+    /**
+     * @see #downloadFileAsync(String, File, IProgressHandler, int, int)
+     */
+    public static WaitingIOFuture downloadFileAsync(String address, File file, IProgressHandler handler) throws IOException {
+        return downloadFileAsync(address, file, handler, 0, Runtime.getRuntime().availableProcessors() << 2);
+    }
+
+    /**
+     * @see #downloadFileAsync(String, File, IProgressHandler, int, int)
+     */
+    public static WaitingIOFuture downloadFileAsync(String address, File file) throws IOException {
+        return downloadFileAsync(address, file, new MTDProgress(), 0, Runtime.getRuntime().availableProcessors() << 2);
+    }
+
+    /**
+     * @see #downloadFileAsync(String, File, IProgressHandler, int, int)
+     */
+    public static WaitingIOFuture downloadFileAsync(String address, File file, int thread) throws IOException {
+        return downloadFileAsync(address, file, new MTDProgress(), 0, thread);
+    }
+
+    public static final int DFLAG_KEEP_INFO_FILE = 1;
+
+    /**
+     * 多线程下载文件
+     *
+     * @param address    文件的网络地址
+     * @param file       文件的保存地址
+     * @param handler    进度条处理器
+     * @param flag       标记
+     * @param threadMax  最大线程数
+     */
+    public static WaitingIOFuture downloadFileAsync(String address, File file, IProgressHandler handler, int flag, int threadMax) throws IOException {
+        if(file.isFile()) {
+            return new ImmediateFuture("done");
+        }
+
+        File parent = file.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs())
+            throw new IOException("无法创建下载目录");
+
+        File infoFile = new File(file.getAbsolutePath() + ".down.nfo");
+        if(infoFile.isFile() && !checkTotalWritePermission(infoFile)) {
+            throw new IOException("下载进度文件无法写入");
+        }
+
+        HttpURLConnection conn = process302(new URL(address), true);
+
+        if(conn.getHeaderField("ETag") == null && conn.getHeaderField("Last-Modified") == null) {
+            return singleThread0(file, handler, 0, flag, infoFile, conn);
+        }
+
+        File downTmp = new File(file.getAbsolutePath() + ".down");
+        if (CHECK_ETAG) {
+            File tagFile = new File(infoFile.getAbsolutePath() + ".down.tag");
+            BoxFile aoc = new BoxFile(tagFile);
+            aoc.load();
+            if (/*!conn.getHeaderField("ETag").equals(aoc.getUTF("ETag")) || */
+                    !conn.getHeaderField("Last-Modified").equals(aoc.getUTF("Last-Modified"))) {
+                if (aoc.contains("ETag") && !infoFile.delete()) {
+                    throw new IOException("fInfoFile文件已被占用");
+                }
+                aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
+                aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));
+            }
+            aoc.close();
+        }
+        conn.disconnect();
+
+        long remain = conn.getContentLengthLong();
+        allocSparseFile(downTmp, remain);
+
+        int id = 0;
+
+        long each = Math.max(remain / threadMax, 4096);
+        long off = 0;
+
+        List<AbstractCalcTask<Void>> tasks = new ArrayList<>(threadMax);
+        URL url = conn.getURL();
+        if (each > MIN_ASYNC_SIZE)
+            while (remain >= each && id < threadMax) {
+                Downloader dn = new Downloader(id++, downTmp, infoFile, url, off, each, handler);
+                if (dn.getDownloaded() != -1) {
+                    ioPool.pushTask(dn);
+                    tasks.add(dn);
+                }
+
+                off += each;
+                remain -= each;
+            }
+        if (remain > 0) {
+            Downloader dn = new Downloader(id, downTmp, infoFile, url, off, remain, handler);
+            if (dn.getDownloaded() != -1) {
+                ioPool.pushTask(dn);
+                tasks.add(dn);
             }
         }
 
-        File fInfoFile = infoFile;
-
-        List<AbstractCalcTask<Void>> tasks = new ArrayList<>(threadMax);
-        try {
-            process302(url, (conn) -> {
-
-                URL url1 = conn.getURL();
-
-                if(/*conn.getResponseCode() != 206*/conn.getHeaderField("ETag") == null) { // Partial content
-                    singleThread0(file, handler, 0, deleteInfo, tempFile, fInfoFile, conn);
-                    if(!fInfoFile.delete()) {
-                        fInfoFile.deleteOnExit();
-                        //throw new IOException("fInfoFile文件已被占用");
-                    }
-                    System.out.println("不支持多线程！");
-                    return;
-                }
-
-                if (CHECK_ETAG) {
-                    File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
-                    BoxFile aoc = new BoxFile(tagFile);
-                    aoc.load();
-                    if (!conn.getHeaderField("ETag").equals(aoc.getUTF("ETag")) || !conn.getHeaderField("Last-Modified").equals(aoc.getUTF("Last-Modified"))) {
-                        if (aoc.contains("ETag") && !fInfoFile.delete()) {
-                            throw new IOException("fInfoFile文件已被占用");
-                        }
-                        aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
-                        aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));
-                    }
-                    aoc.close();
-                }
-                conn.disconnect();
-
-                long length = conn.getContentLengthLong();
-                if (tempFile.length() != length) {
-                    if (!tempFile.isFile() || tempFile.length() == 0) {
-                        tempFile.delete();
-                        FileChannel fc = FileChannel.open(tempFile.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE).position(length - 1);
-                        fc.write(ByteBuffer.wrap(new byte[1]));
-                        fc.close();
-                    } else {
-                        RandomAccessFile raf = new RandomAccessFile(tempFile, "rw");
-                        raf.setLength(length); // alloc
-                        raf.close();
-                    }
-                }
-
-                int remain = threadMax;
-
-                long chip = Math.max(length / threadMax, threadMax);
-                long off = 0;
-
-                if (chip > MIN_ASYNC_SIZE)
-                    while (length >= chip && remain-- > 0) {
-                        Downloader downloader = new Downloader(remain + startPid, tempFile, fInfoFile, url1, off, chip, handler);
-                        if (downloader.getDownloaded() != -1)
-                            tasks.add(downloader);
-
-                        off += chip;
-                        length -= chip;
-                    }
-                if (length > 0) {
-                    Downloader downloader = new Downloader(threadMax + startPid, tempFile, fInfoFile, url1, off, length, handler);
-                    if (downloader.getDownloaded() != -1)
-                        tasks.add(downloader);
-                }
-            }, true);
-        } catch (UnknownHostException e) {
-            throw new FileNotFoundException("网址不存在: " + address);
-        }
-
-        if(tasks.isEmpty()) {
-            return new ImmediateFuture("unsupported");
-        }
-
-        handler.onInitial(tasks.size());
-
-        for (AbstractCalcTask<Void> task : tasks) {
-            ioPool.pushTask(task);
-        }
-
-        return new MTD(tasks, handler, tempFile, file, deleteInfo, fInfoFile);
+        return new DOWN(tasks, handler, file, flag);
     }
 
-    public static void process302(URL url, Operation<IOException, HttpURLConnection> operation, boolean headOnly) throws IOException {
+    public static void allocSparseFile(File file, long length) throws IOException {
+        if (file.length() != length) {
+            if (!file.isFile() || file.length() < length) {
+                file.delete();
+                FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE).position(length - 1);
+                fc.write(ByteBuffer.wrap(new byte[1]));
+                fc.close();
+            } else if (length < Integer.MAX_VALUE) {
+                RandomAccessFile raf = new RandomAccessFile(file, "rw");
+                raf.setLength(length); // alloc
+                raf.close();
+            }
+        }
+    }
+
+    public static HttpURLConnection process302(URL url, boolean headOnly) throws IOException {
         HttpURLConnection conn;
+        int max = 10;
         do {
-            conn = (HttpURLConnection) url.openConnection();
+            try {
+                conn = (HttpURLConnection) url.openConnection();
+            } catch (UnknownHostException e) {
+                throw new FileNotFoundException("网址不存在: " + url);
+            }
             conn.setRequestMethod(headOnly ? "HEAD" : "GET");
             conn.setConnectTimeout(TIMEOUT);
             conn.setReadTimeout(TIMEOUT);
@@ -450,6 +362,8 @@ public final class FileUtil {
             if (code >= 200 && code < 400) {
                 String location = conn.getHeaderField("Location");
                 if (location != null) {
+                    if (max-- < 0)
+                        throw new FileNotFoundException("重定向过多");
                     conn.disconnect();
                     url = new URL(location);
                     continue;
@@ -457,9 +371,7 @@ public final class FileUtil {
                     throw new FileNotFoundException("远程返回状态码: " + code);
                 }
 
-                operation.work(conn);
-
-                break;
+                return conn;
             } else {
                 throw new FileNotFoundException("远程返回状态码: " + code);
             }
@@ -529,21 +441,18 @@ public final class FileUtil {
         }
     }
 
-    private static class MTD implements WaitingIOFuture {
+    private static class DOWN implements WaitingIOFuture {
         private final List<AbstractCalcTask<Void>> tasks;
         private final IProgressHandler handler;
-        private final File tempFile;
         private final File file;
+        private File info;
         private final boolean deleteInfo;
-        private final File fInfoFile;
 
-        public MTD(List<AbstractCalcTask<Void>> tasks, IProgressHandler handler, File tempFile, File file, boolean deleteInfo, File fInfoFile) {
+        public DOWN(List<AbstractCalcTask<Void>> tasks, IProgressHandler handler, File file, int flag) {
             this.tasks = tasks;
             this.handler = handler;
-            this.tempFile = tempFile;
             this.file = file;
-            this.deleteInfo = deleteInfo;
-            this.fInfoFile = fInfoFile;
+            this.deleteInfo = (flag & DFLAG_KEEP_INFO_FILE) == 0;
         }
 
         @Override
@@ -551,9 +460,7 @@ public final class FileUtil {
             for (AbstractCalcTask<Void> task : tasks) {
                 try {
                     task.get();
-                } catch (InterruptedException e) {
-                    System.err.println("That shouldn't happen!");
-                    e.printStackTrace();
+                } catch (InterruptedException ignored) {
                 } catch (ExecutionException e) {
                     handler.errorCaught();
 
@@ -574,28 +481,28 @@ public final class FileUtil {
 
             StringBuilder err = new StringBuilder();
 
-            if(fInfoFile != null) {
-                File tagFile = new File(fInfoFile.getAbsolutePath() + ".tag");
-                if(tagFile.isFile() && !tagFile.delete()) {
-                    tagFile.deleteOnExit();
-                    err.append("; ETag缓存删除失败 ").append(tagFile.getAbsolutePath());
+            File tag = new File(file.getAbsolutePath() + ".down.tag");
+            if(tag.isFile() && !tag.delete()) {
+                tag.deleteOnExit();
+                err.append("; ETag标记删除失败. ");
+            }
+
+            if (deleteInfo) {
+                File nfo = info != null ? info : new File(file.getAbsolutePath() + ".down.nfo");
+                if (nfo.isFile() && !nfo.delete()) {
+                    nfo.deleteOnExit();
+                    err.append("; 下载进度删除失败. ");
                 }
             }
 
+            File tempFile = new File(file.getAbsolutePath() + ".down");
             if (!tempFile.renameTo(file)) {
                 if(file.isFile()) {
                     err.append("; 文件已被另一个线程完成.");
                 } else {
-                    err.append("; 文件重命名失败, 请手动把 ").append(tempFile.getAbsolutePath()).append(" 重命名为 ").append(file.getAbsolutePath());
+                    err.append("; 文件重命名失败.");
                 }
             }
-            if (deleteInfo && (fInfoFile != null && fInfoFile.isFile() && !fInfoFile.delete())) {
-                err.append("; 下载进度删除失败 ").append(fInfoFile.getAbsolutePath());
-                fInfoFile.deleteOnExit();
-            }
-            //if (lockFile.isFile() && !lockFile.delete()) {
-            //    err.append("; 文件锁删除失败 ").append(lockFile.getName());
-            //}
 
             if(err.length() > 0)
                 throw new IOException(err.toString());
@@ -614,6 +521,11 @@ public final class FileUtil {
         @Override
         public String toString() {
             return tasks.toString();
+        }
+
+        public DOWN infoSpecified(File info) {
+            this.info = info;
+            return this;
         }
     }
 

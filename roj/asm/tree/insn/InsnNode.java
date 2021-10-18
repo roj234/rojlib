@@ -27,8 +27,8 @@
 package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.Opcodes;
-import roj.asm.util.ConstantWriter;
+import roj.asm.OpcodeUtil;
+import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
@@ -128,11 +128,11 @@ public abstract class InsnNode implements Helpers.Node {
         return T_OTHER;
     }
 
-    public abstract void toByteArray(ConstantWriter cw, ByteWriter w);
+    public abstract void toByteArray(ConstantPool cw, ByteWriter w);
 
     public int nodeSize() { return -1; }
 
     public String toString() {
-        return Opcodes.toString0(code);
+        return OpcodeUtil.toString0(code);
     }
 }

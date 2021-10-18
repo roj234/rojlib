@@ -28,66 +28,200 @@ package roj.collect;
 import roj.text.CharList;
 
 import javax.annotation.Nonnull;
+import java.util.Arrays;
 import java.util.Iterator;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/11/9 23:10
  */
-public abstract class TrieEntry<T extends TrieEntry<T>> implements Iterable<T> {
-    protected final char c;
-    protected CharMap<T> children;
+public abstract class TrieEntry implements Iterable<TrieEntry> {
+    final char c;
 
-    protected TrieEntry(char ch) {
+    private TrieEntry next;
+
+    TrieEntry(char ch) {
         this.c = ch;
-        this.children = new CharMap<>(1, 1.5f);
     }
 
     public int childrenCount() {
-        return children.size();
+        return size;
     }
 
-    public void putChild(T e) {
-        children.put(e.c, e);
+    public final void putChild(TrieEntry te) {
+        if (size > length * 1.3f) {
+            length <<= 1;
+            resize();
+        }
+
+        char key = te.c;
+        if (entries == null)
+            entries = new TrieEntry[length];
+        TrieEntry prev = null, entry = entries[idx(key)];
+        if (entry == null) {
+            entries[idx(key)] = te;
+            return;
+        }
+        while (true) {
+            if (entry.c == key) {
+                if (prev == null) {
+                    entries[idx(key)] = te;
+                } else {
+                    prev.next = te;
+                }
+                te.next = entry.next;
+                return;
+            }
+            if (entry.next == null)
+                break;
+            prev = entry;
+            entry = entry.next;
+        }
+        entry.next = te;
+        size++;
     }
 
-    public boolean removeChild(T e) {
-        return children.remove(e.c) != null;
+    public final boolean removeChild(TrieEntry te) {
+        TrieEntry prevEntry = null;
+        TrieEntry entry = first(te.c);
+        while (entry != null) {
+            if (entry.c == te.c) {
+                break;
+            }
+            prevEntry = entry;
+            entry = entry.next;
+        }
+
+        if (entry == null)
+            return false;
+
+        this.size--;
+
+        if (prevEntry != null) {
+            prevEntry.next = entry.next;
+        } else {
+            this.entries[idx(te.c)] = entry.next;
+        }
+
+        entry.next = null;
+
+        return true;
     }
 
-    public T getChild(char c) {
-        return children.get(c);
+    public final TrieEntry getChild(char key) {
+        TrieEntry entry = first(key);
+        while (entry != null) {
+            if (entry.c == key)
+                return entry;
+            entry = entry.next;
+        }
+        return null;
     }
 
     @Nonnull
     @Override
-    public Iterator<T> iterator() {
-        return children.values().iterator();
+    public final Iterator<TrieEntry> iterator() {
+        return new ValItr(this);
     }
 
-    public abstract int copyFrom(T node);
+    public abstract int copyFrom(TrieEntry node);
 
-    protected abstract T newInstance();
+    abstract TrieEntry newInstance();
 
-    protected abstract int recursionSum();
+    abstract int recursionSum();
 
     CharSequence text() {
         return null;
     }
 
-    protected void append(CharList sb) {
+    void append(CharList sb) {
         sb.append(c);
     }
 
-    protected int length() {
+    int length() {
         return 1;
     }
 
     @Override
     public String toString() {
         return "CE{" + c + "}";
+    }
+
+    TrieEntry[] entries;
+    int size = 0;
+    int length = 1;
+
+    private void resize() {
+        TrieEntry[] newEntries = new TrieEntry[length];
+        TrieEntry entry;
+        TrieEntry next;
+        int i = 0, j = entries.length;
+        for (; i < j; i++) {
+            entry = entries[i];
+            while (entry != null) {
+                next = entry.next;
+                int newKey = idx(entry.c);
+                TrieEntry entry2 = newEntries[newKey];
+                newEntries[newKey] = entry;
+                entry.next = entry2;
+                entry = next;
+            }
+        }
+
+        this.entries = newEntries;
+    }
+
+    private int idx(int id) {
+        return (id ^ (id >> 8)) & (length - 1);
+    }
+
+    private TrieEntry first(char k) {
+        if (entries == null) {
+            return null;
+        }
+        return entries[idx(k)];
+    }
+
+    public final void clear() {
+        if (size == 0) return;
+        size = 0;
+        if (entries != null)
+            Arrays.fill(entries, null);
+    }
+
+    static final class ValItr extends AbstractIterator<TrieEntry> {
+        TrieEntry map, entry;
+        int i;
+
+        public ValItr(TrieEntry map) {
+            this.map = map;
+            if (map.entries == null)
+                stage = ENDED;
+        }
+
+        @Override
+        public boolean computeNext() {
+            TrieEntry[] entries = map.entries;
+            while (true) {
+                if (entry != null) {
+                    result = entry;
+                    entry = entry.next;
+                    return true;
+                } else {
+                    if (i < entries.length) {
+                        this.entry = entries[i++];
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    public void resetMap() {
+        this.length = 1;
+        this.entries = null;
+        this.size = 0;
     }
 }

@@ -26,24 +26,25 @@
 
 package roj.asm.tree;
 
+import roj.asm.SharedBuf;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.util.*;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.FlagList;
+import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
+ * @version 1.0
  * @since 2021/6/18 9:51
  */
 public final class Field implements MoFNode {
@@ -66,6 +67,7 @@ public final class Field implements MoFNode {
         ByteReader r = new ByteReader();
 
         AttributeList al = field.attributes;
+        attributes.ensureCapacity(al.size());
         for (int i = 0; i < al.size(); i++) {
             Attribute attr = al.get(i);
             if(attr.getClass() == AttrUnknown.class) {
@@ -136,7 +138,7 @@ public final class Field implements MoFNode {
     public AttributeList attributes = new AttributeList();
     public Signature signature;
 
-    public void toByteArray(ConstantWriter pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
         w.writeShort(accesses.flag).writeShort(pool.getUtfId(name)).writeShort(pool.getUtfId(ParamHelper.getField(type)));
 
         if (signature != null)
@@ -165,6 +167,22 @@ public final class Field implements MoFNode {
     @Override
     public FlagList accessFlag() {
         return accesses;
+    }
+
+    FieldSimple i_downgrade(ConstantPool cw) {
+        FieldSimple f = new FieldSimple(accesses, cw.getUtf(name), cw.getUtf(rawDesc()));
+        f.attributes.ensureCapacity(attributes.size() +
+                                            (signature == null ? 0 : 1));
+        ByteWriter w = new ByteWriter(SharedBuf.i_get());
+        for (int i = 0; i < attributes.size(); i++) {
+            f.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
+        }
+        if (signature != null) {
+            w.list.clear();
+            w.writeShort(cw.getUtfId(signature.toGeneric()));
+            f.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
+        }
+        return f;
     }
 
     public AttrAnnotation getAnnotations() {

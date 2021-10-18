@@ -102,7 +102,7 @@ public final class Type implements IType, IGeneric {
     }
 
     @Override
-    public void appendString(CharList sb) {
+    public void appendString(CharList sb, Signature parent) {
         if (this.owner != null) {
             sb.append(owner);
         } else {
@@ -141,7 +141,7 @@ public final class Type implements IType, IGeneric {
 
     public String toString() {
         CharList sb = new CharList();
-        appendString(sb);
+        appendString(sb, null);
         return sb.toString();
     }
 

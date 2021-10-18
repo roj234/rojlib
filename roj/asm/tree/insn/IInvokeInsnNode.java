@@ -65,7 +65,7 @@ public abstract class IInvokeInsnNode extends InsnNode {
         return params;
     }
 
-    public final String rawParameters() {
+    public final String rawDesc() {
         return this.rawParam;
     }
 

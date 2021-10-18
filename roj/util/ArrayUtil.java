@@ -83,9 +83,9 @@ public final class ArrayUtil {
         }
     }
 
-    public static void shuffle(List<Object> arr, Random random) {
+    public static <T> void shuffle(List<T> arr, Random random) {
         for (int i = 0; i < arr.size(); i++) {
-            Object a = arr.get(i);
+            T a = arr.get(i);
             int an = random.nextInt(arr.size());
             arr.set(i, arr.get(an));
             arr.set(an, a);

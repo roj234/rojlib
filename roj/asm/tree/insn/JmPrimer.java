@@ -27,7 +27,7 @@
 package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.collect.LinkedIntMap;
 import roj.util.ByteWriter;
 
@@ -90,7 +90,7 @@ public final class JmPrimer extends InsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         throw new UnsupportedOperationException();
     }
 

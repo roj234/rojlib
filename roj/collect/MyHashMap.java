@@ -670,6 +670,10 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             }
             return null;
         } else if(entry == null) {
+            if (size > length * loadFactor) {
+                length <<= 1;
+                resize();
+            }
             entry = getOrCreateEntry(key);
         }
 
@@ -686,6 +690,10 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         if(entry != null && entry.v != NOT_USING)
             return entry.v;
         if(entry == null) {
+            if (size > length * loadFactor) {
+                length <<= 1;
+                resize();
+            }
             entry = getOrCreateEntry(key);
         }
         if(entry.v == NOT_USING)
@@ -721,6 +729,10 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
 
     @Override
     public V putIfAbsent(K key, V v) {
+        if (size > length * loadFactor) {
+            length <<= 1;
+            resize();
+        }
         Entry<K, V> entry = getOrCreateEntry(key);
         if(entry.v == NOT_USING) {
             size++;

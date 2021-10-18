@@ -30,11 +30,11 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.Signature;
-import roj.asm.util.*;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.FlagList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -181,7 +181,7 @@ public final class Clazz implements IClass {
         poolBuffer.clear();
         mainBuffer.clear();
 
-        ConstantWriter pool = new ConstantWriter();
+        ConstantPool pool = new ConstantPool();
 
         ByteWriter w = new ByteWriter(poolBuffer)
                 .writeShort(accesses.flag)
@@ -320,11 +320,6 @@ public final class Clazz implements IClass {
     }
 
     @Override
-    public void className(String n) {
-        name = n.toString();
-    }
-
-    @Override
     public List<String> interfaces() {
         return interfaces;
     }
@@ -332,11 +327,6 @@ public final class Clazz implements IClass {
     @Override
     public String parentName() {
         return parent;
-    }
-
-    @Override
-    public void parentName(String n) {
-        parent = n;
     }
 
     @Override
@@ -368,11 +358,6 @@ public final class Clazz implements IClass {
             if (fs.name().equals(key)) return i;
         }
         return -1;
-    }
-
-    @Override
-    public AttributeList attributes() {
-        return attributes;
     }
 
     @Override

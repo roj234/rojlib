@@ -54,7 +54,7 @@ public final class CYamlDate extends CLong {
                 off = i;
             }
         }
-        long timestamp = ACalendar.daySinceAD(buf[0], buf[1], buf[2], null) * 86400000;
+        long timestamp = (ACalendar.daySinceAD(buf[0], buf[1], buf[2], null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000;
         return new CYamlDate(timestamp);
     }
 

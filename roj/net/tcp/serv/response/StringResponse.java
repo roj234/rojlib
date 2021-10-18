@@ -92,7 +92,7 @@ public class StringResponse implements HTTPResponse {
             list.add((byte) '\n'); // EOF flag
             buf = list;
         } else {
-            buf.compress();
+            buf.trimToSize();
             buf.rewrite();
         }
     }

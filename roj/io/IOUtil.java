@@ -31,6 +31,7 @@ import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.FastThreadLocal;
 import sun.nio.ch.DirectBuffer;
+import sun.reflect.Reflection;
 
 import java.io.*;
 import java.nio.Buffer;
@@ -91,7 +92,11 @@ public class IOUtil {
     }
 
     public static byte[] read(String path) throws IOException {
-        return read1(IOUtil.class, path, getSharedByteBuf()).toByteArray();
+        Class<?> caller = IOUtil.class;
+        try {
+            caller = Reflection.getCallerClass();
+        } catch (Throwable ignored) {}
+        return read1(caller, path, getSharedByteBuf()).toByteArray();
     }
 
     public static byte[] read(Class<?> provider, String path) throws IOException {

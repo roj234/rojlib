@@ -30,20 +30,17 @@ import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodSimple;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.anno.AnnotationType;
 import roj.asm.tree.attr.AttrAnnotation;
 import roj.asm.tree.attr.AttrBootstrapMethods;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeDynInsnNode;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.type.ParamHelper;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteReader;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -88,7 +85,7 @@ public class SideTransformer implements IClassTransformer {
                 if ((method.accesses.flag & 0x1000) == 0)
                     continue;
                 for (AttrBootstrapMethods.BootstrapMethod dynamicLambdaHandle : dynamicLambdaHandles) {
-                    if (method.name.getString().equals(dynamicLambdaHandle.name) && method.type.getString().equals(dynamicLambdaHandle.rawDesc)) {
+                    if (method.name.getString().equals(dynamicLambdaHandle.name) && method.type.getString().equals(dynamicLambdaHandle.rawDesc())) {
                         System.out.println("Remove lmd method " + dynamicLambdaHandle);
                         it.remove();
                         lambdaGatherer.accept(method);
@@ -100,17 +97,17 @@ public class SideTransformer implements IClassTransformer {
         return Parser.toByteArray(classNode);
     }
 
-    public static final String SIDEONLY_TYPE = ParamHelper.classDescriptor(SideOnly.class);
+    public static final String SIDEONLY_TYPE = SideOnly.class.getName().replace('.', '/');
 
     private boolean remove(ConstantPool cst, Attribute anns, String side) {
         if (anns == null)
             return false;
-        AttrAnnotation annotations = new AttrAnnotation(true, new ByteReader(anns.getRawData()), cst);
+        AttrAnnotation annotations = new AttrAnnotation(true, Parser.reader(anns), cst);
         for (Annotation ann : annotations.annotations) {
-            if (ann.rawDesc.equals(SIDEONLY_TYPE))
+            if (ann.clazz.equals(SIDEONLY_TYPE))
                 if (ann.values != null) {
                     AnnVal value = ann.values.get("value");
-                    if (value != null && value.type == AnnotationType.ENUM) {
+                    if (value != null && value.type() == AnnVal.ENUM) {
                         if (!((AnnValEnum) value).value.equals(side)) {
                             return true;
                         }
@@ -133,7 +130,7 @@ public class SideTransformer implements IClassTransformer {
 
         LambdaGatherer(Attribute attribute, ConstantPool pool) {
             if (attribute != null) {
-                this.bootstrapMethods = new AttrBootstrapMethods(new ByteReader(attribute.getRawData()), pool);
+                this.bootstrapMethods = new AttrBootstrapMethods(Parser.reader(attribute), pool);
                 this.pool = pool;
             }
         }
@@ -153,7 +150,7 @@ public class SideTransformer implements IClassTransformer {
         }
 
         public void visitInvokeDynamicInsn(InvokeDynInsnNode node) {
-            AttrBootstrapMethods.BootstrapMethod bsm = bootstrapMethods.methods.get(node.bootstrapTableIndex);
+            AttrBootstrapMethods.BootstrapMethod bsm = bootstrapMethods.methods.get(node.tableIdx);
             if (META_FACTORY.equals0(bsm)) {
                 System.out.println(bsm);
                 this.dynamicLambdaHandles.add(bsm);

@@ -25,10 +25,8 @@
  */
 package roj.asm.tree;
 
-import roj.asm.tree.simple.MoFNode;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.AttributeList;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.util.ByteWriter;
 
@@ -74,18 +72,8 @@ public final class AccessData implements IClass {
     }
 
     @Override
-    public void className(String n) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String parentName() {
         return superName;
-    }
-
-    @Override
-    public void parentName(String n) {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -120,11 +108,6 @@ public final class AccessData implements IClass {
     }
 
     @Override
-    public AttributeList attributes() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public byte type() {
         return 2;
     }
@@ -144,7 +127,7 @@ public final class AccessData implements IClass {
         }
 
         @Override
-        public void toByteArray(ConstantWriter pool, ByteWriter w) {
+        public void toByteArray(ConstantPool pool, ByteWriter w) {
             throw new UnsupportedOperationException();
         }
 

@@ -25,29 +25,24 @@
  */
 package ilib.asm.fasterforge;
 
+import ilib.asm.fasterforge.anc.FastParser;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import org.objectweb.asm.Type;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.type.ParamHelper;
-import roj.util.Helpers;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import javax.annotation.Nullable;
 import java.io.File;
 import java.lang.reflect.Constructor;
-import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
@@ -60,35 +55,29 @@ public class NiximModContainerFactory {
     @Nullable
     @Inject("build")
     public ModContainer build(ASMModParser modParser, File modSource, ModCandidate container) {
-        String className = modParser.getASMType().getClassName();
-        LinkedList<Annotation> i = Helpers.cast(modParser.getAnnotations());
-
+        String cn = modParser.getASMType().getClassName();
+        List<Annotation> house = ((FastParser) modParser).getClassAnnotations();
         Type type;
-        Annotation ann;
+        for (int i = 0; i < house.size(); i++) {
+            Annotation ann = house.get(i);
+            type = Type.getType("L" + ann.clazz + ';');
+            if (modTypes.containsKey(type)) {
+                FMLLog.log.debug("检测到 {} 类型的mod ({}) - 开始加载", type, cn);
 
-        Iterator<Annotation> var5 = i.iterator();
-        do {
-            if (!var5.hasNext()) {
-                return null;
+                try {
+                    ModContainer ret = modTypes.get(type).newInstance(cn, container, TypeHelper.toPrimitive(ann.values));
+                    if (!ret.shouldLoadInEnvironment()) {
+                        FMLLog.log.debug("放弃加载 {}, mod提示不应该在这个环境加载", cn);
+                        return null;
+                    } else {
+                        return ret;
+                    }
+                } catch (Exception var8) {
+                    FMLLog.log.error("无法构建mod容器 {}", type.getClassName(), var8);
+                    return null;
+                }
             }
-
-            ann = var5.next();
-            type = Type.getType(ParamHelper.getField(ann.type));
-        } while (!modTypes.containsKey(type));
-
-        FMLLog.log.debug("检测到 {} 类型的mod ({}) - 开始加载", type, className);
-
-        try {
-            ModContainer ret = modTypes.get(type).newInstance(className, container, TypeHelper.toPrimitive(ann.values));
-            if (!ret.shouldLoadInEnvironment()) {
-                FMLLog.log.debug("放弃加载 {}, mod提示不应该在这个环境加载", className);
-                return null;
-            } else {
-                return ret;
-            }
-        } catch (Exception var8) {
-            FMLLog.log.error("无法构建mod容器 {}", type.getClassName(), var8);
-            return null;
         }
+        return null;
     }
 }

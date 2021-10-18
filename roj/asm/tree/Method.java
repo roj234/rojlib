@@ -26,19 +26,23 @@
 
 package roj.asm.tree;
 
+import roj.asm.SharedBuf;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.*;
-import roj.asm.util.*;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.FlagList;
 import roj.collect.SimpleList;
+import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.PrimitiveIterator;
+import java.util.PrimitiveIterator.OfInt;
 
 /**
  * No description provided
@@ -60,7 +64,7 @@ public final class Method implements MethodNode, MoFNode {
         this.accesses = accesses;
         this.owner = owner;
         this.name = name;
-        this.desc = desc;
+        this.rawDesc = desc;
         this.attributes = new AttributeList();
     }
 
@@ -69,7 +73,7 @@ public final class Method implements MethodNode, MoFNode {
         this.accesses = method.accesses.copy();
         this.owner = data.name;
         this.name = method.name.getString();
-        this.desc = method.type.getString();
+        this.rawDesc = method.type.getString();
         this.attributes = new AttributeList(method.attributes.size());
 
         ConstantPool pool = data.cp;
@@ -83,14 +87,18 @@ public final class Method implements MethodNode, MoFNode {
 
                 String name = attr.name;
 
-                handleAttribute(pool, r, name, r.length());
+                attr = handleAttribute(pool, r, name, r.length());
 
                 if (!r.isFinished()) {
-                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
+                    throw new IllegalStateException("[M.W.A] " + name + " has " + (r.length() - r.index) + " bytes left: " + attr);
                 }
             } else {
                 attributes.add(attr);
             }
+        }
+
+        if (code == null && !accesses.hasAny(AccessFlag.ABSTRACT | AccessFlag.NATIVE)) {
+            throw new IllegalArgumentException("Non-abstract method " + data.name + '.' + name + ':' + rawDesc + " did not contain Code attribute.");
         }
     }
 
@@ -98,7 +106,7 @@ public final class Method implements MethodNode, MoFNode {
         this.accesses = method.accesses.copy();
         this.owner = owner.className();
         this.name = method.name;
-        this.desc = method.rawDesc();
+        this.rawDesc = method.rawDesc();
         this.attributes = new AttributeList(method.attributes);
     }
 
@@ -106,20 +114,22 @@ public final class Method implements MethodNode, MoFNode {
         int len = r.readUnsignedShort();
         for (int i = 0; i < len; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
-            final int length = r.readInt();
+            int length = r.readInt();
+            int end = r.index + length;
 
-            final int end = r.index + length;
-
-            handleAttribute(pool, r, name, length);
+            Attribute attr = handleAttribute(pool, r, name, length);
 
             if (r.index != end) {
-                System.err.println("[Warning] Attribute " + name + " has " + (end - r.index) + " bytes not read correctly!");
+                new IllegalStateException(
+                "[M.I.A] " + name + " has " + (end - r.index) + " bytes left(total: " + length + "): \n"
+                + attr + "\nAt " + owner + "." + this.name + "\n" + r.getBytes().subList(r.index,
+                end - r.index)).printStackTrace();
                 r.index = end;
             }
         }
     }
 
-    private void handleAttribute(ConstantPool pool, ByteReader r, String name, int length) {
+    private Attribute handleAttribute(ConstantPool pool, ByteReader r, String name, int length) {
         Attribute attr;
         switch (name) {
             case "RuntimeVisibleTypeAnnotations":
@@ -139,7 +149,7 @@ public final class Method implements MethodNode, MoFNode {
             // 泛型签名
             case "Signature":
                 signature = Signature.parse(((CstUTF) pool.get(r)).getString());
-                return;
+                return null;
             // 显示方法参数的标识符
             case "MethodParameters":
                 attr = new AttrMethodParameters(r, pool);
@@ -155,7 +165,7 @@ public final class Method implements MethodNode, MoFNode {
             // 代码
             case "Code":
                 code = new AttrCode(this, r, pool);
-                return;
+                return code;
             // 由编译器生成
             case "Synthetic":
                 // 弃用
@@ -164,13 +174,14 @@ public final class Method implements MethodNode, MoFNode {
                 attr = new AttrUnknown(name, r.readBytesDelegated(length));
         }
         attributes.add(attr);
+        return attr;
     }
 
     public String owner, name;
-    private String desc;
 
-    private List<Type> parameters;
-    private Type returnType;
+    private String rawDesc;
+    private List<Type> params;
+    private Type       returnType;
 
     public FlagList accesses;
     public AttributeList attributes;
@@ -184,26 +195,52 @@ public final class Method implements MethodNode, MoFNode {
             attributes.add(a);
     }
 
-    public void toByteArray(ConstantWriter pool, ByteWriter w) {
+    MethodSimple i_downgrade(ConstantPool cw) {
+        if (params != null) {
+            params.add(returnType);
+            rawDesc = ParamHelper.getMethod(params);
+            params.remove(params.size() - 1);
+        }
+        MethodSimple m = new MethodSimple(accesses, cw.getUtf(name), cw.getUtf(rawDesc));
+        m.owner = owner;
+        if (params != null) {
+            m.params = params;
+        }
+        m.attributes.ensureCapacity(attributes.size() +
+                                            (code == null ? 0 : 1) +
+                                            (signature == null ? 0 : 1));
+        ByteWriter w = new ByteWriter(SharedBuf.i_get());
+        for (int i = 0; i < attributes.size(); i++) {
+            m.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
+        }
+        if (signature != null) {
+            w.list.clear();
+            w.writeShort(cw.getUtfId(signature.toGeneric()));
+            m.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
+        }
+        if (code != null) {
+            m.attributes.add(AttrUnknown.downgrade(cw, w, code));
+        }
+        return m;
+    }
+
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
         w.writeShort(accesses.flag).writeShort(pool.getUtfId(name));
 
-        if(parameters == null && desc != null) {
-            w.writeShort(pool.getUtfId(desc));
-        } else {
-            par();
-
-            parameters.add(returnType);
-            w.writeShort(pool.getUtfId(ParamHelper.getMethod(parameters)));
-            parameters.remove(parameters.size() - 1);
+        if (params != null) {
+            params.add(returnType);
+            rawDesc = ParamHelper.getMethod(params);
+            params.remove(params.size() - 1);
         }
+        w.writeShort(pool.getUtfId(rawDesc));
 
         aOn(code);
         if (signature != null)
             attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
 
         w.writeShort(attributes.size());
-        for (Attribute attr : attributes) {
-            attr.toByteArray(pool, w);
+        for (int i = 0; i < attributes.size(); i++) {
+            attributes.get(i).toByteArray(pool, w);
         }
     }
 
@@ -222,28 +259,30 @@ public final class Method implements MethodNode, MoFNode {
         if (signature != null) {
             sb.append(signature.toString().replaceFirst(" ", " " + name));
         } else {
-            par();
+            initPar();
 
             sb.append(returnType).append(' ').append(name).append('(');
 
-            if (parameters.size() > 0) {
+            if (params.size() > 0) {
                 AttrMethodParameters acc = getParameterAccesses();
                 if (acc != null && code != null) {
                     int i = 0;
                     final List<LocalVariable> list = code.getLVT().list;
-                    for (Type p : parameters) {
+                    for (int j = 0; j < params.size(); j++) {
+                        Type p = params.get(j);
                         String name = list.get(i++).name;
 
                         FlagList ls = acc.flags.get(name);
                         if (ls != null) {
-                            for (PrimitiveIterator.OfInt itr = ls.iterator(); itr.hasNext(); ) {
+                            for (OfInt itr = ls.iterator(); itr.hasNext(); ) {
                                 sb.append(AccessFlag.byIdParameter(itr.nextInt())).append(' ');
                             }
                         }
                         sb.append(p).append(' ').append(name).append(", ");
                     }
                 } else {
-                    for (Type p : parameters) {
+                    for (int i = 0; i < params.size(); i++) {
+                        Type p = params.get(i);
                         sb.append(p).append(", ");
                     }
                 }
@@ -288,49 +327,44 @@ public final class Method implements MethodNode, MoFNode {
 
     @Override
     public List<Type> parameters() {
-        par();
-        return parameters;
+        initPar();
+        return params;
     }
 
     @Override
     public Type getReturnType() {
-        par();
+        initPar();
         return returnType;
     }
 
     public void setReturnType(Type returnType) {
-        par();
+        initPar();
         this.returnType = returnType;
     }
 
-    public void resetParam(boolean byList) {
-        if (byList) {
-            parameters.add(returnType);
-            desc = ParamHelper.getMethod(parameters);
-            parameters.remove(parameters.size() - 1);
-        } else {
-            if(parameters != null) {
-                parameters.clear();
-                ParamHelper.parseMethod(desc, parameters);
-                returnType = parameters.remove(parameters.size() - 1);
-            }
-        }
-    }
-
-    private void par() {
-        if (parameters == null) {
-            if (desc == null) { // fallback
-                parameters = new SimpleList<>();
+    private void initPar() {
+        if (params == null) {
+            if (rawDesc == null) { // fallback
+                params = new SimpleList<>();
                 returnType = Type.std(NativeType.VOID);
                 return;
             }
-            parameters = ParamHelper.parseMethod(desc);
-            returnType = parameters.remove(parameters.size() - 1);
+            params = ParamHelper.parseMethod(rawDesc);
+            returnType = params.remove(params.size() - 1);
         }
     }
 
     public String rawDesc() {
-        return this.desc;
+        return this.rawDesc;
+    }
+
+    public void rawDesc(String param) {
+        this.rawDesc = param;
+        if (params != null) {
+            params.clear();
+            ParamHelper.parseMethod(param, params);
+            returnType = params.remove(params.size() - 1);
+        }
     }
 
     @Override
@@ -369,10 +403,5 @@ public final class Method implements MethodNode, MoFNode {
 
     public AttrAnnotationDefault getAnnotationDefault() {
         return (AttrAnnotationDefault) attributes.getByName(AttrAnnotationDefault.NAME);
-    }
-
-    public void setDesc(String desc) {
-        resetParam(false);
-        this.desc = desc;
     }
 }

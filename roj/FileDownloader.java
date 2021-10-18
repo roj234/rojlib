@@ -46,16 +46,15 @@ public final class FileDownloader {
             return;
         }
 
-        FileUtil.ENABLE_ENDPOINT_RECOVERY = true;
         FileUtil.CHECK_ETAG = false;
         FileUtil.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
 
         int threadCount;
         if (args.length < 3) {
-            System.out.print("线程数[0, 500](0为自动): ");
+            System.out.print("线程数: ");
             threadCount = UIUtil.getNumberInRange(0, 501);
             if (threadCount == 0) {
-                threadCount = Runtime.getRuntime().availableProcessors() << 1;
+                threadCount = Runtime.getRuntime().availableProcessors() << 2;
             }
         } else {
             threadCount = Integer.parseInt(args[2]);

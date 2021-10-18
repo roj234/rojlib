@@ -131,9 +131,9 @@ public final class Proc1_12 extends Processor {
 
             for (int i = 0; i < contexts.size(); i++) {
                 Context context = contexts.get(i);
-                ByteList result = patcher.patchClient(context.getName(), context.get());
+                ByteList result = patcher.patchClient(context.getFileName(), context.get());
                 if (result != null) {
-                    arr[0].add(new Context(context.getName(), context.get()));
+                    arr[0].add(new Context(context.getFileName(), context.get()));
                     context.set(result);
                 }
                 context.getData();
@@ -163,9 +163,9 @@ public final class Proc1_12 extends Processor {
 
             for (int i = 0; i < contexts.size(); i++) {
                 Context context = contexts.get(i);
-                ByteList result = patcher.patchServer(context.getName(), context.get());
+                ByteList result = patcher.patchServer(context.getFileName(), context.get());
                 if (result != null) {
-                    arr[0].add(new Context(context.getName(), context.get()));
+                    arr[0].add(new Context(context.getFileName(), context.get()));
                     context.set(result);
                 }
                 context.getData();
@@ -294,10 +294,10 @@ public final class Proc1_12 extends Processor {
                 try {
                     list = ctx.getCompressedShared();
                 } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    CmdUtil.warning(ctx.getFileName() + " 验证失败", e);
                     continue;
                 }
-                zfw.writeNamed(ctx.getName(), list);
+                zfw.writeNamed(ctx.getFileName(), list);
             }
             merged.clear();
             for (int i = 0; i < fgResult.size(); i++) {
@@ -306,10 +306,10 @@ public final class Proc1_12 extends Processor {
                 try {
                     list = ctx.getCompressedShared();
                 } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    CmdUtil.warning(ctx.getFileName() + " 验证失败", e);
                     continue;
                 }
-                zfw.writeNamed(ctx.getName(), list);
+                zfw.writeNamed(ctx.getFileName(), list);
             }
             fgResult.clear();
             if (DEBUG)

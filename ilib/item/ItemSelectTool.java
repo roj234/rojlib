@@ -26,8 +26,6 @@
 
 package ilib.item;
 
-import ilib.autoreg.AutoRegBlock;
-import ilib.autoreg.AutoRegItem;
 import ilib.misc.SelectionCache;
 import ilib.util.PlayerUtil;
 import net.minecraft.block.state.IBlockState;
@@ -42,9 +40,7 @@ import net.minecraft.world.World;
 
 import javax.annotation.Nonnull;
 
-@AutoRegItem(value = "ilib:select_tool", model = AutoRegBlock.ModelType.MERGED)/**
- * No description provided
- *
+/**
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51

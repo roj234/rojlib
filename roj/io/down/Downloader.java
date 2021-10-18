@@ -39,8 +39,6 @@ import java.net.URL;
 import java.util.concurrent.ExecutionException;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/9/13 12:28

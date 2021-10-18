@@ -25,12 +25,11 @@
  */
 package ilib.util;
 
-import roj.reflect.DirectAccessor;
-
+import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.resources.IResourcePack;
 import net.minecraft.util.math.Vec3d;
-
 import net.minecraftforge.fml.client.FMLClientHandler;
+import roj.reflect.DirectAccessor;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -45,19 +44,21 @@ import java.util.List;
  */
 public interface Reflection {
     Reflection HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(Reflection.class))
-                                      .access(FMLClientHandler.class, "resourcePackList")
-                                      .access(Vec3d.class, new String[] {"field_72450_a", "field_72448_b", "field_72449_c" },
-                                                    null,
-                                                    new String[] { "setVecX", "setVecY", "setVecZ" })
-                                      .delegate(Throwable.class, "getStackTraceDepth")
-                                      .delegate(EnumSet.class, "addAll")
-                                      .build();
+            .access(GuiMainMenu.class, "field_73975_c", null, "setMainMenuSplash")
+            .access(FMLClientHandler.class, "resourcePackList")
+            .access(Vec3d.class, new String[] {"field_72450_a", "field_72448_b", "field_72449_c" },
+                    null,
+                    new String[] { "setVecX", "setVecY", "setVecZ" })
+            .delegate(Throwable.class, "getStackTraceDepth")
+            .delegate(EnumSet.class, "addAll")
+            .build();
 
     static DirectAccessor<Reflection> preloadNecessaryClassesBeforeDefine(DirectAccessor<Reflection> builder) {
         return builder;
     }
 
     // region Field
+    void setMainMenuSplash(GuiMainMenu menu, String splash);
 
     List<IResourcePack> getResourcePackList(FMLClientHandler handler);
     void setResourcePackList(FMLClientHandler handler, List<IResourcePack> list);

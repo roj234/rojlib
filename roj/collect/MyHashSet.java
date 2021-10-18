@@ -26,42 +26,37 @@
 
 package roj.collect;
 
+import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
 
-import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/15 21:33
  */
-public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSet<K> {
-    public static class Entry<K> implements EntryIterable<Entry<K>> {
-        public K k;
-
-        protected Entry(K k) {
+public class MyHashSet<K> implements Set<K>, FindSet<K> {
+    @Internal
+    protected static final class Entry {
+        public Object k, next;
+        Entry(Object k) {
             this.k = k;
         }
 
-        public Entry<K> next;
-
         @Override
-        public Entry<K> nextEntry() {
-            return next;
+        public String toString() {
+            return "{" + k + '}';
         }
     }
 
-    protected Entry<?>[] entries;
-    protected int size = 0;
-
-    protected int length = 2;
+    protected boolean  hasNull;
+    protected Object[] entries;
+    protected int size = 0, length = 2;
 
     float loadFactor = 0.8f;
 
@@ -129,99 +124,85 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public K find(K k) {
-        Entry<K> entry = getEntry(k);
-        return entry == null ? k : entry.k;
+        Object entry = getEntry(k);
+        return entry == NOT_USING ? k : (K) entry;
     }
 
+    @SuppressWarnings("unchecked")
     public K intern(K k) {
-        Entry<K> entry = getOrCreateEntry(k);
-        if(entry.k == NOT_USING) {
-            entry.k = k;
-            size++;
-        }
-        return entry.k;
-    }
-
-    @Override
-    public void removeEntry0(Entry<K> kEntry) {
-        remove(kEntry.k);
-    }
-
-    @SuppressWarnings("unchecked")
-    public void addAll(MyHashSet<K> otherSet) {
-        for (int i = 0; i < otherSet.length; i++) {
-            Entry<K> entry = (Entry<K>) otherSet.entries[i];
-            if (entry == null)
-                continue;
-            while (entry != null) {
-                this.add(entry.k);
-                entry = entry.next;
-            }
-        }
-    }
-
-    public void addAll(K[] arr) {
-        for (K k : arr) {
-            add(k);
-        }
-    }
-
-    public void deduplicate(Collection<K> otherSet) {
-        for (K k : otherSet) {
-            if (!this.add(k)) {
-                otherSet.remove(k);
-            }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public void deduplicate(MyHashSet<K> otherSet) {
-        for (Entry<?> value : otherSet.entries) {
-            Entry<K> entry = (Entry<K>) value;
-            if (entry == null)
-                continue;
-            while (entry != null) {
-                if (!this.add(entry.k)) {
-                    otherSet.remove(entry.k);
-                }
-                entry = entry.next;
-            }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void resize() {
-        //System.err.println("扩容为: "+ DELIM);
-        Entry<?>[] newEntries = new Entry<?>[length];
-        Entry<K> entry;
-        Entry<K> next;
-        int i = 0, j = entries.length;
-        for (; i < j; i++) {
-            entry = (Entry<K>) entries[i];
-            while (entry != null) {
-                next = entry.next;
-                int newKey = indexFor(entry.k);
-                Entry<K> old = (Entry<K>) newEntries[newKey];
-                newEntries[newKey] = entry;
-                entry.next = old;
-                entry = next;
-            }
-        }
-
-        this.entries = newEntries;
-
-    }
-
-    public boolean add(K key) {
         if (size > length * loadFactor) {
             length <<= 1;
             resize();
         }
 
-        Entry<K> entry = getOrCreateEntry(key);
-        if (NOT_USING.equals(entry.k)) {
-            entry.k = key;
+        Object entry = getOrCreateEntry(k);
+        if(entry == NOT_USING) {
+            entry = k;
+            size++;
+        }
+        return (K) entry;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void resize() {
+        Object[] newEntries = new Object[length];
+        Entry entry;
+        int i = 0, j = entries.length;
+        for (; i < j; i++) {
+            Object obj = entries[i];
+            while (obj instanceof Entry) {
+                entry = (Entry) obj;
+                int newKey = indexFor((K) entry.k);
+
+                obj = entry.next;
+
+                Object old = newEntries[newKey];
+                newEntries[newKey] = entry;
+                entry.next = old;
+            }
+            if (obj == null) continue;
+            int newKey = indexFor((K) obj);
+            Object old = newEntries[newKey];
+            if (old == null) {
+                newEntries[newKey] = obj;
+            } else if (old instanceof Entry) {
+                entry = (Entry) old;
+                if (entry.next != null)  {
+                    Entry entry1 = new Entry(obj);
+                    entry1.next = entry;
+                    newEntries[newKey] = entry1;
+                } else {
+                    entry.next = obj;
+                }
+            } else {
+                Entry entry1 = new Entry(obj);
+                entry1.next = old;
+                newEntries[newKey] = entry1;
+            }
+        }
+
+        this.entries = newEntries;
+    }
+
+    public boolean add(K key) {
+        if (key == null) {
+            if (!hasNull) {
+                hasNull = true;
+                size++;
+                return true;
+            }
+            return false;
+        }
+
+        if (size > length * loadFactor) {
+            length <<= 1;
+            resize();
+        }
+
+        Object entry = getOrCreateEntry(key);
+        if (NOT_USING == entry) {
             size++;
             return true;
         }
@@ -246,6 +227,22 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
         return a;
     }
 
+    public boolean addAll(K[] collection) {
+        boolean a = false;
+        for (K k : collection) {
+            a |= this.add(k);
+        }
+        return a;
+    }
+
+    public void deduplicate(Collection<K> otherSet) {
+        for (K k : otherSet) {
+            if (!this.add(k)) {
+                otherSet.remove(k);
+            }
+        }
+    }
+
     @Override
     public boolean retainAll(@Nonnull Collection<?> collection) {
         boolean a = false;
@@ -267,119 +264,101 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
 
     @SuppressWarnings("unchecked")
     public boolean remove(Object o) {
+        if (o == null) {
+            if (hasNull) {
+                hasNull = false;
+                size--;
+                return true;
+            }
+            return false;
+        }
+        if (entries == null) {
+            return false;
+        }
         K id = (K) o;
 
-        Entry<K> prevEntry = null;
-        Entry<K> toRemove = null;
-        {
-            Entry<K> entry = getEntryFirst(id, false);
-            while (entry != null) {
-                if (Objects.equals(o, entry.k)) {
-                    toRemove = entry;
-                    break;
-                }
-                prevEntry = entry;
-                entry = entry.next;
-            }
-        }
+        int i = indexFor(id);
+        Entry prev = null;
+        Object obj = entries[i];
 
-        if (toRemove == null)
-            return false;
+        chk:
+        {
+            while (obj instanceof Entry) {
+                Entry curr = (Entry) obj;
+                if (Objects.equals(id, curr.k)) break chk;
+                prev = curr;
+                obj = prev.next;
+            }
+
+            if (obj == null || !Objects.equals(id, obj))
+                return false;
+        }
 
         this.size--;
 
-        if (prevEntry != null) {
-            prevEntry.next = toRemove.next;
+        Object next = obj instanceof Entry ? ((Entry) obj).next : null;
+        if (prev != null) {
+            prev.next = next;
         } else {
-            this.entries[indexFor(id)] = toRemove.next;
+            this.entries[i] = next;
         }
-
-        putRemovedEntry(toRemove);
 
         return true;
     }
 
     @SuppressWarnings("unchecked")
     public boolean contains(Object o) {
-        Entry<K> entry = getEntry((K) o);
-        return entry != null;
+        if (o == null) return hasNull;
+        return getEntry((K) o) != NOT_USING;
     }
 
-    protected Entry<K> notUsing = null;
-    protected int removedLength = 0;
-
-    protected Entry<K> getCachedEntry(K id) {
-        Entry<K> cached = this.notUsing;
-        if (cached != null) {
-            cached.k = id;
-            this.notUsing = cached.next;
-            cached.next = null;
-            removedLength--;
-            return cached;
+    public Object getEntry(K id) {
+        if (entries == null) {
+            return NOT_USING;
         }
-
-        return new Entry<>(id);
+        Object obj = entries[indexFor(id)];
+        while (obj instanceof Entry) {
+            Entry prev = (Entry) obj;
+            if (Objects.equals(id, prev.k))
+                return prev.k;
+            obj = prev.next;
+        }
+        if (Objects.equals(id, obj))
+            return obj;
+        return NOT_USING;
     }
 
-    protected void putRemovedEntry(Entry<K> entry) {
-        if (notUsing != null && removedLength > MAX_NOT_USING) {
-            return;
+    public Object getOrCreateEntry(K id) {
+        int i = indexFor(id);
+        if (entries == null) {
+            entries = new Object[length];
+            entries[i] = id;
+            return NOT_USING;
         }
-        entry.k = null;
-        entry.next = notUsing;
-        removedLength++;
-        notUsing = entry;
-    }
+        Object obj = entries[i];
+        while (obj instanceof Entry) {
+            Entry prev = (Entry) obj;
+            if (Objects.equals(id, prev.k))
+                return prev.k;
+            if (prev.next == null) { // after resize()
+                prev.next = id;
+                return NOT_USING;
+            }
+            obj = prev.next;
+        }
+        if (Objects.equals(id, obj))
+            return obj;
 
-    public Entry<K> getEntry(K id) {
-        Entry<K> entry = getEntryFirst(id, false);
-        while (entry != null) {
-            if (Objects.equals(id, entry.k))
-                return entry;
-            entry = entry.next;
-        }
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    public Entry<K> getOrCreateEntry(K id) {
-        Entry<K> entry = getEntryFirst(id, true);
-        if (entry.k == NOT_USING)
-            return entry;
-        while (true) {
-            if (Objects.equals(id, entry.k))
-                return entry;
-            if (entry.next == null)
-                break;
-            entry = entry.next;
-        }
-        Entry<K> firstUnused = getCachedEntry((K) NOT_USING);
-        entry.next = firstUnused;
-        return firstUnused;
+        Entry unused = new Entry(id);
+        unused.next = entries[i];
+        entries[i] = unused;
+        return NOT_USING;
     }
 
     protected int indexFor(K id) {
         int v;
-        return id == null ? 0 : ((v = id.hashCode()) ^ (v >>> 16)) & (length - 1);
+        return ((v = id.hashCode()) ^ (v >>> 16)) & (length - 1);
     }
-
-    @SuppressWarnings("unchecked")
-    public Entry<K> getEntryFirst(K id, boolean create) {
-        int i = indexFor(id);
-        if (entries == null) {
-            if (!create)
-                return null;
-            entries = new Entry<?>[length];
-        }
-        Entry<K> entry;
-        if ((entry = (Entry<K>) entries[i]) == null) {
-            if (!create)
-                return null;
-            entries[i] = entry = getCachedEntry((K) NOT_USING);
-        }
-        return entry;
-    }
-
 
     public String toString() {
         StringBuilder sb = new StringBuilder().append('[');
@@ -392,42 +371,51 @@ public class MyHashSet<K> implements Set<K>, CItrMap<MyHashSet.Entry<K>>, FindSe
         return sb.append(']').toString();
     }
 
-    public void slowClear() {
-        if (size == 0)
-            return;
-        size = 0;
-        if (entries != null) {
-            length = 16;
-            entries = null;
-        }
-        if(removedLength != 0) {
-            removedLength = 0;
-            notUsing = null;
-        }
-    }
-
     public void clear() {
         if (size == 0)
             return;
         size = 0;
         if (entries != null)
-            if (notUsing == null || removedLength < MAX_NOT_USING) {
-                for (int i = 0; i < length; i++) {
-                    if (entries[i] != null) {
-                        putRemovedEntry(Helpers.cast(entries[i]));
-                        entries[i] = null;
-                    }
-                }
-            } else Arrays.fill(entries, null);
+            Arrays.fill(entries, null);
     }
 
-    static class SetItr<K> extends MapItr<Entry<K>> implements Iterator<K> {
+    static final class SetItr<K> extends AbstractIterator<K> {
+        final MyHashSet<K> che;
+        private Object entry;
+        private int i;
+
         public SetItr(MyHashSet<K> map) {
-            super(map.entries, map);
+            this.che = map;
+            if (map.hasNull) {
+                stage = AbstractIterator.CHECKED;
+            }
         }
 
-        public K next() {
-            return nextT().k;
+        @Override
+        @SuppressWarnings("unchecked")
+        public boolean computeNext() {
+            while (true) {
+                if (entry != null) {
+                    if (entry instanceof Entry) {
+                        Entry entry = (Entry) this.entry;
+                        result = (K) entry.k;
+                        this.entry = entry.next;
+                    } else {
+                        result = (K) entry;
+                        entry = null;
+                    }
+                    return true;
+                } else if (i < che.entries.length) {
+                    this.entry = che.entries[i++];
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        @Override
+        protected void remove(K obj) {
+            che.remove(obj);
         }
     }
 }

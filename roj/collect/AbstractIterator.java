@@ -113,7 +113,7 @@ public abstract class AbstractIterator<T> implements Iterator<T> {
         stage = INITIAL;
     }
 
-    public void remove(T obj) {
+    protected void remove(T obj) {
         throw new UnsupportedOperationException();
     }
 

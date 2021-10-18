@@ -29,7 +29,6 @@ package roj.asm.tree.attr;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.asm.util.FlagList;
 import roj.collect.LinkedMyHashMap;
 import roj.util.ByteReader;
@@ -79,7 +78,7 @@ public final class AttrMethodParameters extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         w.writeShort((short) flags.size());
         for (Map.Entry<String, FlagList> e : flags.entrySet()) {
             w.writeShort(pool.getUtfId(e.getKey())).writeShort(e.getValue().flag);

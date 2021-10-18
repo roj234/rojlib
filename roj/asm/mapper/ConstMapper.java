@@ -26,16 +26,13 @@
 package roj.asm.mapper;
 
 import roj.asm.Parser;
-import roj.asm.cst.*;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstDynamic;
+import roj.asm.cst.CstRef;
 import roj.asm.mapper.util.*;
-import roj.asm.tree.AccessData;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
+import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrBootstrapMethods;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
@@ -65,7 +62,7 @@ import java.util.function.Predicate;
  * 第二代Class映射器
  *
  * @author Roj234
- * @version 2.8
+ * @version 2.9
  * @since  2020/8/19 22:13
  */
 public class ConstMapper extends Mapping {
@@ -354,10 +351,12 @@ public class ConstMapper extends Mapping {
 
         ArrayList<String> list = new ArrayList<>();
         if(!"java/lang/Object".equals(data.parent)) {
+            list.ensureCapacity(4);
             list.add(data.parent);
         }
 
         List<CstClass> itfs = data.interfaces;
+        list.ensureCapacity(itfs.size() + 1);
         for (int i = 0; i < itfs.size(); i++) {
             CstClass itf = itfs.get(i);
             list.add(itf.getValue().getString());
@@ -420,21 +419,15 @@ public class ConstMapper extends Mapping {
      */
     public final void S2_mapSelf(Context ctx) {
         ConstantData data = ctx.getData();
+        data.normalize();
 
         List<String> parents = selfSupers.getOrDefault(data.name, Collections.emptyList());
 
         Desc sp = Util.shareMD();
 
-        List<? extends MoFNode> methods = data.methods;
+        List<MethodSimple> methods = data.methods;
         for (int i = 0; i < methods.size(); i++) {
-            if(!(methods.get(i) instanceof MethodSimple)) {
-                ctx.get();
-                data = ctx.getData();
-                methods = data.methods;
-                i = 0;
-                continue;
-            }
-            MethodSimple m = (MethodSimple) methods.get(i);
+            MethodSimple m = methods.get(i);
 
             sp.owner = data.name;
             sp.name = m.name.getString();
@@ -474,7 +467,7 @@ public class ConstMapper extends Mapping {
 
                     if(flags == null) {
                         String newName = entry.getValue();
-                        m.name = data.writer.getUtf(newName);
+                        m.name = data.cp.getUtf(newName);
                         sp.owner = data.name;
                         selfMethods.put(sp.copy(), newName);
                     }
@@ -533,7 +526,7 @@ public class ConstMapper extends Mapping {
                 if (DEBUG) {
                     System.out.println("[F25-" + data.name + "]: " + field.name + " => " + newName);
                 }
-                field.name = data.writer.getUtf(newName);
+                field.name = data.cp.getUtf(newName);
             }
         }
     }
@@ -562,46 +555,30 @@ public class ConstMapper extends Mapping {
             Attribute std = (Attribute) data.attributes.getByName("BootstrapMethods");
             if (std == null)
                 throw new IllegalArgumentException("有lambda却无BootstrapMethod at " + data.name);
-            AttrBootstrapMethods bs = std instanceof AttrBootstrapMethods ? (AttrBootstrapMethods) std : new AttrBootstrapMethods(new ByteReader(std.getRawData()), data.cp);
+            AttrBootstrapMethods bs = std instanceof AttrBootstrapMethods ? (AttrBootstrapMethods) std : new AttrBootstrapMethods(Parser.reader(std), data.cp);
             data.attributes.putByName(bs);
 
             for (i = 0; i < lmd.size(); i++) {
                 mapLambda(bs, data, lmd.get(i));
             }
         }
-
-        ctx.refresh();
     }
 
     /**
      * Map: lambda method name
      */
     private void mapLambda(AttrBootstrapMethods bs, ConstantData data, CstDynamic dyn) {
-        AttrBootstrapMethods.BootstrapMethod ibm = bs.methods.get(dyn.bootstrapTableIndex);
-        if(ibm == null) {
-            throw new IllegalArgumentException("BootstrapMethod id 不存在: " + dyn.bootstrapTableIndex + " at class " + data.name);
+        if(dyn.tableIdx > bs.methods.size()) {
+            throw new IllegalArgumentException("BootstrapMethod id 不存在: " + (int)dyn.tableIdx + " at class " + data.name);
         }
-
-        CstMethodType mType = null;
-        List<Constant> args = ibm.arguments;
-        for (int i = 0; i < args.size(); i++) {
-            Constant c = args.get(i);
-            if (c.type() == CstType.METHOD_TYPE) {
-                mType = (CstMethodType) c;
-                break;
-            }
-        }
-
-        if(mType == null) {
-            throw new IllegalArgumentException("METHOD_TYPE argument not found in class " + data.name);
-        }
+        AttrBootstrapMethods.BootstrapMethod ibm = bs.methods.get(dyn.tableIdx);
 
         Desc md = Util.shareMD();
 
         md.name = dyn.getDesc().getName().getString();
         // FP: init / clinit
         if(md.name.startsWith("<")) return;
-        md.param = mType.getValue().getString();
+        md.param = ibm.getMethodType();
 
         String allDesc = dyn.getDesc().getType().getString();
         md.owner = ParamHelper.getReturn(allDesc).owner;
@@ -611,7 +588,7 @@ public class ConstMapper extends Mapping {
         while (true) {
             String name = methodMap.get(md);
             if (name != null) {
-                dyn.setDesc(data.writer.getDesc(name, allDesc));
+                dyn.setDesc(data.cp.getDesc(name, allDesc));
                 return;
             }
 
@@ -880,7 +857,7 @@ public class ConstMapper extends Mapping {
      * Set reference name
      */
     static void setRefName(ConstantData data, CstRef ref, String newName) {
-        ref.desc(data.writer.getDesc(newName, ref.desc().getType().getString()));
+        ref.desc(data.cp.getDesc(newName, ref.desc().getType().getString()));
     }
 
     /**

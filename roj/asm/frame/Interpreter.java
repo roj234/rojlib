@@ -26,6 +26,7 @@
 
 package roj.asm.frame;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstType;
@@ -236,6 +237,10 @@ public final class Interpreter {
                     if (v.type == NULL) {
                         return v;
                     }
+                    // kotlin不为人子！
+                    if (v.type == UNINITIAL || v.type == UNINITIAL_THIS) {
+                        return v;
+                    }
                     break;
             }
 
@@ -404,9 +409,9 @@ public final class Interpreter {
             case LDC:
             case LDC_W:
             case LDC2_W:
-                byte type1 = ((LoadConstInsnNode) node).c.type();
+                byte type1 = ((LdcInsnNode) node).c.type();
                 if(type1 == CstType.DYNAMIC)
-                    type1 = NativeType.validate(((CstDynamic)((LoadConstInsnNode) node).c).getDesc().getType().getString().charAt(0));
+                    type1 = NativeType.validate(((CstDynamic)((LdcInsnNode) node).c).getDesc().getType().getString().charAt(0));
 
                 switch (type1) {
                     case CstType.INT:
@@ -1194,6 +1199,12 @@ public final class Interpreter {
                                                             "GotS: " + stack);
                                         }
                                         next.localBegin.removeTo(local.size);
+                                        Var[] nlb = next.localBegin.list;
+                                        for (int i = next.localBegin.size - 1; i >= 0; i--) {
+                                            if (nlb[i].type == NULL) {
+                                                nlb[i] = local.list[i];
+                                            }
+                                        }
                                     }
                                 } else {
                                     assert flg == 1;
@@ -1405,7 +1416,7 @@ public final class Interpreter {
             case ALOAD:
                 break;
             default:
-                throw new IllegalStateException("Unable wide " + Opcodes.toString0(code));
+                throw new IllegalStateException("Unable wide " + OpcodeUtil.toString0(code));
         }
     }
 }

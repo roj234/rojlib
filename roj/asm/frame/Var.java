@@ -89,7 +89,7 @@ public final class Var {
         if(v == null)
             return false;
         if (v.type != this.type) {
-            return false;
+            return v.type == VarType.NULL || this.type == VarType.NULL;
         } else {
             if (this.owner != null) {
                 return this.owner.equals(v.owner);

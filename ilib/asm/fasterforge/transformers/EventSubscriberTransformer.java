@@ -28,11 +28,10 @@ package ilib.asm.fasterforge.transformers;
 import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodSimple;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.AttrAnnotation;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.MethodSimple;
-import roj.util.ByteReader;
 
 import java.lang.reflect.Modifier;
 
@@ -45,9 +44,9 @@ public class EventSubscriberTransformer implements IClassTransformer {
         for (MethodSimple mn : cz.methods) {
             Attribute attr = mn.attrByName("RuntimeVisibleAnnotations");
             if (attr == null) continue;
-            AttrAnnotation annos = new AttrAnnotation(true, new ByteReader(attr.getRawData()), cz.cp);
+            AttrAnnotation annos = new AttrAnnotation(true, Parser.reader(attr), cz.cp);
             for (Annotation anno : annos.annotations) {
-                if("Lnet/minecraftforge/fml/common/eventhandler/SubscribeEvent;".equals(anno.rawDesc)) {
+                if("net/minecraftforge/fml/common/eventhandler/SubscribeEvent".equals(anno.clazz)) {
                     if (Modifier.isPrivate(mn.accesses.flag)) {
                         String msg = "Cannot apply @SubscribeEvent to private method %s/%s%s";
                         throw new RuntimeException(String.format(msg, cz.name, mn.name.getString(), mn.type.getString()));

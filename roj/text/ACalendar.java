@@ -252,8 +252,8 @@ public class ACalendar {
      */
     static final int[] SUMMED_DAYS  = new int[]{-30, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
-    static final int GREGORIAN_OFFSET_DAY  = 719163; // Fixed day of 1970/1/ 1 (Gregorian)
-    static final int MINIMUM_GREGORIAN_DAY = 577736; // Fixed day of 1582/8/15
+    public static final int GREGORIAN_OFFSET_DAY  = 719163; // Fixed day of 1970/1/ 1 (Gregorian)
+    public static final int MINIMUM_GREGORIAN_DAY = 577736; // Fixed day of 1582/8/15
 
     public static int floorDiv(int a, int b) {
         return a >= 0 ? a / b : (a + 1) / b - 1;

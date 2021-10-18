@@ -26,8 +26,8 @@
 
 package roj.asm.tree.insn;
 
-import roj.asm.Opcodes;
-import roj.asm.util.ConstantWriter;
+import roj.asm.OpcodeUtil;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
@@ -73,7 +73,7 @@ public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
         this.index = (byte) index;
     }
 
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         w.writeByte(code).writeByte(index);
     }
 
@@ -83,6 +83,6 @@ public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return Opcodes.toString0(code, index);
+        return OpcodeUtil.toString0(code, index);
     }
 }

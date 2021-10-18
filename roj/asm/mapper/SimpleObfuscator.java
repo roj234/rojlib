@@ -3,25 +3,23 @@ package roj.asm.mapper;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.*;
+import roj.asm.mapper.CodeMapper.SimpleVar;
 import roj.asm.mapper.obf.policy.*;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
-import roj.asm.tree.Clazz;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.Method;
-import roj.asm.tree.attr.*;
+import roj.asm.tree.*;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.AttrUTF;
+import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.insn.LoadConstInsnNode;
+import roj.asm.tree.insn.LdcInsnNode;
 import roj.asm.tree.insn.NPInsnNode;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.*;
 import roj.asm.util.*;
 import roj.asm.visitor.CodeVisitor;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.collect.ToIntMap;
 import roj.collect.TrieTreeSet;
 import roj.config.JSONParser;
 import roj.config.data.CEntry;
@@ -53,16 +51,16 @@ import java.util.*;
  */
 public final class SimpleObfuscator extends Obfuscator {
     public static final int
-            CLEAR_ATTR = 4,
-            FAKE_SIGN = 8,
+            CLEAR_ATTR       = 4,
+            FAKE_SIGN        = 8,
             INVALID_VAR_NAME = 16,
-            FAKE_VAR_SIGN = 32,
-            RANDOMIZED_SIGN = 64,
-            DESTROY_VAR = 128,
-            DESTROY_LINE = 256,
-            CLEAR_VAR_NAME = 512,
-            KEEP_CP = 1024,
-            OBF_STRING = 2048;
+            FAKE_VAR_SIGN    = 32,
+            RANDOMIZED_SIGN  = 64,
+            DESTROY_VAR      = 128,
+            DESTROY_LINE     = 256,
+            CLEAR_CODE_ATTR  = 512,
+            KEEP_LINES       = 1024,
+            OBF_STRING       = 2048;
     public static final int MAX_LEN = Integer.parseInt(System.getProperty("roj.obf.sign_max_len", "63"));
 
     public static void main(String[] args) throws Exception {
@@ -212,7 +210,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
         for (int i = 0; i < arr.size(); i++) {
             Context ctx = arr.get(i);
-            zfw.writeNamed(ctx.getName(), ctx.getCompressedShared());
+            zfw.writeNamed(ctx.getFileName(), ctx.getCompressedShared());
         }
         zfw.finish();
 
@@ -276,8 +274,8 @@ public final class SimpleObfuscator extends Obfuscator {
     /**
      * 忽略这些package
      */
-    public final TrieTreeSet packageExclusions = new TrieTreeSet();
-    public final MyHashSet<String> classExclusions = new MyHashSet<>();
+    public TrieTreeSet       packageExclusions = new TrieTreeSet();
+    public MyHashSet<String> classExclusions   = new MyHashSet<>();
 
     public final Random rand;
     public NamingFunction clazz, method, field, param;
@@ -308,7 +306,6 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     public void obfuscate(List<Context> arr) {
-        m2.rewrite = false;
         classes.clear();
         super.obfuscate(arr);
     }
@@ -410,18 +407,18 @@ public final class SimpleObfuscator extends Obfuscator {
                     for (int k = 0; k < insn.size(); k++) {
                         InsnNode node = insn.get(k);
                         if (node.nodeType() == InsnNode.T_LDC) {
-                            LoadConstInsnNode ldc = (LoadConstInsnNode) node;
+                            LdcInsnNode ldc = (LdcInsnNode) node;
                             if (ldc.c.type() == CstType.STRING) {
                                 InsnNode next = insn.get(k + 1);
                                 if (next.nodeType() == InsnNode.T_INVOKE) {
                                     InvokeInsnNode iin = (InvokeInsnNode) next;
-                                    if (iin.code == Opcodes.INVOKESTATIC && iin.rawParameters().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+                                    if (iin.code == Opcodes.INVOKESTATIC && iin.rawDesc().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
                                         CstUTF utf = ((CstString) ldc.c).getValue();
                                         if (!done.contains(utf.getString())) {
                                             String value = mcv.tryDecode(iin, null, utf);
                                             if (value != null) {
                                                 done.add(value);
-                                                utf.setString(value);
+                                                data.cp.setUTFValue(utf, value);
                                             } else {
                                                 continue;
                                             }
@@ -444,8 +441,10 @@ public final class SimpleObfuscator extends Obfuscator {
             for (int i = 0; i < arr.size(); i++) {
                 fakeSign(arr.get(i).getData());
             }
-        if((flags & (INVALID_VAR_NAME | FAKE_VAR_SIGN)) != 0)
+        if((flags & (INVALID_VAR_NAME | FAKE_VAR_SIGN | DESTROY_LINE | CLEAR_CODE_ATTR)) != 0)
             for (int i = 0; i < arr.size(); i++) {
+                if (arr.get(i).getFileName().equals("cbk.class"))
+                    arr.get(i).getData().dump();
                 codeSign(arr.get(i).getData());
             }
     }
@@ -464,7 +463,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
         public void initNil(ByteList data) {
             this.br.refresh(data);
-            this.cw = new ConstantWriterEmpty();
+            this.cw = new ConstantPoolEmpty();
             this.bw.list = new ByteList.EmptyByteList();
         }
 
@@ -494,7 +493,7 @@ public final class SimpleObfuscator extends Obfuscator {
             }
             tmp.owner = iin.owner;
             tmp.name = iin.name;
-            tmp.param = iin.rawParameters();
+            tmp.param = iin.rawDesc();
             Decoder dec = methods.get(tmp);
             if (dec != null)
                 try {
@@ -508,12 +507,12 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     static final List<IGeneric>                   fake  = Collections.singletonList(Type.std(NativeType.INT));
-    static final Map<String, Collection<Generic>> fake2 = new MyHashMap<>();
+    static final Map<String, List<Generic>> fake2 = new MyHashMap<>();
     static {
         fake2.put("\u0000", Collections.singletonList(new Generic(Generic.TYPE_TYPE_PARAM, "int", 23, Generic.EX_SUPERS)));
-        fake2.put("\u0001", Collections.singletonList(new Generic(Generic.TYPE_INTERFACE, "long", 0, Generic.EX_EXTENDS)));
+        fake2.put("\u0001", Collections.singletonList(new Generic(Generic.TYPE_INHERIT_CLASS, "long", 0, Generic.EX_EXTENDS)));
         fake2.put("\u0002", Collections.singletonList(new Generic(Generic.TYPE_SUB_CLASS, "double", 0, Generic.EX_SUPERS)));
-        fake2.put("\u0003", Collections.singletonList(new Generic(Generic.TYPE_INTERFACE, "short", 46, Generic.EX_NONE)));
+        fake2.put("\u0003", Collections.singletonList(new Generic(Generic.TYPE_INHERIT_CLASS, "short", 46, Generic.EX_NONE)));
         fake2.put("\u0004", Collections.singletonList(new Generic(Generic.TYPE_CLASS, "char", 0, Generic.EX_SUPERS)));
     }
 
@@ -541,7 +540,8 @@ public final class SimpleObfuscator extends Obfuscator {
 
         Signature sign1 = getSign(Signature.CLASS);
 
-        al.putByName(new AttrUTF("Signature", sign1.toGeneric()));
+        if (data.methods.isEmpty() || data.fields.isEmpty() || rand.nextFloat() > 0.11f)
+            al.putByName(new AttrUTF("Signature", sign1.toGeneric()));
 
         sign1 = getSign(Signature.METHOD);
 
@@ -549,7 +549,8 @@ public final class SimpleObfuscator extends Obfuscator {
         for (int i = 0; i < methods.size(); i++) {
             MethodSimple m = methods.get(i);
             AttributeList al1 = m.attributes;
-            al1.putByName(new AttrUTF("Signature", sign1.toGeneric()));
+            if (rand.nextFloat() > 0.66f)
+                al1.putByName(new AttrUTF("Signature", sign1.toGeneric()));
         }
 
         sign1 = getSign(Signature.FIELD_OR_CLASS);
@@ -558,7 +559,8 @@ public final class SimpleObfuscator extends Obfuscator {
         for (int i = 0; i < fields.size(); i++) {
             FieldSimple m = fields.get(i);
             AttributeList al1 = m.attributes;
-            al1.putByName(new AttrUTF("Signature", sign1.toGeneric()));
+            if (rand.nextFloat() > 0.66f)
+                al1.putByName(new AttrUTF("Signature", sign1.toGeneric()));
         }
     }
 
@@ -573,58 +575,127 @@ public final class SimpleObfuscator extends Obfuscator {
 
         for (int i = 0; i < methods.size(); i++) {
             MethodSimple m = methods.get(i);
-            AttributeList al1 = m.attributes;
-            AttrUnknown code0 = (AttrUnknown) al1.getByName("Code");
-            if(code0 == null)
+            AttrUnknown au = (AttrUnknown) m.attributes.getByName("Code");
+            if(au == null)
                 continue;
 
-            AttrCode code1 = new AttrCode(m, code0.getRawData(), data.cp);
-            al1.putByName(code1);
-            al1 = code1.attributes;
+            ByteReader r = Parser.reader(au);
+            ByteWriter w = new ByteWriter(r.remain());
+            r.index += 4; // stack size
+            int codeLen = r.readInt();
+            r.index += codeLen; // code
 
-            if((flags & CLEAR_VAR_NAME) != 0) {
-                al1.removeByName("LocalVariableTypeTable");
-                al1.removeByName("LocalVariableTable");
-                al1.removeByName("LineNumberTable");
-            } else {
-                if ((flags & DESTROY_LINE) != 0) {
-                    AttrLineNumber lv = (AttrLineNumber) al1.getByName("LineNumberTable");
-                    if (lv != null) {
-                        if(lineLog != null)
-                            lineLog.append(" ").append(m.name.getString()).append(' ').append(m.type.getString()).append('\n');
-                        for (ToIntMap.Entry<InsnNode> e : lv.map.selfEntrySet()) {
-                            int v = rand.nextInt(65536);
-                            if(lineLog != null)
-                                lineLog.append("  ").append(e.v).append(' ').append(v).append('\n');
-                            e.v = v;
-                        }
-                    }
-                }
-                if ((flags & FAKE_VAR_SIGN) != 0) {
-                    AttrLocalVars lv = (AttrLocalVars) al1.getByName("LocalVariableTypeTable");
-                    if (lv != null) {
-                        for (LocalVariable v : lv.list) {
-                            v.name = "";
-                            v.type = getSign(Signature.CLASS);
-                        }
-                    }
-                }
-                if ((flags & INVALID_VAR_NAME) != 0) {
-                    AttrLocalVars lv = (AttrLocalVars) al1.getByName("LocalVariableTable");
-                    if (lv != null) {
-                        for (LocalVariable v : lv.list) {
-                            v.name = "";
-                            if ((flags & DESTROY_VAR) != 0) {
-                                v.type = randType();
-                                InsnNode e = v.end;
-                                v.end = v.start;
-                                v.start = e;
-                                v.slot = rand.nextInt();
+            int len = r.readUnsignedShort(); // exception
+            r.index += len << 3;
+            w.writeBytes(r.getBytes().subList(0, r.index));
+
+            ConstantPool pool = data.cp;
+            len = r.readUnsignedShort();
+
+            int count = 0;
+            int countIdx = w.list.pos();
+            w.writeShort(0);
+
+            System.out.println(m);
+            for (int j = 0; j < len; j++) {
+                String name = ((CstUTF) pool.get(r)).getString();
+                int end = r.readInt() + r.index;
+                switch (name) {
+                    case "LocalVariableTable":
+                        if ((flags & (INVALID_VAR_NAME | DESTROY_VAR)) != 0) {
+                            count++;
+                            List<SimpleVar> list = CodeMapper.readVar(pool, r);
+                            w.writeShort(data.cp.getUtfId(name)).writeInt(len)
+                             .writeShort(list.size());
+                            for (int k = 0; k < list.size(); k++) {
+                                SimpleVar v = list.get(k);
+                                v.name = data.cp.getUtf("");
+
+                                if ((flags & DESTROY_VAR) != 0 && rand.nextFloat() > 0.5f) {
+                                    v.refType = data.cp.getUtf(ParamHelper.getField(randType()));
+                                    int e = v.end;
+                                    v.end = v.start;
+                                    v.start = e;
+                                    v.slot = rand.nextInt();
+                                }
+                                v.write(w);
                             }
+                        } else if((flags & CLEAR_CODE_ATTR) != 0) {
+                            continue;
+                        } else {
+                            count++;
+                            w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
                         }
-                    }
+                        break;
+                    case "LocalVariableTypeTable":
+                        if ((flags & (DESTROY_VAR | FAKE_VAR_SIGN)) != 0) {
+                            count++;
+                            List<SimpleVar> list = CodeMapper.readVar(pool, r);
+                            int pos = w.list.pos();
+                            w.writeShort(data.cp.getUtfId(name)).writeInt(len)
+                             .writeShort(list.size());
+                            for (int k = 0; k < list.size(); k++) {
+                                SimpleVar v = list.get(k);
+                                v.name = data.cp.getUtf("");
+                                if ((flags & FAKE_VAR_SIGN) != 0 && rand.nextFloat() > 0.5f)
+                                    data.cp.setUTFValue(v.refType, getSign(Signature.CLASS).toGeneric());
+
+                                if ((flags & DESTROY_VAR) != 0 && rand.nextFloat() > 0.5f) {
+                                    v.refType = data.cp.getUtf(ParamHelper.getField(randType()));
+                                    int e = v.end;
+                                    v.end = v.start;
+                                    v.start = e;
+                                    v.slot = rand.nextInt();
+                                }
+                                v.write(w);
+                            }
+                        } else if((flags & CLEAR_CODE_ATTR) != 0) {
+                            continue;
+                        } else {
+                            count++;
+                            w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                        }
+                        break;
+                    case "LineNumberTable":
+                        if ((flags & DESTROY_LINE) != 0) {
+                            count++;
+                            int tableLen = r.readUnsignedShort();
+                            w.writeShort(data.cp.getUtfId(name)).writeInt(len)
+                             .writeShort(tableLen);
+
+                            if(lineLog != null)
+                                lineLog.append(' ').append(m.name.getString())
+                                       .append(' ').append(m.type.getString()).append('\n');
+                            for (int k = 0; k < tableLen; k++) {
+                                int index = r.readUnsignedShort();
+                                int line = r.readUnsignedShort();
+
+                                int v = rand.nextInt(65536);
+                                if(lineLog != null)
+                                    lineLog.append("  ").append(line).append(' ').append(v).append('\n');
+
+                                w.writeShort(index).writeShort(v);
+                            }
+                        } else if((flags & (CLEAR_CODE_ATTR | KEEP_LINES)) == CLEAR_CODE_ATTR) {
+                            continue;
+                        } else {
+                            count++;
+                            w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                        }
+                        break;
+                    default:
+                        count++;
+                        w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                    break;
                 }
+                r.index = end;
             }
+            int pos = w.list.pos();
+            w.list.pos(countIdx);
+            w.writeShort(count);
+            w.list.pos(pos);
+
+            au.setRawData(new ByteList(w.toByteArray()));
         }
     }
 
@@ -653,7 +724,7 @@ public final class SimpleObfuscator extends Obfuscator {
             sign1.returns = randType();
 
             len = rand.nextInt(6);
-            Map<String, Collection<Generic>> map = new MyHashMap<>(len);
+            Map<String, List<Generic>> map = new MyHashMap<>(len);
             for (int i = 0; i < len; i++) {
                 int len2 = rand.nextInt(4);
                 ArrayList<Generic> gens1 = new ArrayList<>(len2);

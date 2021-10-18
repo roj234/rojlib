@@ -26,14 +26,14 @@
 
 package ilib.tile;
 
-import ilib.autoreg.AutoRegTile;
+import ilib.autoreg.TileRegister;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import roj.collect.Int2IntMap;
 
 import javax.annotation.Nonnull;
 
-@AutoRegTile("mi:storage")
+@TileRegister("mi:storage")
 /**
  * No description provided
  *

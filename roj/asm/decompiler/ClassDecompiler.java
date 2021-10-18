@@ -30,6 +30,7 @@ import roj.asm.tree.Method;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.IIndexInsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.insn.LdcInsnNode;
 import roj.asm.type.LocalVariable;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
@@ -159,7 +160,7 @@ public class ClassDecompiler {
                 case LDC2_W:
                 case LDC_W:
                 case LDC: {
-                    roj.asm.tree.insn.LoadConstInsnNode node1 = (roj.asm.tree.insn.LoadConstInsnNode) node;
+                    LdcInsnNode node1 = (LdcInsnNode) node;
 
                     String o = "<INTERNAL ERROR: unsupported ldc node>";
 

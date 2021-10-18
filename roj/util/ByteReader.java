@@ -264,7 +264,7 @@ public final class ByteReader implements DataInput {
                 (long) (bytes.get(i) & 0xff) << 24;
     }
 
-    public final long readLongReversed() {
+    public final long readLongR() {
         //checkLength(8);
         int i = index;
         index = i + 8;

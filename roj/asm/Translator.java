@@ -230,7 +230,7 @@ public class Translator {
 
     public static void applyZipFile(File f) throws IOException {
         MutableZipFile mzf = new MutableZipFile(f);
-        mzf.getEOF().comment = "Powered by Roj-ASM class file translator";
+        mzf.getEOF().setComment("Powered by Roj-ASM class file translator");
 
         ZipFile zf = new ZipFile(f);
         String fn = f.getName() + '/';
@@ -267,7 +267,7 @@ public class Translator {
         for (IntMap.Entry<String> entry : map.entrySet()) {
             final CstString string = (CstString) constants.get(entry.getKey());
             //System.out.println(string.getValue().getString() + " to " + entry.getValue());
-            string.setValue(data.writer.getUtf(entry.getValue()));
+            string.setValue(data.cp.getUtf(entry.getValue()));
         }
 
         return Parser.toByteArray(data);

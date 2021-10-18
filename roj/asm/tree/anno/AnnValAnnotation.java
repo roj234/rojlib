@@ -26,29 +26,31 @@
 
 package roj.asm.tree.anno;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/1/9 14:23
  */
 public final class AnnValAnnotation extends AnnVal {
     public AnnValAnnotation(Annotation value) {
-        super(AnnotationType.ANNOTATION);
         this.value = value;
     }
 
     public Annotation value;
 
-    public void _toByteArray(ConstantWriter pool, ByteWriter w) {
-        value.toByteArray(pool, w);
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
+        value.toByteArray(pool, w.writeByte((byte) ANNOTATION));
     }
 
     public String toString() {
-        return "Annotation: \n" + value + '\n';
+        return value.toString();
+    }
+
+    @Override
+    public byte type() {
+        return ANNOTATION;
     }
 }

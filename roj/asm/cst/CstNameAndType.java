@@ -65,7 +65,7 @@ public final class CstNameAndType extends Constant {
 
 
     public final int hashCode() {
-        return name.hashCode() << 16 ^ type.hashCode();
+        return (name.hashCode() << 16) ^ type.hashCode();
     }
 
 
@@ -109,5 +109,15 @@ public final class CstNameAndType extends Constant {
         }
         this.type = type;
         this.typeIndex = (short) type.getIndex();
+    }
+
+    @Override
+    public final CstNameAndType clone() {
+        CstNameAndType slf = (CstNameAndType) super.clone();
+        if (name != null)
+            slf.name = (CstUTF) name.clone();
+        if (type != null)
+            slf.type = (CstUTF) type.clone();
+        return slf;
     }
 }

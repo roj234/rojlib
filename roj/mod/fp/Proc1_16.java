@@ -229,7 +229,7 @@ public final class Proc1_16 extends Processor {
 
             for (int i = 0; i < servCtxs.size(); i++) {
                 Context ctx = servCtxs.get(i);
-                ByteList result = patcher.patchServer(ctx.getName(), ctx.get()); // 服务端的文件已经映射，接下来是打补丁
+                ByteList result = patcher.patchServer(ctx.getFileName(), ctx.get()); // 服务端的文件已经映射，接下来是打补丁
                 if (result != null) ctx.set(result);
             }
 
@@ -272,7 +272,6 @@ public final class Proc1_16 extends Processor {
 
         CodeMapper nameRmp = new CodeMapper(rmp);
         nameRmp.setParamRemappingV2(paramMap);
-        nameRmp.rewrite = true;
 
         threadWait(com(rmp, nameRmp, 1, ctxs),
                    com(new ConstMapper(rmp), nameRmp, 2, ctxs));
@@ -286,10 +285,10 @@ public final class Proc1_16 extends Processor {
                 try {
                     list = ctx.getCompressedShared();
                 } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    CmdUtil.warning(ctx.getFileName() + " 验证失败", e);
                     continue;
                 }
-                zfw.writeNamed(ctx.getName(), list);
+                zfw.writeNamed(ctx.getFileName(), list);
             }
             List<Context> fgResult = ctxs[2];
             merged.clear();
@@ -299,10 +298,10 @@ public final class Proc1_16 extends Processor {
                 try {
                     list = ctx.getCompressedShared();
                 } catch (Throwable e) {
-                    CmdUtil.warning(ctx.getName() + " 验证失败", e);
+                    CmdUtil.warning(ctx.getFileName() + " 验证失败", e);
                     continue;
                 }
-                zfw.writeNamed(ctx.getName(), list);
+                zfw.writeNamed(ctx.getFileName(), list);
             }
             fgResult.clear();
 

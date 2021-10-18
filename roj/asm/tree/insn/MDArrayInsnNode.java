@@ -28,7 +28,7 @@ package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.cst.CstClass;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
@@ -82,7 +82,7 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
     }
 
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         w.writeByte(code)
          .writeShort(cw.getClassId(owner))
          .writeByte((byte) this.dimension);

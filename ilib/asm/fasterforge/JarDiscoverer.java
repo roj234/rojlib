@@ -30,75 +30,58 @@ import ilib.Config;
 import ilib.asm.Loader;
 import ilib.asm.Preloader;
 import ilib.asm.fasterforge.anc.ClassInfo;
-import ilib.asm.fasterforge.anc.ItfGet;
+import ilib.asm.fasterforge.anc.FastParser;
 import ilib.asm.fasterforge.anc.JarInfo;
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
-import roj.io.ZipUtil;
+import roj.io.MutableZipFile;
 import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
-
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 import java.util.jar.JarFile;
-import java.util.regex.Matcher;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 @Nixim("net.minecraftforge.fml.common.discovery.JarDiscoverer")
 abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.JarDiscoverer {
-
-    @Copy
-    // jarName : fileName -> annotationName -> annotation value
+    @Copy(staticInitializer = "init")
     static MyHashMap<String, JarInfo> store;
 
-    @Copy
     private static void init() {
-        if (store == null)
-            store = new MyHashMap<>();
+        store = new MyHashMap<>();
 
         File file = new File("modAnnotationCache.bin");
         if (file.isFile()) {
-            store.clear();
-
             try (FileInputStream fis = new FileInputStream(file)) {
-                ByteReader reader = new ByteReader(IOUtil.read(fis));
+                ByteReader r = new ByteReader(IOUtil.read(fis));
 
-                if (reader.readInt() != 0x22332233) {
+                if (r.readInt() != 0x22332233) {
                     FMLLog.bigWarning("缓存文件错误");
                     return;
                 }
 
-                StringPool pool = new StringPool(reader);
-                ConstantPool cp = new ConstantPool(reader.readUnsignedShort());
-                cp.read(reader);
-                // not need to init?
-                // cp.valid();
-                int len = reader.readVarInt(false);
+                StringPool pool = new StringPool(r);
+                ConstantPool cp = new ConstantPool(r.readUnsignedShort());
+                cp.read(r);
+                int len = r.readVarInt(false);
                 store.ensureCapacity(len);
                 for (int i = 0; i < len; i++) {
-                    String name = reader.readVString();
-                    JarInfo info = JarInfo.fromByteArray(reader, pool, cp);
-
-                    store.put(name, info);
+                    store.put(r.readVString(), JarInfo.fromByteArray(r, pool, cp));
                 }
             } catch (Throwable e) {
                 e.printStackTrace();
@@ -113,7 +96,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             File file = new File("modAnnotationCache.bin");
             try (FileOutputStream fos = new FileOutputStream(file)) {
                 StringPool sp = new StringPool();
-                ConstantWriter cw = new ConstantWriter();
+                ConstantPool cw = new ConstantPool();
 
                 ByteWriter w = new ByteWriter(2333);
 
@@ -140,66 +123,36 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             }
         }
         store = null;
-        fileProcessors = null;
-        myMatcher = null;
     }
-
-    @Copy
-    static boolean init;
-    @Copy
-    static boolean jarModified;
-
-    @Copy
-    static List<Function<String, UnaryOperator<byte[]>>> fileProcessors;
-
-    @Copy
-    static Matcher myMatcher;
 
     @Inject("discover")
     public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table) {
-        if (!init) {
-            init();
-            fileProcessors = Preloader.getFileProcessors();
-            myMatcher = classFile.matcher("");
-            init = true;
-        }
+        List<ModContainer> found = Lists.newArrayList();
 
-        List<ModContainer> foundMods = Lists.newArrayList();
-
-        //FMLLog.log.info("Examining file {} for potential mods", candidate.getModContainer().getName());
         try (ZipFile jar = new JarFile(candidate.getModContainer())) { // 到底要不要验证SHA256?
             ZipEntry modInfo = jar.getEntry("mcmod.info");
             MetadataCollection mc;
             if (modInfo != null) {
-                //FMLLog.log.trace("Located mcmod.info file in file {}", candidate.getModContainer().getName());
                 try (InputStream inputStream = jar.getInputStream(modInfo)) {
                     mc = MetadataCollection.from(inputStream, candidate.getModContainer().getName());
                 }
             } else {
-                //FMLLog.log.debug("The mod container {} appears to be missing an mcmod.info file", candidate.getModContainer().getName());
                 mc = MetadataCollection.from(null, "");
             }
 
             JarInfo list = store.get(candidate.getModContainer().getName());
             if (list != null) {
-                findClassesCache_my(candidate, table, jar, foundMods, mc, list);
+                findClassesCache_my(candidate, table, jar, found, mc, list);
             } else {
-                findClassesASM_my(candidate, table, jar, foundMods, mc);
+                findClassesASM_my(candidate, table, jar, found, mc);
             }
         } catch (Exception e) {
             FMLLog.log.warn("文件 {} 无法读取", candidate.getModContainer().getName(), e);
         }
 
-        if (jarModified) {
-            System.err.println("有一个mod(" + candidate.getModContainer().getName() + ")已被兼容性修改，这会导致它无法加载，需要再次启动, 注：因为一次只能修改一个，所以这个提示可能会出现多次");
-            while (true) {
-                System.exit(233);
-            }
-        }
-
         Loader.handleASMData(table, store);
 
-        return foundMods;
+        return found;
     }
 
     @Copy
@@ -214,7 +167,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             for (Map.Entry<String, Collection<Annotation>> ma : info.annotations.asMap().entrySet()) {
                 String annoClz = ma.getKey();
                 for (Annotation primitiveVal : ma.getValue()) {
-                    table.addASMData(candidate, annoClz, normName, primitiveVal.type.owner, TypeHelper.toPrimitive(primitiveVal.values));
+                    table.addASMData(candidate, annoClz, normName, primitiveVal.clazz, TypeHelper.toPrimitive(primitiveVal.values));
                 }
             }
             for (String intf : info.interfaces)
@@ -263,56 +216,34 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
     @Copy
     private void findClassesASM_my(ModCandidate candidate, ASMDataTable table, ZipFile jar, List<ModContainer> foundMods, MetadataCollection mc) throws IOException {
         Enumeration<? extends ZipEntry> ee = jar.entries();
-        Map<String, byte[]> map = null;
+        MutableZipFile mzf = null;
         while (ee.hasMoreElements()) {
             ZipEntry ze;
             try {
                 ze = ee.nextElement();
             } catch (IllegalArgumentException e) {
-                FMLLog.bigWarning("非UTF-8编码的ZIP文件 " + jar.getName() + " 中出现了非ASCII字符的文件名, 这是mod作者的锅. 我被它坑了很多次, 所以专门搞了个提示,,,");
-                throw new RuntimeException("请看debug.log");
+                throw new RuntimeException("非UTF-8编码的ZIP文件 " + jar.getName() + " 中出现了非ASCII字符的文件名");
             }
             if (ze.getName().startsWith("__MACOSX"))
                 continue;
-            if (!fileProcessors.isEmpty()) {
-                for (Function<String, UnaryOperator<byte[]>> supplier : fileProcessors) {
-                    UnaryOperator<byte[]> operator = supplier.apply(ze.getName());
-                    if (operator != null) {
-                        byte[] result = operator.apply(IOUtil.read(jar.getInputStream(ze)));
-                        if (result != null) {
-                            if (map == null)
-                                map = new MyHashMap<>();
-                            map.put(ze.getName(), result);
-                        }
-                    }
+            Function<byte[], byte[]> operator = Preloader.getFileProcessor(ze.getName());
+            if (operator != null) {
+                byte[] result = operator.apply(IOUtil.read(jar.getInputStream(ze)));
+                if (result != null) {
+                    if (mzf == null)
+                        mzf = new MutableZipFile(new File(jar.getName()));
+                    mzf.setFileData(ze.getName(), new ByteList(result));
                 }
             }
-            if (myMatcher.reset(ze.getName()).matches()) {
+            if (ze.getName().endsWith(".class")) {
                 identityEntry_my(candidate, table, jar, foundMods, mc, ze);
             }
         }
-        if (map != null) {
-            File jarFile = new File(jar.getName());
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            try (ZipOutputStream os = new ZipOutputStream(bos)) {
-                ee = jar.entries();
-                while (ee.hasMoreElements()) {
-                    ZipEntry entry = ee.nextElement();
-                    if (entry.getName().endsWith(".SF") || entry.getName().endsWith(".DSA"))
-                        continue;
-                    os.putNextEntry(new ZipEntry(entry.getName()));
-                    if (entry.getName().equals("MANIFEST.MF")) {
-                        os.write(map.getOrDefault(entry.getName(), doManifest(IOUtil.read(jar.getInputStream(entry)))));
-                    } else {
-                        os.write(map.getOrDefault(entry.getName(), IOUtil.read(jar.getInputStream(entry))));
-                    }
-                    os.closeEntry();
-                }
-                ZipUtil.close(os);
+        if (mzf != null) {
+            mzf.store();
+            for (int i = 0; i < 20; i++) {
+                System.err.println("有一个mod(" + candidate.getModContainer().getName() + ")已被兼容性修改，这会导致它无法加载，需要再次启动MC。这个提示可能会出现多次");
             }
-            jar.close();
-            bos.writeTo(new FileOutputStream(jarFile));
-            jarModified = true;
         }
     }
 
@@ -337,8 +268,8 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
             throw e;
         }
 
-        ItfGet parser = (ItfGet) modParser;
-        Map<String, List<Annotation>> map = parser.getFieldAnnotationMap();
+        FastParser parser = (FastParser) modParser;
+        Map<String, List<Annotation>> map = parser.getAnnotationMap();
         Set<String> itf = parser.getItf();
 
         if (map.isEmpty() && itf.isEmpty())
@@ -352,8 +283,8 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
         for (Map.Entry<String, List<Annotation>> entry : map.entrySet()) {
             for (Annotation annotation1 : entry.getValue()) {
                 Annotation annotation2 = new Annotation(annotation1);
-                String clz = annotation2.type.owner.replace('/', '.');
-                annotation2.type = new Type(entry.getKey(), 0);
+                String clz = annotation2.clazz.replace('/', '.');
+                annotation2.clazz = entry.getKey();
                 classInfo.annotations.put(clz, annotation2);
             }
         }

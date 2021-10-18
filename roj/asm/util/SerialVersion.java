@@ -27,7 +27,7 @@ package roj.asm.util;
 
 import roj.asm.tree.Field;
 import roj.asm.tree.IClass;
-import roj.asm.tree.simple.MoFNode;
+import roj.asm.tree.MoFNode;
 import roj.asm.type.NativeType;
 import roj.asm.type.Type;
 import roj.collect.BSLowHeap;

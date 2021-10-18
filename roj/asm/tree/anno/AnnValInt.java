@@ -26,29 +26,33 @@
 
 package roj.asm.tree.anno;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/1/9 14:23
  */
 public final class AnnValInt extends AnnVal {
     public AnnValInt(char type, int value) {
-        super(type);
+        this.type = (byte) type;
         this.value = value;
     }
 
+    public final byte type;
     public int value;
 
-    public void _toByteArray(ConstantWriter pool, ByteWriter w) {
-        w.writeShort(pool.getIntId(value));
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
+        w.writeByte(type).writeShort(pool.getIntId(value));
     }
 
     public String toString() {
         return String.valueOf(value);
+    }
+
+    @Override
+    public byte type() {
+        return type;
     }
 }

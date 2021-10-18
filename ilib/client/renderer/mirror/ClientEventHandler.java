@@ -27,7 +27,7 @@ package ilib.client.renderer.mirror;
 
 import ilib.ClientProxy;
 import ilib.ImpLib;
-import ilib.client.api.ChangeWorldEvent;
+import ilib.client.api.ClientChangeWorldEvent;
 import ilib.client.renderer.mirror.render.PortalRenderer;
 import ilib.client.renderer.mirror.render.world.RenderGlobalProxy;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
@@ -64,7 +64,7 @@ public class ClientEventHandler {
     }
 
     @SubscribeEvent
-    public static void onChangeWorld(ChangeWorldEvent event) {
+    public static void onChangeWorld(ClientChangeWorldEvent event) {
         if (proxy == null) {
             proxy = new RenderGlobalProxy(ClientProxy.mc);
             proxy.updateDestroyBlockIcons();

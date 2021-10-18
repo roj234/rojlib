@@ -26,17 +26,19 @@
 
 package roj.asm.tree;
 
+import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.MoFNode;
-import roj.asm.util.*;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.FlagList;
 import roj.collect.MyHashSet;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
 
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PrimitiveIterator;
@@ -50,7 +52,7 @@ import static roj.asm.util.AccessFlag.*;
  * @version 0.1
  * @since 2021/5/30 19:59
  */
-public class ConstantData implements IClass {
+public final class ConstantData implements IClass {
     public int version;
 
     public final FlagList accesses;
@@ -60,14 +62,11 @@ public class ConstantData implements IClass {
     public final String name, parent;
 
     public ConstantPool cp;
-    public ConstantWriter writer;
 
     public final List<MethodSimple> methods = new ArrayList<>();
     public final List<FieldSimple> fields = new ArrayList<>();
     public final List<CstClass> interfaces = new ArrayList<>();
     public final AttributeList attributes = new AttributeList();
-
-    public int exceptedBufferLength;
 
     static final boolean NOVERIFY = System.getProperty("roj.asm.cst.NoVerify") != null;
 
@@ -89,7 +88,8 @@ public class ConstantData implements IClass {
         }
 
         int i = 0;
-        for (CstClass itf : interfaces) {
+        for (int j = 0; j < interfaces.size(); j++) {
+            CstClass itf = interfaces.get(j);
             tmp = itf.getValue().getString();
             if (tmp.contains(".") || tmp.contains("\\")) {
                 throw new IllegalArgumentException("Illegal Interface # " + i + ' ' + tmp);
@@ -164,12 +164,10 @@ public class ConstantData implements IClass {
         }
     }
 
-    public ConstantData(int version, ConstantPool cp, int exceptedBufferLength, int accesses, int nameIndex, int superNameIndex) {
+    public ConstantData(int version, ConstantPool cp, int accesses, int nameIndex, int superNameIndex) {
         this.cp = cp;
         this.version = version;
         this.accesses = AccessFlag.of((short) accesses);
-        this.exceptedBufferLength = exceptedBufferLength;
-        this.writer = new ConstantWriter(cp);
         this.nameCst = ((CstClass) cp.array(nameIndex));
         this.name = nameCst.getValue().getString();
         if (superNameIndex == 0) {
@@ -185,19 +183,11 @@ public class ConstantData implements IClass {
         return (Attribute) attributes.getByName(name);
     }
 
-    public void addAttribute(Attribute attr) {
-        this.attributes.putByName(attr);
-    }
-
-    public ByteList getBytes() {
-        return getBytes(new ByteList(exceptedBufferLength), new ByteList());
-    }
-
     public ByteList getBytes(ByteList poolBuffer, ByteList mainBuffer) {
         poolBuffer.clear();
         mainBuffer.clear();
 
-        ConstantWriter writer = this.writer;
+        ConstantPool writer = this.cp;
 
         ByteWriter w = new ByteWriter(poolBuffer);
 
@@ -228,6 +218,21 @@ public class ConstantData implements IClass {
         _gl.writeBytes(w);
 
         return mainBuffer;
+    }
+
+    public void normalize() {
+        List<? extends MethodNode> methods = this.methods;
+        for (int i = 0; i < methods.size(); i++) {
+            if (methods.get(i) instanceof Method) {
+                methods.set(i, Helpers.cast(((Method) methods.get(i)).i_downgrade(cp)));
+            }
+        }
+        List<? extends MoFNode> fields = this.fields;
+        for (int i = 0; i < fields.size(); i++) {
+            if (fields.get(i) instanceof Field) {
+                fields.set(i, Helpers.cast(((Field) fields.get(i)).i_downgrade(cp)));
+            }
+        }
     }
 
     @Override
@@ -263,20 +268,8 @@ public class ConstantData implements IClass {
     }
 
     @Override
-    public void className(String n) {
-        nameCst.getValue().setString(n);
-    }
-
-    @Override
     public String parentName() {
         return parentCst == null ? null : parentCst.getValue().getString();
-    }
-
-    @Override
-    public void parentName(String n) {
-        if(parentCst == null)
-            throw new UnsupportedOperationException();
-        parentCst.getValue().setString(n);
     }
 
     @Override
@@ -304,12 +297,15 @@ public class ConstantData implements IClass {
     }
 
     @Override
-    public AttributeList attributes() {
-        return attributes;
-    }
-
-    @Override
     public byte type() {
         return 1;
+    }
+
+    public void dump() {
+        try (FileOutputStream fos = new FileOutputStream(name.replace('/', '.') + ".class")) {
+            Parser.toByteArrayShared(this).writeToStream(fos);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 }

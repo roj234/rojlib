@@ -25,8 +25,6 @@
  */
 package roj.asm.tree;
 
-import roj.asm.tree.simple.MoFNode;
-import roj.asm.util.AttributeList;
 import roj.asm.util.FlagList;
 
 import java.util.List;
@@ -40,21 +38,14 @@ import java.util.List;
  */
 public interface IClass {
     String className();
-    void className(String n);
     String parentName();
-    void parentName(String n);
     FlagList accessFlag();
-    default void accessFlag(FlagList list) {
-        accessFlag().flag = list.flag;
-    };
 
     List<String> interfaces();
     List<? extends MoFNode> methods();
     List<? extends MoFNode> fields();
     int getMethodByName(String name);
     int getFieldByName(String name);
-
-    AttributeList attributes();
 
     byte type();
 }

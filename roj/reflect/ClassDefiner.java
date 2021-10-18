@@ -26,6 +26,8 @@
 
 package roj.reflect;
 
+import roj.asm.SharedBuf;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -60,7 +62,9 @@ public final class ClassDefiner extends ClassLoader {
         ClassLoader.registerAsParallelCapable();
         FastInvoke fi = null;
         try {
+            SharedBuf.alloc().setLevel(true);
             fi = DirectAccessor.builder(FastInvoke.class).delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1" }).build();
+            SharedBuf.alloc().setLevel(false);
         } catch (Throwable e) {
             e.printStackTrace();
         }

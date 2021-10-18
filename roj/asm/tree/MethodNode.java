@@ -25,7 +25,6 @@
  */
 package roj.asm.tree;
 
-import roj.asm.tree.simple.MoFNode;
 import roj.asm.type.Type;
 
 import java.util.List;

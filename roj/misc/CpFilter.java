@@ -27,7 +27,7 @@ public class CpFilter {
         Runtime.getRuntime().addShutdownHook(new Thread(CpFilter::genList));
     }
 
-    private static void genList() {
+    public static void genList() {
         try {
             File dst = new File("classList.txt");
             // 取并集

@@ -3,7 +3,6 @@ package roj.asm.visitor;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -16,8 +15,8 @@ import roj.util.ByteWriter;
  * @since 2021/7/21 2:28
  */
 public class ClassVisitor {
-    protected final ConstantWriter cw = new ConstantWriter();
-    protected final ByteWriter     bw = new ByteWriter();
+    protected final ConstantPool cw = new ConstantPool();
+    protected final ByteWriter   bw = new ByteWriter();
     protected final ByteReader     br = new ByteReader();
 
     protected final ByteList poolBuf = new ByteList(), klassBuf = new ByteList();

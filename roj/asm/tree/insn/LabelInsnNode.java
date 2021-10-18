@@ -25,7 +25,7 @@
  */
 package roj.asm.tree.insn;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
@@ -46,7 +46,7 @@ public final class LabelInsnNode extends InsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         throw new UnsupportedOperationException();
     }
 }

@@ -51,17 +51,17 @@ public class MTDProgress extends STDProgress {
     }
 
     @Override
-    public void handleJoin(Downloader downloader) {
-        all += downloader.length;
-        downloaded.putLong(downloader, 0);
-        downloadBytes.putLong(downloader, 0);
+    public void handleJoin(Downloader dn) {
+        all += dn.length;
+        downloaded.putLong(dn, 0);
+        downloadBytes.putLong(dn, 0);
     }
 
     @Override
-    public void handleProgress(Downloader thread, long downloaded, long deltaRead) {
-        this.downloadBytes.getEntry(thread).v += deltaRead;
+    public void handleProgress(Downloader dn, long downloaded, long deltaRead) {
+        this.downloadBytes.getEntry(dn).v += deltaRead;
 
-        _progress(thread, downloaded);
+        _progress(dn, downloaded);
     }
 
     private void _progress(Downloader thread, long downloaded) {
@@ -122,13 +122,13 @@ public class MTDProgress extends STDProgress {
     }
 
     @Override
-    public void handleReconnect(Downloader thread, long downloaded) {
-        pr("[线程" + thread.id + "]速度太慢, 尝试重建链接", CmdUtil.Color.YELLOW, true);
+    public void handleReconnect(Downloader dn, long downloaded) {
+        pr("[线程" + dn.id + "]速度太慢, 尝试重建链接", CmdUtil.Color.YELLOW, true);
     }
 
     @Override
-    public void handleDone(Downloader thread) {
-        this.downloadBytes.getEntry(thread).v += thread.length - this.downloaded.putLong(thread, thread.length);
+    public void handleDone(Downloader dn) {
+        this.downloadBytes.getEntry(dn).v += dn.length - this.downloaded.putLong(dn, dn.length);
         _progress(null, 0);
     }
 }

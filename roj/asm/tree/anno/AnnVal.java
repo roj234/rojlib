@@ -28,7 +28,6 @@ package roj.asm.tree.anno;
 
 import roj.asm.cst.*;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -36,78 +35,74 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
  */
 public abstract class AnnVal {
-    AnnVal(char type) {
-        this.type = (byte) type;
-    }
+    public static final char BYTE       = 'B';
+    public static final char CHAR       = 'C';
+    public static final char DOUBLE     = 'D';
+    public static final char FLOAT      = 'F';
+    public static final char INT        = 'I';
+    public static final char LONG       = 'J';
+    public static final char SHORT      = 'S';
+    public static final char BOOLEAN    = 'Z';
+    public static final char STRING     = 's';
+    public static final char ENUM       = 'e';
+    public static final char CLASS      = 'c';
+    public static final char ANNOTATION = '@';
+    public static final char ARRAY      = '[';
 
-    public final byte type;
+    AnnVal() {}
 
     public static AnnVal parse(ConstantPool pool, ByteReader r) {
-        char type = AnnotationType.verify(r.readUByte());
+        int type = r.readUByte();
 
         switch (type) {
-            case AnnotationType.BOOLEAN:
-            case AnnotationType.BYTE:
-            case AnnotationType.SHORT:
-            case AnnotationType.CHAR:
-            case AnnotationType.INT:
-            case AnnotationType.DOUBLE:
-            case AnnotationType.FLOAT:
-            case AnnotationType.LONG:
-            case AnnotationType.STRING:
-            case AnnotationType.CLASS:
-                return parsePrimitive(pool, r, type);
-            case AnnotationType.ENUM:
-                return new roj.asm.tree.anno.AnnValEnum(((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString());
-            case AnnotationType.ANNOTATION:
+            case BOOLEAN:
+            case BYTE:
+            case SHORT:
+            case CHAR:
+            case INT:
+            case DOUBLE:
+            case FLOAT:
+            case LONG:
+            case STRING:
+            case CLASS:
+                Constant c = pool.get(r);
+                switch (type) {
+                    case DOUBLE:
+                        return new AnnValDouble(((CstDouble) c).value);
+                    case FLOAT:
+                        return new AnnValFloat(((CstFloat) c).value);
+                    case LONG:
+                        return new AnnValLong(((CstLong) c).value);
+                    case STRING:
+                        return new AnnValString(((CstUTF) c).getString());
+                    case CLASS:
+                        return new AnnValClass(((CstUTF) c).getString());
+                    default:
+                        return new AnnValInt((char) type, ((CstInt) c).value);
+                }
+            case ENUM:
+                return new AnnValEnum(((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString());
+            case ANNOTATION:
                 return new AnnValAnnotation(Annotation.deserialize(pool, r));
-            case AnnotationType.ARRAY:
+            case ARRAY:
                 int len = r.readUnsignedShort();
-                List<AnnVal> annos = new ArrayList<>();
-                while (len > 0) {
+                List<AnnVal> annos = new ArrayList<>(len);
+                while (len-- > 0) {
                     annos.add(parse(pool, r));
-                    len--;
                 }
                 return new AnnValArray(annos);
         }
-        return null;
+        throw new IllegalArgumentException("Unknown annotation value type '" + (char)type + "'");
     }
 
-    public static AnnVal parsePrimitive(ConstantPool pool, ByteReader r, char type) {
-        Constant c = pool.get(r);
-        switch (type) {
-            case AnnotationType.BOOLEAN:
-            case AnnotationType.BYTE:
-            case AnnotationType.SHORT:
-            case AnnotationType.CHAR:
-            case AnnotationType.INT:
-                return new AnnValInt(type, ((CstInt) c).value);
-            case AnnotationType.DOUBLE:
-                return new AnnValDouble(((CstDouble) c).value);
-            case AnnotationType.FLOAT:
-                return new AnnValFloat(((CstFloat) c).value);
-            case AnnotationType.LONG:
-                return new AnnValLong(((CstLong) c).value);
-            case AnnotationType.STRING:
-                return new AnnValString(((CstUTF) c).getString());
-            case AnnotationType.CLASS:
-                return new AnnValClass(((CstUTF) c).getString());
-        }
-        return null;
-    }
+    public abstract byte type();
 
-    public final void toByteArray(ConstantWriter pool, ByteWriter w) {
-        _toByteArray(pool, w.writeByte(type));
-    }
-
-    abstract void _toByteArray(ConstantWriter pool, ByteWriter w);
+    public abstract void toByteArray(ConstantPool pool, ByteWriter w);
 
     public abstract String toString();
 }

@@ -29,10 +29,7 @@ import roj.asm.Parser;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
 import roj.asm.mapper.util.SubImpl;
-import roj.asm.tree.AccessData;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
+import roj.asm.tree.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.CharMap;
@@ -75,7 +72,6 @@ public abstract class Obfuscator {
         m1 = new ConstMapper(true);
         m1.flag = ConstMapper.FLAG_CONSTANTLY_MAP | ConstMapper.FLAG_CHECK_SUB_IMPL;
         m2 = new CodeMapper(m1);
-        m2.rewrite = true;
     }
 
     final void genDataInherit(List<File> files) {
@@ -194,6 +190,11 @@ public abstract class Obfuscator {
                 cm.processOne(cur = arr.get(i));
             }
 
+            for (int i = 0; i < arr.size(); i++) {
+                cur = arr.get(i);
+                cur.compress();
+            }
+
             afterMapCode(arr);
         } catch (Throwable e) {
             throw new RuntimeException("At parsing " + cur, e);
@@ -216,9 +217,16 @@ public abstract class Obfuscator {
         }
 
         Desc desc = new Desc(data.name, "", "");
-        List<MethodSimple> methods = data.methods;
+        List<? extends MethodNode> methods = data.methods;
         for (int i = 0; i < methods.size(); i++) {
-            MethodSimple method = methods.get(i);
+            if (methods.get(i) instanceof Method) {
+                c.get();
+                data = c.getData();
+                methods = data.methods;
+                i = 0;
+                continue;
+            }
+            MethodSimple method = (MethodSimple) methods.get(i);
             FlagList acc = method.accesses;
             if ((flags & ADD_SYNTHETIC) != 0) {
                 acc.flag |= AccessFlag.SYNTHETIC;

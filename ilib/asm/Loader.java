@@ -28,9 +28,21 @@ package ilib.asm;
 
 import ilib.Config;
 import ilib.asm.fasterforge.anc.JarInfo;
+import ilib.asm.fasterforge.transformers.EventSubscriberTransformer;
 import ilib.asm.fasterforge.transformers.FieldRedirect;
-import ilib.asm.transformers.*;
+import ilib.asm.fasterforge.transformers.SideTransformer;
 import ilib.command.parser.CommandNeXt;
+import io.netty.bootstrap.Bootstrap;
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -39,103 +51,98 @@ import org.apache.logging.log4j.core.config.Configuration;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import roj.asm.AccessTransformer;
 import roj.io.DummyOutputStream;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.reflect.IFieldAccessor;
 import roj.reflect.ReflectionUtils;
-
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
+import roj.util.ByteList;
 
 import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.net.URISyntaxException;
 import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
-@Name("ILASM")
-@MCVersion("1.12.2")
-@SortingIndex(Integer.MIN_VALUE)
-@TransformerExclusions({"ilib.asm.", "roj."})
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 16:43
  */
+@Name("ILASM")
+@MCVersion("1.12.2")
+@SortingIndex(Integer.MIN_VALUE)
+@TransformerExclusions({"ilib.asm.", "roj."})
 public class Loader implements IFMLLoadingPlugin {
-    private static final Logger logger = LogManager.getLogger("ImpLib-ASM");
+    public static final Logger logger = LogManager.getLogger("ImpLib-ASM");
 
-    public static ASMDataTable asmInfo;
+    public static ASMDataTable ASMTable;
     @Nullable
-    public static final Boolean isClient = determineClient();
+    public static final Boolean isClient = testClientSide();
+    static boolean LaunchWrapperInjected;
 
-    private static TransformerWrapperList transformers;
-    private static final ArrayList<IClassTransformer>
-            firstTransformers = new ArrayList<>(5),
-            endTransformers = new ArrayList<>(5);
-
-    public static void changeLevel(Level level) {
-        final Level currLvl = LogManager.getRootLogger().getLevel();
-        if (currLvl.equals(level)) return;
-        // 设置根日志级别
-        ((org.apache.logging.log4j.core.Logger) LogManager.getRootLogger()).setLevel(level);
-
-        // 获取配置文件中的所有log4j对象
-        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        Configuration conf = ctx.getConfiguration();
-        conf.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(level);
-        ctx.updateLoggers(conf);
-
-        ctx = (LoggerContext) LogManager.getContext(true);
-        conf = ctx.getConfiguration();
-        conf.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(level);
-        ctx.updateLoggers(conf);
-    }
+    static long classLoadElapse = 0;
 
     public Loader() throws IOException {
         AccessTransformer.readAndParseAt(Loader.class, "META-INF/IL_at.cfg");
-
-        // todo Enum#values() fix
-        // EntityEquipmentSlot.values() // EnumFacing.values() // etc
+        try {
+            Launch.classLoader.setImplibAccessor(new LaunchInjector());
+            logger.info("LaunchWrapperInjected!");
+            LaunchWrapperInjected = true;
+        } catch (Throwable e) {
+            LaunchWrapperInjected = false;
+        }
 
         if (Config.removePatchy) {
-            for (File patchy : FileUtil.findAllFiles(new File("."), file -> file.getName().startsWith("patchy-") && file.getName().endsWith(".jar"))) {
-                File mark = new File(patchy + "-mark");
-                if (mark.isFile()) continue;
-
+            File patchy;
+            try {
+                patchy = new File(Bootstrap.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
+            } catch (URISyntaxException e) {
+                throw new IllegalArgumentException("removePatchy操作失败", e);
+            }
+            if (patchy.getAbsolutePath().contains("patchy")) {
                 try(MutableZipFile mz = new MutableZipFile(patchy)) {
                     for(String key : mz.getEntries().keySet()) {
                         if (key.startsWith("io/netty")) {
-                            mz.setFileData(key, null, true);
+                            mz.setFileData(key, null);
                         }
                     }
                     mz.store();
                 } catch (IOException e) {
-                    throw new IllegalArgumentException("操作失败", e);
-                }
-
-                try {
-                    if (!mark.createNewFile()) {
-                        throw new IllegalArgumentException("Mark creation失败");
-                    }
-                } catch (IOException e) {
-                    throw new IllegalArgumentException("操作失败", e);
+                    throw new IllegalArgumentException("removePatchy操作失败", e);
                 }
             }
             Config.instance.getConfig().put("Tweak.Client.修复进存档或服务器卡死(只需打开一次)", false);
             Config.instance.save();
+            throw new RuntimeException("请重启Minecraft");
+        }
+
+        if (Config.injectLauncher) {
+            File launcher;
+            try {
+                launcher = new File(Launch.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
+            } catch (URISyntaxException e) {
+                throw new IllegalArgumentException("injectLauncher操作失败", e);
+            }
+
+            try(MutableZipFile mz = new MutableZipFile(launcher)) {
+                // noinspection all
+                ZipInputStream zis = new ZipInputStream(Loader.class.getClassLoader().getResourceAsStream("META-INF/LaunchWrapperInjector.jar"));
+                ZipEntry ze;
+                while ((ze = zis.getNextEntry()) != null) {
+                    if (ze.getName().endsWith(".class")) {
+                        mz.setFileData(ze.getName(), new ByteList().readStreamArrayFully(zis));
+                    }
+                }
+                mz.store();
+            } catch (Throwable e) {
+                throw new IllegalArgumentException("injectLauncher操作失败", e);
+            }
+            Config.instance.getConfig().put("Util.注入LaunchWrapper.注入(只需打开一次)", false);
+            Config.instance.save();
+            throw new RuntimeException("请重启Minecraft");
         }
 
         if(Config.noCollision) {
@@ -176,14 +183,14 @@ public class Loader implements IFMLLoadingPlugin {
         }
 
         if (Config.replaceOIM) {
-            ClassReplacer.addClass("net.minecraft.util.ObjectIntIdentityMap",
-                                   IOUtil.read("META-INF/nixim/ObjectIntIdentityMap.class"));
+            ClassReplacer.add("net.minecraft.util.ObjectIntIdentityMap",
+                              IOUtil.read("META-INF/nixim/ObjectIntIdentityMap.class"));
             NiximProxy.read(IOUtil.read("META-INF/nixim/MapClear.class"));
             NiximProxy.read(IOUtil.read("META-INF/nixim/MapGet.class"));
         }
 
-        ClassReplacer.addClass("net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper", IOUtil.read("ilib/asm/fasterforge/FMLDeobfuscatingRemapper.class"));
-        ClassReplacer.addClass("net.minecraftforge.fml.common.asm.transformers.DeobfuscationTransformer", IOUtil.read("ilib/asm/fasterforge/DeobfuscationTransformer.class"));
+        ClassReplacer.add("net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper", IOUtil.read("ilib/asm/fasterforge/FMLDeobfuscatingRemapper.class"));
+        ClassReplacer.add("net.minecraftforge.fml.common.asm.transformers.DeobfuscationTransformer", IOUtil.read("ilib/asm/fasterforge/DeobfuscationTransformer.class"));
         NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/JarDiscoverer.class"));
         NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/NiximASMModParser.class"));
         NiximProxy.read(IOUtil.read("ilib/asm/fasterforge/NiximModContainerFactory.class"));
@@ -281,187 +288,72 @@ public class Loader implements IFMLLoadingPlugin {
         }
     }
 
-    private static Boolean determineClient() {
-        File file = new File("./assets/");
-        if (file.isDirectory())
-            return true;
-        file = new File("./server.properties");
-        return file.isFile() ? false : null;
-    }
+    private static WrappedTransformers wrapper;
+    private static final ArrayList<IClassTransformer> ilTransformers = new ArrayList<>(5);
+    private static boolean inProgress;
 
-    public static Logger logger() {
-        return logger;
-    }
-
-    @SuppressWarnings("unchecked")
-    public static void tryPatch(IClassTransformer transformer) {
-        if (transformers == null) {
-            try {
-                IFieldAccessor accessor = ReflectionUtils.accessField(LaunchClassLoader.class.getDeclaredField("transformers"));
-
-                accessor.setInstance(Launch.classLoader);
-
-                List<IClassTransformer> list = (List<IClassTransformer>) accessor.getObject();
-
-                transformers = new TransformerWrapperList(list);
-                onTransformerUpdate(transformers);
-
-                accessor.setObject(transformers);
-
-            } catch (NoSuchFieldException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private static int transformForgeTransformer = 0;
-    private static boolean fullInit = false;
-    private static boolean mixinFixed;
-    private static boolean flag;
-
-    public static void onTransformerUpdate(TransformerWrapperList list) {
-        if (flag)
+    static void onUpdate(WrappedTransformers list) {
+        if (inProgress)
             return;
-        flag = true;
+        inProgress = true;
 
-        if (!mixinFixed) {
-            tryFixMixinBug();
-            mixinFixed = true;
-        }
-
-        if (!fullInit) {
-            /*if (Config.patchForge && foundFMLCorePlugins < 3*//*4*//*) {
-                int count = 0;
-                ListIterator<IClassTransformer> itr = list.listIterator();
-
-                while (itr.hasNext()) {
-                    IClassTransformer transformer = itr.next();
-                    switch (transformer.getClass().getName()) {
-                        case "$wrapper.net.minecraftforge.fml.common.asm.transformers.SideTransformer":
-                            itr.set(new SideTransformer());
-                            logger().warn("[WIP] Patched SideTransformer");
-                            foundFMLCorePlugins++;
-                            break;
-                        case "$wrapper.net.minecraftforge.fml.common.asm.transformers.EventSubscriptionTransformer":
-                            itr.set(new EventSubscriptionTransformer());
-                            //logger().warn("[WIP] Patched EventSubscriptionTransformer");
-                            foundFMLCorePlugins++;
-                            break;
-                        case "$wrapper.net.minecraftforge.fml.common.asm.transformers.EventSubscriberTransformer":
-                            itr.set(new EventSubscriberTransformer());
-                            //logger().warn("[WIP] Patched EventSubscriberTransformer");
-                            foundFMLCorePlugins++;
-                            break;
-                        case "$wrapper.net.minecraftforge.fml.common.asm.transformers.SoundEngineFixTransformer":
-                            //foundFMLCorePlugins++;
-                            break;
-                    }
-                }
-            }*/
-
-            if (transformForgeTransformer < 4) {
-                int count = 0;
-                ListIterator<IClassTransformer> itr = list.listIterator();
-
-                while (itr.hasNext()) {
-                    IClassTransformer transformer = itr.next();
-                    switch (transformer.getClass().getName()) {
-                        case "net.minecraftforge.fml.common.asm.transformers.AccessTransformer":
-                            //itr.set(new AT_PATCH_AT("AccessTrans", (net.minecraftforge.fml.common.asm.transformers.AccessTransformer) transformer));
-                            //transformForgeTransformer ++;
-                            break;
-                        case "net.minecraftforge.fml.common.asm.transformers.ModAccessTransformer":
-                            //itr.set(new AT_PATCH_AT("ModAccess", (net.minecraftforge.fml.common.asm.transformers.AccessTransformer) transformer));
-                            //for (int i = 0; i < 10; i++) {
-                            //    System.out.println("FUCK FORGE!!! for the package-private access of net/minecraftforge/fml/common/asm/transformers/AccessTransformer$Modifier");
-                            //}
-                            //transformForgeTransformer ++;
-                            break;
-                        case "net.minecraftforge.fml.common.asm.transformers.ItemStackTransformer":
-                            itr.set(new FieldRedirect("ItemStack", "net.minecraft.item.ItemStack", "Lnet/minecraft/item/Item;", "getItemRaw"));
-                            transformForgeTransformer++;
-                            break;
-                        case "net.minecraftforge.fml.common.asm.transformers.ItemBlockTransformer":
-                            itr.set(new FieldRedirect("ItemBlock", "net.minecraft.item.ItemBlock", "Lnet/minecraft/block/Block;", "getBlockRaw"));
-                            transformForgeTransformer++;
-                            break;
-                        case "net.minecraftforge.fml.common.asm.transformers.ItemBlockSpecialTransformer":
-                            itr.set(new FieldRedirect("ItemBlockSpecial", "net.minecraft.item.ItemBlockSpecial", "Lnet/minecraft/block/Block;", "getBlockRaw"));
-                            transformForgeTransformer++;
-                            break;
-                        case "net.minecraftforge.fml.common.asm.transformers.PotionEffectTransformer":
-                            itr.set(new FieldRedirect("PotionEffect", "net.minecraft.potion.PotionEffect", "Lnet/minecraft/potion/Potion;", "getPotionRaw"));
-                            transformForgeTransformer++;
-                            break;
-                        default:
-                            /*if(transformer.getClass().getName().startsWith("org.spongepowered.asm")) {
-                                itr.set(new ProxiedProxy(transformer));
-                            }*/
-                    }
-                }
-            } else {
-                firstTransformers.add(ClassReplacer.INSTANCE);
-                endTransformers.add(new AutoRegisterTransformer());
-                endTransformers.add(new Transformer());
-
-                fullInit = true;
+        for (int i = 0; i < list.size(); i++) {
+            IClassTransformer ts = list.get(i);
+            switch (ts.getClass().getName()) {
+                case "$wrapper.net.minecraftforge.fml.common.asm.transformers.SideTransformer":
+                    list.set(i, new SideTransformer());
+                    break;
+                case "$wrapper.net.minecraftforge.fml.common.asm.transformers.EventSubscriptionTransformer":
+                    //list.set(new EventSubscriptionTransformer());
+                    break;
+                case "$wrapper.net.minecraftforge.fml.common.asm.transformers.EventSubscriberTransformer":
+                    list.set(i, new EventSubscriberTransformer());
+                    break;
+                case "net.minecraftforge.fml.common.asm.transformers.AccessTransformer":
+                    //itr.set(new AT_PATCH_AT("A", (net.minecraftforge.fml.common.asm.transformers.AccessTransformer) transformer));
+                    break;
+                case "net.minecraftforge.fml.common.asm.transformers.ModAccessTransformer":
+                    //itr.set(new AT_PATCH_AT("M", (net.minecraftforge.fml.common.asm.transformers.AccessTransformer) transformer));
+                    break;
+                case "net.minecraftforge.fml.common.asm.transformers.ItemStackTransformer":
+                    list.set(i, new FieldRedirect("ItemStack", "net.minecraft.item.ItemStack", "Lnet/minecraft/item/Item;", "getItemRaw"));
+                    break;
+                case "net.minecraftforge.fml.common.asm.transformers.ItemBlockTransformer":
+                    list.set(i, new FieldRedirect("ItemBlock", "net.minecraft.item.ItemBlock", "Lnet/minecraft/block/Block;", "getBlockRaw"));
+                    break;
+                case "net.minecraftforge.fml.common.asm.transformers.ItemBlockSpecialTransformer":
+                    list.set(i, new FieldRedirect("ItemBlockSpecial", "net.minecraft.item.ItemBlockSpecial", "Lnet/minecraft/block/Block;", "getBlockRaw"));
+                    break;
+                case "net.minecraftforge.fml.common.asm.transformers.PotionEffectTransformer":
+                    list.set(i, new FieldRedirect("PotionEffect", "net.minecraft.potion.PotionEffect", "Lnet/minecraft/potion/Potion;", "getPotionRaw"));
+                    break;
             }
         }
 
-        HashSet<IClassTransformer> transformerSet = new LinkedHashSet<>(list);
-
-        transformerSet.removeAll(firstTransformers);
-        transformerSet.removeAll(endTransformers);
-        transformerSet.remove(NiximProxy.instance);
+        HashSet<IClassTransformer> set = new LinkedHashSet<>(list);
+        set.remove(ClassReplacer.INSTANCE);
+        set.removeAll(ilTransformers);
 
         list.clear();
-        list.addAll(transformerSet);
-        list.addAll(Math.min(2, list.size()), firstTransformers);
+        list.addAll(set);
+        list.add(Math.min(2, list.size()), ClassReplacer.INSTANCE);
+        list.addAll(list.size() - 1, ilTransformers);
 
-        //int endIndex = -1;
-        //int i = 0;
-        //for (IClassTransformer transformer : transformerSet) {
-        //    i++;
-        //    if (transformer.getClass().getName().endsWith("DeobfuscationTransformer")) {
-        //        endIndex = i + 1;
-        //        break;
-        //    }
-        //}
-        //if (endIndex != -1 && endIndex < list.size()) {
-        //    list.addAll(endIndex, endTransformers);
-        //} else
-            list.addAll(list.size() - 1, endTransformers);
-
-        list.add(list.size() - 1, NiximProxy.instance);
-
-        flag = false;
+        inProgress = false;
     }
 
-    private static void tryFixMixinBug() {
-        try {
-            MixinEnvironment.getCurrentEnvironment().addTransformerExclusion(NiximProxy.class.getName());
-            MixinEnvironment.getCurrentEnvironment().addTransformerExclusion(ClassReplacer.class.getName());
-        } catch (Throwable ignored) {
-        }
-    }
-
-    public static void last(IClassTransformer transformer) {
-        endTransformers.add(transformer);
-    }
-
-    public static void first(IClassTransformer transformer) {
-        firstTransformers.add(transformer);
+    public static void addTransformer(IClassTransformer transformer) {
+        ilTransformers.add(transformer);
     }
 
     public static void handleASMData(ASMDataTable store, Map<String, JarInfo> info) {
-        asmInfo = store;
-        AutoRegisterTransformer.initStore();
+        ASMTable = store;
+        Preloader.preload();
         CommandNeXt.initStore();
     }
 
     @Override
     public String[] getASMTransformerClass() {
-        Preloader.doPreload();
         return new String[0];
     }
 
@@ -486,4 +378,54 @@ public class Loader implements IFMLLoadingPlugin {
         return ATProxy.class.getName();
     }
 
+    private static void changeLevel(Level level) {
+        final Level currLvl = LogManager.getRootLogger().getLevel();
+        if (currLvl.equals(level)) return;
+        // 设置根日志级别
+        ((org.apache.logging.log4j.core.Logger) LogManager.getRootLogger()).setLevel(level);
+
+        // 获取配置文件中的所有log4j对象
+        LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+        Configuration conf = ctx.getConfiguration();
+        conf.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(level);
+        ctx.updateLoggers(conf);
+
+        ctx = (LoggerContext) LogManager.getContext(true);
+        conf = ctx.getConfiguration();
+        conf.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(level);
+        ctx.updateLoggers(conf);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void wrapTransformers() {
+        if (wrapper == null) {
+            try {
+                ilTransformers.add(new Transformer());
+                ilTransformers.add(NiximProxy.instance);
+
+                IFieldAccessor accessor = ReflectionUtils.accessField(LaunchClassLoader.class.getDeclaredField("transformers"));
+                accessor.setInstance(Launch.classLoader);
+                onUpdate(wrapper = new WrappedTransformers((List<IClassTransformer>) accessor.getObject()));
+                accessor.setObject(wrapper);
+            } catch (NoSuchFieldException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                MixinEnvironment env = MixinEnvironment.getCurrentEnvironment();
+                env.addTransformerExclusion(NiximProxy.class.getName());
+                env.addTransformerExclusion(ClassReplacer.class.getName());
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static Boolean testClientSide() {
+        File file = new File("./assets/");
+        if (file.isDirectory())
+            return true;
+        file = new File("./server.properties");
+        return file.isFile() ? false : null;
+    }
 }

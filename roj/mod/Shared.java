@@ -76,28 +76,31 @@ public final class Shared {
     public static final CMapping MAIN_CONFIG;
 
     static {
-        boolean ASSIGNED_LAUNCH_ONLY = System.getProperty("fmd.launch_only") != null;
+        boolean launchOnly = System.getProperty("fmd.launch_only") != null;
+        String basePath = System.getProperty("fmd.base_path");
 
         File base;
-        try {
-            base = new File(FMDMain.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile();
-            if(!ASSIGNED_LAUNCH_ONLY)
-                base = base.getParentFile();
-        } catch (URISyntaxException e) {
-            e.printStackTrace();
-            base = new File("").getAbsoluteFile();
+        if (basePath == null) {
+            try {
+                base = new File(FMDMain.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile().getParentFile();
+            } catch (URISyntaxException e) {
+                e.printStackTrace();
+                base = new File("").getAbsoluteFile();
+            }
+        } else{
+            base = new File(basePath);
         }
         BASE = base;
 
         TMP_DIR = new File(BASE, "tmp/");
 
-        if(!TMP_DIR.isDirectory() && !TMP_DIR.mkdir()) {
+        if (!TMP_DIR.isDirectory() && !TMP_DIR.mkdir()) {
             CmdUtil.error("无法创建临时文件夹: " + TMP_DIR.getAbsolutePath());
             System.exit(-2);
         }
 
         PROJ_CONF_DIR = new File(BASE, "/config/");
-        if(!ASSIGNED_LAUNCH_ONLY && !PROJ_CONF_DIR.isDirectory() && !PROJ_CONF_DIR.mkdirs()) {
+        if (!launchOnly && !PROJ_CONF_DIR.isDirectory() && !PROJ_CONF_DIR.mkdirs()) {
             CmdUtil.error("无法创建配置保存文件夹: " + PROJ_CONF_DIR.getAbsolutePath());
             System.exit(-2);
         }
@@ -123,7 +126,6 @@ public final class Shared {
             CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
             // 4KB
             FileUtil.MIN_ASYNC_SIZE = cfgGen.getBool("使用多线程下载") ? 1024 * 4 : Integer.MAX_VALUE;
-            FileUtil.ENABLE_ENDPOINT_RECOVERY = cfgGen.getBool("开启断点续传");
             FileUtil.USER_AGENT = cfgGen.getString("UserAgent");
             FileUtil.TIMEOUT = cfgGen.getInteger("下载超时");
 
@@ -137,7 +139,7 @@ public final class Shared {
             throw new RuntimeException();
         }
 
-        if(MAIN_CONFIG.getDot("FMD配置.文件修改监控").asBool()) {
+        if(!launchOnly && MAIN_CONFIG.getDot("FMD配置.文件修改监控").asBool()) {
             try {
                 watcher = new ProjectWatcher(new File(BASE, "/class/").toPath(), () -> {
                     CmdUtil.warning("库文件已被修改,重新加载映射表...");

@@ -84,7 +84,7 @@ public class STDProgress implements IProgressHandler {
     long lastTime;
 
     @Override
-    public void handleProgress(Downloader thread, long downloaded, long speedByByte) {
+    public void handleProgress(Downloader dn, long downloaded, long speedByByte) {
         if(DECR_LOGS_2) {
             long t = System.currentTimeMillis();
             if(t - lastTime < 5000) {
@@ -93,7 +93,7 @@ public class STDProgress implements IProgressHandler {
             lastTime = t;
         }
 
-        double temp = (100d * (double) downloaded / (double) thread.length);
+        double temp = (100d * (double) downloaded / (double) dn.length);
 
         synchronized (System.out) {
             CmdUtil.clearLine();
@@ -119,7 +119,7 @@ public class STDProgress implements IProgressHandler {
     }
 
     @Override
-    public void handleReconnect(Downloader thread, long downloaded) {
+    public void handleReconnect(Downloader dn, long downloaded) {
         pr("速度太慢, 尝试重建链接", CmdUtil.Color.YELLOW, true);
     }
 

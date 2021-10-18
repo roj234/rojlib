@@ -34,7 +34,6 @@ import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.util.ByteReader;
@@ -116,7 +115,7 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
         }
     */
     @Override
-    public void toByteArray(ConstantWriter pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
+    public void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
         w.writeShort(list.size());
         for (LocalVariable c : list) {
             InsnNode s = validate(c.start);

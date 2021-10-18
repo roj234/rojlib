@@ -26,7 +26,7 @@
 
 package roj.asm.tree.attr;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
@@ -44,7 +44,7 @@ public abstract class Attribute {
 
     public final String name;
 
-    public final ByteWriter toByteArray(ConstantWriter pool, ByteWriter w) {
+    public final ByteWriter toByteArray(ConstantPool pool, ByteWriter w) {
         w.writeShort(pool.getUtfId(name)).writeInt(-1);
         ByteList list = w.list;
 
@@ -59,17 +59,13 @@ public abstract class Attribute {
         return w;
     }
 
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
-        throw new InternalError("Subclasses should rewrite this: " + this.getClass().getName());
+    void toByteArray1(ConstantPool pool, ByteWriter w) {
+        throw new UnsupportedOperationException("On " + this.getClass().getName());
     }
 
     public abstract String toString();
 
     public ByteList getRawData() {
         return null;
-    }
-
-    public void setRawData(ByteList data) {
-        throw new UnsupportedOperationException();
     }
 }

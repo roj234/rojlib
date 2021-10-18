@@ -25,16 +25,18 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.FieldSimple;
+import roj.asm.tree.MethodSimple;
 import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.FieldInsnNode;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
+
+import net.minecraft.launchwrapper.IClassTransformer;
 
 import java.util.ListIterator;
 
@@ -90,8 +92,14 @@ public class FieldRedirect implements IClassTransformer {
             if (method.name.getString().equals(this.bypass))
                 continue;
 
-            AttrCode code = Parser.getOrCreateCode(classNode, method);
-            if (code == null) continue;
+            AttrCode code;
+            Attribute attr = (Attribute) method.attributes.getByName("Code");
+            if (attr != null) {
+                int index = method.attributes.indexOf(attr);
+                method.attributes.set(index, code = new AttrCode(method, attr.getRawData(), classNode.cp));
+            } else {
+                continue;
+            }
 
             for (ListIterator<InsnNode> it = code.instructions.listIterator(); it.hasNext(); ) {
                 InsnNode insnNode = it.next();
@@ -110,5 +118,4 @@ public class FieldRedirect implements IClassTransformer {
         }
         return Parser.toByteArray(classNode);
     }
-
 }

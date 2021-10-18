@@ -31,7 +31,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializer;
 import ilib.api.PreInitCompleteEvent;
 import ilib.asm.Loader;
-import ilib.asm.transformers.AutoRegisterTransformer;
+import ilib.autoreg.TileRegisterHandler;
 import ilib.block.BlockLootrChest;
 import ilib.client.resource.GeneratedModelRepo;
 import ilib.command.*;
@@ -148,7 +148,7 @@ public class ImpLib {
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        AutoRegisterTransformer.handlePreInit();
+        TileRegisterHandler.register();
 
         ProxyPacket.register();
         SPacketSetPlayerId.register();
@@ -186,7 +186,7 @@ public class ImpLib {
             Registry.block("chest_loot", block, new ItemBlockMI(block), null, 24, true);
         }
 
-        Loader.asmInfo = null;
+        Loader.ASMTable = null;
         try {
             JarDiscoverer.class.getDeclaredMethod("save").invoke(null);
         } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {

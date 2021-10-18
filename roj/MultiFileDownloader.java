@@ -25,11 +25,12 @@
  */
 package roj;
 
+import roj.concurrent.PrefixFactory;
+import roj.concurrent.TaskPool;
+import roj.concurrent.WaitingIOFuture;
 import roj.io.FileUtil;
-import roj.io.down.IProgressHandler;
 import roj.io.down.MTDProgress;
 import roj.text.SimpleLineReader;
-import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 
 import java.io.File;
@@ -70,7 +71,6 @@ public final class MultiFileDownloader {
             parseFileNames(args[i]);
         }
 
-        FileUtil.ENABLE_ENDPOINT_RECOVERY = true;
         FileUtil.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
 
         int threadCount;
@@ -85,6 +85,8 @@ public final class MultiFileDownloader {
         } else {
             threadCount = Math.min(urls.size(), 500);
         }
+        FileUtil.ioPool = new TaskPool(0, threadCount, 1, 512,
+                                       new PrefixFactory("MFD-ParallelIO", 20000));
 
         File base = new File(args[0]);
         if (!base.isDirectory() && !base.mkdirs()) {
@@ -93,80 +95,32 @@ public final class MultiFileDownloader {
 
         urls.sort(null);
 
-        int delim = urls.size() / threadCount;
-        if (delim < 1) {
-            delim = 1;
-        }
-
         MyProgressHandler handler = new MyProgressHandler();
 
-        List<Thread> threads = new ArrayList<>(threadCount);
+        List<WaitingIOFuture> futures = new ArrayList<>(urls.size());
 
-        File downloadInfo = new File(base, "RojMFD.nfo");
+        File nfo = new File(base, "RojMFD.nfo");
 
-        List<String> list = new ArrayList<>(500);
-        int i = 0, j = 0;
-
-        handler.onInitial(urls.size());
+        int j = 0;
         for (String s : urls) {
-            list.add(s);
-            if (++i > delim) {
-                threads.add(openThreadToDownload(list.toArray(new String[list.size()]), base, handler, j + j++ * delim, downloadInfo));
-                list.clear();
-                i = 0;
+            File saveTo = new File(base, s.substring(s.lastIndexOf('/') + 1));
+            futures.add(FileUtil.downloadFile(s, saveTo, nfo, handler, j++, false));
+        }
+
+        System.out.println("已启动 " + threadCount + "个线程");
+
+        for (WaitingIOFuture thread1 : futures) {
+            try {
+                thread1.waitFor();
+            } catch (Throwable e) {
+                e.printStackTrace();
             }
-        }
-        if (!list.isEmpty()) {
-            threads.add(openThreadToDownload(list.toArray(new String[list.size()]), base, handler, j + j * delim, downloadInfo));
-        }
-
-        for (Thread thread1 : threads) {
-            thread1.start();
-        }
-
-        System.out.println("已启动 " + j + "个线程");
-        int delay = 3;
-        do {
-            System.out.println(delay + "秒后开始下载");
-            Thread.sleep(1000);
-        } while (--delay > 0);
-
-        for (Thread thread1 : threads) {
-            thread1.join();
         }
 
         handler.myOnReturn();
     }
 
     static int i = 1;
-
-    private static Thread openThreadToDownload(String[] arr, File base, IProgressHandler handler, int offset, File downloadInfo) {
-        if (arr.length == 0) return null;
-        return new Thread(() -> {
-            try {
-                Thread.sleep(5000);
-            } catch (InterruptedException e) {
-                return;
-            }
-            int offset1 = offset;
-            for (String s : arr) {
-                File saveTo = new File(base, s.substring(s.lastIndexOf('/') + 1));
-                if (!saveTo.exists() || saveTo.length() == 0) {
-                    int retry = 2;
-                    do {
-                        try {
-                            FileUtil.downloadFile(s, saveTo, downloadInfo, handler, offset1, false);
-                            break;
-                        } catch (Throwable e) {
-                            CmdUtil.warning("Failure downloading " + saveTo.getName() + " - " + e.getLocalizedMessage());
-                            CmdUtil.warning("Retry " + (3 - retry) + "/3");
-                        }
-                    } while (retry-- > 0);
-                }
-                offset1++;
-            }
-        }, "Downloader_" + i++);
-    }
 
     private static void parseFileNames(String name) throws IOException {
         File file = new File(name);

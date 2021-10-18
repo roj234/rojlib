@@ -26,6 +26,7 @@
 package roj.asm.util;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
+import roj.asm.type.Signature;
 import roj.text.CharList;
 
 /**
@@ -38,5 +39,5 @@ import roj.text.CharList;
 @Internal
 public interface IGeneric {
     void appendGeneric(CharList sb);
-    void appendString(CharList sb);
+    void appendString(CharList sb, Signature parent);
 }

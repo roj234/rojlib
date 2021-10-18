@@ -32,6 +32,7 @@ import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
+import javax.annotation.Nonnull;
 import java.io.*;
 import java.util.Iterator;
 import java.util.Set;
@@ -44,6 +45,36 @@ import java.util.Set;
  * @since  2021/4/5 18:14
  */
 public class BoxFile implements Closeable {
+    public final class RandomAccessOutputStream extends OutputStream {
+        boolean closed;
+        final String name;
+
+        public RandomAccessOutputStream(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            if (closed)
+                throw new IOException("Stream closed");
+            rf.write(b);
+        }
+
+        @Override
+        public void write(@Nonnull byte[] b, int off, int len) throws IOException {
+            if (closed)
+                throw new IOException("Stream closed");
+            rf.write(b, off, len);
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (!closed)
+                endStream();
+            closed = true;
+        }
+    }
+
     public static void main(String[] args) throws IOException {
         File file = new File("t.bf");
         BoxFile bf = new BoxFile(file);
@@ -188,6 +219,8 @@ public class BoxFile implements Closeable {
     }
 
     public boolean remove(String name) throws IOException {
+        if (stream != null)
+            endStream();
         F fe = infoMap.get(name);
         if(fe == null)
             return false;
@@ -224,6 +257,8 @@ public class BoxFile implements Closeable {
         if(name.length() > 65535) {
             throw new IOException("String length exceed limit 65535");
         }
+        if (stream != null)
+            endStream();
         F fe = infoMap.get(name);
         if(fe == null) { // append
             long off = rf.length() - freeBytes;
@@ -283,6 +318,43 @@ public class BoxFile implements Closeable {
         return fe == null;
     }
 
+    private RandomAccessOutputStream stream;
+    public OutputStream streamAppend(String name) throws IOException {
+        if(name.length() > 65535) {
+            throw new IOException("String length exceed limit 65535");
+        }
+        if (stream != null)
+            endStream();
+        F fe = infoMap.get(name);
+        if(fe == null) { // append
+            long off = rf.length() - freeBytes;
+            int dataLen = ByteWriter.byteCountUTF8(name) + 6;
+            infoMap.put(name, new F(off + dataLen, dataLen));
+            rf.seek(off);
+
+            rf.writeShort(name.length());
+            ByteList li = ByteWriter.encodeUTF(name);
+            rf.write(li.list, 0, li.pos());
+            rf.writeInt(0);
+
+            return stream = new RandomAccessOutputStream(name);
+        } else { // replace
+            throw new IOException("Streamize append can only support fresh entry");
+        }
+    }
+
+    public void endStream() throws IOException {
+        if (stream == null) return;
+        F fe = infoMap.get(stream.name);
+        long ptr = rf.getFilePointer();
+        rf.seek(fe.offset - 4);
+        if (ptr - fe.offset > Integer.MAX_VALUE)
+            throw new IOException("Data size too large");
+        rf.writeInt((int) (ptr - fe.offset));
+        stream.closed = true;
+        stream = null;
+    }
+
     public Set<String> keys() {
         return infoMap.keySet();
     }
@@ -295,8 +367,17 @@ public class BoxFile implements Closeable {
         infoMap.clear();
     }
 
+    public void reset() throws IOException {
+        rf.seek(0);
+        rf.writeInt(MAGIC);
+        rf.writeLong(freeBytes = rf.length() - 12);
+        infoMap.clear();
+    }
+
     @Override
     public void close() throws IOException {
+        if (stream != null)
+            endStream();
         rf.close();
     }
 }

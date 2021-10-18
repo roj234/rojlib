@@ -44,39 +44,37 @@ import java.nio.charset.StandardCharsets;
  */
 public class ByteList {
     public byte[] list;
-    protected int pointer, writePtr, length;
+    protected int pointer, writePtr;
 
     public ByteList() {
-        this.length = 0;
+        this.list = EmptyArrays.BYTES;
     }
 
     public ByteList(int len) {
         list = new byte[len];
-        length = len;
     }
 
     public ByteList(byte[] array) {
         list = array;
         pointer = array.length;
-        length = array.length;
     }
 
     public static ByteList from(ByteBuffer buf) {
         ByteList bl = new ByteList() {
             @Override
             public void ensureCapacity(int required) {
-                if (required > length) {
+                if (required > list.length) {
                     throw new ArrayIndexOutOfBoundsException("ByteList.fromByteBuffer(): buffer space overflow!");
                 }
             }
         };
         if(buf.hasArray()) {
             bl.writePtr = buf.position();
-            bl.pointer = bl.length = buf.limit();
+            bl.pointer = buf.limit();
             bl.list = buf.array();
         } else {
             bl.writePtr = 0;
-            bl.list = new byte[bl.length = bl.pointer = buf.remaining()];
+            bl.list = new byte[bl.pointer = buf.remaining()];
             int pos = buf.position();
             buf.get(bl.list, 0, bl.list.length);
             buf.position(pos);
@@ -101,13 +99,12 @@ public class ByteList {
     }
 
     public void ensureCapacity(int required) {
-        if (required > length) {
-            byte[] newList = new byte[list == null ? Math.max(required, 256) : ((required * 3) >>> 1) + 1];
+        if (required > list.length) {
+            byte[] newList = new byte[list.length == 0 ? Math.max(required, 256) : ((required * 3) >>> 1) + 1];
 
-            if (list != null && pointer > 0)
+            if (pointer > 0)
                 System.arraycopy(list, 0, newList, 0, pointer);
             list = newList;
-            length = newList.length;
         }
     }
 
@@ -231,7 +228,7 @@ public class ByteList {
 
         int real;
         do {
-            real = stream.read(this.list, pointer, length - pointer);
+            real = stream.read(this.list, pointer, list.length - pointer);
             if (real <= 0)
                 break;
             pointer += real;
@@ -292,16 +289,12 @@ public class ByteList {
     public final ByteList setValue(byte[] array) {
         if (getClass() != ByteList.class)
             throw new IllegalStateException();
+        if (array == null)
+            array = EmptyArrays.BYTES;
 
         list = array;
         writePtr = 0;
-        if (array == null) {
-            pointer = 0;
-            length = -1;
-        } else {
-            pointer = array.length;
-            length = array.length;
-        }
+        pointer = array.length;
         return this;
     }
 
@@ -342,13 +335,15 @@ public class ByteList {
         return true;
     }
 
-    public void compress() {
-        if (list != null && pointer > length) {
-            byte[] newList = new byte[pointer];
-            if (pointer > 0)
+    public void trimToSize() {
+        if (list != null && pointer < list.length) {
+            if (pointer > 0) {
+                byte[] newList = new byte[pointer];
                 System.arraycopy(list, 0, newList, 0, pointer);
-            list = newList;
-            length = pointer;
+                list = newList;
+            } else {
+                list = EmptyArrays.BYTES;
+            }
         }
     }
 
@@ -370,10 +365,6 @@ public class ByteList {
 
     public void writePos(int ptr) {
         writePtr = ptr;
-    }
-
-    public int capacity() {
-        return length;
     }
 
     // WIP
@@ -464,9 +455,13 @@ public class ByteList {
             pointer++;
         }
 
-
         public void addAll(byte[] array, int start, int length) {
             pointer += length;
+        }
+
+        @Override
+        public void trimToSize() {
+            throw new UnsupportedOperationException();
         }
     }
 
@@ -476,6 +471,7 @@ public class ByteList {
      */
     public final static class ReadOnlySubList extends ByteList {
         private final int offset;
+        private final int length;
 
         public ReadOnlySubList(byte[] array, int start, int length) {
             super(array);
@@ -513,7 +509,7 @@ public class ByteList {
 
         @Override
         public final void add(byte e) {
-            throw new UnsupportedOperationException("Readonly");
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -537,7 +533,12 @@ public class ByteList {
 
         @Override
         public void addAll(byte[] array, int start, int length) {
-            throw new UnsupportedOperationException("Readonly");
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void trimToSize() {
+            throw new UnsupportedOperationException();
         }
 
         @Override

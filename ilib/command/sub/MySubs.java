@@ -27,7 +27,7 @@ package ilib.command.sub;
 
 import ilib.Config;
 import ilib.ImpLib;
-import ilib.asm.transformers.Transformer;
+import ilib.asm.Transformer;
 import ilib.client.TextureHelper;
 import ilib.util.Colors;
 import ilib.util.DimensionHelper;

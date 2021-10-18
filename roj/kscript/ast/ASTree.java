@@ -40,6 +40,8 @@ import roj.util.Helpers;
 import java.util.*;
 import java.util.function.Consumer;
 
+import static roj.collect.IntMap.NOT_USING;
+
 /**
  * The ASTree (basically called the Abstract Syntax Tree, a kind of machine friendly 'code'), <br>
  * In the KScript, it can also compile to Java's bytecode by using {@link Clazz :the Roj ASM}.
@@ -49,6 +51,32 @@ import java.util.function.Consumer;
  */
 public final class ASTree implements LineHandler {
     public static final boolean DEBUG = System.getProperty("kscript.debug", "false").equalsIgnoreCase("true");
+
+    static final class DataUniquer extends MyHashSet<KType> {
+        @Override
+        public Object getEntry(KType id) {
+            if (entries == null) {
+                return NOT_USING;
+            }
+            Object obj = entries[indexFor(id)];
+            while (obj instanceof Entry) {
+                Entry prev = (Entry) obj;
+                if (Objects.equals(id, prev.k))
+                    return obj;
+                obj = prev.next;
+            }
+            if (Objects.equals(id, obj))
+                return obj;
+            return NOT_USING;
+        }
+
+        public KType find1(KType data) {
+            KType r = find(data);
+            if (r == data)
+                add(data);
+            return r;
+        }
+    }
 
     private Node head, tail;
     private final String depth, file;
@@ -127,18 +155,6 @@ public final class ASTree implements LineHandler {
 
     static KType[] EMPTY = new KType[0];
 
-    private static KType _find(MyHashSet<KType> dataUniquer, KType toFind) {
-        MyHashSet.Entry<KType> entry = dataUniquer.getEntryFirst(toFind, false);
-        while (entry != null) {
-            if (toFind.equalsTo(entry.k)) {
-                return entry.k;
-            }
-            entry = entry.next;
-        }
-        dataUniquer.add(toFind);
-        return toFind;
-    }
-
     /**
      * 后处理
      */
@@ -153,7 +169,7 @@ public final class ASTree implements LineHandler {
 
         Node cur = this.head;
 
-        MyHashSet<KType> dataUniquer = new MyHashSet<>();
+        DataUniquer dataUniquer = new DataUniquer();
 
         MyHashMap<Frame, List<Node>> closures = new MyHashMap<>();
 
@@ -210,7 +226,7 @@ public final class ASTree implements LineHandler {
                     break;
                     case LOAD: {
                         LoadDataNode ld = ((LoadDataNode) cur);
-                        ld.data = _find(dataUniquer, ld.data);
+                        ld.data = dataUniquer.find1(ld.data);
                     }
                     break;
                     case INVOKE:
@@ -382,7 +398,7 @@ public final class ASTree implements LineHandler {
                     break;
                     case LOAD: {
                         LoadDataNode ld = ((LoadDataNode) cur);
-                        ld.data = _find(dataUniquer, ld.data);
+                        ld.data = dataUniquer.find1(ld.data);
                     }
                     break;
                     case INVOKE:

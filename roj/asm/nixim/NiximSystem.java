@@ -27,19 +27,14 @@
 package roj.asm.nixim;
 
 import roj.asm.OpcodesInt;
+import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.mapper.Util;
 import roj.asm.mapper.util.Context;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.Field;
-import roj.asm.tree.Method;
-import roj.asm.tree.MethodNode;
+import roj.asm.tree.*;
 import roj.asm.tree.anno.*;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.insn.*;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.SimpleComponent;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.*;
@@ -83,6 +78,10 @@ public class NiximSystem {
 
     public static boolean debug = false;
 
+    public Map<String, NiximData> getRegistry() {
+        return registry;
+    }
+
     public final boolean remove(String target, String source) {
         NiximData nx = registry.get(target);
         NiximData prev = null;
@@ -107,17 +106,40 @@ public class NiximSystem {
     // region 应用
 
     public static final String SPEC_M_RETVAL = "$$$RETURN_VAL";
-    public static final String SPEC_M_INSN_MATCHER = "$$$MATCHER";
     public static final String SPEC_M_CONTINUE = "$$$CONTINUE";
     public static final String SPEC_M_CONSTRUCTOR = "$$$CONSTRUCTOR";
     public static final String SPEC_M_CONSTRUCTOR_THIS = "$$$CONSTRUCTOR_THIS";
+    public static final class SpecMethods {
+        public static int $$$RETURN_VAL_I() { return 0; }
+        public static long $$$RETURN_VAL_L() { return 0; }
+        public static double $$$RETURN_VAL_D() { return 0; }
+        public static float $$$RETURN_VAL_F() { return 0; }
+        public static byte $$$RETURN_VAL_B() { return 0; }
+        public static char $$$RETURN_VAL_C() { return 0; }
+        public static short $$$RETURN_VAL_S() { return 0; }
 
-    public ByteList nixim(String className, ByteList in) throws NiximException {
-        return nixim(new Context(className, in), registry.remove(className));
+        public static int $$$CONTINUE_I() { return 0; }
+        public static long $$$CONTINUE_L() { return 0; }
+        public static double $$$CONTINUE_D() { return 0; }
+        public static float $$$CONTINUE_F() { return 0; }
+        public static byte $$$CONTINUE_B() { return 0; }
+        public static char $$$CONTINUE_C() { return 0; }
+        public static short $$$CONTINUE_S() { return 0; }
+        public static void $$$CONTINUE_V() {}
     }
 
-    public static ByteList nixim(Context ctx, NiximData nx) throws NiximException {
-        System.out.println("NiximClass " + ctx.getName());
+    public ByteList nixim(String className, ByteList in) throws NiximException {
+        NiximData data = registry.remove(className);
+        if (data != null) {
+            Context ctx = new Context(className, in);
+            nixim(ctx, data);
+            return ctx.get();
+        }
+        return in;
+    }
+
+    public static void nixim(Context ctx, NiximData nx) throws NiximException {
+        System.out.println("NiximClass " + ctx.getFileName());
 
         while (nx != null) {
             ConstantData data = ctx.getData();
@@ -125,7 +147,7 @@ public class NiximSystem {
             // 添加接口
             List<String> itfs = nx.addItfs;
             for (int i = 0; i < itfs.size(); i++) {
-                data.interfaces.add(data.writer.getClazz(itfs.get(i)));
+                data.interfaces.add(data.cp.getClazz(itfs.get(i)));
             }
 
             DescEntry tester = new DescEntry();
@@ -184,7 +206,7 @@ public class NiximSystem {
                 } else if (attr instanceof AttrBootstrapMethods) {
                     selfBSM = (AttrBootstrapMethods) attr;
                 } else {
-                    selfBSM = new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.cp);
+                    selfBSM = new AttrBootstrapMethods(Parser.reader(attr), data.cp);
                     data.attributes.putByName(selfBSM);
                 }
 
@@ -195,7 +217,7 @@ public class NiximSystem {
 
                     List<InvokeDynInsnNode> nodes = info.nodes;
                     for (int i = 0; i < nodes.size(); i++) {
-                        nodes.get(i).bootstrapTableIndex = newId;
+                        nodes.get(i).tableIdx = (char) newId;
                     }
                 }
             }
@@ -246,6 +268,7 @@ public class NiximSystem {
                         }
                         AttrCode code = clinit.code;
                         code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
+                        o:
                         do {
                             code.localSize = (char) Math.max(val.localSize, code.localSize);
                             code.stackSize = (char) Math.max(val.stackSize, code.stackSize);
@@ -259,8 +282,10 @@ public class NiximSystem {
                                 }
                                 code.instructions.add(label);
                             }
-                            if (!itr.hasNext()) break;
-                            val = itr.next();
+                            do {
+                                if (!itr.hasNext()) break o;
+                                val = itr.next();
+                            } while (val == null);
                         } while (true);
                         code.instructions.add(new NPInsnNode(RETURN));
                         break;
@@ -275,19 +300,19 @@ public class NiximSystem {
                 throw new NiximException("验证失败 " + data.name, e);
             }
 
-            ctx.get();
+            ctx.set(ctx.get(true));
             nx = nx.next;
         }
 
+        ctx.set(new ByteList(ctx.get().toByteArray()));
+
         if (debug) {
-            try (FileOutputStream fos = new FileOutputStream(ctx.getName().replace('/', '.'))) {
+            try (FileOutputStream fos = new FileOutputStream(ctx.getFileName().replace('/', '.'))) {
                 ctx.get().writeToStream(fos);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-
-        return ctx.get();
     }
 
     private static void doInject(InjectState s, ConstantData data, List<? extends MethodNode> methods, int index) throws NiximException {
@@ -305,14 +330,14 @@ public class NiximSystem {
                         iin.owner = data.name;
                         for (int i = 0; i < methods.size(); i++) {
                             MethodNode mn = methods.get(i);
-                            if (mn.rawDesc().equals(iin.rawParameters()))
+                            if (mn.rawDesc().equals(iin.rawDesc()))
                                 break st;
                         }
                         throw new NiximException("覆盖的构造器不存在:S");
                     } else {
                         // 无法检查上级构造器是否存在, 但是Object还是可以查一下
                         iin.owner = data.parent;
-                        if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.rawParameters()))
+                        if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.rawDesc()))
                             throw new NiximException("覆盖的构造器不存在:O");
                     }
                     iin.name = "<init>";
@@ -385,26 +410,31 @@ public class NiximSystem {
                 }
                 pl++;
 
-                byte base = NodeHelper.X_LOAD(ParamHelper.getReturn(tm.rawDesc()).nativeName().charAt(0));
+                String ret = ParamHelper.getReturn(tm.rawDesc()).nativeName();
+                byte base = ret.isEmpty() ? RETURN : NodeHelper.X_LOAD(ret.charAt(0));
                 byte type;
                 InsnList targetInsn = s.method.code.instructions;
-                List<Integer> retVal = s.retVal();
-                if (retVal.size() == 0) {
-                    type = 0;
-                } else if (retVal.size() == 1 && retVal.get(0) == 0) {
-                    targetInsn.remove(0);
-                    type = 1;
-                    if (NodeHelper.getVarId(targetInsn.get(0)) == pl) {
+                if (base != RETURN) {
+                    List<Integer> retVal = s.retVal();
+                    if (retVal.size() == 0) {
+                        type = 0;
+                    } else if (retVal.size() == 1 && retVal.get(0) == 0) {
                         targetInsn.remove(0);
-                        type |= 4; // same var id
+                        type = 1;
+                        if (NodeHelper.getVarId(targetInsn.get(0)) == pl) {
+                            targetInsn.remove(0);
+                            type |= 4; // same var id
+                        }
+                    } else {
+                        for (int i : retVal) {
+                            _compress(pl, base, targetInsn, i);
+                        }
+                        type = 2;
                     }
+                    retVal.clear();
                 } else {
-                    for (int i : retVal) {
-                        _compress(pl, base, targetInsn, i);
-                    }
-                    type = 2;
+                    type = -1;
                 }
-                retVal.clear();
 
                 InsnNode FIRST = targetInsn.get(0);
                 int accessedMax = 0;
@@ -429,6 +459,7 @@ public class NiximSystem {
                         }
                         accessedMax = Math.max(accessedMax, i2);
                     } else if (i > 0 && NodeHelper.isReturn(node.code)) {
+                        if (type == -1) continue;
                         // 将返回值（如果存在）存放到指定的变量
                         // 将目标方法中return替换成goto开头
                         switch (type & 3) {
@@ -486,7 +517,7 @@ public class NiximSystem {
             }
             break;
             case "OLD_SUPER_INJECT":
-                ((MethodSimple) methods.get(index)).name = data.writer.getUtf(s.name);
+                ((MethodSimple) methods.get(index)).name = data.cp.getUtf(s.name);
                 methods.add(Helpers.cast(s.method));
             break;
         }
@@ -521,11 +552,11 @@ public class NiximSystem {
         }
     }
 
-    public static final String A_NIXIM_CLASS_FLAG = ParamHelper.classDescriptor(Nixim.class);
-    public static final String A_INJECT           = ParamHelper.classDescriptor(Inject.class);
-    public static final String A_IMPL_INTERFACE   = ParamHelper.classDescriptor(ImplInterface.class);
-    public static final String A_SHADOW           = ParamHelper.classDescriptor(Shadow.class);
-    public static final String A_COPY             = ParamHelper.classDescriptor(Copy.class);
+    public static final String A_NIXIM_CLASS_FLAG = Nixim.class.getName().replace('.', '/');
+    public static final String A_INJECT           = Inject.class.getName().replace('.', '/');
+    public static final String A_IMPL_INTERFACE   = ImplInterface.class.getName().replace('.', '/');
+    public static final String A_SHADOW           = Shadow.class.getName().replace('.', '/');
+    public static final String A_COPY             = Copy.class.getName().replace('.', '/');
 
     public static final String A_BASE = "RuntimeInvisibleAnnotations";
 
@@ -590,7 +621,7 @@ public class NiximSystem {
                 entries.add(entry);
 
                 if (newName != null)
-                    method.name = data.writer.getUtf(newName.value);
+                    method.name = data.cp.getUtf(newName.value);
                 nx.copyMethod.add(Helpers.cast(method));
 
                 methods.remove(i);
@@ -623,7 +654,7 @@ public class NiximSystem {
                 entries.add(entry);
 
                 if (newName != null)
-                    field.name = data.writer.getUtf(newName.value);
+                    field.name = data.cp.getUtf(newName.value);
                 tmpCopyFields.put(field, staticInitializer);
                 fields.remove(i);
             }
@@ -644,7 +675,7 @@ public class NiximSystem {
                 entries.add(entry);
 
                 map.put("value", new AnnValString(method.name()));
-                method.name = data.writer.getUtf(remapName);
+                method.name = data.cp.getUtf(remapName);
                 tmpInjects.put(method, map);
                 methods.remove(i);
             }
@@ -693,10 +724,10 @@ public class NiximSystem {
             if (target != tester) {
                 String name = target.toClass;
                 if (name != null && !name.equals(data.name))
-                    ref.setClazz(data.writer.getClazz(name));
+                    ref.setClazz(data.cp.getClazz(name));
                 name = target.toName;
                 if (name != null && !name.equals(tester.name))
-                    ref.desc(data.writer.getDesc(name, tester.desc));
+                    ref.desc(data.cp.getDesc(name, tester.desc));
             }
         }
         refs = ctx.getFieldConstants();
@@ -707,17 +738,17 @@ public class NiximSystem {
             if (target != tester) {
                 String name = target.toClass;
                 if (name != null && !name.equals(data.name))
-                    ref.setClazz(data.writer.getClazz(name));
+                    ref.setClazz(data.cp.getClazz(name));
                 name = target.toName;
                 if (name != null && !name.equals(tester.name))
-                    ref.desc(data.writer.getDesc(name, tester.desc));
+                    ref.desc(data.cp.getDesc(name, tester.desc));
             }
         }
         List<CstClass> clzs = ctx.getClassConstants();
         for (int i = 0; i < clzs.size(); i++) {
             CstClass clz = clzs.get(i);
             if (clz.getValue().getString().equals(data.name)) {
-                clz.setValue(data.writer.getUtf(destClass));
+                clz.setValue(data.cp.getUtf(destClass));
             }
         }
         entries.clear();
@@ -730,7 +761,7 @@ public class NiximSystem {
         // endregion
 
         Attribute attr = data.attrByName("BootstrapMethods");
-        AttrBootstrapMethods bsms = attr == null ? null : new AttrBootstrapMethods(new ByteReader(attr.getRawData()), data.cp);
+        AttrBootstrapMethods bsms = attr == null ? null : new AttrBootstrapMethods(Parser.reader(attr), data.cp);
         IntMap<LambdaInfo> lambdaBSM = nx.bsm = bsms == null ? null : new IntMap<>(bsms.methods.size());
         List<Method> copyMethod = nx.copyMethod;
         // region 后处理 Copy 注解
@@ -745,8 +776,8 @@ public class NiximSystem {
                     if (node.code == INVOKEDYNAMIC) {
                         InvokeDynInsnNode idn = (InvokeDynInsnNode) node;
                         processInvokeDyn(idn, data.name, destClass);
-                        AttrBootstrapMethods.BootstrapMethod bsm = bsms.methods.get(idn.bootstrapTableIndex);
-                        lambdaBSM.computeIfAbsentSp(idn.bootstrapTableIndex, () -> new LambdaInfo(bsm)).nodes
+                        AttrBootstrapMethods.BootstrapMethod bsm = bsms.methods.get(idn.tableIdx);
+                        lambdaBSM.computeIfAbsentSp(idn.tableIdx, () -> new LambdaInfo(bsm)).nodes
                                 .add(idn);
                     }
                 }
@@ -761,7 +792,7 @@ public class NiximSystem {
             Field field = new Field(data, entry.getKey());
             MethodSimple ms = entry.getValue();
             FieldInit iz = null;
-            AttrCode code = ms == null ? null : new AttrCode(ms, ms.attrByName("Code").getRawData(), data.cp);
+            AttrCode code = ms == null ? null : new AttrCode(ms, Parser.reader(ms.attrByName("Code")), data.cp);
             if (code != null) {
                 InsnList insn = code.instructions;
                 // noinspection all
@@ -835,14 +866,14 @@ public class NiximSystem {
                         }
                         InvokeDynInsnNode idn = (InvokeDynInsnNode) node;
                         processInvokeDyn(idn, data.name, destClass);
-                        AttrBootstrapMethods.BootstrapMethod bsm = bsms.methods.get(idn.bootstrapTableIndex);
-                        lambdaBSM.computeIfAbsentSp(idn.bootstrapTableIndex, () -> new LambdaInfo(bsm)).nodes
+                        AttrBootstrapMethods.BootstrapMethod bsm = bsms.methods.get(idn.tableIdx);
+                        lambdaBSM.computeIfAbsentSp(idn.tableIdx, () -> new LambdaInfo(bsm)).nodes
                                 .add(idn);
                         break;
                 }
             }
 
-            processInject(state, destClass);
+            processInject(state, data.parent);
 
             nx.injectMethod.put(new DescEntry(remap), state);
         }
@@ -861,6 +892,10 @@ public class NiximSystem {
                 if (ref.getClassName().equals(data.name)) {
                     ref.setClazz(new CstClass(destClass));
                     throw new NiximException("测试异常！没转换lambda的ref");
+                }
+                if (!ref.getClassName().equals(destClass)) {
+                    // not self method
+                    break;
                 }
 
                 for (MethodSimple method : data.methods) {
@@ -883,7 +918,7 @@ public class NiximSystem {
     }
 
     // 核心之一 (2/4)
-    private static void processInject(InjectState s, String destClass) throws NiximException {
+    private static void processInject(InjectState s, String parent) throws NiximException {
         Method method = s.method;
         sw:
         switch (s.at) {
@@ -899,7 +934,7 @@ public class NiximSystem {
                         if (node.nodeType() == InsnNode.T_INVOKE) {
                             InvokeInsnNode iin = (InvokeInsnNode) node;
                             // 使用 $$$CONSTRUCT来假装使用了初始化器
-                            if (selfInit ? (iin.name.equals("<init>") && iin.owner.equals(destClass)) : iin.name.startsWith(SPEC_M_CONSTRUCTOR)) {
+                            if (selfInit ? (iin.name.equals("<init>") && (iin.owner.equals(parent))) : iin.name.startsWith(SPEC_M_CONSTRUCTOR)) {
                                 iin.setOpcode(INVOKESPECIAL);
                                 s.superCallEnd = i;
                                 s.method.attributes.removeByName("LocalVariableTable");
@@ -1004,8 +1039,8 @@ public class NiximSystem {
                                 if (code >= ILOAD_0)
                                     code = (byte) (((code - ILOAD_0) / 4) + ILOAD);
                                 entry.v = code;
-                            } else if (index < paramLength)
-                                throw new NiximException("无效的assign " + method + "# " + insn.get(i));
+                            }/* else if (index < paramLength)
+                                throw new NiximException("无效的assign " + method + "# " + insn.get(i));*/
                         } else if (i > 0 && code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
                             node = insn.get(i - 1);
                             if (node.code == INVOKESTATIC) {
@@ -1094,21 +1129,15 @@ public class NiximSystem {
 
         if (m.rawDesc().contains(m.owner)) {
             List<Type> params = m.parameters();
-            boolean ch = false;
             for (int i = 0; i < params.size(); i++) {
                 Type type = params.get(i);
                 if (m.owner.equals(type.owner)) {
                     type.owner = dst;
-                    ch = true;
                 }
             }
             if (m.owner.equals(m.getReturnType().owner)) {
-                ch = true;
                 m.getReturnType().owner = dst;
             }
-
-            if (ch)
-                m.resetParam(true);
         }
 
         AttributeList ca = m.code.attributes;
@@ -1119,7 +1148,7 @@ public class NiximSystem {
         if (anno != null) {
             List<Annotation> annos = anno.annotations;
             for (int i = annos.size() - 1; i >= 0; i--) {
-                if (annos.get(i).type.owner.startsWith("roj/asm/nixim"))
+                if (annos.get(i).clazz.startsWith("roj/asm/nixim"))
                     annos.remove(i);
             }
         }
@@ -1127,16 +1156,16 @@ public class NiximSystem {
         return m.code.frames != null;
     }
 
-    private static Boolean checkNiximFlag(ConstantData data, Attribute attribute, NiximData nx) {
-        if (attribute == null)
+    private static Boolean checkNiximFlag(ConstantData data, Attribute attr, NiximData nx) {
+        if (attr == null)
             return null;
-        AttrAnnotation attrAnn = new AttrAnnotation(false, new ByteReader(attribute.getRawData()), data.cp);
+        AttrAnnotation attrAnn = new AttrAnnotation(false, Parser.reader(attr), data.cp);
 
         boolean keepBridge = false;
         List<Annotation> anns = attrAnn.annotations;
         for (int j = 0; j < anns.size(); j++) {
             Annotation ann = anns.get(j);
-            if (ann.rawDesc.equals(A_NIXIM_CLASS_FLAG)) {
+            if (ann.clazz.equals(A_NIXIM_CLASS_FLAG)) {
                 if (ann.values != null) {
                     AnnVal av = ann.values.get("value");
                     nx.dest = ((AnnValString) av).value.replace('.', '/');
@@ -1154,7 +1183,7 @@ public class NiximSystem {
                     if(avi != null && avi.value == 1)
                         keepBridge = true;
                 }
-            } else if (ann.rawDesc.equals(A_IMPL_INTERFACE)) {
+            } else if (ann.clazz.equals(A_IMPL_INTERFACE)) {
                 if (ann.values != null) {
                     List<AnnVal> annVals = ((AnnValArray) ann.values.get("value")).value;
                     for (int i = 0; i < annVals.size(); i++) {
@@ -1167,17 +1196,17 @@ public class NiximSystem {
         return keepBridge;
     }
 
-    private static Map<String, AnnVal> getAnnotation(ConstantPool pool, SimpleComponent cmp, String aClass) {
+    public static Map<String, AnnVal> getAnnotation(ConstantPool pool, SimpleComponent cmp, String aClass) {
         Attribute obj = cmp.attrByName(A_BASE);
         if (obj == null)
             return null;
-        AttrAnnotation attrAnn = obj instanceof AttrAnnotation ? (AttrAnnotation) obj : new AttrAnnotation(A_BASE, new ByteReader(obj.getRawData()), pool);
+        AttrAnnotation attrAnn = obj instanceof AttrAnnotation ? (AttrAnnotation) obj : new AttrAnnotation(A_BASE, Parser.reader(obj), pool);
         cmp.attributes.putByName(attrAnn);
 
         List<Annotation> anns = attrAnn.annotations;
         for (int i = 0; i < anns.size(); i++) {
             Annotation ann = anns.get(i);
-            if (ann.rawDesc.equals(aClass)) {
+            if (ann.clazz.equals(aClass)) {
                 if (ann.values != null) {
                     anns.remove(i);
                     return ann.values;
@@ -1223,7 +1252,8 @@ public class NiximSystem {
         InjectState(Method method, Map<String, AnnVal> map) throws NiximException {
             this.method = method;
 
-            this.at = ((AnnValEnum) map.get("at")).value;
+            AnnValEnum ave = (AnnValEnum) map.get("at");
+            this.at = ave == null ? "OLD_SUPER_INJECT" : ave.value;
             AnnValInt avi = (AnnValInt) map.get("flags");
             this.flags = avi == null ? 0 : avi.value;
 
@@ -1234,7 +1264,7 @@ public class NiximSystem {
                 throw new NiximException("无法解析occurrence matcher JSON", e);
             }
 
-            switch (at) {
+            switch (this.at) {
                 case "HEAD":
                 case "TAIL":
                 case "OLD_SUPER_INJECT":
@@ -1244,7 +1274,7 @@ public class NiximSystem {
                     this.nodeList = null;
                     break;
             }
-            this.name = at.equals("OLD_SUPER_INJECT") ?
+            this.name = this.at.equals("OLD_SUPER_INJECT") ?
                     method.name + '_' + (System.nanoTime() % 10000) :
                     ((AnnValString) map.get("value")).value;
         }
@@ -1299,7 +1329,7 @@ public class NiximSystem {
             this.tester2 = new DescEntry();
             this.destClass = destClass;
 
-            this.cw = new ConstantWriterEmpty();
+            this.cw = new ConstantPoolEmpty();
             this.bw = new ByteWriter(new ByteList.EmptyByteList());
             this.br = new ByteReader();
         }
@@ -1327,7 +1357,7 @@ public class NiximSystem {
 
         private void checkInvokeTarget(CstRef ref) {
             if (ref.getClassName().equals(destClass) && tester.read(ref).equals(tester2)) {
-                int id = data.writer.getMethodRefId("//MARKER", ref.desc().getName().getString(), ref.desc().getType().getString());
+                int id = data.cp.getMethodRefId("//MARKER", ref.desc().getName().getString(), ref.desc().getType().getString());
                 br.getBytes().set(br.index - 2, (byte) (id >> 8));
                 br.getBytes().set(br.index - 1, (byte) id);
             }

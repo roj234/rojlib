@@ -43,10 +43,12 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public class Generic implements IGeneric {
-    public static final byte TYPE_TYPE_PARAM = 0,
-            TYPE_INTERFACE = 1,
-            TYPE_CLASS = 2,
-            TYPE_SUB_CLASS = 3,
+    public static final byte
+            TYPE_TYPE_PARAM         = 0,
+            TYPE_INHERIT_TYPE_PARAM = 1,
+            TYPE_CLASS              = 2,
+            TYPE_INHERIT_CLASS      = 3,
+            TYPE_SUB_CLASS          = 4,
 
             EX_NONE = 0,
             EX_SUPERS = 1,
@@ -105,13 +107,13 @@ public class Generic implements IGeneric {
     private char[] getCatDesc() {
         if (type == TYPE_SUB_CLASS)
             return new char[]{'.'};
-        int arrLen = array + 1 + (this.type == TYPE_INTERFACE ? 1 : 0) + (extendType != 0 ? 1 : 0);
+        int arrLen = array + 1 + (type & 1) + (extendType != 0 ? 1 : 0);
         char[] chars = new char[arrLen];
 
         int i = 0;
         if (extendType != 0)
-            chars[i++] = getClassMark();
-        if (type == TYPE_INTERFACE)
+            chars[i++] = extendType == EX_SUPERS ? '-' : '+';
+        if ((type & 1) != 0)
             chars[i++] = ':';
         for (; i < arrLen - 1; i++) {
             chars[i] = '[';
@@ -119,28 +121,20 @@ public class Generic implements IGeneric {
 
         switch (type) {
             case TYPE_CLASS:
-            case TYPE_INTERFACE:
+            case TYPE_INHERIT_CLASS:
                 chars[arrLen - 1] = 'L';
                 return chars;
             case TYPE_TYPE_PARAM:
+            case TYPE_INHERIT_TYPE_PARAM:
                 chars[arrLen - 1] = 'T';
                 return chars;
         }
         throw new IllegalArgumentException(String.valueOf(type));
     }
 
-    private char getClassMark() {
-        switch (extendType) {
-            case EX_SUPERS:
-                return '-';
-            case EX_EXTENDS:
-                return '+';
-        }
-        throw new IllegalArgumentException("classType");
-    }
 
     protected void rename(UnaryOperator<String> renameFunction) {
-        if (type != TYPE_TYPE_PARAM & type != TYPE_SUB_CLASS)
+        if (type != TYPE_TYPE_PARAM && type != TYPE_INHERIT_TYPE_PARAM && type != TYPE_SUB_CLASS)
             owner = renameFunction.apply(owner);
         if (subClass != null) {
             String tmp = renameFunction.apply(owner + '$' + subClass.owner);
@@ -155,7 +149,7 @@ public class Generic implements IGeneric {
         }
     }
 
-    public void appendString(CharList sb) {
+    public void appendString(CharList sb, Signature fn) {
         switch (extendType) {
             case EX_SUPERS:
                 sb.append("? supers ");
@@ -164,18 +158,25 @@ public class Generic implements IGeneric {
                 sb.append("? extends ");
                 break;
         }
-        sb.append(owner.equals("*") ? "?" : owner.substring(owner.lastIndexOf('/') + 1));
+        if (owner.equals("*")) {
+            sb.append('?');
+        } else if (fn != null && (type == TYPE_TYPE_PARAM || type == TYPE_INHERIT_TYPE_PARAM)) {
+            fn.appendTypeParameter(sb, owner, null);
+        } else {
+            int start = owner.lastIndexOf('/') + 1;
+            sb.append(owner, start, owner.length() - start);
+        }
         if (children != null && !children.isEmpty()) {
             sb.append('<');
-            for (IGeneric child : children) {
-                child.appendString(sb);
+            for (int i = 0; i < children.size(); i++) {
+                children.get(i).appendString(sb, fn);
                 sb.append(", ");
             }
             sb.setIndex(sb.length() - 2);
             sb.append('>');
         }
         if (subClass != null) {
-            subClass.appendString(sb.append('.'));
+            subClass.appendString(sb.append('.'), fn);
         }
         for (int i = 0; i < array; i++) {
             sb.append("[]");
@@ -184,7 +185,7 @@ public class Generic implements IGeneric {
 
     public String toString() {
         CharList cl = new CharList();
-        appendString(cl);
+        appendString(cl, null);
         return cl.toString();
     }
 }

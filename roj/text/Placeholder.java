@@ -27,7 +27,6 @@ package roj.text;
 
 import roj.collect.IntList;
 import roj.collect.MyHashMap;
-import roj.util.Helpers;
 
 import java.util.Map;
 import java.util.function.Function;
@@ -44,10 +43,20 @@ public final class Placeholder {
     static final Function<String, IntList> NEW_INT_LIST = (x) -> new IntList();
 
     public final String value;
-    // value 22位放offset，10位放length
-    public final MyHashMap<String, int[]> points;
+    public final P[] points;
 
-    Placeholder(String value, MyHashMap<String, int[]> points) {
+    static final class P {
+        final String key;
+        // value 22位放offset，10位放length
+        final int[] val;
+
+        P(String key, int[] array) {
+            this.key = key;
+            this.val = array;
+        }
+    }
+
+    private Placeholder(String value, P[] points) {
         this.value = value;
         this.points = points;
     }
@@ -64,24 +73,25 @@ public final class Placeholder {
                 break;
             }
         }
-        MyHashMap<String, Object> map1 = Helpers.cast(map);
-        for (Map.Entry<String, Object> entry : map1.entrySet()) {
-            entry.setValue(((IntList) entry.getValue()).toArray());
+        P[] ps = new P[map.size()];
+        int i = 0;
+        for (Map.Entry<String, IntList> entry : map.entrySet()) {
+            ps[i++] = new P(entry.getKey(), entry.getValue().toArray());
         }
 
-        return new Placeholder(val, Helpers.cast(map));
+        return new Placeholder(val, ps);
     }
 
     public String replace(Map<String, String> replacer) throws ArgumentMissingException {
         CharList sb = new CharList().append(value);
         int str, len, off = 0;
-        for (Map.Entry<String, int[]> entry : points.entrySet()) {
-            String value = replacer.get(entry.getKey());
+        for (P entry : points) {
+            String value = replacer.get(entry.key);
             if (value == null) {
-                throw new ArgumentMissingException(entry.getKey());
+                throw new ArgumentMissingException(entry.key);
             }
 
-            for (int i : entry.getValue()) {
+            for (int i : entry.val) {
                 str = i >>> 10;
                 len = i & 1023;
                 sb.replace(str + off, str + off + len, value);

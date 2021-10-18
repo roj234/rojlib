@@ -26,12 +26,16 @@
 
 package roj.asm.tree.attr;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
 import roj.asm.frame.*;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.insn.*;
-import roj.asm.util.*;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantPool;
+import roj.asm.util.ExceptionEntry;
+import roj.asm.util.InsnList;
 import roj.collect.*;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -84,6 +88,8 @@ public class AttrCode extends Attribute {
         this.localSize = r.readChar();
 
         int largestIndex = r.readInt();
+        if (largestIndex < 1 || largestIndex > r.remain())
+            throw new IllegalStateException("Wrong code attribute: " + largestIndex + " of length at " + owner.ownerClass() + "." + owner.name() + " remaining " + r.remain());
         IntMap<InsnNode> pc = parseCode(cp, r, largestIndex);
 
         int len = r.readUnsignedShort();
@@ -93,9 +99,10 @@ public class AttrCode extends Attribute {
         //如果字节码从第start_pc行到第end_pc行之间出现了catch_type所描述的异常类型，那么将跳转到handler_pc行继续处理。
         // catchType => ConstantClass extends Throwable
         for (int i = 0; i < len; i++) {
+            int pci;
             this.exceptions.add(new ExceptionEntry(
                     pc.get(r.readUnsignedShort()), // start
-                    pc.get(r.readUnsignedShort()), // end
+                    (pci = r.readUnsignedShort()) == largestIndex ? EndOfInsn.MARKER : pc.get(pci), // end
                     pc.get(r.readUnsignedShort()), // handler
                     (CstClass) cp.get(r)));      // type
         }
@@ -143,7 +150,7 @@ public class AttrCode extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantWriter cw, ByteWriter w) {
+    protected void toByteArray1(ConstantPool cw, ByteWriter w) {
         w.writeShort(this.stackSize).writeShort(this.localSize).writeInt(0);
 
         final ByteList list = w.list;
@@ -223,10 +230,10 @@ public class AttrCode extends Attribute {
      *
      * @param cw 常量池
      */
-    public static <T extends IIntMap<InsnNode>> T reIndex(InsnList insn, ConstantWriter cw, T pcRev) {
-        InsnNode last = insn.remove(insn.size() - 1);
-        if (last != EndOfInsn.MARKER) {
-            insn.add(last);
+    public static <T extends IIntMap<InsnNode>> T reIndex(InsnList insn, ConstantPool cw, T pcRev) {
+        InsnNode last = insn.get(insn.size() - 1);
+        if (last == EndOfInsn.MARKER) {
+            insn.remove(insn.size() - 1);
         }
 
         int pos = 0;
@@ -293,7 +300,15 @@ public class AttrCode extends Attribute {
     // region readCode
 
     public IntMap<InsnNode> parseCode(ConstantPool pool, ByteReader r, int len) {
-        IntMap<InsnNode> pci = new IntMap<>(len / 2);
+        IntMap<InsnNode> pci = new IntMap<InsnNode>(Math.min(len / 2, 100000)) {
+            @Override
+            public InsnNode get(int id) {
+                InsnNode node = super.get(id);
+                if (node == null)
+                    throw new NullPointerException("Node is null: " + owner.ownerClass() + "." + owner.name() + " (bci:" + id + ")\n" + entrySet());
+                return node;
+            }
+        };
         int begin = r.index;
         len += begin;
 
@@ -304,7 +319,7 @@ public class AttrCode extends Attribute {
         boolean widen = false;
         while (r.index < len) {
             try {
-                byte code = Opcodes.byId(r.readByte());
+                byte code = OpcodeUtil.byId(r.readByte());
                 if (widen) Interpreter.checkWide(code);
                 switch (code) {
                     case PUTFIELD:
@@ -371,11 +386,11 @@ public class AttrCode extends Attribute {
                         curr = new U1InsnNode(code, r.readByte());
                         break;
                     case LDC:
-                        curr = new LoadConstInsnNode(code, pool.array(r.readUByte()));
+                        curr = new LdcInsnNode(code, pool.array(r.readUByte()));
                         break;
                     case LDC_W:
                     case LDC2_W:
-                        curr = new LoadConstInsnNode(code, pool.get(r));
+                        curr = new LdcInsnNode(code, pool.get(r));
                         break;
                     case IINC:
                         curr = widen ? new IncrInsnNode(r.readUnsignedShort(), r.readShort()) : new IncrInsnNode(r.readUByte(), r.readByte());
@@ -423,7 +438,7 @@ public class AttrCode extends Attribute {
                 err.println("Prev: " + curr);
                 r.index = begin + idxBegin;
                 try {
-                    err.println("Except: " + toString0(r.readByte()));
+                    err.println("Except: " + OpcodeUtil.toString0(r.readByte()));
                 } catch (Throwable e111) {
                     r.index = begin + idxBegin;
                     err.println("Except: " + r.readByte());
@@ -454,7 +469,13 @@ public class AttrCode extends Attribute {
             idxBegin = r.index - begin;
         }
         // 为什么初始化容量是 len / 2 :
-        // System.out.println("P: " + ((float)MathUtils.getMin2PowerOf(pci.size()) / MathUtils.getMin2PowerOf(len - begin)));
+        /*float v = (float) MathUtils.getMin2PowerOf(pci.size()) / MathUtils.getMin2PowerOf(len - begin);
+        if (avg == 0) {
+            avg = v;
+        } else {
+            avg = (amount++ * avg + v) / amount;
+            if ((amount & 16383) == 0) System.out.println("avg " + avg);
+        }*/
 
         while (negXXX < 0) {
             JmPrimer n = (JmPrimer) pci.remove(negXXX++);
@@ -477,14 +498,10 @@ public class AttrCode extends Attribute {
     }
 
     private InsnNode validateJump(IntMap<InsnNode> pci, int index, JmPrimer self) {
-        InsnNode node = pci.get(index - 1);
+        InsnNode node = pci.getOrDefault(index - 1, null);
         if(node != null && node.getOpcode() == WIDE)
             throw new IllegalArgumentException("Jump target must not \"after\" wide");
-        node = pci.get(index);
-        if (node == null) {
-            throw new NullPointerException("At " + owner.ownerClass() + "." + owner.name() +  "\nSELF: " + self + "\nJumping to NULL (bci:" + index + ")\n" + pci.entrySet());
-        }
-        return node;
+        return pci.get(index);
     }
 
     private static void throwUnsupportedCode() {
@@ -518,7 +535,27 @@ public class AttrCode extends Attribute {
         int def = r.readInt();
         int count = r.readInt();
 
-        if(count <= 0 || count > 100000)
+        // 草泥马，真的有这种人中人么
+        //switch (def) {
+        //    default:
+        //        // do sth
+        //}
+        // 有的，
+        //====================PARSING NODE====================
+        //Prev: 0x1b 加载第1个int
+        //Except: 0xab 二分switch
+        //
+        //PrevIndex: 1
+        //Index: 2
+        //ByteList{
+        //             0 1  2 3  4 5  6 7  8 9  a b  c d  e f
+        //0x00000000   1BAB 0000 0000 000B 0000 0000 BB00 7E59
+        //0x00000020   1B1C B700 814E 2DB0 }
+        //====================PARSING NODE====================
+        // java.lang.InternalError: At com/sk89q/worldedit/schematic/SchematicFormat.getBlockForId
+        //Caused by: java.lang.IllegalArgumentException: length err 0
+
+        if(count < 0 || count > 100000)
             throw new IllegalArgumentException("length err " + count);
 
         LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count + 5);
@@ -533,7 +570,7 @@ public class AttrCode extends Attribute {
     // region StackFrameTable
 
     @SuppressWarnings("fallthrough")
-    private void writeFrames(ConstantWriter pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
+    private void writeFrames(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
         Frame prev = getFirstFrame();
         for (int j = 0; j < frames.size(); j++) {
             Frame curr = frames.get(j);
@@ -615,7 +652,7 @@ public class AttrCode extends Attribute {
         }
     }
 
-    private static void putVar(Var v, ByteWriter w, ConstantWriter pool, ToIntMap<InsnNode> pcRev) {
+    private static void putVar(Var v, ByteWriter w, ConstantPool pool, ToIntMap<InsnNode> pcRev) {
         w.writeByte(v.type);
         switch (v.type) {
             case VarType.REFERENCE:

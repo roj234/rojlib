@@ -26,7 +26,7 @@
 
 package roj.asm.tree.insn;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.collect.IIntMap;
 import roj.util.ByteWriter;
 
@@ -74,7 +74,7 @@ public final class IfInsnNode extends GotoInsnNode {
         return false;
     }
 
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         w.writeByte(code).writeShort(delta);
     }
 }

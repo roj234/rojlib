@@ -57,10 +57,10 @@ public final class Config extends JSONConfiguration {
             noSoManyBlockPos, fastLightCheck, fastMethod, lootR, otherWorldChange, cacheBox2, miscPickaxeOptimize,
             showDPS, moreEggs, portalCache, betterRenderGlobal, disableGlobalTESR, enablePinyinSearch, searchNameOnly, entityAabbCache,
             noAdvancement, eventInvoker, removePatchy, slabHelper, eventInvokerMost, packetBufferInfinity, IwantLight, noRecipeBook,
-            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax;
+            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax, betterF3, injectLauncher;
     public static int aabbCache, reduceFPSWhenNotActive, clientNetworkTimeout, chatLength, debug, maxParticleCountPerLayer,
-            maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, autoFlipTooltip;
-    public static byte advancedTooltipFlag, threadPriority, subThreadPriority, packetDelay, dynamicViewDistance, changeWorldSpeed;
+            maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, autoFlipTooltip, tooltipFlag;
+    public static byte threadPriority, subThreadPriority, packetDelay, dynamicViewDistance, changeWorldSpeed;
     public static long maxChunkTimeTick, nbtMaxLength;
     public static String title, clientBrand;
     public static Set<String> disableTileEntities, siTimeExcludeTargets, siTimeExcludeDmgs, siTimeExcludeAttackers;
@@ -149,7 +149,7 @@ public final class Config extends JSONConfiguration {
     protected void readConfig(CMapping map) {
         map.dotMode(true);
 
-        Loader.logger().debug(
+        Loader.logger.debug(
                 "    // DEBUG FLAGS\n" +
                         "    // 1 MOD API INFO\n" +
                         "    // 2 CLASS REPLACER\n" +
@@ -229,12 +229,25 @@ public final class Config extends JSONConfiguration {
         if((debug & 1024) != 0)
             System.setProperty("roj.directaccessor.debug", "true");
 
+        injectLauncher = map.putIfAbsent("Util.注入LaunchWrapper.注入(只需打开一次)", false);
+        map.getOrCreateList("Util.注入LaunchWrapper.附加不转换包前缀");
+        map.putIfAbsent("Util.注入LaunchWrapper.class替换源", "");
+        map.putIfAbsent("Util.注入LaunchWrapper.启用文件缓存", false);
 
+        betterF3 = map.putIfAbsent("Util.Client.中文调试界面", true);
 
-        boolean advancedTooltip_Reg = map.putIfAbsent("Util.Client.高级提示框.注册名", true);
-        boolean advancedTooltip_Loc = map.putIfAbsent("Util.Client.高级提示框.未本地化名", false);
-        boolean advancedTooltip_Food = map.putIfAbsent("Util.Client.高级提示框.食物", false);
-        advancedTooltipFlag = (byte) ((advancedTooltip_Food ? 1 : 0) << 2 | (advancedTooltip_Loc ? 1 : 0) << 1 | (advancedTooltip_Reg ? 1 : 0));
+        int tooltipFlags = map.putIfAbsent("Util.Client.高级提示框.注册名", true) ? 1 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.高级提示框.未本地化名", false) ? 1 << 1 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.高级提示框.矿物词典", false) ? 1 << 2 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.高级提示框.NBT", false) ? 1 << 3 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.高级提示框.食物", false) ? 1 << 4 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.流体提示框.粘度", true) ? 1 << 5 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.流体提示框.亮度", false) ? 1 << 6 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.流体提示框.温度", false) ? 1 << 7 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.流体提示框.颜色", false) ? 1 << 8 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.流体提示框.密度", false) ? 1 << 9 : 0;
+        tooltipFlags |= map.putIfAbsent("Util.Client.流体提示框.气体", false) ? 1 << 10 : 0;
+        tooltipFlag = tooltipFlags | (map.putIfAbsent("Util.Client.流体提示框.可放置", false) ? 1 << 11 : 0);
 
         autoFlipTooltip = map.putIfAbsent("Util.Client.Tooltip分页长度", 16);
 

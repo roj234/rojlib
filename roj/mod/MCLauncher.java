@@ -60,7 +60,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -1102,9 +1104,9 @@ public class MCLauncher extends JFrame {
     // endregion
     // region config
 
-    static CMapping config;
+    public static CMapping config;
 
-    static void save() {
+    public static void save() {
         try (FileOutputStream fos = new FileOutputStream(new File(BASE, "launcher.json"))) {
             fos.write(config.toShortJSON().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
@@ -1113,7 +1115,7 @@ public class MCLauncher extends JFrame {
         }
     }
 
-    static void load() {
+    public static void load() {
         if(config != null) return;
 
         File conf = new File(BASE, "launcher.json");
@@ -1249,8 +1251,9 @@ public class MCLauncher extends JFrame {
     }
     // endregion
 
-    public static int runClient(CMapping mc_conf, File nativePath, int processFlags, Consumer<Process> consumer) throws IOException {
-        Map<String, String> env = new MyHashMap<>(4);
+    public static int runClient(CMapping mc_conf, int processFlags, Consumer<Process> consumer) throws IOException {
+        Map<String, String> env = new MyHashMap<>();
+        File nativePath = new File(mc_conf.getString("native_path"));
         env.put("natives_directory", '"' + AbstLexer.addSlashes(nativePath.getAbsolutePath()) + '"');
         env.put("classpath", '"' + AbstLexer.addSlashes(new StringBuilder(mc_conf.getString("libraries")).append(mc_conf.getString("jar"))) + '"');
         env.put("launcher_name", "FMD");
@@ -1847,7 +1850,7 @@ public class MCLauncher extends JFrame {
 
         @Override
         public void calculate(Thread thread) throws Exception {
-            runClient(config.get("mc_conf").asMap(), new File(config.getString("mc_conf.native_path")), log ? 3 : 2, this);
+            runClient(config.get("mc_conf").asMap(), log ? 3 : 2, this);
             run = true;
         }
 
@@ -1930,7 +1933,7 @@ public class MCLauncher extends JFrame {
                     if (async) {
                         FileUtil.downloadFileAsync(url, targetFile).waitFor();
                     } else {
-                        FileUtil.downloadFile(url, targetFile);
+                        FileUtil.downloadFile(url, targetFile).waitFor();
                     }
                 } catch (Throwable e) {
                     if(!targetFile.isFile()) {
@@ -1995,13 +1998,13 @@ public class MCLauncher extends JFrame {
                     if (async) {
                         FileUtil.downloadFileAsync(url, targetFile).waitFor();
                     } else {
-                        FileUtil.downloadFile(url, targetFile);
+                        FileUtil.downloadFile(url, targetFile).waitFor();
                     }
                 } catch (Throwable e) {
                     if(!targetFile.isFile()) {
                         CmdUtil.error(url + "下载失败, 重试", e);
                         try {
-                            Thread.sleep(5000);
+                            Thread.sleep(2500);
                         } catch (InterruptedException ignored) {}
 
                         if(retry++ > 5) {
@@ -2112,6 +2115,7 @@ public class MCLauncher extends JFrame {
             BigInteger sha1Resl = new BigInteger(1, _sha1);
 
             if (sha1 == null || sha1.equals(sha1Resl)) {
+                // noinspection all
                 out = null;
                 executing = false;
                 CmdUtil.success(url.substring(url.lastIndexOf('/') + 1) + " 完毕.");
@@ -2120,6 +2124,7 @@ public class MCLauncher extends JFrame {
             } else {
                 if (sha1Resl.equals(lastResl)) {
                     CmdUtil.warning("二次SHA1相同,镜像问题? " + url);
+                    // noinspection all
                     out = null;
                     executing = false;
                     if(callback != null)
@@ -2143,6 +2148,7 @@ public class MCLauncher extends JFrame {
 
             if(e instanceof CancellationException) {
                 CmdUtil.warning(url + " 的下载被取消");
+                // noinspection all
                 out = null;
                 canceled = true;
                 return;
@@ -2150,12 +2156,14 @@ public class MCLauncher extends JFrame {
 
             if(e.getMessage().equals("文件已存在")) {
                 CmdUtil.info(url + " 已被其它线程完成");
+                // noinspection all
                 out = null;
                 return;
             }
 
             if(e.getMessage().equals("文件已被占用")) {
                 CmdUtil.warning(url + " 正在被另一个线程下载");
+                // noinspection all
                 out = null;
                 return;
             }
@@ -2163,6 +2171,7 @@ public class MCLauncher extends JFrame {
             if(!e.getMessage().equals("Read timed out")) {
                 if(e instanceof FileNotFoundException) {
                     CmdUtil.error("网络连接异常: " + e.toString());
+                    // noinspection all
                     out = null;
                     return;
                 }
@@ -2187,6 +2196,7 @@ public class MCLauncher extends JFrame {
 
                 if (retry++ > 5) {
                     CmdUtil.error(url + "错误太多, abort", e);
+                    // noinspection all
                     out = null;
                 }
             } else {
@@ -2196,6 +2206,7 @@ public class MCLauncher extends JFrame {
 
         @Override
         public boolean continueExecuting() {
+            // noinspection all
             return !canceled && ((Object)out == this);
         }
     }

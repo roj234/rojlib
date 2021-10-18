@@ -27,7 +27,7 @@
 package lac.server;
 
 import ilib.ImpLib;
-import lac.common.pkt.PktLogin;
+import lac.server.packets.PacketLogin;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.util.ByteReader;
@@ -78,7 +78,7 @@ public final class LoginMgr {
         account.init(conn, callback);
         pending.add(account);
 
-        PktLogin.toC(conn, account.pass != null ? "lac.login.input_pass" : "lac.login.register");
+        PacketLogin.send(conn, account.pass != null ? "lac.login.input_pass" : "lac.login.register");
     }
 
     public static void handlePacket(EntityPlayerMP p, String pass) {
@@ -166,7 +166,7 @@ public final class LoginMgr {
         protected String pass;
         protected int index;
 
-        private int tick;
+        private int tick, wrong;
         protected NetworkManager conn;
         protected Runnable cb;
 
@@ -183,7 +183,7 @@ public final class LoginMgr {
 
             if (tick++ % 5 == 0)
                 sendMsg("lac.login.input_pass");
-            if (tick >= Config.loginDelay) {
+            if (tick >= Config.loginTimeout) {
                 disconnect("lac.login.timeout");
                 this.conn = null;
                 return true;
@@ -229,16 +229,18 @@ public final class LoginMgr {
                 return true;
             }
 
-            if (Config.kickWrong) {
+            if (wrong++ >= Config.kickWrong) {
                 disconnect("lac.login.pass_wrong");
             } else
-                conn.sendPacket(new PktLogin("lac.login.pass_wrong"));
+                conn.sendPacket(new PacketLogin("lac.login.pass_wrong"));
             return false;
         }
 
         public void init(NetworkManager p, Runnable cb) {
             this.conn = p;
             this.cb = cb;
+            this.tick = 0;
+            this.wrong = 0;
         }
 
         public boolean changePassword(String o, String n) {

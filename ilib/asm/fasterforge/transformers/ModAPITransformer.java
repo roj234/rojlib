@@ -35,12 +35,11 @@ import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureWriter;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
+import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodSimple;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.MethodSimple;
-import roj.util.ByteList;
 
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transformers.ModAPITransformer {
@@ -104,18 +103,19 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
     }
 
     private void log(String s, Object... methodDescriptor) {
-        ilib.asm.Loader.logger().info(s, methodDescriptor);
+        ilib.asm.Loader.logger.info(s, methodDescriptor);
     }
 
-    private void stripInterface(ConstantData classNode, String interfaceName, boolean stripRefs) {
+    private void stripInterface(ConstantData cn, String interfaceName, boolean stripRefs) {
         String ifaceName = interfaceName.replace('.', '/');
-        boolean found = classNode.interfaces.remove(new CstClass(ifaceName));
-        Attribute signature = classNode.attrByName("signature");
-        if (found && signature != null) {
-            SignatureReader sr = new SignatureReader(signature.getRawData().getString());
-            RemovingSignatureWriter signatureWriter = new RemovingSignatureWriter(ifaceName);
-            sr.accept(signatureWriter);
-            signature.setRawData(new ByteList(signatureWriter.toString().getBytes(StandardCharsets.UTF_8)));
+        boolean found = cn.interfaces.remove(new CstClass(ifaceName));
+        Attribute sign = cn.attrByName("signature");
+        if (found && sign != null) {
+            CstUTF v = (CstUTF) cn.cp.get(Parser.reader(sign));
+            SignatureReader sr = new SignatureReader(v.getString());
+            RemovingSignatureWriter sw = new RemovingSignatureWriter(ifaceName);
+            sr.accept(sw);
+            v.setString(sw.toString());
             if (logDebugInfo)
                 log("Optional removal - interface {} removed from type signature", interfaceName);
         }
@@ -126,7 +126,7 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
         if (found && stripRefs) {
             if (logDebugInfo)
                 log("Optional removal - interface {} - stripping method signature references", interfaceName);
-            for (Iterator<MethodSimple> iterator = classNode.methods.iterator(); iterator.hasNext(); ) {
+            for (Iterator<MethodSimple> iterator = cn.methods.iterator(); iterator.hasNext(); ) {
                 MethodSimple node = iterator.next();
                 if (node.type.getString().contains(ifaceName)) {
                     if (logDebugInfo)

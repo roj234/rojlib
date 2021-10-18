@@ -25,7 +25,7 @@
  */
 package ilib.tile;
 
-import ilib.autoreg.AutoRegTile;
+import ilib.autoreg.TileRegister;
 import ilib.block.BlockLootrChest;
 import ilib.item.handler.StandardItemHandler;
 import ilib.item.handler.inv.InventoryArray;
@@ -54,7 +54,7 @@ import java.util.Set;
  * @version 0.1
  * @since  2020/8/18 13:41
  */
-@AutoRegTile("ilib:loot_chest")
+@TileRegister("ilib:loot_chest")
 public class TileEntityLootrChest extends TileEntityChest {
     static Random random = new MyRandom();
     Set<String> opened = new MyHashSet<>();

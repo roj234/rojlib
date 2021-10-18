@@ -28,7 +28,6 @@ package roj.asm.tree.attr;
 
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -58,7 +57,7 @@ public final class AttrParamAnnotation extends Attribute {
     public List<List<Annotation>> annotations;
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         w.writeByte((byte) annotations.size());
         for (List<Annotation> list : annotations) {
             w.writeShort(list.size());

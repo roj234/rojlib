@@ -26,9 +26,10 @@
 
 package roj.asm.tree.insn;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstClass;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
@@ -84,7 +85,7 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         if (code == Opcodes.NEW && owner.startsWith("[")) {
             throw new IllegalArgumentException("The new instruction cannot be used to create an array.");
         }
@@ -97,6 +98,6 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return Opcodes.toString0(code, owner.substring(owner.lastIndexOf('/') + 1));
+        return OpcodeUtil.toString0(code, owner.substring(owner.lastIndexOf('/') + 1));
     }
 }

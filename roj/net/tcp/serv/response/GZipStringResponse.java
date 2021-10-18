@@ -56,7 +56,7 @@ public class GZipStringResponse extends StringResponse {
 
             buf = buf2;
         } else {
-            buf.compress();
+            buf.trimToSize();
             buf.rewrite();
         }
     }

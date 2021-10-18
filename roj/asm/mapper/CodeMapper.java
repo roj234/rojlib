@@ -26,15 +26,14 @@
 
 package roj.asm.mapper;
 
+import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.mapper.struct.AttrCode_Simple;
-import roj.asm.mapper.struct.AttrLVT_Simple.SimpleVar;
 import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.FieldSimple;
+import roj.asm.tree.MethodSimple;
 import roj.asm.tree.attr.*;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
@@ -44,6 +43,7 @@ import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.util.ByteList;
 import roj.util.ByteReader;
+import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -74,15 +74,12 @@ public final class CodeMapper extends Mapping {
         return now == null ? old : now;
     };
 
-    public boolean rewrite;
-
     public CodeMapper(boolean checkFieldType) {
         super(checkFieldType);
     }
 
     public CodeMapper(CodeMapper o) {
         super(o);
-        this.rewrite = o.rewrite;
         this.paramNameMap = o.paramNameMap;
         this.paramNameType = o.paramNameType;
         this.validVarChars = o.validVarChars;
@@ -133,6 +130,7 @@ public final class CodeMapper extends Mapping {
     // 致天天想着搞优化的我: 有顺序！！！
     public final void processOne(Context ctx) {
         ConstantData data = ctx.getData();
+        data.normalize();
 
         // 这里都成了String，要第一个！
         Attribute a = (Attribute) data.attributes.getByName("InnerClasses");
@@ -141,7 +139,7 @@ public final class CodeMapper extends Mapping {
             if(a instanceof AttrInnerClasses)
                 ic = (AttrInnerClasses) a;
             else
-                data.attributes.putByName(ic = new AttrInnerClasses(new ByteReader(a.getRawData()), data.cp));
+                data.attributes.putByName(ic = new AttrInnerClasses(Parser.reader(a), data.cp));
 
             List<AttrInnerClasses.InnerClass> classes = ic.classes;
             for (int j = 0; j < classes.size(); j++) {
@@ -177,7 +175,7 @@ public final class CodeMapper extends Mapping {
             if(a instanceof AttrBootstrapMethods)
                 bs = (AttrBootstrapMethods) a;
             else
-                data.attributes.putByName(bs = new AttrBootstrapMethods(new ByteReader(a.getRawData()), data.cp));
+                data.attributes.putByName(bs = new AttrBootstrapMethods(Parser.reader(a), data.cp));
 
             List<AttrBootstrapMethods.BootstrapMethod> methods = bs.methods;
             for (int i = 0; i < methods.size(); i++) {
@@ -192,7 +190,7 @@ public final class CodeMapper extends Mapping {
                         String newCls = Util.transformMethodParam(classMap, oldCls);
 
                         if (!oldCls.equals(newCls)) {
-                            type.setValue(data.writer.getUtf(newCls));
+                            type.setValue(data.cp.getUtf(newCls));
                             if (DEBUG) {
                                 System.out.println("[" + data.name + "]BootstrapMethod " + i + "-" + j + ": " + oldCls + ' ' + newCls);
                             }
@@ -207,9 +205,8 @@ public final class CodeMapper extends Mapping {
 
         mapParam(ctx, data);
 
-        if(rewrite) {
-            ctx.compress();
-        }
+        // 以后可能会有attribute序列化的需求，省得忘了
+        data.normalize();
     }
 
     private void mapSignature(ConstantPool pool, AttributeList list) {
@@ -226,7 +223,7 @@ public final class CodeMapper extends Mapping {
 
             au.value = generic.toGeneric();
         } else {
-            Signature generic = Signature.parse(((CstUTF) pool.array(new ByteReader(a.getRawData()).readUnsignedShort())).getString());
+            Signature generic = Signature.parse(((CstUTF) pool.array(Parser.reader(a).readUnsignedShort())).getString());
 
             generic.rename(NAME_REMAPPER);
 
@@ -237,18 +234,18 @@ public final class CodeMapper extends Mapping {
     private void mapClassAndSuper(ConstantData data) {
         String name = Util.mapOwner(classMap, data.name, false);
         if(name != null)
-            data.nameCst.setValue(data.writer.getUtf(name));
+            data.nameCst.setValue(data.cp.getUtf(name));
 
         name = Util.mapOwner(classMap, data.parent, false);
         if(name != null) // noinspection all
-            data.parentCst.setValue(data.writer.getUtf(name));
+            data.parentCst.setValue(data.cp.getUtf(name));
 
         List<CstClass> itf = data.interfaces;
         for (int i = 0; i < itf.size(); i++) {
             CstClass clz = itf.get(i);
             name = Util.mapOwner(classMap, clz.getValue().getString(), false);
             if (name != null)
-                clz.setValue(data.writer.getUtf(name));
+                clz.setValue(data.cp.getUtf(name));
         }
     }
 
@@ -256,48 +253,40 @@ public final class CodeMapper extends Mapping {
         String oldCls, newCls;
         int i;
 
-        List<?> methods1 = data.methods;
+        List<MethodSimple> methods1 = data.methods;
         Desc md = Util.shareMD();
         md.owner = data.name;
         for (i = 0; i < methods1.size(); i++) {
-            Object o = methods1.get(i);
-            if(o instanceof MethodSimple) {
-                MethodSimple method = (MethodSimple) o;
+            MethodSimple method = methods1.get(i);
 
-                /**
-                 * Method Name
-                 */
-                md.name = method.name.getString();
-                md.param = method.type.getString();
+            /**
+             * Method Name
+             */
+            md.name = method.name.getString();
+            md.param = method.type.getString();
 
-                String newName = methodMap.get(md);
-                if (newName != null) {
-                    if (DEBUG) {
-                        System.out.println("[" + data.name + "]M-NAME: " + method.name.getString() + ' ' + newName);
-                    }
-                    method.name = data.writer.getUtf(newName);
+            String newName = methodMap.get(md);
+            if (newName != null) {
+                if (DEBUG) {
+                    System.out.println("[" + data.name + "]M-NAME: " + method.name.getString() + ' ' + newName);
                 }
-
-                /**
-                 * Method Parameters
-                 */
-                oldCls = method.type.getString();
-                newCls = Util.transformMethodParam(classMap, oldCls);
-
-                if(!oldCls.equals(newCls)) {
-                    method.type = data.writer.getUtf(newCls);
-                    if(DEBUG) {
-                        System.out.println("[" + data.name + "]M: " + oldCls + ' ' + newCls);
-                    }
-                }
-
-                mapSignature(data.cp, method.attributes);
-            } else {
-                ctx.get();
-                data = ctx.getData();
-                methods1 = data.methods;
-                i = 0;
+                method.name = data.cp.getUtf(newName);
             }
+
+            /**
+             * Method Parameters
+             */
+            oldCls = method.type.getString();
+            newCls = Util.transformMethodParam(classMap, oldCls);
+
+            if(!oldCls.equals(newCls)) {
+                method.type = data.cp.getUtf(newCls);
+                if(DEBUG) {
+                    System.out.println("[" + data.name + "]M: " + oldCls + ' ' + newCls);
+                }
+            }
+
+            mapSignature(data.cp, method.attributes);
         }
 
         md.owner = data.name;
@@ -318,7 +307,7 @@ public final class CodeMapper extends Mapping {
                 if (DEBUG) {
                     System.out.println("[" + data.name + "]F-NAME: " + field.name.getString() + ' ' + newName);
                 }
-                field.name = data.writer.getUtf(newName);
+                field.name = data.cp.getUtf(newName);
             }
 
             /**
@@ -328,7 +317,7 @@ public final class CodeMapper extends Mapping {
             newCls = Util.transformFieldType(classMap, oldCls);
 
             if(newCls != null) {
-                field.type = data.writer.getUtf(newCls);
+                field.type = data.cp.getUtf(newCls);
 
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]F: " + oldCls + ' ' + newCls);
@@ -340,7 +329,7 @@ public final class CodeMapper extends Mapping {
 
         // 十分不幸的是, field rename (when parameterized) 会被 LVT 工序影响
         for (i = 0; i < methods1.size(); i++) {
-            transform_LVT_LVTT_ST(data, (MethodSimple) methods1.get(i));
+            transform_LVT_LVTT_ST(data, methods1.get(i));
         }
 
         List<CstRef> cst = ctx.getFieldConstants();
@@ -354,7 +343,7 @@ public final class CodeMapper extends Mapping {
             newCls = Util.transformFieldType(classMap, oldCls);
 
             if(newCls != null) {
-                field.desc().setType(data.writer.getUtf(newCls));
+                field.desc().setType(data.cp.getUtf(newCls));
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]F-REF: " + oldCls + ' ' + newCls);
                 }
@@ -372,7 +361,7 @@ public final class CodeMapper extends Mapping {
             newCls = Util.transformMethodParam(classMap, oldCls);
 
             if(!newCls.equals(oldCls)) {
-                method.desc().getType().setString(newCls);//.setType(data.writer.getUtf(newCls));
+                data.cp.setUTFValue(method.desc().getType(), newCls);
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]M-REF: " + oldCls + ' ' + newCls);
                 }
@@ -391,7 +380,7 @@ public final class CodeMapper extends Mapping {
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]C: " + oldCls + ' ' + newCls);
                 }
-                clazz.setValue(data.writer.getUtf(newCls));
+                clazz.setValue(data.cp.getUtf(newCls));
             }
         }
 
@@ -405,7 +394,7 @@ public final class CodeMapper extends Mapping {
             newCls = Util.transformMethodParam(classMap, oldCls);
 
             if(!oldCls.equals(newCls)) {
-                dyn.getDesc().getType().setString(newCls);//.setType(data.writer.getUtf(newCls));
+                data.cp.setUTFValue(dyn.getDesc().getType(), newCls);
                 if (DEBUG) {
                     System.out.println("[" + data.name + "]M-REF-LAMBDA: " + oldCls + " => " + newCls);
                 }
@@ -416,54 +405,99 @@ public final class CodeMapper extends Mapping {
     private void transform_LVT_LVTT_ST(ConstantData data, MethodSimple method) {
         AttrUnknown au = (AttrUnknown) method.attributes.getByName("Code");
         if(au != null) {
-            AttrCode_Simple sc = new AttrCode_Simple(new ByteReader(au.getRawData()), data.cp);
+            ByteReader r = Parser.reader(au);
+            r.index += 4; // stack size
+            int codeLen = r.readInt();
+            r.index += codeLen; // code
+
+            int len = r.readUnsignedShort(); // exception
+            r.index += len << 3;
 
             String methodDesc = method.name.getString() + '|' + method.rawDesc();
+            ConstantPool pool = data.cp;
+            len = r.readUnsignedShort();
+            for (int i = 0; i < len; i++) {
+                String name = ((CstUTF) pool.get(r)).getString();
+                int end = r.readInt() + r.index;
+                switch (name) {
+                    case "LocalVariableTable":
+                        List<SimpleVar> list = readVar(pool, r);
+                        for (int j = 0; j < list.size(); j++) {
+                            SimpleVar entry = list.get(j);
+                            String ref = entry.refType.getString();
+                            if (ref.endsWith(";")) { // [Lxx; or Lxx;
+                                Type type = ParamHelper.parseField(ref);
+                                String clazz = Util.mapOwner(classMap, type.owner, false);
+                                if (clazz != null) {
+                                    type.owner = clazz;
+                                    data.cp.setUTFValue(entry.refType, ParamHelper.getField(type));
+                                }
+                            }
 
-            if (sc.lvt != null) {
-                List<SimpleVar> list = sc.lvt.list;
-                for (int i = 0; i < list.size(); i++) {
-                    SimpleVar entry = list.get(i);
-                    Type type = (Type) entry.type;
-                    if (type.owner != null) {
-                        String clazz = Util.mapOwner(classMap, type.owner, false);
-                        if (clazz != null) {
-                            type.owner = clazz;
-                            entry.refType.setString(ParamHelper.getField(type));
+                            String n = mapEntryName(data, methodDesc, entry, j);
+                            if(!n.equals(entry.name.getString())) {
+                                int id = data.cp.getUtfId(n);
+
+                                ByteList bl = r.getBytes();
+                                byte[] arr = bl.list;
+                                int ni = entry.nameId;
+                                arr[bl.offset() + ni] = (byte) (id >>> 8);
+                                arr[bl.offset() + ni + 1] = (byte) id;
+                            }
                         }
-                    }
+                        break;
+                    case "LocalVariableTypeTable":
+                        list = readVar(pool, r);
+                        for (int j = 0; j < list.size(); j++) {
+                            SimpleVar entry = list.get(j);
+                            Signature sign = Signature.parse(entry.refType.getString());
+                            sign.rename(NAME_REMAPPER);
+                            data.cp.setUTFValue(entry.refType, sign.toGeneric());
 
-                    String n = mapEntryName(data, methodDesc, entry, i);
-                    if(!n.equals(entry.name.getString())) {
-                        int id = data.writer.getUtfId(n);
+                            String n = mapEntryName(data, methodDesc, entry, j);
+                            if(!n.equals(entry.name.getString())) {
+                                int id = data.cp.getUtfId(n);
 
-                        ByteList bl = entry.bl;
-                        byte[] arr = bl.list;
-                        int ni = entry.nameId;
-                        arr[bl.offset() + ni] = (byte) (id >>> 8);
-                        arr[bl.offset() + ni + 1] = (byte) id;
-                    }
+                                ByteList bl = r.getBytes();
+                                byte[] arr = bl.list;
+                                int ni = entry.nameId;
+                                arr[bl.offset() + ni] = (byte) (id >>> 8);
+                                arr[bl.offset() + ni + 1] = (byte) id;
+                            }
+                        }
+                        break;
                 }
+                r.index = end;
             }
-            if (sc.lvtt != null) {
-                List<SimpleVar> list = sc.lvtt.list;
-                for (int i = 0; i < list.size(); i++) {
-                    SimpleVar entry = list.get(i);
-                    ((Signature) entry.type).rename(NAME_REMAPPER);
-                    entry.refType.setString(entry.type.toGeneric());
+        }
+    }
 
-                    String n = mapEntryName(data, methodDesc, entry, i);
-                    if(!n.equals(entry.name.getString())) {
-                        int id = data.writer.getUtfId(n);
+    static List<SimpleVar> readVar(ConstantPool cp, ByteReader r) {
+        int len = r.readUnsignedShort();
+        List<SimpleVar> list = new ArrayList<>(len);
 
-                        ByteList bl = entry.bl;
-                        byte[] arr = bl.list;
-                        int ni = entry.nameId;
-                        arr[bl.offset() + ni] = (byte) (id >>> 8);
-                        arr[bl.offset() + ni + 1] = (byte) id;
-                    }
-                }
-            }
+        for (int i = 0; i < len; i++) {
+            SimpleVar sv = new SimpleVar();
+            sv.start = r.readUnsignedShort();
+            sv.end = r.readUnsignedShort();
+            sv.nameId = r.index;
+            sv.name = ((CstUTF) cp.get(r));
+            sv.refType = ((CstUTF) cp.get(r));
+            sv.slot = r.readUnsignedShort();
+            list.add(sv);
+        }
+        return list;
+    }
+
+    static final class SimpleVar {
+        CstUTF name, refType;
+        int slot, nameId;
+        int start, end;
+
+        void write(ByteWriter w) {
+            w.writeShort(start).writeShort(end)
+             .writeShort(name.getIndex()).writeShort(refType.getIndex())
+             .writeShortR(slot);
         }
     }
 

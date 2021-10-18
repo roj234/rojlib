@@ -25,18 +25,23 @@
  */
 package roj.asm.tree.attr;
 
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/10/21 22:45
  */
 public final class AttrUnknown extends Attribute {
+    public static Attribute downgrade(ConstantPool cw, ByteWriter w, Attribute attr) {
+        ByteList l = w.list;
+        l.clear();
+        attr.toByteArray1(cw, w);
+        return new AttrUnknown(attr.name, new ByteList(l.toByteArray()));
+    }
+
     public AttrUnknown(String attrName, ByteList bytes) {
         super(attrName);
         this.data = bytes;
@@ -45,7 +50,7 @@ public final class AttrUnknown extends Attribute {
     private ByteList data;
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         w.writeBytes(data);
     }
 

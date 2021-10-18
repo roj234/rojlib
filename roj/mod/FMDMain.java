@@ -209,7 +209,6 @@ public final class FMDMain {
                 }
 
                 FileUtil.MIN_ASYNC_SIZE = 1024 * 64;
-                FileUtil.ENABLE_ENDPOINT_RECOVERY = true;
 
                 if(!downloadPath.isDirectory() && !downloadPath.mkdirs()) {
                     CmdUtil.warning("下载目录不存在且无法创建");
@@ -356,7 +355,7 @@ public final class FMDMain {
 
             for (int j = 0; j < list.size(); j++) {
                 Context ctx = list.get(j);
-                zfw.writeNamed(ctx.getName(), ctx.get(true));
+                zfw.writeNamed(ctx.getFileName(), ctx.get(true));
             }
             zfw.finish();
 
@@ -441,7 +440,7 @@ public final class FMDMain {
                 if(subs != null)
                     code = AccessTransformer.openSubClass(code, subs);
 
-                mz.setFileData(ze.getName(), new ByteList(code), true);
+                mz.setFileData(ze.getName(), new ByteList(code));
 
                 CmdUtil.success("转换 " + ze.getName());
             }
@@ -655,7 +654,7 @@ public final class FMDMain {
                     CmdUtil.info("重载配置完毕 " + cl);
             }
 
-            return MCLauncher.runClient(mc_conf, new File(mc_conf.getString("native_path")), 3, null);
+            return MCLauncher.runClient(mc_conf, 3, null);
         } else {
             return -1;
         }
@@ -859,11 +858,11 @@ public final class FMDMain {
 
         File jarFile = new File(jarDest, project.name + ((flag & 1) == 0 ? '-' + project.version : "") + ".jar");
 
-        int amount = 30;
+        int amount = 30 * 20;
         while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile) && amount > 0) {
-            if((amount % 5) == 0)
+            if((amount % 100) == 0)
                 CmdUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
-            LockSupport.parkNanos(1000L * 1000L * 1000L);
+            LockSupport.parkNanos(50L * 1000L * 1000L);
             amount--;
         }
         if(amount == 0)
@@ -949,7 +948,7 @@ public final class FMDMain {
                 if(!canIncrementWrite) {
                     MyHashSet<String> changed = new MyHashSet<>(list.size());
                     for (int i = 0; i < list.size(); i++) {
-                        changed.add(list.get(i).getName());
+                        changed.add(list.get(i).getFileName());
                     }
                     for (MutableZipFile.EFile file : stampZip.getEntries().values()) {
                         if(!changed.contains(file.getName()))
@@ -1009,9 +1008,9 @@ public final class FMDMain {
                 mz.setFileDataMore(entries);
                 for (int i = 0; i < list.size(); i++) {
                     Context ctx = list.get(i);
-                    mz.setFileData(ctx.getName(), ctx.get());
-                    if(entries.containsKey(ctx.getName())) {
-                        CmdUtil.warning("发现重复的文件 " + ctx.getName());
+                    mz.setFileData(ctx.getFileName(), ctx.get());
+                    if(entries.containsKey(ctx.getFileName())) {
+                        CmdUtil.warning("发现重复的文件 " + ctx.getFileName());
                     }
                 }
 
@@ -1030,8 +1029,8 @@ public final class FMDMain {
                 }
             } else {
                 for (int i = 0; i < list.size(); i++) {
-                    if (resources.remove(list.get(i).getName()) != null) {
-                        CmdUtil.warning("发现重复的文件 " + list.get(i).getName());
+                    if (resources.remove(list.get(i).getFileName()) != null) {
+                        CmdUtil.warning("发现重复的文件 " + list.get(i).getFileName());
                     }
                 }
 
@@ -1056,7 +1055,7 @@ public final class FMDMain {
 
                 for (int i = 0; i < list.size(); i++) {
                     Context ctx = list.get(i);
-                    zfw.writeNamed(ctx.getName(), ctx.get(true));
+                    zfw.writeNamed(ctx.getFileName(), ctx.get(true));
                 }
                 zfw.setComment("Powered by Roj234's FMDv" + VERSION);
                 zfw.finish();

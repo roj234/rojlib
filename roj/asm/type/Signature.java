@@ -44,7 +44,7 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public class Signature implements IType {
-    public Map<String, Collection<Generic>> genericTypeMap;
+    public Map<String, List<Generic>> genericTypeMap;
 
     public static final byte METHOD = 1,
             FIELD_OR_CLASS = 0,
@@ -64,7 +64,7 @@ public class Signature implements IType {
         this.type = (byte) type;
     }
 
-    public Signature(Map<String, Collection<Generic>> genericTypeMap, List<IGeneric> value, boolean isMethod, List<IGeneric> exceptions) {
+    public Signature(Map<String, List<Generic>> genericTypeMap, List<IGeneric> value, boolean isMethod, List<IGeneric> exceptions) {
         this.genericTypeMap = genericTypeMap;
         this.returns = value.remove(value.size() - 1);
         this.values = value;
@@ -77,7 +77,7 @@ public class Signature implements IType {
         CharList sb = new CharList();
         if (!genericTypeMap.isEmpty()) {
             sb.append('<');
-            for (Map.Entry<String, Collection<Generic>> entry : genericTypeMap.entrySet()) {
+            for (Map.Entry<String, List<Generic>> entry : genericTypeMap.entrySet()) {
                 sb.append(entry.getKey()).append(':');
                 Collection<Generic> list = entry.getValue();
 
@@ -117,45 +117,51 @@ public class Signature implements IType {
         if (genericTypeMap.isEmpty())
             return "";
         CharList sb = new CharList(40).append('<');
-        for (Map.Entry<String, Collection<Generic>> entry : genericTypeMap.entrySet()) {
-            sb.append(entry.getKey());
-            Collection<Generic> list = entry.getValue();
-            if (list.size() > 1/* || !list.get(0).clazz.className.equals("java/lang/Object")*/) {
-                sb.append(" extends ");
-                for (Generic value : list) {
-                    value.appendString(sb);
-                    sb.append(" & ");
-                }
-                sb.setIndex(sb.length() - 3);
-            }
+        for (Map.Entry<String, List<Generic>> entry : genericTypeMap.entrySet()) {
+            appendTypeParameter(sb, entry.getKey(), entry.getValue());
             sb.append(", ");
         }
         sb.setIndex(sb.length() - 2);
         return sb.append('>').toString();
     }
 
+    public void appendTypeParameter(CharList sb, String name, List<Generic> list) {
+        sb.append(name);
+        if (list == null)
+            list = genericTypeMap.getOrDefault(name, Collections.emptyList());
+        if (list.isEmpty()) return;
+        if (list.size() > 1 || !list.get(0).owner.equals("java/lang/Object")) {
+            sb.append(" extends ");
+            for (Generic value : list) {
+                value.appendString(sb, this);
+                sb.append(" & ");
+            }
+            sb.setIndex(sb.length() - 3);
+        }
+    }
+
     public String toString() {
+        CharList sb = new CharList();
         if (type == FIELD_OR_CLASS) {
-            return returns.toString();
+            returns.appendString(sb, this);
         } else {
-            CharList sb = new CharList();
             if (type == METHOD) {
-                returns.appendString(sb);
+                returns.appendString(sb, this);
                 sb.append(' ').append('(');
                 for (int i = 0; i < values.size(); i++) {
-                    values.get(i).appendString(sb);
+                    values.get(i).appendString(sb, this);
                     sb.append(", ");
                 }
                 sb.setIndex(sb.length() - 2);
                 sb.append(')');
             } else {
                 for (int i = 0; i < values.size(); i++) {
-                    values.get(i).appendString(sb);
+                    values.get(i).appendString(sb, this);
                 }
-                returns.appendString(sb);
+                returns.appendString(sb, this);
             }
-            return sb.toString();
         }
+        return sb.toString();
     }
 
     public void rename(UnaryOperator<String> fn) {
@@ -189,7 +195,7 @@ public class Signature implements IType {
 
     public static void main(String[] args) {
         Signature signature = parse(args[0]);
-        System.out.println("toString(): " + signature);
+        System.out.println("toString(): " + signature.toString());
         System.out.println("getSignatureType(): " + signature.getSignatureType());
         System.out.println("toGeneric(): " + signature.toGeneric());
     }
@@ -231,7 +237,7 @@ public class Signature implements IType {
 
         int i = 0;
 
-        Map<String, Collection<Generic>> map = new LinkedMyHashMap<>();
+        Map<String, List<Generic>> map = new LinkedMyHashMap<>();
 
         if (generic.charAt(0) == '<') {
             i = 1;
@@ -243,20 +249,20 @@ public class Signature implements IType {
                     case ':': {
                         String key = tmp.toString();
                         tmp.clear();
-                        Collection<Generic> collection = new LinkedList<>();
+                        List<Generic> list = new ArrayList<>(4);
 
                         boolean first = true;
 
                         while (first || hasNext(generic, i)) {
                             mi.setValue(i);
                             tmp.clear();
-                            collection.add((Generic) getSignatureValue(generic, mi, F_TEST_ITF, tmp));
+                            list.add((Generic) getSignatureValue(generic, mi, F_TEST_ITF, tmp));
                             i = mi.getValue();
                             first = false;
                         }
                         tmp.clear();
 
-                        map.put(key, collection);
+                        map.put(key, list);
                         continue;
                     }
                     case '>':
@@ -354,6 +360,7 @@ public class Signature implements IType {
                 }
             }
 
+            out:
             switch (c) {
                 case '*': {
                     mi.setValue(i + 1);
@@ -366,10 +373,15 @@ public class Signature implements IType {
                     cat = Generic.TYPE_CLASS;
                     break;
                 case ':':
-                    cat = Generic.TYPE_INTERFACE;
                     if ((F & F_TEST_ITF) != 0) {
-                        if (s.charAt(++i) == 'L')
-                            break;
+                        switch (s.charAt(++i)) {
+                            case 'L':
+                                cat = Generic.TYPE_INHERIT_CLASS;
+                                break out;
+                            case 'T': // <S:Ljava/lang/Object;T::TS;>     <S, T extends S>
+                                cat = Generic.TYPE_INHERIT_TYPE_PARAM;
+                                break out;
+                        }
                     }
                 default:
                     throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
@@ -406,7 +418,7 @@ public class Signature implements IType {
             while (i < s.length() && s.charAt(i) != '>') {
                 mi.setValue(i);
                 tmp.clear();
-                value.addChild(getSignatureValue(s, mi, F, tmp));
+                value.addChild(getSignatureValue(s, mi, F & ~F_IS_SUB_CLASS, tmp));
                 i = mi.getValue();
             }
         }

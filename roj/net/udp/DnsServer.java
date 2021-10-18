@@ -488,8 +488,9 @@ public class DnsServer implements Router {
             return target;
         }
 
+        static final float TTL_UPDATE_MULTIPLIER = 1 / Float.parseFloat(System.getProperty("TTL_UPDATE_MULTIPLIER", "1"));
         public boolean shouldUpdate(int ts) {
-            return ts - timestamp >= TTL;
+            return (TTL_UPDATE_MULTIPLIER * (float)(ts - timestamp)) >= TTL;
         }
 
         @Override
@@ -857,7 +858,7 @@ public class DnsServer implements Router {
 
     public void run() {
         ByteList bytes = new ByteList(512);
-        DatagramPacket pkt = new DatagramPacket(bytes.list, 512);
+        DatagramPacket pkt = new DatagramPacket(bytes.list, 0);
         ByteReader r = new ByteReader(bytes);
         ByteWriter w = new ByteWriter(bytes);
         CharList sb = new CharList();
@@ -865,9 +866,7 @@ public class DnsServer implements Router {
 
         DatagramSocket server = this.serverSocket;
 
-        Thread self = Thread.currentThread();
-        //mian:
-        while (!self.isInterrupted()) {
+        while (!Thread.interrupted()) {
             try {
                 pkt.setLength(512);
                 server.receive(pkt);
@@ -1071,24 +1070,21 @@ public class DnsServer implements Router {
             return;
         }
 
+        cleaner.interrupt();
         ForwardQuery request = new ForwardQuery(query, target.size());
         try {
             for (int i = 0; i < target.size(); i++) {
                 pkt.setSocketAddress(target.get(i));
+                pendingRequest.put(new XAddr(target.get(i), query.sessionId), request);
                 receiveSocket.send(pkt);
             }
             if(fakeDnsServer != null) {
                 pkt.setSocketAddress(fakeDnsServer);
-                receiveSocket.send(pkt);
                 pendingRequest.put(new XAddr(fakeDnsServer, query.sessionId), request);
+                receiveSocket.send(pkt);
             }
         } catch (IOException e) {
             e.printStackTrace();
-            return;
-        }
-        cleaner.interrupt();
-        for (int i = 0; i < target.size(); i++) {
-            pendingRequest.put(new XAddr(target.get(i), query.sessionId), request);
         }
     }
 
@@ -1179,26 +1175,22 @@ public class DnsServer implements Router {
         resolvedCache.putAll(response.response);
         dirty.getAndSet(true);
 
-        byte[] list = new byte[512];
-        ByteWriter w = new ByteWriter(new ByteList(list));
-        w.list.pos(0);
+        ByteWriter w = new ByteWriter(new ByteList(512));
         DnsQuery query = fq.query;
         w.writeShort(query.sessionId)
          .writeShort((1 << 15) | (query.opcode << 12) | (response.authorizedAnswer ? 1 << 11 : 0) | (response.iterate ? 1 << 8 : 0) | RCODE_OK) // flag
          .writeShort(query.records.length).writeShort(0).writeInt(0);
 
-        DnsRecord[] records = query.records;
-        for (DnsRecord req : records) {
+        for (DnsRecord req : query.records) {
             _w_domain_name(w, req.url);
             w.writeShort(req.qType).writeShort(req.qClass);
         }
 
         processQuery(w, query, true);
 
-        DatagramPacket pkt = new DatagramPacket(list, 0);
+        DatagramPacket pkt = new DatagramPacket(w.list.list, w.list.pos());
         pkt.setAddress(query.senderIp);
         pkt.setPort(query.senderPort);
-        pkt.setLength(w.list.pos());
 
         try {
             serverSocket.send(pkt);
@@ -1377,7 +1369,7 @@ public class DnsServer implements Router {
                         }
 
                         if(msg == null) {
-                            List<Record> records = resolvedCache.get(key);
+                            List<Record> records = resolvedCache.computeIfAbsent(key, Helpers.fnArrayList());
                             key.lock.enqueueWriteLock();
                             records.clear();
                             records.add(e);
@@ -1523,6 +1515,7 @@ public class DnsServer implements Router {
          */
 
         System.out.println("Welcome, to a cleaner world, " + System.getProperty("user.name", "user") + " !\n");
+        //roj.misc.CpFilter.registerShutdownHook();
 
         Thread.currentThread().setName("Dns Server");
         dns.run();

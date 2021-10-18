@@ -36,14 +36,18 @@ import ilib.capabilities.EntitySize;
 import ilib.client.AutoFPS;
 import ilib.client.api.CustomRTResult;
 import ilib.client.util.KeyHelper;
+import ilib.client.util.MyDebugOverlay;
 import ilib.util.NBTType;
 import ilib.util.PlayerUtil;
+import ilib.util.Reflection;
 import ilib.util.TextHelperM;
 import ilib.world.saver.WorldSaver;
+import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.client.audio.SoundManager;
 import net.minecraft.client.gui.GuiDownloadTerrain;
+import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.gui.GuiMultiplayer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.GlStateManager;
@@ -55,6 +59,7 @@ import net.minecraft.entity.ai.attributes.AttributeModifier;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemFood;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumHand;
@@ -62,6 +67,8 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraftforge.client.event.*;
+import net.minecraftforge.client.event.RenderGameOverlayEvent.ElementType;
+import net.minecraftforge.client.event.RenderGameOverlayEvent.Text;
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
@@ -69,18 +76,26 @@ import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.oredict.OreDictionary;
 import roj.collect.MyHashSet;
+import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.reflect.ReflectionUtils;
+import roj.text.Placeholder;
+import roj.text.SimpleLineReader;
 
+import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+
+import static ilib.ClientProxy.mc;
 
 /**
  * No description provided
@@ -91,12 +106,18 @@ import java.util.List;
  */
 public final class ClientEvent {
     private static final MyHashSet<ResourceLocation> ADDITIONAL_TEXTURES = new MyHashSet<>();
+    private static List<String> splashes;
 
     public static void init() {
         MinecraftForge.EVENT_BUS.register(ClientEvent.class);
 
         if (Config.reduceFPSWhenNotActive > 0) {
             AutoFPS.init(Config.reduceFPSWhenNotActive);
+        }
+        try {
+            splashes = SimpleLineReader.slrParserV2(IOUtil.readUTF("META-INF/splashes.txt"), true);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -172,15 +193,34 @@ public final class ClientEvent {
     }
 
     @SubscribeEvent
+    public static void onRenderF3(RenderGameOverlayEvent.Pre event) {
+        if (event.getType() == ElementType.DEBUG && Config.betterF3)
+            event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void onRenderDebugOverlay(Text event) {
+        if (Config.betterF3) {
+            MyDebugOverlay.process(event.getLeft(), event.getRight());
+        }
+    }
+
+    @SubscribeEvent
     public static void onOpenGui(GuiOpenEvent event) {
-        final GuiScreen gui = event.getGui();
-        if (Config.changeWorldSpeed > 0) {
-            if (gui instanceof GuiDownloadTerrain) {
+        GuiScreen gui = event.getGui();
+        if (gui instanceof GuiDownloadTerrain) {
+            if (Config.changeWorldSpeed > 0) {
                 event.setCanceled(true);
             }
-        }
-        if (gui instanceof GuiMultiplayer) {
+        } else if (gui instanceof GuiMultiplayer) {
             WorldSaver.plusSid();
+        } else if (gui instanceof GuiMainMenu) {
+            if (splashes != null) {
+                String splash = splashes.get(Math.abs((int) System.nanoTime()) % splashes.size());
+                splash = Placeholder.assign('{', '}', splash)
+                                    .replace(Collections.singletonMap("$USERNAME", mc.getSession().getUsername()));
+                Reflection.HELPER.setMainMenuSplash((GuiMainMenu) event.getGui(), splash);
+            }
         }
     }
 
@@ -259,15 +299,17 @@ public final class ClientEvent {
             ((ICustomTooltip) item).handleTooltipEvent(list, stack, player);
         }
 
-        final byte tooltip = Config.advancedTooltipFlag;
-        if (tooltip != 0 && !KeyHelper.isShiftPressed()) {
-            list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.registry"));
-            list.add("\u00a77 - " + item.getRegistryName());
-            try {
-                if ((tooltip & 2) != 0) {
-                    list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.unlocalized"));
-                    list.add("\u00a77 - " + item.getTranslationKey(stack) + ".name");
-                }
+        final int f = Config.tooltipFlag;
+        if (f != 0 && !KeyHelper.isShiftPressed()) {
+            if ((f & 1) != 0) {
+                list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.registry"));
+                list.add("\u00a77 - " + item.getRegistryName());
+            }
+            if ((f & 2) != 0) {
+                list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.unlocalized"));
+                list.add("\u00a77 - " + item.getTranslationKey(stack) + ".name");
+            }
+            if ((f & 4) != 0) {
                 int[] oreIds = OreDictionary.getOreIDs(stack);
                 if (oreIds.length > 0) {
                     list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.oredict"));
@@ -275,24 +317,49 @@ public final class ClientEvent {
                         list.add("\u00a77 - " + OreDictionary.getOreName(i));
                     }
                 }
-                if ((tooltip & 4) != 0 && item instanceof ItemFood) {
-                    list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.food"));
-                    ItemFood food = (ItemFood) item;
-                    list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.meat") + TextHelperM.translate(food.isWolfsFavoriteMeat()));
-                    list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.sat") + food.getSaturationModifier(stack));
-                    list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.heal") + food.getHealAmount(stack));
+            }
+            if ((f & 8) != 0 && stack.hasTagCompound()) {
+                if (!KeyHelper.isCtrlPressed()) {
+                    list.add("\u00a7aNBT (Ctrl)");
+                } else {
+                    list.add("\u00a7aNBT");
+                    list.add("\u00a77 - " + NBTType.betterRender(stack.getTagCompound()));
                 }
-                if (stack.hasTagCompound()) {
-                    if (!KeyHelper.isCtrlPressed()) {
-                        list.add("\u00a7aNBT (Ctrl)");
-                    } else {
-                        list.add("\u00a7aNBT");
-                        list.add("\u00a77 - " + NBTType.betterRender(stack.getTagCompound()));
+            }
+            if ((f & 16) != 0 && item instanceof ItemFood) {
+                list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.food"));
+                ItemFood food = (ItemFood) item;
+                list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.meat") + TextHelperM.translate(food.isWolfsFavoriteMeat()));
+                list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.sat") + food.getSaturationModifier(stack));
+                list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.heal") + food.getHealAmount(stack));
+            }
+            if ((f & 4064) != 0 && item instanceof ItemBlock) {
+                Block block = ((ItemBlock) item).getBlock();
+                if (block instanceof IFluidBlock) {
+                    Fluid fluid = ((IFluidBlock) block).getFluid();
+                    list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.fluid"));
+                    if ((f & 32) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.viscosity") + fluid.getViscosity());
+                    }
+                    if ((f & 64) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.luminosity") + fluid.getLuminosity());
+                    }
+                    if ((f & 128) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.temperature") + fluid.getTemperature());
+                    }
+                    if ((f & 256) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.color") + Integer.toHexString(fluid.getColor()));
+                    }
+                    if ((f & 512) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.density") + fluid.getDensity());
+                    }
+                    if ((f & 1024) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.gas") + fluid.isGaseous());
+                    }
+                    if ((f & 2048) != 0) {
+                        list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.fluid.place") + fluid.canBePlacedInWorld());
                     }
                 }
-            } catch (Throwable e) {
-                list.add("加载调试信息时出现了异常");
-                list.add(e.toString());
             }
         }
 

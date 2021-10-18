@@ -25,64 +25,61 @@
  */
 package ilib.asm.fasterforge;
 
-import org.objectweb.asm.Type;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.AnnValArray;
-import roj.asm.type.ParamHelper;
-
 import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
+import org.objectweb.asm.Type;
+import roj.asm.tree.anno.*;
+import roj.asm.type.ParamHelper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static roj.asm.tree.anno.AnnotationType.*;
-
 public abstract class TypeHelper {
-    public static Map<String, Object> toPrimitive(Map<String, roj.asm.tree.anno.AnnVal> param) {
+    public static Map<String, Object> toPrimitive(Map<String, AnnVal> param) {
         Map<String, Object> map = new HashMap<>(param.size());
-        for (Map.Entry<String, roj.asm.tree.anno.AnnVal> entry : param.entrySet()) {
+        for (Map.Entry<String, AnnVal> entry : param.entrySet()) {
             map.put(entry.getKey(), toPrimitive(entry.getValue()));
         }
         return map;
     }
 
-    public static Object toPrimitive(roj.asm.tree.anno.AnnVal param) {
-        switch (param.type) {
-            case FLOAT:
-                return ((roj.asm.tree.anno.AnnValFloat) param).value;
-            case DOUBLE:
-                return ((roj.asm.tree.anno.AnnValDouble) param).value;
-            case LONG:
-                return ((roj.asm.tree.anno.AnnValLong) param).value;
-            case INT:
-                return ((roj.asm.tree.anno.AnnValInt) param).value;
-            case STRING:
-                return ((roj.asm.tree.anno.AnnValString) param).value;
-            case SHORT:
-                return (short) ((roj.asm.tree.anno.AnnValInt) param).value;
-            case CHAR:
-                return (char) ((roj.asm.tree.anno.AnnValInt) param).value;
-            case BYTE:
-                return (byte) ((roj.asm.tree.anno.AnnValInt) param).value;
-            case BOOLEAN:
-                return ((roj.asm.tree.anno.AnnValInt) param).value == 1;
-            case ENUM:
-                roj.asm.tree.anno.AnnValEnum annotationValueEnum = (roj.asm.tree.anno.AnnValEnum) param;
-                return new ModAnnotation.EnumHolder(annotationValueEnum.clazz.owner, annotationValueEnum.value);
-            case ARRAY:
-                roj.asm.tree.anno.AnnValArray annotationValueArray = (AnnValArray) param;
-                List<Object> list = new ArrayList<>(annotationValueArray.value.size());
-                for (AnnVal c : annotationValueArray.value) {
-                    list.add(toPrimitive(c));
+    public static Object toPrimitive(AnnVal param) {
+        switch (param.type()) {
+            case AnnVal.FLOAT:
+                return ((AnnValFloat) param).value;
+            case AnnVal.DOUBLE:
+                return ((AnnValDouble) param).value;
+            case AnnVal.LONG:
+                return ((AnnValLong) param).value;
+            case AnnVal.INT:
+                return ((AnnValInt) param).value;
+            case AnnVal.STRING:
+                return ((AnnValString) param).value;
+            case AnnVal.SHORT:
+                return (short) ((AnnValInt) param).value;
+            case AnnVal.CHAR:
+                return (char) ((AnnValInt) param).value;
+            case AnnVal.BYTE:
+                return (byte) ((AnnValInt) param).value;
+            case AnnVal.BOOLEAN:
+                return ((AnnValInt) param).value == 1;
+            case AnnVal.ENUM:
+                AnnValEnum ave = (AnnValEnum) param;
+                return new ModAnnotation.EnumHolder(ave.clazz, ave.value);
+            case AnnVal.ARRAY:
+                AnnValArray ava = (AnnValArray) param;
+                List<Object> list = new ArrayList<>(ava.value.size());
+                List<AnnVal> value = ava.value;
+                for (int i = 0; i < value.size(); i++) {
+                    list.add(toPrimitive(value.get(i)));
                 }
                 return list;
-            case CLASS:
-                roj.asm.tree.anno.AnnValClass annotationValueClass = (roj.asm.tree.anno.AnnValClass) param;
-                return Type.getType(ParamHelper.getField(annotationValueClass.value));
-            case ANNOTATION:
-                return toPrimitive(((roj.asm.tree.anno.AnnValAnnotation) param).value.values);
+            case AnnVal.CLASS:
+                AnnValClass avc = (AnnValClass) param;
+                return Type.getType(ParamHelper.getField(avc.value));
+            case AnnVal.ANNOTATION:
+                return toPrimitive(((AnnValAnnotation) param).value.values);
         }
         throw new UnsupportedOperationException();
     }

@@ -25,107 +25,86 @@
  */
 package ilib.asm;
 
-import roj.collect.MyHashSet;
-import roj.io.IOUtil;
-import roj.text.CharList;
-
-import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+import net.minecraftforge.fml.common.discovery.ASMDataTable.ASMData;
+import roj.collect.MyHashMap;
+import roj.text.TextUtil;
+import roj.util.Helpers;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Set;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+
+import static ilib.asm.Loader.logger;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class Preloader {
-    private static final List<Function<String, UnaryOperator<byte[]>>> fileProcessors = new ArrayList<>();
+    private static final MyHashMap<String, Function<byte[], byte[]>> fileProcessors = new MyHashMap<>();
 
-    public static void doPreload() {
-        for (String clazz : findPreloadClasses()) {
-            try {
-                Launch.classLoader.addTransformerExclusion(clazz);
-                Class.forName(clazz, true, Launch.classLoader);
-            } catch (ClassNotFoundException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public static void registerTransformer(IClassTransformer transformer) {
-        Loader.last(transformer);
-    }
-
-    /**
-     * 不推荐使用
-     */
-    public static void registerFileProcessor(Function<String, UnaryOperator<byte[]>> processor) {
-        fileProcessors.add(processor);
-    }
-
-    public static Set<String> visitedFiles = new MyHashSet<>();
-
-    private static Collection<String> findPreloadClasses() {
-        File file = new File("mods/");
-        if (!file.isDirectory()) return Collections.emptySet();
-        File[] files = file.listFiles();
-        if (files == null) {
-            System.err.println("Failed to load mod classes");
-            return Collections.emptySet();
-        }
-
-        Collection<String> list = new ArrayList<>();
-
-        for (File file1 : files) {
-            if (file1.isFile() && (file1.getName().endsWith(".jar") || file1.getName().endsWith(".zip"))) {
-                try(ZipFile jar = new ZipFile(file1)) {
-                    ZipEntry entry = jar.getEntry("META-INF/Preload.ini");
-                    if (entry != null) {
-                        Loader.logger().info("Found Preload ASM config in " + file1.getName());
-                        Loader.logger().info("Adding classpath... ");
-                        Launch.classLoader.addURL(file1.toURI().toURL());
-                        visitedFiles.add(file1.getAbsolutePath());
-
-                        String text = new String(IOUtil.read(jar.getInputStream(entry)), StandardCharsets.UTF_8);
-                        CharList cl = new CharList();
-                        for (int i = 0; i < text.length(); i++) {
-                            char c = text.charAt(i);
-                            switch (c) {
-                                case ' ':
-                                    continue;
-                                case ';':
-                                    if (cl.length() > 0) {
-                                        list.add(cl.toString());
-                                        cl.clear();
-                                    }
-                                    break;
-                                default:
-                                    cl.append(c);
+    static {
+        Thread ldr = new Thread("Class Preloader") {
+            @Override
+            public void run() {
+                logger.info("Preloading minecraft classes...");
+                LockSupport.parkNanos(1_000_000_000L);
+                if (Thread.interrupted()) return;
+                char[] chars = new char[3];
+                int count = 0;
+                try {
+                    LaunchClassLoader cl = Launch.classLoader;
+                    for (int i = 0; i < 26; i++) {
+                        chars[2] = (char) TextUtil.digits[i + 10];
+                        cl.loadClass(new String(chars, 0, 1));
+                        LockSupport.parkNanos(100_000L);
+                        count++;
+                        for (int j = 0; j < 26; j++) {
+                            chars[1] = (char) TextUtil.digits[i + 10];
+                            cl.loadClass(new String(chars, 0, 2));
+                            LockSupport.parkNanos(100_000L);
+                            count++;
+                            for (int k = 0; k < 26; k++) {
+                                chars[0] = (char) TextUtil.digits[i + 10];
+                                cl.loadClass(new String(chars, 0, 3));
+                                LockSupport.parkNanos(100_000L);
+                                count++;
                             }
                         }
-                        if (cl.length() > 0) {
-                            list.add(cl.toString());
-                        }
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                } catch (ClassNotFoundException nfe) {
+                    System.out.println("Preloaded: " + count);
+                    nfe.printStackTrace();
                 }
             }
-        }
-        return list;
+        };
+        ldr.setDaemon(true);
+        ldr.start();
     }
 
-    public static List<Function<String, UnaryOperator<byte[]>>> getFileProcessors() {
-        return fileProcessors;
+    public static void preload() {
+        Set<ASMData> all = Loader.ASMTable.getAll("ilib.asm.Preloaded");
+        for (ASMData data : all) {
+            try {
+                Class.forName(data.getClassName(), true, Launch.classLoader);
+            } catch (ClassNotFoundException e) {
+                Helpers.throwAny(e);
+            }
+        }
+        all.clear();
+    }
+
+    public static void registerFileProcessor(String name, Function<byte[], byte[]> processor) {
+        Function<byte[], byte[]> fn = fileProcessors.putIfAbsent(name, processor);
+        if (fn != null) {
+            fileProcessors.put(name, fn.andThen(processor));
+        }
+    }
+
+    public static Function<byte[], byte[]> getFileProcessor(String entry) {
+        return fileProcessors.get(entry);
     }
 }

@@ -122,7 +122,7 @@ public class Main {
 
         for (int i = 0; i < arr.size(); i++) {
             Context ctx = arr.get(i);
-            zfw.writeNamed(ctx.getName(), ctx.get(true));
+            zfw.writeNamed(ctx.getFileName(), ctx.get(true));
         }
         zfw.finish();
 

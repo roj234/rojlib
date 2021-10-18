@@ -25,6 +25,7 @@
  */
 package roj.asm.visitor;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
 import roj.asm.util.ConstantPool;
@@ -118,7 +119,7 @@ public class CodeVisitor extends Holder {
         byte prev = 0, code;
         while (r.index < len) {
             bci = r.index - begin;
-            code = Opcodes.byId(r.readByte());
+            code = OpcodeUtil.byId(r.readByte());
 
             boolean widen = prev == Opcodes.WIDE;
             if (widen) {
@@ -137,7 +138,7 @@ public class CodeVisitor extends Holder {
                     case ALOAD:
                         break;
                     default:
-                        throw new IllegalStateException("Unable to wide " + Opcodes.toString0(code));
+                        throw new IllegalStateException("Unable to wide " + OpcodeUtil.toString0(code));
                 }
             }
 

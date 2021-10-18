@@ -29,8 +29,6 @@ package roj.asm.cst;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
@@ -68,7 +66,7 @@ public final class CstUTF extends Constant {
     }
 
     public int hashCode() {
-        return data == null ? 0 : data.hashCode();
+        return 1 + (data == null ? 0 : data.hashCode());
     }
 
     public boolean equals(Object o) {

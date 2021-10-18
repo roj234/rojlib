@@ -33,7 +33,7 @@ import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.ClassInsnNode;
 import roj.asm.tree.insn.FieldInsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.insn.LoadConstInsnNode;
+import roj.asm.tree.insn.LdcInsnNode;
 import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
@@ -201,7 +201,7 @@ public final class DirectAccessor<T> {
             code.stackSize = 1;
             code.localSize = 1;
             InsnList insn = code.instructions;
-            insn.add(new LoadConstInsnNode(Opcodes.LDC, new CstString(sb.toString())));
+            insn.add(new LdcInsnNode(Opcodes.LDC, new CstString(sb.toString())));
             insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
             var.methods.add(toString);

@@ -63,7 +63,7 @@ public final class CstMethodHandle extends Constant {
     }
 
     public final int hashCode() {
-        return ref.hashCode() << 4 ^ kind;
+        return (ref.hashCode() << 3) | kind;
     }
 
     public final boolean equals(Object o) {
@@ -88,5 +88,13 @@ public final class CstMethodHandle extends Constant {
 
     public int getRefIndex() {
         return ref == null ? refIndex : ref.getIndex();
+    }
+
+    @Override
+    public final CstMethodHandle clone() {
+        CstMethodHandle slf = (CstMethodHandle) super.clone();
+        if (ref != null)
+            slf.ref = ref.clone();
+        return slf;
     }
 }

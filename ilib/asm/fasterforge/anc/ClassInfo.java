@@ -29,7 +29,6 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.text.StringPool;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -63,7 +62,7 @@ public class ClassInfo {
         this.annotations = annotations;
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool, ConstantWriter cw) {
+    public void toByteArray(ByteWriter w, StringPool pool, ConstantPool cw) {
         pool.writeString(w, internalName);
         w.writeVarInt(interfaces.size(), false);
         for (String s : interfaces) {

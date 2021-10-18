@@ -26,34 +26,35 @@
 
 package roj.asm.tree.anno;
 
-import roj.asm.type.ParamHelper;
-import roj.asm.type.Type;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
  */
 public final class AnnValEnum extends AnnVal {
     public AnnValEnum(String type, String value) {
-        super(AnnotationType.ENUM);
-        this.clazz = ParamHelper.parseField(type);
+        // 当你已知这不可能是基本类型...
+        this.clazz = type.substring(1, type.length() - 1);
         this.value = value;
     }
 
-    public Type clazz;
-    public String value;
+    public String clazz, value;
 
-    public void _toByteArray(ConstantWriter pool, ByteWriter w) {
-        w.writeShort(pool.getUtfId(ParamHelper.getField(this.clazz)));
-        w.writeShort(pool.getUtfId(value));
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
+        w.writeByte((byte) ENUM)
+         .writeShort(pool.getUtfId("L" + this.clazz + ';'))
+         .writeShort(pool.getUtfId(value));
     }
 
     public String toString() {
         return String.valueOf(clazz) + '.' + value;
+    }
+
+    @Override
+    public byte type() {
+        return ENUM;
     }
 }

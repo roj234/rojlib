@@ -28,7 +28,6 @@ package roj.asm.tree.attr;
 
 import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -82,7 +81,7 @@ public final class AttrStringList extends Attribute {
     public final List<String> classes;
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         final List<String> ex = this.classes;
 
         w.writeShort(ex.size());

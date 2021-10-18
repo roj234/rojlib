@@ -26,7 +26,12 @@
 package ilib.asm.fasterforge;
 
 import com.google.common.base.MoreObjects;
-import ilib.asm.fasterforge.anc.ItfGet;
+import ilib.asm.fasterforge.anc.FastParser;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.LoaderException;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import org.objectweb.asm.Type;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
@@ -36,34 +41,30 @@ import roj.asm.nixim.Inject.At;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.FieldSimple;
+import roj.asm.tree.MethodSimple;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.AttrAnnotation;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
 import roj.asm.util.ConstantPool;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.io.IOUtil;
+import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.LoaderException;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
-import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
-
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Nixim(value = "net.minecraftforge.fml.common.discovery.asm.ASMModParser", copyItf = true)
-public class NiximASMModParser extends ASMModParser implements ItfGet {
+public class NiximASMModParser extends ASMModParser implements FastParser {
     @Copy
     private Map<String, List<Annotation>> named;
 
-    @Copy
-    private LinkedList<Annotation> annotations1;
     @Shadow("asmType")
     private Type asmType;
     @Shadow("classVersion")
@@ -80,66 +81,44 @@ public class NiximASMModParser extends ASMModParser implements ItfGet {
     void $$$CONSTRUCTOR() {}
 
     @Inject(value = "<init>", at = At.REPLACE)
-    public void remapInit(InputStream stream) throws IOException {
+    public void remapInit(InputStream stream) {
         $$$CONSTRUCTOR();
 
-        annotations1 = new LinkedList<>();
-        interfaces = new HashSet<>();
-        named = new HashMap<>();
+        interfaces = new MyHashSet<>();
+        named = new MyHashMap<>();
         try {
-            byte[] bytes = IOUtil.read(stream);
-            ConstantData data = Parser.parseConstants(bytes);
+            ByteList shared = IOUtil.getSharedByteBuf();
+            shared.clear();
+            shared.readStreamArrayFully(stream);
+            ConstantData data = Parser.parseConstants(shared);
 
             this.asmType = TypeHelper.asmType(data.name);
             this.asmSuperType = TypeHelper.asmType(data.parent);
             this.classVersion = data.version;
-            for (CstClass itf : data.interfaces) {
-                this.interfaces.add(itf.getValue().getString());
+            List<CstClass> classes = data.interfaces;
+            for (int i = 0; i < classes.size(); i++) {
+                this.interfaces.add(classes.get(i).getValue().getString());
             }
 
-            AttrAnnotation a = getAnnotationValue(data.cp, data.attrByName("RuntimeInvisibleAnnotations"));
-            if (a != null)
-                named.computeIfAbsent(data.name.replace('/', '.'), (k) -> new ArrayList<>()).addAll(a.annotations);
-            a = getAnnotationValue(data.cp, data.attrByName("RuntimeVisibleAnnotations"));
-            if (a != null)
-                named.computeIfAbsent(data.name.replace('/', '.'), (k) -> new ArrayList<>()).addAll(a.annotations);
+            List<Annotation> list = named.computeIfAbsent(data.name.replace('/', '.'), Helpers.fnArrayList());
+            getAnn(data.cp, data.attrByName("RuntimeInvisibleAnnotations"), list);
+            getAnn(data.cp, data.attrByName("RuntimeVisibleAnnotations"), list);
 
-            //if(Config.readFullAnnotation) {
-            for (FieldSimple fieldSimple : data.fields) {
-                List<Annotation> list = named.computeIfAbsent(fieldSimple.name.getString(), (k) -> new ArrayList<>());
-                a = getAnnotationValue(data.cp, fieldSimple.attrByName("RuntimeInvisibleAnnotations"));
-
-                if (a != null)
-                    list.addAll(a.annotations);
-
-                a = getAnnotationValue(data.cp, fieldSimple.attrByName("RuntimeVisibleAnnotations"));
-
-                if (a != null)
-                    list.addAll(a.annotations);
+            List<FieldSimple> fields = data.fields;
+            for (int i = 0; i < fields.size(); i++) {
+                FieldSimple fs = fields.get(i);
+                list = named.computeIfAbsent(fs.name.getString(), Helpers.fnArrayList());
+                getAnn(data.cp, fs.attrByName("RuntimeInvisibleAnnotations"), list);
+                getAnn(data.cp, fs.attrByName("RuntimeVisibleAnnotations"), list);
             }
 
-            for (MethodSimple methodSimple : data.methods) {
-                List<Annotation> list = named.computeIfAbsent(methodSimple.name.getString() + methodSimple.type.getString(), (k) -> new ArrayList<>());
-                a = getAnnotationValue(data.cp, methodSimple.attrByName("RuntimeInvisibleAnnotations"));
-
-                if (a != null)
-                    list.addAll(a.annotations);
-
-                a = getAnnotationValue(data.cp, methodSimple.attrByName("RuntimeVisibleAnnotations"));
-
-                if (a != null)
-                    list.addAll(a.annotations);
+            List<MethodSimple> methods = data.methods;
+            for (int i = 0; i < methods.size(); i++) {
+                MethodSimple ms = methods.get(i);
+                list = named.computeIfAbsent(ms.name.getString() + ms.type.getString(), Helpers.fnArrayList());
+                getAnn(data.cp, ms.attrByName("RuntimeVisibleAnnotations"), list);
+                getAnn(data.cp, ms.attrByName("RuntimeVisibleAnnotations"), list);
             }
-
-            //for (MethodSimple methodSimple : data.methods) {
-            //    attribute = methodSimple.attrByName("RuntimeInvisibleAnnotations");
-            //    attribute1 = methodSimple.attrByName("RuntimeVisibleAnnotations");
-            //    addo(data, attribute);
-            //    addo(data, attribute1);
-            //}
-            //}
-
-            //this.data = data;
         } catch (Exception ex) {
             FMLLog.log.error("class加载失败", ex);
             throw new LoaderException(ex);
@@ -147,47 +126,54 @@ public class NiximASMModParser extends ASMModParser implements ItfGet {
     }
 
     @Copy
+    @Override
     public Set<String> getItf() {
         return this.interfaces;
     }
 
     @Copy
-    public Map<String, List<Annotation>> getFieldAnnotationMap() {
+    @Override
+    public Map<String, List<Annotation>> getAnnotationMap() {
         return this.named;
+    }
+
+    @Override
+    public List<Annotation> getClassAnnotations() {
+        return this.named.getOrDefault(asmType.getClassName(), Collections.emptyList());
     }
 
     @Inject("toString")
     public String toString() {
-        return MoreObjects.toStringHelper("MIASMAnnotationDiscover").add("className", this.asmType.getClassName()).add("classVersion", this.classVersion).add("superName", this.asmSuperType.getClassName()).add("annotations", this.annotations1).toString();
+        return MoreObjects.toStringHelper("FastAnnotationDiscover")
+                          .add("name", this.asmType.getClassName())
+                          .add("version", this.classVersion)
+                          .add("parent", asmSuperType.getClassName()).toString();
     }
 
     @Inject("sendToTable")
     public void sendToTable(ASMDataTable table, ModCandidate candidate) {
         String normName = asmType.getClassName();
         for (Map.Entry<String, List<Annotation>> entry : named.entrySet()) {
-            for (Annotation annotation : entry.getValue()) {
-                table.addASMData(candidate, annotation.type.owner.replace('/', '.'), normName, entry.getKey(), TypeHelper.toPrimitive(annotation.values));
+            List<Annotation> value = entry.getValue();
+            for (int i = 0; i < value.size(); i++) {
+                Annotation ann = value.get(i);
+                table.addASMData(candidate, ann.clazz.replace('/', '.'), normName,
+                                 entry.getKey(), TypeHelper.toPrimitive(ann.values));
             }
         }
         for (String intf : this.interfaces)
             table.addASMData(candidate, intf, asmType.getInternalName(), null, null);
     }
 
-    @Inject("getAnnotations")
-    @Override
-    public LinkedList<ModAnnotation> getAnnotations() {
-        LinkedList<Annotation> list = new LinkedList<>(this.annotations1);
-        for (Map.Entry<String, List<Annotation>> entry : named.entrySet()) {
-            list.addAll(entry.getValue());
-        }
-        return Helpers.cast(list);
-    }
-
     @Copy
-    private static AttrAnnotation getAnnotationValue(ConstantPool pool, Attribute attribute) {
-        if (attribute == null)
-            return null;
+    private static void getAnn(ConstantPool cp, Attribute attr, List<Annotation> list) {
+        if (attr == null)
+            return;
+        ByteReader r = Parser.reader(attr);
 
-        return new AttrAnnotation(attribute.name, new ByteReader(attribute.getRawData()), pool);
+        int cnt = r.readUnsignedShort();
+        while (cnt-- > 0) {
+            list.add(Annotation.deserialize(cp, r));
+        }
     }
 }

@@ -1,11 +1,7 @@
 package roj.misc;
 
 import roj.asm.Parser;
-import roj.asm.tree.Clazz;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.Method;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.MoFNode;
+import roj.asm.tree.*;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
@@ -71,7 +67,7 @@ public class PFClassMerger {
             }
             for (List<MoFNode> nodes : s.values())
                 orig.methods.addAll(Helpers.cast(nodes));
-            Clazz compress = Parser.parse(orig.getBytes());
+            Clazz compress = Parser.parse(Parser.toByteArrayShared(orig));
             modified.put(ze.getName(), compress.getBytes());
         }
 

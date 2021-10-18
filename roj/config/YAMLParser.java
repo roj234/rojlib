@@ -780,7 +780,7 @@ public class YAMLParser {
                             if(buf[2] > 31)
                                 throw err("[YMLTS] day > 31: " + buf[2], index = j);
 
-                            long ts = ACalendar.daySinceAD(buf[0] - 1969, buf[1], buf[2], null) * 86400000;
+                            long ts = (ACalendar.daySinceAD(buf[0] - 1969, buf[1], buf[2], null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000;
                             if (c0 == 'T' || c0 == 't') {
                                 if(val.charAt(++j) != '\t')
                                     j--;

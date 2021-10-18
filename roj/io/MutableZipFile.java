@@ -12,19 +12,23 @@ import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.EmptyArrays;
 
+import javax.annotation.Nonnull;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.jar.Manifest;
 import java.util.zip.*;
 
 /**
- * 你别指望这东西能打开分卷压缩文件，没有ZIP64，也没有EXTTag <br>
- *     对于非UTF-8编码的压缩文件只读，毕竟java的charset写的垃圾的很
+ * 不能打开分卷压缩文件（ZipFile也不可以好嘛啊sir，虽然我可以做，但是没需求又平添bug...）<br>
+ * 对于非UTF-8编码的压缩文件只能以UTF-8（UFS bit）方式写入 （纯粹是我懒）
  *
  * @author Roj233
  * @since 2021/7/10 17:09
@@ -41,18 +45,27 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     private final Deflater deflater;
     private final CRC32 crc;
     private final Charset charset;
+    private final LinkedList<ZipInflatedStream> inflaters;
 
-    private final boolean killExtFlags;
+    private final byte flags;
 
     private static final int WHEN_USE_FILE_CACHE = 1048576;
 
     public static final int HEADER_EXT = 0x504b0708;
+    public static final int HEADER_ZIP64_EOF_LOCATOR = 0x504b0607;
+    public static final int HEADER_ZIP64_EOF = 0x504b0606;
     public static final int HEADER_EOF = 0x504b0506;
     public static final int HEADER_FILE = 0x504b0304;
     public static final int HEADER_ATTRIBUTE = 0x504b0102;
 
+    public static final long U32_MAX = 4294967295L;
+    public static final int MAXIMUM_BYTE_ARRAY_LENGTH = 1 << 30;
+
+    static final int MAX_INFLATER_SIZE = 16;
+
     public static final int FLAG_KILL_EXT = 1;
     public static final int FLAG_VERIFY = 2;
+    public static final int FLAG_ONLY_READ_LOC = 4;
 
     public MutableZipFile(File file) throws IOException {
         this(file, Deflater.DEFAULT_COMPRESSION, FLAG_KILL_EXT | FLAG_VERIFY, 0, StandardCharsets.UTF_8);
@@ -74,15 +87,15 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         this.file = file;
         if(!file.isFile() && !file.createNewFile())
             throw new IOException("Unable to create a new file");
+        inflaters = new LinkedList<>();
         entries = new MyHashMap<>();
         modified = new MyHashSet<>();
         eof = new EEOF();
-        eof.comment = "";
         buffer = new ByteList(1024);
         inflater = new Inflater(true);
         deflater = new Deflater(compressionLevel, true);
         crc = new CRC32();
-        killExtFlags = (flag & FLAG_KILL_EXT) != 0;
+        flags = (byte) flag;
         zip = new RandomAccessFile(file, "rw");
         zip.seek(offset);
         this.charset = charset;
@@ -95,8 +108,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             throw ze;
         } catch (IOException e) {
             zip.close();
+            throw e;
         }
-        if((flag & FLAG_VERIFY) != 0)
+        if((flag & (FLAG_VERIFY | FLAG_ONLY_READ_LOC)) == FLAG_VERIFY)
             verify();
     }
 
@@ -135,6 +149,8 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     readEOF(out);
                     break cyl;
                 case HEADER_ATTRIBUTE:
+                    if ((flags & FLAG_ONLY_READ_LOC) != 0)
+                        break cyl;
                     readAttr(out);
                     break;
                 case HEADER_FILE:
@@ -148,23 +164,29 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
     private void readFile(CharList out) throws IOException {
         byte[] buf = buffer.list;
-        zip.read(buf, 0, 26);
+        zip.readFully(buf, 0, 26);
         EFile entry = new EFile();
 
         //entry.minExtractVer = buf[0] | buf[1] << 8;
         int flags = (buf[2] & 0xFF) | (buf[3] & 0xFF) << 8;
         entry.flags = (char) flags;
         int cp = /*entry.compressMethod =*/ (buf[4] & 0xFF) | (buf[5] & 0xFF) << 8;
-        //entry.lastModify = _date(buf[6] | buf[7] << 8, buf[8] | buf[9] << 8);
-        //entry.CRC32 = buf[10] | buf[11] << 8 | buf[12] << 16 | buf[13] << 24;
         int cSize = /*entry.cSize =*/ (buf[14] & 0xFF) | (buf[15] & 0xFF) << 8 | (buf[16] & 0xFF) << 16 | (buf[17] & 0xFF) << 24;
-        //entry.uSize = buf[18] | buf[19] << 8 | buf[20] << 16 | buf[21] << 24;
+
+        if ((flags & FLAG_ONLY_READ_LOC) != 0) {
+            Attr attr = entry.attr = new Attr();
+            attr.cSize = cSize;
+            attr.uSize = buf[18] | buf[19] << 8 | buf[20] << 16 | buf[21] << 24;
+            attr.compressMethod = (char) cp;
+            attr.modTime = buf[6] | buf[7] << 8 | buf[8] << 16 | buf[9] << 24;
+            attr.CRC32 = buf[10] | buf[11] << 8 | buf[12] << 16 | buf[13] << 24;
+        }
 
         int nameLen = (buf[22] & 0xFF) | (buf[23] & 0xFF) << 8;
         int extraLen = (buf[24] & 0xFF) | (buf[25] & 0xFF) << 8;
 
         buffer.ensureCapacity(nameLen);
-        zip.read(buf = buffer.list, 0, nameLen);
+        zip.readFully(buf = buffer.list, 0, nameLen);
 
         if (charset == StandardCharsets.UTF_8) {
             buffer.pos(nameLen);
@@ -178,11 +200,10 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         entries.put(entry.name, entry);
 
         if(extraLen > 0) {
-            zip.read(buf, 0, extraLen);
+            zip.readFully(buf, 0, extraLen);
             buffer.pos(extraLen);
-            entry.extra = buffer.toByteArray();
-        } else {
-            entry.extra = EmptyArrays.BYTES;
+            entry.extraLength = (char) extraLen;
+            entry.readExtra(buffer, cSize == (int)U32_MAX || (entry.attr != null && entry.attr.uSize == (int)U32_MAX));
         }
 
         long off = zip.getFilePointer();
@@ -203,7 +224,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                         if (inflater.finished() || inflater.needsDictionary()) {
                             // OVERWRITE FUCKING ZERO ENTRY (as we know actual size now)
                             // NOTE: attr knows size
-                            if(killExtFlags) {
+                            if((flags & FLAG_KILL_EXT) != 0) {
                                 // top + header + offset (usize)
                                 zip.seek(entry.startPos() + 4 + 14);
                                 // not update EXT flag: not more I/O (moving)
@@ -245,16 +266,16 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     private void skipExtHeader(EFile entry) throws IOException {
         if (zip.readInt() != HEADER_EXT) {
             zip.skipBytes(8);
-            entry.ext = 12;
+            entry.extDesc = 12;
         } else {
             zip.skipBytes(12);
-            entry.ext = 16;
+            entry.extDesc = 16;
         }
     }
 
     private Attr readAttr(CharList out) throws IOException {
         byte[] buf = buffer.list;
-        zip.read(buf, 0, 42);
+        zip.readFully(buf, 0, 42);
         Attr entry = new Attr();
 
         //entry.ver = buf[0] | buf[1] << 8;
@@ -269,14 +290,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         //entry.diskId = buf[30] | buf[31] << 8;
         //entry.attrIn = buf[32] | buf[33] << 8;
         //entry.attrEx = buf[34] | buf[35] << 8 | buf[36] << 16 | buf[37] << 24;
-        int fileHeader = /*entry.fileHeader =*/ (buf[38] & 0xFF) | (buf[39] & 0xFF) << 8 | (buf[40] & 0xFF) << 16 | (buf[41] & 0xFF) << 24;
+        long fileHeader = /*entry.fileHeader =*/ (buf[38] & 0xFF) | (buf[39] & 0xFF) << 8 | (buf[40] & 0xFF) << 16 | (buf[41] & 0xFF) << 24;
 
         int nameLen = (buf[24] & 0xFF) | (buf[25] & 0xFF) << 8;
         int extraLen = (buf[26] & 0xFF) | (buf[27] & 0xFF) << 8;
         int commentLen = (buf[28] & 0xFF) | (buf[29] & 0xFF) << 8;
 
         buffer.ensureCapacity(Math.max(nameLen, commentLen));
-        zip.read(buf = buffer.list, 0, nameLen);
+        zip.readFully(buf = buffer.list, 0, nameLen);
 
         String name;
         if (charset == StandardCharsets.UTF_8) {
@@ -290,7 +311,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         zip.skipBytes(commentLen);
         //if(commentLen > 0) {
-            //zip.read(buf, 0, commentLen);
+            //zip.readFully(buf, 0, commentLen);
             //buffer.pos(commentLen);
             //ByteReader.decodeUTF(-1, out, buffer);
             //entry.comment = out.toString();
@@ -303,10 +324,16 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         file.attr = entry;
 
         if(extraLen > 0) {
-            zip.skipBytes(extraLen);
-            //zip.read(buf, 0, extraLen);
-            //buffer.pos(extraLen);
-            //entry.extra = buffer.toByteArray();
+            boolean checkZIP64 = entry.cSize == (int)U32_MAX || entry.uSize == (int)U32_MAX || fileHeader == (int)U32_MAX;
+            if (!checkZIP64) {
+                zip.skipBytes(extraLen);
+            } else {
+                zip.readFully(buf, 0, extraLen);
+                buffer.pos(extraLen);
+                long t = entry.readExtra(buffer, true, fileHeader);
+                if (t >= 0)
+                    fileHeader = t;
+            }
         }
 
         if(fileHeader != file.startPos()) {
@@ -317,16 +344,13 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         if(off >= zip.length())
             throw new EOFException();
-        //entry.offset = off;
-        //zip.seek(off/* + entry.cSize*/);
 
         return entry;
     }
 
     private void readEOF(CharList cl) throws IOException {
         byte[] buf = buffer.list;
-        if(zip.read(buf, 0, 18) < 18)
-            throw new EOFException();
+        zip.readFully(buf, 0, 18);
         EEOF entry = this.eof;
 
         //entry.diskId = buf[0] | buf[1] << 8;
@@ -340,19 +364,10 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         if(commentLen > 0) {
             buffer.ensureCapacity(commentLen);
-            if(zip.read(buf = buffer.list, 0, commentLen) < commentLen)
-                throw new EOFException();
-
-            if (charset == StandardCharsets.UTF_8) {
-                buffer.pos(commentLen);
-                ByteReader.decodeUTF(-1, cl, buffer);
-                entry.comment = cl.toString();
-                cl.clear();
-            } else {
-                entry.comment = new String(buf, 0, commentLen, charset);
-            }
+            zip.readFully(buffer.list, 0, commentLen);
+            entry.comment = buffer.toByteArray();
         } else {
-            entry.comment = "";
+            entry.comment = EmptyArrays.BYTES;
         }
     }
 
@@ -372,36 +387,67 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     }
 
     public byte[] getFileData(EFile file) throws IOException {
-        if(file.data != null)
-            return file.data;
+        if (file.data != null) return file.data;
+        if (file.attr.uSize > MAXIMUM_BYTE_ARRAY_LENGTH)
+            throw new ZipException("Compressed size >= 2Gbytes(1 << 30) limitation, streaming method is required!");
+
+        return getFileData(file, new ByteList((int) file.attr.uSize)).toByteArray();
+    }
+
+    public ByteList getFileData(EFile file, ByteList buf) throws IOException {
+        if (file.attr.uSize > MAXIMUM_BYTE_ARRAY_LENGTH)
+            throw new ZipException("Compressed size >= 2Gbytes(1 << 30) limitation, streaming method is required!");
+        if (buf.pos() + file.attr.uSize > MAXIMUM_BYTE_ARRAY_LENGTH)
+            throw new ZipException("Uncompressed size >= 2Gbytes(1 << 30) limitation, streaming method is required!");
 
         zip.seek(file.offset);
         Attr attr = file.attr;
-        buffer.ensureCapacity(attr.cSize);
-        if(zip.read(buffer.list, 0, attr.cSize) < attr.cSize)
-            throw new IOException("Reading error: not read " + attr.cSize);
+        buf.ensureCapacity((int) (buf.pos() + attr.uSize));
+        int icSize = (int) attr.cSize;
 
         switch (attr.compressMethod) {
             case ZipEntry.DEFLATED:
-                Inflater inflater = this.inflater;
-                inflater.setInput(buffer.list, 0, attr.cSize);
-                byte[] dec = new byte[attr.uSize];
+                buffer.ensureCapacity(icSize);
+                zip.readFully(buffer.list, 0, icSize);
+                Inflater inf = this.inflater;
+                inf.setInput(buffer.list, 0, icSize);
                 try {
-                    if(inflater.inflate(dec, 0, dec.length) < dec.length)
-                        throw new ZipException("Data error");
+                    int gen;
+                    do {
+                        int pos = buf.pos();
+                        gen = inf.inflate(buf.list, pos, buf.list.length - pos);
+                        buf.pos(pos + gen);
+                    } while (gen > 0);
                 } catch (DataFormatException e) {
+                    inf.reset();
                     ZipException err = new ZipException("Data format: " + e.getMessage());
                     err.initCause(e);
                     throw err;
                 }
-                inflater.reset();
-                return file.data = dec;
+                if(inf.getBytesWritten() != attr.uSize)
+                    throw new ZipException("Data error");
+                inf.reset();
+                return buf;
             case ZipEntry.STORED:
-                buffer.pos(attr.cSize);
-                return file.data = buffer.toByteArray();
+                zip.readFully(buf.list, buf.pos(), icSize);
+                buf.pos(buf.pos() + icSize);
+                return buf;
             default:
                 throw new ZipException("Unsupported compression method " + Integer.toHexString(attr.compressMethod));
         }
+    }
+
+    public InputStream getFileDataStreaming(String entry) throws IOException {
+        EFile file = entries.get(entry);
+        if(file == null)
+            return null;
+        return getFileDataStreaming(file);
+    }
+
+    public InputStream getFileDataStreaming(EFile file) throws IOException {
+        return file.attr.compressMethod == ZipEntry.STORED ?
+                new ZipStoredStream(file, this.file) :
+                inflaters.isEmpty() ? new ZipInflatedStream(file, this) : inflaters.removeLast();
     }
 
     // content == null : 删除
@@ -417,16 +463,14 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         return file;
     }
 
-    public ModFile setFileData(String entry, ByteList content, boolean requiredExistence) {
+    public ModFile setFileDataStreaming(String entry, InputStream content, boolean compress) {
         ModFile file = new ModFile();
         file.name = entry;
         if(file == (file = modified.find(file))) {
-            if(((file.file = entries.get(entry)) == null) == requiredExistence) {
-                throw new AssertionError("(entries.get(entry) == null) != requiredExistence");
-            }
+            file.file = entries.get(entry);
             modified.add(file);
         }
-        file.compress = content != null && content.pos() > 0;
+        file.compress = compress;
         file.data = content;
         return file;
     }
@@ -444,7 +488,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     Attr attr = file.file.attr;
                     if(bl.pos() == attr.uSize) {
                         crc.reset();
-                        crc.update(bl.list, bl.offset(), bl.pos());
+                        crc.update(bl.list, bl.offset(), bl.limit());
                         if ((int) crc.getValue() == attr.CRC32) {
                             // same length and checksum: same file, skip
                             continue;
@@ -570,7 +614,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         ChannelOutputStream appender = new ChannelOutputStream(cf);
 
-        ByteWriter writer = new ByteWriter();
+        ByteWriter bw = new ByteWriter();
 
         // write modified EFile header
         for(ModFile file : modified) {
@@ -580,56 +624,128 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 ef.attr = new Attr();
                 entries.put(ef.name = file.name, ef);
             } else {
-                file.file.ext = 0;
+                file.file.extDesc = 0;
+                file.file.extraLength = 0;
                 file.file.data = null;
             }
 
             EFile file1 = file.file;
             // flag 8: 后面包含 EXT_SIGN (stream)
             file1.flags = (char) ((file1.flags & ~8) | 2048);
-            file1.offset = cf.position() + 30 + ByteWriter.byteCountUTF8(file1.name) + file1.extra.length;
+            file1.offset = cf.position() + 30 + ByteWriter.byteCountUTF8(file1.name)/* + file1.extDesc*/;
 
             Attr attr = file1.attr;
             attr.compressMethod = (char) (file.compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 
-            crc.reset();
-            crc.update(file.data.list, file.data.offset(), file.data.pos());
-            attr.CRC32 = (int) crc.getValue();
-            crc.reset();
-            attr.uSize = file.data.pos();
-
-            ByteList t;
-            if (file.compress) {
-                Deflater deflater = this.deflater;
-                deflater.setInput(file.data.list, 0, file.data.pos());
-                deflater.finish();
-
-                ByteList buffer = this.buffer;
-                buffer.clear();
-                int off = 0;
-                while (!deflater.finished()) {
-                    off += deflater.deflate(buffer.list, off, 1024);
-                    buffer.pos(off);
-                    buffer.ensureCapacity(off + 1024);
+            if (file.data instanceof ByteList) {
+                ByteList data = (ByteList) file.data;
+                crc.reset();
+                crc.update(data.list, data.offset(), data.limit());
+                attr.CRC32 = (int) crc.getValue();
+                crc.reset();
+                attr.uSize = data.pos();
+                if (!file.compress) {
+                    attr.cSize = attr.uSize;
                 }
-                attr.cSize = (int) deflater.getBytesWritten();
-                deflater.reset();
 
-                t = buffer;
+                long offset = zip.getFilePointer();
+                writeFile(appender, bw, file.file);
+
+                if (file.compress) {
+                    Deflater def = this.deflater;
+                    def.setInput(data.list, data.offset(), data.limit());
+                    def.finish();
+
+                    ByteList buffer = this.buffer;
+                    buffer.clear();
+                    buffer.ensureCapacity(1024);
+
+                    while (!def.finished()) {
+                        int len = def.deflate(buffer.list, 0, buffer.list.length);
+                        if (len > 0)
+                            appender.write(buffer.list, 0, len);
+                    }
+                    long curr = zip.getFilePointer();
+                    // backward, 文件就是这点好
+                    zip.seek(offset + 18);
+                    zip.writeInt(Integer.reverseBytes((int) (attr.cSize = def.getBytesWritten())));
+                    zip.seek(curr);
+                    def.reset();
+                } else {
+                    appender.write(data.list, data.offset(), data.limit());
+                }
             } else {
-                attr.cSize = attr.uSize;
-                t = file.data;
+                InputStream in = (InputStream) file.data;
+
+                // 可以用EXT,但是都是文件了,那么无聊浪费CPU干嘛
+                long offset = zip.getFilePointer();
+                // CONSIDER: 当使用Stream方式，多半是大文件，所以哦
+                attr.cSize = U32_MAX;
+                attr.uSize = U32_MAX;
+                writeFile(appender, bw, file.file);
+
+                crc.reset();
+
+                ByteList buf = this.buffer;
+                buf.clear();
+                buf.ensureCapacity(2048);
+                if (file.compress) {
+                    Deflater def = this.deflater;
+                    final int d2 = buf.list.length / 2;
+                    int read;
+                    while ((read = in.read(buf.list, 0, d2)) > 0) {
+                        def.setInput(buf.list, 0, read);
+                        crc.update(buf.list, 0, read);
+                        while (!deflater.needsInput()) {
+                            int len = def.deflate(buf.list, d2, buf.list.length - d2);
+                            appender.write(buf.list, 0, len);
+                        }
+                    }
+                    def.finish();
+
+                    while (!def.finished()) {
+                        int len = def.deflate(buf.list, 0, buf.list.length);
+                        appender.write(buf.list, 0, len);
+                    }
+
+                    attr.uSize = def.getBytesRead();
+                    attr.cSize = def.getBytesWritten();
+                    def.reset();
+                } else {
+                    int read;
+                    while ((read = in.read(buf.list, 0, buf.list.length)) > 0) {
+                        appender.write(buf.list, 0, read);
+                        crc.update(buf.list, 0, read);
+                        attr.cSize += read;
+                    }
+                    attr.uSize = attr.cSize;
+                }
+
+                long curr = zip.getFilePointer();
+                zip.seek(offset + 14);
+                zip.writeShort(Integer.reverseBytes((int) crc.getValue()));
+                boolean zip64 = attr.cSize > U32_MAX || attr.uSize > U32_MAX;
+                if (!zip64) {
+                    zip.writeInt(Integer.reverseBytes((int) (attr.uSize)));
+                    zip.writeInt(Integer.reverseBytes((int) (attr.cSize)));
+                    zip.seek(offset + 32 + ByteWriter.byteCountUTF8(file1.name));
+                    zip.writeShort(0); // ignore Extra flag
+                } else {
+                    zip.seek(offset + 34 + ByteWriter.byteCountUTF8(file1.name));
+                    zip.writeLong(Long.reverseBytes(attr.uSize));
+                    zip.writeLong(Long.reverseBytes(attr.cSize));
+                }
+                zip.seek(curr);
             }
 
-            writeFile(appender, writer, file.file);
-            appender.write(t.list, 0, t.pos());
+            file1.offset += file1.extraLength;
         }
 
         modified.clear();
         buffer.clear();
 
         // write ALL CDir header
-        eof.cDirOffset = cf.position();
+        eof.cDirOffset = zip.getFilePointer();
 
         // 排序CDir属性
         uFile.reuseClear();
@@ -637,7 +753,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             uFile.add(file);
         }
 
-        ByteList bl = writer.list;
+        ByteList bl = bw.list;
         bl.ensureCapacity(1024);
         int v = Math.max((int) (bl.list.length * 0.8f), 1024);
         for (Unioner.Region region : uFile) {
@@ -647,9 +763,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 if (node.end())
                     node = node.next(); // 找到Start
 
-                writeAttr(writer, node.owner());
+                writeAttr(bw, node.owner());
             } else if(!node.end())
-                writeAttr(writer, node.owner());
+                writeAttr(bw, node.owner());
 
             if(bl.pos() > v) {
                 bl.writeToStream(appender);
@@ -662,9 +778,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
         bl.clear();
 
-        eof.cDirLen = cf.position() - eof.cDirOffset;
+        eof.cDirLen = zip.getFilePointer() - eof.cDirOffset;
 
-        writeEOF(writer);
+        writeEOF(bw, eof, entries.size(), zip.getFilePointer());
 
         bl.writeToStream(appender);
         bl.clear();
@@ -715,108 +831,172 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         if(zip != null)
             zip.close();
         buffer.list = null;
+        for (ZipInflatedStream rs : inflaters) {
+            rs.close();
+        }
+        inflaters.clear();
     }
 
     private static void writeFile(OutputStream appender, ByteWriter util, EFile file) throws IOException {
-        /*int elen = 0;
-        int elenEXTT = 0;
-        int flagEXTT = 0;
-        if (e.mtime != null) {
-            elenEXTT += 4;
-            flagEXTT |= EXTT_FLAG_LMT;
-        }
-        if (e.atime != null) {
-            elenEXTT += 4;
-            flagEXTT |= EXTT_FLAG_LAT;
-        }
-        if (e.ctime != null) {
-            elenEXTT += 4;
-            flagEXTT |= EXTT_FLAT_CT;
-        }
-        if (flagEXTT != 0)
-            elen += (elenEXTT + 5);    // headid(2) + size(2) + flag(1) + data*/
-
         Attr attr = file.attr;
+        int ext = 4;
+
+        int us;
+        if (attr.uSize >= U32_MAX) {
+            us = (int) U32_MAX;
+            ext = 20;
+        } else {
+            us = (int) attr.uSize;
+        }
+        int cs;
+        if (attr.cSize >= U32_MAX) {
+            cs = (int) U32_MAX;
+            ext = 20;
+        } else {
+            cs = (int) attr.cSize;
+        }
+
         util.writeInt(HEADER_FILE)
-            .writeShortR(20)
+            .writeShortR(ext == 20 ? 45 : 20)
             .writeShortR(file.flags)
             .writeShortR(attr.compressMethod)
             .writeIntR(attr.modTime)
             .writeIntR(attr.CRC32)
-            .writeIntR(attr.cSize)
-            .writeIntR(attr.uSize)
+            .writeIntR(cs)
+            .writeIntR(us)
             .writeShortR(ByteWriter.byteCountUTF8(file.name))
-            .writeShortR(/*elen*/0)
+            .writeShortR(ext > 4 ? ext : 0)
             .writeAllUTF(file.name);
-        /*if (flagEXTT != 0) {
-            util.writeShortR(EXTID_EXTT)
-            .writeShortR(elenEXTT + 1)      // flag + data
-            .writeByteR(flagEXTT);
-            if (e.mtime > 0)
-                util.writeInt(e.mtime / 1000);
-            if (e.atime > 0)
-                util.writeIntR(e.atime / 1000);
-            if (e.ctime > 0)
-                util.writeIntR(e.ctime / 1000);
-        }*/
+        if (ext > 4) {
+            util.writeShortR(1).writeShortR(16)
+                .writeLongR(attr.cSize).writeLongR(attr.uSize);
+            file.extraLength = 20;
+        } else {
+            file.extraLength = 0;
+        }
         util.list.writeToStream(appender);
         util.list.clear();
     }
 
-    private static void writeAttr(ByteWriter util, EFile file) {
+    static void writeAttr(ByteWriter util, EFile file) {
         Attr attr = file.attr;
+        int ext = 4;
+        int off;
+        if (file.startPos() >= U32_MAX) {
+            off = (int) U32_MAX;
+            ext += 8;
+        } else {
+            off = (int) file.startPos();
+        }
+        int us;
+        if (attr.uSize >= U32_MAX) {
+            us = (int) U32_MAX;
+            ext += 8;
+        } else {
+            us = (int) attr.uSize;
+        }
+        int cs;
+        if (attr.cSize >= U32_MAX) {
+            cs = (int) U32_MAX;
+            ext += 8;
+        } else {
+            cs = (int) attr.cSize;
+        }
 
         util.writeInt(HEADER_ATTRIBUTE)
-            .writeShortR(20)
-            .writeShortR(20)
+            .writeShortR(ext > 4 ? 45 : 20)
+            .writeShortR(ext > 4 ? 45 : 20)
             .writeShortR(file.flags)
             .writeShortR(attr.compressMethod)
             .writeIntR(attr.modTime)
             .writeIntR(attr.CRC32)
-            .writeIntR(attr.cSize)
-            .writeIntR(attr.uSize)
+            .writeIntR(cs)
+            .writeIntR(us)
             .writeShortR(ByteWriter.byteCountUTF8(file.name))
-            .writeShortR(0) // ext
+            .writeShortR(ext > 4 ? ext : 0) // ext
             .writeShortR(0) // comment
             .writeShortR(0) // disk
             .writeShortR(0) // attrIn
             .writeIntR(0) // attrEx
-            .writeIntR((int) file.startPos())
+            .writeIntR(off)
             .writeAllUTF(file.name);
+        if (ext > 4) {
+            util.writeShortR(1).writeShortR(ext - 4);
+            if (cs == (int) U32_MAX) {
+                util.writeLongR(attr.cSize);
+            }
+            if (us == (int) U32_MAX) {
+                util.writeLongR(attr.uSize);
+            }
+            if (off == (int) U32_MAX) {
+                util.writeLongR(file.startPos());
+            }
+        }
     }
 
-    private void writeEOF(ByteWriter util) {
-        EEOF eof = this.eof;
+    static void writeEOF(ByteWriter util, EEOF eof, int entryCount, long position) {
+        boolean zip64 = false;
+        int co;
+        if (eof.cDirOffset >= U32_MAX) {
+            co = (int) U32_MAX;
+            zip64 = true;
+        } else {
+            co = (int) eof.cDirOffset;
+        }
+        int cl;
+        if (eof.cDirLen >= U32_MAX) {
+            cl = (int) U32_MAX;
+            zip64 = true;
+        } else {
+            cl = (int) eof.cDirLen;
+        }
+        int count = entryCount;
+        if (count >= 0xFFFF) {
+            count = 0xFFFF;
+            zip64 = true;
+        }
+        if (zip64) {
+            util.writeInt(HEADER_ZIP64_EOF)
+                .writeLongR(44).writeShortR(45).writeShortR(45) // size, ver, ver
+                .writeIntR(0).writeIntR(0) // disk id, attr begin id
+                .writeLongR(entryCount).writeLongR(entryCount) // disk entries, total entries
+                .writeLongR(eof.cDirLen).writeLongR(eof.cDirOffset)
+
+                .writeInt(HEADER_ZIP64_EOF_LOCATOR)
+                .writeInt(0) // eof disk id
+                .writeLongR(position)
+                .writeIntR(1); // disk in total
+        }
 
         util.writeInt(HEADER_EOF)
             .writeShortR(0)
             .writeShortR(0)
-            .writeShortR(entries.size())
-            .writeShortR(entries.size())
-            .writeIntR((int) eof.cDirLen)
-            .writeIntR((int) eof.cDirOffset)
-            .writeShortR(ByteWriter.byteCountUTF8(eof.comment))
-            .writeAllUTF(eof.comment);
+            .writeShortR(count)
+            .writeShortR(count)
+            .writeIntR(cl)
+            .writeIntR(co)
+            .writeShortR(eof.comment.length)
+            .writeBytes(eof.comment);
     }
 
     /**
      * Converts DOS time to Java time (number of milliseconds since epoch).
      */
     public static long dos2JavaTime(int dtime) {
-        long day = ACalendar.daySinceAD(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f) - 1, (dtime >> 16) & 0x1f, null);
-        return 86400000L * (day + 24L * (((dtime >> 11) & 0x1f) + 60L * (((dtime >> 5) & 0x3f) + 60L * ((dtime << 1) & 0x3e))));
+        long day = ACalendar.daySinceAD(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f)/* - 1*/, (dtime >> 16) & 0x1f, null) - ACalendar.GREGORIAN_OFFSET_DAY;
+        return 86400000L * day + 3600_000L * ((dtime >> 11) & 0x1f) + 60_000L * ((dtime >> 5) & 0x3f) + 1000L * ((dtime << 1) & 0x3e);
     }
 
     /**
      * Converts Java time to DOS time.
      */
     public static int java2DosTime(long time) {
-        int[] arr = ACalendar.get1(time);
-        int year = arr[ACalendar.YEAR] + 1900;
-        if (year < 1980) {
+        int[] arr = ACalendar.get1(time + TimeZone.getDefault().getOffset(time));
+        int year = arr[ACalendar.YEAR] - 1980;
+        if (year < 0) {
             return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;
         }
-        return ((year - 1980) << 25) | ((arr[ACalendar.MONTH] + 1) << 21) |
+        return (year << 25) | (arr[ACalendar.MONTH] << 21) |
                 (arr[ACalendar.DAY] << 16) | (arr[ACalendar.HOUR] << 11) | (arr[ACalendar.MINUTE] << 5) |
                 (arr[ACalendar.SECOND] >> 1);
     }
@@ -829,7 +1009,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         //int CRC32;
         //int cSize, uSize;
         String name;
-        byte[] extra = EmptyArrays.BYTES;
 
         byte[] data;
 
@@ -837,7 +1016,8 @@ public class MutableZipFile implements Closeable, AutoCloseable {
          * 文件数据的offset 不要再记错了！
          */
         long offset;
-        byte ext;
+        char extraLength;
+        byte extDesc;
 
         Attr attr;
 
@@ -852,12 +1032,43 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         @Override
         public long startPos() {
-            return offset - 30 - ByteWriter.byteCountUTF8(name) - extra.length;
+            return offset - 30 - ByteWriter.byteCountUTF8(name) - extraLength;
         }
 
         @Override
         public long endPos() {
-            return offset + attr.cSize + ext;
+            return offset + attr.cSize + extDesc;
+        }
+
+        public long getUncompressedSize() {
+            return attr.uSize;
+        }
+
+        @SuppressWarnings("fallthrough")
+        void readExtra(ByteList extra, boolean checkZIP64) {
+            ByteReader r = new ByteReader(extra);
+            while (r.remain() > 4) {
+                int flag = r.readUShortR();
+                int length = r.readUShortR();
+                switch (flag) {
+                    case 1:
+                        if (checkZIP64) {
+                            // LOC extra zip64 entry MUST include BOTH original
+                            // and compressed file size fields.
+                            // If invalid zip64 extra fields, simply skip. Even
+                            // it's rare, it's possible the entry size happens to
+                            // be the magic value and it "accidently" has some
+                            // bytes in extra match the id.
+                            if (length >= 16) {
+                                attr.uSize = r.readLongR();
+                                attr.cSize = r.readLongR();
+                            }
+                            break;
+                        }
+                    default:
+                        r.skipBytes(length);
+                }
+            }
         }
     }
 
@@ -868,7 +1079,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         char compressMethod;
         int modTime;
         int CRC32;
-        int cSize, uSize;
+        long cSize, uSize;
         //String name, comment;
         //int diskId;
         //int attrIn, attrEx;
@@ -883,6 +1094,35 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             return "Attr{" + "cm=" + compressMethod + ", CRC=" + CRC32 + ", cSz=" + cSize + ", uSz" +
                     "=" + uSize + '}';
         }
+
+        @SuppressWarnings("fallthrough")
+        long readExtra(ByteList extra, boolean checkZIP64, long header) {
+            ByteReader r = new ByteReader(extra);
+            while (r.remain() > 4) {
+                int flag = r.readUShortR();
+                int length = r.readUShortR();
+                switch (flag) {
+                    case 1:
+                        if (checkZIP64) {
+                            if (uSize == (int) U32_MAX && length > 8) {
+                                length -= 8;
+                                uSize = r.readLongR();
+                            }
+                            if (cSize == (int) U32_MAX && length > 8) {
+                                length -= 8;
+                                cSize = r.readLongR();
+                            }
+                            if (header == (int) U32_MAX && length > 8) {
+                                header = r.readLongR();
+                            }
+                            break;
+                        }
+                    default:
+                        r.skipBytes(length);
+                }
+            }
+            return header;
+        }
     }
 
     public static final class EEOF {
@@ -892,11 +1132,23 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         //int cDirTotal;
         long cDirLen, cDirOffset;
         //long offset;
-        public String comment;
+        byte[] comment = EmptyArrays.BYTES;
 
         @Override
         public String toString() {
-            return "ZEnd{" + "cDirLen=" + cDirLen + ", cDirOff=" + cDirOffset + ", comment='" + comment + '\'' + '}';
+            return "ZEnd{" + "cDirLen=" + cDirLen + ", cDirOff=" + cDirOffset + ", comment='" + new String(comment) + '\'' + '}';
+        }
+
+        public void setComment(String comment) {
+            this.comment = comment == null ? EmptyArrays.BYTES : ByteWriter.encodeUTF(comment).toByteArray();
+            if (this.comment.length > 65535) {
+                this.comment = Arrays.copyOf(this.comment, 65535);
+                throw new IllegalArgumentException("Comment too long");
+            }
+        }
+
+        public void setComment(byte[] comment) {
+            this.comment = comment == null ? EmptyArrays.BYTES : comment;
         }
     }
 
@@ -904,7 +1156,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         EFile file;
         public boolean compress;
         public String name;
-        public ByteList data;
+        public Object data;
 
         @Override
         public boolean equals(Object o) {
@@ -917,6 +1169,122 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         @Override
         public int hashCode() {
             return name.hashCode();
+        }
+    }
+
+    static class ZipStoredStream extends InputStream {
+        ZipStoredStream(EFile eFile, File file) throws IOException {
+            this.remain = eFile.attr.uSize;
+            (this.file = new RandomAccessFile(file, "r"))
+                    .seek(eFile.offset);
+        }
+
+        final RandomAccessFile file;
+        long remain;
+
+        @Override
+        public int read() throws IOException {
+            if (remain <= 0)
+                return -1;
+            return file.read();
+        }
+
+        @Override
+        public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+            if (remain <= 0)
+                return 0;
+            len = Math.min(len, available());
+            file.readFully(b, off, len);
+            remain -= len;
+            return len;
+        }
+
+        @Override
+        public int available() throws IOException {
+            file.getFilePointer();
+            return remain > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) remain;
+        }
+
+        @Override
+        public long skip(long n) throws IOException {
+            n = Math.min(n, remain);
+            if (file.getFilePointer() + n > file.length())
+                throw new ZipException("File size was externally changed.");
+            file.seek(file.getFilePointer() + n);
+            return n;
+        }
+
+        @Override
+        public void close() throws IOException {
+            file.close();
+            remain = -1;
+        }
+    }
+
+    static final class ZipInflatedStream extends ZipStoredStream {
+        ZipInflatedStream(EFile eFile, MutableZipFile file) throws IOException {
+            super(eFile, file.file);
+            this.inf = new Inflater(true);
+            this.buf = new byte[1024];
+            this.owner = file;
+        }
+
+        final MutableZipFile owner;
+        final Inflater inf;
+        boolean eof;
+
+        final byte[] buf;
+        int bufPos;
+        byte[] sb;
+
+        @Override
+        public int read() throws IOException {
+            if (eof) return -1;
+            if (sb == null)
+                sb = new byte[1];
+            if (read(sb, 0, 1) < 1) return -1;
+            return sb[0];
+        }
+
+        @Override
+        public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+            if (off < 0 || len < 0 || len > b.length - off) {
+                throw new IndexOutOfBoundsException();
+            } else if (len == 0 || eof) {
+                return 0;
+            }
+            try {
+                int n;
+                while ((n = inf.inflate(b, off, len)) == 0) {
+                    if (inf.finished() || inf.needsDictionary()) {
+                        close();
+                        return -1;
+                    }
+                    if (inf.needsInput()) {
+                        int read = super.read(buf, 0, b.length);
+                        if (read == 0) {
+                            close();
+                            throw new EOFException();
+                        }
+                        inf.setInput(buf, 0, read);
+                    }
+                }
+                return n;
+            } catch (DataFormatException e) {
+                throw new ZipException(e.toString());
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            eof = true;
+            if (owner.inflaters.size() < MAX_INFLATER_SIZE) {
+                inf.reset();
+                owner.inflaters.add(this);
+            } else {
+                inf.end();
+                super.close();
+            }
         }
     }
 }

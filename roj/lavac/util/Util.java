@@ -1,7 +1,7 @@
 package roj.lavac.util;
 
 import roj.asm.Opcodes;
-import roj.asm.tree.simple.MoFNode;
+import roj.asm.tree.MoFNode;
 import roj.asm.type.NativeType;
 import roj.asm.type.Type;
 import roj.lavac.parser.IAccessor;

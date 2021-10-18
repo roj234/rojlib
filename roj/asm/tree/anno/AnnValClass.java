@@ -28,29 +28,31 @@ package roj.asm.tree.anno;
 
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/18 9:51
  */
 public final class AnnValClass extends AnnVal {
     public AnnValClass(String className) {
-        super(AnnotationType.CLASS);
         this.value = ParamHelper.parseField(className);
     }
 
     public Type value;
 
-    public void _toByteArray(ConstantWriter pool, ByteWriter w) {
-        w.writeShort(pool.getUtfId(ParamHelper.getField(value)));
+    public void toByteArray(ConstantPool pool, ByteWriter w) {
+        w.writeByte((byte) CLASS).writeShort(pool.getUtfId(ParamHelper.getField(value)));
     }
 
     public String toString() {
         return value.toString() + ".class";
+    }
+
+    @Override
+    public byte type() {
+        return CLASS;
     }
 }

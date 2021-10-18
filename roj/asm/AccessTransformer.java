@@ -36,7 +36,6 @@ import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
-import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -111,8 +110,8 @@ public class AccessTransformer {
     public static byte[] openSubClass(final byte[] bytecode, Collection<String> names) {
         ConstantData data = Parser.parseConstants(bytecode);
         Attribute attribute = data.attrByName("InnerClasses");
-        AttrInnerClasses ic = new AttrInnerClasses(new ByteReader(attribute.getRawData()), data.cp);
-        data.addAttribute(ic);
+        AttrInnerClasses ic = new AttrInnerClasses(Parser.reader(attribute), data.cp);
+        data.attributes.putByName(ic);
         for (AttrInnerClasses.InnerClass innerClass : ic.classes) {
             if (names.contains(innerClass.self)) {
                 FlagList list = new FlagList(innerClass.flags);

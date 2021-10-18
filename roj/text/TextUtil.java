@@ -292,6 +292,10 @@ public class TextUtil {
     }
 
     public static StringBuilder dumpBytes(StringBuilder sb, byte[] b, int off, int len) {
+        if (b.length - off < len) {
+            System.err.println("Index out of bounds: len+" + (len - b.length + off));
+            len = b.length - off;
+        }
         sb.append("\n             0 1  2 3  4 5  6 7  8 9  a b  c d  e f\n0x00000000   ");
         int j = 1, v = 0;
         for (int i = off; i < len; i++, j++) {

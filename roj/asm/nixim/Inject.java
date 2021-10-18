@@ -36,7 +36,8 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
 public @interface Inject {
-    int FLAG_OPTIONAL = 1;
+    int FLAG_OPTIONAL             = 1;
+    int FLAG_MODIFIABLE_PARAMETER = 2;
 
     /**
      * @return target method name

@@ -56,7 +56,7 @@ public abstract class CstRef extends Constant {
     }
 
     public final String toString() {
-        return super.toString() + ' ' + (clazz == null ? classIndex : clazz.getValue().getString()) + '.' + (desc == null ? descIndex : (desc.getName().getString() + ':' + desc.getType().getString()));
+        return super.toString() + ' ' + (clazz == null ? (int)classIndex : clazz.getValue().getString()) + '.' + (desc == null ? (int)descIndex : (desc.getName().getString() + ':' + desc.getType().getString()));
     }
 
     public final String getClassName() {
@@ -109,5 +109,15 @@ public abstract class CstRef extends Constant {
 
     public CstNameAndType desc() {
         return desc;
+    }
+
+    @Override
+    public final CstRef clone() {
+        CstRef slf = (CstRef) super.clone();
+        if (clazz != null)
+            slf.clazz = (CstClass) clazz.clone();
+        if (desc != null)
+            slf.desc = desc.clone();
+        return slf;
     }
 }

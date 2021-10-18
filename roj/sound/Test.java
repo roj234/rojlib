@@ -25,8 +25,8 @@
  */
 package roj.sound;
 
+import roj.io.source.RandomAccessFileSource;
 import roj.sound.mp3.Player;
-import roj.sound.source.RandomAccessFileSource;
 import roj.sound.util.JavaAudio;
 import roj.sound.util.PCMBuffer;
 import roj.util.ByteList;

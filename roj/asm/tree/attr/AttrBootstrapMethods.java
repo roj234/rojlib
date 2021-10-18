@@ -26,17 +26,17 @@
 
 package roj.asm.tree.attr;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+import roj.util.Helpers;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.cst.CstType.*;
@@ -152,7 +152,7 @@ public final class AttrBootstrapMethods extends Attribute {
         };
 
         public static String toString(byte kind) {
-            return Opcodes.toString0(toString[kind]);
+            return OpcodeUtil.toString0(toString[kind]);
         }
 
         public static byte validate(int kind) {
@@ -162,7 +162,7 @@ public final class AttrBootstrapMethods extends Attribute {
         }
     }
 
-    public static class BootstrapMethod {
+    public static final class BootstrapMethod implements Cloneable {
         /**
          * 仅比较
          */
@@ -171,72 +171,89 @@ public final class AttrBootstrapMethods extends Attribute {
             this.name = name;
             this.rawDesc = desc;
             this.kind = Kind.validate(kind);
-            this.parameters = Collections.emptyList();
         }
 
         public BootstrapMethod(String owner, String name, String desc, byte kind, byte methodType, List<Constant> arguments) {
             this.owner = owner;
             this.name = name;
-            this.parameters = ParamHelper.parseMethod(this.rawDesc = desc);
-            this.returnType = parameters.remove(parameters.size() - 1);
+            this.rawDesc = desc;
             this.kind = Kind.validate(kind);
             this.methodType = methodType;
             this.arguments = arguments;
         }
 
-        public final String rawDesc;
-
         public String owner, name;
 
-        public final List<Type> parameters;
-        public Type returnType;
+        private String     rawDesc;
+        private List<Type> params;
+        private Type returnType;
+
+        private void initPar() {
+            if (params == null) {
+                params = ParamHelper.parseMethod(rawDesc);
+                returnType = params.remove(params.size() - 1);
+            }
+        }
+
+        public final Type returnType() {
+            initPar();
+            return returnType;
+        }
+
+        public final List<Type> parameters() {
+            initPar();
+            return params;
+        }
+
+        public final String rawDesc() {
+            return rawDesc;
+        }
+
+        public final void rawDesc(String param) {
+            this.rawDesc = param;
+            if (params != null) {
+                params.clear();
+                ParamHelper.parseMethod(param, params);
+                returnType = params.remove(params.size() - 1);
+            }
+        }
 
         public List<Constant> arguments;
 
         public byte kind, methodType;
 
-        public void toByteArray(ConstantWriter pool, ByteWriter w) {
+        public void toByteArray(ConstantPool pool, ByteWriter w) {
             if (!Kind.verifyType(kind, methodType)) {
                 throw new IllegalArgumentException("Method type " + methodType + " doesn't fit with lambda kind " + kind);
             }
-            parameters.add(returnType);
-            w.writeShort(pool.getMethodHandleId(owner, name, ParamHelper.getMethod(parameters), kind, methodType));
-            parameters.remove(parameters.size() - 1);
+            if (params != null) {
+                params.add(returnType);
+                rawDesc = ParamHelper.getMethod(params);
+                params.remove(params.size() - 1);
+            }
+            w.writeShort(pool.getMethodHandleId(owner, name, rawDesc, kind, methodType));
 
             w.writeShort(arguments.size());
-            for (Constant c : arguments) {
-                w.writeShort(pool.reset(c).getIndex());
+            for (int i = 0; i < arguments.size(); i++) {
+                w.writeShort(pool.reset(arguments.get(i)).getIndex());
             }
         }
 
         public String toString() {
+            initPar();
             StringBuilder sb = new StringBuilder("type=").append(Kind.toString(kind))
                     .append("\n            Site: ").append(returnType).append(' ').append(owner.substring(owner.lastIndexOf('/') + 1)).append('.').append(name)
                     .append('(');
 
-            if (!parameters.isEmpty()) {
-                for (Type p : parameters) {
-                    sb.append(p).append(", ");
+            if (params.size() > 0) {
+                for (int i = 0; i < params.size(); i++) {
+                    sb.append(params.get(i)).append(", ");
                 }
                 sb.delete(sb.length() - 2, sb.length());
             }
             sb.append(")\n            Desc: ");
 
-            CstMethodType mType = null;
-            for (Constant c : arguments) {
-                if (c.type() == CstType.METHOD_TYPE) {
-                    mType = (CstMethodType) c;
-                    break;
-                }
-            }
-
-            if (mType == null) {
-                throw new IllegalArgumentException("METHOD_TYPE argument not found. ");
-            }
-
-            String methodDesc = mType.getValue().getString();
-
-            List<Type> types = ParamHelper.parseMethod(methodDesc);
+            List<Type> types = ParamHelper.parseMethod(getMethodType());
 
             sb.append(types.remove(types.size() - 1)).append(" .dynamic(");
             if (!types.isEmpty()) {
@@ -251,10 +268,47 @@ public final class AttrBootstrapMethods extends Attribute {
         public boolean equals0(BootstrapMethod method) {
             return method.kind == this.kind && method.owner.equals(this.owner) && method.name.equals(this.name) && method.rawDesc.equals(this.rawDesc);
         }
+
+        public String getMethodType() {
+            CstMethodType mType = (CstMethodType) arguments.get(0);
+            //            for (int i = 0; i < arguments.size(); i++) {
+            //                Constant c = arguments.get(i);
+            //                if (c.type() == METHOD_TYPE) {
+            //                    mType = (CstMethodType) c;
+            //                    break;
+            //                }
+            //            }
+            //
+            //            if (mType == null) {
+            //                throw new IllegalArgumentException("METHOD_TYPE argument not found. ");
+            //            }
+            return mType.getValue().getString();
+        }
+
+        @Override
+        public BootstrapMethod clone() {
+            BootstrapMethod slf;
+            try {
+                slf = (BootstrapMethod) super.clone();
+            } catch (CloneNotSupportedException e) {
+                return Helpers.nonnull();
+            }
+            List<Constant> args = slf.arguments = new ArrayList<>(slf.arguments);
+            for (int i = 0; i < args.size(); i++) {
+                args.set(i, args.get(i).clone());
+            }
+            if (params != null) {
+                params.add(returnType);
+                slf.rawDesc = ParamHelper.getMethod(params);
+                slf.params = null;
+                params.remove(params.size() - 1);
+            }
+            return slf;
+        }
     }
 
     @Override
-    protected void toByteArray1(ConstantWriter pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         w.writeShort(methods.size());
         for (BootstrapMethod method : methods) {
             method.toByteArray(pool, w);

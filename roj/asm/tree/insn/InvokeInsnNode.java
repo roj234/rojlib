@@ -30,7 +30,7 @@ import roj.asm.Opcodes;
 import roj.asm.cst.CstRef;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
 import roj.util.ByteWriter;
 
@@ -112,7 +112,7 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
         this.owner = clazz.toString();
     }
 
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         if (params != null) {
             params.add(returnType);
             rawParam = ParamHelper.getMethod(params);

@@ -30,7 +30,7 @@ import roj.asm.Opcodes;
 import roj.asm.cst.CstDynamic;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
@@ -47,7 +47,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
 
     public InvokeDynInsnNode(CstDynamic ref, int type) {
         super(Opcodes.INVOKEDYNAMIC);
-        this.bootstrapTableIndex = ref.bootstrapTableIndex;
+        this.tableIdx = ref.tableIdx;
         this.name = ref.getDesc().getName().getString();
         this.rawParam = ref.getDesc().getType().getString();
     }
@@ -64,20 +64,20 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
     /**
      * bootstrap table index
      */
-    public int bootstrapTableIndex;
+    public char tableIdx;
 
     /**
      * The third and fourth operand bytes of each invokedynamic instruction must have the value zero. <br>
      * Thus, we ignore it again(Previous in InvokeItfInsnNode).
      */
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         if (params != null) {
             params.add(returnType);
             rawParam = ParamHelper.getMethod(params);
             params.remove(params.size() - 1);
         }
-        w.writeByte(code).writeShort(cw.getInvokeDynId(0xFFFF & bootstrapTableIndex, name, rawParam)).writeShort(0);
+        w.writeByte(code).writeShort(cw.getInvokeDynId(tableIdx, name, rawParam)).writeShort(0);
     }
 
     @Override
@@ -87,7 +87,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
 
     public String toString() {
         initPar();
-        StringBuilder sb = new StringBuilder(super.toString()).append(" #").append(bootstrapTableIndex).append(' ').append(returnType).append(" ?").append('.').append(name).append('(');
+        StringBuilder sb = new StringBuilder(super.toString()).append(" #").append((int) tableIdx).append(' ').append(returnType).append(" ?").append('.').append(name).append('(');
         if (!params.isEmpty()) {
             for (int i = 0; i < params.size(); i++) {
                 Type par = params.get(i);

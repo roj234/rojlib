@@ -26,7 +26,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 /**
@@ -47,7 +47,7 @@ public final class EndOfInsn extends InsnNode {
     public void _i_replace(InsnNode now) {}
 
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         throw new UnsupportedOperationException();
     }
 

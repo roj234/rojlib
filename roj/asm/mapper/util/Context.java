@@ -28,7 +28,7 @@ package roj.asm.mapper.util;
 import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.tree.ConstantData;
-import roj.text.CharList;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -37,21 +37,18 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
 
-public final class Context {
-    public static final int ID_METHOD = 0;
-    public static final int ID_FIELD = 1;
-    public static final int ID_CLASS = 2;
-    public static final int ID_INVOKE_DYN = 3;
+public final class Context implements Consumer<Constant> {
+    static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2, ID_INVOKE_DYN = 3;
 
     private String name;
     private ConstantData data;
     private Object stream;
     private ByteList result;
 
-    private final ArrayList<Constant>[] typedTmp = Helpers.cast(new ArrayList<?>[4]);
+    private final ArrayList<Constant>[] cstCache = Helpers.cast(new ArrayList<?>[4]);
 
     public Context(String name, Object o) {
         this.name = name;
@@ -68,19 +65,19 @@ public final class Context {
                 bytes = this.result;
                 this.result = null;
             } else
-                throw new IllegalStateException(getName() + " 没有数据");
+                throw new IllegalStateException(getFileName() + " 没有数据");
             ConstantData data;
             try {
                 data = Parser.parseConstants(bytes);
             } catch (Throwable e) {
-                final File file = new File("ctx_" + name);
+                final File file = new File(getFileName().replace('/', '.'));
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     bytes.writeToStream(fos);
                 } catch (IOException ignored) {}
                 throw new IllegalArgumentException(name + " 读取失败", e);
             }
             this.data = data;
-            getName();
+            getFileName();
         }
         return this.data;
     }
@@ -100,34 +97,24 @@ public final class Context {
         throw new ClassCastException(o.getClass().getName());
     }
 
-    private void initConstant() {
-        if(typedTmp[0] == null) {
-            typedTmp[0] = new ArrayList<>();
-            typedTmp[1] = new ArrayList<>();
-            typedTmp[2] = new ArrayList<>();
-            typedTmp[3] = new ArrayList<>();
-            refresh();
-        }
-    }
-
     public List<CstRef> getMethodConstants() {
-        initConstant();
-        return Helpers.cast(typedTmp[ID_METHOD]);
+        cstInit();
+        return Helpers.cast(cstCache[ID_METHOD]);
     }
 
     public List<CstRef> getFieldConstants() {
-        initConstant();
-        return Helpers.cast(typedTmp[ID_FIELD]);
+        cstInit();
+        return Helpers.cast(cstCache[ID_FIELD]);
     }
 
     public List<CstDynamic> getInvokeDynamic() {
-        initConstant();
-        return Helpers.cast(typedTmp[ID_INVOKE_DYN]);
+        cstInit();
+        return Helpers.cast(cstCache[ID_INVOKE_DYN]);
     }
 
     public List<CstClass> getClassConstants() {
-        initConstant();
-        return Helpers.cast(typedTmp[ID_CLASS]);
+        cstInit();
+        return Helpers.cast(cstCache[ID_CLASS]);
     }
 
     public ByteList get(boolean shared) {
@@ -138,8 +125,27 @@ public final class Context {
                     if (shared) {
                         return Parser.toByteArrayShared(data);
                     } else {
-                        this.result = data.getBytes();
+                        this.result = new ByteList(Parser.toByteArray(data));
                     }
+                } catch (Throwable e) {
+                    throw new IllegalArgumentException(name + " 写入失败", e);
+                } finally {
+                    clearData();
+                }
+            } else {
+                this.result = read0(stream);
+                this.stream = null;
+            }
+        }
+        return this.result;
+    }
+
+    public ByteList get2(ByteList a, ByteList b) {
+        if(this.result == null) {
+            if(this.data != null) {
+                try {
+                    data.verify();
+                    return data.getBytes(a, b);
                 } catch (Throwable e) {
                     throw new IllegalArgumentException(name + " 写入失败", e);
                 } finally {
@@ -159,9 +165,12 @@ public final class Context {
 
     private void clearData() {
         if(this.data != null) {
-            getName();
+            getFileName();
             this.data = null;
-            Arrays.fill(typedTmp, null);
+            if (cstCache[0] != null)
+            for (List<?> list : cstCache) {
+                list.clear();
+            }
         }
     }
 
@@ -175,38 +184,56 @@ public final class Context {
         return "Ctx " + "'" + name + '\'';
     }
 
-    public void refresh() {
-        for (List<?> list : typedTmp) {
-            list.clear();
+    private void cstInit() {
+        if(cstCache[0] == null) {
+            cstCache[0] = new ArrayList<>();
+            cstCache[1] = new ArrayList<>();
+            cstCache[2] = new ArrayList<>();
+            cstCache[3] = new ArrayList<>();
         }
-        List<Constant> csts = getData().writer.getConstants();
-        for (int i = 0; i < csts.size(); i++) {
-            Constant cst = csts.get(i);
-            switch (cst.type()) {
-                case CstType.INTERFACE:
-                case CstType.METHOD:
-                    typedTmp[ID_METHOD].add(cst);
-                    break;
-                case CstType.CLASS:
-                    typedTmp[ID_CLASS].add(cst);
-                    break;
-                case CstType.FIELD:
-                    typedTmp[ID_FIELD].add(cst);
-                    break;
-                case CstType.INVOKE_DYNAMIC:
-                    typedTmp[ID_INVOKE_DYN].add(cst);
-                    break;
+        if (cstCache[0].isEmpty()) {
+            ConstantPool cw = getData().cp;
+            cw.setAddListener(this);
+            List<Constant> csts = cw.getConstants();
+            for (int i = 0; i < csts.size(); i++) {
+                accept(csts.get(i));
             }
+            getFileName();
         }
-        getName();
     }
 
-    public String getName() {
+    @Override
+    public void accept(Constant cst) {
+        if (cst == null) {
+            for (List<?> list : cstCache) {
+                list.clear();
+            }
+            cstInit();
+            return;
+        }
+        switch (cst.type()) {
+            case CstType.INTERFACE:
+            case CstType.METHOD:
+                cstCache[ID_METHOD].add(cst);
+                break;
+            case CstType.CLASS:
+                cstCache[ID_CLASS].add(cst);
+                break;
+            case CstType.FIELD:
+                cstCache[ID_FIELD].add(cst);
+                break;
+            case CstType.INVOKE_DYNAMIC:
+                cstCache[ID_INVOKE_DYN].add(cst);
+                break;
+        }
+    }
+
+    public String getFileName() {
         if(data == null)
             return name;
         String realName = data.nameCst.getValue().getString();
         if(!realName.equals(name))
-            this.name = new CharList(realName.length() + 6).append(realName).append(".class").toString();
+            this.name = realName.concat(".class");
         return this.name;
     }
 
@@ -214,7 +241,7 @@ public final class Context {
         try {
             return Parser.toByteArrayShared(Parser.parse(get(true)));
         } catch (Throwable t) {
-            try (FileOutputStream fos = new FileOutputStream(getName().replace('/', '_'))) {
+            try (FileOutputStream fos = new FileOutputStream(getFileName().replace('/', '_'))) {
                 get().writeToStream(fos);
             } catch (Throwable ignored) {}
             throw t;

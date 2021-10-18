@@ -27,7 +27,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.collect.IIntMap;
 import roj.collect.IntMap;
 import roj.collect.LinkedIntMap;
@@ -92,7 +92,7 @@ public final class SwitchInsnNode extends InsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         if(pad == -1) {
             throw new IllegalStateException();
         }
@@ -116,8 +116,8 @@ public final class SwitchInsnNode extends InsnNode {
                 if (val < lo) lo = val;
             }
 
-            if (hi <= lo)
-                throw new IllegalArgumentException();
+            if (hi < lo)
+                throw new IllegalArgumentException(switcher.toString());
 
             w.writeInt(pcRev.getInt(validate(def)) - self)
                     .writeInt(lo).writeInt(hi);

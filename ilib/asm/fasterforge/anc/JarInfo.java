@@ -26,7 +26,6 @@
 package ilib.asm.fasterforge.anc;
 
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.text.StringPool;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -56,7 +55,7 @@ public class JarInfo {
         this.mainClasses = mainClasses;
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool, ConstantWriter cw) {
+    public void toByteArray(ByteWriter w, StringPool pool, ConstantPool cw) {
         w.writeVarInt(classes.size(), false);
         for (Map.Entry<String, ClassInfo> entry : classes.entrySet()) {
             pool.writeString(w, entry.getKey());

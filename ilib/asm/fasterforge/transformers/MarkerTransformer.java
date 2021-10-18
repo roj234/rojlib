@@ -92,7 +92,7 @@ public class MarkerTransformer implements IClassTransformer {
             return bytes;
         ConstantData data = Parser.parseConstants(bytes);
         for (String marker : this.markers.get(name)) {
-            data.interfaces.add(data.writer.getClazz(marker));
+            data.interfaces.add(data.cp.getClazz(marker));
         }
         return Parser.toByteArray(data);
     }

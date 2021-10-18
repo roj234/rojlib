@@ -26,13 +26,13 @@
 
 package roj.asm.tree.insn;
 
-import roj.asm.Opcodes;
+import roj.asm.OpcodeUtil;
 import roj.asm.cst.CstRefField;
 import roj.asm.tree.Clazz;
 import roj.asm.tree.Field;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.util.ByteWriter;
 
 import static roj.asm.Opcodes.*;
@@ -107,7 +107,7 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
         return owner;
     }
 
-    public void toByteArray(ConstantWriter cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteWriter w) {
         w.writeByte(code).writeShort(cw.getFieldRefId(owner, name, ParamHelper.getField(type)));
     }
 
@@ -129,6 +129,6 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return Opcodes.toString0(code, type, owner.substring(owner.lastIndexOf('/') + 1), name);
+        return OpcodeUtil.toString0(code, type, owner.substring(owner.lastIndexOf('/') + 1), name);
     }
 }

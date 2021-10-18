@@ -54,7 +54,7 @@ public abstract class CstRefUTF extends Constant {
             throw new NullPointerException("value");
         }
         this.value = value;
-        this.valueIndex = (char) value.getIndex();
+        this.valueIndex = value.index;
     }
 
     @Override
@@ -64,7 +64,7 @@ public abstract class CstRefUTF extends Constant {
     }
 
     public final String toString() {
-        return super.toString() + " : " + (value == null ? valueIndex : value.getString() + " (" + value.getIndex() + ")");
+        return super.toString() + " : " + (value == null ? (int)valueIndex : value.getString() + " (" + value.getIndex() + ")");
     }
 
     public final int hashCode() {
@@ -85,5 +85,13 @@ public abstract class CstRefUTF extends Constant {
 
     public final int getValueIndex() {
         return value == null ? valueIndex : value.getIndex();
+    }
+
+    @Override
+    public final CstRefUTF clone() {
+        CstRefUTF slf = (CstRefUTF) super.clone();
+        if (value != null)
+            slf.value = (CstUTF) value.clone();
+        return slf;
     }
 }

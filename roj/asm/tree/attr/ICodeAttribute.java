@@ -26,17 +26,15 @@
 package roj.asm.tree.attr;
 
 import roj.asm.tree.insn.InsnNode;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.collect.ToIntMap;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/1/16 22:33
  */
 public interface ICodeAttribute {
-    void toByteArray(ConstantWriter pool, ByteWriter w, ToIntMap<InsnNode> pcRev);
+    void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev);
 }

@@ -193,7 +193,7 @@ public final class NonblockingUtil {
     }
 
     private static int read(FileDescriptor fd, ByteList buf, int max, int socket) throws IOException {
-        int len = Math.min(buf.capacity() - buf.pos(), max);
+        int len = Math.min(buf.list.length - buf.pos(), max);
         len = Math.min(DIRECT_CACHE_MAX, len);
 
         ByteBuffer shared = DIRECT_CACHE.get();

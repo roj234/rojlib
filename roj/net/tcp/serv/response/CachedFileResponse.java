@@ -72,7 +72,7 @@ public class CachedFileResponse extends FileResponse {
             gz.finish();
             gz.close();
 
-            this.buf.compress();
+            this.buf.trimToSize();
             super.release();
         }
         buf.rewrite();

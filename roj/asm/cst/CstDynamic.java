@@ -29,14 +29,12 @@ package roj.asm.cst;
 import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
  */
 public final class CstDynamic extends Constant {
-    public int bootstrapTableIndex;
+    public char tableIdx;
     private int descIndex;
     private final boolean method;
 
@@ -44,7 +42,7 @@ public final class CstDynamic extends Constant {
 
     public CstDynamic(boolean method, int tableIndex, int descIndex) {
         this.method = method;
-        this.bootstrapTableIndex = tableIndex;
+        this.tableIdx = (char) tableIndex;
         this.descIndex = descIndex;
     }
 
@@ -63,12 +61,12 @@ public final class CstDynamic extends Constant {
     @Override
     public final void write(ByteWriter w) {
         w.writeByte(type())
-         .writeShort(bootstrapTableIndex)
+         .writeShort(tableIdx)
          .writeShort(getDescIndex());
     }
 
     public final String toString() {
-        return super.toString() + "BTableIdx: #" + bootstrapTableIndex + ", //" + desc + "]";
+        return super.toString() + " T#" + (int)tableIdx + ", //" + desc + "]";
     }
 
     public final CstNameAndType getDesc() {
@@ -80,7 +78,7 @@ public final class CstDynamic extends Constant {
     }
 
     public final int hashCode() {
-        return (desc.hashCode() << 16 ^ bootstrapTableIndex) + type();
+        return ((desc.hashCode() << 16) ^ tableIdx) + type();
     }
 
     public final boolean equals(Object o) {
@@ -89,6 +87,14 @@ public final class CstDynamic extends Constant {
         if (o == null || o.getClass() != getClass())
             return false;
         CstDynamic ref = (CstDynamic) o;
-        return ref.type() == this.type() && ref.bootstrapTableIndex == this.bootstrapTableIndex && ref.getDescIndex() == this.getDescIndex();
+        return ref.type() == this.type() && ref.tableIdx == this.tableIdx && ref.getDescIndex() == this.getDescIndex();
+    }
+
+    @Override
+    public final CstDynamic clone() {
+        CstDynamic slf = (CstDynamic) super.clone();
+        if (desc != null)
+            slf.desc = desc.clone();
+        return slf;
     }
 }

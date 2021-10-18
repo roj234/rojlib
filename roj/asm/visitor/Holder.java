@@ -26,7 +26,6 @@
 package roj.asm.visitor;
 
 import roj.asm.util.ConstantPool;
-import roj.asm.util.ConstantWriter;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -38,9 +37,9 @@ import roj.util.ByteWriter;
  * @since 2021/10/4 11:57
  */
 public abstract class Holder {
-    protected ByteWriter     bw;
-    protected ConstantWriter cw;
-    protected ByteReader     br;
+    protected ByteWriter   bw;
+    protected ConstantPool cw;
+    protected ByteReader   br;
     protected ConstantPool   cp;
 
     Holder() {}

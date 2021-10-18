@@ -27,7 +27,7 @@ package roj.asm.nixim;
 
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.simple.MoFNode;
+import roj.asm.tree.MoFNode;
 
 /**
  * @author solo6975

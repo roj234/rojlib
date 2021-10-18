@@ -30,11 +30,8 @@ import roj.asm.cst.Constant;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.*;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
 import roj.asm.util.*;
 import roj.collect.CharMap;
 import roj.util.ByteList;
@@ -42,7 +39,6 @@ import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,7 +63,7 @@ public final class Parser {
         if (buf == null) throw new NullPointerException("Bytecode is null!");
 
         Clazz result = new Clazz();
-        ByteReader r = new ByteReader(buf);
+        ByteReader r = SharedBuf.reader(buf);
 
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
@@ -148,26 +144,24 @@ public final class Parser {
     }
 
     public static byte[] toByteArray(Clazz c) {
-        return SharedCache.store(c).getByteArray();
+        return SharedBuf.store(c).getByteArray();
     }
 
     public static ByteList toByteArrayShared(Clazz c) {
-        return SharedCache.store(c);
+        return SharedBuf.store(c);
     }
 
     // endregion
     // region CONSTANT DATA parse LOD 1
 
     public static ConstantData parseConstants(byte[] buf) {
-        return parseConst0(new ByteReader(buf));
-    }
-
-    public static ConstantData parseConstants(ByteList buf) {
-        return parseConst0(new ByteReader(buf));
+        return parseConstants(new ByteList(buf));
     }
 
     @Nonnull
-    public static ConstantData parseConst0(ByteReader r) {
+    public static ConstantData parseConstants(ByteList buf) {
+        ByteReader r = SharedBuf.reader(buf);
+
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
@@ -176,7 +170,7 @@ public final class Parser {
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         pool.read(r);
 
-        ConstantData result = new ConstantData(version, pool, r.length(), r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+        ConstantData result = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
         int len = r.readUnsignedShort();
 
@@ -238,26 +232,28 @@ public final class Parser {
     }
 
     public static byte[] toByteArray(ConstantData c) {
-        return SharedCache.store(c).getByteArray();
+        return SharedBuf.store(c).getByteArray();
     }
 
     public static ByteList toByteArrayShared(ConstantData c) {
-        return SharedCache.store(c);
+        return SharedBuf.store(c);
     }
 
     // endregion
     // region ACCESS parse LOD 0
 
     public static AccessData parseAccess(byte[] buf) {
-        return parseAcc0(buf.clone(), new ByteReader(buf));
+        return parseAcc0(buf.clone(), new ByteList(buf));
     }
 
     public static AccessData parseAccessDirect(byte[] buf) {
-        return parseAcc0(buf, new ByteReader(buf));
+        return parseAcc0(buf, new ByteList(buf));
     }
 
     @Nonnull
-    public static AccessData parseAcc0(byte[] buf, ByteReader r) {
+    public static AccessData parseAcc0(byte[] dst, ByteList src) {
+        ByteReader r = SharedBuf.reader(src);
+
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
@@ -330,23 +326,18 @@ public final class Parser {
             arr[k] = com;
         }
 
-        return new AccessData(buf, Helpers.cast(arr[0]), Helpers.cast(arr[1]), cfo, self, parent, itf);
+        return new AccessData(dst, Helpers.cast(arr[0]), Helpers.cast(arr[1]), cfo, self, parent, itf);
     }
 
     // endregion
-    // SIMPLE parse LOD -1
+    // region SIMPLE parse LOD -1
 
     public static List<String> simpleData(byte[] buf) {
-        if (buf == null)
-            return null;
         return simpleData(new ByteList(buf));
     }
 
     public static List<String> simpleData(ByteList buf) {
-        if (buf == null)
-            return null;
-
-        ByteReader r = new ByteReader(buf);
+        ByteReader r = SharedBuf.reader(buf);
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
@@ -383,34 +374,7 @@ public final class Parser {
     }
 
     // endregion
-    // region MISC
-
-    /**
-     * Used to create AttrCode
-     *
-     * @param clazz  class
-     * @param method method
-     * @return code or null
-     */
-    @Nullable
-    public static AttrCode getOrCreateCode(@Nonnull ConstantData clazz, @Nonnull MethodSimple method) {
-        Attribute attribute = method.attrByName("Code");
-
-        if (attribute == null) {
-            if (!method.accesses.hasAll(AccessFlag.ABSTRACT)) {
-                throw new IllegalArgumentException("Non-abstract method " + clazz.name + '.' + method.name.getString() + ':' + method.type.getString() + " did not contains a Code attribute.");
-            }
-            return null;
-        }
-
-        AttrCode code;
-        if (!(attribute instanceof AttrCode)) {
-            int index = method.attributes.indexOf(attribute);
-            method.attributes.set(index, code = new AttrCode(method, attribute.getRawData(), clazz.cp));
-        } else {
-            code = (AttrCode) attribute;
-        }
-        return code;
+    public static ByteReader reader(Attribute attr) {
+        return SharedBuf.reader(attr.getRawData());
     }
-    // endregion
 }

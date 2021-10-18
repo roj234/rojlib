@@ -25,19 +25,14 @@
  */
 package roj.mod.remap;
 
+import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.mapper.util.Context;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.Field;
-import roj.asm.tree.Method;
+import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrInnerClasses;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.simple.FieldSimple;
-import roj.asm.tree.simple.MethodSimple;
-import roj.asm.tree.simple.MoFNode;
 import roj.collect.MyHashMap;
 import roj.ui.CmdUtil;
-import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import java.util.Collection;
@@ -58,7 +53,7 @@ public class ClassMerger {
         MyHashMap<String, Context> byName = new MyHashMap<>();
         for (int i = 0; i < main.size(); i++) {
             Context ctx = main.get(i);
-            byName.put(ctx.getName(), ctx);
+            byName.put(ctx.getFileName(), ctx);
         }
 
         clientOnly = main.size();
@@ -67,7 +62,7 @@ public class ClassMerger {
         for (int i = 0; i < sub.size(); i++) {
             Context sc = sub.get(i);
 
-            Context mc = byName.putIfAbsent(sc.getName(), sc);
+            Context mc = byName.putIfAbsent(sc.getFileName(), sc);
             if (mc != null) {
                 processOne(mc, sc);
                 clientOnly--;
@@ -150,7 +145,7 @@ public class ClassMerger {
             return;
         AttrInnerClasses mainAttr = getAttr(main);
         if(mainAttr == null) {
-            main.addAttribute(subAttr);
+            main.attributes.add(subAttr);
             return;
         }
 
@@ -179,7 +174,7 @@ public class ClassMerger {
         if(attr instanceof AttrInnerClasses) {
             aIC = (AttrInnerClasses) attr;
         } else if(attr != null) {
-            aIC = new AttrInnerClasses(new ByteReader(attr.getRawData()), clz.cp);
+            aIC = new AttrInnerClasses(Parser.reader(attr), clz.cp);
         }
         return aIC;
     }

@@ -27,7 +27,7 @@
 package roj.asm.tree.attr;
 
 import roj.asm.tree.insn.InsnNode;
-import roj.asm.util.ConstantWriter;
+import roj.asm.util.ConstantPool;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.util.ByteReader;
@@ -74,7 +74,7 @@ public final class AttrLineNumber extends Attribute implements ICodeAttribute {
     }
 
     @Override
-    public void toByteArray(ConstantWriter pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
+    public void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
         w.writeShort(map.size());
         for (ToIntMap.Entry<InsnNode> entry : map.selfEntrySet()) {
             w.writeShort(pcRev.getInt(validate(entry.getKey())))

@@ -98,16 +98,24 @@ public final class MapperList extends SimpleList<String> {
     }
 
     public void _init_() {
+        preClean();
+        trimToSize();
+    }
+
+    public void preClean() {
         indexer.clear();
         for (int i = 0; i < size; i++) {
             Integer orig = indexer.putInt((String) list[i], i);
             if(orig != null) {
-                // 留后面的 需要测试
                 super.remove((int) orig);
-                i = 0;
-                indexer.clear();
+            } else if (list[i] == null) {
+                size = i;
+                break;
+            } else {
+                continue;
             }
+            i = 0;
+            indexer.clear();
         }
-        trimToSize();
     }
 }

@@ -49,7 +49,7 @@ import static roj.collect.TrieTree.MIN_REMOVE_ARRAY_SIZE;
  * @since 2021/4/30 19:27
  */
 public final class TrieTreeSet implements Set<CharSequence> {
-    private static class Entry extends TrieEntry<Entry> {
+    static class Entry extends TrieEntry {
         boolean isEnd;
 
         private Entry(char c) {
@@ -58,29 +58,32 @@ public final class TrieTreeSet implements Set<CharSequence> {
 
         public Entry(char c, Entry entry) {
             super(c);
-            this.children = entry.children;
+            this.entries = entry.entries;
+            this.length = entry.length;
+            this.size = entry.size;
             this.isEnd = entry.isEnd;
         }
 
         protected int recursionSum() {
             int i = isEnd ? 1 : 0;
-            if (!children.isEmpty()) {
-                for (Entry value : children.values()) {
+            if (size > 0) {
+                for (TrieEntry value : this) {
                     i += value.recursionSum();
                 }
             }
             return i;
         }
 
-        public int copyFrom(Entry node) {
+        public int copyFrom(TrieEntry x) {
+            Entry node = (Entry) x;
             int v = 0;
             if(node.isEnd && !isEnd) {
                 this.isEnd = true;
                 v = 1;
             }
 
-            for (Entry entry : node) {
-                Entry sub = getChild(entry.c);
+            for (TrieEntry entry : node) {
+                TrieEntry sub = getChild(entry.c);
                 if (sub == null) putChild(sub = newInstance());
                 v += sub.copyFrom(entry);
             }
@@ -93,15 +96,15 @@ public final class TrieTreeSet implements Set<CharSequence> {
         }
     }
 
-    private static final class PEntry extends Entry {
+    static final class PEntry extends Entry {
         CharSequence val;
 
-        private PEntry(CharSequence val) {
+        PEntry(CharSequence val) {
             super(val.charAt(0));
             this.val = val;
         }
 
-        public PEntry(CharSequence val, Entry entry) {
+        PEntry(CharSequence val, Entry entry) {
             super(val.charAt(0), entry);
             this.val = val;
         }
@@ -116,12 +119,12 @@ public final class TrieTreeSet implements Set<CharSequence> {
         }
 
         @Override
-        protected void append(CharList sb) {
+        void append(CharList sb) {
             sb.append(val);
         }
 
         @Override
-        protected int length() {
+        int length() {
             return val.length();
         }
 
@@ -162,7 +165,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
         for (; i < len; i++) {
             char c = s.charAt(i);
             prev = entry;
-            entry = entry.getChild(c);
+            entry = (Entry) entry.getChild(c);
             if (entry == null) {
                 // 前COMPRESS_START_DEPTH个字符, 避免频繁插入带来效率损失
                 if (len - i == 1 || i < COMPRESS_START_DEPTH) {
@@ -200,7 +203,6 @@ public final class TrieTreeSet implements Set<CharSequence> {
                         child = new PEntry(text.subSequence(lastMatch, text.length()), entry);
                     }
 
-                    entry.children = new CharMap<>(1, 1.5f);
                     entry.isEnd = false;
                     entry.putChild(child);
 
@@ -237,7 +239,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
 
         Entry entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry) entry.getChild(s.charAt(i));
             if (entry == null)
                 return null;
             final CharSequence text = entry.text();
@@ -324,7 +326,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
 
         Entry entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry) entry.getChild(s.charAt(i));
             if (entry == null)
                 return false;
 
@@ -378,7 +380,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
                 StringBuilder sb = new StringBuilder().append(entry.text() == null ? entry.c : entry.text());
 
                 while (entry.childrenCount() == 1) {
-                    entry = new CharMap.ValItr<>(entry.children).next();
+                    entry = (Entry) entry.iterator().next();
 
                     sb.append(entry.text() == null ? entry.c : entry.text());
                 }
@@ -430,7 +432,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
         Entry entry = root;
         int d = 0;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry) entry.getChild(s.charAt(i));
             if (entry == null)
                 break;
             final CharSequence text = entry.text();
@@ -462,7 +464,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
 
         Entry entry = root, next;
         for (; i < len; i++) {
-            next = entry.getChild(s.charAt(i));
+            next = (Entry) entry.getChild(s.charAt(i));
             if (next == null) {
                 return Collections.emptyList();
             }
@@ -515,7 +517,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
         Entry entry = root;
 
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry) entry.getChild(s.charAt(i));
             if (entry == null)
                 return false;
             final CharSequence text = entry.text();
@@ -548,7 +550,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
     @Override
     public void clear() {
         size = 0;
-        root.children.clear();
+        root.clear();
     }
 
     /**
@@ -600,9 +602,9 @@ public final class TrieTreeSet implements Set<CharSequence> {
         if (parent.isEnd) {
             consumer.accept(sb.toString());
         }
-        for (Entry entry : parent) {
+        for (TrieEntry entry : parent) {
             entry.append(sb);
-            recursionEntry(entry, consumer, sb);
+            recursionEntry((Entry) entry, consumer, sb);
             sb.setIndex(sb.length() - entry.length());
         }
     }

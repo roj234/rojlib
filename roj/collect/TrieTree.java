@@ -50,40 +50,41 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     static final int COMPRESS_START_DEPTH = 1,
             MIN_REMOVE_ARRAY_SIZE = 8;
 
-    protected static class Entry<V> extends TrieEntry<Entry<V>> {
-        protected V value;
+    static class Entry<V> extends TrieEntry {
+        V value;
 
         @SuppressWarnings("unchecked")
-        protected Entry(char c) {
+        Entry(char c) {
             super(c);
             this.value = (V) NOT_USING;
         }
 
-        protected Entry(char c, Entry<V> entry) {
+        Entry(char c, Entry<V> entry) {
             super(c);
-            this.children = entry.children;
             this.value = entry.value;
         }
         
-        protected int recursionSum() {
+        int recursionSum() {
             int i = value == IntMap.NOT_USING ? 0 : 1;
-            if (!children.isEmpty()) {
-                for (Entry<V> value : children.values()) {
+            if (size > 0) {
+                for (TrieEntry value : this) {
                     i += value.recursionSum();
                 }
             }
             return i;
         }
 
-        public int copyFrom(Entry<V> node) {
+        @SuppressWarnings("unchecked")
+        public int copyFrom(TrieEntry x) {
+            Entry<?> node = (Entry<?>) x;
             int v = 0;
             if(node.value != IntMap.NOT_USING && value == IntMap.NOT_USING) {
-                this.value = node.value;
+                this.value = (V) node.value;
                 v = 1;
             }
 
-            for (Entry<V> entry : node) {
-                Entry<V> sub = getChild(entry.c);
+            for (TrieEntry entry : node) {
+                TrieEntry sub = getChild(entry.c);
                 if (sub == null) putChild(sub = newInstance());
                 v += sub.copyFrom(entry);
             }
@@ -112,15 +113,15 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         }
     }
 
-    protected static final class PEntry<V> extends Entry<V> {
+    static final class PEntry<V> extends Entry<V> {
         CharSequence val;
 
-        private PEntry(CharSequence val) {
+        PEntry(CharSequence val) {
             super(val.charAt(0));
             this.val = val;
         }
 
-        public PEntry(CharSequence val, Entry<V> entry) {
+        PEntry(CharSequence val, Entry<V> entry) {
             super(val.charAt(0), entry);
             this.val = val;
         }
@@ -137,12 +138,12 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         }
 
         @Override
-        protected void append(CharList sb) {
+        void append(CharList sb) {
             sb.append(val);
         }
 
         @Override
-        protected int length() {
+        int length() {
             return val.length();
         }
 
@@ -176,7 +177,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         for (; i < len; i++) {
             char c = s.charAt(i);
             prev = entry;
-            entry = entry.getChild(c);
+            entry = (Entry<V>) entry.getChild(c);
             if (entry == null) {
                 // 前COMPRESS_START_DEPTH个字符, 避免频繁插入带来效率损失
                 if (len - i == 1 || i < COMPRESS_START_DEPTH) {
@@ -214,7 +215,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
                         child = new PEntry<>(text.subSequence(lastMatch, text.length()), entry);
                     }
 
-                    entry.children = new CharMap<>(1, 1.5f);
+                    entry.resetMap();
                     entry.value = (V) IntMap.NOT_USING;
                     entry.putChild(child);
 
@@ -245,13 +246,14 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return entry;
     }
 
+    @SuppressWarnings("unchecked")
     public Entry<V> getEntry(CharSequence s, int i, int len) {
         if (len - i < 0)
             throw new IllegalArgumentException("delta length < 0");
 
         Entry<V> entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry<V>) entry.getChild(s.charAt(i));
             if (entry == null)
                 return null;
             final CharSequence text = entry.text();
@@ -322,6 +324,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return remove(s, i, len, NOT_USING);
     }
 
+    @SuppressWarnings("unchecked")
     V remove(CharSequence s, int i, int len, Object tc) {
         if(len - i < 0)
             throw new IllegalArgumentException("delta length < 0");
@@ -330,7 +333,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
         Entry<V> entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry<V>) entry.getChild(s.charAt(i));
             if (entry == null)
                 return null;
 
@@ -372,7 +375,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
                 CharList sb = new CharList().append(entry.text() == null ? entry.c : entry.text());
 
                 while (entry.childrenCount() == 1) {
-                    entry = new CharMap.ValItr<>(entry.children).next();
+                    entry = (Entry<V>) entry.iterator().next();
 
                     sb.append(entry.text() == null ? entry.c : entry.text());
                 }
@@ -425,12 +428,13 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return longestMatches(s, 0, len);
     }
 
+    @SuppressWarnings("unchecked")
     public Map.Entry<Integer, V> longestMatches(CharSequence s, int i, int len) {
         int d = 0;
 
         Entry<V> entry = root, next;
         for (; i < len; i++) {
-            next = entry.getChild(s.charAt(i));
+            next = (Entry<V>) entry.getChild(s.charAt(i));
             if (next == null)
                 break;
             entry = next;
@@ -503,10 +507,11 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return entries;
     }
 
+    @SuppressWarnings("unchecked")
     private Entry<V> matches(CharSequence s, int i, int len, CharList sb) {
         Entry<V> entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry<V>) entry.getChild(s.charAt(i));
             if (entry == null) {
                 return null;
             }
@@ -544,10 +549,11 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return startsWith(s, 0, len);
     }
 
+    @SuppressWarnings("unchecked")
     public boolean startsWith(CharSequence s, int i, int len) {
         Entry<V> entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(s.charAt(i));
+            entry = (Entry<V>) entry.getChild(s.charAt(i));
             if (entry == null)
                 return false;
             final CharSequence text = entry.text();
@@ -594,7 +600,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     @Override
     public void clear() {
         size = 0;
-        root.children.clear();
+        root.clear();
     }
 
     /**
@@ -628,6 +634,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public boolean computeNext() {
             final SimpleList<Entry<V>> a = this.a;
             if(a.size == 0)
@@ -641,10 +648,10 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
             final SimpleList<Entry<V>> b = this.b;
             for (Entry<V> entry : a) {
-                if(entry.children.size > 0) {
-                    b.ensureCapacity(b.size + entry.children.size);
-                    for (Entry<V> subEntry : entry) {
-                        b.add(subEntry);
+                if(entry.size > 0) {
+                    b.ensureCapacity(b.size + entry.size);
+                    for (TrieEntry subEntry : entry) {
+                        b.add((Entry<V>) subEntry);
                     }
                 }
             }
@@ -721,13 +728,14 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         recursionEntry(root, consumer, new CharList());
     }
 
+    @SuppressWarnings("unchecked")
     private static <V> void recursionEntry(Entry<V> parent, BiConsumer<? super CharSequence, ? super V> consumer, CharList sb) {
         if (parent.value != IntMap.NOT_USING) {
             consumer.accept(sb.toString(), parent.value);
         }
-        for (Entry<V> entry : parent) {
+        for (TrieEntry entry : parent) {
             entry.append(sb);
-            recursionEntry(entry, consumer, sb);
+            recursionEntry((Entry<V>) entry, consumer, sb);
             sb.setIndex(sb.length() - entry.length());
         }
     }
