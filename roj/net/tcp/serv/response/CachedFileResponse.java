@@ -26,7 +26,7 @@
 package roj.net.tcp.serv.response;
 
 import roj.net.tcp.serv.util.ReusableGZOutput;
-import roj.net.tcp.util.SharedConfig;
+import roj.net.tcp.util.Shared;
 import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -59,12 +59,12 @@ public class CachedFileResponse extends FileResponse {
             throw new IllegalArgumentException("file is empty");
         if (buf.pos() == 0) {
             super.prepare();
-            ReusableGZOutput gz = new ReusableGZOutput(buf.asOutputStream(), SharedConfig.WRITE_MAX, 5);
+            ReusableGZOutput gz = new ReusableGZOutput(buf.asOutputStream(), Shared.WRITE_MAX, 5);
 
-            ByteList buf = new ByteList(Math.min(SharedConfig.WRITE_MAX, stream.available()));
+            ByteList buf = new ByteList(Math.min(Shared.WRITE_MAX, stream.available()));
             int delta;
             do {
-                delta = buf.readStreamArray(stream, SharedConfig.WRITE_MAX);
+                delta = buf.readStreamArray(stream, Shared.WRITE_MAX);
                 buf.writeToStream(gz);
                 buf.clear();
             } while (delta > 0);

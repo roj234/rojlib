@@ -149,7 +149,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
                 String file = diag.getSource().toUri().getPath();
                 int off = 1;
                 if(file.startsWith(basePath, 1)) {
-                    off += basePath.length();
+                    off += basePath.length() + 1;
                 }
                 sb.append(file, off, file.length() - off).append(':');
                 if(diag.getLineNumber() >= 0)

@@ -28,13 +28,14 @@ package roj.io.down;
 import roj.concurrent.WaitingIOFuture;
 import roj.concurrent.task.AbstractCalcTask;
 import roj.io.FileUtil;
+import roj.net.tcp.client.HttpClient;
+import roj.net.tcp.client.HttpConnection;
 
 import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ExecutionException;
 
@@ -47,7 +48,7 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
     public static final int UPDATE_FREQUENCY = 1000;
 
     public final File file;
-    public final URL url;
+    public final HttpConnection conn;
     public final long startPos, length;
     private long downloaded;
     public final int id;
@@ -97,7 +98,7 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
     public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len, IProgressHandler progress) throws IOException {
         this.id = pid;
         this.file = downloadTo;
-        this.url = url;
+        this.conn = new HttpConnection(url);
         this.startPos = start;
         this.length = len;
         this.progress = progress;
@@ -121,6 +122,12 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
         } else {
             this.info = null;
         }
+
+        HttpClient client = conn.getClient();
+        client.method("GET")
+              .header("User-Agent", FileUtil.USER_AGENT)
+              .connectTimeout(FileUtil.TIMEOUT);
+        client.readTimeout(FileUtil.TIMEOUT);
     }
 
     @Override
@@ -156,7 +163,7 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
     }
 
     long last;
-    
+
     private void writePos(long i) throws IOException {
         if (info != null) {
             long t = System.currentTimeMillis();
@@ -168,15 +175,6 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
         }
     }
 
-    protected InputStream setConnectData(HttpURLConnection conn) throws IOException {
-        conn.setRequestMethod("GET");
-        conn.setConnectTimeout(FileUtil.TIMEOUT);
-        conn.setReadTimeout(FileUtil.TIMEOUT);
-        conn.setRequestProperty("User-Agent", FileUtil.USER_AGENT);
-        conn.setRequestProperty("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
-        return conn.getInputStream();
-    }
-
     @Override
     public void waitFor() throws IOException {
         if (this.downloaded == -1 || downloaded >= length) {
@@ -184,12 +182,10 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
             return;
         }
 
-        long lastTime;
-
-        int speedLowCount = 0;
         try {
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            InputStream is = setConnectData(conn);
+            conn.getClient()
+                .header("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
+            InputStream is = this.conn.getInputStream();
 
             try {
                 try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
@@ -200,7 +196,8 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
                     long deltaRead = 0;
 
                     int read;
-                    lastTime = System.currentTimeMillis();
+                    long lastTime = System.currentTimeMillis();
+                    int speedLowCount = 0;
                     while (downloaded < length && -1 != (read = is.read(data))) {
                         raf.write(data, 0, read);
                         downloaded += read;
@@ -225,12 +222,14 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
                                     if (progress != null)
                                         progress.handleReconnect(this, downloaded);
 
-                                    is.close();
                                     conn.disconnect();
 
                                     speedLowCount = 0;
 
-                                    is = setConnectData(conn = (HttpURLConnection) url.openConnection());
+                                    conn.getClient()
+                                        .header("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
+                                    is = conn.getInputStream();
+
                                     raf.seek(startPos + this.downloaded);
                                 }
                             } else {

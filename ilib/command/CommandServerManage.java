@@ -27,8 +27,10 @@
 package ilib.command;
 
 import ilib.command.sub.AbstractSubCommand;
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
+import net.minecraft.command.ICommandSender;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.text.TextComponentString;
 import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
@@ -37,17 +39,9 @@ import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.net.tcp.serv.util.StaticZipRouter;
 import roj.net.tcp.util.Code;
-import roj.net.tcp.util.WrappedSocket;
-import roj.util.ByteList;
-
-import net.minecraft.command.ICommandSender;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TextComponentString;
 
 import javax.annotation.Nonnull;
-import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.zip.ZipFile;
@@ -166,77 +160,6 @@ public final class CommandServerManage extends AbstractSubCommand {
                 case "execution":
             }
             return new Reply(Code.NOT_FOUND, new StringResponse("服务器制作中"));
-        }
-    }
-
-    private static class NettyWrap implements WrappedSocket {
-        final ByteBuf buffer;
-
-        public NettyWrap(ByteBuf write) {
-            buffer = write;
-        }
-
-        @Override
-        public Socket socket() {
-            return null;
-        }
-
-        @Override
-        public boolean handShake() throws IOException {
-            return false;
-        }
-
-        @Override
-        public int read() throws IOException {
-            return 0;
-        }
-
-        @Override
-        public int read(int max) throws IOException {
-            throw new UnsupportedOperationException("Not implemented yet");
-        }
-
-        @Override
-        public ByteList buffer() {
-            return null;
-        }
-
-        @Override
-        public int write(ByteList src) throws IOException {
-            int wp = src.writePos();
-            /*int wrote = */buffer.writeBytes(src.list, src.offset() + wp, src.pos() - wp);
-            src.writePos(/*wp + wrote*/src.pos());
-            return src.pos() - wp;
-        }
-
-        @Override
-        public long write(InputStream src, long max) throws IOException {
-            throw new UnsupportedOperationException("Not implemented yet");
-        }
-
-        @Override
-        public int write(InputStream src, int max) throws IOException {
-            return buffer.writeBytes(src, max);
-        }
-
-        @Override
-        public boolean dataFlush() throws IOException {
-            return false;
-        }
-
-        @Override
-        public boolean shutdown() throws IOException {
-            return false;
-        }
-
-        @Override
-        public void close() throws IOException {
-
-        }
-
-        @Override
-        public FileDescriptor fd() {
-            throw new UnsupportedOperationException("Not implemented yet");
         }
     }
 }

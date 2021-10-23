@@ -28,9 +28,7 @@ package roj.net.tcp.util;
 import roj.concurrent.OperationDone;
 import roj.net.tcp.serv.Router;
 import roj.net.tcp.serv.util.Notify;
-import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -38,21 +36,19 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/2/4 15:43
  */
 public class StreamLikeSequence implements CharSequence {
-    CharList cl;
-    WrappedSocket socket;
-    long timeout;
-    int bufOff, maxRecv;
-    boolean async;
+    private final boolean async;
 
-    public StreamLikeSequence(int initialCapacity, boolean async) {
-        this.cl = new CharList(initialCapacity);
+    WrappedSocket socket;
+    long time;
+    int maxRecv;
+    boolean eof;
+
+    public StreamLikeSequence(boolean async) {
         this.async = async;
     }
 
@@ -60,80 +56,63 @@ public class StreamLikeSequence implements CharSequence {
         return init(socket, router.readTimeout(), router.maxLength());
     }
 
-    public StreamLikeSequence init(WrappedSocket socket, long timeout, int maxRecv) {
-        this.timeout = System.currentTimeMillis() + timeout;
+    public StreamLikeSequence init(WrappedSocket socket, int timeout, int maxRecv) {
+        if (!async || time == 0)
+            this.time = System.currentTimeMillis() + timeout;
         this.socket = socket;
-        this.bufOff = 0;
+        this.eof = false;
         this.maxRecv = maxRecv;
         return this;
     }
 
     public void release() {
-        if (cl.length() > SharedConfig.MAX_CHAR_BUFFER_CAPACITY) {
-            cl = new CharList();
-        } else {
-            cl.clear();
-        }
         this.socket = null;
     }
 
     @Override
     public int length() {
-        return bufOff == -1 ? cl.length() : Integer.MAX_VALUE;
+        return maxRecv;
     }
 
     @Override
     public char charAt(int index) {
-        ensureLength(index + 1);
-        return cl.charAt(index);
+        fill(index + 1);
+        return (char) socket.buffer().get(index);
     }
 
-    private void ensureLength(int required) {
-        int start = bufOff;
-        if(start == -1)
-            return;
+    private void fill(int want) {
+        if(eof) return;
         ByteList buf = socket.buffer();
         try {
-            int read;
-            while (cl.length() < required) {
-                read = socket.read();
-                if (read >= 0) {
-                    if (read > 0) {
-                        start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);
-                    }
-
-                    LockSupport.parkNanos(10);
-                } else {
-                    if(read == -1) {
-                        bufOff = -1;
-                        return;
-                    }
-                    throw new Notify(new IOException("socket.read() got " + read));
+            while (buf.pos() < want) {
+                if (System.currentTimeMillis() > time) {
+                    throw new Notify(-128);
                 }
 
                 if(buf.pos() > maxRecv) {
                     throw new Notify(-127);
                 }
 
-                if (System.currentTimeMillis() > timeout) {
-                    throw new Notify(-128);
-                }
-
-                if(cl.length() < required && async) {
-                    throw OperationDone.INSTANCE;
+                int read = socket.read();
+                if (read == 0) {
+                    if(async) throw OperationDone.INSTANCE;
+                    LockSupport.parkNanos(20);
+                } else if (read < 0) {
+                    if(read == -1) {
+                        eof = true;
+                        return;
+                    }
+                    throw new Notify(new IOException("socket.read() got " + read));
                 }
             }
         } catch (IOException e) {
             throw new Notify(e);
-        } finally {
-            bufOff = start;
         }
     }
 
     @Override
     public CharSequence subSequence(int start, int end) {
-        ensureLength(end + 1);
-        return cl.subSequence(start, end);
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -149,6 +128,6 @@ public class StreamLikeSequence implements CharSequence {
     @Nonnull
     @Override
     public String toString() {
-        return cl.toString();
+        return socket.buffer().getString();
     }
 }

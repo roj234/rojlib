@@ -745,6 +745,40 @@ public final class FMDMain {
         if(files == null) {
             files = FileUtil.findAllFiles(source, FileFilter.INST.reset(stamp, increment ? FileFilter.F_SRC_TIME : FileFilter.F_SRC_ANNO));
         }
+        if (MAIN_CONFIG.getBool("自动备份源码") && !files.isEmpty()) {
+            MutableZipFile sourceZip = project.sourceZip;
+            String srcPath = source.getAbsolutePath();
+            if (!increment) {
+                ZipFileWriter zfw = new ZipFileWriter(sourceZip.file);
+                ByteList shared = IOUtil.getSharedByteBuf();
+                shared.clear();
+                for (int i = 0; i < files.size(); i++) {
+                    File file = files.get(i);
+                    try (InputStream in = new FileInputStream(file)) {
+                        shared.readStreamArrayFully(in);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    zfw.writeNamed(file.getAbsolutePath()
+                                       .substring(srcPath.length() + 1)
+                                       .replace(File.separatorChar, '/'), shared, ZipEntry.STORED);
+                }
+
+                zfw.setComment("");
+                zfw.finish();
+
+                sourceZip.read();
+            } else {
+                for (int i = 0; i < files.size(); i++) {
+                    File file = files.get(i);
+                    sourceZip.setFileData(file.getAbsolutePath()
+                                              .substring(srcPath.length() + 1)
+                                              .replace(File.separatorChar, '/'), new ByteList(IOUtil.read(file))).compress = false;
+                }
+                // compress all ?
+                sourceZip.store();
+            }
+        }
 
         // endregion
 

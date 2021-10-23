@@ -28,18 +28,22 @@ package roj.net.tcp.serv;
 import roj.collect.MyHashMap;
 import roj.management.PerformanceLogger;
 import roj.net.tcp.client.HttpClient;
+import roj.net.tcp.client.HttpHeader;
 import roj.net.tcp.serv.response.CachedFileResponse;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.net.tcp.util.Code;
-import roj.net.tcp.util.SharedConfig;
+import roj.net.tcp.util.Shared;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * No description provided
@@ -63,19 +67,28 @@ public class Test {
             headers.put("Upgrade-Insecure-Requests", "1");
             headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36");
             headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
-            headers.put("Accept-Encoding", "gzip, deflate, br");
+            headers.put("Accept-Encoding", "gzip, deflate");//, br);
             headers.put("Accept-Language", "zh-CN,zh;q=0.9");
 
             HttpClient client = new HttpClient();
-            client.readTimeout(1500);
-            client.type("GET").path("/").body("").headers(headers);
+            client.readTimeout(5000);
+            client.method("GET").headers(headers);
 
             int i = 0;
 
             //while (true) {
                 try {
-                    client.createSocket("127.0.0.1", 2333, true);
+                    client.url(new URL("http://127.0.0.1/music/index.html"));
                     client.send();
+                    HttpHeader header = client.response();
+                    System.out.println(header);
+                    ByteList list = new ByteList().readStreamArrayFully(client.getInputStream());
+                    System.out.println("DL " + list.pos());
+                    System.out.println("Keep-Alive: " + header.headers.get("connection"));
+                    LockSupport.parkNanos(2_000_000_000L);
+                    client.send();
+                    header = client.response();
+                    System.out.println(header);
 
                     if (++i == 1000) {
                         System.out.println("1000!");
@@ -120,11 +133,11 @@ public class Test {
                                 return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, "未定义的路由"));
                         }
                     }
-                }), "server.keystore", "123456".toCharArray());
+                }), "server.ks", "123456".toCharArray());
 
         System.out.println("Max connection: " + 2048);
-        System.out.println("Write buffer: " + SharedConfig.WRITE_MAX);
-        System.out.println("UTF-8 decode buffer: " + SharedConfig.MAX_CHAR_BUFFER_CAPACITY);
+        System.out.println("Write buffer: " + Shared.WRITE_MAX);
+        System.out.println("UTF-8 decode buffer: " + Shared.MAX_CHAR_BUFFER_CAPACITY);
         System.out.println("Listening on " + server.getSocket().getLocalSocketAddress());
 
         server.run();

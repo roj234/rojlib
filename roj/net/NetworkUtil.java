@@ -52,6 +52,7 @@ public final class NetworkUtil {
         context.init(null, new TrustManager[]{new TrustAllManager()}, new SecureRandom());
 
         HttpsURLConnection.setDefaultSSLSocketFactory(context.getSocketFactory());
+        SSLContext.setDefault(context);
     }
 
     public static void trustAllHosts() {

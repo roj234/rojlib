@@ -27,6 +27,7 @@ package roj.net.tcp.serv.util;
 
 import roj.collect.TimedHashMap;
 import roj.concurrent.task.ITaskNaCl;
+import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.Router;
@@ -34,7 +35,6 @@ import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
-import roj.net.tcp.util.SharedConfig;
 import roj.net.tcp.util.WrappedSocket;
 
 import java.io.IOException;
@@ -64,8 +64,8 @@ public class ChannelRouterSync implements ITaskNaCl {
 
             InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
             int visited;
-            if(SharedConfig.THROTTLING_CHECK_ENABLED) {
-                final TimedHashMap<String, AtomicInteger> addresses = SharedConfig.CONNECTING_ADDRESSES;
+            if(HttpServer.THROTTLING_CHECK_ENABLED) {
+                final TimedHashMap<String, AtomicInteger> addresses = HttpServer.CONNECTING_ADDRESSES;
                 AtomicInteger count = addresses.get(remote.getHostString());
                 if (count == null) {
                     synchronized (addresses) {
@@ -90,7 +90,7 @@ public class ChannelRouterSync implements ITaskNaCl {
                         return;
                     }
                 } else {
-                    reply = SharedConfig.CONNECTION_THROTTLING;
+                    reply = new Reply(Code.UNAVAILABLE, new StringResponse("DDoS detected"));
                 }
             } else {
                 final long time = System.currentTimeMillis() + router.readTimeout();

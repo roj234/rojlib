@@ -28,7 +28,7 @@ package roj.net.tcp.serv;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.util.Action;
 import roj.net.tcp.util.Code;
-import roj.net.tcp.util.SharedConfig;
+import roj.net.tcp.util.Shared;
 import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -58,7 +58,7 @@ public class Reply implements Response {
     private ByteList buf = null;
 
     protected ByteList headers() {
-        Object[] data = SharedConfig.SYNC_BUFFER.get();
+        Object[] data = Shared.SYNC_BUFFER.get();
 
         CharList header = (CharList) data[2];
         header.ensureCapacity(100);
@@ -66,7 +66,7 @@ public class Reply implements Response {
 
         try {
             response.writeHeader(header.append("HTTP/1.1 ").append(code.toString()).append(CRLF)
-                    .append("Server: Async/0.1").append(CRLF));
+                    .append("Server: Async/1.2").append(CRLF));
 
             ByteList bl = new ByteList(header.append(CRLF).length());
 
@@ -74,8 +74,8 @@ public class Reply implements Response {
 
             return bl;
         } finally {
-            if (header.arrayLength() > SharedConfig.MAX_CHAR_BUFFER_CAPACITY)
-                data[0] = new CharList(SharedConfig.MAX_CHAR_BUFFER_CAPACITY);
+            if (header.arrayLength() > Shared.MAX_CHAR_BUFFER_CAPACITY)
+                data[0] = new CharList(Shared.MAX_CHAR_BUFFER_CAPACITY);
             else
                 header.clear();
         }

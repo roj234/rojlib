@@ -30,8 +30,10 @@ import roj.net.tcp.util.WrappedSocket;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
+import java.net.SocketTimeoutException;
 import java.net.StandardSocketOptions;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * No description provided
@@ -44,7 +46,7 @@ public abstract class ClientSocket {
     protected SocketChannel server;
     protected WrappedSocket channel;
 
-    protected int readTimeout = -1, writeTimeout = -1;
+    protected int connectTimeout = -1, readTimeout = -1, writeTimeout = -1;
     protected InetSocketAddress endpoint;
     protected Proxy proxy;
 
@@ -57,7 +59,7 @@ public abstract class ClientSocket {
     }
 
     public boolean connected() {
-        return server != null && server.isConnected();
+        return server != null && (server.isConnected() || server.isConnectionPending());
     }
 
     public ClientSocket proxy(Proxy proxy) {
@@ -78,15 +80,24 @@ public abstract class ClientSocket {
     }
 
     protected SocketChannel createSocket(String server, int port) throws IOException {
-        this.endpoint = new InetSocketAddress(server, port/* & 0xFFFF*/);
-        return (SocketChannel) SocketChannel.open().setOption(StandardSocketOptions.SO_REUSEADDR, true)
-                .setOption(StandardSocketOptions.SO_KEEPALIVE, true).configureBlocking(false);
+        this.endpoint = new InetSocketAddress(server, port);
+        return (SocketChannel) SocketChannel.open()
+                                            .setOption(StandardSocketOptions.SO_REUSEADDR, true)
+                                            .setOption(StandardSocketOptions.TCP_NODELAY, true)
+                                            .configureBlocking(false);
     }
 
     protected void connect() throws IOException {
         if (!connected()) {
             server.connect(endpoint);
-            channel = getChannel();
+            long to = System.currentTimeMillis() + connectTimeout;
+            while (!server.finishConnect()) {
+                LockSupport.parkNanos(100);
+                if (connectTimeout > 0 && System.currentTimeMillis() > to)
+                    throw new SocketTimeoutException();
+            }
+            server.finishConnect();
+            channel = createChannel();
         }
     }
 
@@ -107,6 +118,11 @@ public abstract class ClientSocket {
         }
     }
 
+    public WrappedSocket getChannel() throws IOException {
+        connect();
+        return channel;
+    }
+
     public void writeTimeout(int timeout) {
         writeTimeout = timeout;
     }
@@ -123,5 +139,13 @@ public abstract class ClientSocket {
         return readTimeout;
     }
 
-    protected abstract WrappedSocket getChannel() throws IOException;
+    public void connectTimeout(int timeout) {
+        connectTimeout = timeout;
+    }
+
+    public int connectTimeout() {
+        return connectTimeout;
+    }
+
+    protected abstract WrappedSocket createChannel() throws IOException;
 }

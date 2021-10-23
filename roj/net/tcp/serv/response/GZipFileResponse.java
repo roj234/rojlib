@@ -27,7 +27,7 @@ package roj.net.tcp.serv.response;
 
 import roj.net.NetworkUtil;
 import roj.net.tcp.serv.util.ReusableGZOutput;
-import roj.net.tcp.util.SharedConfig;
+import roj.net.tcp.util.Shared;
 import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -62,9 +62,9 @@ public class GZipFileResponse extends FileResponse {
         super.prepare();
 
         if (this.gz == null) {
-            this.gz = new ReusableGZOutput(zipped.asOutputStream(), SharedConfig.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
+            this.gz = new ReusableGZOutput(zipped.asOutputStream(), Shared.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
 
-            zipped.ensureCapacity(Math.min(SharedConfig.WRITE_MAX, stream.available()));
+            zipped.ensureCapacity(Math.min(Shared.WRITE_MAX, stream.available()));
 
             hex[8] = '\r';
             hex[9] = '\n';
@@ -86,7 +86,7 @@ public class GZipFileResponse extends FileResponse {
         ByteList buf = channel.buffer();
         buf.clear();
 
-        long delta = buf.readStreamArray(stream, SharedConfig.WRITE_MAX);
+        long delta = buf.readStreamArray(stream, Shared.WRITE_MAX);
         buf.writeToStream(gz);
         buf.clear();
 
@@ -107,7 +107,7 @@ public class GZipFileResponse extends FileResponse {
             buf.addAll(hex, 8, 2);
 
             if (!undone) {
-                buf.addAll(SharedConfig.END_OF_CHUNK);
+                buf.addAll(Shared.END_OF_CHUNK);
             }
 
             channel.write(buf);

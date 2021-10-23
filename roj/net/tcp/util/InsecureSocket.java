@@ -90,7 +90,7 @@ public class InsecureSocket implements WrappedSocket {
 
         int wrote;
         do {
-            wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, src, SharedConfig.WRITE_MAX));
+            wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, src, Shared.WRITE_MAX));
         } while (wrote == -3 && !socket.isClosed());
         return wrote;
     }
@@ -100,7 +100,7 @@ public class InsecureSocket implements WrappedSocket {
         if(socket.isClosed())
             return -1;
 
-        int cap = Math.min(SharedConfig.WRITE_MAX, max);
+        int cap = Math.min(Shared.WRITE_MAX, max);
         final ByteList buf = this.buffer;
         buf.clear();
         buf.ensureCapacity(cap);
@@ -108,7 +108,7 @@ public class InsecureSocket implements WrappedSocket {
 
         int wrote;
         do {
-            wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, buf, SharedConfig.WRITE_MAX));
+            wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, buf, Shared.WRITE_MAX));
         } while (wrote == -3 && !socket.isClosed());
         buf.clear();
         return wrote;
@@ -135,6 +135,11 @@ public class InsecureSocket implements WrappedSocket {
     public void close() throws IOException {
         socket.close();
         //fd = null;
+    }
+
+    @Override
+    public void reuse() throws IOException {
+        buffer.clear();
     }
 
     @Override

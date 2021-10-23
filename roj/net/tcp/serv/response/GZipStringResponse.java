@@ -26,7 +26,7 @@
 package roj.net.tcp.serv.response;
 
 import roj.net.tcp.serv.util.ReusableGZOutput;
-import roj.net.tcp.util.SharedConfig;
+import roj.net.tcp.util.Shared;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
@@ -48,7 +48,7 @@ public class GZipStringResponse extends StringResponse {
             ByteWriter.writeUTF(list, content, (byte) -1);
 
             ByteList buf2 = new ByteList(list.pos());
-            ReusableGZOutput gz = new ReusableGZOutput(buf2.asOutputStream(), SharedConfig.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
+            ReusableGZOutput gz = new ReusableGZOutput(buf2.asOutputStream(), Shared.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
 
             list.writeToStream(gz);
             gz.finish();

@@ -44,13 +44,13 @@ import java.util.Map;
 public final class Request {
     private final int action;
     private final String path, version;
-    private final Map<String, String> headers;
+    private final Headers headers;
     private final InetSocketAddress remote;
 
     private Object postFields;
     private Map<String, String> getFields;
 
-    private Request(int action, String version, String path, Map<String, String> headers, String postFields, InetSocketAddress remote) {
+    private Request(int action, String version, String path, Headers headers, String postFields, InetSocketAddress remote) {
         this.action = action;
         this.version = version;
         this.path = path;
@@ -72,7 +72,7 @@ public final class Request {
     }
 
     public String host() {
-        return headers.get("Host");
+        return headers.get("host");
     }
 
     public String path() {
@@ -84,7 +84,7 @@ public final class Request {
         }
     }
 
-    public Map<String, String> headers() {
+    public Headers headers() {
         return headers;
     }
 
@@ -128,7 +128,7 @@ public final class Request {
     }
 
     public static Request parse(WrappedSocket socket, Router router) throws IllegalRequestException {
-        Object[] data = SharedConfig.SYNC_BUFFER.get();
+        Object[] data = Shared.SYNC_BUFFER.get();
 
         StreamLikeSequence plain = (StreamLikeSequence) data[0];
         HTTPHeaderLexer lexer = ((HTTPHeaderLexer) data[1]).init(plain.init(socket, router));
@@ -147,7 +147,7 @@ public final class Request {
             }
             throw new IllegalRequestException(code, notifyException);
         } finally {
-            lexer.init((CharSequence) null);
+            lexer.init(null);
             plain.release();
         }
     }
@@ -170,26 +170,17 @@ public final class Request {
 
         String postFields = null;
 
-        Map<String, String> headers = new MyHashMap<>();
-        String t;
+        Headers headers = new Headers();
         while (true) {
-            t = lexer.readHttpWord();
-            if (t == SharedConfig._ERROR) {
+            String t = lexer.readHttpWord();
+            if (t == Shared._ERROR) {
                 throw new IllegalRequestException(Code.BAD_REQUEST, lexer.err("Unexpected " + t));
-            } else if (t == SharedConfig._SHOULD_EOF) {
-                //if (t != (t = lexer.readHttpWord())) {
-                    //if (act == Action.POST) {
-                        //lexer.retractWord();
-                    //} else {
-                    //    throw new IllegalRequestException(Code.BAD_REQUEST, lexer.exception("Excepting EOF, got " + t));
-                    //}
-                //}
-                // streamlike: end
+            } else if (t == Shared._SHOULD_EOF) {
                 break;
             } else if (t == null) {
                 break;
             } else {
-                headers.put(t, lexer.readHttpWord());
+                headers.add(t, lexer.readHttpWord());
             }
         }
 
@@ -197,7 +188,7 @@ public final class Request {
             try {
                 postFields = lexer.content(headers.get("Content-Length"), router.postMaxLength());
             } catch (ParseException e) {
-                throw new IllegalRequestException(Code.BAD_REQUEST, lexer.err("Excepting EOF, got " + e.getMessage()));
+                throw new IllegalRequestException(Code.BAD_REQUEST, e);
             }
         }
 
@@ -213,10 +204,9 @@ public final class Request {
     public static Request parseAsync(WrappedSocket socket, Router router, Object[] holder) throws IllegalRequestException {
         Object obj = holder[0];
 
-
         HTTPHeaderLexer lexer;
         if(obj == null) {
-            StreamLikeSequence seq = new StreamLikeSequence(SharedConfig.STREAM_SEQ_INITIAL_CAPACITY, true);
+            StreamLikeSequence seq = new StreamLikeSequence(true);
             lexer = new HTTPHeaderLexer().init(seq.init(socket, router));
             holder[0] = lexer;
         } else {
@@ -245,6 +235,6 @@ public final class Request {
     }
 
     public String headers(String s) {
-        return headers.get(s);
+        return headers.get(s.toLowerCase());
     }
 }

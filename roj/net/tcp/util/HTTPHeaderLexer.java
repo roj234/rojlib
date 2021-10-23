@@ -26,25 +26,28 @@
 package roj.net.tcp.util;
 
 import roj.config.ParseException;
-import roj.config.word.AbstLexer;
-import roj.config.word.Word;
 import roj.math.MathUtils;
 import roj.net.tcp.serv.util.Notify;
 import roj.text.CharList;
 import roj.util.ByteWriter;
 
+import static roj.config.word.AbstLexer.WHITESPACE;
+
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
+ * @version 1.0
  * @since  2021/2/4 16:56
  */
-public final class HTTPHeaderLexer extends AbstLexer {
+public final class HTTPHeaderLexer {
     public HTTPHeaderLexer init(CharSequence s) {
-        super.init(s);
+        this.input = s;
+        this.index = 0;
         return this;
     }
+
+    CharSequence input;
+    public int index;
+    CharList found = new CharList();
 
     /**
      * 读词
@@ -52,8 +55,6 @@ public final class HTTPHeaderLexer extends AbstLexer {
     public String readHttpWord() {
         CharSequence in = this.input;
         int i = this.index;
-
-        lastWord = i;
 
         CharList temp = this.found;
         temp.clear();
@@ -67,17 +68,17 @@ public final class HTTPHeaderLexer extends AbstLexer {
                         i++;
                         if (remain > 3 && in.charAt(i) == '\r' && in.charAt(i + 1) == '\n') {
                             this.index = i + 2;
-                            return SharedConfig._SHOULD_EOF;
+                            return Shared._SHOULD_EOF;
                         }
                     } else {
                         this.index = i;
-                        return SharedConfig._ERROR;
+                        return Shared._ERROR;
                     }
                     break;
                 case ':':
                     if (in.charAt(i++) != ' ') {
                         this.index = i;
-                        return SharedConfig._ERROR;
+                        return Shared._ERROR;
                     }
 
                     while ((c = in.charAt(i++)) != '\r' || in.charAt(i) != '\n') {
@@ -118,15 +119,7 @@ public final class HTTPHeaderLexer extends AbstLexer {
             }
         }
         this.index = i;
-        return SharedConfig._SHOULD_EOF;
-    }
-
-    /**
-     * 读词
-     */
-    @Override
-    public Word readWord() {
-        return null;
+        return Shared._SHOULD_EOF;
     }
 
     public String content(String length, int max) throws ParseException {
@@ -182,6 +175,26 @@ public final class HTTPHeaderLexer extends AbstLexer {
         return temp.toString();
     }
 
+    public ParseException err(String reason) {
+        ParseException pe = new ParseException(input, reason, index, null);
+        try {
+            pe.__lineParser();
+        } catch (Throwable ignored) {
+            pe.noDetail();
+        }
+        return pe;
+    }
+
+    public ParseException err(String reason, Throwable reason2) {
+        ParseException pe = new ParseException(input, reason, index, reason2);
+        try {
+            pe.__lineParser();
+        } catch (Throwable ignored) {
+            pe.noDetail();
+        }
+        return pe;
+    }
+
     public String readLine() {
         int index = this.index;
         final CharSequence input = this.input;
@@ -189,11 +202,11 @@ public final class HTTPHeaderLexer extends AbstLexer {
         final CharList temp = this.found;
         temp.clear();
 
-        char c = 0;
-        while (index < input.length() && (c = input.charAt(index++)) != '\r' || input.charAt(index) != '\n') {
+        char c;
+        while ((c = input.charAt(index++)) != '\r' || input.charAt(index) != '\n') {
             temp.append(c);
         }
-        this.index = index - 1;
+        this.index = index + 1;
 
         if (temp.length() == 0) {
             return "";

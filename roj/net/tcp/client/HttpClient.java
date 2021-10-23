@@ -25,27 +25,28 @@
  */
 package roj.net.tcp.client;
 
+import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.concurrent.task.CalculateTask;
 import roj.config.ParseException;
+import roj.io.EmptyInputStream;
 import roj.io.NonblockingUtil;
 import roj.net.ssl.EngineAllocator;
-import roj.net.tcp.util.Action;
-import roj.net.tcp.util.InsecureSocket;
-import roj.net.tcp.util.SecureSocket;
-import roj.net.tcp.util.WrappedSocket;
+import roj.net.ssl.SslEngineFactory;
+import roj.net.tcp.util.*;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 
 /**
- * No description provided
+ * 傻逼GIT搞丢了我可怜的这个class，这是反编译出来的
  *
  * @author Roj234
  * @version 0.1
@@ -53,13 +54,20 @@ import java.util.Map;
  */
 public class HttpClient extends ClientSocket {
     private CharSequence action, path, body;
-    private final MyHashMap<CharSequence, CharSequence> header = new MyHashMap<>();
+    private final MyHashMap<CharSequence, CharSequence> header = new LinkedMyHashMap<>();
     private final CharList utf8Buf = new CharList();
     private int maxReceive;
 
-    public HttpClient() {}
+    public HttpClient() {
+        header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,* /*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+                .header("Accept-Encoding", "gzip, deflate")
+                .header("Accept-Language", "zh-CN,zh;q=0.9")
+                .header("Connection", "keep-alive")
+                .header("Pragma", "no-cache")
+                .header("Cache-Control", "no-cache");
+    }
 
-    public HttpClient type(String type) {
+    public HttpClient method(String type) {
         if (Action.valueOf(type) == -1)
             throw new IllegalArgumentException(type);
         action = type;
@@ -91,7 +99,7 @@ public class HttpClient extends ClientSocket {
     }
 
     @Override
-    protected WrappedSocket getChannel() throws IOException {
+    protected WrappedSocket createChannel() throws IOException {
         return clientEngine != null ? SecureSocket.get(server.socket(), NonblockingUtil.fd(server), clientEngine, true) : new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
     }
 
@@ -105,11 +113,11 @@ public class HttpClient extends ClientSocket {
     public void send() throws IOException {
         connect();
 
-        final long timeout = writeTimeout <= 0 ? Long.MAX_VALUE : writeTimeout + System.currentTimeMillis();
+        long timeout = writeTimeout <= 0 ? Long.MAX_VALUE : writeTimeout + System.currentTimeMillis();
 
         while (!channel.handShake()) {
             if (System.currentTimeMillis() > timeout) {
-                throw new SocketTimeoutException("Timeout " + timeout);
+                throw new SocketTimeoutException("Handshake");
             }
         }
 
@@ -120,15 +128,18 @@ public class HttpClient extends ClientSocket {
 
         while (channel.write(buf) > 0) {
             if (System.currentTimeMillis() > timeout) {
-                throw new SocketTimeoutException("Timeout " + timeout);
+                throw new SocketTimeoutException("Write");
             }
         }
 
         buf.clear();
 
-        while (!channel.dataFlush());
-
-        header.clear();
+        while (!channel.dataFlush()) {
+            LockSupport.parkNanos(100);
+            if (System.currentTimeMillis() > timeout) {
+                throw new SocketTimeoutException("Flush");
+            }
+        }
     }
 
     static final String CRLF = "\r\n";
@@ -137,7 +148,7 @@ public class HttpClient extends ClientSocket {
         CharList text = utf8Buf;
         text.clear();
 
-        if (body != null) {
+        if (body != null && body.length() != 0) {
             header.put("Content-Length", Integer.toString(ByteWriter.byteCountUTF8(body)));
         }
 
@@ -154,7 +165,7 @@ public class HttpClient extends ClientSocket {
         ByteWriter.writeUTF(buf, text, -1);
         text.clear();
 
-        if (body != null) {
+        if (body != null && body.length() != 0) {
             ByteWriter.writeUTF(buf, body, -1);
         }
         buf.add((byte) '\r');
@@ -163,26 +174,49 @@ public class HttpClient extends ClientSocket {
         buf.add((byte) '\n');
     }
 
-    public HTTPResponse response() throws ParseException {
-        ByteList buffer = channel.buffer();
+    private InputStream in;
+
+    public HttpHeader response() throws ParseException {
+        Object[] data = Shared.SYNC_BUFFER.get();
+
+        StreamLikeSequence plain = (StreamLikeSequence)data[0];
+        HTTPHeaderLexer lexer = ((HTTPHeaderLexer)data[1]).init(plain.init(channel, readTimeout, maxReceive <= 0 ? Integer.MAX_VALUE : maxReceive));
+
         try {
-            return HTTPResponse.parse(channel, readTimeout, maxReceive <= 0 ? Integer.MAX_VALUE : maxReceive);
+            HttpHeader hdr = HttpHeader.parse(lexer, action);
+            if (!"HEAD".contentEquals(action)) {
+                in = HttpInputStream.create(hdr, new SocketInputStream(channel, lexer.index).init(hdr.headers.get("Content-Length"), readTimeout));
+            } else {
+                in = new EmptyInputStream();
+                channel.buffer().clear();
+            }
+            return hdr;
+        } catch (IOException e) {
+            throw lexer.err("IO Exception", e);
         } finally {
-            buffer.clear();
+            lexer.init(null);
+            plain.release();
         }
     }
 
-    public CalculateTask<HTTPResponse> asyncResponse() {
-        return new CalculateTask<>(this::response);
+    @Override
+    public void disconnect() throws IOException {
+        if (in != null) {
+            in.close();
+            in = null;
+        }
+        super.disconnect();
+    }
+
+    public InputStream getInputStream() {
+        return in;
     }
 
     public HttpClient url(URL url) throws IOException {
         if(url.getProtocol().equals("https")) {
             try {
-                clientEngine = EngineAllocator.getClientDefault();
-            } catch (GeneralSecurityException e) {
-                e.printStackTrace();
-            }
+                clientEngine = SslEngineFactory.getClientDefault();
+            } catch (GeneralSecurityException ignored) {}
         }
         path = url.getPath();
         header.put("Host", url.getHost());

@@ -90,5 +90,7 @@ public interface WrappedSocket extends AutoCloseable {
 
     void close() throws IOException;
 
+    void reuse() throws IOException;
+
     FileDescriptor fd();
 }

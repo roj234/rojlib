@@ -23,35 +23,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.ssl;
+package roj.net.tcp.client;
 
-import javax.net.ssl.SSLEngine;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterInputStream;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
- * @since  2021/2/5 0:33
+ * @since  2020/12/5 15:30
  */
-public abstract class EngineAllocator {
-    protected final SslConfig config;
-
-    public EngineAllocator(SslConfig config) {
-        this.config = config;
+final class DeflateInputStream extends InflaterInputStream {
+    public DeflateInputStream(InputStream in, Inflater inf) {
+        super(in, inf);
     }
 
-    protected static void config(SSLEngine sslEngine, SslConfig cfg) {
-        if (cfg == null) {
-            sslEngine.setNeedClientAuth(false);
-            sslEngine.setUseClientMode(true);
-        } else {
-            sslEngine.setUseClientMode(!cfg.isServerSide());
-            sslEngine.setEnabledProtocols(sslEngine.getSupportedProtocols());
-            // false为单向认证，true为双向认证
-            sslEngine.setNeedClientAuth(cfg.isNeedClientAuth());
-        }
+    @Override
+    public void close() throws IOException {
+        this.inf.end();
+        super.close();
     }
-
-    public abstract SSLEngine allocate();
 }

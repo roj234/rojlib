@@ -83,7 +83,7 @@ public final class ParseException extends Exception {
     }
 
     @SuppressWarnings("fallthrough")
-    private void lineParser() {
+    public void __lineParser() {
         if(this.line != -2) return;
 
         CharList chars = new CharList(20);
@@ -92,9 +92,7 @@ public final class ParseException extends Exception {
 
         int target = index;
         if(target > keys.length() || target < 0) {
-            this.line = 0;
-            this.linePos = 8;
-            this.lineContent = "<ERROR: INVALID OFFSET>";
+            noDetail();
             return;
         }
 
@@ -135,11 +133,17 @@ public final class ParseException extends Exception {
         this.lineContent = chars.toString();
     }
 
+    public void noDetail() {
+        this.line = 0;
+        this.linePos = 8;
+        this.lineContent = "<UNKNOWN ERROR>";
+    }
+
     @Override
     public String toString() {
         String msg = getMessage() == null ? (getCause() == null ? "<未提供>" : getCause().toString()) : getMessage();
 
-        lineParser();
+        __lineParser();
 
         String line = getLineContent();
 

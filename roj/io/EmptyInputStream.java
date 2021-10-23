@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,35 +23,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.ssl;
+package roj.io;
 
-import javax.net.ssl.SSLEngine;
+import java.io.InputStream;
 
 /**
- * No description provided
- *
- * @author Roj234
+ * @author solo6975
  * @version 0.1
- * @since  2021/2/5 0:33
+ * @since 2021/10/23 23:16
  */
-public abstract class EngineAllocator {
-    protected final SslConfig config;
-
-    public EngineAllocator(SslConfig config) {
-        this.config = config;
+public final class EmptyInputStream extends InputStream {
+    @Override
+    public int read() {
+        return -1;
     }
-
-    protected static void config(SSLEngine sslEngine, SslConfig cfg) {
-        if (cfg == null) {
-            sslEngine.setNeedClientAuth(false);
-            sslEngine.setUseClientMode(true);
-        } else {
-            sslEngine.setUseClientMode(!cfg.isServerSide());
-            sslEngine.setEnabledProtocols(sslEngine.getSupportedProtocols());
-            // false为单向认证，true为双向认证
-            sslEngine.setNeedClientAuth(cfg.isNeedClientAuth());
-        }
-    }
-
-    public abstract SSLEngine allocate();
 }

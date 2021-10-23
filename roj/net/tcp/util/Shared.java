@@ -25,41 +25,32 @@
  */
 package roj.net.tcp.util;
 
-import roj.collect.TimedHashMap;
-import roj.net.tcp.serv.Reply;
-import roj.net.tcp.serv.Response;
-import roj.net.tcp.serv.response.StringResponse;
 import roj.text.CharList;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/11/28 21:13
  */
-public final class SharedConfig {
+public final class Shared extends ThreadLocal<Object[]> {
+    private Shared() {}
+
     public static final String _SHOULD_EOF = new String();
     public static final String _ERROR = new String();
 
-    public static final int
-            STREAM_SEQ_INITIAL_CAPACITY = 100,
-            THROTTLING_INTERVAL = 1000,
-            MAX_CHAR_BUFFER_CAPACITY = 262144,
-            WRITE_MAX = 131072;
+    public static final int MAX_CHAR_BUFFER_CAPACITY    = 262144;
+    public static final int WRITE_MAX                   = 131072;
 
-    public static final boolean THROTTLING_CHECK_ENABLED = false;
+    public static final ThreadLocal<Object[]> SYNC_BUFFER = new Shared();
 
-    public static final Response CONNECTION_THROTTLING = new Reply(Code.UNAVAILABLE, new StringResponse("压测防御" + THROTTLING_INTERVAL + "ms"));
-    public static final TimedHashMap<String, AtomicInteger> CONNECTING_ADDRESSES = new TimedHashMap<>(THROTTLING_INTERVAL);
-
-    public static final ThreadLocal<Object[]> SYNC_BUFFER = ThreadLocal.withInitial(() -> new Object[]{
-            new StreamLikeSequence(STREAM_SEQ_INITIAL_CAPACITY, false),
-            new HTTPHeaderLexer(),
-            new CharList()
-    });
+    @Override
+    protected Object[] initialValue() {
+        return new Object[]{
+                new StreamLikeSequence(false),
+                new HTTPHeaderLexer(),
+                new CharList()
+        };
+    }
 
     public static final byte[] END_OF_CHUNK = new byte[] {
             '0', '\r', '\n', '\r', '\n'

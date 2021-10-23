@@ -67,7 +67,8 @@ import java.util.concurrent.locks.LockSupport;
  * </PRE>
  */
 public class SecureSocket extends InsecureSocket {
-    private final SSLEngine engine;
+    private final EngineAllocator alloc;
+    private SSLEngine engine;
 
     private int appBufSize, netBufSize;
 
@@ -109,11 +110,7 @@ public class SecureSocket extends InsecureSocket {
     protected SecureSocket(Socket sc, FileDescriptor fd, EngineAllocator sslc, boolean isClient) throws IOException {
         super(sc, fd);
 
-        /*
-         * We're a server, so no need to use host/port variant.
-         *
-         * The first call for a server is a NEED_UNWRAP.
-         */
+        alloc = sslc;
         engine = sslc.allocate();
         engine.setUseClientMode(isClient);
         engine.beginHandshake();
@@ -162,7 +159,7 @@ public class SecureSocket extends InsecureSocket {
             final ByteList list = ByteList.from(bb);
             int wrote;
             do {
-                wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, list, SharedConfig.WRITE_MAX));
+                wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, list, Shared.WRITE_MAX));
             } while (wrote == -3 && !socket.isClosed());
             if(wrote > 0) {
                 bb.position(bb.position() + wrote);
@@ -180,8 +177,6 @@ public class SecureSocket extends InsecureSocket {
      */
     @SuppressWarnings("fallthrough")
     public boolean handShake() throws IOException {
-        SSLEngineResult result;
-
         if (hsDone) {
             return true;
         }
@@ -211,11 +206,13 @@ public class SecureSocket extends InsecureSocket {
             return hsDone;
         }
 
-
+        SSLEngineResult result;
         switch (this.status) {
             case NEED_UNWRAP:
                 if (_read(networkIn) < 0) {
-                    engine.closeInbound();
+                    try {
+                        engine.closeInbound();
+                    } catch (SSLException ignored) {}
                     return hsDone;
                 }
 
@@ -357,6 +354,7 @@ public class SecureSocket extends InsecureSocket {
         }
 
         read = 0;
+        vw:
         do {
             result = _readNetworkIn(max - read);
             read += result.bytesProduced();
@@ -382,20 +380,20 @@ public class SecureSocket extends InsecureSocket {
                     netBufSize = engine.getSession().getPacketBufferSize();
                     if (netBufSize > networkIn.capacity()) {
                         expandNetBuf();
-
-                        break; // for next read
                     }
-                    break;
+                    break vw;
                 case OK:
                     if (result.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
                         doTasks();
                     }
                     break;
 
-                default:
-                    throw new IOException("SSLEngine error during data read: " + result.getStatus());
+                default: // closed
+                    if (read == 0)
+                        return -1;
+                    break vw;
             }
-        } while ((networkIn.position() != 0) && result.getStatus() != Status.BUFFER_UNDERFLOW);
+        } while (networkIn.position() != 0);
         return read + nread;
     }
 
@@ -467,7 +465,7 @@ public class SecureSocket extends InsecureSocket {
         int wrote = 0;
         do {
             buf.clear();
-            int once = Math.min(SharedConfig.WRITE_MAX, max);
+            int once = Math.min(Shared.WRITE_MAX, max);
             buf.ensureCapacity(once);
             buf.readStreamArray(src, once);
             while (buf.writePos() < buf.pos()) {
@@ -508,5 +506,19 @@ public class SecureSocket extends InsecureSocket {
         }
 
         return (!networkOut.hasRemaining() && (result.getHandshakeStatus() != HandshakeStatus.NEED_WRAP));
+    }
+
+    @Override
+    public void reuse() throws IOException {
+        if (shutdown)
+            throw new IOException("Stream closed.");
+        hsDone = false;
+        pushback.clear();
+        buffer.clear();
+
+        SSLEngine newEngine = alloc.allocate();
+        newEngine.setUseClientMode(engine.getUseClientMode());
+        (engine = newEngine).beginHandshake();
+        status = newEngine.getHandshakeStatus();
     }
 }

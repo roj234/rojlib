@@ -496,6 +496,10 @@ public final class ByteReader implements DataInput {
                         }
                 default:
                     /* 10xx xxxx,  1111 xxxx */
+                    if((flag & 1) != 0) {
+                        i --;
+                        break cyl;
+                    }
                     throw new UTFDataFormatException("malformed input around byte " + i);
             }
         }

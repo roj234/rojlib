@@ -59,7 +59,7 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
     }
 
     @Override
-    protected WrappedSocket getChannel() {
+    protected WrappedSocket createChannel() {
         return new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
     }
 

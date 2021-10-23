@@ -25,6 +25,7 @@
  */
 package roj.net.tcp.serv;
 
+import roj.collect.TimedHashMap;
 import roj.concurrent.task.ITask;
 import roj.io.NonblockingUtil;
 import roj.net.tcp.TCPServer;
@@ -38,8 +39,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class HttpServer extends TCPServer {
+    public static final boolean THROTTLING_CHECK_ENABLED = false;
+    public static final TimedHashMap<String, AtomicInteger> CONNECTING_ADDRESSES  = new TimedHashMap<>(1000);
+
     protected final Router router;
 
     public HttpServer(int port, int maxConnection, Router router, String keyStoreFile, char[] keyPassword) throws IOException, GeneralSecurityException {

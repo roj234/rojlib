@@ -68,7 +68,7 @@ public final class Project extends JSONConfiguration {
     static FileFilter resourceFilter = new FileFilter();
     MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
 
-    MutableZipFile dstZip, stampZip;
+    MutableZipFile dstZip, stampZip, sourceZip;
 
     private Project(String name) {
         super(new File(BASE, "config/" + name + ".json"), false);
@@ -77,7 +77,15 @@ public final class Project extends JSONConfiguration {
         String abs = BASE.getAbsolutePath();
         resource = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "resources" + File.separatorChar);
         source = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "java" + File.separatorChar);
-        stamp = new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-src.jar");
+        stamp = new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-dev.jar");
+        try {
+            sourceZip = new MutableZipFile(new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-src.zip"));
+        } catch (IOException e) {
+            CmdUtil.warning("源码备份损坏", e);
+            CmdUtil.warning("为了防止自动操作让我想死，请手动解决问题");
+            LockSupport.parkNanos(3_000_000_000L);
+            System.exit(-2);
+        }
 
         Set<String> ignores = new MyHashSet<>();
         FMDMain.readTextList(ignores::add, "忽略的编译错误码");

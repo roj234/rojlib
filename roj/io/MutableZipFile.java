@@ -365,6 +365,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         if(commentLen > 0) {
             buffer.ensureCapacity(commentLen);
             zip.readFully(buffer.list, 0, commentLen);
+            buffer.pos(commentLen);
             entry.comment = buffer.toByteArray();
         } else {
             entry.comment = EmptyArrays.BYTES;

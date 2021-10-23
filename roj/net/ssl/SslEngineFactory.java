@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * No description provided
@@ -93,6 +94,10 @@ public final class SslEngineFactory {
     public static EngineAllocator getSslFactory(SslConfig cfg) throws IOException, GeneralSecurityException {
         SSLContext context = getSslContext(cfg.getPkPath(), cfg.getCaPath(), cfg.getPasswd(), cfg.isServerSide());
         return new Alloc(context, cfg);
+    }
+
+    public static EngineAllocator getClientDefault() throws NoSuchAlgorithmException {
+        return new Alloc(SSLContext.getDefault(), null);
     }
 
     private static final class Alloc extends EngineAllocator {

@@ -34,15 +34,16 @@ import roj.io.down.Downloader;
 import roj.io.down.IProgressHandler;
 import roj.io.down.MTDProgress;
 import roj.io.down.STDProgress;
+import roj.net.tcp.client.HttpClient;
+import roj.net.tcp.client.HttpConnection;
+import roj.net.tcp.client.HttpHeader;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.*;
-import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
@@ -87,6 +88,8 @@ public final class FileUtil {
     public static int TIMEOUT = 10 * 1000;
 
     public static void copyFile(File source, File target) throws IOException {
+        // noinspection all
+        Thread.interrupted();
         FileChannel src = FileChannel.open(source.toPath(), StandardOpenOption.READ);
         FileChannel dst = FileChannel.open(target.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         src.transferTo(0, source.length(), dst);
@@ -177,7 +180,7 @@ public final class FileUtil {
     }
 
     public static byte[] downloadFileToMemory(String url) throws IOException {
-        HttpURLConnection con = process302(new URL(url), false);
+        HttpConnection con = process302(new URL(url), false);
         try (InputStream in = con.getInputStream()) {
             int length = con.getContentLength();
             ByteList buf = IOUtil.getSharedByteBuf();
@@ -213,9 +216,11 @@ public final class FileUtil {
         return singleThread0(file, handler, pid, deleteInfo ? DFLAG_KEEP_INFO_FILE : 0, info, process302(new URL(url), false));
     }
 
-    private static WaitingIOFuture singleThread0(File file, IProgressHandler handler, int pid, int flag, File info, HttpURLConnection conn) throws IOException {
+    private static WaitingIOFuture singleThread0(File file, IProgressHandler handler, int pid, int flag, File info, HttpConnection conn) throws IOException {
         long length = conn.getContentLengthLong();
         conn.disconnect();
+        if (length < 0)
+            return streamMode(file, handler, conn);
 
         File tmp = new File(file.getAbsolutePath() + ".down");
         if (tmp.length() != length) {
@@ -226,6 +231,37 @@ public final class FileUtil {
         ioPool.pushTask(dn);
 
         return new DOWN(Collections.singletonList(dn), handler, file, flag).infoSpecified(info);
+    }
+
+    private static WaitingIOFuture streamMode(File file, IProgressHandler handler, HttpConnection conn) throws IOException {
+        FileChannel fc = FileChannel.open(new File(file.getAbsolutePath() + ".down").toPath(),
+                                          StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        conn.getClient().method("GET");
+        InputStream in = conn.getInputStream();
+
+        AbstractCalcTask<Void> task = new AbstractCalcTask<Void>() {
+            @Override
+            public void calculate(Thread thread) throws Exception {
+                try {
+                    //noinspection all
+                    Thread.interrupted();
+                    ByteBuffer buf = ByteBuffer.allocate(8192);
+                    int read;
+                    while ((read = in.read(buf.array())) > 0) {
+                        buf.position(0).limit(read);
+                        fc.write(buf);
+                    }
+                } finally {
+                    out = null;
+                    synchronized (this) {
+                        notifyAll();
+                    }
+                }
+            }
+        };
+        ioPool.pushTask(task);
+
+        return new DOWN(Collections.singletonList(task), handler, file, 0);
     }
 
     /**
@@ -274,15 +310,20 @@ public final class FileUtil {
             throw new IOException("下载进度文件无法写入");
         }
 
-        HttpURLConnection conn = process302(new URL(address), true);
+        HttpConnection conn = process302(new URL(address), true);
+
+        long remain = conn.getContentLengthLong();
+        if (remain == -1) {
+            conn.disconnect();
+            return streamMode(file, handler, conn);
+        }
 
         if(conn.getHeaderField("ETag") == null && conn.getHeaderField("Last-Modified") == null) {
             return singleThread0(file, handler, 0, flag, infoFile, conn);
         }
 
-        File downTmp = new File(file.getAbsolutePath() + ".down");
         if (CHECK_ETAG) {
-            File tagFile = new File(infoFile.getAbsolutePath() + ".down.tag");
+            File tagFile = new File(file.getAbsolutePath() + ".down.tag");
             BoxFile aoc = new BoxFile(tagFile);
             aoc.load();
             if (/*!conn.getHeaderField("ETag").equals(aoc.getUTF("ETag")) || */
@@ -295,10 +336,11 @@ public final class FileUtil {
             }
             aoc.close();
         }
-        conn.disconnect();
 
-        long remain = conn.getContentLengthLong();
+        File downTmp = new File(file.getAbsolutePath() + ".down");
         allocSparseFile(downTmp, remain);
+
+        conn.disconnect();
 
         int id = 0;
 
@@ -330,6 +372,8 @@ public final class FileUtil {
     }
 
     public static void allocSparseFile(File file, long length) throws IOException {
+        // noinspection all
+        Thread.interrupted();
         if (file.length() != length) {
             if (!file.isFile() || file.length() < length) {
                 file.delete();
@@ -344,27 +388,26 @@ public final class FileUtil {
         }
     }
 
-    public static HttpURLConnection process302(URL url, boolean headOnly) throws IOException {
-        HttpURLConnection conn;
+    public static HttpConnection process302(URL url, boolean headOnly) throws IOException {
+        HttpConnection conn = new HttpConnection(url);
+
+        HttpClient client = conn.getClient();
+        client.header("User-Agent", USER_AGENT)
+              .header("Range", "bytes=0-")
+              .method(headOnly ? "HEAD" : "GET")
+              .readTimeout(TIMEOUT);
+        client.connectTimeout(TIMEOUT);
+
         int max = 10;
         do {
-            try {
-                conn = (HttpURLConnection) url.openConnection();
-            } catch (UnknownHostException e) {
-                throw new FileNotFoundException("网址不存在: " + url);
-            }
-            conn.setRequestMethod(headOnly ? "HEAD" : "GET");
-            conn.setConnectTimeout(TIMEOUT);
-            conn.setReadTimeout(TIMEOUT);
-            conn.setRequestProperty("User-Agent", USER_AGENT);
-            conn.setRequestProperty("Range", "bytes=0-");
-            int code = conn.getResponseCode();
+            conn.setURL(url);
+            HttpHeader header = conn.getResponse();
+            int code = header.code;
             if (code >= 200 && code < 400) {
-                String location = conn.getHeaderField("Location");
+                String location = header.headers.get("Location");
                 if (location != null) {
                     if (max-- < 0)
                         throw new FileNotFoundException("重定向过多");
-                    conn.disconnect();
                     url = new URL(location);
                     continue;
                 } else if (code >= 300) {
@@ -412,6 +455,8 @@ public final class FileUtil {
     }
 
     public static long transferFileSelf(FileChannel cf, long fOffset, long tOffset, long length) throws IOException {
+        // noinspection all
+        Thread.interrupted();
         if (fOffset == tOffset || length == 0) return length;
         if (fOffset > tOffset ?
                 tOffset + length <= fOffset :
