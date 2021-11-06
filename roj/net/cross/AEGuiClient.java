@@ -39,7 +39,7 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
 import java.io.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;

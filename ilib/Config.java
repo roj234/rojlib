@@ -57,7 +57,7 @@ public final class Config extends JSONConfiguration {
             noSoManyBlockPos, fastLightCheck, fastMethod, lootR, otherWorldChange, cacheBox2, miscPickaxeOptimize,
             showDPS, moreEggs, portalCache, betterRenderGlobal, disableGlobalTESR, enablePinyinSearch, searchNameOnly, entityAabbCache,
             noAdvancement, eventInvoker, removePatchy, slabHelper, eventInvokerMost, packetBufferInfinity, IwantLight, noRecipeBook,
-            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax, betterF3, injectLauncher;
+            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax, betterF3;
     public static int aabbCache, reduceFPSWhenNotActive, clientNetworkTimeout, chatLength, debug, maxParticleCountPerLayer,
             maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, autoFlipTooltip, tooltipFlag;
     public static byte threadPriority, subThreadPriority, packetDelay, dynamicViewDistance, changeWorldSpeed;
@@ -229,7 +229,7 @@ public final class Config extends JSONConfiguration {
         if((debug & 1024) != 0)
             System.setProperty("roj.directaccessor.debug", "true");
 
-        injectLauncher = map.putIfAbsent("Util.注入LaunchWrapper.注入(只需打开一次)", false);
+        //injectLauncher = map.putIfAbsent("Util.注入LaunchWrapper.注入(只需打开一次)", false);
         map.getOrCreateList("Util.注入LaunchWrapper.附加不转换包前缀");
         map.putIfAbsent("Util.注入LaunchWrapper.class替换源", "");
         map.putIfAbsent("Util.注入LaunchWrapper.启用文件缓存", false);

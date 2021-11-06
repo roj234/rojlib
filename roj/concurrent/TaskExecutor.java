@@ -31,6 +31,7 @@ import roj.util.FastLocalThread;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.concurrent.locks.LockSupport;
 
 public class TaskExecutor extends FastLocalThread implements TaskHandler, Executor {
     ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
@@ -72,11 +73,8 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
                         notifyAll();
                     }
 
-                    try {
-                        Thread.sleep(timeout);
-                    } catch (InterruptedException e) {
-                        // maybe there's something to do now.
-                    }
+                    LockSupport.parkNanos(timeout * 1000_000L);
+                    // maybe there's something to do now.
 
                     if (tasks.isEmpty()) {
                         synchronized (this) {
@@ -119,7 +117,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
 
         if (!busy) {
             // wake this thread up.
-            interrupt();
+            LockSupport.unpark(this);
         }
     }
 
@@ -138,7 +136,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
 
         if (!busy) {
             // wake this thread up.
-            interrupt();
+            LockSupport.unpark(this);
         }
     }
 

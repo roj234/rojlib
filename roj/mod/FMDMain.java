@@ -751,9 +751,9 @@ public final class FMDMain {
             if (!increment) {
                 ZipFileWriter zfw = new ZipFileWriter(sourceZip.file);
                 ByteList shared = IOUtil.getSharedByteBuf();
-                shared.clear();
                 for (int i = 0; i < files.size(); i++) {
                     File file = files.get(i);
+                    shared.clear();
                     try (InputStream in = new FileInputStream(file)) {
                         shared.readStreamArrayFully(in);
                     } catch (IOException e) {

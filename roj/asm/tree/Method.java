@@ -355,6 +355,14 @@ public final class Method implements MethodNode, MoFNode {
     }
 
     public String rawDesc() {
+        if (this.rawDesc == null) {
+            if (params != null) {
+                params.add(returnType);
+                String v = ParamHelper.getMethod(params);
+                params.remove(params.size() - 1);
+                return v;
+            }
+        }
         return this.rawDesc;
     }
 

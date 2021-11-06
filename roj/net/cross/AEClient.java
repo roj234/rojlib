@@ -135,7 +135,6 @@ public class AEClient implements Runnable, Closeable {
         for (Object o : arr) {
             Worker w = (Worker) o;
             w.interrupt();
-            LockSupport.unpark(w);
         }
         for (Object o : arr) {
             Worker w = (Worker) o;

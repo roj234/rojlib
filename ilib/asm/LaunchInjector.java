@@ -25,8 +25,9 @@
  */
 package ilib.asm;
 
-import net.minecraft.launchwrapper.ContextClassTransformer;
+import ilib.api.ContextClassTransformer;
 import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader.Acceptor;
 import net.minecraft.launchwrapper.LaunchClassLoader.Reader;
 import roj.asm.SharedBuf;
@@ -44,6 +45,10 @@ import java.util.List;
  * @since 2021/10/21 9:45
  */
 class LaunchInjector implements Acceptor {
+    static void patch() throws NoClassDefFoundError, NoSuchMethodError {
+        Launch.classLoader.setAcceptorIL(new LaunchInjector());
+    }
+
     @Override
     public void accept(List<IClassTransformer> transformers, String name, String trName, Object obj) {
         Level level = SharedBuf.alloc();
@@ -71,7 +76,7 @@ class LaunchInjector implements Acceptor {
                 }
             }
 
-            ByteList list = ctx.get(true);
+            ByteList list = ctx.get();
             Warp.buf1 = list.list;
             Warp.pos1 = list.pos();
         } finally {

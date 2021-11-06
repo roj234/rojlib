@@ -13,6 +13,7 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.config.ParseException;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
@@ -26,6 +27,7 @@ import javax.tools.Diagnostic;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -42,6 +44,11 @@ public final class ClassContext {
     private JavaLexer wr;
     private final Clazz dest = new Clazz();
     private final ArrayList<Runnable> pendingToStage2 = new ArrayList<>();
+    private final MyHashSet<String> finder = new MyHashSet<>();
+
+    public Clazz getDest() {
+        return dest;
+    }
 
     private String path;
 
@@ -72,7 +79,7 @@ public final class ClassContext {
         CharList pkg = new CharList();
         out:
         while (true) {
-            w = wr.readWord();
+            w = wr.nextWord();
             wr.recycle(w);
             switch (w.type()) {
                 case Keyword.PACKAGE:
@@ -122,10 +129,10 @@ public final class ClassContext {
 
         // ## 2.2 class type
         acc = getClass(wr, acc);
-        dest.accesses.flag = (char) acc;
+        dest.accesses = AccessFlag.of(acc);
 
         // # 3.1 class name
-        w = wr.readWord();
+        w = wr.nextWord();
         wr.recycle(w);
         if(w.type() != WordPresets.LITERAL) {
             throw wr.err("unexpected:" + w.val() + ":CLASS_NAME");
@@ -134,13 +141,13 @@ public final class ClassContext {
         dest.name = pkg.append(w.val()).toString();
 
         // ## 3.2 generic
-        w = wr.readWord();
+        w = wr.nextWord();
         wr.recycle(w);
         if(w.type() == Symbol.lss) { // <
             dest.signature = resolveGeneric(wr, Signature.CLASS);
             System.out.println("Generic test: " + dest.signature);
 
-            w = wr.readWord();
+            w = wr.nextWord();
             wr.recycle(w);
         }
 
@@ -150,7 +157,7 @@ public final class ClassContext {
         switch (w.type()) {
             case Keyword.EXTENDS:
                 parent = resolveClass(tmp, false, true);
-                w = wr.readWord();
+                w = wr.nextWord();
                 wr.recycle(w);
                 if(w.type() == Symbol.lss) { // extends A<B>
                     appendGeneric(false);
@@ -161,7 +168,7 @@ public final class ClassContext {
 
             case Keyword.IMPLEMENTS:
                 parent = resolveClass(tmp, true, true);
-                w = wr.readWord();
+                w = wr.nextWord();
                 wr.recycle(w);
                 if(w.type() == Symbol.lss) { // implements A<B>
                     appendGeneric(true);
@@ -185,11 +192,11 @@ public final class ClassContext {
             out:
             while (true) {
                 itfs.add(resolveClass(tmp, false, true));
-                w = wr.readWord();
+                w = wr.nextWord();
                 if(w.type() == Symbol.lss) { // implements A<B>
                     wr.recycle(w);
                     appendGeneric(true);
-                    w = wr.readWord();
+                    w = wr.nextWord();
                 }
 
                 switch (w.type()) {
@@ -211,8 +218,9 @@ public final class ClassContext {
         // ## 5. field, method and/or inner classes
         List<Annotation> pending = new ArrayList<>();
         while (wr.hasNext()) {
-            w = wr.readWord(); // if annotation
+            w = wr.nextWord(); // if annotation
             wr.recycle(w);
+            if (w.type() == WordPresets.EOF) break;
             if(w.type() == Symbol.at) {
                 resolveAnnotations(pending);
             } else {
@@ -240,8 +248,11 @@ public final class ClassContext {
 
                 w = wr.nextWord(); // probably name
                 switch (w.type()) {
+                    case Symbol.left_l_bracket: // static initializator
+                        pendingToStage2.add(new ClInitParser(dest, wr.index, skipBrackets(wr)));
+                        continue;
                     case Keyword.CLASS: // inner class
-
+                        System.err.println("// TODO: Inner Class!");
                         // todo recursion
 
                         continue;
@@ -262,79 +273,100 @@ public final class ClassContext {
                         // todo filter and add
                     }
 
-                    LinkedMyHashMap<String, Boolean> paramName = new LinkedMyHashMap<>();
+                    w = wr.nextWord();
+                    wr.recycle(w);
 
-                    boolean lsVarargs = false;
-                    AttrMethodParameters paramAttr = null;
-                    while (wr.hasNext()) {
-                        if(lsVarargs) {
-                            fireDiagnostic(Diagnostic.Kind.ERROR, "vararg_on_last");
-                        }
+                    List<String> paramNames;
+                    if(w.type() != Symbol.right_s_bracket) {
+                        LinkedMyHashMap<String, Boolean> paramName = new LinkedMyHashMap<>();
 
-                        acc = resolveAccessFlag(wr, AccessFlag.FINAL);
+                        boolean lsVarargs = false;
+                        AttrMethodParameters paramAttr = null;
+                        while (wr.hasNext()) {
+                            if (lsVarargs) {
+                                fireDiagnostic(Diagnostic.Kind.ERROR, "vararg_on_last");
+                            }
 
-                        boolean pr1 = resolveType(wr, tmp, true);
-                        if(tmp.equals("void"))
-                            fireDiagnostic(Diagnostic.Kind.ERROR, "param_is_void");
+                            acc = resolveAccessFlag(wr, AccessFlag.FINAL);
 
-                        method.parameters().add(toType(pr1, tmp));
+                            tmp.clear();
+                            boolean pr1 = resolveType(wr, tmp, true);
+                            if (tmp.equals("void"))
+                                fireDiagnostic(Diagnostic.Kind.ERROR, "param_is_void");
 
-                        w = wr.nextWord();
-                        wr.recycle(w);
-
-                        // String... args
-                        if (w.type() == Symbol.varargs) {
-                            lsVarargs = true;
+                            method.parameters().add(toType(pr1, tmp));
 
                             w = wr.nextWord();
                             wr.recycle(w);
-                        }
 
-                        if (w.type() == WordPresets.LITERAL) {
-                            if(paramName.put(w.val(), true) != null) {
-                                fireDiagnostic(Diagnostic.Kind.ERROR, "dup_param_name");
+                            // String... args
+                            if (w.type() == Symbol.varargs) {
+                                lsVarargs = true;
+
+                                w = wr.nextWord();
+                                wr.recycle(w);
                             }
-                        } else {
-                            throw wr.err("unexpected:" + w.val());
-                        }
 
-                        if(acc != 0) {
-                            if(paramAttr == null) {
-                                paramAttr = new AttrMethodParameters();
-                                method.attributes.add(paramAttr);
+                            if (w.type() == WordPresets.LITERAL) {
+                                if (paramName.put(w.val(), true) != null) {
+                                    fireDiagnostic(Diagnostic.Kind.ERROR, "dup_param_name");
+                                }
+                            } else {
+                                throw wr.err("unexpected:" + w.val());
                             }
-                            paramAttr.flags.put(w.val(), AccessFlag.of(acc));
-                        }
 
-                        w = wr.nextWord();
-                        wr.recycle(w);
-                        wr.retractWord();
-                        if(w.type() == Symbol.right_s_bracket) {
-                            if(lsVarargs)
-                                method.accesses.add(AccessFlag.TRANSIENT_OR_VARARGS);
+                            if (acc != 0) {
+                                if (paramAttr == null) {
+                                    paramAttr = new AttrMethodParameters();
+                                    method.attributes.add(paramAttr);
+                                }
+                                paramAttr.flags.put(w.val(), AccessFlag.of(acc));
+                            }
 
-                            break;
+                            w = wr.nextWord();
+                            wr.recycle(w);
+                            if (w.type() == Symbol.right_s_bracket) {
+                                if (lsVarargs)
+                                    method.accesses.add(AccessFlag.TRANSIENT_OR_VARARGS);
+
+                                break;
+                            }
+                            wr.retractWord();
                         }
+                        paramNames = new ArrayList<>(paramName.keySet());
+                    } else {
+                        paramNames = Collections.emptyList();
                     }
 
-                    List<String> paramNames = new ArrayList<>(paramName.keySet());
 
                     boolean isAbst = !methodDefaulted && (dest.accesses.hasAny(AccessFlag.INTERFACE) || method.accesses.hasAny(AccessFlag.ABSTRACT));
 
                     if(!isAbst) {
-                        expect(wr, Symbol.left_l_bracket);
-
-                        int begin = wr.index;
-
-                        while (wr.hasNext()) { // skip method body
-                            w = wr.nextWord();
-                            wr.recycle(w);
-                            if (w.type() == Symbol.right_l_bracket) {
+                        w = wr.nextWord();
+                        wr.recycle(w);
+                        switch (w.type()) {
+                            case Symbol.left_l_bracket:
                                 break;
-                            }
+                            case Keyword.THROWS:
+                                while (wr.hasNext()) {
+                                    tmp.clear();
+                                    resolveType(wr, tmp, false);
+
+                                    w = wr.nextWord();
+                                    wr.recycle(w);
+                                    if (w.type() == Symbol.left_l_bracket)
+                                        break;
+                                    else if (w.type() != Symbol.comma)
+                                        throw wr.err("unexpected:" + w.val());
+                                }
+                                break;
                         }
 
-                        pendingToStage2.add(new MethodParser(method.code = new AttrCode(method), paramNames, begin, wr.index));
+                        pendingToStage2.add(new MethodParser(method.code = new AttrCode(method), paramNames, wr.index, skipBrackets(wr)));
+                        if (!finder.add(method.name + method.rawDesc())) {
+                            fireDiagnostic(Diagnostic.Kind.ERROR, /*generic ?*/ "duplicate_method");
+                        }
+                        dest.methods.add(method);
                     }
 
                     w = wr.nextWord();
@@ -344,9 +376,19 @@ public final class ClassContext {
                         wr.retractWord();
 
                 } else { // field
-                    wr.retractWord();
                     Field field = new Field(AccessFlag.of(acc), w.val(), type);
+                    if (!finder.add(field.name)) {
+                        fireDiagnostic(Diagnostic.Kind.ERROR, /*generic ?*/ "duplicate_field");
+                    }
+                    dest.fields.add(field);
                     // todo
+
+                    w = wr.nextWord();
+                    wr.recycle(w);
+                    System.out.println("WD " + w);
+
+                    if(w.type() != Symbol.semicolon)
+                        wr.retractWord();
                 }
 
                 pending.clear();
@@ -354,6 +396,22 @@ public final class ClassContext {
             }
         }
 
+    }
+
+    private static int skipBrackets(JavaLexer wr) throws ParseException {
+        int brLvl = 0;
+        do {
+            Word w = wr.nextWord();
+            switch (w.type()) {
+                case Symbol.left_l_bracket:
+                    brLvl++;
+                    break;
+                case Symbol.right_l_bracket:
+                    brLvl--;
+                    break;
+            }
+        } while (wr.hasNext() && brLvl >= 0);
+        return wr.index;
     }
 
     private static Type toType(boolean prim, CharList tmp) {
@@ -407,7 +465,7 @@ public final class ClassContext {
 
     public int getClass(JavaLexer wr, int acc) throws ParseException {
         Word w;
-        w = wr.readWord();
+        w = wr.nextWord();
         switch (w.type()) {
             case Keyword.CLASS: // class
                 if((acc & (AccessFlag.INTERFACE | AccessFlag.ENUM)) != 0)
@@ -435,7 +493,7 @@ public final class ClassContext {
                     throw wr.err("illegal_modifier:@interface:class,interface,enum,abstract");
                 if((acc & AccessFlag.ANNOTATION) != 0)
                     throw wr.err("duplicate_modifier:@interface");
-                w = wr.readWord();
+                w = wr.nextWord();
                 if(w.type() == Keyword.INTERFACE) {
                     acc |= AccessFlag.ANNOTATION;
                 } else {
@@ -515,7 +573,7 @@ public final class ClassContext {
     }
 
     private static void expect(JavaLexer wr, short k) throws ParseException {
-        Word w = wr.readWord();
+        Word w = wr.nextWord();
         if(w.type() != k) {
             throw wr.err("unexpected:" + w.val() + ':' + Symbol.byId(k));
         }
@@ -526,7 +584,7 @@ public final class ClassContext {
         int acc = 0, kind = 0, target;
         out:
         while (true) {
-            w = wr.readWord();
+            w = wr.nextWord();
             switch (w.type()) {
                 case Keyword.PUBLIC:
                     target = (1 << 16) | (AccessFlag.PUBLIC & 0xFFFF);
@@ -592,7 +650,7 @@ public final class ClassContext {
 
         int fl = 0;
         while (true) {
-            w = wr.readWord();
+            w = wr.nextWord();
             wr.recycle(w);
             switch (w.type()) {
                 case Keyword.VOID:
@@ -622,8 +680,12 @@ public final class ClassContext {
 
                     break;
                 case WordPresets.LITERAL:
-                    if(fl != 0)
+                    if(fl == 1)
                         throw wr.err("unexpected:" + w.val());
+                    else if (fl == 2) {
+                        wr.retractWord();
+                        return true;
+                    }
                     fl = 1;
                     sb.append(w.val());
                     break;
@@ -634,7 +696,8 @@ public final class ClassContext {
                     sb.append('/');
                     break;
                 default:
-                        return false;
+                    wr.retractWord();
+                    return fl == 2;
             }
         }
     }

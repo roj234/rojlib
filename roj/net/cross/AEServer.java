@@ -105,6 +105,7 @@ public class AEServer extends TCPServer {
             room.master = null;
             rooms.remove(room.id);
             room.set(0);
+            room.wakeupAndDiscard();
         }
     }
 
@@ -170,11 +171,11 @@ public class AEServer extends TCPServer {
             room.master = null;
         }
         rooms.clear();
-        watcher.interruptAll();
+        watcher.wakeupAll();
         for (Worker w : workers.keySet()) {
             int state = w.state;
             w.state = SHUTDOWN;
-            LockSupport.unpark(w.self);
+            w.self.interrupt();
             switch (state) {
                 case CONNECTED:
                 case ESTABLISHED:
@@ -190,7 +191,6 @@ public class AEServer extends TCPServer {
                         w.channel.close();
                     } catch (IOException ignored) {}
             }
-            w.self.interrupt();
         }
         for (Worker w : workers.keySet()) {
             try {
@@ -355,6 +355,7 @@ public class AEServer extends TCPServer {
 
         @Override
         public void run() {
+            catcher:
             try {
                 conn:
                 {
@@ -608,6 +609,10 @@ public class AEServer extends TCPServer {
                 channel.close();
                 state = FINALIZED;
             } catch (Throwable e) {
+                if (room != null && roomIndex == 0 && room.master == null) {
+                    syncPrint(this + ": 解散");
+                    break catcher;
+                }
                 state = ERROR;
 
                 try {
@@ -637,7 +642,7 @@ public class AEServer extends TCPServer {
                     room.master = null;
                     server.rooms.remove(room.id);
                     room.wakeupAndDiscard();
-                } else {
+                } else if (roomIndex > 0) {
                     synchronized (room.slaves) {
                         room.slaves.remove(roomIndex);
                     }
@@ -722,8 +727,10 @@ public class AEServer extends TCPServer {
             }
             if(!channel.buffer().startsWith(CLIENT_HALLO))
                 return 5;
-            if(channel.buffer().getU(CLIENT_HALLO.list.length) != PROTOCOL_VERSION)
+            if(channel.buffer().getU(CLIENT_HALLO.list.length) != PROTOCOL_VERSION) {
+                writeEx(channel, (byte) PS_VERSION_CONFLICT);
                 return 6;
+            }
 
             return writeEx(channel, (byte) PS_SERVER_HALLO);
         }

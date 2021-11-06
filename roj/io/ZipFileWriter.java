@@ -78,6 +78,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
 
     public ZipFileWriter(File file, int compressionLevel, boolean checkDuplicate) throws IOException {
         this.file = new RandomAccessFile(file, "rw");
+        this.file.seek(0);
         this.deflater = new Deflater(compressionLevel, true);
         this.attrList = new ArrayList<>();
         this.buffer = new ByteList();
@@ -164,7 +165,9 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
           .writeIntR(cSize)
           .writeIntR(data.pos())
           .writeShortR(ByteWriter.byteCountUTF8(name))
-          .writeLong(0) // 四个short 0
+          .writeShortR(attrZip64 ? 10 : 0)
+          .writeShortR(0)
+          .writeIntR(0) // 四个short 0
           .writeIntR(0)
           .writeIntR((int) (attrZip64 ? U32_MAX : beginOffset))
           .writeAllUTF(name);

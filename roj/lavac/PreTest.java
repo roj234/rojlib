@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,25 +23,35 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package roj.lavac;
 
-package ilib.asm;
+import roj.config.ParseException;
+import roj.lavac.parser.ClassContext;
+import roj.lavac.parser.IAccessor;
 
-import net.minecraft.launchwrapper.IClassTransformer;
-import roj.asm.AccessTransformer;
+import java.io.FileInputStream;
+import java.io.IOException;
 
 /**
- * @author Roj234
+ * Lavac Preworking TEST!
+ *
+ * @author solo6975
  * @version 0.1
- * @since 2021/5/29 16:43
+ * @since 2021/11/6 23:09
  */
-public class ATProxy implements IClassTransformer {
-    public ATProxy() {
-        Loader.addTransformer(this);
+public class PreTest {
+    public static void main(String[] args) throws IOException, ParseException {
+        ClassContext ctx = new ClassContext(args[0], new FileInputStream(args[0]), new ACC());
+        ctx.stage0Read();
+        ctx.stage1Struct();
+        System.out.println("STRUCT: " + ctx.getDest());
+        ctx.stage2Compile();
+        System.out.println("BYTECODE: " + ctx.getDest());
+        ctx.stage3Optimize();
+        System.out.println("OPTIMIZED: " + ctx.getDest());
     }
 
-    @Override
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        Loader.wrapTransformers();
-        return AccessTransformer.transform(transformedName, basicClass);
+    static class ACC extends IAccessor {
+
     }
 }

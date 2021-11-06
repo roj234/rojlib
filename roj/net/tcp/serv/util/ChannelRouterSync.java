@@ -35,6 +35,7 @@ import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
+import roj.net.tcp.util.Notify;
 import roj.net.tcp.util.WrappedSocket;
 
 import java.io.IOException;

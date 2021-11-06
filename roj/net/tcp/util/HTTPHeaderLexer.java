@@ -27,7 +27,6 @@ package roj.net.tcp.util;
 
 import roj.config.ParseException;
 import roj.math.MathUtils;
-import roj.net.tcp.serv.util.Notify;
 import roj.text.CharList;
 import roj.util.ByteWriter;
 

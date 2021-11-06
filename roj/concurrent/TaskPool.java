@@ -220,10 +220,10 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         return running < 0;
     }
 
-    public void interruptAll() {
+    public void wakeupAll() {
         for (TaskExecutor te : thread) {
             if (te != null) {
-                te.interrupt();
+                LockSupport.unpark(te);
             }
         }
     }

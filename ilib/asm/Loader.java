@@ -74,25 +74,43 @@ import java.util.zip.ZipInputStream;
 @Name("ILASM")
 @MCVersion("1.12.2")
 @SortingIndex(Integer.MIN_VALUE)
-@TransformerExclusions({"ilib.asm.", "roj."})
+@TransformerExclusions({"ilib.", "roj."})
 public class Loader implements IFMLLoadingPlugin {
     public static final Logger logger = LogManager.getLogger("ImpLib-ASM");
 
     public static ASMDataTable ASMTable;
     @Nullable
     public static final Boolean isClient = testClientSide();
-    static boolean LaunchWrapperInjected;
 
     static long classLoadElapse = 0;
 
     public Loader() throws IOException {
         AccessTransformer.readAndParseAt(Loader.class, "META-INF/IL_at.cfg");
         try {
-            Launch.classLoader.setImplibAccessor(new LaunchInjector());
-            logger.info("LaunchWrapperInjected!");
-            LaunchWrapperInjected = true;
+            LaunchInjector.patch();
+            throw new RuntimeException();
         } catch (Throwable e) {
-            LaunchWrapperInjected = false;
+            File launcher;
+            try {
+                launcher = new File(Launch.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
+            } catch (URISyntaxException e1) {
+                throw new IllegalArgumentException("injectLauncher操作失败", e);
+            }
+
+            try(MutableZipFile mz = new MutableZipFile(launcher)) {
+                // noinspection all
+                ZipInputStream zis = new ZipInputStream(Loader.class.getClassLoader().getResourceAsStream("META-INF/LaunchWrapperInjector.jar"));
+                ZipEntry ze;
+                while ((ze = zis.getNextEntry()) != null) {
+                    if (ze.getName().endsWith(".class")) {
+                        mz.setFileData(ze.getName(), new ByteList().readStreamArrayFully(zis));
+                    }
+                }
+                mz.store();
+            } catch (Throwable e1) {
+                throw new IllegalArgumentException("injectLauncher操作失败", e);
+            }
+            //throw new RuntimeException("请重启Minecraft", e);
         }
 
         if (Config.removePatchy) {
@@ -115,32 +133,6 @@ public class Loader implements IFMLLoadingPlugin {
                 }
             }
             Config.instance.getConfig().put("Tweak.Client.修复进存档或服务器卡死(只需打开一次)", false);
-            Config.instance.save();
-            throw new RuntimeException("请重启Minecraft");
-        }
-
-        if (Config.injectLauncher) {
-            File launcher;
-            try {
-                launcher = new File(Launch.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
-            } catch (URISyntaxException e) {
-                throw new IllegalArgumentException("injectLauncher操作失败", e);
-            }
-
-            try(MutableZipFile mz = new MutableZipFile(launcher)) {
-                // noinspection all
-                ZipInputStream zis = new ZipInputStream(Loader.class.getClassLoader().getResourceAsStream("META-INF/LaunchWrapperInjector.jar"));
-                ZipEntry ze;
-                while ((ze = zis.getNextEntry()) != null) {
-                    if (ze.getName().endsWith(".class")) {
-                        mz.setFileData(ze.getName(), new ByteList().readStreamArrayFully(zis));
-                    }
-                }
-                mz.store();
-            } catch (Throwable e) {
-                throw new IllegalArgumentException("injectLauncher操作失败", e);
-            }
-            Config.instance.getConfig().put("Util.注入LaunchWrapper.注入(只需打开一次)", false);
             Config.instance.save();
             throw new RuntimeException("请重启Minecraft");
         }

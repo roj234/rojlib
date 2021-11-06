@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,24 +23,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.tree.anno.typed;
-
-import roj.asm.type.LocalVariable;
-
-import java.util.ArrayList;
-import java.util.List;
+package roj.pe;
 
 /**
- * No description provided
+ * Your description here
  *
- * @author Roj234
+ * @author Roj233
  * @version 0.1
- * @since  2021/1/1 17:21
+ * @since 2021/10/15 13:18
  */
-public final class TypeLocalVars {
-    public final List<LocalVariable> localVars = new ArrayList<>();
-
-    public TypeLocalVars() {
-        // todo
-    }
-}
+public class PEFile {}

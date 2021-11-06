@@ -27,9 +27,9 @@
 package ilib.asm;
 
 import ilib.Config;
+import ilib.api.ContextClassTransformer;
 import ilib.client.api.ClientChangeWorldEvent;
 import net.minecraft.entity.Entity;
-import net.minecraft.launchwrapper.ContextClassTransformer;
 import net.minecraftforge.common.MinecraftForge;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;

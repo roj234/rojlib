@@ -140,25 +140,6 @@ public final class Context implements Consumer<Constant> {
         return this.result;
     }
 
-    public ByteList get2(ByteList a, ByteList b) {
-        if(this.result == null) {
-            if(this.data != null) {
-                try {
-                    data.verify();
-                    return data.getBytes(a, b);
-                } catch (Throwable e) {
-                    throw new IllegalArgumentException(name + " 写入失败", e);
-                } finally {
-                    clearData();
-                }
-            } else {
-                this.result = read0(stream);
-                this.stream = null;
-            }
-        }
-        return this.result;
-    }
-
     public ByteList get() {
         return get(false);
     }

@@ -231,6 +231,9 @@ public class AttrCode extends Attribute {
      * @param cw 常量池
      */
     public static <T extends IIntMap<InsnNode>> T reIndex(InsnList insn, ConstantPool cw, T pcRev) {
+        if (insn.isEmpty()) {
+            return pcRev;
+        }
         InsnNode last = insn.get(insn.size() - 1);
         if (last == EndOfInsn.MARKER) {
             insn.remove(insn.size() - 1);

@@ -35,7 +35,10 @@ import roj.util.FastThreadLocal;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
@@ -83,6 +86,7 @@ public class Util {
     public static final int PS_SLAVE_CONNECT     = 10;
     public static final int PS_SLAVE_DISCONNECT  = 11;
     public static final int PS_RESET             = 12;
+    public static final int PS_VERSION_CONFLICT  = 13;
     public static final int PS_LINK_OVERFLOW     = 255;
 
     public static final String[] ERROR_NAMES = {"IO错误", "登录失败(密码无效/房间不存在/房间已有房主)", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
@@ -101,7 +105,7 @@ public class Util {
     public static final int PS_STATE_IO_ERROR = 1;
     public static final int PS_STATE_DISCARD = 2;
 
-    public static final int PROTOCOL_VERSION = 3_3;
+    public static final int PROTOCOL_VERSION = 3_5;
     public static final ByteList CLIENT_HALLO = new ByteList(new byte[] {
             'A','E','C','L','I','E','N','T','H','A','L','L','O'
     });
@@ -332,15 +336,21 @@ public class Util {
         }
         if(read < 0)
             return 4;
-        if(buf.getU(0) != PS_SERVER_HALLO) {
-            if (buf.getU(0) == PS_LINK_OVERFLOW) {
-                syncPrint("服务端报告: 超过最大连接数");
-                return 4;
-            } else
+        read = buf.getU(0);
+        buf.clear();
+        switch (read) {
+            case PS_SERVER_HALLO:
+                buf.clear();
+                return 0;
+            case PS_LINK_OVERFLOW:
+                syncPrint("服务端报告超过最大连接数");
+                return 5;
+            case PS_VERSION_CONFLICT:
+                syncPrint("服务端报告不兼容当前版本 " + PROTOCOL_VERSION);
+                return 5;
+            default:
                 throw new SocketException("协议错误: " + buf);
         }
-        buf.clear();
-        return 0;
     }
 
     static int writeAndFlush(WrappedSocket channel, ByteList buf, int timeout) throws IOException {

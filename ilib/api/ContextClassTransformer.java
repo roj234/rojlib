@@ -23,25 +23,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-package ilib.asm;
+package ilib.api;
 
 import net.minecraft.launchwrapper.IClassTransformer;
-import roj.asm.AccessTransformer;
+import roj.asm.mapper.util.Context;
 
 /**
+ * 更高效的transform方案
  * @author Roj234
  * @version 0.1
- * @since 2021/5/29 16:43
+ * @since  2021/10/19 23:21
  */
-public class ATProxy implements IClassTransformer {
-    public ATProxy() {
-        Loader.addTransformer(this);
+public interface ContextClassTransformer extends IClassTransformer {
+    @Override
+    @Deprecated
+    default byte[] transform(String name, String transformedName, byte[] basicClass) {
+        if (basicClass == null)
+            return null;
+        Context ctx = new Context(name, basicClass);
+        transform(transformedName, ctx);
+        return ctx.get(true).toByteArray();
     }
 
-    @Override
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        Loader.wrapTransformers();
-        return AccessTransformer.transform(transformedName, basicClass);
-    }
+    void transform(String transformedName, Context context);
 }

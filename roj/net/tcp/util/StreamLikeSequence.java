@@ -27,7 +27,6 @@ package roj.net.tcp.util;
 
 import roj.concurrent.OperationDone;
 import roj.net.tcp.serv.Router;
-import roj.net.tcp.serv.util.Notify;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;

@@ -113,9 +113,10 @@ public class HttpClient extends ClientSocket {
     public void send() throws IOException {
         connect();
 
-        long timeout = writeTimeout <= 0 ? Long.MAX_VALUE : writeTimeout + System.currentTimeMillis();
+        long timeout = readTimeout <= 0 ? Long.MAX_VALUE : readTimeout + System.currentTimeMillis();
 
         while (!channel.handShake()) {
+            LockSupport.parkNanos(100);
             if (System.currentTimeMillis() > timeout) {
                 throw new SocketTimeoutException("Handshake");
             }
@@ -127,6 +128,7 @@ public class HttpClient extends ClientSocket {
         prepare(buf);
 
         while (channel.write(buf) > 0) {
+            LockSupport.parkNanos(100);
             if (System.currentTimeMillis() > timeout) {
                 throw new SocketTimeoutException("Write");
             }

@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,25 +23,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package roj.lavac.parser;
 
-package ilib.asm;
-
-import net.minecraft.launchwrapper.IClassTransformer;
-import roj.asm.AccessTransformer;
+import roj.asm.tree.Clazz;
 
 /**
- * @author Roj234
+ * Your description here
+ *
+ * @author solo6975
  * @version 0.1
- * @since 2021/5/29 16:43
+ * @since 2021/11/6 23:25
  */
-public class ATProxy implements IClassTransformer {
-    public ATProxy() {
-        Loader.addTransformer(this);
+public class ClInitParser implements Runnable {
+    public ClInitParser(Clazz dest, int begin, int end) {
+        super();
     }
 
     @Override
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        Loader.wrapTransformers();
-        return AccessTransformer.transform(transformedName, basicClass);
+    public void run() {
+
     }
 }

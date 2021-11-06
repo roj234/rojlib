@@ -26,7 +26,7 @@
 
 package ilib.asm;
 
-import net.minecraft.launchwrapper.ContextClassTransformer;
+import ilib.api.ContextClassTransformer;
 import roj.asm.mapper.util.Context;
 import roj.asm.nixim.NiximException;
 import roj.asm.nixim.NiximSystem;

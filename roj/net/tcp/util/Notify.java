@@ -23,25 +23,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-package ilib.asm;
-
-import net.minecraft.launchwrapper.IClassTransformer;
-import roj.asm.AccessTransformer;
+package roj.net.tcp.util;
 
 /**
  * @author Roj234
  * @version 0.1
- * @since 2021/5/29 16:43
+ * @since  2021/2/4 15:40
  */
-public class ATProxy implements IClassTransformer {
-    public ATProxy() {
-        Loader.addTransformer(this);
+public final class Notify extends RuntimeException {
+    public final int code;
+
+    public Notify(int code) {
+        super("Notify");
+        this.code = code;
     }
 
-    @Override
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        Loader.wrapTransformers();
-        return AccessTransformer.transform(transformedName, basicClass);
+    public Notify(Throwable e) {
+        super(e);
+        this.code = 1;
     }
 }

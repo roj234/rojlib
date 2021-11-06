@@ -46,7 +46,7 @@ public abstract class ClientSocket {
     protected SocketChannel server;
     protected WrappedSocket channel;
 
-    protected int connectTimeout = -1, readTimeout = -1, writeTimeout = -1;
+    protected int connectTimeout = -1, readTimeout = -1;
     protected InetSocketAddress endpoint;
     protected Proxy proxy;
 
@@ -121,14 +121,6 @@ public abstract class ClientSocket {
     public WrappedSocket getChannel() throws IOException {
         connect();
         return channel;
-    }
-
-    public void writeTimeout(int timeout) {
-        writeTimeout = timeout;
-    }
-
-    public int writeTimeout() {
-        return writeTimeout;
     }
 
     public void readTimeout(int timeout) {
