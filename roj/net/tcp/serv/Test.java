@@ -29,7 +29,7 @@ import roj.collect.MyHashMap;
 import roj.management.PerformanceLogger;
 import roj.net.tcp.client.HttpClient;
 import roj.net.tcp.client.HttpHeader;
-import roj.net.tcp.serv.response.CachedFileResponse;
+import roj.net.tcp.serv.response.GZipFileResponse;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
@@ -82,7 +82,7 @@ public class Test {
                     client.send();
                     HttpHeader header = client.response();
                     System.out.println(header);
-                    ByteList list = new ByteList().readStreamArrayFully(client.getInputStream());
+                    ByteList list = new ByteList().readStreamFully(client.getInputStream());
                     System.out.println("DL " + list.pos());
                     System.out.println("Keep-Alive: " + header.headers.get("connection"));
                     LockSupport.parkNanos(2_000_000_000L);
@@ -101,7 +101,7 @@ public class Test {
             return;
         }
 
-        HTTPResponse gzc = new CachedFileResponse(new File("E:/章节修复.txt"));
+        HTTPResponse gzc = new GZipFileResponse(new File("E:/章节修复.txt"));
 
         HttpServer server = new HttpServer(2333, 2048, new RouterImpl(new Router() {
                     @Override
@@ -111,7 +111,7 @@ public class Test {
 
                         switch (request.path()) {
                             case "/favicon.ico":
-                                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, null));
+                                return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
                             case "/":
                             case "":
                                 StringBuilder sb = new StringBuilder().append("<h1>Welcome! <br> Asyncorized_MC's HTTP(S) Server</h1>");
@@ -130,7 +130,7 @@ public class Test {
                             case "/mem":
                                 return new Reply(Code.OK, new StringResponse(getMemory(), "text/plain"));
                             default:
-                                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, "未定义的路由"));
+                                return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, "未定义的路由"));
                         }
                     }
                 }), "server.ks", "123456".toCharArray());

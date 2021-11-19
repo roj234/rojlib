@@ -37,10 +37,10 @@ import roj.util.ByteWriter;
  * @since 2021/10/4 11:57
  */
 public abstract class Holder {
-    protected ByteWriter   bw;
-    protected ConstantPool cw;
-    protected ByteReader   br;
-    protected ConstantPool   cp;
+    public ByteWriter   bw;
+    public ConstantPool cw;
+    public ByteReader   br;
+    public ConstantPool cp;
 
     Holder() {}
 

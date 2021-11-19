@@ -33,6 +33,7 @@ import roj.asm.tree.MoFNode;
 import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
+import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.SharedThreads;
@@ -490,7 +491,7 @@ public final class Util {
 
         ByteList bl = new ByteList();
         for (Map.Entry<String, InputStream> entry : streams.entrySet()) {
-            Context c = new Context(entry.getKey().replace('\\', '/'), bl.readStreamArrayFully(entry.getValue()).toByteArray());
+            Context c = new Context(entry.getKey().replace('\\', '/'), bl.readStreamFully(entry.getValue()).toByteArray());
             entry.getValue().close();
             c.getData();
             bl.clear();
@@ -521,7 +522,7 @@ public final class Util {
             if (zn.isDirectory()) continue;
             if (zn.getName().endsWith(".class") && filter.test(zn.getName())) {
                 InputStream in = inputJar.getInputStream(zn);
-                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamFully(in).toByteArray());
                 in.close();
                 bl.clear();
                 ctx.add(c);
@@ -549,7 +550,7 @@ public final class Util {
             }
             if (zn.isDirectory()) continue;
             InputStream in = inputJar.getInputStream(zn);
-            bl.readStreamArrayFully(in);
+            bl.readStreamFully(in);
             in.close();
             if (zn.getName().endsWith(".class")) {
                 Context c = new Context(zn.getName().replace('\\', '/'), bl.toByteArray());

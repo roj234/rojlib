@@ -27,10 +27,10 @@ package roj.mod.remap;
 
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
-import roj.asm.mapper.util.Context;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrInnerClasses;
 import roj.asm.tree.attr.Attribute;
+import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.ui.CmdUtil;
 import roj.util.Helpers;

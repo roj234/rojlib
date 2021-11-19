@@ -207,7 +207,7 @@ public final class Project extends JSONConfiguration {
                         try {
                             resourceCache.put(s.substring(len + 1).replace('\\', '/'), IOUtil.read(new FileInputStream(file)));
                         } catch (IOException e) {
-                            Helpers.throwAny(e);
+                            Helpers.athrow(e);
                         }
                     }
                 } else {
@@ -221,7 +221,7 @@ public final class Project extends JSONConfiguration {
                         try {
                             entry.setValue(IOUtil.read((InputStream) entry.getValue()));
                         } catch (IOException e) {
-                            Helpers.throwAny(e);
+                            Helpers.athrow(e);
                         }
                     }
                 }

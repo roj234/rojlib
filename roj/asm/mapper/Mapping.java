@@ -80,17 +80,16 @@ public class Mapping {
 
     public final void loadMap(InputStream is, boolean reverse) {
         try(SimpleLineReader slr = new SimpleLineReader(is)) {
-            CharList cl = new CharList(100);
             ArrayList<String> q = new ArrayList<>();
             String last0 = null, last1 = null;
 
             for(String s : slr) {
                 q.clear();
-                String dlm0 = TextUtil.split(q, cl, s, ':', 2).get(0);
+                String dlm0 = TextUtil.split(q, s, ':', 2).get(0);
                 String dlm1 = q.get(1);
 
                 q.clear();
-                TextUtil.split(q, cl, dlm1, ' ');
+                TextUtil.split(q, dlm1, ' ');
 
                 int id, id2;
                 switch(dlm0) {

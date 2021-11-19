@@ -94,7 +94,7 @@ public class StreamingChars implements CharSequence {
         try {
             int read;
             while (cl.length() < required) {
-                read = buffer.readStreamArray(in, MathUtils.clamp(in.available(), 128, 4096));
+                read = buffer.readStream(in, MathUtils.clamp(in.available(), 128, 4096));
                 if (read >= 0) {
                     if (read > 0) {
                         start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);
@@ -114,7 +114,7 @@ public class StreamingChars implements CharSequence {
                 }
             }
         } catch (IOException e) {
-            Helpers.throwAny(e);
+            Helpers.athrow(e);
         } finally {
             bufOff = start;
         }

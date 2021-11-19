@@ -27,6 +27,7 @@ package roj.io;
 
 import roj.collect.MyHashMap;
 import roj.concurrent.PrefixFactory;
+import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.WaitingIOFuture;
 import roj.concurrent.task.AbstractCalcTask;
@@ -63,8 +64,8 @@ import java.util.function.Predicate;
 public final class FileUtil {
     public static final MessageDigest MD5, SHA1;
 
-    public static TaskPool ioPool = new TaskPool(0, Runtime.getRuntime().availableProcessors() * 8, 1, 512,
-            new PrefixFactory("FLU-ParIO", 20000));
+    public static TaskHandler ioPool = new TaskPool(0, Runtime.getRuntime().availableProcessors() * 8, 1, 512,
+                                                    new PrefixFactory("FLU-ParIO", 20000));
 
     static {
         MessageDigest MD, SH;
@@ -186,7 +187,7 @@ public final class FileUtil {
             ByteList buf = IOUtil.getSharedByteBuf();
             buf.clear();
             buf.ensureCapacity(length);
-            return buf.readStreamArrayFully(in).toByteArray();
+            return buf.readStreamFully(in).toByteArray();
         }
     }
 
@@ -213,55 +214,48 @@ public final class FileUtil {
             throw new IOException("下载进度文件无法写入");
         }
 
-        return singleThread0(file, handler, pid, deleteInfo ? DFLAG_KEEP_INFO_FILE : 0, info, process302(new URL(url), false));
+        return singleThread0(file, handler, pid, deleteInfo ? DFLAG_KEEP_INFO_FILE : 0, info, new URL(url));
     }
 
-    private static WaitingIOFuture singleThread0(File file, IProgressHandler handler, int pid, int flag, File info, HttpConnection conn) throws IOException {
-        long length = conn.getContentLengthLong();
-        conn.disconnect();
-        if (length < 0)
-            return streamMode(file, handler, conn);
-
+    private static WaitingIOFuture singleThread0(File file, IProgressHandler handler, int pid, int flag, File info, Object o) {
         File tmp = new File(file.getAbsolutePath() + ".down");
-        if (tmp.length() != length) {
-            allocSparseFile(tmp, length);
-        }
-
-        Downloader dn = new Downloader(pid, tmp, info, conn.getURL(), 0, length, handler);
-        ioPool.pushTask(dn);
-
-        return new DOWN(Collections.singletonList(dn), handler, file, flag).infoSpecified(info);
-    }
-
-    private static WaitingIOFuture streamMode(File file, IProgressHandler handler, HttpConnection conn) throws IOException {
-        FileChannel fc = FileChannel.open(new File(file.getAbsolutePath() + ".down").toPath(),
-                                          StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-        conn.getClient().method("GET");
-        InputStream in = conn.getInputStream();
-
         AbstractCalcTask<Void> task = new AbstractCalcTask<Void>() {
             @Override
             public void calculate(Thread thread) throws Exception {
-                try {
-                    //noinspection all
-                    Thread.interrupted();
+                HttpConnection conn;
+                if (o instanceof HttpConnection) {
+                    conn = (HttpConnection) o;
+                } else {
+                    conn = process302((URL) o, false);
+                }
+
+                long length = conn.getContentLengthLong();
+
+                if (length < 0) {
+                    if (!conn.getClient().method().equals("GET")) {
+                        conn.disconnect();
+                        conn.getClient().method("GET");
+                    }
+                    FileChannel fc = FileChannel.open(tmp.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+                    InputStream in = conn.getInputStream();
+
                     ByteBuffer buf = ByteBuffer.allocate(8192);
                     int read;
                     while ((read = in.read(buf.array())) > 0) {
                         buf.position(0).limit(read);
                         fc.write(buf);
                     }
-                } finally {
-                    out = null;
-                    synchronized (this) {
-                        notifyAll();
+                } else {
+                    if (tmp.length() != length) {
+                        allocSparseFile(tmp, length);
                     }
+                    new Downloader(pid, tmp, info, conn, 0, length, handler).waitFor();
                 }
             }
         };
         ioPool.pushTask(task);
 
-        return new DOWN(Collections.singletonList(task), handler, file, 0);
+        return new DOWN(Collections.singletonList(task), handler, file, flag).infoSpecified(info);
     }
 
     /**
@@ -313,12 +307,8 @@ public final class FileUtil {
         HttpConnection conn = process302(new URL(address), true);
 
         long remain = conn.getContentLengthLong();
-        if (remain == -1) {
-            conn.disconnect();
-            return streamMode(file, handler, conn);
-        }
 
-        if(conn.getHeaderField("ETag") == null && conn.getHeaderField("Last-Modified") == null) {
+        if(remain < 0 || (conn.getHeaderField("ETag") == null && conn.getHeaderField("Last-Modified") == null)) {
             return singleThread0(file, handler, 0, flag, infoFile, conn);
         }
 
@@ -372,8 +362,6 @@ public final class FileUtil {
     }
 
     public static void allocSparseFile(File file, long length) throws IOException {
-        // noinspection all
-        Thread.interrupted();
         if (file.length() != length) {
             if (!file.isFile() || file.length() < length) {
                 file.delete();
@@ -508,17 +496,7 @@ public final class FileUtil {
                 } catch (InterruptedException ignored) {
                 } catch (ExecutionException e) {
                     handler.errorCaught();
-
-                    Throwable cause = e.getCause();
-                    if(cause instanceof RuntimeException) {
-                        throw (RuntimeException) cause;
-                    }
-
-                    if(cause instanceof IOException) {
-                        throw (IOException) cause;
-                    }
-
-                    throw new RuntimeException(cause);
+                    Helpers.athrow(e.getCause());
                 }
             }
 

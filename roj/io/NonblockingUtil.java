@@ -149,8 +149,8 @@ public final class NonblockingUtil {
         int pos = buf.position();
         int lim = buf.limit();
 
-        int len = pos < lim ? lim - pos : 0;
-        if (len == 0) {
+        int len = lim - pos;
+        if (len <= 0) {
             return 0;
         } else {
             if(!fd.valid())
@@ -165,61 +165,12 @@ public final class NonblockingUtil {
         }
     }
 
-    public static int readSocket(FileDescriptor fd, ByteBuffer buf, int max) throws IOException {
-        return read(fd, buf, max, 1);
-    }
-
-    public static int readFile(FileDescriptor fd, ByteBuffer buf, int max) throws IOException {
-        return read(fd, buf, max, 0);
-    }
-
-    private static int read(FileDescriptor fd, ByteBuffer buf, int max, int socket) throws IOException {
-        if (buf.isDirect()) {
-            int lim = buf.limit();
-            buf.limit(Math.min(max, buf.capacity()));
-            int read = readToNativeBuffer(fd, buf, socket);
-            buf.limit(lim);
-            return read;
-        }
-        throw new RuntimeException("Not direct buffer");
-    }
-
-    public static int readSocket(FileDescriptor fd, ByteList buf, int max) throws IOException {
-        return read(fd, buf, max, 1);
-    }
-
-    public static int readFile(FileDescriptor fd, ByteList buf, int max) throws IOException {
-        return read(fd, buf, max, 0);
-    }
-
-    private static int read(FileDescriptor fd, ByteList buf, int max, int socket) throws IOException {
-        int len = Math.min(buf.list.length - buf.pos(), max);
-        len = Math.min(DIRECT_CACHE_MAX, len);
-
-        ByteBuffer shared = DIRECT_CACHE.get();
-        if (shared == null || shared.capacity() < len) {
-            if (shared != null) {
-                IOUtil.clean(shared);
-            }
-            DIRECT_CACHE.set(shared = ByteBuffer.allocateDirect(len));
-        }
-        shared.position(0).limit(len);
-
-        int read = readToNativeBuffer(fd, shared, socket);
-        if (read > 0) {
-            shared.flip();
-            buf.readFrom(shared);
-        }
-
-        return read;
-    }
-
     public static int readToNativeBuffer(FileDescriptor fd, ByteBuffer buf, int socket) throws IOException {
         int pos = buf.position();
         int lim = buf.limit();
 
-        int len = pos < lim ? lim - pos : 0;
-        if (len == 0) {
+        int len = lim - pos;
+        if (len <= 0) {
             return 0;
         } else {
             if(!fd.valid())

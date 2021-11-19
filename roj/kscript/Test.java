@@ -28,7 +28,7 @@ package roj.kscript;
 import roj.config.ParseException;
 import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.Context;
+import roj.kscript.asm.Context;
 import roj.kscript.func.KFuncNative;
 import roj.kscript.func.KFunction;
 import roj.kscript.func.KInitializer;

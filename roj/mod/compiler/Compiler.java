@@ -174,7 +174,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
         if(lineNumber == -1)
             return "";
         try {
-            return SimpleLineReader.readSingleLine(IOUtil.readUTF(source.openInputStream()), false, (int) (lineNumber - 1));
+            return SimpleLineReader.readSingleLine(IOUtil.readUTF(source.openInputStream()), (int) lineNumber);
         } catch (IOException e) {
             e.printStackTrace();
             return "<ERROR> failed to get " + source.getName() + " due to " + e;

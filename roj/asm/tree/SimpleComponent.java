@@ -84,6 +84,11 @@ public abstract class SimpleComponent implements MoFNode {
     }
 
     @Override
+    public AttributeList attributes() {
+        return attributes;
+    }
+
+    @Override
     public String toString() {
         return name.getString() + ' ' + type.getString();
     }

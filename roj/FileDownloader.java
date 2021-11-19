@@ -41,7 +41,7 @@ import java.io.IOException;
  */
 public final class FileDownloader {
     public static void main(String[] args) throws IOException {
-        if (args.length == 0) {
+        if (args.length < 2) {
             System.out.println("FileDownloader <saveTo> <url>");
             return;
         }

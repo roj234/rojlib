@@ -39,16 +39,17 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/2/26 10:52
  */
 public class PluginRenamer {
     public static void main(String[] args) {
-        if(args.length == 0)
-            System.out.println("PR <path to plugins>");
+        if(args.length < 1) {
+            System.out.println("PluginRenamer <path>");
+            System.out.println("用途：根据plugin.yml还原插件名称");
+            return;
+        }
         ByteList bl = new ByteList();
         CharList cl = new CharList();
         for (File file : new File(args[0]).listFiles()) {
@@ -61,7 +62,7 @@ public class PluginRenamer {
 
                     bl.clear();
                     InputStream in = zf.getInputStream(ze);
-                    bl.readStreamArrayFully(in);
+                    bl.readStreamFully(in);
                     //in.close();
 
                     cl.clear();

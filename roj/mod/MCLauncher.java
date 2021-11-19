@@ -60,9 +60,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -720,7 +718,7 @@ public class MCLauncher extends JFrame {
             final File mcJsonTmp = new File(installDir, ver + ".json.tmp");
             try (FileOutputStream fos = new FileOutputStream(mcJsonTmp)) {
                 final InputStream in = zf.getInputStream(verJson);
-                bl.readStreamArrayFully(in).writeToStream(fos);
+                bl.readStreamFully(in).writeToStream(fos);
                 in.close();
                 bl.clear();
             }
@@ -774,7 +772,7 @@ public class MCLauncher extends JFrame {
 
                         try (FileOutputStream fos = new FileOutputStream(f)) {
                             final InputStream in = zf.getInputStream(ze);
-                            bl.readStreamArrayFully(in).writeToStream(fos);
+                            bl.readStreamFully(in).writeToStream(fos);
                             in.close();
                             bl.clear();
                         }
@@ -809,7 +807,7 @@ public class MCLauncher extends JFrame {
 
                         try (FileOutputStream fos = new FileOutputStream(dest)) {
                             final InputStream in = zf.getInputStream(ze);
-                            bl.readStreamArrayFully(in).writeToStream(fos);
+                            bl.readStreamFully(in).writeToStream(fos);
                             in.close();
                             bl.clear();
                         }
@@ -917,7 +915,7 @@ public class MCLauncher extends JFrame {
 
                         try(FileOutputStream fos = new FileOutputStream(dest)) {
                             final InputStream in = zf.getInputStream(ze);
-                            bl.readStreamArrayFully(in).writeToStream(fos);
+                            bl.readStreamFully(in).writeToStream(fos);
                             in.close();
                             bl.clear();
                         }
@@ -951,7 +949,7 @@ public class MCLauncher extends JFrame {
             ByteList bl = new ByteList();
             try(FileOutputStream fos = new FileOutputStream(dest)) {
                 InputStream in = zf.getInputStream(forge);
-                bl.readStreamArrayFully(in);
+                bl.readStreamFully(in);
                 in.close();
                 bl.writeToStream(fos);
             }
@@ -2154,21 +2152,22 @@ public class MCLauncher extends JFrame {
                 return;
             }
 
-            if(e.getMessage().equals("文件已存在")) {
+            String msg = e.getMessage();
+            if("文件已存在".equals(msg)) {
                 CmdUtil.info(url + " 已被其它线程完成");
                 // noinspection all
                 out = null;
                 return;
             }
 
-            if(e.getMessage().equals("文件已被占用")) {
+            if("文件已被占用".equals(msg)) {
                 CmdUtil.warning(url + " 正在被另一个线程下载");
                 // noinspection all
                 out = null;
                 return;
             }
 
-            if(!e.getMessage().equals("Read timed out")) {
+            if(!"Read timed out".equals(msg)) {
                 if(e instanceof FileNotFoundException) {
                     CmdUtil.error("网络连接异常: " + e.toString());
                     // noinspection all

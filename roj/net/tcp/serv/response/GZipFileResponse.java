@@ -25,6 +25,7 @@
  */
 package roj.net.tcp.serv.response;
 
+import roj.io.ByteBufferOutputStream;
 import roj.net.NetworkUtil;
 import roj.net.tcp.serv.util.ReusableGZOutput;
 import roj.net.tcp.util.Shared;
@@ -34,87 +35,70 @@ import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/12/5 18:31
  */
 public class GZipFileResponse extends FileResponse {
     ReusableGZOutput gz;
-    final ByteList zipped = new ByteList();
-    final byte[] hex = new byte[10];
+    final ByteList tmp = new ByteList();
+    final byte[]   hex = new byte[8];
 
     public GZipFileResponse(File absolute) {
         super(absolute);
-    }
-
-    public GZipFileResponse(URI relative) {
-        super(relative);
+        gz = new ReusableGZOutput(Shared.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
     }
 
     @Override
     public void prepare() throws IOException {
         super.prepare();
-
-        if (this.gz == null) {
-            this.gz = new ReusableGZOutput(zipped.asOutputStream(), Shared.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
-
-            zipped.ensureCapacity(Math.min(Shared.WRITE_MAX, stream.available()));
-
-            hex[8] = '\r';
-            hex[9] = '\n';
-        }
+        gz.reset(new ByteBufferOutputStream(null));
+        tmp.ensureCapacity(8192);
     }
 
     @Override
     public boolean send(WrappedSocket channel) throws IOException {
         if (stream == null)
             throw new IllegalStateException();
-        long pos = position;
-        if (pos < 0)
-            throw new IllegalStateException();
+        if (eof) return false;
 
-        if (pos >= length) {
-            return false;
+        ByteBuffer buf = channel.buffer();
+        if (buf.hasRemaining()) {
+            channel.writeDirect(buf);
+            return true;
         }
 
-        ByteList buf = channel.buffer();
         buf.clear();
+        ByteBufferOutputStream out = (ByteBufferOutputStream) gz.getOut();
+        out.setBuffer(buf);
 
-        long delta = buf.readStreamArray(stream, Shared.WRITE_MAX);
-        buf.writeToStream(gz);
-        buf.clear();
+        int read = tmp.readStream(stream, 8192);
+        tmp.writeToStream(gz);
+        tmp.clear();
 
-        pos += delta;
-
-        boolean undone = (position = pos) < length;
-
-        if (!undone) {
+        if (read < 0) {
             gz.finish();
+            eof = true;
         }
 
-        if ((buf = this.zipped).pos() > 0) {
+        if (buf.position() > 0) {
             byte[] hex = this.hex;
-            int off = NetworkUtil.number2hex(buf.pos(), hex);
+            int off = NetworkUtil.number2hex(buf.position(), hex);
+            buf.put(hex, off, 8 - off).put((byte) '\r').put((byte) '\n');
 
-            channel.write(new ByteList.ReadOnlySubList(hex, off, 10 - off));
-
-            buf.addAll(hex, 8, 2);
-
-            if (!undone) {
-                buf.addAll(Shared.END_OF_CHUNK);
+            if (read < 0) {
+                buf.put(Shared.END_OF_CHUNK);
             }
 
-            channel.write(buf);
-            buf.clear();
+            buf.flip();
+            channel.writeDirect(buf);
         }
 
-        return undone;
+        return read > 0;
     }
 
     @Override

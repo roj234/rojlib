@@ -25,6 +25,7 @@
  */
 package roj.asm.mapper.util;
 
+import roj.asm.util.Context;
 import roj.concurrent.task.AbstractExecutionTask;
 
 import java.util.List;
@@ -38,7 +39,7 @@ import java.util.function.Consumer;
  * @since 2021/5/30 19:59
  */
 public final class Worker extends AbstractExecutionTask {
-    private final List<Context> files;
+    private final List<Context>     files;
     private final Consumer<Context> consumer;
 
     public Worker(List<Context> files, Consumer<Context> consumer, String name) {

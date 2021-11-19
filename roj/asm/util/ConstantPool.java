@@ -135,6 +135,7 @@ public class ConstantPool {
             } catch (RuntimeException e) {
                 String error;
                 try {
+                    // noinspection all
                     error = getReferTo(c).toString();
                 } catch (Throwable e1) {
                     error = e1.toString();
@@ -662,5 +663,45 @@ public class ConstantPool {
     Consumer<Constant> listener;
     public void setAddListener(Consumer<Constant> listener) {
         this.listener = listener;
+    }
+
+    public int byteLength() {
+        int length = 0;
+        for (int i = 0; i < constants.size(); i++) {
+            Constant c = constants.get(i);
+            switch (c.type()) {
+                case UTF:
+                    length += 3 + ByteWriter.byteCountUTF8(((CstUTF) c).getString());
+                    break;
+                case INT:
+                case INVOKE_DYNAMIC:
+                case FLOAT:
+                case NAME_AND_TYPE:
+                case METHOD:
+                case FIELD:
+                case INTERFACE:
+                    length += 5;
+                    break;
+                case LONG:
+                case DOUBLE:
+                    length += 9;
+                    break;
+                case METHOD_TYPE:
+                case STRING:
+                case MODULE:
+                case PACKAGE:
+                case CLASS:
+                    length += 3;
+                    break;
+                case METHOD_HANDLE:
+                    length += 4;
+                    break;
+                case _TOP_:
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown constant type " + (0xFF & c.type()));
+            }
+        }
+        return length;
     }
 }

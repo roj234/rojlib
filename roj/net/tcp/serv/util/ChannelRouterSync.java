@@ -98,7 +98,7 @@ public class ChannelRouterSync implements ITaskNaCl {
 
                 while (!channel.handShake()) {
                     if (System.currentTimeMillis() > time) {
-                        reply = new Reply(Code.TIMEOUT, StringResponse.errorResponse(Code.TIMEOUT, null));
+                        reply = new Reply(Code.TIMEOUT, StringResponse.forError(Code.TIMEOUT, null));
                         break;
                     }
                     LockSupport.parkNanos(50);
@@ -111,13 +111,13 @@ public class ChannelRouterSync implements ITaskNaCl {
                             reply.getClass(); // checkNull
                             reply.prepare();
                         } catch (Throwable e) {
-                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(null, e));
                         }
                     } catch (IllegalRequestException e) {
                         final Throwable cause = e.getCause();
                         reply = new Reply(e.code, cause instanceof Notify ?
-                                StringResponse.errorResponse(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
-                                StringResponse.errorResponse(null, e)
+                                StringResponse.forError(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
+                                StringResponse.forError(null, e)
                         );
                     }
                 }
@@ -147,7 +147,7 @@ public class ChannelRouterSync implements ITaskNaCl {
                 reply.release();
             }
 
-            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(null, e));
             try {
                 long time = System.currentTimeMillis();
                 long timeout = router.writeTimeout(request);

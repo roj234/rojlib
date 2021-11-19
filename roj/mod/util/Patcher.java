@@ -226,7 +226,7 @@ public final class Patcher {
                 while ((ze = zis.getNextEntry()) != null) {
                     if(ze.getName().endsWith(".binpatch")) {
                         list.clear();
-                        list.readStreamArrayFully(zis);
+                        list.readStreamFully(zis);
                         Patch cp = read113Patch(new ByteReader(list));
                         String cn = unmapper.getOrDefault(cp.source, cp.source);
 

@@ -28,7 +28,7 @@ package ilib.asm.fasterforge;
 import roj.asm.Parser;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.util.Context;
+import roj.asm.util.Context;
 import roj.collect.TrieTreeSet;
 import roj.util.ByteList;
 

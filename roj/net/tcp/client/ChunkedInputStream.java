@@ -108,7 +108,7 @@ public class ChunkedInputStream extends InputStream {
         StreamLikeSequence plain = (StreamLikeSequence)data[0];
         HTTPHeaderLexer lexer = ((HTTPHeaderLexer)data[1]).init(plain.init(in.socket, in.readTimeout, (int) in.dataRemain));
 
-        lexer.index = in.bufPos;
+        lexer.index = in.buf.position();
         try {
             switch (stage) {
                 case CHUNK_END:

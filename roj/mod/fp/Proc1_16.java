@@ -28,7 +28,7 @@ package roj.mod.fp;
 import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.Util;
-import roj.asm.mapper.util.Context;
+import roj.asm.util.Context;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.OperationDone;
@@ -130,12 +130,12 @@ public final class Proc1_16 extends Processor {
             ZipEntry ze = zf.getEntry("data/server.lzma");
             if (ze == null)
                 throw OperationDone.INSTANCE;
-            server_lzma = new ByteList().readStreamArrayFully(zf.getInputStream(ze)).asInputStream();
+            server_lzma = new ByteList().readStreamFully(zf.getInputStream(ze)).asInputStream();
 
             ze = zf.getEntry("install_profile.json");
             if (ze == null)
                 throw OperationDone.INSTANCE;
-            CMapping installconf = JSONParser.parse(ByteReader.readUTF(new ByteList().readStreamArrayFully(zf.getInputStream(ze)))).asMap();
+            CMapping installconf = JSONParser.parse(ByteReader.readUTF(new ByteList().readStreamFully(zf.getInputStream(ze)))).asMap();
 
             zf.close();
 
@@ -333,7 +333,7 @@ public final class Proc1_16 extends Processor {
             if (zn.getName().endsWith(".class")) {
                 map.add(zn.getName());
                 InputStream in = zf.getInputStream(zn);
-                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamFully(in).toByteArray());
                 in.close();
                 bl.clear();
                 ctx.add(c);
@@ -353,7 +353,7 @@ public final class Proc1_16 extends Processor {
             if (zn.isDirectory()) continue;
             if (zn.getName().endsWith(".class") && map.add(zn.getName())) {
                 InputStream in = zf.getInputStream(zn);
-                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamArrayFully(in).toByteArray());
+                Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamFully(in).toByteArray());
                 in.close();
                 bl.clear();
                 ctx.add(c);

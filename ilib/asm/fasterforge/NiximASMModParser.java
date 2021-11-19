@@ -27,11 +27,6 @@ package ilib.asm.fasterforge;
 
 import com.google.common.base.MoreObjects;
 import ilib.asm.fasterforge.anc.FastParser;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.LoaderException;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import org.objectweb.asm.Type;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
@@ -52,6 +47,12 @@ import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.Helpers;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.LoaderException;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -89,7 +90,7 @@ public class NiximASMModParser extends ASMModParser implements FastParser {
         try {
             ByteList shared = IOUtil.getSharedByteBuf();
             shared.clear();
-            shared.readStreamArrayFully(stream);
+            shared.readStreamFully(stream);
             ConstantData data = Parser.parseConstants(shared);
 
             this.asmType = TypeHelper.asmType(data.name);

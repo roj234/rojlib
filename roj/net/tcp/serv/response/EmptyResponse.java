@@ -29,13 +29,11 @@ import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/11/29 0:22
  */
-public final class EmptyResponse implements HTTPResponse {
+public class EmptyResponse implements HTTPResponse {
     public static final HTTPResponse INSTANCE = new EmptyResponse();
 
     private EmptyResponse() {

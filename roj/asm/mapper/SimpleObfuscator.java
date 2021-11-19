@@ -5,7 +5,6 @@ import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.mapper.CodeMapper.SimpleVar;
 import roj.asm.mapper.obf.policy.*;
-import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrCode;
@@ -277,7 +276,7 @@ public final class SimpleObfuscator extends Obfuscator {
     public TrieTreeSet       packageExclusions = new TrieTreeSet();
     public MyHashSet<String> classExclusions   = new MyHashSet<>();
 
-    public final Random rand;
+    public Random rand;
     public NamingFunction clazz, method, field, param;
     final MyHashSet<String> tempF = new MyHashSet<>(), tempM = new MyHashSet<>(), classes = new MyHashSet<>();
     public CharList lineLog;

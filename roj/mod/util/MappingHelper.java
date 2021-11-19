@@ -121,7 +121,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
 
             tmp.clear();
-            if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
+            if(TextUtil.split(tmp, line, ',').size() < 2) {
                 throw new IllegalArgumentException("methods.csv:" + i + ": 未知标记: " + line);
             }
             List<Desc> descriptors = methods.get(tmp.get(0));
@@ -151,7 +151,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
 
             tmp.clear();
-            if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
+            if(TextUtil.split(tmp, line, ',').size() < 2) {
                 throw new IllegalArgumentException("fields.csv:" + i + ": 未知标记: " + line);
             }
             List<Desc> descriptors = fields.get(tmp.get(0));
@@ -181,7 +181,7 @@ public class MappingHelper {
             if (line.length() == 0 || line.startsWith("#")) continue;
 
             tmp.clear();
-            if(TextUtil.split(tmp, cl, line, ',').size() < 2) {
+            if(TextUtil.split(tmp, line, ',').size() < 2) {
                 throw new IllegalArgumentException("params.csv:" + i + ": 未知标记: " + line);
             }
             paramMap.put(tmp.get(0), tmp.get(1));
@@ -331,7 +331,6 @@ public class MappingHelper {
 
         int i = 1, fuckedArgs = 0, fuckingTsrg2 = 0;
 
-        CharList tmp = new CharList();
         final ArrayList<String> list = new ArrayList<>();
 
         for (String line : slr) {
@@ -348,7 +347,7 @@ public class MappingHelper {
                     continue;
                 }
                 list.clear();
-                List<String> arr = TextUtil.split(list, tmp, line.substring(1), ' ', 3 + fuckingTsrg2);
+                List<String> arr = TextUtil.split(list, line.substring(1), ' ', 3 + fuckingTsrg2);
                 if(fuckingTsrg2 == 1)
                     arr.remove(arr.size() - 1);
 
@@ -393,7 +392,7 @@ public class MappingHelper {
                 }
 
                 list.clear();
-                TextUtil.split(list, tmp, line, ' ', 2);
+                TextUtil.split(list, line, ' ', 2);
                 ctx[0] = list.get(0);
                 ctx[1] = list.get(1);
 
@@ -513,7 +512,7 @@ public class MappingHelper {
             if(!key.startsWith("func_"))
                 continue;
             tmp.clear();
-            TextUtil.split(tmp, cl, key, '_');
+            TextUtil.split(tmp, key, '_');
 
             if(tmp.size() < 3) {
                 OUT.println("[Warn]Src参数不符合 " + key);
@@ -536,7 +535,7 @@ public class MappingHelper {
         final Function<String, List<String>> fnL = Helpers.fnArrayList();
         for (Map.Entry<String, String> entry : paramNameMap.entrySet()) {
             tmp.clear();
-            TextUtil.split(tmp, cl, entry.getKey(), '_');
+            TextUtil.split(tmp, entry.getKey(), '_');
             String[] data = ds.remove(tmp.get(1));
             if(data == null) {
                 if(!tmp.get(1).startsWith("i"))
@@ -896,8 +895,6 @@ public class MappingHelper {
                 i++;
             }
 
-            CharList tmp0 = new CharList();
-
             i = 1;
             final ArrayList<String> list = new ArrayList<>(2);
             for (String line : slr) {
@@ -914,7 +911,7 @@ public class MappingHelper {
                         if(s != null)
                             mb.set(true);
                         return true;
-                    }), tmp0, line.trim(), ':');
+                    }), line.trim(), ':');
                     String val = arr1.found;
 
                     if (!mb.get()) {
@@ -924,7 +921,7 @@ public class MappingHelper {
                         } else {
                             // field type: arr[0]
                             list.clear();
-                            final String s = TextUtil.split(list, tmp0, val, ' ', 2).get(1);
+                            final String s = TextUtil.split(list, val, ' ', 2).get(1);
                             int index = s.indexOf(" -> ");
 
                             elementMap.computeIfAbsent(currentClass[1], Helpers.fnMyHashMap()).put(s.substring(index + 4), s.substring(0, index));
@@ -935,7 +932,7 @@ public class MappingHelper {
 
                     if (mb.get()) {
                         list.clear();
-                        List<String> arr = TextUtil.split(list, tmp0, val, ' ', 2);
+                        List<String> arr = TextUtil.split(list, val, ' ', 2);
                         final String s = arr.get(1);
                         int index = s.indexOf(" -> ");
 

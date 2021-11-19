@@ -119,7 +119,7 @@ public class FMDInstall extends JFrame {
         if(code == null)
             return;
 
-        List<String> list = TextUtil.split(new ArrayList<>(4), new CharList(), code, '|', 8, true);
+        List<String> list = TextUtil.split(new ArrayList<>(4), code, '|', 8, true);
         if(list.size() < 4 || list.size() > 5) {
             error("安装代码无效");
             return;

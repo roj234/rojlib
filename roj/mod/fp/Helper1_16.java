@@ -62,7 +62,7 @@ class Helper1_16 {
                     ZipEntry ze1 = new ZipEntry(ze);
                     ze1.setCompressedSize(-1);
                     zos.putNextEntry(ze1);
-                    bl.readStreamArrayFully(zf.getInputStream(ze)).writeToStream(zos);
+                    bl.readStreamFully(zf.getInputStream(ze)).writeToStream(zos);
                     bl.clear();
                     zos.closeEntry();
                     i++;

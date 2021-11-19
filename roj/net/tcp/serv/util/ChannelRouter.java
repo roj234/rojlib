@@ -126,13 +126,13 @@ public class ChannelRouter extends ChannelRouterSync {
                             reply.getClass(); // checkNull
                             reply.prepare();
                         } catch (Throwable e) {
-                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(null, e));
                         }
                     } catch (IllegalRequestException e) {
                         final Throwable cause = e.getCause();
                         reply = new Reply(e.code, cause instanceof Notify ?
-                                StringResponse.errorResponse(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
-                                StringResponse.errorResponse(null, e)
+                                StringResponse.forError(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
+                                StringResponse.forError(null, e)
                         );
                     }
                 }
@@ -171,7 +171,7 @@ public class ChannelRouter extends ChannelRouterSync {
                 reply.release();
             }
 
-            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.errorResponse(null, e));
+            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(null, e));
             try {
                 long time = System.currentTimeMillis();
                 long timeout = router.writeTimeout(request);

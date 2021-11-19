@@ -27,9 +27,9 @@ package roj.kscript.vm;
 
 import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.Frame;
-import roj.kscript.ast.Node;
-import roj.kscript.ast.TryEnterNode;
+import roj.kscript.asm.Frame;
+import roj.kscript.asm.Node;
+import roj.kscript.asm.TryEnterNode;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KError;
 import roj.kscript.type.KType;

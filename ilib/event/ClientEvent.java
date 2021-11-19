@@ -42,6 +42,14 @@ import ilib.util.PlayerUtil;
 import ilib.util.Reflection;
 import ilib.util.TextHelperM;
 import ilib.world.saver.WorldSaver;
+import roj.collect.IntMap;
+import roj.collect.MyHashSet;
+import roj.io.IOUtil;
+import roj.math.MathUtils;
+import roj.reflect.ReflectionUtils;
+import roj.text.Placeholder;
+import roj.text.SimpleLineReader;
+
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.SoundHandler;
@@ -66,6 +74,9 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.world.WorldProvider;
+
+import net.minecraftforge.client.IRenderHandler;
 import net.minecraftforge.client.event.*;
 import net.minecraftforge.client.event.RenderGameOverlayEvent.ElementType;
 import net.minecraftforge.client.event.RenderGameOverlayEvent.Text;
@@ -74,6 +85,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
+import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.IFluidBlock;
@@ -81,12 +93,6 @@ import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.oredict.OreDictionary;
-import roj.collect.MyHashSet;
-import roj.io.IOUtil;
-import roj.math.MathUtils;
-import roj.reflect.ReflectionUtils;
-import roj.text.Placeholder;
-import roj.text.SimpleLineReader;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
@@ -481,6 +487,18 @@ public final class ClientEvent {
                 return;
         }
         event.setCanceled(true);
+    }
+
+    // 替换其他世界天空渲染
+    public static final IntMap<IRenderHandler> REPLACE_SKY_RENDERS = new IntMap<>(4);
+    @SubscribeEvent
+    public static void onWorldLoad(WorldEvent.Load e) {
+        WorldProvider pv = e.getWorld().provider;
+        if (pv != null && e.getWorld().isRemote/* && pv.getDimension() == theDimensionId*/) {
+            IRenderHandler theRenderer = REPLACE_SKY_RENDERS.get(pv.getDimension());
+            if (theRenderer != null)
+                pv.setSkyRenderer(theRenderer);
+        }
     }
 
     @SubscribeEvent

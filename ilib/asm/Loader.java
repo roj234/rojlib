@@ -33,16 +33,6 @@ import ilib.asm.fasterforge.transformers.FieldRedirect;
 import ilib.asm.fasterforge.transformers.SideTransformer;
 import ilib.command.parser.CommandNeXt;
 import io.netty.bootstrap.Bootstrap;
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
-import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -56,6 +46,18 @@ import roj.io.MutableZipFile;
 import roj.reflect.IFieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
+
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.Name;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.SortingIndex;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -88,13 +90,12 @@ public class Loader implements IFMLLoadingPlugin {
         AccessTransformer.readAndParseAt(Loader.class, "META-INF/IL_at.cfg");
         try {
             LaunchInjector.patch();
-            throw new RuntimeException();
         } catch (Throwable e) {
             File launcher;
             try {
                 launcher = new File(Launch.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
             } catch (URISyntaxException e1) {
-                throw new IllegalArgumentException("injectLauncher操作失败", e);
+                throw new IllegalArgumentException("injectLauncher操作失败", e1);
             }
 
             try(MutableZipFile mz = new MutableZipFile(launcher)) {
@@ -103,14 +104,14 @@ public class Loader implements IFMLLoadingPlugin {
                 ZipEntry ze;
                 while ((ze = zis.getNextEntry()) != null) {
                     if (ze.getName().endsWith(".class")) {
-                        mz.setFileData(ze.getName(), new ByteList().readStreamArrayFully(zis));
+                        mz.setFileData(ze.getName(), new ByteList().readStreamFully(zis));
                     }
                 }
                 mz.store();
             } catch (Throwable e1) {
-                throw new IllegalArgumentException("injectLauncher操作失败", e);
+                throw new IllegalArgumentException("injectLauncher操作失败", e1);
             }
-            //throw new RuntimeException("请重启Minecraft", e);
+            throw new RuntimeException("请重启Minecraft", e);
         }
 
         if (Config.removePatchy) {
@@ -330,6 +331,8 @@ public class Loader implements IFMLLoadingPlugin {
         list.addAll(set);
         list.add(Math.min(2, list.size()), ClassReplacer.INSTANCE);
         list.addAll(list.size() - 1, ilTransformers);
+
+        System.err.println("!!INS " + list);
 
         inProgress = false;
     }

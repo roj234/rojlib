@@ -69,19 +69,19 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
     /**
      * 多线程下载器
      *
-     * @see Downloader#Downloader(int, File, File, URL, long, long, IProgressHandler)
+     * @see Downloader#Downloader(int, File, File, HttpConnection, long, long, IProgressHandler)
      */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long len) throws IOException {
-        this(pid, downloadTo, infoFile, url, 0, len, null);
+    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len) throws IOException {
+        this(pid, downloadTo, infoFile, new HttpConnection(url), start, len, null);
     }
 
     /**
      * 多线程下载器
      *
-     * @see Downloader#Downloader(int, File, File, URL, long, long, IProgressHandler)
+     * @see Downloader#Downloader(int, File, File, HttpConnection, long, long, IProgressHandler)
      */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len) throws IOException {
-        this(pid, downloadTo, infoFile, url, start, len, null);
+    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len, IProgressHandler progress) throws IOException {
+        this(pid, downloadTo, infoFile, new HttpConnection(url), start, len, progress);
     }
 
     /**
@@ -90,15 +90,15 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
      * @param pid        多线程ID
      * @param downloadTo 保存目标
      * @param infoFile   进度文件 (null: 不使用)
-     * @param url        下载地址
+     * @param conn       下载地址
      * @param start      起始位置
      * @param len        文件长度
      * @param progress   进度条监视器
      */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len, IProgressHandler progress) throws IOException {
+    public Downloader(int pid, File downloadTo, @Nullable File infoFile, HttpConnection conn, long start, long len, IProgressHandler progress) throws IOException {
         this.id = pid;
         this.file = downloadTo;
-        this.conn = new HttpConnection(url);
+        this.conn = conn;
         this.startPos = start;
         this.length = len;
         this.progress = progress;
@@ -123,7 +123,7 @@ public class Downloader extends AbstractCalcTask<Void> implements Runnable, Wait
             this.info = null;
         }
 
-        HttpClient client = conn.getClient();
+        HttpClient client = this.conn.getClient();
         client.method("GET")
               .header("User-Agent", FileUtil.USER_AGENT)
               .connectTimeout(FileUtil.TIMEOUT);

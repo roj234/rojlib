@@ -60,7 +60,7 @@ public final class JSONParser {
     public static final int NO_DUPLICATE_KEY = 1, LITERAL_KEY = 2, UNESCAPED_SINGLE_YH = 4, NO_EOF = 8;
 
     public static void main(String[] args) throws ParseException, IOException {
-        String s = ByteReader.readUTF(new ByteList().readStreamArrayFully(new FileInputStream(args[0])));
+        String s = ByteReader.readUTF(new ByteList().readStreamFully(new FileInputStream(args[0])));
         System.out.println(parse(s));
     }
 

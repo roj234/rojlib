@@ -28,7 +28,6 @@ package roj.asm.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldSimple;
@@ -39,6 +38,7 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
+import roj.asm.util.Context;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.util.ByteList;

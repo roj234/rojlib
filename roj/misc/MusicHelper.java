@@ -41,6 +41,12 @@ import java.util.function.Predicate;
  */
 public class MusicHelper {
     public static void main(String[] args) {
+        if (args.length < 2) {
+            System.out.println("MusicHelper <path>");
+            System.out.println("  用途：处理我的音乐");
+            return;
+        }
+
         List<File> songs = new ArrayList<>();
         List<File> lyrics = new ArrayList<>();
         List<File> chineseLyrics = new ArrayList<>();

@@ -31,6 +31,7 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 
 /**
  * These methods may seem unnecessary but they are
@@ -51,7 +52,9 @@ public interface WrappedSocket extends AutoCloseable {
 
     int read(int max) throws IOException;
 
-    ByteList buffer();
+    ByteBuffer buffer();
+
+    int writeDirect(ByteBuffer src) throws IOException;
 
     int write(ByteList src) throws IOException;
 

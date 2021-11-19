@@ -124,7 +124,7 @@ class NxSecurity extends SecurityManager {
         if (back[0].getLineNumber() > 0) // support jre
             back[0] = new StackTraceElement("java.lang.ProcessBuilder", "start", "ProcessBuilder.java", 1024);
         pipe.setStackTrace(back);
-        Helpers.throwAny(pipe);
+        Helpers.athrow(pipe);
     }
 
 //    @Override

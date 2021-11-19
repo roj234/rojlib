@@ -25,9 +25,7 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import ilib.api.ContextClassTransformer;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodSimple;
@@ -41,31 +39,34 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeDynInsnNode;
 import roj.asm.util.ConstantPool;
+import roj.asm.util.Context;
+
+import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class SideTransformer implements IClassTransformer {
+public class SideTransformer implements ContextClassTransformer {
     private static final String SIDE = FMLLaunchHandler.side().name();
 
     private static final boolean DEBUG = false;
 
-    public byte[] transform(String name, String transformedName, byte[] bytes) {
-        if (bytes == null)
-            return null;
-        ConstantData classNode = Parser.parseConstants(bytes);
+    @Override
+    public void transform(String transformedName, Context context) {
+        ConstantData data = context.getData();
 
-        ConstantPool pool = classNode.cp;
+        ConstantPool pool = data.cp;
 
-        if (remove(pool, classNode.attrByName("RuntimeVisibleAnnotations"), SIDE))
-            throw new RuntimeException(String.format("Attempted to load class %s for invalid side %s", classNode.name, SIDE));
+        if (remove(pool, data.attrByName("RuntimeVisibleAnnotations"), SIDE))
+            throw new RuntimeException("Attempted to load class " + data.name + " for invalid side " + SIDE);
 
-        classNode.fields.removeIf(field -> remove(pool, field.attrByName("RuntimeVisibleAnnotations"), SIDE));
+        data.fields.removeIf(field -> remove(pool, field.attrByName("RuntimeVisibleAnnotations"), SIDE));
 
-        LambdaGatherer lambdaGatherer = new LambdaGatherer(classNode.attrByName("BootstrapMethods"), pool);
+        LambdaGatherer lambdaGatherer = new LambdaGatherer(data.attrByName("BootstrapMethods"), pool);
 
-        Iterator<MethodSimple> it = classNode.methods.iterator();
+        Iterator<MethodSimple> it = data.methods.iterator();
         while (it.hasNext()) {
             MethodSimple method = it.next();
             if (remove(pool, method.attrByName("RuntimeVisibleAnnotations"), SIDE)) {
@@ -78,7 +79,7 @@ public class SideTransformer implements IClassTransformer {
         List<AttrBootstrapMethods.BootstrapMethod> dynamicLambdaHandles = lambdaGatherer.getDynamicLambdaHandles();
         for (; !dynamicLambdaHandles.isEmpty(); dynamicLambdaHandles = lambdaGatherer.getDynamicLambdaHandles()) {
             lambdaGatherer = new LambdaGatherer(lambdaGatherer);
-            it = classNode.methods.iterator();
+            it = data.methods.iterator();
             while (it.hasNext()) {
                 MethodSimple method = it.next();
                 // not public
@@ -86,15 +87,13 @@ public class SideTransformer implements IClassTransformer {
                     continue;
                 for (AttrBootstrapMethods.BootstrapMethod dynamicLambdaHandle : dynamicLambdaHandles) {
                     if (method.name.getString().equals(dynamicLambdaHandle.name) && method.type.getString().equals(dynamicLambdaHandle.rawDesc())) {
-                        System.out.println("Remove lmd method " + dynamicLambdaHandle);
+                        System.err.println("Remove lmd method " + dynamicLambdaHandle);
                         it.remove();
                         lambdaGatherer.accept(method);
                     }
                 }
             }
         }
-
-        return Parser.toByteArray(classNode);
     }
 
     public static final String SIDEONLY_TYPE = SideOnly.class.getName().replace('.', '/');

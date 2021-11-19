@@ -26,12 +26,16 @@
 package roj;
 
 import roj.concurrent.PrefixFactory;
+import roj.concurrent.SimpleSpinLock;
+import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
-import roj.concurrent.WaitingIOFuture;
+import roj.concurrent.task.ITask;
 import roj.io.FileUtil;
+import roj.io.down.Downloader;
 import roj.io.down.MTDProgress;
 import roj.text.SimpleLineReader;
 import roj.ui.UIUtil;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -51,18 +55,40 @@ public final class MultiFileDownloader {
     static List<String> urls = new ArrayList<>();
 
     public static class MyProgressHandler extends MTDProgress {
+        SimpleSpinLock ssl = new SimpleSpinLock();
+
         @Override
-        public void onReturn() {
+        public void handleDone(Downloader dn) {
+            ssl.enqueueWriteLock();
+            super.handleDone(dn);
+            ssl.releaseWriteLock();
         }
+
+        @Override
+        public void handleJoin(Downloader dn) {
+            ssl.enqueueWriteLock();
+            super.handleJoin(dn);
+            ssl.releaseWriteLock();
+        }
+
+        @Override
+        public void handleProgress(Downloader dn, long downloaded, long deltaRead) {
+            ssl.enqueueWriteLock();
+            super.handleProgress(dn, downloaded, deltaRead);
+            ssl.releaseWriteLock();
+        }
+
+        @Override
+        public void onReturn() {}
 
         public void myOnReturn() {
             super.onReturn();
         }
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException {
-        if (args.length == 0) {
-            System.out.println("MultiFileDownloader <savePath> <urlFile0> [urlFile1 ...]");
+    public static void main(String[] args) throws IOException {
+        if (args.length < 2) {
+            System.out.println("MultiFileDownloader [-noinput] <savePath> <urlFile0> [urlFile1 ...]");
             return;
         }
 
@@ -85,8 +111,24 @@ public final class MultiFileDownloader {
         } else {
             threadCount = Math.min(urls.size(), 500);
         }
-        FileUtil.ioPool = new TaskPool(0, threadCount, 1, 512,
-                                       new PrefixFactory("MFD-ParallelIO", 20000));
+
+        FileUtil.ioPool = new TaskHandler() {
+            @Override
+            public void pushTask(ITask task) {
+                try {
+                    task.calculate(null);
+                } catch (Throwable e) {
+                    Helpers.athrow(e);
+                }
+            }
+
+            @Override
+            public void clearTasks() {
+
+            }
+        };
+        TaskPool testPool = new TaskPool(0, threadCount, 1, 512,
+                      new PrefixFactory("MFD-ParallelIO", 20000));
 
         File base = new File(args[0]);
         if (!base.isDirectory() && !base.mkdirs()) {
@@ -97,25 +139,24 @@ public final class MultiFileDownloader {
 
         MyProgressHandler handler = new MyProgressHandler();
 
-        List<WaitingIOFuture> futures = new ArrayList<>(urls.size());
-
         File nfo = new File(base, "RojMFD.nfo");
 
-        int j = 0;
-        for (String s : urls) {
-            File saveTo = new File(base, s.substring(s.lastIndexOf('/') + 1));
-            futures.add(FileUtil.downloadFile(s, saveTo, nfo, handler, j++, false));
+        for (int k = 0; k < urls.size(); k++) {
+            int finalK = k;
+            testPool.pushRunnable(() -> {
+                String s = urls.get(finalK);
+                File saveTo = new File(base, s.substring(s.lastIndexOf('/') + 1));
+                try {
+                    FileUtil.downloadFile(s, saveTo, nfo, handler, finalK, false).waitFor();
+                } catch (IOException e) {
+                    Helpers.athrow(e);
+                }
+            });
         }
 
         System.out.println("已启动 " + threadCount + "个线程");
 
-        for (WaitingIOFuture thread1 : futures) {
-            try {
-                thread1.waitFor();
-            } catch (Throwable e) {
-                e.printStackTrace();
-            }
-        }
+        testPool.waitUntilFinish();
 
         handler.myOnReturn();
     }

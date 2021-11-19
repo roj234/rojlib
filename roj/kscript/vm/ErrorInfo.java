@@ -25,7 +25,7 @@
  */
 package roj.kscript.vm;
 
-import roj.kscript.ast.TryEnterNode;
+import roj.kscript.asm.TryEnterNode;
 
 /**
  * No description provided

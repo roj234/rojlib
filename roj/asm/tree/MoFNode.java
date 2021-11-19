@@ -25,8 +25,10 @@
  */
 package roj.asm.tree;
 
+import roj.asm.tree.attr.Attribute;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
+import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.util.ByteWriter;
@@ -55,6 +57,14 @@ public interface MoFNode {
 
     default char accessFlag2() {
         return accessFlag().flag;
+    }
+
+    default Attribute attrByName(String name) {
+        return (Attribute) attributes().getByName(name);
+    }
+
+    default AttributeList attributes() {
+        throw new UnsupportedOperationException();
     }
 
     int type();

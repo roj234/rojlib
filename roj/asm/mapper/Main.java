@@ -25,7 +25,7 @@
  */
 package roj.asm.mapper;
 
-import roj.asm.mapper.util.Context;
+import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.io.ZipFileWriter;
 

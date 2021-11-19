@@ -31,9 +31,9 @@ import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.ConstMapper.State;
 import roj.asm.mapper.Util;
-import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.ResWriter;
 import roj.asm.tree.ConstantData;
+import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -502,7 +502,7 @@ public final class FMDMain {
     }
 
     private static String translateSeg(CEntry ce1) {
-        String s = TextUtil.split(new ArrayList<>(2), new CharList(), ce1.asString(), ' ').get(0);
+        String s = TextUtil.split(new ArrayList<>(2), ce1.asString(), ' ').get(0);
         int i = s.lastIndexOf('|');
         if(i != -1) {
             String s1 = s.substring(0, i);
@@ -755,7 +755,7 @@ public final class FMDMain {
                     File file = files.get(i);
                     shared.clear();
                     try (InputStream in = new FileInputStream(file)) {
-                        shared.readStreamArrayFully(in);
+                        shared.readStreamFully(in);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }

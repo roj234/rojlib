@@ -26,6 +26,7 @@
 package roj.asm.tree;
 
 import roj.asm.util.FlagList;
+import roj.util.ByteList;
 
 import java.util.List;
 
@@ -48,4 +49,8 @@ public interface IClass {
     int getFieldByName(String name);
 
     byte type();
+
+    default ByteList getBytes(ByteList buf) {
+        throw new UnsupportedOperationException();
+    }
 }

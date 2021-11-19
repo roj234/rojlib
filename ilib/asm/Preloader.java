@@ -25,18 +25,15 @@
  */
 package ilib.asm;
 
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
-import net.minecraftforge.fml.common.discovery.ASMDataTable.ASMData;
 import roj.collect.MyHashMap;
-import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import java.util.Set;
-import java.util.concurrent.locks.LockSupport;
-import java.util.function.Function;
+import net.minecraft.launchwrapper.Launch;
 
-import static ilib.asm.Loader.logger;
+import net.minecraftforge.fml.common.discovery.ASMDataTable.ASMData;
+
+import java.util.Set;
+import java.util.function.Function;
 
 /**
  * @author Roj234
@@ -47,7 +44,7 @@ public class Preloader {
     private static final MyHashMap<String, Function<byte[], byte[]>> fileProcessors = new MyHashMap<>();
 
     static {
-        Thread ldr = new Thread("Class Preloader") {
+        /*Thread ldr = new Thread("Class Preloader") {
             @Override
             public void run() {
                 logger.info("Preloading minecraft classes...");
@@ -82,7 +79,7 @@ public class Preloader {
             }
         };
         ldr.setDaemon(true);
-        ldr.start();
+        ldr.start();*/
     }
 
     public static void preload() {
@@ -91,7 +88,7 @@ public class Preloader {
             try {
                 Class.forName(data.getClassName(), true, Launch.classLoader);
             } catch (ClassNotFoundException e) {
-                Helpers.throwAny(e);
+                Helpers.athrow(e);
             }
         }
         all.clear();

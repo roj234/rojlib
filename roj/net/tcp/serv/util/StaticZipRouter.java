@@ -74,9 +74,9 @@ public class StaticZipRouter implements Router {
             if(flag) {
                 ZipEntry dir = zipFs.getEntry(url);
                 if(dir != null && dir.isDirectory())
-                    return new Reply(Code.FORBIDDEN, StringResponse.errorResponse(Code.FORBIDDEN, null));
+                    return new Reply(Code.FORBIDDEN, StringResponse.forError(Code.FORBIDDEN, null));
             }
-            return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, null));
+            return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
         }
         return new Reply(Code.OK, new ZipResponse(url, zipFs.getInputStream(ze)));
     }
@@ -84,6 +84,7 @@ public class StaticZipRouter implements Router {
     private static class ZipResponse extends StreamResponse {
         private final String url;
         private final InputStream in;
+        private long length;
 
         public ZipResponse(String url, InputStream in) {
             this.url = url;

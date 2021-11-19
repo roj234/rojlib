@@ -20,15 +20,18 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- *
  * @author Roj233
  * @since 2021/7/8 12:35
  */
 public class PFClassMerger {
     public static void main(String[] args) throws Exception {
-        System.out.println("class方法替换者 参数 jar [class method...]... use '!' as method name end");
+        if (args.length < 2) {
+            System.out.println("PFClassMerger <jar> <class <method>... !>...");
+            System.out.println("  用途：替换jar内指定class的指定方法");
+            System.out.println("       使用'!'作为方法的终止");
+            System.out.println("  eg: PFCR implib-0.4.0.jar PFClassMerger-replace.class main !");
+            return;
+        }
         MyHashMap<String, ByteList> modified = new MyHashMap<>();
 
         ZipFile zf = new ZipFile(args[0]);
@@ -83,7 +86,7 @@ public class PFClassMerger {
                 modified.get(ze1.getName()).writeToStream(zos);
             } else {
                 InputStream in = zf.getInputStream(ze1);
-                bl.readStreamArrayFully(in).writeToStream(zos);
+                bl.readStreamFully(in).writeToStream(zos);
                 in.close();
                 bl.clear();
             }

@@ -174,34 +174,33 @@ public final class Clazz implements IClass {
     }
 
     public ByteList getBytes() {
-        return getBytes(new ByteList(1024), new ByteList());
+        return getBytes(new ByteList(1024));
     }
 
-    public ByteList getBytes(ByteList poolBuffer, ByteList mainBuffer) {
-        poolBuffer.clear();
-        mainBuffer.clear();
+    public ByteList getBytes(ByteList buf) {
+        buf.clear();
 
-        ConstantPool pool = new ConstantPool();
+        ConstantPool cw = new ConstantPool();
 
-        ByteWriter w = new ByteWriter(poolBuffer)
+        ByteWriter w = new ByteWriter(buf)
                 .writeShort(accesses.flag)
-                .writeShort(pool.getClassId(name))
-                .writeShort(parent == null ? 0 : pool.getClassId(parent))
+                .writeShort(cw.getClassId(name))
+                .writeShort(parent == null ? 0 : cw.getClassId(parent))
 
-                .writeShort((short) interfaces.size());
+                .writeShort(interfaces.size());
 
         for (int i = 0; i < interfaces.size(); i++) {
-            w.writeShort(pool.getClassId(interfaces.get(i)));
+            w.writeShort(cw.getClassId(interfaces.get(i)));
         }
 
-        w.writeShort((short) fields.size());
+        w.writeShort(fields.size());
         for (int i = 0, l = fields.size(); i < l; i++) {
-            fields.get(i).toByteArray(pool, w);
+            fields.get(i).toByteArray(cw, w);
         }
 
-        w.writeShort((short) methods.size());
+        w.writeShort(methods.size());
         for (int i = 0, l = methods.size(); i < l; i++) {
-            methods.get(i).toByteArray(pool, w);
+            methods.get(i).toByteArray(cw, w);
         }
 
         if (signature != null)
@@ -209,17 +208,24 @@ public final class Clazz implements IClass {
 
         w.writeShort(attributes.size());
         for (int i = 0, l = attributes.size(); i < l; i++) {
-            attributes.get(i).toByteArray(pool, w);
+            attributes.get(i).toByteArray(cw, w);
         }
 
-        mainBuffer.ensureCapacity(poolBuffer.pos() + 10);
+        int pos = buf.pos();
+        byte[] tmp = buf.list;
+        int cpl = cw.byteLength() + 10;
+        if (tmp.length < pos + cpl) {
+            tmp = new byte[pos + cpl];
+        }
+        System.arraycopy(buf.list, 0, tmp, cpl, pos);
+        buf.list = tmp;
 
-        // major, minor
-        ByteWriter _gl = new ByteWriter(mainBuffer).writeInt(0xcafebabe).writeShort(version).writeShort(version >>> 16);
-        pool.write(_gl);
-        _gl.writeBytes(w);
+        buf.pos(0);
+        cw.write(w.writeInt(0xCAFEBABE).writeShort(version).writeShort(version >> 16));
+        assert buf.pos() == cpl;
+        buf.pos(pos + cpl);
 
-        return mainBuffer;
+        return buf;
     }
 
     public void initAttributes(ConstantPool pool, ByteReader r) {

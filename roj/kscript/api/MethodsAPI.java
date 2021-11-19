@@ -25,8 +25,8 @@
  */
 package roj.kscript.api;
 
-import roj.kscript.parser.expr.DedicatedMethod;
-import roj.kscript.parser.expr.Method;
+import roj.kscript.parser.ast.DedicatedMethod;
+import roj.kscript.parser.ast.Method;
 import roj.kscript.type.KType;
 
 import java.util.List;

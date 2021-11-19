@@ -79,7 +79,7 @@ public class Recorder implements Runnable {
         try {
             int got;
             do {
-                got = buf.readStreamArray(adapter, once);
+                got = buf.readStream(adapter, once);
                 if (got <= 0) {
                     break;
                 }

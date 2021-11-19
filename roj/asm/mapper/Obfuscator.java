@@ -26,11 +26,11 @@
 package roj.asm.mapper;
 
 import roj.asm.Parser;
-import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
 import roj.asm.mapper.util.SubImpl;
 import roj.asm.tree.*;
 import roj.asm.util.AccessFlag;
+import roj.asm.util.Context;
 import roj.asm.util.FlagList;
 import roj.collect.CharMap;
 import roj.collect.FindMap;

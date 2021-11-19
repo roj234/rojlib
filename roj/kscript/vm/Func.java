@@ -27,9 +27,9 @@ package roj.kscript.vm;
 
 import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.ASTree;
-import roj.kscript.ast.Frame;
-import roj.kscript.ast.Node;
+import roj.kscript.asm.Frame;
+import roj.kscript.asm.KS_ASM;
+import roj.kscript.asm.Node;
 import roj.kscript.func.KFunction;
 import roj.kscript.type.KType;
 
@@ -129,7 +129,7 @@ public class Func extends KFunction {
     @Override
     public StringBuilder toString0(StringBuilder sb, int depth) {
         sb.append("function ").append(getName()).append("() {");
-        return ASTree.DEBUG ? ASTree.toString(begin, sb.append("\n")) : sb.append(" ... ").append('}');
+        return KS_ASM.DEBUG ? KS_ASM.toString(begin, sb.append("\n")) : sb.append(" ... ").append('}');
     }
 
     public KFunction onReturn(Frame frame) {

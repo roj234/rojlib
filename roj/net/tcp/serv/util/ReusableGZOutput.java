@@ -25,6 +25,8 @@
  */
 package roj.net.tcp.serv.util;
 
+import roj.io.DummyOutputStream;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.CRC32;
@@ -32,8 +34,6 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/12/5 23:34
@@ -44,9 +44,8 @@ public final class ReusableGZOutput extends DeflaterOutputStream {
     private final static int GZIP_MAGIC = 0x8b1f;
     private final static int TRAILER_SIZE = 8;
 
-    public ReusableGZOutput(OutputStream out, int size, int compressionLevel) throws IOException {
-        super(out, new Deflater(compressionLevel, true), size, false);
-        reset(out);
+    public ReusableGZOutput(int size, int compressionLevel) {
+        super(DummyOutputStream.INSTANCE, new Deflater(compressionLevel, true), size, false);
     }
 
     public void write(byte[] buf, int off, int len) throws IOException {
@@ -118,5 +117,9 @@ public final class ReusableGZOutput extends DeflaterOutputStream {
     public void close() throws IOException {
         super.close();
         def.end();
+    }
+
+    public OutputStream getOut() {
+        return out;
     }
 }

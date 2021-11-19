@@ -29,7 +29,7 @@ import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.ConstMapper;
 import roj.asm.mapper.Mapping;
 import roj.asm.mapper.Util;
-import roj.asm.mapper.util.Context;
+import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTreeSet;
 import roj.io.ZipFileWriter;

@@ -183,41 +183,52 @@ public final class ConstantData implements IClass {
         return (Attribute) attributes.getByName(name);
     }
 
-    public ByteList getBytes(ByteList poolBuffer, ByteList mainBuffer) {
-        poolBuffer.clear();
-        mainBuffer.clear();
+    public ByteList getBytes(ByteList buf) {
+        buf.clear();
 
-        ConstantPool writer = this.cp;
+        ConstantPool cw = this.cp;
 
-        ByteWriter w = new ByteWriter(poolBuffer);
+        ByteWriter w = new ByteWriter(buf)
+         .writeShort(accesses.flag)
+         .writeShort(cw.reset(nameCst).getIndex())
+         .writeShort(parentCst == null ? 0 : cw.reset(parentCst).getIndex())
+         .writeShort(interfaces.size());
 
-        w.writeShort(accesses.flag).writeShort(writer.reset(nameCst).getIndex()).writeShort(parentCst == null ? 0 : writer.reset(parentCst).getIndex()).writeShort(interfaces.size());
         for (int i = 0; i < interfaces.size(); i++) {
             CstClass it = interfaces.get(i);
-            w.writeShort(writer.reset(it).getIndex());
+            w.writeShort(cw.reset(it).getIndex());
         }
 
         w.writeShort(fields.size());
         for (int i = 0, l = fields.size(); i < l; i++) {
-            ((MoFNode) fields.get(i)).toByteArray(writer, w);
+            ((MoFNode) fields.get(i)).toByteArray(cw, w);
         }
 
         w.writeShort(methods.size());
         for (int i = 0, l = methods.size(); i < l; i++) {
-            ((MoFNode) methods.get(i)).toByteArray(writer, w);
+            ((MoFNode) methods.get(i)).toByteArray(cw, w);
         }
 
         w.writeShort(attributes.size());
         for (int i = 0, l = attributes.size(); i < l; i++) {
-            attributes.get(i).toByteArray(writer, w);
+            attributes.get(i).toByteArray(cw, w);
         }
 
-        mainBuffer.ensureCapacity(poolBuffer.pos() + 10);
-        ByteWriter _gl = new ByteWriter(mainBuffer).writeInt(0xcafebabe).writeShort(version).writeShort(version >>> 16);
-        writer.write(_gl);
-        _gl.writeBytes(w);
+        int pos = buf.pos();
+        byte[] tmp = buf.list;
+        int cpl = cw.byteLength() + 10;
+        if (tmp.length < pos + cpl) {
+            tmp = new byte[pos + cpl];
+        }
+        System.arraycopy(buf.list, 0, tmp, cpl, pos);
+        buf.list = tmp;
 
-        return mainBuffer;
+        buf.pos(0);
+        cw.write(w.writeInt(0xCAFEBABE).writeShort(version).writeShort(version >> 16));
+        assert buf.pos() == cpl;
+        buf.pos(pos + cpl);
+
+        return buf;
     }
 
     public void normalize() {

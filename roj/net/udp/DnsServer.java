@@ -149,7 +149,7 @@ public class DnsServer implements Router {
         if(cacheFile == null || !cacheFile.isFile())
             return;
 
-        ByteReader r = new ByteReader(new ByteList().readStreamArrayFully(new FileInputStream(cacheFile)));
+        ByteReader r = new ByteReader(new ByteList().readStreamFully(new FileInputStream(cacheFile)));
         if(0x2a6789fa != r.readInt()) {
             throw new IOException("File header error");
         }
@@ -1283,7 +1283,7 @@ public class DnsServer implements Router {
     public Response response(Socket socket, Request request) throws IOException {
         switch (request.path()) {
             case "/favicon.ico":
-                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, null));
+                return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
             case "/":
             case "": {
                 StringBuilder sb = new StringBuilder().append("<title>AsyncDns 1.0</title><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.0</h1>");
@@ -1323,7 +1323,7 @@ public class DnsServer implements Router {
             }
             case "/set": {
                 if(request.action() != Action.POST) {
-                    return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.errorResponse(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
+                    return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.forError(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
                 }
                 Map<String, String> postFields = request.postFields();
                 String url = postFields.get("url");
@@ -1384,7 +1384,7 @@ public class DnsServer implements Router {
                 return new Reply(Code.FOUND, hp);
             }
             default:
-                return new Reply(Code.NOT_FOUND, StringResponse.errorResponse(Code.NOT_FOUND, "未定义的路由"));
+                return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, "未定义的路由"));
         }
     }
 

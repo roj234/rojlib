@@ -29,12 +29,16 @@ import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstRef;
-import roj.asm.mapper.util.*;
+import roj.asm.mapper.util.AccessFallbackHandler;
+import roj.asm.mapper.util.Desc;
+import roj.asm.mapper.util.MapperList;
+import roj.asm.mapper.util.SubImpl;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrBootstrapMethods;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.AccessFlag;
+import roj.asm.util.Context;
 import roj.asm.util.FlagList;
 import roj.collect.*;
 import roj.concurrent.collect.ConcurrentFindHashMap;
@@ -653,7 +657,7 @@ public class ConstMapper extends Mapping {
 
     public final void loadLibraries(File folder) {
         if(!folder.isDirectory()) {
-            Helpers.throwAny(new NotDirectoryException(folder.getAbsolutePath()));
+            Helpers.athrow(new NotDirectoryException(folder.getAbsolutePath()));
         }
 
         loadLibraries(FileUtil.findAllFiles(folder), null);

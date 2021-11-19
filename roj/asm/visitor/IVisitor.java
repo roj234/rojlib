@@ -129,6 +129,6 @@ public class IVisitor extends Holder {
     }
 
     public void visitEndError(Throwable e) {
-        Helpers.throwAny(e);
+        Helpers.athrow(e);
     }
 }

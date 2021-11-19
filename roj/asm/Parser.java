@@ -144,7 +144,7 @@ public final class Parser {
     }
 
     public static byte[] toByteArray(Clazz c) {
-        return SharedBuf.store(c).getByteArray();
+        return SharedBuf.store(c).toByteArray();
     }
 
     public static ByteList toByteArrayShared(Clazz c) {
@@ -232,7 +232,7 @@ public final class Parser {
     }
 
     public static byte[] toByteArray(ConstantData c) {
-        return SharedBuf.store(c).getByteArray();
+        return SharedBuf.store(c).toByteArray();
     }
 
     public static ByteList toByteArrayShared(ConstantData c) {

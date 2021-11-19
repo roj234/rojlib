@@ -44,10 +44,10 @@ import java.util.function.Predicate;
 public class Helpers {
     /**
      * 在不可能的地方丢出异常 <BR>
-     * throwAny(new IOException());
+     * athrow(new IOException());
      */
     @SuppressWarnings("unchecked")
-    public static <T extends Throwable> void throwAny(Throwable e) throws T {
+    public static <T extends Throwable> void athrow(Throwable e) throws T {
         throw (T)e;
     }
 

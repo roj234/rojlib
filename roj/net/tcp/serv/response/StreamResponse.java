@@ -25,26 +25,25 @@
  */
 package roj.net.tcp.serv.response;
 
+import roj.net.tcp.util.Shared;
 import roj.net.tcp.util.WrappedSocket;
 
 import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/2/16 11:21
  */
 public abstract class StreamResponse implements HTTPResponse {
     protected InputStream stream = null;
-    protected long length, position = -1;
+    protected boolean eof;
 
     public void prepare() throws IOException {
-        if (stream == null) {//stream.close();
+        if (stream == null) {
             stream = getStream();
-            position = 0;
+            eof = false;
         }
     }
 
@@ -52,23 +51,20 @@ public abstract class StreamResponse implements HTTPResponse {
 
     public boolean send(WrappedSocket channel) throws IOException {
         if (stream == null) throw new IllegalStateException();
-        long pos = position;
-        if (pos < 0) throw new IllegalStateException();
+        if (eof) return false;
 
-        if (pos >= length) {
-            return false;
-        }
+        int transfer = channel.write(stream, Shared.WRITE_MAX);
+        if (transfer < 0)
+            eof = true;
 
-        pos += channel.write(stream, length - pos);
-
-        return (position = pos) < length;
+        return !eof;
     }
 
     public void release() throws IOException {
         if (stream != null) {
             stream.close();
             stream = null;
-            position = -1;
+            eof = true;
         }
     }
 }

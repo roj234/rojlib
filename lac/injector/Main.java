@@ -32,7 +32,6 @@ import roj.asm.mapper.CodeMapper;
 import roj.asm.mapper.Mapping;
 import roj.asm.mapper.SimpleObfuscator;
 import roj.asm.mapper.obf.policy.SimpleNamer;
-import roj.asm.mapper.util.Context;
 import roj.asm.mapper.util.Desc;
 import roj.asm.nixim.NiximException;
 import roj.asm.nixim.NiximSystem;
@@ -41,6 +40,7 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldSimple;
 import roj.asm.tree.MethodSimple;
 import roj.asm.util.AccessFlag;
+import roj.asm.util.Context;
 import roj.asm.util.FlagList;
 import roj.asm.util.Pack125;
 import roj.collect.MyHashMap;
@@ -210,7 +210,7 @@ public class Main extends JFrame {
         Inflater inf = new Inflater(true);
         try (InputStream in = new InflaterInputStream(file.get("lib classes", list).asInputStream(), inf)) {
             ByteList shared = IOUtil.getSharedByteBuf();
-            Pack125.unpack(new ByteReader(shared.readStreamArrayFully(in)), (name, data) -> {
+            Pack125.unpack(new ByteReader(shared.readStreamFully(in)), (name, data) -> {
 
             });
         }
@@ -323,7 +323,7 @@ public class Main extends JFrame {
         for (File file : FileUtil.findAllFiles(modDir, findJar)) {
             sm3.reset();
             try (FileInputStream in = new FileInputStream(file)) {
-                shared.readStreamArray(in, 4096);
+                shared.readStream(in, 4096);
                 sm3.update(shared.list, 0, shared.pos());
                 shared.clear();
             }
@@ -370,6 +370,7 @@ public class Main extends JFrame {
                 continue;
             }
             File file1 = new File(file);
+            if (!file1.isFile()) continue;
             ZipFile libZip = new ZipFile(file1);
             Enumeration<? extends ZipEntry> entries = libZip.entries();
             while (entries.hasMoreElements()) {
@@ -623,7 +624,7 @@ public class Main extends JFrame {
                 throw new NiximException("无法找到 " + check.name);
             }
             sb.clear();
-            sb.readStreamArrayFully(Main.class.getClassLoader().getResourceAsStream(entry.getValue()));
+            sb.readStreamFully(Main.class.getClassLoader().getResourceAsStream(entry.getValue()));
             ConstantData data = Parser.parseConstants(sb);
             data.nameCst.getValue().setString(entry.getKey());
 

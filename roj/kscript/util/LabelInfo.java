@@ -25,7 +25,7 @@
  */
 package roj.kscript.util;
 
-import roj.kscript.ast.LabelNode;
+import roj.kscript.asm.LabelNode;
 
 /**
  * No description provided

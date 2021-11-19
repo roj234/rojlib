@@ -15,9 +15,9 @@ import roj.util.ByteWriter;
  * @since 2021/7/21 2:28
  */
 public class ClassVisitor {
-    protected final ConstantPool cw = new ConstantPool();
-    protected final ByteWriter   bw = new ByteWriter();
-    protected final ByteReader     br = new ByteReader();
+    public final ConstantPool cw = new ConstantPool();
+    public final ByteWriter   bw = new ByteWriter();
+    public final ByteReader   br = new ByteReader();
 
     protected final ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
 

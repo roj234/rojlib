@@ -65,7 +65,7 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
     }
 
     private static CharSequence readAsUTF(InputStream stream) throws IOException {
-        ByteList in = IOUtil.getSharedByteBuf().readStreamArrayFully(stream);
+        ByteList in = IOUtil.getSharedByteBuf().readStreamFully(stream);
         CharList out = new CharList((in.pos() / 3) << 1);
         ByteReader.decodeUTF(-1, out, in);
         in.clear();
@@ -87,57 +87,60 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
 
     @SuppressWarnings("fallthrough")
     public static List<String> slrParserV2(CharSequence keys, boolean clean) {
-        CharList chars = new CharList(20);
         List<String> list = new ArrayList<>();
 
-        for (int i = 0; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
-            switch (c1) {
+        int r = 0, i = 0, prev = 0;
+        while (i < keys.length()) {
+            switch (keys.charAt(i)) {
                 case '\r':
-                    if (i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+                    if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
+                        break;
+                    } else {
+                        r = 1;
                         i++;
-                case '\n':
-                    if (chars.length() > 0 || !clean) {
-                        list.add(chars.toString());
-                        chars.clear();
                     }
+                case '\n':
+                    if (prev < i || !clean) {
+                        list.add(prev == i ? "" : keys.subSequence(prev, i - r).toString());
+                    }
+                    prev = i + 1;
+                    r = 0;
                     break;
-                default:
-                    chars.append(c1);
             }
+            i++;
         }
 
-        if (chars.length() > 0) {
-            list.add(chars.toString());
+        if (prev < i || !clean) {
+            list.add(prev == i ? "" : keys.subSequence(prev, i).toString());
         }
 
         return list;
     }
 
     @SuppressWarnings("fallthrough")
-    public static String readSingleLine(String keys, boolean clean, int line) {
-        CharList chars = new CharList(20);
-
-        for (int i = 0; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
-            switch (c1) {
+    public static String readSingleLine(CharSequence keys, int line) {
+        int r = 0, i = 0, prev = 0;
+        while (i < keys.length()) {
+            switch (keys.charAt(i)) {
                 case '\r':
-                    if (i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+                    if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
+                        break;
+                    } else {
+                        r = 1;
                         i++;
-                case '\n':
-                    if (chars.length() > 0 || !clean) {
-                        if(line-- == 0) {
-                            return chars.toString();
-                        }
-                        chars.clear();
                     }
+                case '\n':
+                    if(--line == 0) {
+                        return prev == i ? "" : keys.subSequence(prev, i - r).toString();
+                    }
+                    prev = i + 1;
+                    r = 0;
                     break;
-                default:
-                    chars.append(c1);
             }
+            i++;
         }
 
-        return line == 0 ? chars.toString() : null;
+        return --line == 0 ? prev == i ? "" : keys.subSequence(prev, i).toString() : null;
     }
 
     public SimpleLineReader(List<String> list) {

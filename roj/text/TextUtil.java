@@ -81,7 +81,7 @@ public class TextUtil {
                 if(entry.startsWith("#") || entry.isEmpty()) continue;
                 if (!block) {
                     k_v.clear();
-                    split(k_v, sb, entry, '=', 2);
+                    split(k_v, entry, '=', 2);
                     if (k_v.get(1).startsWith("#strl")) {
                         block = true;
                         sb.clear();
@@ -519,91 +519,74 @@ public class TextUtil {
         return split(list, keys, c).toArray(new String[list.size()]);
     }
 
-    public static List<String> split(List<String> dest, CharSequence str, char delim) {
-        return split(dest, new CharList(), str, delim, Integer.MAX_VALUE, false);
+    public static List<String> split(List<String> list, CharSequence str, char delimiter) {
+        return split(list, str, delimiter, Integer.MAX_VALUE, false);
     }
 
-    public static List<String> split(List<String> dest, CharSequence str, char delim, int max) {
-        return split(dest, new CharList(), str, delim, max, false);
+    public static List<String> split(List<String> list, CharSequence str, char delimiter, int max) {
+        return split(list, str, delimiter, max, false);
     }
 
-    public static List<String> split(List<String> dest, CharList tmp, CharSequence str, char delim) {
-        return split(dest, tmp, str, delim, Integer.MAX_VALUE, false);
-    }
-
-    public static List<String> split(List<String> dest, CharList tmp, CharSequence str, char delim, int max) {
-        return split(dest, tmp, str, delim, max, false);
-    }
-
-    public static List<String> split(List<String> dest, CharList tmp, CharSequence str, char c, int max, boolean keepEmpty) {
-        tmp.clear();
-
-        for (int i = 0; i < str.length(); i++) {
-            char c1 = str.charAt(i);
-            if (c == c1) {
-                if (tmp.length() > 0 || keepEmpty) {
+    public static List<String> split(List<String> list, CharSequence str, char delimiter, int max, boolean keepEmpty) {
+        int i = 0, prev = 0;
+        while (i < str.length()) {
+            if (delimiter == str.charAt(i)) {
+                if (prev < i || keepEmpty) {
+                    list.add(prev == i ? "" : str.subSequence(prev, i).toString());
                     if (--max == 0) {
-                        tmp.append(str, i, str.length() - i);
-                        dest.add(tmp.toString());
-                        tmp.clear();
-                        return dest;
-                    } else {
-                        dest.add(tmp.toString());
-                        tmp.clear();
+                        return list;
                     }
                 }
-            } else {
-                tmp.append(c1);
+                prev = i + 1;
             }
+            i++;
         }
 
-        if (tmp.length() > 0) {
-            dest.add(tmp.toString());
-            tmp.clear();
+        if (max > 0 && (prev < i || keepEmpty)) {
+            list.add(prev == i ? "" : str.subSequence(prev, i).toString());
         }
 
-        return dest;
+        return list;
     }
 
-    public static List<String> splitPlus(List<String> dest, CharList tmp, CharSequence str, CharSequence delim) {
-        return splitPlus(dest, tmp, str, delim, Integer.MAX_VALUE, false);
+    public static List<String> split(List<String> list, CharSequence str, CharSequence delimiter) {
+        return split(list, str, delimiter, Integer.MAX_VALUE, false);
     }
 
-    public static List<String> splitPlus(List<String> dest, CharList tmp, CharSequence str, CharSequence find, int max, boolean keepEmpty) {
-        tmp.clear();
-        if(find.length() == 0) {
-            for (int i = 0; i < str.length(); i++) {
-                dest.add(String.valueOf(str.charAt(i)));
-            }
-            return dest;
+    public static List<String> split(List<String> list, CharSequence str, CharSequence delimiter, int max, boolean keepEmpty) {
+        switch (delimiter.length()) {
+            case 0:
+                for (int i = 0; i < str.length(); i++) {
+                    list.add(String.valueOf(str.charAt(i)));
+                }
+                return list;
+            case 1:
+                return split(list, str, delimiter.charAt(0), max, keepEmpty);
         }
 
-        char first = find.charAt(0);
+        char first = delimiter.charAt(0);
 
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-            if (first == c && lastMatches(str, i, find, 0, find.length()) == find.length()) {
-                if (tmp.length() > 0 || keepEmpty) {
+        int len = delimiter.length();
+        int i = 0, prev = 0;
+        while (i < str.length()) {
+            if (first == str.charAt(i) &&
+                    lastMatches(str, i, delimiter, 0, len) == len) {
+                i += len;
+                if (prev < i || keepEmpty) {
+                    list.add(prev == i ? "" : str.subSequence(prev, i - len + 1).toString());
                     if (--max == 0) {
-                        tmp.append(str, i, str.length() - i);
-                        dest.add(tmp.toString());
-                        tmp.clear();
-                        return dest;
-                    } else {
-                        dest.add(tmp.toString());
-                        tmp.clear();
+                        return list;
                     }
                 }
-            } else {
-                tmp.append(c);
+                prev = i;
             }
+            i++;
         }
 
-        if (tmp.length() > 0) {
-            dest.add(tmp.toString());
-            tmp.clear();
+        if (max > 0 && (prev < i || keepEmpty)) {
+            list.add(prev == i ? "" : str.subSequence(prev, i - len + 1).toString());
         }
 
-        return dest;
+        return list;
     }
 }

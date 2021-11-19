@@ -57,8 +57,14 @@ public class CpFilter {
     }
 
     public static void main(String[] args) throws Exception {
-        System.out.println("Usage: CpFilter <jar> <classList>");
+        if (args.length < 1) {
+            System.out.println("CpFilter <jar> [classList]");
+            System.out.println("  用途：精简jar");
+            return;
+        }
+
         MyHashSet<String> dt = new MyHashSet<>();
+        if (args.length > 1)
         try (SimpleLineReader s = new SimpleLineReader(IOUtil.readUTF(new File(args[1])))) {
             for (String ss : s) {
                 dt.add(ss);

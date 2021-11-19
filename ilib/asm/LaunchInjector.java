@@ -26,14 +26,15 @@
 package ilib.asm;
 
 import ilib.api.ContextClassTransformer;
+import roj.asm.SharedBuf;
+import roj.asm.SharedBuf.Level;
+import roj.asm.util.Context;
+import roj.util.ByteList;
+
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader.Acceptor;
 import net.minecraft.launchwrapper.LaunchClassLoader.Reader;
-import roj.asm.SharedBuf;
-import roj.asm.SharedBuf.Level;
-import roj.asm.mapper.util.Context;
-import roj.util.ByteList;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -51,12 +52,18 @@ class LaunchInjector implements Acceptor {
 
     @Override
     public void accept(List<IClassTransformer> transformers, String name, String trName, Object obj) {
-        Level level = SharedBuf.alloc();
-
         long cn = System.nanoTime();
-        Reader Warp = (Reader) obj;
-        Context ctx = new Context(name, Warp.buf1);
-        ByteList unshared = ctx.get();
+
+        Reader rd = (Reader) obj;
+
+        ByteList shared = (ByteList) rd.threadLocalForYou;
+        if (shared == null)
+            rd.threadLocalForYou = shared = new ByteList();
+
+        shared.setValue(rd.buf1);
+        Context ctx = new Context(name, shared);
+
+        Level level = SharedBuf.alloc();
         level.setLevel(true);
         try {
             for (int i = 0; i < transformers.size(); i++) {
@@ -65,8 +72,8 @@ class LaunchInjector implements Acceptor {
                     if (o instanceof ContextClassTransformer) {
                         ((ContextClassTransformer) o).transform(trName, ctx);
                     } else {
-                        unshared.setValue(((IClassTransformer) o).transform(name, trName, ctx.get(true).getByteArray()));
-                        ctx.set(unshared);
+                        shared.setValue(((IClassTransformer) o).transform(name, trName, ctx.get(true).getByteArray()));
+                        ctx.set(shared);
                     }
                 } catch (Throwable e) {
                     try (FileOutputStream out = new FileOutputStream(trName.replace('/', '.'))) {
@@ -76,9 +83,9 @@ class LaunchInjector implements Acceptor {
                 }
             }
 
-            ByteList list = ctx.get();
-            Warp.buf1 = list.list;
-            Warp.pos1 = list.pos();
+            ByteList list = ctx.get(true);
+            rd.buf1 = list.list;
+            rd.pos1 = list.pos();
         } finally {
             level.setLevel(false);
             Loader.classLoadElapse = System.nanoTime() - cn;

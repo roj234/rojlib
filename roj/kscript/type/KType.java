@@ -27,9 +27,9 @@ package roj.kscript.type;
 
 import roj.kscript.api.IArray;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.Frame;
+import roj.kscript.asm.Frame;
 import roj.kscript.func.KFunction;
-import roj.kscript.parser.expr.Expression;
+import roj.kscript.parser.ast.Expression;
 
 import javax.annotation.Nonnull;
 
@@ -99,7 +99,7 @@ public interface KType {
 
 
     /**
-     * 仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.ast.LoadDataNode#exec(Frame) 加载KType}中 <BR>
+     * 仅用于{@link Expression#compress() Expression的缩减}以及{@link roj.kscript.asm.LoadDataNode#exec(Frame) 加载KType}中 <BR>
      *     拷贝自身, 用于加载对象, 嗯
      */
     default KType copy() {
@@ -107,7 +107,7 @@ public interface KType {
     }
 
     /**
-     * 仅用于{@link roj.kscript.ast.LoadDataNode#exec(Frame) 加载KType}中 <BR>
+     * 仅用于{@link roj.kscript.asm.LoadDataNode#exec(Frame) 加载KType}中 <BR>
      *     从同类对象中拷贝数据
      */
     default void copyFrom(KType type) {}

@@ -27,6 +27,7 @@ package roj.net.cross;
 
 import roj.collect.MyHashSet;
 import roj.concurrent.task.ITaskNaCl;
+import roj.io.IOUtil;
 import roj.io.NonblockingUtil;
 import roj.net.ssl.EngineAllocator;
 import roj.net.ssl.SslConfig;
@@ -35,8 +36,8 @@ import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.SecureSocket;
 import roj.net.tcp.util.WrappedSocket;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.ByteWriter;
+import roj.util.DirectByteBufferAsList;
 import roj.util.FastLocalThread;
 
 import java.io.Closeable;
@@ -46,6 +47,7 @@ import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.locks.LockSupport;
 
@@ -146,6 +148,7 @@ public class AEClient implements Runnable, Closeable {
 
     public void run() {
         long t = System.currentTimeMillis();
+        x:
         while (true) {
             Socket client;
             try {
@@ -165,20 +168,21 @@ public class AEClient implements Runnable, Closeable {
                 }
                 initSocketPref(client);
                 InsecureSocket client1 = new InsecureSocket(client, NonblockingUtil.fd(client));
-                x:
-                synchronized (workers) {
-                    if (freeThreads > 0) {
-                        for (Worker wx : workers) {
-                            if (wx.client == null) {
-                                wx.client = client1;
-                                LockSupport.unpark(wx.self);
-                                freeThreads--;
-                                break x;
+                if (freeThreads > 0) {
+                    synchronized (workers) {
+                        if (freeThreads > 0) {
+                            for (Worker wx : workers) {
+                                if (wx.client == null) {
+                                    wx.client = client1;
+                                    freeThreads--;
+                                    System.out.println("使用缓存的连接");
+                                    continue x;
+                                }
                             }
                         }
                     }
-                    task.pushTask(new Worker(client1));
                 }
+                task.pushTask(new Worker(client1));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -192,12 +196,11 @@ public class AEClient implements Runnable, Closeable {
         Worker(WrappedSocket client) {
             setDaemon(true);
             this.client = client;
-            this.ob = new ByteList();
         }
 
         Thread self;
         WrappedSocket client;
-        ByteList ob;
+        ByteBuffer ob;
 
         // 子机ID
         int slaveId;
@@ -215,6 +218,7 @@ public class AEClient implements Runnable, Closeable {
         public void run() {
             self = this;
             try {
+                setName("SW " + this);
                 run1();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -226,7 +230,6 @@ public class AEClient implements Runnable, Closeable {
         }
 
         void run1() throws IOException {
-            self.setName("SW " + this);
             Socket remote = new Socket();
             try {
                 remote.connect(server);
@@ -245,48 +248,49 @@ public class AEClient implements Runnable, Closeable {
                         syncPrint("握手失败: " + result);
                         break conn;
                     }
-                    ByteList buf = channel.buffer();
-                    ByteReader r = new ByteReader(buf);
-                    ByteWriter w = new ByteWriter(buf);
+                    this.ob = ByteBuffer.allocateDirect(9);
+                    ByteBuffer rb = channel.buffer();
+                    ByteBuffer wb = rb.duplicate();
 
-                    w.writeByte((byte) PS_CONNECT).writeByte((byte) ByteWriter.byteCountUTF8(id)).writeByte((byte) ByteWriter.byteCountUTF8(token)).writeByte((byte) 0).writeAllUTF(id).writeAllUTF(token);
-                    if(writeAndFlush(channel, buf, TIMEOUT_TRANSFER) < 0) {
+                    wb.clear();
+                    wb.put((byte) PS_CONNECT).put((byte) ByteWriter.byteCountUTF8(id))
+                      .put((byte) ByteWriter.byteCountUTF8(token)).put((byte) 0);
+                    ByteList u8b = new DirectByteBufferAsList(wb);
+                    ByteWriter.writeUTF(u8b, id, -1);
+                    ByteWriter.writeUTF(u8b, token, -1);
+                    wb.flip();
+                    if(writeAndFlush(channel, wb, TIMEOUT_TRANSFER) < 0) {
                         syncPrint(this + ": 连接数据包发送超时");
                         break conn;
                     }
-                    buf.clear();
 
                     int heart = 0;
                     int except = -1;
                     while (!shutdownRequested) {
-                        while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
-                            if(--heart <= 0) {
-                                if(heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
-                                    if (writeEx(channel, (byte) PS_HEARTBEAT) < 0) {
-                                        syncPrint(this + ": 心跳发送失败");
-                                    }
-                                } else if(heart < -T_CLIENT_HEARTBEAT_TIMEOUT) {
-                                    syncPrint(this + ": 没收到服务端心跳");
-                                    break conn;
+                        while ((read = channel.read(except == -1 ? 1 : except - rb.position())) == 0 || rb.position() < except) {
+                            if(--heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
+                                if (write1(channel, (byte) PS_HEARTBEAT) < 0) {
+                                    syncPrint(this + ": 心跳发送失败");
                                 }
+                            } else if(heart < -T_CLIENT_HEARTBEAT_TIMEOUT) {
+                                syncPrint(this + ": 没收到服务端心跳");
+                                break conn;
                             }
                             if(shutdownRequested) break conn;
                             int r1 = client == null ? 0 : client.read();
                             if (r1 != 0) {
                                 if(r1 > 0) {
-                                    ByteList ob = this.ob;
+                                    ByteBuffer ob = this.ob;
+                                    ByteBuffer cb = client.buffer();
                                     ob.clear();
-                                    ByteList cb = client.buffer();
-                                    w.list = ob;
-                                    w.writeByte((byte) PS_DATA).writeInt(cb.pos()).writeBytes(cb)
-                                     .list = buf;
-                                    cb.clear();
-
-                                    if (writeAndFlush(channel, ob, TIMEOUT_TRANSFER) < 0) {
-                                        syncPrint(this + ": 数据发送失败! " + buf.writePos() + "/" + buf.pos());
+                                    ob.put((byte) PS_DATA).putInt(0).putInt(cb.flip().limit() + 4).flip();
+                                    if (writeAndFlush(channel, ob, TIMEOUT_TRANSFER) < 0 ||
+                                        writeAndFlush(channel, cb, TIMEOUT_TRANSFER) < 0) {
+                                        syncPrint(this + ": 数据发送失败! " + cb.position() + "/" + cb.limit());
+                                        cb.clear();
                                         break;
                                     }
-                                    ob.clear();
+                                    cb.clear();
                                 } else {
                                     //syncPrint(this + ": 下级断开连接");
                                     if (freeThreads < maxWorkers) {
@@ -297,7 +301,7 @@ public class AEClient implements Runnable, Closeable {
                                         client = null;
                                         // 连接保留30s
                                         lastConnect = System.currentTimeMillis();
-                                        if(writeEx(channel, (byte) PS_RESET) < 0) {
+                                        if(write1(channel, (byte) PS_RESET) < 0) {
                                             syncPrint(this + ": 重置发送失败");
                                             break conn;
                                         }
@@ -320,45 +324,44 @@ public class AEClient implements Runnable, Closeable {
                         if (read < 0 || shutdownRequested) {
                             break;
                         }
-                        if(buf.pos() < 1) {
+                        if(rb.position() < 1) {
                             continue;
                         }
-                        switch (buf.get(0) & 0xFF) {
+                        switch (rb.get(0) & 0xFF) {
                             case PS_HEARTBEAT:
                                 lastHeart = System.currentTimeMillis();
-                                buf.clear();
+                                rb.clear();
                                 break;
                             case PS_LOGON:
-                                if(buf.pos() < 5) {
+                                if(rb.position() < 5) {
                                     except = 5;
                                     break;
                                 }
                                 except = -1;
-                                r.index = 1;
-                                slaveId = r.readInt();
+                                slaveId = rb.getInt(1);
                                 syncPrint(this + ": 登录成功 #" + slaveId);
-                                buf.clear();
+                                rb.clear();
                                 break;
                             case PS_DISCONNECT:
                                 syncPrint(this + ": 断开连接(协议)");
                                 break conn;
                             case PS_STATE:
-                                if(buf.pos() < 2) {
+                                if(rb.position() < 2) {
                                     except = 2;
                                     break;
                                 }
                                 except = -1;
-                                syncPrint(this + ": 上次的转发状态: " + RSTATE_NAMES[buf.getU(1)]);
-                                buf.clear();
+                                syncPrint(this + ": 上次的转发状态: " +
+                                                  RSTATE_NAMES[rb.get(1) & 0xFF]);
+                                rb.clear();
                                 break;
                             case PS_SERVER_DATA:
-                                r.index = 1;
-                                if(buf.pos() < 5) {
+                                if(rb.position() < 5) {
                                     except = 5;
                                     break;
                                 }
-                                int value = r.readInt();
-                                if(buf.pos() < value + 5) {
+                                int value = rb.getInt(1);
+                                if(rb.position() < value + 5) {
                                     except = value + 5;
                                     break;
                                 }
@@ -366,25 +369,27 @@ public class AEClient implements Runnable, Closeable {
 
                                 if(client == null) {
                                     syncPrint(this + ": 丢弃转发数据? " + value);
-                                    buf.clear();
+                                    rb.clear();
                                     break;
                                 }
-                                buf.writePos(5);
-                                if(writeAndFlush(client, buf, TIMEOUT_TRANSFER) < 0) {
-                                    syncPrint(this + ": 本地传输超时 " + buf.writePos() + "/" + buf.pos());
-                                    break;
+
+                                if (!IOUtil.directBufferEquals(wb, rb)) {
+                                    wb = rb.duplicate();
                                 }
-                                buf.clear();
+                                wb.position(5).limit(rb.position());
+                                if(writeAndFlush(client, wb, TIMEOUT_TRANSFER) < 0) {
+                                    syncPrint(this + ": 本地传输超时 " + wb.position() + "/" + wb.limit());
+                                }
                                 break;
                             default:
                                 error++;
-                                int bc = buf.getU(0) - 0x20;
-                                if(buf.pos() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
+                                int bc = (rb.get(0) & 0xFF) - 0x20;
+                                if(rb.position() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
                                     syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
                                 } else {
-                                    syncPrint(this + ": 未知数据包: " + buf);
+                                    syncPrint(this + ": 未知数据包: " + dumpBuffer(rb));
                                 }
-                                buf.clear();
+                                rb.clear();
                                 break conn;
                         }
                         heart = T_CLIENT_HEARTBEAT_TIME;
@@ -397,7 +402,7 @@ public class AEClient implements Runnable, Closeable {
                 }
 
                 try {
-                    writeEx(channel, (byte) PS_DISCONNECT);
+                    write1(channel, (byte) PS_DISCONNECT);
                 } catch (IOException ignored) {}
                 while (!channel.shutdown()) {
                     LockSupport.parkNanos(100);
@@ -416,13 +421,12 @@ public class AEClient implements Runnable, Closeable {
 
         @Override
         public void calculate(Thread thread) throws Exception {
-            // noinspection all
-            interrupted();
             self = thread;
+            thread.setName("SW " + this);
             try {
                 run1();
             } finally {
-                self.setName("SW Idle");
+                thread.setName("SW Idle");
                 synchronized (workers) {
                     workers.remove(this);
                 }
@@ -437,9 +441,9 @@ public class AEClient implements Runnable, Closeable {
     }
 
     void onError(WrappedSocket channel, Throwable e) {
-        ByteList buf = channel.buffer();
+        ByteBuffer buf = channel.buffer();
         int bc;
-        if(buf.pos() == 1 && (bc = buf.getU(0) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
+        if(buf.position() == 1 && (bc = (0xFF & buf.get(0)) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
             syncPrint(channel + ": 错误 " + ERROR_NAMES[bc]);
         } else {
             String msg = e.getMessage();

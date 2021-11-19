@@ -31,6 +31,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UTFDataFormatException;
+import java.nio.ByteBuffer;
 
 /**
  * No description provided
@@ -308,6 +309,14 @@ public class ByteWriter {
 
     public void writeBytes(byte[] array, int off, int len) {
         list.addAll(array, off, len);
+    }
+
+    public ByteWriter writeBytes(ByteBuffer buffer) {
+        int rem = buffer.remaining();
+        list.ensureCapacity(list.pos() + rem);
+        buffer.get(list.list, list.pointer, rem);
+        list.pointer += rem;
+        return this;
     }
 
     public ByteWriter writeAllUTF(CharSequence s) {

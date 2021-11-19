@@ -35,6 +35,7 @@ import sun.reflect.Reflection;
 
 import java.io.*;
 import java.nio.Buffer;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
 
@@ -84,7 +85,7 @@ public class IOUtil {
             throw new IOException("available < 0");
         }
         list.ensureCapacity(except);
-        list.readStreamArrayFully(stream);
+        list.readStreamFully(stream);
 
         stream.close();
 
@@ -161,5 +162,9 @@ public class IOUtil {
                 db = (DirectBuffer) db.attachment();
             db.cleaner().clean();
         } catch (Throwable ignored) {}
+    }
+
+    public static boolean directBufferEquals(ByteBuffer a, ByteBuffer b) {
+        return ((DirectBuffer) a).address() == ((DirectBuffer) b).address();
     }
 }

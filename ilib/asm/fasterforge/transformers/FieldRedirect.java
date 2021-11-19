@@ -25,8 +25,8 @@
  */
 package ilib.asm.fasterforge.transformers;
 
+import ilib.api.ContextClassTransformer;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldSimple;
 import roj.asm.tree.MethodSimple;
@@ -35,12 +35,11 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.FieldInsnNode;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.util.Context;
 
-import net.minecraft.launchwrapper.IClassTransformer;
+import java.util.List;
 
-import java.util.ListIterator;
-
-public class FieldRedirect implements IClassTransformer {
+public class FieldRedirect implements ContextClassTransformer {
     private final String clsName, fieldType, methodDesc;
 
     private final String bypass;
@@ -60,14 +59,19 @@ public class FieldRedirect implements IClassTransformer {
         return getClass().getName() + '[' + desc + ']';
     }
 
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        if (!this.clsName.equals(transformedName))
-            return basicClass;
-        ConstantData classNode = Parser.parseConstants(basicClass);
-        FieldSimple fieldRef = null;
-        for (FieldSimple f : classNode.fields) {
+    @Override
+    public void transform(String transformedName, Context context) {
+        if (!this.clsName.equals(transformedName)) return;
+
+        ConstantData data = context.getData();
+
+        String fieldRef = null;
+
+        List<FieldSimple> fields = data.fields;
+        for (int i = 0; i < fields.size(); i++) {
+            FieldSimple f = fields.get(i);
             if (this.fieldType.equals(f.type.getString()) && fieldRef == null) {
-                fieldRef = f;
+                fieldRef = f.name();
                 continue;
             }
             if (this.fieldType.equals(f.type.getString()))
@@ -75,8 +79,9 @@ public class FieldRedirect implements IClassTransformer {
         }
         if (fieldRef == null)
             throw new RuntimeException("Error processing " + this.clsName + " - no holder field declared (is the code somehow obfuscated?)");
+
         MethodSimple getMethod = null;
-        for (MethodSimple m : classNode.methods) {
+        for (MethodSimple m : data.methods) {
             if (m.name.getString().equals(this.bypass))
                 continue;
             if (this.methodDesc.equals(m.type.getString()) && getMethod == null) {
@@ -88,34 +93,38 @@ public class FieldRedirect implements IClassTransformer {
         }
         if (getMethod == null)
             throw new RuntimeException("Error processing " + this.clsName + " - no get method found (is the code somehow obfuscated?)");
-        for (MethodSimple method : classNode.methods) {
+
+        for (MethodSimple method : data.methods) {
             if (method.name.getString().equals(this.bypass))
                 continue;
 
             AttrCode code;
             Attribute attr = (Attribute) method.attributes.getByName("Code");
             if (attr != null) {
-                int index = method.attributes.indexOf(attr);
-                method.attributes.set(index, code = new AttrCode(method, attr.getRawData(), classNode.cp));
+                if (attr instanceof AttrCode) {
+                    code = (AttrCode) attr;
+                } else {
+                    method.attributes.putByName(code = new AttrCode(method, attr.getRawData(), data.cp));
+                }
             } else {
                 continue;
             }
 
-            for (ListIterator<InsnNode> it = code.instructions.listIterator(); it.hasNext(); ) {
-                InsnNode insnNode = it.next();
-                if (insnNode instanceof FieldInsnNode) {
-                    FieldInsnNode fi = (FieldInsnNode) insnNode;
+            for (int i = 0; i < code.instructions.size(); i++) {
+                InsnNode node = code.instructions.get(i);
+                if (node.getOpcode() == Opcodes.GETFIELD) {
+                    FieldInsnNode fi = (FieldInsnNode) node;
                     // GETFIELD
-                    if (fieldRef.name.getString().equals(fi.name) && fi.code == Opcodes.GETFIELD) {
+                    if (fieldRef.equals(fi.name)) {
                         InvokeInsnNode replace = new InvokeInsnNode(Opcodes.INVOKEVIRTUAL);
-                        replace.owner = classNode.name;
+                        replace.owner = data.name;
                         replace.name = getMethod.name.getString();
                         replace.setParameters(getMethod.type.getString());
-                        it.set(replace);
+
+                        code.instructions.set(i, replace);
                     }
                 }
             }
         }
-        return Parser.toByteArray(classNode);
     }
 }

@@ -34,13 +34,13 @@ import roj.net.ssl.EngineAllocator;
 import roj.net.ssl.SslEngineFactory;
 import roj.net.tcp.util.*;
 import roj.text.CharList;
-import roj.util.ByteList;
 import roj.util.ByteWriter;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.concurrent.locks.LockSupport;
@@ -65,6 +65,8 @@ public class HttpClient extends ClientSocket {
                 .header("Connection", "keep-alive")
                 .header("Pragma", "no-cache")
                 .header("Cache-Control", "no-cache");
+        action = "GET";
+        path = "/";
     }
 
     public HttpClient method(String type) {
@@ -72,6 +74,10 @@ public class HttpClient extends ClientSocket {
             throw new IllegalArgumentException(type);
         action = type;
         return this;
+    }
+
+    public String method() {
+        return action.toString();
     }
 
     public Map<CharSequence, CharSequence> headers() {
@@ -122,12 +128,12 @@ public class HttpClient extends ClientSocket {
             }
         }
 
-        ByteList buf = channel.buffer();
+        ByteBuffer buf = channel.buffer();
         buf.clear();
 
         prepare(buf);
 
-        while (channel.write(buf) > 0) {
+        while (channel.writeDirect(buf) > 0) {
             LockSupport.parkNanos(100);
             if (System.currentTimeMillis() > timeout) {
                 throw new SocketTimeoutException("Write");
@@ -146,7 +152,7 @@ public class HttpClient extends ClientSocket {
 
     static final String CRLF = "\r\n";
 
-    private void prepare(ByteList buf) {
+    private void prepare(ByteBuffer buf) {
         CharList text = utf8Buf;
         text.clear();
 
@@ -164,16 +170,30 @@ public class HttpClient extends ClientSocket {
             text.append(CRLF);
         }
 
-        ByteWriter.writeUTF(buf, text, -1);
+        writeUTF(buf, text);
         text.clear();
 
         if (body != null && body.length() != 0) {
-            ByteWriter.writeUTF(buf, body, -1);
+            writeUTF(buf, body);
         }
-        buf.add((byte) '\r');
-        buf.add((byte) '\n');
-        buf.add((byte) '\r');
-        buf.add((byte) '\n');
+        buf.put((byte) '\r').put((byte) '\n').put((byte) '\r').put((byte) '\n');
+    }
+
+    private static void writeUTF(ByteBuffer nio, CharSequence str) {
+        int len = str.length();
+        for (int j = 0; j < len; j++) {
+            int c = str.charAt(j);
+            if ((c >= 0x0001) && (c <= 0x007F)) {
+                nio.put((byte) c);
+            } else if (c > 0x07FF) {
+                nio.put((byte) (0xE0 | ((c >> 12) & 0x0F)))
+                   .put((byte) (0x80 | ((c >> 6) & 0x3F)))
+                   .put((byte) (0x80 | (c & 0x3F)));
+            } else {
+                nio.put((byte) (0xC0 | ((c >> 6) & 0x1F)))
+                   .put((byte) (0x80 | (c & 0x3F)));
+            }
+        }
     }
 
     private InputStream in;

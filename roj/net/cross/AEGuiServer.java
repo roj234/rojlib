@@ -47,7 +47,7 @@ import roj.ui.UIUtil;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
+import java.awt.event.*;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -81,14 +81,17 @@ public class AEGuiServer extends JFrame {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }
-        boolean nolog = false;
+        int log = 0;
         boolean nogui = false;
         String port = null;
         int webPort = -1, maxUsers = 100;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "-nolog":
-                    nolog = true;
+                    log = -1;
+                    break;
+                case "-noweblog":
+                    log = 1;
                     break;
                 case "-nogui":
                     nogui = true;
@@ -162,7 +165,7 @@ public class AEGuiServer extends JFrame {
                 }
             }
         }
-        if (!nolog) {
+        if (log == 0) {
             RingBuffer<String> logger = AEGuiServer.logger = new RingBuffer<>(Integer.parseInt(System.getProperty("ae.logLines", "1000")));
             ACalendar cl = new ACalendar();
             Util.out = new DelegatedPrintStream(2000) {
@@ -174,6 +177,8 @@ public class AEGuiServer extends JFrame {
             };
             System.setOut(Util.out);
             System.setErr(Util.out);
+        } else if (log == 1) {
+            Util.out = System.out;
         }
     }
 

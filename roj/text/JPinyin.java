@@ -94,7 +94,7 @@ public class JPinyin {
     private void parse(String pinyin, String wordS2T, String wordT2S, String wordYin, byte flag) {
         CharList cl = new CharList(32);
 
-        List<String> list0 = TextUtil.split(new ArrayList<>(10000), cl, pinyin, '\n');
+        List<String> list0 = TextUtil.split(new ArrayList<>(10000), pinyin, '\n');
         List<String> list1 = new ArrayList<>(5);
         List<String> list2 = new ArrayList<>(10);
 
@@ -102,7 +102,7 @@ public class JPinyin {
 
         for (String s : list0) {
             if (s.startsWith("#")) continue;
-            TextUtil.split(list1, cl, s, '=');
+            TextUtil.split(list1, s, '=');
 
             final int cp = list1.get(0).codePointAt(0);
 
@@ -111,7 +111,7 @@ public class JPinyin {
                     notYin.add(cp);
                 charYin.put(cp, "[?Y]");
             } else {
-                TextUtil.split(list2, cl, list1.get(1), ',');
+                TextUtil.split(list2, list1.get(1), ',');
                 //for(String s3 : list2) {
                 String s3 = list2.get(0);
                 switch (flag) {
@@ -144,11 +144,11 @@ public class JPinyin {
 
         if (wordT2S != null) {
             list0.clear();
-            TextUtil.split(list0, cl, wordT2S, '\n');
+            TextUtil.split(list0, wordT2S, '\n');
 
             for (String s : list0) {
                 if (s.startsWith("#")) continue;
-                TextUtil.split(list1, cl, s, '=');
+                TextUtil.split(list1, s, '=');
 
                 String from = list1.get(0);
                 String to = list1.get(1);
@@ -160,11 +160,11 @@ public class JPinyin {
 
         if (wordS2T != null) {
             list0.clear();
-            TextUtil.split(list0, cl, wordS2T, '\n');
+            TextUtil.split(list0, wordS2T, '\n');
 
             for (String s : list0) {
                 if (s.startsWith("#")) continue;
-                TextUtil.split(list1, cl, s, '=');
+                TextUtil.split(list1, s, '=');
 
                 String from = list1.get(0);
                 String to = list1.get(1);
@@ -176,11 +176,11 @@ public class JPinyin {
 
         if (wordYin != null) {
             list0.clear();
-            TextUtil.split(list0, cl, wordYin, '\n');
+            TextUtil.split(list0, wordYin, '\n');
 
             for (String s : list0) {
                 if (s.startsWith("#")) continue;
-                TextUtil.split(list1, cl, s, '=');
+                TextUtil.split(list1, s, '=');
 
                 String from = list1.get(0);
                 String to = list1.get(1);

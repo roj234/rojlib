@@ -44,7 +44,12 @@ import java.util.zip.ZipException;
  */
 public class ExecutableHelperZ {
     public static void main(String[] args) throws IOException {
-        System.out.println("EHZ <exe-file> <zip-file> [begin-offset]");
+        if (args.length < 2) {
+            System.out.println("ExecutableHelperZ <exe-file> <zip-file> [begin-offset]");
+            System.out.println("  用途：简易修改各种自解压zip文件");
+            return;
+        }
+
         File file = new File(args[0]);
         byte[] data = IOUtil.read(file);
         int offset = args.length < 3 ? 0 : Integer.parseInt(args[2]);

@@ -27,10 +27,14 @@ package roj.net.tcp.util;
 
 import roj.concurrent.OperationDone;
 import roj.net.tcp.serv.Router;
-import roj.util.ByteList;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
@@ -81,15 +85,15 @@ public class StreamLikeSequence implements CharSequence {
 
     private void fill(int want) {
         if(eof) return;
-        ByteList buf = socket.buffer();
+        ByteBuffer buf = socket.buffer();
         try {
-            while (buf.pos() < want) {
+            while (buf.position() < want) {
                 if (System.currentTimeMillis() > time) {
-                    throw new Notify(-128);
+                    throw new SocketTimeoutException(time + " ms");
                 }
 
-                if(buf.pos() > maxRecv) {
-                    throw new Notify(-127);
+                if(buf.position() > maxRecv) {
+                    throw new BufferOverflowException();
                 }
 
                 int read = socket.read();
@@ -101,11 +105,11 @@ public class StreamLikeSequence implements CharSequence {
                         eof = true;
                         return;
                     }
-                    throw new Notify(new IOException("socket.read() got " + read));
+                    throw new SocketException("socket.read() got " + read);
                 }
             }
         } catch (IOException e) {
-            throw new Notify(e);
+            Helpers.athrow(e);
         }
     }
 
@@ -127,6 +131,6 @@ public class StreamLikeSequence implements CharSequence {
     @Nonnull
     @Override
     public String toString() {
-        return socket.buffer().getString();
+        return socket.buffer().asCharBuffer().toString();
     }
 }

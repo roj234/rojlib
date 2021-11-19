@@ -85,8 +85,8 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
     public MutableZipFile(File file, int compressionLevel, int flag, long offset, Charset charset) throws IOException {
         this.file = file;
-        if(!file.isFile() && !file.createNewFile())
-            throw new IOException("Unable to create a new file");
+        zip = new RandomAccessFile(file, "rw");
+        zip.seek(offset);
         inflaters = new LinkedList<>();
         entries = new MyHashMap<>();
         modified = new MyHashSet<>();
@@ -96,8 +96,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         deflater = new Deflater(compressionLevel, true);
         crc = new CRC32();
         flags = (byte) flag;
-        zip = new RandomAccessFile(file, "rw");
-        zip.seek(offset);
         this.charset = charset;
         try {
             readInternal();

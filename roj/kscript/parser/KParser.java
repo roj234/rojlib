@@ -35,11 +35,11 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
 import roj.kscript.api.ErrorHandler;
-import roj.kscript.ast.*;
+import roj.kscript.asm.*;
 import roj.kscript.func.KFunction;
-import roj.kscript.parser.expr.Binary;
-import roj.kscript.parser.expr.ExprParser;
-import roj.kscript.parser.expr.Expression;
+import roj.kscript.parser.ast.Binary;
+import roj.kscript.parser.ast.ExprParser;
+import roj.kscript.parser.ast.Expression;
 import roj.kscript.type.KType;
 import roj.kscript.type.KUndefined;
 import roj.kscript.util.ContextPrimer;
@@ -74,11 +74,11 @@ public class KParser implements ParseContext {
     /**
      * 语法树
      */
-    ASTree tree;
+    KS_ASM  tree;
     /**
      * 文件名
      */
-    String file;
+    String  file;
 
     /**
      * 作用域
@@ -172,7 +172,7 @@ public class KParser implements ParseContext {
     private KFunction parse0() throws ParseException {
         reset(null);
 
-        tree = ASTree.builder(file);
+        tree = KS_ASM.builder(file);
         wr.setLineHandler(tree);
 
         try {
@@ -211,8 +211,8 @@ public class KParser implements ParseContext {
         return fn;
     }
 
-    private KFunction parseInner(ASTree parent) throws ParseException {
-        tree = ASTree.builder(parent);
+    private KFunction parseInner(KS_ASM parent) throws ParseException {
+        tree = KS_ASM.builder(parent);
         wr.setLineHandler(tree);
 
         functionParser();
@@ -1045,8 +1045,8 @@ public class KParser implements ParseContext {
 
                     if(cstv != null) {
                         if(!expr.asCst().val().equalsTo(cstv)) {
-                            ASTree tmp = tree;
-                            tree = ASTree.builder(tree);
+                            KS_ASM tmp = tree;
+                            tree = KS_ASM.builder(tree);
                             switchBlock(end);
                             tree = tmp;
                             break;
@@ -1328,7 +1328,7 @@ public class KParser implements ParseContext {
     @Override
     public void assignVariable(String name) {
         ctx.chainUpdate(name);
-        if(ctx.isConst(name)) Helpers.throwAny(wr.err("var.write_const"));
+        if(ctx.isConst(name)) Helpers.athrow(wr.err("var.write_const"));
     }
 
     @Override

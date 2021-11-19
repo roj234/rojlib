@@ -1,0 +1,58 @@
+OpenGL 帧缓冲区(第10章)
+opengl 3.1中，这些技术都已经废弃了，但概念还是相关的。
+
+ 
+
+1.缓冲区及用途:   颜色，深度，模板，累计缓冲区。其中颜色又分为左前，右前，左后，右后以及任何数量的辅助颜色缓冲区。 GL必须实现前左缓冲区。
+
+2.清除缓冲区， 这些函数可以设置每个缓冲区的清除值。
+
+glClearColor, glClearDepth, glClearStencil , glClearAccum.   设定清除值以后，可以使用glClear(GLbitField mask)来清除mask指定的缓冲区。
+
+gl3.0 以后，可以使用glClearBuffer来清除一个buffer ， 同时在此函数中要指定清除值。
+
+3.选择用于读写的颜色缓冲区: 绘图和读取的目标可以是任何颜色缓冲区。可以选择一个或者多个缓冲区作为绘图的目标。 glDrawBuffer可以用来选择需要写入的缓冲区。 glReadBuffer用于选定读取缓冲区， 这个选定的缓冲区，作为glReadPixels. glCopyPixels的数据源。
+
+ 
+
+glDrawBuffer(GLenum mode) , 缺省情况下，单缓冲区是为GL_FRONT ， 双缓冲区为GL_BACK .
+
+gl2.0 增加了glDrawBuffers（）来指定多个颜色缓冲区。
+
+gl3.0增加了帧缓冲区对象。当GL绑定到一个用户定义的帧缓冲区是，增加了GL_COLOR_ATACHMENTi来指定那个颜色缓冲区是绘制目标。
+
+ 
+
+glReadBuffer. 选择颜色缓冲区，作为以后glReadPixels, glCopyPixels, glCopyTexImage , glCopyTexSubImage, glCopyConcolutionFilter 像素读取的来源。
+
+4. 缓冲区屏蔽 gl在将数据写入到启用的颜色缓冲区，深度或者模板缓冲区以前，首先会对数据执行屏蔽操作，所有的掩码都是使用逻辑AND进行组合，glIndexMask glColorMask glColorMaksi  glDepthMask, glStencilMask , glStencilMaksSeperate .
+
+5.片段测试和操作  。 片段在写入到帧缓冲区之前需要执行下列操作，如果某操作为通过就不会继续执行后续的测试。
+
+裁剪测试 ， alpha测试 ，模板测试 ，深度测试 ， 混合 ， 抖动 ， 逻辑操作。
+
+分别通过以下函数指定参数， glScissor () ,  glEnable(GL_ALPHA_TEST) + glAlphaFunc ,  glStencilFunc + glStencilOp , glDepthFunc , glEnable(GL_BLEND) , glEnable(GL_DITHER) ,  glLogicOp.
+
+关于深度测试，需要提一下查询对象和条件绘制, 我们可以在绘制一个物体之前判断一个物体是否可见，具体步骤为
+
+glGenQueries(n , *ids) ;  glBeginQuery(GL_SAMPLES_PASSED , ids[0]) ; glBegin(GL_TRANGLES) ; glVertex3f() ; glVertex3f() ; glVertex3f() ;  glEnd() ; glEndQuery(GL_SAMPLES_PASSED) ;
+
+判断查询结果：  glGetQueryObjectiv(id, GLenum pname , glint * params) ; id 是前面查询的名称，pname 如果为GL_QUERY_RESULT , 则params将包含通过了深度测试的片段或样本，如果为0， 表示该对象完全被遮挡。
+
+查询结束以后，调用glDeleteQueries() 删除查询。
+
+条件渲染： glBeginConditionalRender(GLuint id , GLenum mode) ;   glEndConditionalRender (void) ;  以下为一个例子：
+
+glBeginConditionalRender(Query , GL_QUERY_WAIT ) ;  glDrawArrays( GL_TRIANGLES_FAN , 0 , NumVertices) ； glEndConditionalRender () ;
+
+另外累计缓冲区的操作通过函数glAccum来完成，使用时可以查询手册。该函数主要是把颜色缓冲区的内容搬到累计缓冲区，最后在把累计缓冲区的内容搬到颜色缓冲区显示出来。 如此可以制造处运动模糊的效果。
+
+关于柔和阴影也可以用累计缓冲区来完成，即每次打开一个光源，绘制一边，然后累计这些绘制结果。
+
+6. 帧缓冲区对象。 应用程序创建的帧缓冲区，只能用于离屏渲染。
+
+产生一个帧缓存对象 glGenFrameBuffers(n, *buffers) ; glBindFrameBuffer(GLenum target , gluint fb) ; 其中target为GL_DRAW_FRAMEBUFFER时，fb指定了帧缓冲区的渲染目标，当target为GL_READ_FRAMEBUFFER时，fb指定了读取操作的源。
+
+可以参开书本336页，关于离屏渲染的实例。 1个fb跟几个renderbuffer相关联，每个renderbuffer又需要利用glRenderBufferStorage来指定其格式。 绘制时，选用bind fb进行离屏渲染，然后在bind  fb 为0 ，渲染到窗口。
+
+离屏渲染的另一个用途是动态更新纹理：  glFramebufferTexture2D(target , attachment , teturetarget  , texture , level) ;  参考338页的实例，该实例动态更新一个2D纹理。

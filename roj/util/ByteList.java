@@ -59,32 +59,6 @@ public class ByteList {
         pointer = array.length;
     }
 
-    public static ByteList from(ByteBuffer buf) {
-        ByteList bl = new ByteList() {
-            @Override
-            public void ensureCapacity(int required) {
-                if (required > list.length) {
-                    throw new ArrayIndexOutOfBoundsException("ByteList.fromByteBuffer(): buffer space overflow!");
-                }
-            }
-        };
-        if(buf.hasArray()) {
-            bl.writePtr = buf.position();
-            bl.pointer = buf.limit();
-            bl.list = buf.array();
-        } else {
-            bl.writePtr = 0;
-            bl.list = new byte[bl.pointer = buf.remaining()];
-            int pos = buf.position();
-            buf.get(bl.list, 0, bl.list.length);
-            buf.position(pos);
-        }
-
-        if (buf.arrayOffset() != 0)
-            return bl.subList(buf.arrayOffset(), buf.limit());
-        return bl;
-    }
-
     public final int remaining() {
         return pointer - writePtr;
     }
@@ -191,33 +165,7 @@ public class ByteList {
         return 0;
     }
 
-    public final int readFrom(ByteBuffer buffer) {
-        return readFrom(buffer, buffer.remaining());
-    }
-
-    public final int readFrom(ByteBuffer buffer, int len) {
-        len = Math.min(buffer.remaining(), len);
-        if(len <= 0)
-            return 0;
-        ensureCapacity(pointer + len);
-
-        buffer.get(list, offset() + pointer, len);
-
-        pointer += len;
-        return len;
-    }
-
     public final ByteList readStreamFully(InputStream stream) throws IOException {
-        if (getClass() != ByteList.class)
-            throw new IllegalStateException();
-        int i;
-        while ((i = stream.read()) != -1) {
-            add((byte) i);
-        }
-        return this;
-    }
-
-    public final ByteList readStreamArrayFully(InputStream stream) throws IOException {
         if (getClass() != ByteList.class)
             throw new IllegalStateException();
 
@@ -237,7 +185,7 @@ public class ByteList {
         return this;
     }
 
-    public final int readStreamArray(InputStream stream, int max) throws IOException {
+    public final int readStream(InputStream stream, int max) throws IOException {
         if (getClass() != ByteList.class)
             throw new IllegalStateException();
 
@@ -302,10 +250,6 @@ public class ByteList {
         return list == null ? null : (pointer == list.length && offset() == 0 ? list : toByteArray());
     }
 
-    public final ByteBuffer toByteBuffer() {
-        return ByteBuffer.wrap(this.list, offset(), pos());
-    }
-
     public void rewrite() {
         writePtr = 0;
     }
@@ -367,7 +311,6 @@ public class ByteList {
         writePtr = ptr;
     }
 
-    // WIP
     public int lastIndexOf(byte[] bytes) {
         return lastIndexOf(list, offset(), limit(), bytes, 0, bytes.length, limit());
     }

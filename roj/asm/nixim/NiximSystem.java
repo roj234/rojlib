@@ -30,7 +30,6 @@ import roj.asm.OpcodesInt;
 import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.mapper.Util;
-import roj.asm.mapper.util.Context;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.*;
 import roj.asm.tree.attr.*;
@@ -565,6 +564,7 @@ public class NiximSystem {
      * @throws NiximException 出现错误
      */
     @Nullable
+    @SuppressWarnings("fallthrough")
     public static NiximData read0(Context ctx) throws NiximException {
         ConstantData data = ctx.getData();
 
@@ -1341,7 +1341,7 @@ public class NiximSystem {
 
         private void checkAccess(CstRef ref) {
             if (ref.getClassName().equals(data.name) && unaccessible.contains(tester.read(ref))) {
-                Helpers.throwAny(new NiximException("无法访问" + data.name + '.' + tester + ": 会出现 IllegalAccessError / NoSuchFieldError"));
+                Helpers.athrow(new NiximException("无法访问" + data.name + '.' + tester + ": 会出现 IllegalAccessError / NoSuchFieldError"));
             }
         }
 

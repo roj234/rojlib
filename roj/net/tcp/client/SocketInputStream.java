@@ -26,12 +26,13 @@
 package roj.net.tcp.client;
 
 import roj.net.tcp.util.WrappedSocket;
-import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.InvalidMarkException;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -45,22 +46,19 @@ import java.util.concurrent.locks.LockSupport;
 public class SocketInputStream extends InputStream {
     public final WrappedSocket socket;
 
-    private final ByteList buf;
+    final ByteBuffer buf;
     private int markLimit;
 
     // Shared
-    int bufPos;
     long dataRemain;
     int readTimeout;
 
     public SocketInputStream(WrappedSocket socket, int bufPos) {
         this.socket = socket;
-        this.buf = socket.buffer();
-        if (bufPos > 0) {
-            this.bufPos = bufPos;
-            dataRemain = -(buf.pos() - bufPos);
-            moveFirst();
-        }
+        buf = socket.buffer();
+        buf.position(bufPos);
+        buf.compact();
+        dataRemain = buf.remaining();
     }
 
     public SocketInputStream init(String s, int readTimeout) {
@@ -72,17 +70,20 @@ public class SocketInputStream extends InputStream {
     @Override
     public int read() throws IOException {
         if (socket.socket().isClosed()) throw new IOException("Socket closed.");
-        if (bufPos < 0) return -1;
-        if (buf.pos() == this.bufPos) {
+        if (markLimit == -1) return -1;
+        if (!buf.hasRemaining()) {
             if (!fill()) return -1;
         }
-        return buf.getU(bufPos++);
+        return buf.get() & 0xFF;
     }
 
     private boolean fill() throws IOException {
-        if (bufPos > markLimit) markLimit = 0;
-        if (markLimit == 0)
+        int prevPos = buf.position();
+        if (prevPos > markLimit) markLimit = 0;
+        if (markLimit == 0) {
             buf.clear();
+            prevPos = 0;
+        } else buf.limit(buf.capacity());
 
         int read;
         if (dataRemain > 0) {
@@ -90,7 +91,7 @@ public class SocketInputStream extends InputStream {
             while ((read = socket.read()) == 0) {
                 LockSupport.parkNanos(100L);
                 if (System.currentTimeMillis() > timeout) {
-                    throw new SocketTimeoutException("Read Timeout");
+                    throw new SocketTimeoutException(readTimeout + " ms");
                 }
             }
         } else {
@@ -98,11 +99,12 @@ public class SocketInputStream extends InputStream {
         }
 
         if (read < 0) {
-            bufPos = -1;
+            markLimit = -1;
             return false;
         } else {
             dataRemain -= read;
-            if (markLimit == 0) bufPos = 0;
+            buf.limit(buf.position());
+            buf.position(prevPos);
             return true;
         }
     }
@@ -110,22 +112,21 @@ public class SocketInputStream extends InputStream {
     @Override
     public int read(@Nonnull byte[] b, int off, int len) throws IOException {
         if (socket.socket().isClosed()) throw new IOException("Socket closed.");
-        if (bufPos < 0) return -1;
+        if (markLimit == -1) return -1;
 
-        if (buf.pos() == this.bufPos) {
+        if (!buf.hasRemaining()) {
             if (!fill()) return -1;
         }
 
-        int read = Math.min(buf.pos() - bufPos, len);
-        System.arraycopy(buf.list, bufPos, b, off, read);
-        this.bufPos += read;
+        int read = Math.min(buf.remaining(), len);
+        buf.get(b, off, read);
         return read;
     }
 
     @Override
     public int available() throws IOException {
         if (socket.socket().isClosed()) throw new IOException("Socket closed.");
-        return buf.pos() - bufPos;
+        return buf.remaining();
     }
 
     @Override
@@ -138,16 +139,14 @@ public class SocketInputStream extends InputStream {
 
     @Override
     public void mark(int limit) {
-        if (limit <= 0 || bufPos < 0) return;
-        if (bufPos > 0) moveFirst();
-        this.markLimit = limit;
-    }
-
-    private void moveFirst() {
-        ByteList buf = this.buf;
-        System.arraycopy(buf.list, bufPos, buf.list, 0, buf.pos() - bufPos);
-        buf.pos(buf.pos() - bufPos);
-        bufPos = 0;
+        if (limit <= 0 || markLimit == -1) return;
+        if (limit > buf.capacity()) {
+            throw new InvalidMarkException();
+            //buf = socket.ensureBufferCapacity(limit);
+        }
+        if (buf.position() > 0) buf.compact();
+        buf.mark();
+        markLimit = limit;
     }
 
     @Override
@@ -158,13 +157,11 @@ public class SocketInputStream extends InputStream {
     @Override
     public void reset() throws IOException {
         if (socket.socket().isClosed()) throw new IOException("Socket closed.");
-        if (markLimit == 0) throw new IOException("Not marked");
-        bufPos = 0;
+        buf.reset();
     }
 
     void pass(int bufPos) {
-        this.bufPos = bufPos;
-        if (markLimit == 0)
-            moveFirst();
+        buf.position(bufPos);
+        if (markLimit == 0) buf.compact();
     }
 }

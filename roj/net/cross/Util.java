@@ -27,18 +27,13 @@ package roj.net.cross;
 
 import roj.io.NonblockingUtil;
 import roj.net.ssl.SslEngineFactory;
-import roj.net.tcp.util.InsecureSocket;
 import roj.net.tcp.util.WrappedSocket;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
-import roj.util.FastThreadLocal;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
@@ -70,8 +65,8 @@ public class Util {
     public static final int FINALIZED   = 5;
     public static final int SHUTDOWN    = 6;
 
-    public static final int TIMEOUT_CONNECT     = 200000;
-    public static final int TIMEOUT_TRANSFER    = 200000;
+    public static final int TIMEOUT_CONNECT     = 20000;
+    public static final int TIMEOUT_TRANSFER    = 20000;
 
     public static final int PS_HEARTBEAT         = 1;
     public static final int PS_CONNECT           = 2;
@@ -110,11 +105,10 @@ public class Util {
             'A','E','C','L','I','E','N','T','H','A','L','L','O'
     });
 
-    public static final boolean T_SERVER_HEARTBEAT = System.getProperty("ae.noHeartbeat") == null;
     public static final int T_SERVER_HEART_TIME     = 10000;
 
     public static final int T_CLIENT_HEARTBEAT_TIME  = 2000;
-    public static final int T_CLIENT_HEARTBEAT_RETRY = 1000;
+    public static final int T_CLIENT_HEARTBEAT_RETRY = 100;
     public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 2000;
 
     public static class SslDialog extends JDialog {
@@ -320,23 +314,22 @@ public class Util {
             }
         }
 
-        ByteList buf = channel.buffer();
+        ByteBuffer buf = channel.buffer();
         buf.clear();
-        buf.addAll(CLIENT_HALLO.list);
-        buf.add((byte) PROTOCOL_VERSION);
+        buf.put(CLIENT_HALLO.list).put((byte) PROTOCOL_VERSION).flip();
         wait = writeAndFlush(channel, buf, wait);
         buf.clear();
 
         int read;
         while ((read = channel.read(1)) == 0) {
-            LockSupport.parkNanos(1000);
+            LockSupport.parkNanos(100);
             if(wait-- <= 0) {
                 return 3;
             }
         }
         if(read < 0)
             return 4;
-        read = buf.getU(0);
+        read = buf.get(0) & 0xFF;
         buf.clear();
         switch (read) {
             case PS_SERVER_HALLO:
@@ -353,16 +346,15 @@ public class Util {
         }
     }
 
-    static int writeAndFlush(WrappedSocket channel, ByteList buf, int timeout) throws IOException {
+    static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, int timeout) throws IOException {
         Thread t = Thread.currentThread();
         do {
-            int w = channel.write(buf);
+            int w = channel.writeDirect(buf);
             if(w < 0)
                 return w;
-            if (buf.writePos() == buf.pos()) {
-                channel.dataFlush();
+            if (!buf.hasRemaining())
                 break;
-            }
+            channel.dataFlush();
             LockSupport.parkNanos(20);
             if(t.isInterrupted())
                 return NonblockingUtil.INTERRUPTED;
@@ -373,26 +365,25 @@ public class Util {
         return timeout;
     }
 
-    private static final FastThreadLocal<ByteList> FCG = new FastThreadLocal<>();
-    static int writeEx(WrappedSocket channel, byte buf) throws IOException {
-        int state;
-        if(channel.getClass() == InsecureSocket.class) {
-            ByteBuffer nx = NonblockingUtil.getNativeDirectBuffer();
-            nx.position(0).limit(1);
-            nx.put(buf).position(0);
-            int timeout = 10;
-            while ((state = NonblockingUtil.writeFromNativeBuffer(channel.fd(), nx, NonblockingUtil.SOCKET_FD)) == 0 && timeout > 0) {
-                LockSupport.parkNanos(20);
-                timeout--;
-            }
-            return state < 0 ? state : timeout <= 0 ? -7 : 0;
-        } else {
-            ByteList tmp = FCG.get();
-            if(tmp == null)
-                FCG.set(tmp = new ByteList(1));
-            tmp.clear();
-            tmp.add(buf);
-            return (state = writeAndFlush(channel, tmp, 200)) > 0 ? 0 : state;
+    static int write1(WrappedSocket channel, byte buf) throws IOException {
+        ByteBuffer nx = NonblockingUtil.getNativeDirectBuffer();
+        nx.position(0).limit(1);
+        nx.put(0, buf);
+
+        int timeout = 10;
+        int wrote;
+        while ((wrote = channel.writeDirect(nx)) == 0 && timeout > 0) {
+            LockSupport.parkNanos(20);
+            timeout--;
         }
+        nx.clear();
+        return wrote < 0 ? wrote : timeout <= 0 ? -7 : 0;
+    }
+
+    static String dumpBuffer(ByteBuffer rb) {
+        rb.flip();
+        byte[] tmp = new byte[rb.limit()];
+        rb.get(tmp);
+        return new ByteList(tmp).toString();
     }
 }

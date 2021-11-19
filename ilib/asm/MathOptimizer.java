@@ -25,12 +25,13 @@
  */
 package ilib.asm;
 
-import net.minecraft.util.math.MathHelper;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
-import roj.asm.mapper.util.Context;
 import roj.asm.tree.insn.*;
+import roj.asm.util.Context;
 import roj.asm.util.InsnList;
+
+import net.minecraft.util.math.MathHelper;
 
 import java.util.List;
 import java.util.Set;

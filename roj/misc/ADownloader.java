@@ -43,7 +43,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 /**
- * Your description here
+ * Adnmb HTML Parser
  *
  * @author Roj233
  * @version 0.1
@@ -51,7 +51,12 @@ import java.util.Iterator;
  */
 public class ADownloader {
     public static void main(String[] args) throws IOException, ParseException {
-        System.out.println("ADownloader -- ADnmb HTML Parser & Fetcher");
+        if (args.length < 2) {
+            System.out.println("ADownloader <dst> <src> [cookie-id]...");
+            System.out.println("  用途：处理A岛指定cookie的回复为txt格式 src为保存的html");
+            return;
+        }
+
         MyHashSet<String> targetCookie = new MyHashSet<>();
         for (int i = 2; i < args.length; i++) {
             targetCookie.add(args[i]);

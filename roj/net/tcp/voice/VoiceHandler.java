@@ -27,7 +27,8 @@ package roj.net.tcp.voice;
 
 import roj.concurrent.task.ITaskNaCl;
 import roj.net.tcp.util.WrappedSocket;
-import roj.util.ByteList;
+
+import java.nio.ByteBuffer;
 
 /**
  * No description provided
@@ -45,7 +46,7 @@ public class VoiceHandler implements ITaskNaCl {
 
     @Override
     public void calculate(Thread thread) throws Exception {
-        ByteList list = socket.buffer();
+        ByteBuffer list = socket.buffer();
         socket.read();
     }
 

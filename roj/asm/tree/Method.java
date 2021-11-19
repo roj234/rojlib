@@ -224,6 +224,11 @@ public final class Method implements MethodNode, MoFNode {
         return m;
     }
 
+    @Override
+    public AttributeList attributes() {
+        return attributes;
+    }
+
     public void toByteArray(ConstantPool pool, ByteWriter w) {
         w.writeShort(accesses.flag).writeShort(pool.getUtfId(name));
 

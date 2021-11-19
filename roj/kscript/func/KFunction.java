@@ -28,7 +28,7 @@ package roj.kscript.func;
 import roj.kscript.Constants;
 import roj.kscript.api.ArgList;
 import roj.kscript.api.IObject;
-import roj.kscript.ast.Frame;
+import roj.kscript.asm.Frame;
 import roj.kscript.type.KInstance;
 import roj.kscript.type.KObject;
 import roj.kscript.type.KType;

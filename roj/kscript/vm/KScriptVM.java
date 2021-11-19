@@ -27,11 +27,11 @@ package roj.kscript.vm;
 
 import roj.collect.SimpleList;
 import roj.kscript.api.ArgList;
-import roj.kscript.ast.Frame;
-import roj.kscript.ast.Node;
+import roj.kscript.asm.Frame;
+import roj.kscript.asm.Node;
 import roj.kscript.func.KFunction;
 import roj.kscript.parser.KParser;
-import roj.kscript.parser.expr.ExprParser;
+import roj.kscript.parser.ast.ExprParser;
 import roj.kscript.type.KDouble;
 import roj.kscript.type.KInt;
 import roj.kscript.type.KType;

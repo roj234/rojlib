@@ -28,9 +28,9 @@ package roj.kscript.util;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.Unioner;
-import roj.kscript.ast.Frame;
-import roj.kscript.ast.Node;
-import roj.kscript.ast.NodeUtil;
+import roj.kscript.asm.Frame;
+import roj.kscript.asm.Node;
+import roj.kscript.asm.NodeUtil;
 import roj.kscript.type.KType;
 import roj.kscript.util.opm.SWEntry;
 

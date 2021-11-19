@@ -41,7 +41,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * A helper class which performs I/O using the SSLEngine API.
@@ -72,8 +71,6 @@ public class SecureSocket extends InsecureSocket {
 
     private int appBufSize, netBufSize;
 
-    private ByteBuffer appInTmp;
-
     /*
      * All I/O goes through these buffers.
      * <P>
@@ -84,7 +81,6 @@ public class SecureSocket extends InsecureSocket {
      * Outbound application data is supplied to us by our callers.
      */
     private ByteBuffer networkIn, networkOut;
-    private ByteList pushback;
 
     /*
      * An empty ByteBuffer for use when one isn't available, say
@@ -116,14 +112,13 @@ public class SecureSocket extends InsecureSocket {
         engine.beginHandshake();
         status = engine.getHandshakeStatus();
         hsDone = false;
-        pushback = new ByteList();
 
         // Create a buffer using the normal expected packet size we'll
         // be getting.  This may change, depending on the peer's
         // SSL implementation.
         netBufSize = engine.getSession().getPacketBufferSize();
         networkIn = ByteBuffer.allocateDirect(netBufSize);
-        networkOut = ByteBuffer.allocate(netBufSize);
+        networkOut = ByteBuffer.allocateDirect(netBufSize);
         networkOut.limit(0);
     }
 
@@ -134,16 +129,9 @@ public class SecureSocket extends InsecureSocket {
         // be getting.  This may change, depending on the peer's
         // SSL implementation.
         cio.appBufSize = cio.engine.getSession().getApplicationBufferSize();
-        cio.appInTmp = ByteBuffer.allocate(cio.appBufSize);
+        cio.expandBufferCapacity(cio.appBufSize);
 
         return cio;
-    }
-
-    protected void expandAppBuf() {
-        ByteBuffer bb = ByteBuffer.allocate(appBufSize);
-        appInTmp.flip();
-        bb.put(appInTmp);
-        appInTmp = bb;
     }
 
     private void expandNetBuf() {
@@ -156,14 +144,12 @@ public class SecureSocket extends InsecureSocket {
 
     private boolean tryFlush(ByteBuffer bb) throws IOException {
         if (bb.hasRemaining()) {
-            final ByteList list = ByteList.from(bb);
             int wrote;
             do {
-                wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, list, Shared.WRITE_MAX));
+                wrote = NonblockingUtil.normalize(
+                        NonblockingUtil.writeFromNativeBuffer(fd, bb,
+                                                              NonblockingUtil.SOCKET_FD));
             } while (wrote == -3 && !socket.isClosed());
-            if(wrote > 0) {
-                bb.position(bb.position() + wrote);
-            }
         }
         return !bb.hasRemaining();
     }
@@ -218,12 +204,11 @@ public class SecureSocket extends InsecureSocket {
 
                 needIO:
                 while (this.status == HandshakeStatus.NEED_UNWRAP) {
-                    result = _readNetworkIn(-1);
+                    result = _readNetworkIn(0);
 
                     this.status = result.getHandshakeStatus();
 
                     switch (result.getStatus()) {
-
                         case OK:
                             switch (this.status) {
                                 case NOT_HANDSHAKING:
@@ -239,7 +224,6 @@ public class SecureSocket extends InsecureSocket {
                             }
 
                             break;
-
                         case BUFFER_UNDERFLOW:
                             netBufSize = engine.getSession().getPacketBufferSize();
                             if (netBufSize > networkIn.capacity()) {
@@ -250,11 +234,10 @@ public class SecureSocket extends InsecureSocket {
                              * Need to go reread the Channel for more data.
                              */
                             break needIO;
-
                         case BUFFER_OVERFLOW:
                             appBufSize = engine.getSession().getApplicationBufferSize();
-                            if (appBufSize > appInTmp.capacity()) {
-                                expandAppBuf();
+                            if (appBufSize > buffer.capacity()) {
+                                expandBufferCapacity(appBufSize);
                             }
                             break;
 
@@ -272,7 +255,6 @@ public class SecureSocket extends InsecureSocket {
                 }
 
                 // Fall through and fill the write buffers.
-
             case NEED_WRAP:
                 /*
                  * The flush above guarantees the out buffer to be empty
@@ -301,7 +283,9 @@ public class SecureSocket extends InsecureSocket {
     }
 
     private int _read(ByteBuffer buffer) throws IOException {
-        return NonblockingUtil.normalize(NonblockingUtil.readSocket(fd, buffer, 65536));
+        return NonblockingUtil.normalize(
+                NonblockingUtil.readToNativeBuffer(fd, buffer,
+                                                   NonblockingUtil.SOCKET_FD));
     }
 
     private SSLEngineResult.HandshakeStatus doTasks() {
@@ -314,6 +298,7 @@ public class SecureSocket extends InsecureSocket {
         return engine.getHandshakeStatus();
     }
 
+    int pushback;
     /*
      * Read the channel for more information, then unwrap the
      * (hopefully application) data we get.
@@ -331,17 +316,13 @@ public class SecureSocket extends InsecureSocket {
         }
 
         int nread;
-        if(pushback.pos() > 0) {
-            ByteList pb = this.pushback;
-            nread = Math.min(pb.pos(), max);
-            buffer.addAll(pb, 0, nread);
-            if(pb.pos() - nread > 0)
-                System.arraycopy(pb.list, nread, pb.list, 0, pb.pos() - nread);
-            pb.pos(pb.pos() - nread);
-
-            max -= nread;
-            if(max == 0)
-                return nread;
+        if(pushback > 0) {
+            nread = Math.min(pushback, max);
+            buffer.position(buffer.position() + nread);
+            pushback -= nread;
+            if (nread == max) {
+                return max;
+            }
         } else {
             nread = 0;
         }
@@ -369,9 +350,8 @@ public class SecureSocket extends InsecureSocket {
                 case BUFFER_OVERFLOW:
                     // Reset the application buffer size.
                     appBufSize = engine.getSession().getApplicationBufferSize();
-                    if (appBufSize > appInTmp.capacity()) {
-                        expandAppBuf();
-
+                    if (appBufSize > buffer.capacity()) {
+                        expandBufferCapacity(appBufSize);
                         break;
                     }
                     break;
@@ -399,20 +379,13 @@ public class SecureSocket extends InsecureSocket {
 
     private SSLEngineResult _readNetworkIn(int mx) throws SSLException {
         networkIn.flip();
-        SSLEngineResult result = engine.unwrap(networkIn, appInTmp);
-
-        if(result.bytesProduced() > 0) {
-            appInTmp.flip();
-            if(mx > 0) {
-                if (buffer.readFrom(appInTmp, mx = Math.min(mx, result.bytesProduced())) != mx) {
-                    throw new SSLException("result.bytesProduced() != appInTmp.remaining()");
-                }
+        SSLEngineResult result = engine.unwrap(networkIn, buffer);
+        if (mx > 0) {
+            int more = pushback = result.bytesProduced() - mx;
+            if (more > 0) {
+                buffer.position(buffer.position() - more);
             }
-            if (appInTmp.remaining() > 0)
-                pushback.readFrom(appInTmp);
-            appInTmp.clear();
         }
-
         networkIn.compact();
         return result;
     }
@@ -426,11 +399,8 @@ public class SecureSocket extends InsecureSocket {
             return 0;
         }
 
-        /*
-         * The data buffer is empty, we can reuse the entire buffer.
-         */
         networkOut.clear();
-        SSLEngineResult result = engine.wrap(ByteBuffer.wrap(src.list, src.writePos(), src.pos() - src.writePos()), networkOut);
+        SSLEngineResult result = engine.wrap(ByteBuffer.wrap(src.list, src.writePos(), Math.min(src.pos() - src.writePos(), Shared.WRITE_MAX)), networkOut);
         networkOut.flip();
 
         if (result.getStatus() == Status.OK) {
@@ -450,6 +420,34 @@ public class SecureSocket extends InsecureSocket {
         return retValue;
     }
 
+    public int write(ByteBuffer src) throws IOException {
+        if (!hsDone) {
+            throw new SSLException("Not handshake");
+        }
+
+        if (networkOut.hasRemaining() && !tryFlush(networkOut)) {
+            return 0;
+        }
+
+        networkOut.clear();
+        SSLEngineResult result = engine.wrap(src, networkOut);
+        networkOut.flip();
+
+        if (result.getStatus() == Status.OK) {
+            if (result.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
+                doTasks();
+            }
+        } else {
+            throw new IOException("SSLEngine error during data write: " + result.getStatus());
+        }
+
+        if (networkOut.hasRemaining()) {
+            tryFlush(networkOut);
+        }
+
+        return result.bytesConsumed();
+    }
+
     public boolean dataFlush() throws IOException {
         if (networkOut.hasRemaining()) {
             tryFlush(networkOut);
@@ -459,25 +457,28 @@ public class SecureSocket extends InsecureSocket {
     }
 
     @Override
-    @Deprecated
     public int write(InputStream src, int max) throws IOException {
-        final ByteList buf = this.buffer;
-        int wrote = 0;
-        do {
-            buf.clear();
-            int once = Math.min(Shared.WRITE_MAX, max);
-            buf.ensureCapacity(once);
-            buf.readStreamArray(src, once);
-            while (buf.writePos() < buf.pos()) {
-                if((wrote = write(buf)) == 0) LockSupport.parkNanos(100);
-                else if(wrote < 0)
-                    break;
-            }
-            buf.clear();
-            max -= once;
-        } while (max > 0);
+        if (!hsDone) {
+            throw new SSLException("Not handshake");
+        }
 
-        return wrote;
+        if (networkOut.hasRemaining() && !tryFlush(networkOut)) {
+            return 0;
+        }
+
+        int cap = Math.min(Shared.WRITE_MAX, max);
+        if (writeBuffer.length < cap) {
+            writeBuffer = new byte[cap];
+        }
+        int len = src.read(writeBuffer);
+        if (len <= 0)
+            return len;
+
+        networkOut.clear();
+        SSLEngineResult result = engine.wrap(ByteBuffer.wrap(writeBuffer, 0, len), networkOut);
+        networkOut.flip();
+
+        return len;
     }
 
     public boolean shutdown() throws IOException {
@@ -513,7 +514,6 @@ public class SecureSocket extends InsecureSocket {
         if (shutdown)
             throw new IOException("Stream closed.");
         hsDone = false;
-        pushback.clear();
         buffer.clear();
 
         SSLEngine newEngine = alloc.allocate();

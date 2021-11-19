@@ -25,85 +25,116 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import net.minecraft.launchwrapper.IClassTransformer;
+import ilib.api.ContextClassTransformer;
+import roj.asm.Opcodes;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstRef;
+import roj.asm.cst.CstType;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.type.ParamHelper;
+import roj.asm.util.Context;
+import roj.asm.visitor.AsIsAttributeVisitor;
+import roj.asm.visitor.CodeVisitor;
+import roj.util.ByteReader;
+import roj.util.ByteWriter;
+
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.FMLSecurityManager;
-import roj.asm.Opcodes;
-import roj.asm.cst.CstRef;
-import roj.asm.type.ParamHelper;
-import roj.asm.visitor.*;
-import roj.util.ByteList;
 
-public class TerminalTransformer extends CodeVisitor implements IClassTransformer {
-    ClassVisitor cv;
+import java.util.List;
+
+public class TerminalTransformer extends CodeVisitor implements ContextClassTransformer {
     public TerminalTransformer() {
-        cv = new ClassVisitor();
-        AsIsAttributeVisitor aiav = new AsIsAttributeVisitor(cv);
+        bw = new ByteWriter();
+        br = new ByteReader();
 
-        cv.attributeVisitor = aiav;
-        cv.fieldVisitor = new IVisitor();
-        MethodVisitor mv = new MethodVisitor() {
-            @Override
-            public void visitNode(int acc, String name, String desc, int count) {
-                mName = name;
-                mDesc = desc;
-            }
-        };
-        mv.attributeVisitor = aiav;
-        cv.methodVisitor = mv;
-        mv.codeVisitor = this;
-        this.attributeVisitor = aiav;
-        preVisit(cv);
+        attributeVisitor = new AsIsAttributeVisitor();
+        attributeVisitor.bw = bw;
+        attributeVisitor.br = br;
     }
 
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        if (basicClass == null)
-            return null;
-        check(clsName = name);
-        ByteList out = cv.visit(new ByteList(basicClass));
+    @Override
+    public void transform(String transformedName, Context context) {
+        check(clsName = transformedName);
 
-        return dirty ? out.toByteArray() : basicClass;
+        ConstantData data = context.getData();
+
+        mName = "<IMPLIB快速常量池检查>";
+        mDesc = "<无法获得>";
+
+        boolean doVisit = false;
+        List<Constant> csts = data.cp.getConstants();
+        for (int i = 0; i < csts.size(); i++) {
+            Constant c = csts.get(i);
+            if (c.type() == CstType.METHOD) {
+                CstRef ref = (CstRef) c;
+                if (ref.desc().getType().getString().equals("(I)V")) {
+                    if (ref.getClassName().equals("java/lang/System") &&
+                            ref.desc().getName().getString().equals("exit")) {
+                        warn();
+                        ref.setClazz(data.cp.getClazz(callbackOwner));
+                    } else if (ref.getClassName().equals("java/lang/Runtime")) {
+                        String n = ref.desc().getName().getString();
+                        if (n.equals("halt") || n.equals("exit")) {
+                            doVisit = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (doVisit) {
+            dirty = false;
+
+            attributeVisitor.cw = cw = data.cp;
+
+            List<? extends MethodNode> methods = data.methods;
+            for (int i = 0; i < methods.size(); i++) {
+                MethodNode method = methods.get(i);
+                mName = method.name();
+                mDesc = method.rawDesc();
+
+                Attribute attr = (Attribute) method.attributes().getByName("Code");
+                if (attr != null) {
+                    if (attr instanceof AttrCode) {
+                        attr.toByteArray(cw, bw);
+                    } else {
+                        br.refresh(attr.getRawData());
+                        bw.list.clear();
+                        visit(cw);
+                        if (dirty) {
+                            attr.getRawData().setValue(bw.toByteArray());
+                        }
+                    }
+                }
+            }
+
+            attributeVisitor.cw = cw = attributeVisitor.cp = cp = null;
+        }
     }
 
     static String clsName, mName, mDesc;
 
     @Override
     public void invoke(byte code, CstRef method) {
-        String owner = method.getClassName();
-        if(owner.length() < 16 || owner.length() > 17 || !owner.startsWith("java/lang/")) {
-            super.invoke(code, method);
-            return;
-        }
-        String name = method.desc().getName().getString();
-        String desc = method.desc().getType().getString();
-        switch (owner) {
-            case "java/lang/System":
-                if (code == Opcodes.INVOKESTATIC && name.equals("exit") && desc.equals("(I)V")) {
-                    if (warn) {
-                        FMLLog.log.warn("=============================================================");
-                        FMLLog.log.warn("MOD HAS DIRECT REFERENCE System.exit() THIS IS NOT ALLOWED REROUTING TO FML!");
-                        FMLLog.log.warn("Offender: {}.{}{}", clsName, mName, mDesc);
-                        FMLLog.log.warn("Use FMLCommonHandler.exitJava instead");
-                        FMLLog.log.warn("=============================================================");
-                    }
-                    bw.writeByte(code).writeShort(cw.getMethodRefId(callbackOwner, "systemExitCalled", desc));
-                    dirty = true;
-                    return;
+        if (code == Opcodes.INVOKEVIRTUAL && "java/lang/Runtime".equals(method.getClassName())) {
+            String name = method.desc().getName().getString();
+            String desc = method.desc().getType().getString();
+            if (desc.equals("(I)V") && name.length() == 4) {
+                switch (name) {
+                    case "exit":
+                    case "halt":
+                        warn();
+                        bw.writeByte(Opcodes.INVOKESTATIC)
+                          .writeShort(cw.getMethodRefId(callbackOwner,
+                                                        name.equals("exit") ? "runtimeExitCalled" : "runtimeHaltCalled", "(I)V"));
+                        dirty = true;
+                        return;
                 }
-                break;
-            case "java/lang/Runtime":
-                if (code != Opcodes.INVOKEVIRTUAL && desc.equals("(I)V") && name.length() == 4) {
-                    switch (name) {
-                        case "exit":
-                        case "halt":
-                            warn();
-                            bw.writeByte(code).writeShort(cw.getMethodRefId(callbackOwner, "runtimeExitCalled", desc));
-                            dirty = true;
-                            return;
-                    }
-
-                }
-                break;
+            }
         }
         super.invoke(code, method);
     }
@@ -111,7 +142,7 @@ public class TerminalTransformer extends CodeVisitor implements IClassTransforme
     private void warn() {
         if (warn) {
             FMLLog.log.warn("=============================================================");
-            FMLLog.log.warn("MOD直接退出JAVA, 这是不允许的!");
+            FMLLog.log.warn("不允许MOD直接退出JAVA!");
             FMLLog.log.warn("来自: {}.{}{}", clsName, mName, mDesc);
             FMLLog.log.warn("请使用 FMLCommonHandler.exitJava();");
             FMLLog.log.warn("=============================================================");

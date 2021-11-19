@@ -54,6 +54,10 @@ public final class ClassDefiner extends ClassLoader {
     private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
     public static final ClassDefiner INSTANCE    = new ClassDefiner(SELF_LOADER);
 
+    public static ClassDefiner getFor(ClassLoader loader) {
+        return new ClassDefiner(getParentClassLoader(loader.getClass()));
+    }
+
     private static Method defineClassMethod;
     public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
 

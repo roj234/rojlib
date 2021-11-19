@@ -49,7 +49,7 @@ public class StringResponse implements HTTPResponse {
         this(c, "text/plain");
     }
 
-    public static StringResponse errorResponse(Code code, Object e) {
+    public static StringResponse forError(Code code, Object e) {
         if(code == null) {
             code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : Code.INTERNAL_ERROR;
         }

@@ -50,8 +50,6 @@ public class HttpConnection {
     }
 
     public void connect() throws IOException {
-        //noinspection all
-        Thread.interrupted();
         if (!connector.connected()) {
             connector.url(url).send();
             try {

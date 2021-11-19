@@ -47,7 +47,8 @@ import java.io.IOException;
 public class Prefixer {
     public static void main(String[] args) {
         if(args.length < 1) {
-            System.out.println("Usage: Prefixer <path>\n not config available");
+            System.out.println("Prefixer <path>");
+            System.out.println("  用途： 批量添加协议和class介绍");
             return;
         }
 
@@ -106,7 +107,7 @@ public class Prefixer {
                 bl.clear();
 
                 FileInputStream fis = new FileInputStream(file);
-                ByteReader.decodeUTF(-1, cl1, bl.readStreamArrayFully(fis));
+                ByteReader.decodeUTF(-1, cl1, bl.readStreamFully(fis));
                 fis.close();
 
                 if(cl1.regionMatches(0, license)) {

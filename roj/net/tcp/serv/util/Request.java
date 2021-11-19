@@ -32,10 +32,10 @@ import roj.math.Version;
 import roj.net.tcp.serv.Router;
 import roj.net.tcp.util.*;
 import roj.text.TextUtil;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -194,7 +194,7 @@ public final class Request {
 
         version = version.substring(version.indexOf('/') + 1);
 
-        final ByteList buffer = socket.buffer();
+        final ByteBuffer buffer = socket.buffer();
         if(buffer != null)
             buffer.clear();
 

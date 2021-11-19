@@ -29,19 +29,21 @@ package ilib.asm;
 import ilib.Config;
 import ilib.api.ContextClassTransformer;
 import ilib.client.api.ClientChangeWorldEvent;
-import net.minecraft.entity.Entity;
-import net.minecraftforge.common.MinecraftForge;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
-import roj.asm.mapper.util.Context;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodSimple;
 import roj.asm.tree.insn.*;
+import roj.asm.util.Context;
 import roj.asm.util.InsnList;
 import roj.collect.IntBiMap;
 import roj.collect.WeakHashSet;
 import roj.util.Helpers;
+
+import net.minecraft.entity.Entity;
+
+import net.minecraftforge.common.MinecraftForge;
 
 import java.util.List;
 import java.util.Set;

@@ -25,24 +25,28 @@
  */
 package roj.net.tcp.util;
 
+import roj.io.IOUtil;
 import roj.io.NonblockingUtil;
+import roj.math.MathUtils;
 import roj.util.ByteList;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 
 public class InsecureSocket implements WrappedSocket {
     Socket socket;
     FileDescriptor fd;
 
-    ByteList buffer;
+    ByteBuffer buffer;
+    byte[] writeBuffer;
 
     public InsecureSocket(Socket socket, FileDescriptor fd) {
         this.socket = socket;
         this.fd = fd;
-        this.buffer = new ByteList();
+        this.buffer = ByteBuffer.allocateDirect(4096);
     }
 
     @Override
@@ -70,16 +74,36 @@ public class InsecureSocket implements WrappedSocket {
         if(socket.isClosed())
             return -1;
 
-        buffer.ensureCapacity(buffer.pos() + max);
+        ByteBuffer buf = this.buffer;
+        if (!buf.hasRemaining()) {
+            buf = expandBufferCapacity(buf.capacity() << 1);
+        }
+
+        if(max >= 0) buf.limit(Math.min(buf.position() + max, buf.capacity()));
         int read;
-        do {
-            read = NonblockingUtil.normalize(NonblockingUtil.readSocket(fd, buffer, max));
-        } while (read == -3 && !socket.isClosed());
+        try {
+            do {
+                read = NonblockingUtil.normalize(
+                        NonblockingUtil.readToNativeBuffer(fd, buf,
+                                                           NonblockingUtil.SOCKET_FD));
+            } while (read == -3 && !socket.isClosed());
+        } finally {
+            buf.limit(buf.capacity());
+        }
         return read;
     }
 
+    ByteBuffer expandBufferCapacity(int cap) {
+        ByteBuffer cur = buffer;
+        ByteBuffer next = ByteBuffer.allocateDirect(cap);
+        cur.flip();
+        next.put(cur);
+        IOUtil.clean(cur);
+        return buffer = next;
+    }
+
     @Override
-    public ByteList buffer() {
+    public ByteBuffer buffer() {
         return buffer;
     }
 
@@ -96,19 +120,46 @@ public class InsecureSocket implements WrappedSocket {
     }
 
     @Override
+    public int writeDirect(ByteBuffer src) throws IOException {
+        if(socket.isClosed())
+            return -1;
+        if (!src.isDirect())
+            throw new IllegalArgumentException("Not direct");
+
+        int wrote;
+        do {
+            wrote = NonblockingUtil.normalize(
+                    NonblockingUtil.writeFromNativeBuffer(fd, src,
+                                                          NonblockingUtil.SOCKET_FD));
+        } while (wrote == -3 && !socket.isClosed());
+        return wrote;
+    }
+
+    @Override
     public int write(InputStream src, int max) throws IOException {
         if(socket.isClosed())
             return -1;
 
         int cap = Math.min(Shared.WRITE_MAX, max);
-        final ByteList buf = this.buffer;
+        if (writeBuffer.length < cap) {
+            writeBuffer = new byte[cap];
+        }
+        int len = src.read(writeBuffer);
+        if (len <= 0)
+            return len;
+
+        ByteBuffer buf = this.buffer;
+        if (buf.capacity() < len) {
+            buf = expandBufferCapacity(MathUtils.getMin2PowerOf(len));
+        }
         buf.clear();
-        buf.ensureCapacity(cap);
-        buf.readStreamArray(src, max);
+        buf.put(writeBuffer, 0, len).flip();
 
         int wrote;
         do {
-            wrote = NonblockingUtil.normalize(NonblockingUtil.writeSocket(fd, buf, Shared.WRITE_MAX));
+            wrote = NonblockingUtil.normalize(
+                    NonblockingUtil.writeFromNativeBuffer(fd, buf,
+                                                          NonblockingUtil.SOCKET_FD));
         } while (wrote == -3 && !socket.isClosed());
         buf.clear();
         return wrote;
@@ -134,7 +185,6 @@ public class InsecureSocket implements WrappedSocket {
     @Override
     public void close() throws IOException {
         socket.close();
-        //fd = null;
     }
 
     @Override
@@ -144,6 +194,6 @@ public class InsecureSocket implements WrappedSocket {
 
     @Override
     public String toString() {
-        return "InsSocket{" + socket.getRemoteSocketAddress() + '}';
+        return "WSocket{" + socket.getRemoteSocketAddress() + '}';
     }
 }

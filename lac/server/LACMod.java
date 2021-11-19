@@ -36,10 +36,14 @@ import lac.server.packets.PacketClassCheck;
 import lac.server.packets.PacketLogin;
 import lac.server.packets.PacketScreenshot;
 import lac.server.packets.SPacketCrash;
+import roj.io.IOUtil;
+import roj.util.Helpers;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.EnumConnectionState;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.server.MinecraftServer;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
@@ -48,8 +52,6 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import roj.io.IOUtil;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.List;
@@ -83,7 +85,7 @@ public class LACMod {
                         "net.minecraftforge.fml.common.network.handshake.FMLHandshakeServerState");
             }
         } catch (IOException e) {
-            Helpers.throwAny(e);
+            Helpers.athrow(e);
         }
     }
 

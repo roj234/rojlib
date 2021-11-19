@@ -25,42 +25,48 @@
  */
 package ilib.asm.fasterforge.transformers;
 
-import net.minecraft.launchwrapper.IClassTransformer;
+import ilib.api.ContextClassTransformer;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodSimple;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.AttrAnnotation;
 import roj.asm.tree.attr.Attribute;
+import roj.asm.util.Context;
 
 import java.lang.reflect.Modifier;
+import java.util.List;
 
-public class EventSubscriberTransformer implements IClassTransformer {
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
-        if (basicClass == null)
-            return null;
-        ConstantData cz = Parser.parseConstants(basicClass);
+public class EventSubscriberTransformer implements ContextClassTransformer {
+    @Override
+    public void transform(String transformedName, Context context) {
+        ConstantData cz = context.getData();
+
         boolean isSubscriber = false;
-        for (MethodSimple mn : cz.methods) {
+        List<MethodSimple> methods = cz.methods;
+        for (int j = 0; j < methods.size(); j++) {
+            MethodSimple mn = methods.get(j);
             Attribute attr = mn.attrByName("RuntimeVisibleAnnotations");
             if (attr == null) continue;
-            AttrAnnotation annos = new AttrAnnotation(true, Parser.reader(attr), cz.cp);
-            for (Annotation anno : annos.annotations) {
-                if("net/minecraftforge/fml/common/eventhandler/SubscribeEvent".equals(anno.clazz)) {
+            AttrAnnotation arA = new AttrAnnotation(true, Parser.reader(attr), cz.cp);
+
+            List<Annotation> annos = arA.annotations;
+            for (int i = 0; i < annos.size(); i++) {
+                Annotation anno = annos.get(i);
+                if ("net/minecraftforge/fml/common/eventhandler/SubscribeEvent".equals(anno.clazz)) {
                     if (Modifier.isPrivate(mn.accesses.flag)) {
                         String msg = "Cannot apply @SubscribeEvent to private method %s/%s%s";
                         throw new RuntimeException(String.format(msg, cz.name, mn.name.getString(), mn.type.getString()));
                     }
                     mn.accesses.flag = (char) toPublic(mn.accesses.flag);
                     isSubscriber = true;
+                    break;
                 }
             }
         }
-        if (isSubscriber) {
+
+        if (isSubscriber)
             cz.accesses.flag = (char) toPublic(cz.accesses.flag);
-            return Parser.toByteArray(cz);
-        }
-        return basicClass;
     }
 
     private static int toPublic(int access) {

@@ -27,9 +27,9 @@
 package ilib.asm;
 
 import ilib.api.ContextClassTransformer;
-import roj.asm.mapper.util.Context;
 import roj.asm.nixim.NiximException;
 import roj.asm.nixim.NiximSystem;
+import roj.asm.util.Context;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -49,7 +49,7 @@ public final class NiximProxy extends NiximSystem implements ContextClassTransfo
         try {
             instance.load(basicClass);
         } catch (NiximException e) {
-            Helpers.throwAny(e);
+            Helpers.athrow(e);
         }
     }
 
@@ -67,7 +67,7 @@ public final class NiximProxy extends NiximSystem implements ContextClassTransfo
                 nixim(context, data);
             }
         } catch (NiximException e) {
-            Helpers.throwAny(e);
+            Helpers.athrow(e);
         }
     }
 }

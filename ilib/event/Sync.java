@@ -81,7 +81,7 @@ public class Sync {
         List<File> scriptFiles = FileUtil.findAllFiles(dir);
         for (File file : scriptFiles) {
             try(FileInputStream stream = new FileInputStream(file)) {
-                fileData.put(file.getAbsolutePath(), new ByteList().readStreamArrayFully(stream));
+                fileData.put(file.getAbsolutePath(), new ByteList().readStreamFully(stream));
             } catch (IOException e) {
                 throw new RuntimeException("配置读取失败", e);
             }

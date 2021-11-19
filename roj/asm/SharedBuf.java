@@ -26,8 +26,7 @@
 package roj.asm;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.tree.Clazz;
-import roj.asm.tree.ConstantData;
+import roj.asm.tree.IClass;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
@@ -41,21 +40,15 @@ public final class SharedBuf {
 
     @Internal
     public static ByteList i_get() {
-        return BUFFERS.get().pool;
+        return BUFFERS.get().current();
     }
 
     public static Level alloc() {
         return BUFFERS.get();
     }
 
-    static ByteList store(ConstantData data) {
-        Level arr = BUFFERS.get();
-        return data.getBytes(arr.pool, arr.current());
-    }
-
-    static ByteList store(Clazz clazz) {
-        Level arr = BUFFERS.get();
-        return clazz.getBytes(arr.pool, arr.current());
+    static ByteList store(IClass data) {
+        return data.getBytes(BUFFERS.get().current());
     }
 
     static ByteReader reader(ByteList data) {
@@ -67,7 +60,6 @@ public final class SharedBuf {
     public static final class Level {
         static final int LEVEL_MAX = 6;
 
-        ByteList   pool = new ByteList();
         ByteReader sharedReader;
         ByteList[] buffers = new ByteList[LEVEL_MAX];
         int level;
@@ -82,7 +74,10 @@ public final class SharedBuf {
 
         ByteList current() {
             if (level == LEVEL_MAX) return new ByteList(4096);
-            return buffers[level];
+            ByteList bl = buffers[level];
+            bl.ensureCapacity(4096);
+            bl.clear();
+            return bl;
         }
 
         public boolean setLevel(boolean add) {

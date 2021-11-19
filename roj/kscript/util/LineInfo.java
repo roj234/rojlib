@@ -25,7 +25,7 @@
  */
 package roj.kscript.util;
 
-import roj.kscript.ast.Node;
+import roj.kscript.asm.Node;
 
 /**
  * No description provided

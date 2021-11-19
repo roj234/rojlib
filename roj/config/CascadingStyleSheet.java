@@ -26,7 +26,7 @@
 package roj.config;
 
 import roj.collect.MyHashMap;
-import roj.kscript.parser.expr.Expression;
+import roj.kscript.parser.ast.Expression;
 
 /**
  * No description provided

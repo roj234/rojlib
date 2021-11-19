@@ -67,7 +67,7 @@ public class ResWriter implements Runnable, Callable<Void> {
         for (Map.Entry<String, ?> entry : resources.entrySet()) {
             Object value = entry.getValue();
             if (value instanceof InputStream) {
-                bl.readStreamArrayFully((InputStream) value);
+                bl.readStreamFully((InputStream) value);
                 value = bl;
             }
             zfw.writeNamed(entry.getKey(), value instanceof ByteList ? (ByteList) value : bl.setValue((byte[]) value));

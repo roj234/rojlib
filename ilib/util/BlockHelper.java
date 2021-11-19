@@ -27,7 +27,6 @@
 package ilib.util;
 
 import com.google.common.collect.Sets;
-import roj.text.CharList;
 import roj.text.TextUtil;
 
 import net.minecraft.block.Block;
@@ -600,10 +599,9 @@ public final class BlockHelper {
             if (!"default".equals(desc)) {
                 BlockStateContainer container = block.getBlockState();
                 ArrayList<String> tmp = new ArrayList<>();
-                CharList cl = new CharList();
 
-                for (String one : TextUtil.split(new ArrayList<>(), cl, desc, ',')) {
-                    TextUtil.split(tmp, cl, desc, '=', 2);
+                for (String one : TextUtil.split(new ArrayList<>(), desc, ',')) {
+                    TextUtil.split(tmp, desc, '=', 2);
                     if (tmp.size() < 2) return null;
 
                     IProperty prop = container.getProperty(tmp.get(0));
