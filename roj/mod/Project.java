@@ -1,6 +1,5 @@
 package roj.mod;
 
-import roj.asm.mapper.ConstMapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -12,6 +11,7 @@ import roj.config.data.CString;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
+import roj.mapper.ConstMapper;
 import roj.mod.compiler.Compiler;
 import roj.text.CharList;
 import roj.text.TextUtil;

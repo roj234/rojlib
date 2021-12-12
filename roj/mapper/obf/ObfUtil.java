@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper.obf;
+package roj.mapper.obf;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -56,7 +56,7 @@ public class ObfUtil {
     static Method textXOR_A, textXOR_B;
     static {
         try {
-            Clazz total = Parser.parse(IOUtil.read("roj/asm/mapper/obf/ObfUtil.class"));
+            Clazz total = Parser.parse(IOUtil.read("roj/mapper/obf/ObfUtil.class"));
             Method txa = total.methods.get(total.getMethodByName("TextXORA"));
             txa.code.attributes.clear();
             textXOR_A = txa;

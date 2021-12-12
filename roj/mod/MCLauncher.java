@@ -1042,7 +1042,7 @@ public class MCLauncher extends JFrame {
             result.removeAll();
             int y = 2;
 
-            String str = classInp.getText().toLowerCase();
+            String str = searchText.getText().toLowerCase();
             List<String> entries = new ArrayList<>();
             final String id = fg ? "version" : "id";
             for (int i = 0; i < versions.size(); i++) {

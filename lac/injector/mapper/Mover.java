@@ -27,7 +27,6 @@ package lac.injector.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.CstRef;
-import roj.asm.mapper.util.Desc;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrBootstrapMethods;
 import roj.asm.tree.attr.AttrBootstrapMethods.BootstrapMethod;
@@ -39,6 +38,7 @@ import roj.asm.util.InsnList;
 import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.mapper.util.Desc;
 import roj.util.Helpers;
 
 import java.util.Collections;

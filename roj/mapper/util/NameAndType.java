@@ -1,4 +1,4 @@
-package roj.asm.mapper.util;
+package roj.mapper.util;
 
 /**
  * This file is a part of MI <br>

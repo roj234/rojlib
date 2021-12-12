@@ -54,11 +54,14 @@ public final class HangupWatchdog extends Thread {
     @Override
     public void run() {
         try(ServerSocket ss = new ServerSocket(port)) {
+            byte[] temp = new byte[] {(byte) 233};
             while (true) {
-                Socket socket = ss.accept();
-                socket.getOutputStream().write(233);
-                LockSupport.parkNanos(100000L);
-                socket.close();
+                try (Socket socket = ss.accept()) {
+                    while (true) {
+                        socket.getOutputStream().write(temp);
+                        LockSupport.parkNanos(500_000_000L);
+                    }
+                } catch (IOException ignored) {}
             }
         } catch (IOException ignored) {}
     }
@@ -76,18 +79,19 @@ public final class HangupWatchdog extends Thread {
         System.arraycopy(args, 2, procArg, 0, args.length - 2);
 
         startProcess(args[1], procArg);
+        byte[] temp = new byte[1];
 
         while (true) {
-            long t0 = System.currentTimeMillis();
             try (Socket socket = new Socket()) {
                 socket.setSoTimeout(1000);
                 socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), Integer.parseInt(args[0])));
-                if (socket.getInputStream().read() == 233) {
-                    LockSupport.parkNanos(1000_000_000L - 1000_000L * (System.currentTimeMillis() - t0));
-                    continue;
-                }
+                int read;
+                do {
+                    read = socket.getInputStream().read(temp);
+                } while (read > 0);
             } catch (IOException ignored) {}
 
+            LockSupport.parkNanos(500_000_000L);
             long t1 = System.currentTimeMillis();
             if(!process.isAlive()) {
                 System.err.println("\n\n" + t1 + " 进程正常退出,正在重启\n不需要请改源代码\n\n");

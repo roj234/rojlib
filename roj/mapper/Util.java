@@ -23,10 +23,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper;
+package roj.mapper;
 
 import roj.asm.cst.CstClass;
-import roj.asm.mapper.util.*;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MoFNode;
@@ -38,6 +37,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.SharedThreads;
 import roj.io.ZipFileWriter;
+import roj.mapper.util.*;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;

@@ -25,9 +25,6 @@
  */
 package roj.mod.util;
 
-import roj.asm.mapper.Mapping;
-import roj.asm.mapper.Util;
-import roj.asm.mapper.util.Desc;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.FlagList;
 import roj.collect.FilterList;
@@ -35,6 +32,9 @@ import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
+import roj.mapper.Mapping;
+import roj.mapper.Util;
+import roj.mapper.util.Desc;
 import roj.math.MathUtils;
 import roj.math.MutableBoolean;
 import roj.text.CharList;

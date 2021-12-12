@@ -1,7 +1,7 @@
-package roj.asm.mapper.obf.policy;
+package roj.mapper.obf.policy;
 
-import roj.asm.mapper.util.Desc;
 import roj.collect.ToIntMap;
+import roj.mapper.util.Desc;
 import roj.text.CharList;
 
 import java.util.Random;

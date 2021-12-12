@@ -25,13 +25,13 @@
  */
 package roj.mod;
 
-import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.util.Desc;
 import roj.asm.type.ParamHelper;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTree;
 import roj.collect.TrieTreeSet;
+import roj.mapper.ConstMapper;
+import roj.mapper.util.Desc;
 import roj.ui.UIUtil;
 import roj.util.Helpers;
 
@@ -49,13 +49,13 @@ import java.util.*;
  * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class ReflectTool extends JFrame {
+public class ReflectTool extends JFrame implements KeyListener, WindowListener {
     private static final int MAX_DISPLAY = 200;
 
     static boolean simpleMode = true;
 
-    JTextField classInp;
-    JPanel result;
+    JTextField searchText;
+    JPanel     result;
     JScrollPane scroll;
 
     Set<ClassWindow> opened = new MyHashSet<>();
@@ -65,14 +65,7 @@ public class ReflectTool extends JFrame {
         UIUtil.setLogo(this, "FMD_logo.png");
 
         setDefaultCloseOperation(exit ? JFrame.EXIT_ON_CLOSE : JFrame.DISPOSE_ON_CLOSE);
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent windowEvent) {
-                for(JFrame frame1 : opened) {
-                    frame1.dispose();
-                }
-            }
-        });
+        addWindowListener(this);
 
         JPanel panel = new JPanel();
 
@@ -80,9 +73,9 @@ public class ReflectTool extends JFrame {
         classNameLabel.setBounds(10,20,50,25);
         panel.add(classNameLabel);
 
-        classInp = new JTextField(20);
-        classInp.setBounds(100,20,165,25);
-        panel.add(classInp);
+        searchText = new JTextField(20);
+        searchText.setBounds(100, 20, 165, 25);
+        panel.add(searchText);
 
         JButton search = new JButton("搜索");
         search.setBounds(280, 20, 80, 25);
@@ -134,9 +127,7 @@ public class ReflectTool extends JFrame {
 
     static final TrieTree<String>             simple2full = new TrieTree<>();
     static final TrieTreeSet                  fullClass   = new TrieTreeSet();
-    static final Map<String, ArrayList<Desc>> methodIndex = new MyHashMap<>(),
-            fieldIndex                                    = new MyHashMap<>();
-    static Map<Desc, String> methodMap, fieldMap;
+    static final Map<String, ArrayList<Desc>> methodIndex = new MyHashMap<>(), fieldIndex = new MyHashMap<>();
 
     public static void start(boolean exit) {
         new ReflectTool(exit, null);
@@ -145,65 +136,82 @@ public class ReflectTool extends JFrame {
     protected void loadData(JLabel label) {
         if(fullClass.isEmpty()) {
             Shared.initForwardMapper();
-            ConstMapper remapper = Shared.mapperFwd;
-            methodMap = remapper.getMethodMap();
-            fieldMap = remapper.getFieldMap();
-            for(String s : remapper.getClassMap().keySet()) {
+            ConstMapper mapper = Shared.mapperFwd;
+            for(String s : mapper.getClassMap().keySet()) {
                 fullClass.add(s);
                 final String key = s.substring(s.lastIndexOf('/') + 1).toLowerCase();
                 String s1 = simple2full.put(key, s);
                 if(s1 != null) {
-                    simple2full.put(key + '_' + System.currentTimeMillis(), s1);
+                    simple2full.put(key + '_' + (System.nanoTime() % 9999), s1);
                 }
             }
 
-            for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
-                methodIndex.computeIfAbsent(entry.getKey().owner, Helpers.cast(Helpers.fnArrayList())).add(entry.getKey());
+            for (Map.Entry<Desc, String> entry : mapper.getMethodMap().entrySet()) {
+                Desc copy = entry.getKey().copy();
+                methodIndex.computeIfAbsent(copy.owner, Helpers.cast(Helpers.fnArrayList())).add(copy);
+                copy.owner = entry.getValue();
             }
-            final Comparator<Desc> comparator = (o1, o2) -> o1.name.compareToIgnoreCase(o2.name);
+
+            for (Map.Entry<Desc, String> entry : mapper.getFieldMap().entrySet()) {
+                Desc copy = entry.getKey().copy();
+                fieldIndex.computeIfAbsent(copy.owner, Helpers.cast(Helpers.fnArrayList())).add(copy);
+                copy.owner = entry.getValue();
+            }
+
+            for (CharSequence c : fullClass) {
+                String s = c.toString();
+                if (!methodIndex.containsKey(s) && !fieldIndex.containsKey(s)) {
+                    fullClass.remove(s);
+                    final String key = s.substring(s.lastIndexOf('/') + 1).toLowerCase();
+                    simple2full.remove(key);
+                    System.out.println("Removing " + s);
+                }
+            }
+
+            final Comparator<Desc> cmp = (o1, o2) -> o1.name.compareToIgnoreCase(o2.name);
             for(ArrayList<Desc> list : methodIndex.values()) {
-                list.sort(comparator);
+                list.sort(cmp);
                 list.trimToSize();
             }
 
-            for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
-                fieldIndex.computeIfAbsent(entry.getKey().owner, Helpers.cast(Helpers.fnArrayList())).add(entry.getKey());
-            }
             for(ArrayList<Desc> list : fieldIndex.values()) {
-                list.sort(comparator);
+                list.sort(cmp);
                 list.trimToSize();
             }
         }
 
         done();
 
-        label.setText("加载完毕，在上方输入类名然后点击搜索吧!");
+        label.setText("加载完毕");
         label.setForeground(Color.GREEN);
 
         result.repaint();
     }
 
-    protected void done() {
-        classInp.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyTyped(KeyEvent keyEvent) {
-                if (keyEvent.getKeyChar() == '\n') {
-                    search(null);
-                }
-            }
-        });
+    protected final void done() {
+        searchText.addKeyListener(this);
     }
 
     protected void search(ActionEvent event) {
-        String text = classInp.getText().replace('.', '/');
+        String text = searchText.getText().trim().replace('.', '/');
         Collection<String> entries;
-        if(simpleMode) {
-            entries = simple2full.valueMatches(text.toLowerCase(), MAX_DISPLAY);
+        if (text.startsWith("field_") || text.startsWith("func_")) {
+            ConstMapper mapper = Shared.mapperFwd;
+            entries = new ArrayList<>();
+            for (Map.Entry<Desc, String> entry : (text.startsWith("field_") ? mapper.getFieldMap() :
+                    mapper.getMethodMap()).entrySet()) {
+                if (entry.getValue().contains(text)) {
+                    entries.add(entry.getKey().owner);
+                }
+            }
         } else {
-            if (!text.startsWith("net/"))
-                text = "net/minecraft/" + text;
+            if (simpleMode) {
+                entries = simple2full.valueMatches(text.toLowerCase(), MAX_DISPLAY);
+            } else {
+                if (!text.startsWith("net/")) text = "net/minecraft/" + text;
 
-            entries = fullClass.keyMatches(text, MAX_DISPLAY);
+                entries = fullClass.keyMatches(text, MAX_DISPLAY);
+            }
         }
 
         result.removeAll();
@@ -216,17 +224,19 @@ public class ReflectTool extends JFrame {
             y += 22;
             result.add(labelNotify);
         } else if(entries.size() >= MAX_DISPLAY) {
-            JLabel labelNotify = new JLabel("结果超过" + MAX_DISPLAY +  "个!");
+            JLabel labelNotify = new JLabel("结果超过" + MAX_DISPLAY +  "个, 已省略超出的!");
             labelNotify.setForeground(Color.RED);
-            labelNotify.setBounds(200, y, 100, 15);
+            labelNotify.setBounds(200, y, 180, 15);
             y += 22;
             result.add(labelNotify);
         }
+
+        ActionListener openClass = this::openClass;
         for(String entry : entries) {
             JButton button = new JButton(entry);
             button.setBounds(5, y, 480, 20);
             y += 22;
-            button.addActionListener(this::openClass);
+            button.addActionListener(openClass);
             result.add(button);
         }
 
@@ -236,34 +246,30 @@ public class ReflectTool extends JFrame {
     }
 
     private void openClass(ActionEvent event) {
-        String className = ((JButton)event.getSource()).getText();
+        String clazz = ((JButton)event.getSource()).getText();
         for (ClassWindow window : opened) {
-            if(window.className.equals(className)) {
-                window.requestFocus();
+            if(window.clazz.equals(clazz)) {
+                window.toFront();
                 return;
             }
         }
 
-        opened.add(new ClassWindow(this, className));
+        opened.add(new ClassWindow(this, clazz));
     }
 
-    private static final class ClassWindow extends JFrame {
-        final String className;
-        public ClassWindow(ReflectTool parent, String className) {
-            this.className = className;
+    private static final class ClassWindow extends JFrame implements MouseListener {
+        final String clazz;
 
-            setTitle(className.substring(className.lastIndexOf('/') + 1) + " 的方法和字段");
+        ClassWindow(ReflectTool parent, String clazz) {
+            this.clazz = clazz;
+
+            setTitle(clazz.substring(clazz.lastIndexOf('/') + 1) + " 的方法和字段");
             setLayout(null);
 
             UIUtil.setLogo(this, "FMD_logo.png");
 
             setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-            addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosed(WindowEvent event) {
-                    parent.opened.remove(ClassWindow.this);
-                }
-            });
+            addWindowListener(parent);
 
             JPanel panelMethod = new JPanel();
             panelMethod.setLayout(null);
@@ -280,7 +286,7 @@ public class ReflectTool extends JFrame {
             JButton search = new JButton("过滤");
             search.setBounds(124, 2, 80, 25);
             ActionListener l = e -> {
-                initData(className, panelMethod, panelField, searchField.getText().toLowerCase());
+                init(clazz, panelMethod, panelField, searchField.getText().trim().toLowerCase());
             };
             search.addActionListener(l);
             add(search);
@@ -294,7 +300,7 @@ public class ReflectTool extends JFrame {
                 }
             });
 
-            initData(className, panelMethod, panelField, null);
+            init(clazz, panelMethod, panelField, null);
 
             JScrollPane paneM = new JScrollPane();
             paneM.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -315,120 +321,152 @@ public class ReflectTool extends JFrame {
 
             pack();
             setVisible(true);
-            setBounds(300, 300, 604, 662);
+            setBounds(300, 300, 608, 662);
             setResizable(false);
             validate();
         }
 
-        private void initData(String className, JPanel panelMethod, JPanel panelField, String search) {
-            panelMethod.removeAll();
-            panelField.removeAll();
+        private void init(String clazz, JPanel pMethod, JPanel pField, String search) {
+            pMethod.removeAll();
+            pField.removeAll();
 
             JLabel label = new JLabel("字段");
             label.setBounds(280, 5, 40, 15);
-            panelField.add(label);
+            pField.add(label);
 
             label = new JLabel("方法");
             label.setBounds(280, 5, 40, 15);
-            panelMethod.add(label);
+            pMethod.add(label);
 
-            if(methodIndex.get(className) != null) {
+            ArrayList<Desc> descs = methodIndex.get(clazz);
+            if(descs != null) {
+                methodNames = new String[descs.size()];
                 int y = 25;
-                for(Desc descriptor : methodIndex.get(className)) {
+                for(Desc md : descs) {
                     try {
-                        List<roj.asm.type.Type> params = ParamHelper.parseMethod(descriptor.param);
-                        if(search == null || descriptor.name.toLowerCase().contains(search)) {
-                            JLabel label1 = new JLabel(ParamHelper.humanize(params, descriptor.name));
-                            label1.addMouseListener(new LabelClick(true, label1, descriptor));
-                            label1.setBounds(2, y, 596, 15);
-                            panelMethod.add(label1);
+                        if(search == null || md.name.toLowerCase().contains(search)) {
+                            List<roj.asm.type.Type> params = ParamHelper.parseMethod(md.param);
+                            JLabel label1 = makeLabel(y, ParamHelper.humanize(params, md.name));
+                            methodNames[(y - 25) / 22] = md.owner;
+                            pMethod.add(label1);
                             y += 22;
                         }
                     } catch (Exception e) {
-                        System.out.println("Error parsing descriptor: " + descriptor);
+                        System.out.println("Error parsing method: " + md);
                     }
                 }
 
-                panelMethod.setPreferredSize(new Dimension(600, y));
+                pMethod.setPreferredSize(new Dimension(600, y));
+            } else {
+                label = new JLabel("没有数据");
+                label.setForeground(Color.RED);
+                label.setBounds(270, 20, 80, 15);
+                pMethod.add(label);
             }
 
-            if(panelMethod.getComponentCount() == 1) {
-                JLabel label1 = new JLabel("没有数据");
-                label1.setForeground(Color.RED);
-                label1.setBounds(270, 20, 80, 15);
-                panelMethod.add(label1);
-            }
-
-            if(fieldIndex.get(className) != null) {
+            descs = fieldIndex.get(clazz);
+            if(descs != null) {
+                fieldNames = new String[descs.size()];
                 int y = 25;
-                for (Desc descriptor : fieldIndex.get(className)) {
-                    if(search == null || descriptor.name.toLowerCase().contains(search)) {
-                        JLabel label1 = new JLabel(descriptor.name);
-                        label1.addMouseListener(new LabelClick(false, label1, descriptor));
-                        label1.setBounds(2, y, 596, 15);
-                        panelField.add(label1);
+                for (Desc fd : descs) {
+                    if(search == null || fd.name.toLowerCase().contains(search)) {
+                        pField.add(makeLabel(y, fd.name));
+                        fieldNames[(y - 25) / 22] = fd.owner;
                         y += 22;
                     }
                 }
 
-                panelField.setPreferredSize(new Dimension(600, y));
+                pField.setPreferredSize(new Dimension(600, y));
+            } else {
+                label = new JLabel("没有数据");
+                label.setForeground(Color.RED);
+                label.setBounds(270, 20, 80, 15);
+                pField.add(label);
             }
 
-            if(panelField.getComponentCount() == 1) {
-                JLabel label1 = new JLabel("没有数据");
-                label1.setForeground(Color.RED);
-                label1.setBounds(270, 20, 80, 15);
-                panelField.add(label1);
-            }
-
-            panelField.repaint();
-            panelMethod.repaint();
+            pField.repaint();
+            pMethod.repaint();
         }
 
-        private static class LabelClick implements MouseListener {
-            final boolean md;
-            final JLabel label;
-            final Desc   descriptor;
-            String originalLabel;
+        private JLabel makeLabel(int y, String name) {
+            JLabel l = new JLabel(name);
+            l.setForeground(Color.BLACK);
+            l.addMouseListener(this);
+            l.setBounds(2, y, 596, 15);
+            return l;
+        }
 
-            public LabelClick(boolean md, JLabel label1, Desc descriptor) {
-                this.md = md;
-                this.label = label1;
-                this.descriptor = descriptor;
-            }
+        String[] methodNames, fieldNames;
+        String original, searge;
 
-            public void mouseClicked(MouseEvent var1) {
-                clipboard.setContents(new StringSelection(getName()), null);
-                label.setText("已复制");
-            }
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            clipboard.setContents(new StringSelection(searge), null);
+            JLabel label = (JLabel) e.getComponent();
+            label.setText("已复制");
+        }
 
-            public void mousePressed(MouseEvent var1) {}
+        @Override
+        public void mousePressed(MouseEvent e) {}
 
-            public void mouseReleased(MouseEvent var1) {}
+        @Override
+        public void mouseReleased(MouseEvent e) {}
 
-            public void mouseEntered(MouseEvent var1) {
-                label.setText(getText());
-            }
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            JLabel label = (JLabel) e.getComponent();
+            label.setForeground(Color.RED);
+            int i = (label.getY() - 25) / 22;
+            original = label.getText();
+            label.setText(searge = original.endsWith(")") ? methodNames[i] : fieldNames[i]);
+        }
 
-            private String getText() {
-                originalLabel = label.getText();
-                String name;
-
-                label.setForeground(Color.RED);
-                label.setBackground(Color.GRAY);
-
-                return getName();
-            }
-
-            private String getName() {
-                return md ? methodMap.get(descriptor) : fieldMap.get(descriptor);
-            }
-
-            public void mouseExited(MouseEvent var1) {
-                label.setText(originalLabel);
-                label.setForeground(Color.BLACK);
-                label.setBackground(null);
-            }
+        @Override
+        public void mouseExited(MouseEvent e) {
+            JLabel label = (JLabel) e.getComponent();
+            label.setForeground(Color.BLACK);
+            label.setText(original);
         }
     }
+
+    @Override
+    public void windowOpened(WindowEvent e) {}
+
+    @Override
+    public void windowClosing(WindowEvent e) {}
+
+    @Override
+    public void windowClosed(WindowEvent e) {
+        if (e.getWindow() instanceof ClassWindow)
+            opened.remove(e.getWindow());
+        else
+            for (Window window : opened) {
+                window.dispose();
+            }
+    }
+
+    @Override
+    public void windowIconified(WindowEvent e) {}
+
+    @Override
+    public void windowDeiconified(WindowEvent e) {}
+
+    @Override
+    public void windowActivated(WindowEvent e) {}
+
+    @Override
+    public void windowDeactivated(WindowEvent e) {}
+
+    @Override
+    public void keyTyped(KeyEvent e) {}
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        if (e.getKeyChar() == '\n') {
+            search(null);
+        }
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {}
 }

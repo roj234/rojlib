@@ -25,14 +25,14 @@
  */
 package roj.mod.fp;
 
-import roj.asm.mapper.CodeMapper;
-import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.Mapping;
-import roj.asm.mapper.Util;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTreeSet;
 import roj.io.ZipFileWriter;
+import roj.mapper.CodeMapper;
+import roj.mapper.ConstMapper;
+import roj.mapper.Mapping;
+import roj.mapper.Util;
 import roj.mod.FMDMain;
 import roj.mod.remap.ClassMerger;
 import roj.mod.util.DummyPrintStream;

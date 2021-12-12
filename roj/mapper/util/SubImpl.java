@@ -1,4 +1,4 @@
-package roj.asm.mapper.util;
+package roj.mapper.util;
 
 import roj.collect.MyHashSet;
 

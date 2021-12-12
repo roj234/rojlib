@@ -38,8 +38,9 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-public final class Context implements Consumer<Constant> {
+public final class Context implements Consumer<Constant>, Supplier<ByteList> {
     static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2, ID_INVOKE_DYN = 3;
 
     private String name;

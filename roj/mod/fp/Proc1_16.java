@@ -25,9 +25,6 @@
  */
 package roj.mod.fp;
 
-import roj.asm.mapper.CodeMapper;
-import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.Util;
 import roj.asm.util.Context;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTreeSet;
@@ -37,6 +34,9 @@ import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.FileUtil;
 import roj.io.ZipFileWriter;
+import roj.mapper.CodeMapper;
+import roj.mapper.ConstMapper;
+import roj.mapper.Util;
 import roj.mod.FMDMain;
 import roj.mod.MCLauncher;
 import roj.mod.remap.ClassMerger;

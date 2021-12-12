@@ -1,4 +1,4 @@
-package roj.asm.mapper.obf.policy;
+package roj.mapper.obf.policy;
 
 import java.util.Random;
 

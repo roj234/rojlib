@@ -1,6 +1,6 @@
-package roj.asm.mapper.obf.policy;
+package roj.mapper.obf.policy;
 
-import roj.asm.mapper.util.Desc;
+import roj.mapper.util.Desc;
 
 import java.util.Random;
 import java.util.Set;

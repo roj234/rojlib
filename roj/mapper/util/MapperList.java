@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper.util;
+package roj.mapper.util;
 
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;

@@ -26,9 +26,9 @@
 package roj.collect;
 
 import roj.text.CharList;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import java.util.Arrays;
 import java.util.Iterator;
 
 /**
@@ -36,17 +36,13 @@ import java.util.Iterator;
  * @version 0.1
  * @since  2020/11/9 23:10
  */
-public abstract class TrieEntry implements Iterable<TrieEntry> {
+public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable {
     final char c;
 
     private TrieEntry next;
 
     TrieEntry(char ch) {
         this.c = ch;
-    }
-
-    public int childrenCount() {
-        return size;
     }
 
     public final void putChild(TrieEntry te) {
@@ -61,6 +57,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry> {
         TrieEntry prev = null, entry = entries[idx(key)];
         if (entry == null) {
             entries[idx(key)] = te;
+            size++;
             return;
         }
         while (true) {
@@ -122,14 +119,12 @@ public abstract class TrieEntry implements Iterable<TrieEntry> {
     @Nonnull
     @Override
     public final Iterator<TrieEntry> iterator() {
-        return new ValItr(this);
+        return new Val(this);
     }
 
     public abstract int copyFrom(TrieEntry node);
 
-    abstract TrieEntry newInstance();
-
-    abstract int recursionSum();
+    abstract boolean isValid();
 
     CharSequence text() {
         return null;
@@ -149,7 +144,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry> {
     }
 
     TrieEntry[] entries;
-    int size = 0;
+    int size;
     int length = 1;
 
     private void resize() {
@@ -184,17 +179,26 @@ public abstract class TrieEntry implements Iterable<TrieEntry> {
     }
 
     public final void clear() {
-        if (size == 0) return;
-        size = 0;
-        if (entries != null)
-            Arrays.fill(entries, null);
+        this.length = 1;
+        this.entries = null;
+        this.size = 0;
     }
 
-    static final class ValItr extends AbstractIterator<TrieEntry> {
+    @Override
+    public TrieEntry clone() {
+        TrieEntry entry = null;
+        try {
+            entry = (TrieEntry) super.clone();
+        } catch (CloneNotSupportedException ignored) {}
+        entry.clear();
+        return entry;
+    }
+
+    static final class Val extends AbstractIterator<TrieEntry> {
         TrieEntry map, entry;
         int i;
 
-        public ValItr(TrieEntry map) {
+        public Val(TrieEntry map) {
             this.map = map;
             if (map.entries == null)
                 stage = ENDED;
@@ -219,9 +223,108 @@ public abstract class TrieEntry implements Iterable<TrieEntry> {
         }
     }
 
-    public void resetMap() {
-        this.length = 1;
-        this.entries = null;
-        this.size = 0;
+    static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
+        SimpleList<ENTRY> a = new SimpleList<>(), b = new SimpleList<>();
+        ENTRY ent;
+        int   i = 0;
+
+        public final void setupDepthFirst(ENTRY root) {
+            a.add(root);
+            b.add(Helpers.cast(root.iterator()));
+        }
+
+        public final void setupWidthFirst(ENTRY root) {
+            a.add(root);
+        }
+
+        // 深度优先
+        @SuppressWarnings("unchecked")
+        public final boolean _computeNextDepthFirst() {
+            SimpleList<ENTRY> a = this.a;
+            SimpleList<Iterator<ENTRY>> b = Helpers.cast(this.b);
+
+            int i = a.size - 1;
+            while (true) {
+                ENTRY ent = a.get(i);
+                if (this.ent != ent) {
+                    if (ent.isValid()) {
+                        this.ent = ent;
+                        return true;
+                    }
+                }
+
+                Iterator<ENTRY> itr = b.get(i);
+                if (!itr.hasNext()) { // this level is empty
+                    do {
+                        a.remove(i);
+                        b.remove(i--);
+                        if (i < 0) return false;
+                    } while (!b.get(i).hasNext());
+                } else {
+                    ENTRY t = itr.next();
+                    a.add(t);
+                    b.add((Iterator<ENTRY>) t.iterator());
+                    i++;
+                }
+            }
+        }
+
+        // 广度优先
+        @SuppressWarnings("unchecked")
+        public final boolean _computeNextWidthFirst() {
+            SimpleList<ENTRY> a = this.a;
+            while (true) {
+                if (a.size == 0) return false;
+
+                while (i < a.size) {
+                    if ((ent = a.get(i++)).isValid()) return true;
+                }
+                i = 0;
+
+                SimpleList<ENTRY> b = this.b;
+                for (ENTRY entry : a) {
+                    if (entry.size > 0) {
+                        b.ensureCapacity(b.size + entry.size);
+                        for (TrieEntry subEntry : entry) {
+                            b.add((ENTRY) subEntry);
+                        }
+                    }
+                }
+
+                // Swap
+                a.size = 0;
+                this.a = this.b;
+                this.b = a;
+                a = this.a;
+            }
+        }
     }
+
+    static final class KeyItr extends Itr<CharSequence, TrieEntry> {
+        final CharList seq;
+
+        KeyItr(TrieEntry root) {
+            this(root, new CharList());
+        }
+
+        KeyItr(TrieEntry root, CharList base) {
+            super.setupDepthFirst(root);
+            result = seq = base;
+            i = base.length();
+        }
+
+        @Override
+        public boolean computeNext() {
+            boolean v = super._computeNextDepthFirst();
+            if (v) {
+                seq.setIndex(i);
+                // j = 1: skip root entry
+                for (int j = 1; j < a.size; j++) {
+                    a.get(j).append(seq);
+                }
+            }
+            return v;
+        }
+    }
+
 }

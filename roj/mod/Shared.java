@@ -25,8 +25,6 @@
  */
 package roj.mod;
 
-import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.util.Desc;
 import roj.collect.MyHashMap;
 import roj.concurrent.PrefixFactory;
 import roj.concurrent.TaskPool;
@@ -36,6 +34,8 @@ import roj.config.data.CMapping;
 import roj.io.BOMInputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.mapper.ConstMapper;
+import roj.mapper.util.Desc;
 import roj.misc.CpFilter;
 import roj.ui.CmdUtil;
 import roj.util.ByteWriter;

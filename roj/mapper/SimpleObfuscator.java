@@ -1,11 +1,8 @@
-package roj.asm.mapper;
+package roj.mapper;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.mapper.CodeMapper.SimpleVar;
-import roj.asm.mapper.obf.policy.*;
-import roj.asm.mapper.util.Desc;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUTF;
@@ -27,6 +24,9 @@ import roj.config.data.CMapping;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.ZipFileWriter;
+import roj.mapper.CodeMapper.SimpleVar;
+import roj.mapper.obf.policy.*;
+import roj.mapper.util.Desc;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;

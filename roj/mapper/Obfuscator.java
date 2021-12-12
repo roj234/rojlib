@@ -23,11 +23,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper;
+package roj.mapper;
 
 import roj.asm.Parser;
-import roj.asm.mapper.util.Desc;
-import roj.asm.mapper.util.SubImpl;
 import roj.asm.tree.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
@@ -38,6 +36,8 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
+import roj.mapper.util.Desc;
+import roj.mapper.util.SubImpl;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;

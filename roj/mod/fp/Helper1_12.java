@@ -26,7 +26,7 @@
 package roj.mod.fp;
 
 import LZMA.LzmaInputStream;
-import roj.asm.mapper.ConstMapper;
+import roj.mapper.ConstMapper;
 
 import java.io.File;
 import java.io.FileNotFoundException;

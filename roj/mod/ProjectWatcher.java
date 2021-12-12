@@ -108,14 +108,21 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
             try {
                 key = watcher.take();
             } catch (InterruptedException e) {
+                System.out.println("ProjectWatcher.pause()");
                 pause = true;
+                // noinspection all
+                Thread.interrupted();
                 LockSupport.park();
+                // noinspection all
+                Thread.interrupted();
                 pause = false;
+                System.out.println("ProjectWatcher.unpause()");
                 continue;
             }
 
             via.key = key;
             X csm = actions.find(via);
+            System.out.println("ProjectWatcher.onEvent(): " + key.watchable());
 
             x:
             for (WatchEvent<?> event : key.pollEvents()) {
@@ -165,9 +172,12 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
             if (!key.reset()) {
                 key.cancel();
                 if(csm != null) {
-                    for (X set : listeners.remove(csm.owner)) {
-                        actions.remove(set);
-                        set.key.cancel();
+                    X[] remove = listeners.remove(csm.owner);
+                    if (remove != null) {
+                        for (X set : remove) {
+                            actions.remove(set);
+                            set.key.cancel();
+                        }
                     }
                 }
             }
@@ -191,8 +201,8 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         if(listeners == null)
             return;
 
-        t.interrupt();
         while (!pause) {
+            t.interrupt();
             LockSupport.parkNanos(1000L);
         }
 
@@ -201,22 +211,41 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         }
         actions.clear();
         listeners.clear();
+
+        do {
+            LockSupport.unpark(t);
+        } while (pause);
     }
 
     @Override
     public void terminate() {
         if(listeners == null)
             return;
-        reset();
+
+        while (!pause) {
+            t.interrupt();
+            LockSupport.parkNanos(1000L);
+        }
+
+        for (X key : actions) {
+            key.key.cancel();
+        }
+        actions.clear();
+        listeners.clear();
         listeners = null;
+
+        while (pause) {
+            LockSupport.unpark(t);
+        }
+
     }
 
     public void register(Project proj) throws IOException {
         if(listeners == null)
             return;
 
-        t.interrupt();
         while (!pause) {
+            t.interrupt();
             LockSupport.parkNanos(1000L);
         }
 
@@ -242,6 +271,10 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         actions.add(arr[1] = new X(proj.name, key, 1));
 
         listeners.put(proj.name, arr);
-        LockSupport.unpark(t);
+
+        do {
+            LockSupport.unpark(t);
+            System.out.println("ProjectWatcher.asyncUnpause()");
+        } while (pause);
     }
 }

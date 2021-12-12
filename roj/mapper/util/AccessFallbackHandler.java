@@ -23,17 +23,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.asm.fasterforge;
+package roj.mapper.util;
 
-import roj.mapper.ConstMapper;
+import roj.asm.util.FlagList;
+import roj.collect.CharMap;
+
+import java.util.Map;
 
 /**
- * Your description here
+ * Access flag handler
  *
- * @author Roj233
+ * @author solo6975
  * @version 0.1
- * @since 2021/8/5 22:42
+ * @since 2021/10/1 19:30
  */
-public interface IFDAccessPort {
-    ConstMapper getMapper();
+public interface AccessFallbackHandler {
+    boolean fillAccessFlags(Desc desc, CharMap<FlagList> interner);
+
+    void handleUnmatched(Map<String, Map<String, Desc>> rest, CharMap<FlagList> interner);
 }

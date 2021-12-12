@@ -88,35 +88,39 @@ public class Loader implements IFMLLoadingPlugin {
 
     public Loader() throws IOException {
         AccessTransformer.readAndParseAt(Loader.class, "META-INF/IL_at.cfg");
-        try {
-            LaunchInjector.patch();
-        } catch (Throwable e) {
-            File launcher;
+        if (/*Config.injectLWP*/true) {
             try {
-                launcher = new File(Launch.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
-            } catch (URISyntaxException e1) {
-                throw new IllegalArgumentException("injectLauncher操作失败", e1);
-            }
-
-            try(MutableZipFile mz = new MutableZipFile(launcher)) {
-                // noinspection all
-                ZipInputStream zis = new ZipInputStream(Loader.class.getClassLoader().getResourceAsStream("META-INF/LaunchWrapperInjector.jar"));
-                ZipEntry ze;
-                while ((ze = zis.getNextEntry()) != null) {
-                    if (ze.getName().endsWith(".class")) {
-                        mz.setFileData(ze.getName(), new ByteList().readStreamFully(zis));
-                    }
+                LaunchInjector.patch();
+            } catch (Throwable e) {
+                File launcher;
+                try {
+                    launcher = new File(Launch.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
+                } catch (URISyntaxException e1) {
+                    throw new IllegalArgumentException("injectLauncher操作失败", e1);
                 }
-                mz.store();
-            } catch (Throwable e1) {
-                throw new IllegalArgumentException("injectLauncher操作失败", e1);
+
+                try (MutableZipFile mz = new MutableZipFile(launcher)) {
+                    // noinspection all
+                    ZipInputStream zis = new ZipInputStream(Loader.class.getClassLoader().getResourceAsStream("META-INF/LaunchWrapperInjector.jar"));
+                    ZipEntry ze;
+                    while ((ze = zis.getNextEntry()) != null) {
+                        if (ze.getName().endsWith(".class")) {
+                            mz.setFileData(ze.getName(), new ByteList().readStreamFully(zis));
+                        }
+                    }
+                    mz.store();
+                } catch (Throwable e1) {
+                    throw new IllegalArgumentException("injectLauncher操作失败", e1);
+                }
+                throw new RuntimeException("请重启Minecraft", e);
             }
-            throw new RuntimeException("请重启Minecraft", e);
         }
 
         if (Config.removePatchy) {
             File patchy;
             try {
+                // todo bug fix
+                System.out.println(Bootstrap.class.getProtectionDomain().getCodeSource().getLocation().toURI());
                 patchy = new File(Bootstrap.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
             } catch (URISyntaxException e) {
                 throw new IllegalArgumentException("removePatchy操作失败", e);

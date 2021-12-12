@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.function.Supplier;
 import java.util.jar.Manifest;
 import java.util.zip.*;
 
@@ -195,7 +196,8 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             entry.name = new String(buf, 0, nameLen, charset);
         }
 
-        entries.put(entry.name, entry);
+        if (null != entries.put(entry.name, entry))
+            throw new ZipException("重复的entry名称！MZF不支持");
 
         if(extraLen > 0) {
             zip.readFully(buf, 0, extraLen);
@@ -462,6 +464,18 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         return file;
     }
 
+    public ModFile setFileData(String entry, Supplier<ByteList> content, boolean compress) {
+        ModFile file = new ModFile();
+        file.name = entry;
+        if(file == (file = modified.find(file))) {
+            file.file = entries.get(entry);
+            modified.add(file);
+        }
+        file.compress = true;
+        file.data = content;
+        return file;
+    }
+
     public ModFile setFileDataStreaming(String entry, InputStream content, boolean compress) {
         ModFile file = new ModFile();
         file.name = entry;
@@ -636,8 +650,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             Attr attr = file1.attr;
             attr.compressMethod = (char) (file.compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 
-            if (file.data instanceof ByteList) {
-                ByteList data = (ByteList) file.data;
+            if (!(file.data instanceof InputStream)) {
+                ByteList data = (ByteList) (file.data instanceof Supplier ?
+                        ((Supplier<?>) file.data).get() : file.data);
                 crc.reset();
                 crc.update(data.list, data.offset(), data.limit());
                 attr.CRC32 = (int) crc.getValue();

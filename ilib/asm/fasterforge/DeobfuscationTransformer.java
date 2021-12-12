@@ -26,10 +26,10 @@
 package ilib.asm.fasterforge;
 
 import roj.asm.Parser;
-import roj.asm.mapper.CodeMapper;
-import roj.asm.mapper.ConstMapper;
 import roj.asm.util.Context;
 import roj.collect.TrieTreeSet;
+import roj.mapper.CodeMapper;
+import roj.mapper.ConstMapper;
 import roj.util.ByteList;
 
 import net.minecraft.launchwrapper.IClassNameTransformer;

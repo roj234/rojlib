@@ -23,16 +23,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper;
+package roj.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstRef;
-import roj.asm.mapper.util.AccessFallbackHandler;
-import roj.asm.mapper.util.Desc;
-import roj.asm.mapper.util.MapperList;
-import roj.asm.mapper.util.SubImpl;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrBootstrapMethods;
 import roj.asm.tree.attr.Attribute;
@@ -46,6 +42,10 @@ import roj.concurrent.collect.ConcurrentFindHashSet;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
+import roj.mapper.util.AccessFallbackHandler;
+import roj.mapper.util.Desc;
+import roj.mapper.util.MapperList;
+import roj.mapper.util.SubImpl;
 import roj.text.DottedStringPool;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;

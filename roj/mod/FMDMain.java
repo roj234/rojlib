@@ -27,11 +27,6 @@ package roj.mod;
 
 import roj.asm.AccessTransformer;
 import roj.asm.Parser;
-import roj.asm.mapper.CodeMapper;
-import roj.asm.mapper.ConstMapper;
-import roj.asm.mapper.ConstMapper.State;
-import roj.asm.mapper.Util;
-import roj.asm.mapper.util.ResWriter;
 import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
@@ -47,7 +42,13 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.*;
+import roj.mapper.CodeMapper;
+import roj.mapper.ConstMapper;
+import roj.mapper.ConstMapper.State;
+import roj.mapper.Util;
+import roj.mapper.util.ResWriter;
 import roj.math.Version;
+import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.compiler.ByteListOutput;
 import roj.mod.compiler.Compiler;
 import roj.mod.fp.Proc1_12;
@@ -57,7 +58,6 @@ import roj.mod.util.MappingHelper;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
-import roj.text.crypt.Base64;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
@@ -65,6 +65,9 @@ import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -625,10 +628,17 @@ public final class FMDMain {
 
     public static int run(Map<String, Object> args) throws IOException, InterruptedException {
         MCLauncher.load();
+        if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
+            if (UIUtil.readBoolean("MC没有退出,是否结束进程 (注意，热重载需要且只支持build)?")) {
+                MCLauncher.task.cancel(true);
+            } else {
+                return -1;
+            }
+        }
 
         CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
         if(mc_conf.size() == 0) {
-            CmdUtil.error("配置丢失，无法启动");
+            CmdUtil.error("配置丢失，无法启动，请重新安装或在启动器内重新选择版本");
             return -1;
         }
 
@@ -636,25 +646,31 @@ public final class FMDMain {
         if(compile(args, currentProject, dest, 1)) {
             dest = new File(dest, currentProject.name + ".jar");
             if(!dest.isFile()) {
-                CmdUtil.warning("目标jar不存在 (3)");
+                CmdUtil.warning("目标jar不存在");
                 return -1;
             }
 
+            boolean asyncRun = MAIN_CONFIG.getDot("FMD配置.异步运行MC").asBool();
+
             if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBool()) {
-                File hrTmp = new File(TMP_DIR, "hr");
-                if(!hrTmp.isDirectory() && !hrTmp.mkdirs()) {
-                    CmdUtil.error("tmp/hr 目录创建失败");
-                }
+                asyncRun = true;
+
+                // default 4485
+                char port = (char) MAIN_CONFIG.getDot("FMD配置.重载端口").asInteger();
 
                 String jvm = mc_conf.getString("jvmArg");
-                CharList cl = Base64.encode(ByteWriter.encodeUTF(hrTmp.getAbsolutePath()), new CharList()).append(' ');
-                mc_conf.put("jvmArg", jvm + " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + '=' + cl);
+                mc_conf.put("jvmArg", jvm + " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port);
 
                 if(DEBUG)
-                    CmdUtil.info("重载配置完毕 " + cl);
+                    CmdUtil.info("重载工具已在端口 4485 上启动");
             }
 
-            return MCLauncher.runClient(mc_conf, 3, null);
+            if (asyncRun) {
+                parallel.pushTask(MCLauncher.task = new RunMinecraftTask(true));
+                return 0;
+            } else {
+                return MCLauncher.runClient(mc_conf, 3, null);
+            }
         } else {
             return -1;
         }
@@ -665,29 +681,35 @@ public final class FMDMain {
             args.put("_HOT_RELOAD_ENABLE_", Helpers.cast(new ArrayList<>()));
 
         if(compile(args, currentProject, BASE, 0)) {
+            hotReload:
             if(args.containsKey("_HOT_RELOAD_ENABLE_")) {
-                File hrTmp = new File(TMP_DIR, "hr");
-                if(!hrTmp.isDirectory() && !hrTmp.mkdirs()) {
-                    CmdUtil.error("tmp/hr 目录创建失败");
-                }
-
                 List<ConstantData> modified = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
-                BoxFile aoc = new BoxFile(new File(hrTmp, "modified.bin"));
-                aoc.clear();
+                if (modified.isEmpty())
+                    break hotReload;
 
+                ByteWriter bw = new ByteWriter().writeByte((byte) 0x66)
+                                                .writeShort(modified.size());
                 for (int i = 0; i < modified.size(); i++) {
                     ConstantData data = modified.get(i);
-                    aoc.append(data.name, Parser.toByteArrayShared(data));
+                    ByteList buf = Parser.toByteArrayShared(data);
+                    byte[] nb = data.name.replace('/', '.').getBytes(StandardCharsets.UTF_8);
+                    bw.writeShort(nb.length)
+                      .writeBytes(nb)
+                      .writeInt(buf.pos())
+                      .writeBytes(buf);
                 }
 
-                File lck = new File(hrTmp, "mod.lck");
-                try(FileOutputStream fos = new FileOutputStream(lck)) {
-                    fos.write(0x23);
+                InetSocketAddress addr = new InetSocketAddress(InetAddress.getLoopbackAddress(), 4485);
+                try (Socket socket = new Socket()) {
+                    socket.setSoTimeout(1000);
+                    socket.connect(addr);
+                    bw.writeToStream(socket.getOutputStream());
+                    if(DEBUG)
+                        CmdUtil.success("发送重载请求");
+                } catch (IOException e) {
+                    CmdUtil.error("工具连接失败");
+                    e.printStackTrace();
                 }
-                aoc.close();
-
-                if(DEBUG)
-                    CmdUtil.success("发送重载请求");
             }
 
             return 0;
@@ -731,6 +753,8 @@ public final class FMDMain {
                 for (String s : set) {
                     files.add(new File(s));
                 }
+                if (DEBUG)
+                    System.out.println("Use ProjectWatcher.getSrc(): " + set);
             }
         }
 
@@ -744,6 +768,8 @@ public final class FMDMain {
 
         if(files == null) {
             files = FileUtil.findAllFiles(source, FileFilter.INST.reset(stamp, increment ? FileFilter.F_SRC_TIME : FileFilter.F_SRC_ANNO));
+            if (DEBUG)
+                System.out.println("Use FileFilter.getSrc(): " + files);
         }
         if (MAIN_CONFIG.getBool("自动备份源码") && !files.isEmpty()) {
             MutableZipFile sourceZip = project.sourceZip;

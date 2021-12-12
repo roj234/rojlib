@@ -25,8 +25,8 @@
  */
 package roj.collect;
 
-import roj.concurrent.OperationDone;
-import roj.math.MutableBoolean;
+import roj.collect.TrieEntry.Itr;
+import roj.collect.TrieEntry.KeyItr;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -48,7 +48,7 @@ import static roj.collect.IntMap.NOT_USING;
  */
 public class TrieTree<V> implements Map<CharSequence, V> {
     static final int COMPRESS_START_DEPTH = 1,
-            MIN_REMOVE_ARRAY_SIZE = 8;
+            MIN_REMOVE_ARRAY_SIZE = 5;
 
     static class Entry<V> extends TrieEntry {
         V value;
@@ -61,51 +61,42 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
         Entry(char c, Entry<V> entry) {
             super(c);
+            this.length = entry.length;
+            this.size = entry.size;
+            this.entries = entry.entries;
             this.value = entry.value;
         }
-        
-        int recursionSum() {
-            int i = value == IntMap.NOT_USING ? 0 : 1;
-            if (size > 0) {
-                for (TrieEntry value : this) {
-                    i += value.recursionSum();
-                }
-            }
-            return i;
+
+        @Override
+        boolean isValid() {
+            return value != NOT_USING;
         }
 
         @SuppressWarnings("unchecked")
         public int copyFrom(TrieEntry x) {
             Entry<?> node = (Entry<?>) x;
             int v = 0;
-            if(node.value != IntMap.NOT_USING && value == IntMap.NOT_USING) {
+            if (node.value != NOT_USING && value == NOT_USING) {
                 this.value = (V) node.value;
                 v = 1;
             }
 
             for (TrieEntry entry : node) {
                 TrieEntry sub = getChild(entry.c);
-                if (sub == null) putChild(sub = newInstance());
+                if (sub == null) putChild(sub = entry.clone());
                 v += sub.copyFrom(entry);
             }
             return v;
         }
 
-        @Override
-        protected Entry<V> newInstance() {
-            Entry<V> entry = new Entry<>(c);
-            entry.value = value;
-            return entry;
-        }
-
         public V getValue() {
-            if (value == IntMap.NOT_USING)
+            if (value == NOT_USING)
                 throw new UnsupportedOperationException();
             return value;
         }
 
         public V setValue(V value) {
-            if (value == IntMap.NOT_USING)
+            if (value == NOT_USING || this.value == NOT_USING)
                 throw new UnsupportedOperationException();
             V ov = this.value;
             this.value = value;
@@ -124,13 +115,6 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         PEntry(CharSequence val, Entry<V> entry) {
             super(val.charAt(0), entry);
             this.val = val;
-        }
-
-        @Override
-        protected Entry<V> newInstance() {
-            Entry<V> entry = new PEntry<>(val);
-            entry.value = value;
-            return entry;
         }
 
         CharSequence text() {
@@ -170,7 +154,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     @SuppressWarnings("unchecked")
     Entry<V> entryForPut(CharSequence s, int i, int len) {
         if (len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
+            throw new IllegalArgumentException("Δlength < 0");
 
         Entry<V> entry = root;
         Entry<V> prev;
@@ -179,56 +163,60 @@ public class TrieTree<V> implements Map<CharSequence, V> {
             prev = entry;
             entry = (Entry<V>) entry.getChild(c);
             if (entry == null) {
-                // 前COMPRESS_START_DEPTH个字符, 避免频繁插入带来效率损失
+                // 前COMPRESS_START_DEPTH个字符，或者只剩一个字符不压缩
                 if (len - i == 1 || i < COMPRESS_START_DEPTH) {
                     prev.putChild(entry = new Entry<>(c));
                 } else {
                     prev.putChild(entry = new PEntry<>(s.subSequence(i, len)));
                     break;
                 }
-            } else if (entry.text() != null) { // # split
-                // PEntry
-
+            } else if (entry.text() != null) {
                 final CharSequence text = entry.text();
 
-                // lastMatch = 1; // of i(minAdd) off
                 int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                // a - bcd
                 if (lastMatch == text.length()) {
-                    // do nothing... as it for next
+                    // 全部match
                     i += lastMatch - 1;
                 } else {
-
-                    // [0 - 2) => bc
+                    // 拆分P1: 前半部分[0, lastMatch)
                     if (lastMatch == 1) {
-                        prev.putChild(entry = new Entry<>(text.charAt(0), entry));
+                        prev.putChild(new Entry<>(entry.c));
                     } else {
                         ((PEntry<V>) entry).val = text.subSequence(0, lastMatch);
                     }
 
-                    // [2, 3) => d
+                    // 拆分P2: 后半部分[lastMatch, text.length)
                     Entry<V> child;
                     if (text.length() - 1 == lastMatch) {
-                        // only one char
                         child = new Entry<>(text.charAt(lastMatch), entry);
                     } else {
                         child = new PEntry<>(text.subSequence(lastMatch, text.length()), entry);
                     }
 
-                    entry.resetMap();
-                    entry.value = (V) IntMap.NOT_USING;
-                    entry.putChild(child);
+                    // entry的数据已复制到了child
+                    entry.clear();
+                    entry.value = (V) NOT_USING;
 
-                    //System.out.println("E to " + entry + " and " + child);
+                    // 目的：避免之前修改entry的值
+                    (entry = (Entry<V>) prev.getChild(entry.c)).putChild(child);
 
-                    if (len - i - 1 == lastMatch) {
+                    // 插入新的entry
+                    lastMatch += i;
+                    if (len == lastMatch + 1) {
+                        // 情况1
+                        // 原先 abcde 插入 abcdf
+                        // 一个字符
                         child = new Entry<>(s.charAt(len - 1));
                     } else {
-                        if (len == i + lastMatch) {
-                            // entry = child
+                        if (len == lastMatch) {
+                            // 情况2
+                            // 原先 abcde 插入 abcd
+                            // 拆分的P1就是child
                             break;
                         } else {
-                            child = new PEntry<>(s.subSequence(i + lastMatch, len));
+                            // 情况2
+                            // 原先 abcde 插入 abcdef
+                            child = new PEntry<>(s.subSequence(lastMatch, len));
                         }
                     }
 
@@ -239,7 +227,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
                 }
             }
         }
-        if (entry.value == IntMap.NOT_USING) {
+        if (entry.value == NOT_USING) {
             size++;
             entry.value = null;
         }
@@ -249,7 +237,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     @SuppressWarnings("unchecked")
     public Entry<V> getEntry(CharSequence s, int i, int len) {
         if (len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
+            throw new IllegalArgumentException("Δlength < 0");
 
         Entry<V> entry = root;
         for (; i < len; i++) {
@@ -264,7 +252,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
                 i += text.length() - 1;
             }
         }
-        return entry.value != IntMap.NOT_USING ? entry : null;
+        return entry.value != NOT_USING ? entry : null;
     }
 
     public Entry<V> getRoot() {
@@ -326,18 +314,18 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
     @SuppressWarnings("unchecked")
     V remove(CharSequence s, int i, int len, Object tc) {
-        if(len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
+        if (len - i < 0)
+            throw new IllegalArgumentException("Δlength < 0");
 
-        SimpleList<Entry<V>> list = new SimpleList<>(Math.min(len - i, MIN_REMOVE_ARRAY_SIZE));
+        SimpleList<Entry<V>> list = new SimpleList<>();
 
         Entry<V> entry = root;
         for (; i < len; i++) {
+            list.add(entry);
+
             entry = (Entry<V>) entry.getChild(s.charAt(i));
             if (entry == null)
                 return null;
-
-            list.add(entry);
 
             final CharSequence text = entry.text();
             if (text != null) {
@@ -347,48 +335,53 @@ public class TrieTree<V> implements Map<CharSequence, V> {
                 i += text.length() - 1;
             }
         }
-        if(entry.value == NOT_USING)
+        if (entry.value == NOT_USING)
             return null;
-        if(!Objects.equals(entry.value, tc) && tc != NOT_USING)
+        if (!Objects.equals(entry.value, tc) && tc != NOT_USING)
             return null;
 
         size--;
 
-        if (!list.isEmpty()) {
-            i = list.size;
+        i = list.size - 1;
 
-            while (--i >= 0) {
-                Entry<V> prev = list.get(i);
+        Entry<V> prev = entry;
+        while (i >= 0) {
+            Entry<V> curr = list.get(i);
 
-                if (prev.recursionSum() != 0) {
-                    prev.removeChild(entry);
-                    break;
+            // 清除单线连接:
+            // root <== a <== b <== cd <== efg
+            if (curr.size > 1 || curr.isValid()) {
+                curr.removeChild(prev);
+
+                // 压缩剩余的entry
+                // root <== a <== b (curr) <== def <== ghi
+                if (curr.size == 1 && i >= COMPRESS_START_DEPTH) {
+                    CharList sb = new CharList(16);
+
+                    do {
+                        curr.append(sb);
+
+                        TrieEntry[] entries = curr.entries;
+                        for (TrieEntry trieEntry : entries) {
+                            if (trieEntry != null) {
+                                curr = (Entry<V>) trieEntry;
+                                break;
+                            }
+                        }
+                    } while (curr.size == 1);
+                    curr.append(sb);
+                    // sb = "bdefghi"
+
+                    // sb.length 必定大于 1
+                    // 因为至少包含 curr 与 curr.next
+                    list.get(i - 1).putChild(new PEntry<>(sb.toString(), curr));
                 }
-                entry = prev;
+                return entry.value;
             }
-            list.size = i + 1;
-
-            // 下面还有东西
-            if (i >= COMPRESS_START_DEPTH) {
-                entry = list.get(i);
-
-                CharList sb = new CharList().append(entry.text() == null ? entry.c : entry.text());
-
-                while (entry.childrenCount() == 1) {
-                    entry = (Entry<V>) entry.iterator().next();
-
-                    sb.append(entry.text() == null ? entry.c : entry.text());
-                }
-
-                if (sb.length() > 0) {
-                    (COMPRESS_START_DEPTH > 0 && i == 0 ? root : list.get(i - 1)).putChild(sb.length() == 1 ? new Entry<>(sb.charAt(0), entry) : new PEntry<>(sb.toString(), entry));
-                }
-            }
-
-            list.clear();
+            prev = curr;
+            i--;
         }
-
-        return entry.value;
+        throw new AssertionError("Entry list chain size");
     }
 
     @Override
@@ -407,17 +400,13 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
     @Override
     public boolean containsValue(Object value) {
-        MutableBoolean mb = new MutableBoolean(false);
-        try {
-            forEach((k, v) -> {
-                if (Objects.equals(value, v)) {
-                    mb.set(true);
-                    throw OperationDone.INSTANCE;
-                }
-            });
-        } catch (OperationDone ignored) {
+        Iterator<Entry<V>> itr = mapItr();
+        while (itr.hasNext()) {
+            if (Objects.equals(itr.next().value, value)) {
+                return true;
+            }
         }
-        return mb.get();
+        return false;
     }
 
     public Map.Entry<Integer, V> longestMatches(CharSequence s) {
@@ -463,21 +452,23 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return valueMatches(s, 0, len, limit);
     }
 
+    @SuppressWarnings("unchecked")
     public List<V> valueMatches(CharSequence s, int i, int len, int limit) {
         CharList base = new CharList();
         Entry<V> entry = matches(s, i, len, base);
         if (entry == null)
             return Collections.emptyList();
 
-        ArrayList<V> values = new ArrayList<>(Math.min(entry.recursionSum(), limit));
-        try {
-            recursionEntry(entry, (k, v) -> {
-                if (values.size() >= limit) {
-                    throw OperationDone.INSTANCE;
-                }
-                values.add(v);
-            }, base);
-        } catch (OperationDone ignored) {}
+        ArrayList<V> values = new ArrayList<>();
+        base.clear();
+        KeyItr itr = new KeyItr(entry, base);
+        while (itr.hasNext()) {
+            if (values.size() >= limit) {
+                break;
+            }
+            itr.next();
+            values.add(((Entry<V>) itr.ent).value);
+        }
         return values;
     }
 
@@ -489,21 +480,21 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return entryMatches(s, 0, len, limit);
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map.Entry<String, V>> entryMatches(CharSequence s, int i, int len, int limit) {
         CharList base = new CharList();
         Entry<V> entry = matches(s, i, len, base);
         if (entry == null)
             return Collections.emptyList();
 
-        ArrayList<Map.Entry<String, V>> entries = new ArrayList<>(Math.min(entry.recursionSum(), limit));
-        try {
-            recursionEntry(entry, (k, v) -> {
-                if (entries.size() >= limit) {
-                    throw OperationDone.INSTANCE;
-                }
-                entries.add(new AbstractMap.SimpleImmutableEntry<>(k.toString(), v));
-            }, base);
-        } catch (OperationDone ignored) {}
+        ArrayList<Map.Entry<String, V>> entries = new ArrayList<>();
+        KeyItr itr = new KeyItr(entry, base);
+        while (itr.hasNext()) {
+            if (entries.size() >= limit) {
+                break;
+            }
+            entries.add(new AbstractMap.SimpleImmutableEntry<>(itr.next().toString(), ((Entry<V>) itr.ent).value));
+        }
         return entries;
     }
 
@@ -519,7 +510,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
             if (text != null) {
                 int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
                 if (lastMatch != text.length()) {
-                    if(lastMatch < len - i) // 字符串没匹配上
+                    if (lastMatch < len - i) // 字符串没匹配上
                         return null;
 
                     sb.append(text);
@@ -536,7 +527,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     }
 
     /**
-     * internal: nodes.forEach(if(s.startsWith(node)))
+     * internal: nodes.forEach(if (s.startsWith(node)))
      * s: abcdef
      * node: abcdef / abcde / abcd... true
      * node: abcdefg  ... false
@@ -566,10 +557,10 @@ public class TrieTree<V> implements Map<CharSequence, V> {
                 i += text.length() - 1;
             }
 
-            if (entry.value != IntMap.NOT_USING)
+            if (entry.value != NOT_USING)
                 return true;
         }
-        return entry.value != IntMap.NOT_USING;
+        return entry.value != NOT_USING;
     }
 
     @Override
@@ -608,11 +599,8 @@ public class TrieTree<V> implements Map<CharSequence, V> {
      */
     @Nonnull
     @Override
-    @Deprecated
     public Set<CharSequence> keySet() {
-        Set<CharSequence> set = new MyHashSet<>(size);
-        forEach((k, v) -> set.add(k));
-        return Collections.unmodifiableSet(set);
+        return new KeySet(this);
     }
 
     @Nonnull
@@ -622,48 +610,46 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     }
 
     public Iterator<Entry<V>> mapItr() {
-        return new MapItr<>(root);
-    }
-    
-    private static class MapItr<V> extends AbstractIterator<Entry<V>> {
-        SimpleList<Entry<V>> a = new SimpleList<>(), b = new SimpleList<>();
-        int listIndex = 0;
+        return new Itr<Entry<V>, Entry<V>>() {
+            {
+                super.setupDepthFirst(root);
+            }
 
-        public MapItr(Entry<V> root) {
-            a.add(root);
+            @Override
+            public boolean computeNext() {
+                boolean v = super._computeNextDepthFirst();
+                if (v)
+                    result = ent;
+                return v;
+            }
+        };
+    }
+
+    static final class KeySet extends AbstractSet<CharSequence> {
+        private final TrieTree<?> map;
+
+        public KeySet(TrieTree<?> map) {
+            this.map = map;
         }
 
-        @Override
-        @SuppressWarnings("unchecked")
-        public boolean computeNext() {
-            final SimpleList<Entry<V>> a = this.a;
-            if(a.size == 0)
-                return false;
+        public final int size() {
+            return map.size();
+        }
 
-            while (listIndex < a.size) {
-                if((result = a.get(listIndex++)).value != NOT_USING)
-                    return true;
-            }
-            listIndex = 0;
+        public final void clear() {
+            map.clear();
+        }
 
-            final SimpleList<Entry<V>> b = this.b;
-            for (Entry<V> entry : a) {
-                if(entry.size > 0) {
-                    b.ensureCapacity(b.size + entry.size);
-                    for (TrieEntry subEntry : entry) {
-                        b.add((Entry<V>) subEntry);
-                    }
-                }
-            }
+        public final Iterator<CharSequence> iterator() {
+            return isEmpty() ? Collections.emptyIterator() : new KeyItr(map.root);
+        }
 
-            // Swap
-            SimpleList<Entry<V>> tmp1 = this.a;
-            tmp1.size = 0;
-            this.a = this.b;
-            this.b = tmp1;
+        public final boolean contains(Object o) {
+            return map.containsKey(o);
+        }
 
-            return computeNext();
-
+        public final boolean remove(Object o) {
+            return map.remove(o) != null;
         }
     }
 
@@ -683,17 +669,17 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         }
 
         public final Iterator<V> iterator() {
-            return isEmpty() ? Collections.emptyIterator() : new Iterator<V>() {
-                final MapItr<V> itr = new MapItr<>(map.root);
-
-                @Override
-                public boolean hasNext() {
-                    return itr.hasNext();
+            return isEmpty() ? Collections.emptyIterator() : new Itr<V, Entry<V>>() {
+                {
+                    super.setupDepthFirst(map.root);
                 }
 
                 @Override
-                public V next() {
-                    return itr.next().value;
+                public boolean computeNext() {
+                    boolean v = super._computeNextDepthFirst();
+                    if (v)
+                        result = ent.value;
+                    return v;
                 }
             };
         }
@@ -730,7 +716,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
     @SuppressWarnings("unchecked")
     private static <V> void recursionEntry(Entry<V> parent, BiConsumer<? super CharSequence, ? super V> consumer, CharList sb) {
-        if (parent.value != IntMap.NOT_USING) {
+        if (parent.value != NOT_USING) {
             consumer.accept(sb.toString(), parent.value);
         }
         for (TrieEntry entry : parent) {
@@ -751,9 +737,9 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     @Override
     public boolean replace(CharSequence key, V oldValue, V newValue) {
         Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry == null || entry.value == NOT_USING)
+        if (entry == null || entry.value == NOT_USING)
             return false;
-        if(Objects.equals(oldValue, entry.value)) {
+        if (Objects.equals(oldValue, entry.value)) {
             entry.value = newValue;
             return true;
         }
@@ -761,19 +747,19 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     }
 
     @Override
-    public V compute(CharSequence key, BiFunction<? super CharSequence, ? super V, ? extends V> remappingFunction) {
+    public V compute(CharSequence key, BiFunction<? super CharSequence, ? super V, ? extends V> remap) {
         Entry<V> entry = getEntry(key, 0, key.length());
-        V newV = remappingFunction.apply(key, entry == null || entry.value == NOT_USING ? null : entry.value);
-        if(newV == null) {
-            if(entry != null && entry.value != NOT_USING) {
-                remove(key, 0, key.length());
+        V newV = remap.apply(key, entry == null || entry.value == NOT_USING ? null : entry.value);
+        if (newV == null) {
+            if (entry != null && entry.value != NOT_USING) {
+                remove(key, 0, key.length(), NOT_USING);
             }
             return null;
-        } else if(entry == null) {
+        } else if (entry == null) {
             entry = entryForPut(key, 0, key.length());
         }
 
-        if(entry.value == NOT_USING)
+        if (entry.value == NOT_USING)
             size++;
         entry.value = newV;
 
@@ -781,29 +767,29 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     }
 
     @Override
-    public V computeIfAbsent(CharSequence key, Function<? super CharSequence, ? extends V> mappingFunction) {
+    public V computeIfAbsent(CharSequence key, Function<? super CharSequence, ? extends V> map) {
         Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry != null && entry.value != NOT_USING)
+        if (entry != null && entry.value != NOT_USING)
             return entry.value;
-        if(entry == null) {
+        if (entry == null) {
             entry = entryForPut(key, 0, key.length());
         }
-        if(entry.value == NOT_USING)
+        if (entry.value == NOT_USING)
             size++;
-        return entry.value = mappingFunction.apply(key);
+        return entry.value = map.apply(key);
     }
 
     @Override
     public V computeIfPresent(CharSequence key,
-                              BiFunction<? super CharSequence, ? super V, ? extends V> remappingFunction) {
+                              BiFunction<? super CharSequence, ? super V, ? extends V> remap) {
         Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry == null || entry.value == NOT_USING)
+        if (entry == null || entry.value == NOT_USING)
             return null;
-        if(entry.value == null)
+        if (entry.value == null)
             return null; // default implement guarantee
-        V newV = remappingFunction.apply(key, entry.value);
-        if(newV == null) {
-            remove(key, 0, key.length());
+        V newV = remap.apply(key, entry.value);
+        if (newV == null) {
+            remove(key, 0, key.length(), NOT_USING);
             return null;
         }
 
@@ -814,7 +800,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     public V getOrDefault(Object key, V defaultValue) {
         CharSequence cs = (CharSequence) key;
         Entry<V> entry = getEntry(cs, 0, cs.length());
-        if(entry == null || entry.value == NOT_USING)
+        if (entry == null || entry.value == NOT_USING)
             return defaultValue;
         return entry.value;
     }
@@ -823,7 +809,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     public V putIfAbsent(CharSequence key, V value) {
         int os = size;
         Entry<V> entry = entryForPut(key, 0, key.length());
-        if(os != size) {
+        if (os != size) {
             return entry.value = value;
         }
         return entry.value;
@@ -832,11 +818,11 @@ public class TrieTree<V> implements Map<CharSequence, V> {
     @Override
     public V replace(CharSequence key, V value) {
         Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry == null)
+        if (entry == null)
             return null;
 
         V v = entry.value;
-        if(v == NOT_USING)
+        if (v == NOT_USING)
             v = null;
 
         entry.value = value;

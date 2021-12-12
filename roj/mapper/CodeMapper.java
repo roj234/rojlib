@@ -24,11 +24,10 @@
  * THE SOFTWARE.
  */
 
-package roj.asm.mapper;
+package roj.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.mapper.util.Desc;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldSimple;
 import roj.asm.tree.MethodSimple;
@@ -41,6 +40,7 @@ import roj.asm.util.ConstantPool;
 import roj.asm.util.Context;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
+import roj.mapper.util.Desc;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;

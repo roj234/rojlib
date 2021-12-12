@@ -23,56 +23,35 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper.util;
+package roj.mapper.util;
 
-import roj.io.ZipFileWriter;
-import roj.util.ByteList;
+import roj.asm.util.Context;
+import roj.concurrent.task.AbstractExecutionTask;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Map;
-import java.util.concurrent.Callable;
+import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
- * @since 2021/5/29 16:43
+ * @since 2021/5/30 19:59
  */
-public class ResWriter implements Runnable, Callable<Void> {
-    public ResWriter(ZipFileWriter zfw, Map<String, ?> resources) {
-        this.zfw = zfw;
-        this.resources = resources;
+public final class Worker extends AbstractExecutionTask {
+    private final List<Context>     files;
+    private final Consumer<Context> consumer;
+
+    public Worker(List<Context> files, Consumer<Context> consumer, String name) {
+        this.files = files;
+        this.consumer = consumer;
     }
 
-    private final ZipFileWriter  zfw;
-    private final Map<String, ?> resources;
-
-    /**
-     * Write resource into zip
-     */
-    @Override
     public void run() {
-        try {
-            call();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        List<Context> f = this.files;
+        Consumer<Context> c = this.consumer;
+        for (int i = 0; i < f.size(); i++) {
+            c.accept(f.get(i));
         }
-    }
-
-    @Override
-    public Void call() throws IOException {
-        ByteList bl = new ByteList();
-        for (Map.Entry<String, ?> entry : resources.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof InputStream) {
-                bl.readStreamFully((InputStream) value);
-                value = bl;
-            }
-            zfw.writeNamed(entry.getKey(), value instanceof ByteList ? (ByteList) value : bl.setValue((byte[]) value));
-            bl.clear();
-        }
-        return null;
     }
 }

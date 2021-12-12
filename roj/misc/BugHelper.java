@@ -4,12 +4,12 @@ import roj.asm.Parser;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
-import roj.asm.mapper.Mapping;
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 import roj.io.FileUtil;
 import roj.io.ZipUtil;
+import roj.mapper.Mapping;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 

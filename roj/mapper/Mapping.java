@@ -23,11 +23,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper;
+package roj.mapper;
 
-import roj.asm.mapper.util.Desc;
-import roj.asm.mapper.util.MapperList;
 import roj.collect.*;
+import roj.mapper.util.Desc;
+import roj.mapper.util.MapperList;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;

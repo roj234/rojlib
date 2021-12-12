@@ -27,190 +27,160 @@
 package roj.mod;
 
 import roj.asm.Parser;
-import roj.asm.tree.AccessData;
-import roj.io.BoxFile;
 import roj.io.IOUtil;
-import roj.text.CharList;
-import roj.text.TextUtil;
-import roj.text.crypt.Base64;
 import roj.ui.UIUtil;
-import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
-import java.io.*;
+import net.minecraft.launchwrapper.Launch;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import java.nio.file.*;
-import java.util.Set;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/30 19:59
  */
 public final class HotReload {
     public static void main(String[] args) throws IOException {
-        if(args.length == 0) {
-            System.out.println("重载测试工具: 参数缺失: path");
+        if(args.length < 1) {
+            System.out.println("class重载工具: 参数缺失: port");
             return;
         }
 
-        File path = new File(TextUtil.concat(args, ' '));
+        InetSocketAddress addr = new InetSocketAddress(InetAddress.getLoopbackAddress(), Integer.parseInt(args[0]));
+        ByteWriter bw = new ByteWriter().writeByte((byte) 0x66).writeShort(0);
+        int dataAmount = 0;
 
-        System.out.println("Path: " + Base64.encode(ByteWriter.encodeUTF(path.getAbsolutePath()), new CharList()));
-
-        BoxFile aoc = new BoxFile(new File(path, "modified.bin"));
-        aoc.clear();
         while (true) {
-            String ques = UIUtil.userInput("class路径, 留空转换 or CLR 清除");
+            String ques = UIUtil.userInput("class路径, 留空转换, CLR 清除");
 
             if(ques.equals("CLR")) {
-                aoc.clear();
+                dataAmount = 0;
+                bw.list.clear();
+                bw.writeByte((byte) 0x66).writeShort(0);
             } else if(ques.length() == 0) {
-                File lck = new File(path, "mod.lck");
-                try(FileOutputStream fos = new FileOutputStream(lck)) {
-                   fos.write(0x23);
+                int pos = bw.list.pos();
+                bw.list.pos(1);
+                bw.writeShort(dataAmount);
+                bw.list.pos(pos);
+
+                try (Socket socket = new Socket()) {
+                    socket.setSoTimeout(1000);
+                    socket.connect(addr);
+                    bw.list.writeToStream(socket.getOutputStream());
+                    System.out.println("重载请求已发送...");
+                } catch (IOException e) {
+                    System.out.println("连接失败");
+                    e.printStackTrace();
                 }
-                System.out.println("重载请求已发送...");
+
+                dataAmount = 0;
+                bw.list.clear();
+                bw.writeByte((byte) 0x66).writeShort(0);
             } else {
                 File clz = new File(ques);
                 if (!clz.isFile()) {
-                    System.out.println("路径不存在");
+                    System.out.println("文件不存在");
                     continue;
                 }
 
                 byte[] buf = IOUtil.read(new FileInputStream(clz));
-                AccessData ad;
+                String name;
                 try {
-                    ad = Parser.parseAccessDirect(buf);
+                    name = Parser.simpleData(buf).get(0);
                 } catch (Throwable e) {
                     System.out.println("不是class文件");
                     e.printStackTrace();
                     continue;
                 }
 
-                aoc.append(ad.name, new ByteList(buf));
+                dataAmount++;
+                byte[] nb = name.replace('/', '.').getBytes(StandardCharsets.UTF_8);
+                bw.writeShort(nb.length)
+                  .writeBytes(nb)
+                  .writeInt(buf.length)
+                  .writeBytes(buf);
             }
         }
     }
 
-    public static void doEvent(Instrumentation inst, Path path) throws IOException {
-        BoxFile aoc = new BoxFile(new File(path.toString(), "modified.bin"));
-        aoc.load();
-
-        ByteList rl = new ByteList();
-        final Set<String> keys = aoc.keys();
-
-        if(keys.size() == 0) {
-            System.err.println("没有数据(0) !");
-            return;
-        }
-
-        ClassDefinition[] classes = new ClassDefinition[keys.size()];
-        try {
-            int i = 0;
-            for(String k : keys) {
-                try {
-                    Class<?> t = Class.forName(k.replace('/', '.'), false, HotReload.class.getClassLoader());
-                    classes[i++] = new ClassDefinition(t, aoc.get(k, rl).getByteArray());
-                    rl.clear();
-
-                } catch (Throwable ignored) {
-                    System.err.println("无法找到 " + k);
-                }
-            }
-
-            if(i != classes.length) {
-                if(i == 0) {
-                    System.err.println("没有数据(1) !");
-                    return;
-                }
-
-                ClassDefinition[] clz = new ClassDefinition[i];
-                System.arraycopy(classes, 0, clz, 0, i);
-                classes = clz;
-            }
-
-            inst.redefineClasses(classes);
-            System.out.println("对以下对象的操作成功: " + java.util.Arrays.toString(classes));
-        } catch (Throwable e) {
-            System.err.println("Failed to update class: ");
-            e.printStackTrace();
-        }
-
-        aoc.close();
+    public static void premain(String agentArgs, Instrumentation inst) {
+        int port = Integer.parseInt(agentArgs);
+        Thread th = new Runner(inst, port);
+        th.start();
     }
 
-    public static void premain(String agentArgs, Instrumentation inst) throws UTFDataFormatException {
-        agentArgs = ByteReader.readUTF(Base64.decode(agentArgs, new ByteList()));
-
-        final Path path = Paths.get(agentArgs);
-
-        try {
-            WatchService watcher = FileSystems.getDefault().newWatchService();
-            path.register(watcher, StandardWatchEventKinds.ENTRY_MODIFY);
-            final Thread th = new Thread(new Runner(watcher, inst, path), "FMD.HRcv");
-            th.setDaemon(true);
-            th.start();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    static final class Runner implements Runnable {
-        final WatchService watcher;
+    static final class Runner extends Thread {
         final Instrumentation inst;
-        final Path path;
+        final int port;
 
-         Runner(WatchService watcher, Instrumentation inst, Path path) {
-            this.watcher = watcher;
+         Runner(Instrumentation inst, int port) {
             this.inst = inst;
-            this.path = path;
+            this.port = port;
+            setName("HotReload Listener");
+            setDaemon(true);
         }
 
         @Override
         public void run() {
-            while (true) {
-                try {
-                    final WatchKey key = watcher.take();
-
-                    for (WatchEvent<?> event : key.pollEvents()) {
-                        final WatchEvent.Kind<?> kind = event.kind();
-                        if (kind == StandardWatchEventKinds.OVERFLOW) {
+            try (ServerSocket ss = new ServerSocket()) {
+                ss.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+                byte[] tmp = new byte[8192];
+                main:
+                while (true) {
+                    try (Socket socket = ss.accept()) {
+                        socket.setSoTimeout(500);
+                        InputStream in = socket.getInputStream();
+                        if (3 != in.read(tmp, 0, 3) || tmp[0] != 0x66)
                             continue;
+                        int entryCount = ((tmp[1] & 0xFF) << 8) | (tmp[2] & 0xFF);
+
+                        ClassDefinition[] classes = new ClassDefinition[entryCount];
+
+                        while (entryCount-- > 0) {
+                            if (8 != in.read(tmp, 0, 6))
+                                continue main;
+                            int nameLen = ((tmp[0] & 0xFF) << 8) | (tmp[1] & 0xFF);
+                            int dataLen = ((tmp[2] & 0xFF) << 24) | ((tmp[3] & 0xFF) << 16) | ((tmp[4] & 0xFF) << 8) | (tmp[5] & 0xFF);
+                            if (tmp.length < dataLen) {
+                                tmp = new byte[dataLen];
+                            }
+                            if (nameLen != in.read(tmp, 0, nameLen)) {
+                                continue main;
+                            }
+                            String name = new String(tmp, 0, nameLen, StandardCharsets.UTF_8);
+
+                            if (dataLen != in.read(tmp, 0, dataLen)) {
+                                continue main;
+                            }
+
+                            try {
+                                Class<?> t = Class.forName(name, false, Launch.classLoader);
+                                classes[entryCount] = new ClassDefinition(t, Arrays.copyOf(tmp, dataLen));
+                            } catch (Throwable e) {
+                                System.err.println("Failed to update class: ");
+                                e.printStackTrace();
+                            }
                         }
 
-                        @SuppressWarnings("unchecked")
-                        final WatchEvent<Path> path1 = (WatchEvent<Path>) event;
-
-                        File flg = new File(path.toString(), path1.context().toString());
-                        
-                        //文件名不匹配
-                        if (!flg.getName().endsWith(".lck") || flg.length() == 0)
-                            continue;
-
-                        doEvent(inst, path);
-                        
-                        try(RandomAccessFile raf = new RandomAccessFile(flg, "rw")) {
-                            raf.setLength(0);
-                        }
+                        inst.redefineClasses(classes);
+                        System.out.println("对以下对象的操作成功: " + java.util.Arrays.toString(classes));
+                    } catch (Throwable e) {
+                        System.err.println("Failed to update class: ");
+                        e.printStackTrace();
                     }
-                    
-                    // exit loop if the key is not valid (if the directory was deleted
-                    if (!key.reset()) {
-                        break;
-                    }
-                } catch (InterruptedException | IOException e) {
-                    e.printStackTrace();
                 }
-            }
-
-            try {
-                watcher.close();
             } catch (IOException ignored) {}
         }
     }

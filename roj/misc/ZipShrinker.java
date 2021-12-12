@@ -23,22 +23,42 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.asm.mapper.util;
+package roj.misc;
 
-import roj.asm.util.FlagList;
-import roj.collect.CharMap;
+import roj.io.FileUtil;
+import roj.io.MutableZipFile;
 
-import java.util.Map;
+import java.io.File;
+import java.io.IOException;
 
 /**
- * Access flag handler
- *
- * @author solo6975
+ * @author Roj233
  * @version 0.1
- * @since 2021/10/1 19:30
+ * @since 2021/12/11 14:46
  */
-public interface AccessFallbackHandler {
-    boolean fillAccessFlags(Desc desc, CharMap<FlagList> interner);
+public class ZipShrinker {
+    public static void main(String[] args) {
+        if (args.length < 1) {
+            System.out.println("ZipShrinker <path>");
+            System.out.println("  用途：精简zip, 删除目录项");
+            return;
+        }
 
-    void handleUnmatched(Map<String, Map<String, Desc>> rest, CharMap<FlagList> interner);
+        for (File file : FileUtil.findAllFiles(new File(args[0]), (f) -> f.getName().endsWith(".jar") || f.getName().endsWith(".zip"))) {
+            long modTime = file.lastModified();
+            try (MutableZipFile zf = new MutableZipFile(file)) {
+                for (String entry : zf.getEntries().keySet()) {
+                    if (entry.endsWith("/")) {
+                        zf.setFileData(entry, null);
+                    }
+                }
+                zf.getEOF().setComment(new byte[0]);
+                zf.store();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            file.setLastModified(modTime);
+        }
+        System.out.println("OK");
+    }
 }

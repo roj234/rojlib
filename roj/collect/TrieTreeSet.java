@@ -26,8 +26,7 @@
 
 package roj.collect;
 
-import roj.concurrent.OperationDone;
-import roj.math.MutableBoolean;
+import roj.collect.TrieEntry.KeyItr;
 import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -39,11 +38,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import static roj.collect.TrieTree.COMPRESS_START_DEPTH;
-import static roj.collect.TrieTree.MIN_REMOVE_ARRAY_SIZE;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/30 19:27
@@ -52,11 +48,11 @@ public final class TrieTreeSet implements Set<CharSequence> {
     static class Entry extends TrieEntry {
         boolean isEnd;
 
-        private Entry(char c) {
+        Entry(char c) {
             super(c);
         }
 
-        public Entry(char c, Entry entry) {
+        Entry(char c, Entry entry) {
             super(c);
             this.entries = entry.entries;
             this.length = entry.length;
@@ -64,35 +60,25 @@ public final class TrieTreeSet implements Set<CharSequence> {
             this.isEnd = entry.isEnd;
         }
 
-        protected int recursionSum() {
-            int i = isEnd ? 1 : 0;
-            if (size > 0) {
-                for (TrieEntry value : this) {
-                    i += value.recursionSum();
-                }
-            }
-            return i;
-        }
-
         public int copyFrom(TrieEntry x) {
             Entry node = (Entry) x;
             int v = 0;
-            if(node.isEnd && !isEnd) {
+            if (node.isEnd && !isEnd) {
                 this.isEnd = true;
                 v = 1;
             }
 
             for (TrieEntry entry : node) {
                 TrieEntry sub = getChild(entry.c);
-                if (sub == null) putChild(sub = newInstance());
+                if (sub == null) putChild(sub = entry.clone());
                 v += sub.copyFrom(entry);
             }
             return v;
         }
 
         @Override
-        protected Entry newInstance() {
-            return new Entry(c);
+        boolean isValid() {
+            return isEnd;
         }
     }
 
@@ -107,11 +93,6 @@ public final class TrieTreeSet implements Set<CharSequence> {
         PEntry(CharSequence val, Entry entry) {
             super(val.charAt(0), entry);
             this.val = val;
-        }
-
-        @Override
-        protected Entry newInstance() {
-            return new PEntry(val);
         }
 
         CharSequence text() {
@@ -158,7 +139,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
 
     Entry entryForPut(CharSequence s, int i, int len) {
         if (len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
+            throw new IllegalArgumentException("Δlength < 0");
 
         Entry entry = root;
         Entry prev;
@@ -167,55 +148,45 @@ public final class TrieTreeSet implements Set<CharSequence> {
             prev = entry;
             entry = (Entry) entry.getChild(c);
             if (entry == null) {
-                // 前COMPRESS_START_DEPTH个字符, 避免频繁插入带来效率损失
                 if (len - i == 1 || i < COMPRESS_START_DEPTH) {
                     prev.putChild(entry = new Entry(c));
                 } else {
                     prev.putChild(entry = new PEntry(s.subSequence(i, len)));
                     break;
                 }
-            } else if (entry.text() != null) { // # split
-                // PEntry
-
+            } else if (entry.text() != null) {
                 final CharSequence text = entry.text();
 
-                // lastMatch = 1; // of i(minAdd) off
                 int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                // a - bcd
                 if (lastMatch == text.length()) {
-                    // do nothing... as it for next
                     i += lastMatch - 1;
                 } else {
-
-                    // [0 - 2) => bc
                     if (lastMatch == 1) {
-                        prev.putChild(entry = new Entry(text.charAt(0), entry));
+                        prev.putChild(new Entry(entry.c));
                     } else {
                         ((PEntry) entry).val = text.subSequence(0, lastMatch);
                     }
 
-                    // [2, 3) => d
                     Entry child;
                     if (text.length() - 1 == lastMatch) {
-                        // only one char
                         child = new Entry(text.charAt(lastMatch), entry);
                     } else {
                         child = new PEntry(text.subSequence(lastMatch, text.length()), entry);
                     }
 
                     entry.isEnd = false;
-                    entry.putChild(child);
+                    entry.clear();
 
-                    //System.out.println("E to " + entry + " and " + child);
+                    (entry = (Entry) prev.getChild(entry.c)).putChild(child);
 
-                    if (len - 1 == i + lastMatch) {
+                    lastMatch += i;
+                    if (len == lastMatch + 1) {
                         child = new Entry(s.charAt(len - 1));
                     } else {
-                        if (len == i + lastMatch) {
-                            // entry = child
+                        if (len == lastMatch) {
                             break;
                         } else {
-                            child = new PEntry(s.subSequence(i + lastMatch, len));
+                            child = new PEntry(s.subSequence(lastMatch, len));
                         }
                     }
 
@@ -235,7 +206,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
 
     Entry getEntry(CharSequence s, int i, int len) {
         if (len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
+            throw new IllegalArgumentException("Δlength < 0");
 
         Entry entry = root;
         for (; i < len; i++) {
@@ -319,18 +290,18 @@ public final class TrieTreeSet implements Set<CharSequence> {
     }
 
     public boolean remove(CharSequence s, int i, int len) {
-        if(len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
+        if (len - i < 0)
+            throw new IllegalArgumentException("Δlength < 0");
 
-        SimpleList<Entry> list = new SimpleList<>(Math.min(len - i, MIN_REMOVE_ARRAY_SIZE));
+        SimpleList<Entry> list = new SimpleList<>();
 
         Entry entry = root;
         for (; i < len; i++) {
+            list.add(entry);
+
             entry = (Entry) entry.getChild(s.charAt(i));
             if (entry == null)
                 return false;
-
-            list.add(entry);
 
             final CharSequence text = entry.text();
             if (text != null) {
@@ -346,54 +317,42 @@ public final class TrieTreeSet implements Set<CharSequence> {
         entry.isEnd = false;
         size--;
 
-        //需要考虑的情况:
-        // a-b-cd-e-fgh
-        //         \
-        //          jkl
+        i = list.size - 1;
 
-        // on delete abcde
-        // a => b => cd => e : any [child=1] => char
-        // operate: 反向: e - cd - b - a
-        // e => cd : cd.child=1
-        // node = cde
-        // cde => b
-        // node = bcde
+        Entry prev = entry;
+        while (i >= 0) {
+            Entry curr = list.get(i);
 
-        if (!list.isEmpty()) {
-            i = list.size;
+            if (curr.size > 1 || curr.isValid()) {
+                curr.removeChild(prev);
 
-            while (--i >= 0) {
-                Entry prev = list.get(i);
+                if (curr.size == 1 && i >= COMPRESS_START_DEPTH) {
+                    CharList sb = new CharList(16);
 
-                if (prev.recursionSum() != 0) {
-                    prev.removeChild(entry);
-                    break;
+                    do {
+                        curr.append(sb);
+
+                        TrieEntry[] entries = curr.entries;
+                        for (TrieEntry trieEntry : entries) {
+                            if (trieEntry != null) {
+                                curr = (Entry) trieEntry;
+                                break;
+                            }
+                        }
+                    } while (curr.size == 1);
+                    curr.append(sb);
+                    // sb = "bdefghi"
+
+                    // sb.length 必定大于 1
+                    // 因为至少包含 curr 与 curr.next
+                    list.get(i - 1).putChild(new PEntry(sb.toString(), curr));
                 }
-                entry = prev;
+                return true;
             }
-            list.size = i + 1;
-
-            // 下面还有东西
-            if (i >= COMPRESS_START_DEPTH) {
-                entry = list.get(i);
-
-                StringBuilder sb = new StringBuilder().append(entry.text() == null ? entry.c : entry.text());
-
-                while (entry.childrenCount() == 1) {
-                    entry = (Entry) entry.iterator().next();
-
-                    sb.append(entry.text() == null ? entry.c : entry.text());
-                }
-
-                if (sb.length() > 0) {
-                    (COMPRESS_START_DEPTH > 0 && i == 0 ? root : list.get(i - 1)).putChild(sb.length() == 1 ? new Entry(sb.charAt(0), entry) : new PEntry(sb.toString(), entry));
-                }
-            }
-
-            list.clear();
+            prev = curr;
+            i--;
         }
-
-        return true;
+        throw new AssertionError("Entry list chain size");
     }
 
     @Override
@@ -472,7 +431,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
             if (text != null) {
                 int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
                 if (lastMatch != text.length()) {
-                    if(lastMatch < len - i) // 字符串没匹配上
+                    if (lastMatch < len - i) // 字符串没匹配上
                         return Collections.emptyList();
 
                     entry = next;
@@ -487,20 +446,19 @@ public final class TrieTreeSet implements Set<CharSequence> {
             entry = next;
         }
 
-        List<String> values = new ArrayList<>(Math.min(entry.recursionSum(), limit));
-        try {
-            recursionEntry(entry, (k) -> {
-                if (values.size() >= limit) {
-                    throw OperationDone.INSTANCE;
-                }
-                values.add(k.toString());
-            }, sb);
-        } catch (OperationDone ignored) {}
+        List<String> values = new ArrayList<>();
+        KeyItr itr = new KeyItr(entry, sb);
+        while (itr.hasNext()) {
+            if (values.size() >= limit) {
+                break;
+            }
+            values.add(itr.next().toString());
+        }
         return values;
     }
 
     /**
-     * internal: nodes.forEach(if(s.startsWith(node)))
+     * internal: nodes.forEach(if (s.startsWith(node)))
      * s: abcdef
      * node: abcdef / abcde / abcd... true
      * node: abcdefg  ... false
@@ -561,9 +519,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
     @Nonnull
     @Override
     public Iterator<CharSequence> iterator() {
-        CharSequence[] arr = new CharSequence[size];
-        reuseLambda(arr);
-        return new ArrayIterator<>(arr);
+        return new KeyItr(root);
     }
 
     @Nonnull
@@ -610,19 +566,16 @@ public final class TrieTreeSet implements Set<CharSequence> {
     }
 
     @Override
-    public Spliterator<CharSequence> spliterator() {
-        return Spliterators.spliterator(toArray(), Spliterator.IMMUTABLE | Spliterator.SIZED);
-    }
-
-    @Override
     public boolean removeIf(Predicate<? super CharSequence> filter) {
-        MutableBoolean mb = new MutableBoolean(false);
-        forEach((k) -> {
-            if(filter.test(k)) {
+        boolean mod = false;
+        KeyItr itr = new KeyItr(root);
+        while (itr.hasNext()) {
+            CharSequence k = itr.next();
+            if (filter.test(k)) {
                 remove(k);
-                mb.set(true);
+                mod = true;
             }
-        });
-        return mb.get();
+        }
+        return mod;
     }
 }
