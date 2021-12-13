@@ -30,7 +30,7 @@ package roj.sound.mp3;
 
 import roj.sound.util.AudioBuffer;
 
-public final class Layer1 extends Layer {
+final class Layer1 extends Layer {
     byte[][] allocation, scalefactor;    //[2][32]
     float[][] syin;            //[2][32]
 

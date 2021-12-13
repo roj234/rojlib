@@ -29,12 +29,12 @@ import lac.server.Config;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
-import roj.text.crypt.SM4;
-import roj.util.ByteList;
+import roj.crypt.SM4;
 
 import net.minecraft.network.PacketBuffer;
 
-import java.security.DigestException;
+import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 
 /**
@@ -59,18 +59,17 @@ class NxEncryption {
         buf.writeString(this.hashedServerId);
 
         SM4 sm4 = new SM4();
-        sm4.reset(SM4.SM4_ENCRYPT | SM4.SM4_AUTO_PADDING | SM4.SM4_CBC);
-        sm4.setOption(SM4.SM4_CBC_IV, Config.ENCRYPT_IV);
-        sm4.setPassword(this.verifyToken);
+        sm4.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_STREAMED);
+        sm4.setOption(SM4.SM4_IV, Config.ENCRYPT_IV);
+        sm4.setKey(this.verifyToken);
 
         byte[] encoded = this.publicKey.getEncoded();
-        ByteList out = new ByteList(encoded.length);
         try {
-            sm4.crypt(new ByteList(encoded), out);
-            buf.writeBytes(out.list, 0, out.pos());
-        } catch (DigestException e) {
-            buf.writeBytes(encoded);
+            sm4.crypt(ByteBuffer.wrap(encoded), ByteBuffer.wrap(encoded));
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
         }
-        buf.writeByteArray(this.verifyToken);
+        buf.writeByteArray(encoded)
+           .writeByteArray(this.verifyToken);
     }
 }

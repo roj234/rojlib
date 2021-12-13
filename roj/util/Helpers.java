@@ -27,7 +27,6 @@ package roj.util;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.reflect.TraceUtil;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -35,7 +34,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * No description provided
+ * 小工具
  *
  * @author Roj234
  * @version 0.1
@@ -77,6 +76,7 @@ public class Helpers {
         return (T) c;
     }
 
+    @Deprecated
     public static <K, V> Map<K, V> subMap(Map<K, V> map, int start, int end) {
         int i = -1;
         Map<K, V> subMap = new HashMap<>();
@@ -90,48 +90,12 @@ public class Helpers {
         return subMap;
     }
 
-    public static StringBuilder getMethodTrace() {
-        return getMethodTrace(new Throwable(), 1);
-    }
-
-    /**
-     * 是否运行过{@param className}的{@param methodName}方法
-     *
-     * @return 运行过
-     */
-    public static boolean noBurstStackHelper(String className, String methodName) {
-        StackTraceElement[] elements = TraceUtil.getTraces(new Throwable());
-        int i = 2;
-        for (StackTraceElement element : elements) {
-            if (i-- > 0) continue;
-            if (methodName.equals(element.getMethodName()) && className.equals(element.getClassName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Nonnull
     public static <T> T nonnull() {
         return null;
     }
 
-    public static <K, V> void filter(Map<K, V> source, Map<K, V> destination, Predicate<K> predicate) {
-        for (Iterator<Map.Entry<K, V>> iterator = source.entrySet().iterator(); iterator.hasNext(); ) {
-            Map.Entry<K, V> entry = iterator.next();
-            if (predicate.test(entry.getKey())) {
-                destination.put(entry.getKey(), entry.getValue());
-                iterator.remove();
-            }
-        }
-    }
-
-    @Deprecated
-    public static StringBuilder getMethodTrace(Throwable err) {
-        return getMethodTrace(err, 0);
-    }
-
-    private static StringBuilder getMethodTrace(Throwable err, int i) {
+    public static StringBuilder traceString(Throwable err, int i) {
         StringBuilder sb = new StringBuilder();
         StackTraceElement[] elements = err.getStackTrace();
         sb.append(err.getClass().getName()).append(':').append(err.getMessage());
@@ -142,26 +106,25 @@ public class Helpers {
         return sb;
     }
 
-    public static <T> Predicate<T> alwaysTrue() {
-        return cast(alwaystrue);
-    }
-
     public static final Predicate<?> alwaystrue = (a) -> true;
     public static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
     public static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
     public static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();
     public static final Function<?, ?> myhashsetfn = (a) -> new MyHashSet<>();
 
-    public static <R,T> Function<R, List<T>> fnArrayList() {
+    public static <T> Predicate<T> alwaysTrue() {
+        return cast(alwaystrue);
+    }
+    public static <T,R> Function<T, List<R>> fnArrayList() {
         return cast(arraylistfn);
     }
-    public static <R,T> Function<R, List<T>> fnLinkedList() {
+    public static <T,R> Function<T, List<R>> fnLinkedList() {
         return cast(linkedlistfn);
     }
-    public static <R,K,V> Function<R, Map<K, V>> fnMyHashMap() {
+    public static <T,R,E> Function<T, Map<R, E>> fnMyHashMap() {
         return cast(myhashmapfn);
     }
-    public static <R,T> Function<R, Set<T>> fnMyHashSet() {
+    public static <T,R> Function<T, Set<R>> fnMyHashSet() {
         return cast(myhashsetfn);
     }
 }

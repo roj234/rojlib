@@ -32,19 +32,16 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 20:45
  */
 public class ByteList {
     public byte[] list;
-    protected int pointer, writePtr;
+    protected int pointer;
 
     public ByteList() {
         this.list = EmptyArrays.BYTES;
@@ -57,10 +54,6 @@ public class ByteList {
     public ByteList(byte[] array) {
         list = array;
         pointer = array.length;
-    }
-
-    public final int remaining() {
-        return pointer - writePtr;
     }
 
     public int pos() {
@@ -150,7 +143,6 @@ public class ByteList {
 
     public void clear() {
         pointer = 0;
-        writePtr = 0;
     }
 
     public String getString() {
@@ -182,6 +174,7 @@ public class ByteList {
             pointer += real;
             ensureCapacity(pointer + 1);
         } while (true);
+        stream.close();
         return this;
     }
 
@@ -214,24 +207,10 @@ public class ByteList {
         return new AsOutputStream(this);
     }
 
-    public final int writeToStream(OutputStream os) throws IOException {
-        int v = pointer - writePtr;
-        if (v > 0) {
-            os.write(this.list, offset() + writePtr, v);
-            writePtr = pointer;
-            return v;
+    public final void writeToStream(OutputStream os) throws IOException {
+        if (pos() > 0) {
+            os.write(this.list, offset(), pos());
         }
-        return -1;
-    }
-
-    public final int writeToStream(OutputStream os, int max) throws IOException {
-        int v = Math.min(pointer - writePtr, max);
-        if (v > 0) {
-            os.write(this.list, offset() + writePtr, v);
-            writePtr += v;
-            return v;
-        }
-        return -1;
     }
 
     public final ByteList setValue(byte[] array) {
@@ -241,42 +220,12 @@ public class ByteList {
             array = EmptyArrays.BYTES;
 
         list = array;
-        writePtr = 0;
         pointer = array.length;
         return this;
     }
 
     public final byte[] getByteArray() {
         return list == null ? null : (pointer == list.length && offset() == 0 ? list : toByteArray());
-    }
-
-    public void rewrite() {
-        writePtr = 0;
-    }
-
-    public boolean startsWith(ByteList list) {
-        final int len;
-        if (this.limit() < (len = list.limit()))
-            return false;
-        final byte[] a = list.list, b = this.list;
-        for (int i = offset(), j = list.offset(); j < len; ) {
-            if (a[j++] != b[i++])
-                return false;
-        }
-        return true;
-    }
-
-    public boolean endsWith(ByteList list) {
-        final int len;
-        if (this.limit() < (len = list.limit()))
-            return false;
-        final byte[] a = list.list, b = this.list;
-        final int ptr = pointer;
-        for (int i = ptr - len, j = list.pointer - len; i < ptr; ) {
-            if (a[j++] != b[i++])
-                return false;
-        }
-        return true;
     }
 
     public void trimToSize() {
@@ -289,26 +238,6 @@ public class ByteList {
                 list = EmptyArrays.BYTES;
             }
         }
-    }
-
-    public void putInto(ByteBuffer buffer, int max) {
-        int v = Math.min(pointer - writePtr, max);
-        if (v <= 0)
-            return;
-        buffer.put(list, offset() + writePtr, v);
-        writePtr += v;
-    }
-
-    public void putInto(ByteBuffer buffer) {
-        putInto(buffer, limit());
-    }
-
-    public int writePos() {
-        return writePtr;
-    }
-
-    public void writePos(int ptr) {
-        writePtr = ptr;
     }
 
     public int lastIndexOf(byte[] bytes) {

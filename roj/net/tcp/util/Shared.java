@@ -25,6 +25,7 @@
  */
 package roj.net.tcp.util;
 
+import roj.net.tcp.StreamLikeSequence;
 import roj.text.CharList;
 
 /**

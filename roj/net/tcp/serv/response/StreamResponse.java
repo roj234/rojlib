@@ -25,8 +25,8 @@
  */
 package roj.net.tcp.serv.response;
 
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.util.Shared;
-import roj.net.tcp.util.WrappedSocket;
 
 import java.io.IOException;
 import java.io.InputStream;

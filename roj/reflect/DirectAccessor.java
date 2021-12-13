@@ -76,23 +76,34 @@ public final class DirectAccessor<T> {
     public static final IBitSet EMPTY_BITS           = new SingleBitSet();
 
     static final AtomicInteger NEXT_ID = new AtomicInteger();
-    static final FlagList      PUBLIC_ACCESS    = new FlagList(AccessFlag.PUBLIC);
+    static final FlagList      PUBLIC  = new FlagList(AccessFlag.PUBLIC);
 
     private static final ThreadLocal<Object> ACCESSOR_TMP = new ThreadLocal<>();
     private static void syncCallback(Object handle) {
         ACCESSOR_TMP.set(handle);
     }
 
+    //
     private final MyHashMap<String, Method> methodByName;
-    private final MyCustomMap caches;
     private final Class<T> owner;
-    private final Clazz    var;
-    private       CharList sb;
-    private       T        instance;
-    private       MyCustomMap.Entry cache;
+    private       Clazz    var;
+
+    // Cached object
+    private final CacheMap caches;
+    private       CacheMap.Entry cache;
+
+    // Cast check
     private       boolean check;
 
-    static final class MyCustomMap extends MyHashMap<String, Class<?>> {
+    // Debug
+    private       CharList sb;
+
+    // State machine mode
+    private Class<?> target;
+    private String[] from, to;
+    private List<Class<?>[]> fuzzy;
+
+    static final class CacheMap extends MyHashMap<String, Class<?>> {
         static final class Entry extends MyHashMap.Entry<String, Class<?>> {
             public Entry(String s) {
                 super(s, (Class<?>) IntMap.NOT_USING);
@@ -143,7 +154,7 @@ public final class DirectAccessor<T> {
             }
         }
         var = new Clazz();
-        caches = new MyCustomMap();
+        caches = new CacheMap();
         String clsName = packageName + "DAB$" + NEXT_ID.getAndIncrement();
         makeHeader(clsName, deClass.getName().replace('.', '/'), var);
         addInit(var);
@@ -157,13 +168,17 @@ public final class DirectAccessor<T> {
      */
     @SuppressWarnings("unchecked")
     public synchronized T build() {
-        if(instance != null)
-            return instance;
+        if(var == null)
+            throw new IllegalStateException("Already built");
 
         writeDebugInfo();
         methodByName.clear();
 
-        return instance = (T) i_build(var);
+        try {
+            return (T) i_build(var);
+        } finally {
+            var = null;
+        }
     }
 
     public static Object i_build(Clazz var) {
@@ -195,7 +210,7 @@ public final class DirectAccessor<T> {
 
     private void writeDebugInfo() {
         if(sb != null) {
-            roj.asm.tree.Method toString = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "toString", "()Ljava/lang/String;");
+            roj.asm.tree.Method toString = new roj.asm.tree.Method(PUBLIC, var, "toString", "()Ljava/lang/String;");
             AttrCode code = toString.code = new AttrCode(toString);
 
             code.stackSize = 1;
@@ -238,7 +253,7 @@ public final class DirectAccessor<T> {
             if((methodFlag & 8) != 0) {
                 checkExistence("set" + name1);
             }
-            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "set" + name1,
+            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, "set" + name1,
                                                               "(Ljava/lang/Object;)V");
             set.code = code = new AttrCode(set);
 
@@ -259,7 +274,7 @@ public final class DirectAccessor<T> {
             if((methodFlag & 8) != 0) {
                 checkExistence("clear" + name1);
             }
-            roj.asm.tree.Method clear = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "clear" + name1, "()V");
+            roj.asm.tree.Method clear = new roj.asm.tree.Method(PUBLIC, var, "clear" + name1, "()V");
             clear.code = code = new AttrCode(clear);
 
             code.stackSize = 2;
@@ -278,7 +293,7 @@ public final class DirectAccessor<T> {
             if((methodFlag & 8) != 0) {
                 checkExistence("get" + name1);
             }
-            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "get" + name1,
+            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, "get" + name1,
                                                               "()Ljava/lang/Object;");
             get.code = code = new AttrCode(get);
 
@@ -311,7 +326,7 @@ public final class DirectAccessor<T> {
     }
 
     public DirectAccessor<T> useCache(String name) {
-        cache = (MyCustomMap.Entry) caches.getEntry(name);
+        cache = (CacheMap.Entry) caches.getEntry(name);
         if(cache == null && name != null) {
             throw new IllegalArgumentException("Cache '" + name + "' not exist");
         }
@@ -451,7 +466,7 @@ public final class DirectAccessor<T> {
             String initParam = ParamHelper.classDescriptors(params, void.class);
             String methodParam = objectDescriptors(params, invokerReturns[i], objectModes == null);
 
-            roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, methodNames[i], methodParam);
+            roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, methodNames[i], methodParam);
 
             AttrCode code;
             invoke.code = code = new AttrCode(invoke);
@@ -689,7 +704,7 @@ public final class DirectAccessor<T> {
             String desc = ParamHelper.classDescriptors(params, method.getReturnType());
 
             String selfDesc = objectModes == null ? desc : objectDescriptors(params, method.getReturnType(), true);
-            roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, selfMethodNames[i], selfDesc);
+            roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, selfMethodNames[i], selfDesc);
             AttrCode code;
             invoke.code = code = new AttrCode(invoke);
             var.methods.add(invoke);
@@ -850,7 +865,7 @@ public final class DirectAccessor<T> {
 
             Method getter = getterMethods[i];
             if(getter != null) {
-                roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, getter.getName(), ParamHelper.classDescriptors(isStatic || useCache ? EmptyArrays.CLASSES : getter.getParameterTypes(), getter.getReturnType()));
+                roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, getter.getName(), ParamHelper.classDescriptors(isStatic || useCache ? EmptyArrays.CLASSES : getter.getParameterTypes(), getter.getReturnType()));
                 AttrCode code = get.code = new AttrCode(get);
 
                 byte type = fieldType.type;
@@ -879,7 +894,7 @@ public final class DirectAccessor<T> {
 
             Method setter = setterMethods[i];
             if(setter != null) {
-                roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC_ACCESS, var, setter.getName(), ParamHelper.classDescriptors(setter.getParameterTypes(), void.class));
+                roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, setter.getName(), ParamHelper.classDescriptors(setter.getParameterTypes(), void.class));
                 AttrCode code = set.code = new AttrCode(set);
 
                 byte type = fieldType.type;
@@ -921,7 +936,7 @@ public final class DirectAccessor<T> {
 
         String methodParam = ParamHelper.classDescriptors(method.getParameterTypes(), method.getReturnType());
 
-        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, selfMethodName, methodParam);
+        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, selfMethodName, methodParam);
         AttrCode code = invoke.code = new AttrCode(invoke);
 
         InsnList insn = code.instructions;
@@ -965,7 +980,7 @@ public final class DirectAccessor<T> {
 
         String selfDesc = ParamHelper.classDescriptors(method.getParameterTypes(), method.getReturnType());
 
-        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC_ACCESS, var, selfMethodName, selfDesc);
+        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, selfMethodName, selfDesc);
         AttrCode code;
         invoke.code = code = new AttrCode(invoke);
         var.methods.add(invoke);
@@ -1014,7 +1029,7 @@ public final class DirectAccessor<T> {
             if(method.getParameterCount() != 2)
                 throw new IllegalArgumentException(owner.getName() + '.' + getterName + ": 期待两个参数, got " + method.getParameterCount() + '!');
 
-            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "get", "()" + ParamHelper.classDescriptor(method.getReturnType()));
+            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, "get", "()" + ParamHelper.classDescriptor(method.getReturnType()));
             AttrCode code = get.code = new AttrCode(get);
 
             byte type = get.getReturnType().type;
@@ -1041,7 +1056,7 @@ public final class DirectAccessor<T> {
                 throw new IllegalArgumentException(owner.getName() + '.' + setterName + " 是个 setter, " +
                                                            "但是它的返回值不是void: " + method.getReturnType());
 
-            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC_ACCESS, var, "set", ParamHelper.classDescriptors(method.getParameterTypes(), void.class));
+            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, "set", ParamHelper.classDescriptors(method.getParameterTypes(), void.class));
             AttrCode code = set.code = new AttrCode(set);
 
             byte type = set.getReturnType().type;
@@ -1083,6 +1098,59 @@ public final class DirectAccessor<T> {
         return this;
     }
 
+    public DirectAccessor<T> from(String... names) {
+        if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
+        this.from = names;
+        return this;
+    }
+
+    public DirectAccessor<T> in(Class<?> target) {
+        this.target = target;
+        this.to = null;
+        this.fuzzy = null;
+        return this;
+    }
+
+    public DirectAccessor<T> to(String... names) {
+        if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
+        this.to = names;
+        this.fuzzy = null;
+        return this;
+    }
+
+    public DirectAccessor<T> withFuzzy(boolean fuzzy) {
+        this.fuzzy = fuzzy ? Collections.emptyList() : null;
+        return this;
+    }
+
+    public DirectAccessor<T> withFuzzy(Class<?>... names) {
+        if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
+        this.fuzzy = Collections.singletonList(names);
+        return this;
+    }
+
+    public DirectAccessor<T> withFuzzy(List<Class<?>[]> names) {
+        this.fuzzy = names;
+        return this;
+    }
+
+    public DirectAccessor<T> op(String op) {
+        if (target == null || from == null)
+            throw new IllegalStateException("Missing arguments");
+        switch (op) {
+            case "access":
+                return access(target, to,
+                              capitalize(from, "get"),
+                              capitalize(from, "set"));
+            case "delegate":
+                return delegate(target, to, EMPTY_BITS, from, fuzzy);
+            case "construct":
+                return construct(target, from, fuzzy);
+            default:
+                throw new IllegalArgumentException("Invalid operation " + op);
+        }
+    }
+
     /**
      * 首字母大写: xx,set => setXxx
      */
@@ -1099,7 +1167,7 @@ public final class DirectAccessor<T> {
     }
 
     static void cloneable(Clazz clz) {
-        roj.asm.tree.Method cl = new roj.asm.tree.Method(PUBLIC_ACCESS, clz, "clone", "()Ljava/lang/Object;");
+        roj.asm.tree.Method cl = new roj.asm.tree.Method(PUBLIC, clz, "clone", "()Ljava/lang/Object;");
         AttrCode code = cl.code = new AttrCode(cl);
 
         code.stackSize = 1;
@@ -1122,7 +1190,7 @@ public final class DirectAccessor<T> {
     static void addInit(Clazz clz) {
         AttrCode code;
 
-        roj.asm.tree.Method init = new roj.asm.tree.Method(PUBLIC_ACCESS, clz, "<init>", "()V");
+        roj.asm.tree.Method init = new roj.asm.tree.Method(PUBLIC, clz, "<init>", "()V");
         init.code = code = new AttrCode(init);
 
         code.stackSize = 1;

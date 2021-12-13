@@ -26,10 +26,10 @@
 package roj.net.tcp.client;
 
 import roj.math.MathUtils;
+import roj.net.tcp.StreamLikeSequence;
 import roj.net.tcp.util.HTTPHeaderLexer;
 import roj.net.tcp.util.Headers;
 import roj.net.tcp.util.Shared;
-import roj.net.tcp.util.StreamLikeSequence;
 
 import java.io.EOFException;
 import java.io.IOException;

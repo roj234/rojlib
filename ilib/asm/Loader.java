@@ -402,7 +402,7 @@ public class Loader implements IFMLLoadingPlugin {
                 ilTransformers.add(new Transformer());
                 ilTransformers.add(NiximProxy.instance);
 
-                IFieldAccessor accessor = ReflectionUtils.accessField(LaunchClassLoader.class.getDeclaredField("transformers"));
+                IFieldAccessor accessor = ReflectionUtils.access(LaunchClassLoader.class.getDeclaredField("transformers"));
                 accessor.setInstance(Launch.classLoader);
                 onUpdate(wrapper = new WrappedTransformers((List<IClassTransformer>) accessor.getObject()));
                 accessor.setObject(wrapper);

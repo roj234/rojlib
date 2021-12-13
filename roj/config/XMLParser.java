@@ -178,7 +178,7 @@ public class XMLParser {
                     case WordPresets.LITERAL: {
                         String aName = w.val();
                         if(wr.nextWord().type() == equ) {
-                            // todo 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
+                            // 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
                             attributes.put(aName, of(wr.nextWord()));
                         } else {
                             wr.retractWord();

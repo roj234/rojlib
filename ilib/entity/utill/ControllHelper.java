@@ -27,6 +27,8 @@ package ilib.entity.utill;
 
 import ilib.util.EntityHelper;
 import ilib.util.PlayerUtil;
+import roj.reflect.ReflectionUtils;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -43,7 +45,6 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
-import roj.reflect.ReflectionUtils;
 
 /**
  * No description provided
@@ -274,7 +275,7 @@ public class ControllHelper {
         }
         if(IGNITED == null) {
             try {
-                IGNITED = (DataParameter<Boolean>) ReflectionUtils.accessField(EntityCreeper.class.getDeclaredField("field_184715_c")).getObject();
+                IGNITED = (DataParameter<Boolean>) ReflectionUtils.access(EntityCreeper.class.getDeclaredField("field_184715_c")).getObject();
             } catch (NoSuchFieldException e) {
                 e.printStackTrace();
             }

@@ -30,9 +30,15 @@ import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.io.EmptyInputStream;
 import roj.io.NonblockingUtil;
+import roj.net.SecureUtil;
 import roj.net.ssl.EngineAllocator;
-import roj.net.ssl.SslEngineFactory;
-import roj.net.tcp.util.*;
+import roj.net.tcp.PlainSocket;
+import roj.net.tcp.SSLSocket;
+import roj.net.tcp.StreamLikeSequence;
+import roj.net.tcp.WrappedSocket;
+import roj.net.tcp.util.Action;
+import roj.net.tcp.util.HTTPHeaderLexer;
+import roj.net.tcp.util.Shared;
 import roj.text.CharList;
 import roj.util.ByteWriter;
 
@@ -106,7 +112,7 @@ public class HttpClient extends ClientSocket {
 
     @Override
     protected WrappedSocket createChannel() throws IOException {
-        return clientEngine != null ? SecureSocket.get(server.socket(), NonblockingUtil.fd(server), clientEngine, true) : new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
+        return clientEngine != null ? SSLSocket.get(server.socket(), NonblockingUtil.fd(server), clientEngine, true) : new PlainSocket(server.socket(), NonblockingUtil.fd(server));
     }
 
     EngineAllocator clientEngine;
@@ -133,7 +139,7 @@ public class HttpClient extends ClientSocket {
 
         prepare(buf);
 
-        while (channel.writeDirect(buf) > 0) {
+        while (channel.write(buf) > 0) {
             LockSupport.parkNanos(100);
             if (System.currentTimeMillis() > timeout) {
                 throw new SocketTimeoutException("Write");
@@ -237,7 +243,7 @@ public class HttpClient extends ClientSocket {
     public HttpClient url(URL url) throws IOException {
         if(url.getProtocol().equals("https")) {
             try {
-                clientEngine = SslEngineFactory.getClientDefault();
+                clientEngine = SecureUtil.getClientDefault();
             } catch (GeneralSecurityException ignored) {}
         }
         path = url.getPath();

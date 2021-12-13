@@ -25,34 +25,31 @@
  */
 
 package roj.util;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
  * @version 0.1
  * @since 2020/12/5 14:45
  */
 public class Color {
     public static final Color TRANSPARENT = new Color(0, 0, 0, 0);
-    /**
-     * The color code that will be displayed
-     */
-    final byte r, g, b, a;
+
+    private final int argb;
+
+    public int getAlpha() {
+        return (argb >>> 24) & 0xFF;
+    }
 
     public int getRed() {
-        return r & 0xFF;
+        return (argb >>> 16) & 0xFF;
     }
 
     public int getGreen() {
-        return g & 0xFF;
+        return (argb >>> 8) & 0xFF;
     }
 
     public int getBlue() {
-        return b & 0xFF;
-    }
-
-    public int getAlpha() {
-        return a & 0xFF;
+        return argb & 0xFF;
     }
 
     public float getRedP() {
@@ -72,24 +69,16 @@ public class Color {
     }
 
     public int getARGB() {
-        return ((a & 0xFF) << 24) |
-                ((r & 0xFF) << 16) |
-                ((g & 0xFF) << 8) |
-                ((b & 0xFF));
+        return argb;
     }
 
     public int getRGB() {
-        return ((r & 0xFF) << 16) |
-                ((g & 0xFF) << 8) |
-                ((b & 0xFF));
+        return argb & 0xFFFFFF;
     }
 
     public Color(int r, int g, int b, int a) {
         if (r >= 256 || g >= 256 || b >= 256 || a >= 256 || r < 0 || g < 0 || b < 0 || a < 0)
             throw new RuntimeException("Invalid color");
-        this.r = (byte) r;
-        this.g = (byte) g;
-        this.b = (byte) b;
-        this.a = (byte) a;
+        this.argb = (a << 24) | (r << 16) | (g << 8) | b;
     }
 }

@@ -28,15 +28,15 @@ package ilib.asm.nixim;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
-import roj.text.crypt.SM4;
-import roj.util.ByteList;
+import roj.crypt.SM4;
 
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.network.login.server.SPacketEncryptionRequest;
 import net.minecraft.util.CryptManager;
 
 import java.io.IOException;
-import java.security.DigestException;
+import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 
 /**
@@ -61,14 +61,13 @@ public class FuckMiddleMan extends SPacketEncryptionRequest {
         byte[] key = _lvt_1_.readByteArray();
         this.verifyToken = _lvt_1_.readByteArray();
         SM4 sm4 = new SM4();
-        sm4.reset(SM4.SM4_DECRYPT | SM4.SM4_AUTO_PADDING | SM4.SM4_ECB);
-        sm4.setPassword(verifyToken);
-        ByteList out = new ByteList();
+        sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
+        sm4.setKey(verifyToken);
         try {
-            sm4.crypt(new ByteList(key), out);
-            key = out.toByteArray();
-        } catch (DigestException ignored) {}
-        sm4.reset(0);
+            sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+        }
         this.publicKey = CryptManager.decodePublicKey(key);
     }
 
@@ -78,17 +77,15 @@ public class FuckMiddleMan extends SPacketEncryptionRequest {
 
         byte[] encoded = this.publicKey.getEncoded();
         SM4 sm4 = new SM4();
-        sm4.reset(SM4.SM4_ENCRYPT | SM4.SM4_AUTO_PADDING | SM4.SM4_ECB);
+        sm4.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
         byte[] token = this.verifyToken;
-        sm4.setPassword(token);
-        ByteList out = new ByteList();
+        sm4.setKey(token);
         try {
-            sm4.crypt(new ByteList(encoded), out);
-            buf.writeBytes(out.list, 0, out.pos());
-        } catch (DigestException e) {
-            buf.writeBytes(encoded);
+            sm4.crypt(ByteBuffer.wrap(encoded), ByteBuffer.wrap(encoded));
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
         }
-        sm4.reset(0);
-        buf.writeByteArray(token);
+        buf.writeByteArray(encoded)
+           .writeByteArray(token);
     }
 }

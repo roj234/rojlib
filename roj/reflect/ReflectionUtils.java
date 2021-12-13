@@ -30,6 +30,7 @@ import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 import roj.concurrent.Ref;
 
@@ -46,36 +47,11 @@ import static roj.asm.type.NativeType.ARRAY;
 import static roj.asm.type.NativeType.CLASS;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/17 19:51
  */
 public final class ReflectionUtils {
-    /**
-     * 将old的field复制到now
-     *
-     * @param old        old
-     * @param now        new
-     * @param fieldNames Field names to copy
-     */
-    @Deprecated
-    public static <T> void dataCopy(T old, T now, String[] fieldNames) throws NoSuchFieldException, IllegalAccessException {
-        if (fieldNames == null) {
-            List<Field> list = getFields(old.getClass());
-            for (Field field : list) {
-                Object value = field.get(old);
-                setFinal(now, field, value);
-            }
-        } else {
-            for (String name : fieldNames) {
-                Object value = getValue(old, name);
-                setFinal(now, getField(now.getClass(), name), value);
-            }
-        }
-    }
-
     /**
      * 在obj中查找类型为targetClass的field
      *
@@ -85,13 +61,13 @@ public final class ReflectionUtils {
     public static Field getFieldValueByType(Class<?> obj, Class<?> targetClass) {
         for (Field f : getFields(obj)) {
 
-            Class<?> tempClass = f.getType();
-            while (tempClass != null) {
-                if (tempClass == targetClass) {
+            Class<?> tmp = f.getType();
+            while (tmp != null) {
+                if (tmp == targetClass) {
                     f.setAccessible(true);
                     return f;
                 }
-                tempClass = tempClass.getSuperclass();
+                tmp = tmp.getSuperclass();
             }
         }
         return null;
@@ -135,9 +111,8 @@ public final class ReflectionUtils {
     public static Field getField(Class<?> clazz, String name) throws NoSuchFieldException {
         Ref<Field> ref = Ref.from();
         try {
-            //Class<?> type = null;
             consumeFields(clazz, field -> {
-                if (field.getName().equals(name) /*&& (type == null || field.getType() == type)*/) {
+                if (field.getName().equals(name)) {
                     ref.set(field);
                     throw OperationDone.INSTANCE;
                 }
@@ -235,21 +210,21 @@ public final class ReflectionUtils {
     }
 
     public static void setFinal(Object o, Field field, Object value) {
-        IFieldAccessor acc = accessField(field);
+        IFieldAccessor acc = access(field);
         acc.setInstance(o);
         acc.setObject(value);
     }
 
-    static WeakHashMap<Field, IFieldAccessor> accessorWeakHashMap = new WeakHashMap<>();
-    public static IFieldAccessor accessField(@Nonnull Field field) {
-        IFieldAccessor accessor = accessorWeakHashMap.get(field);
-        if(accessor != null)
-            return accessor;
+    private static final WeakHashMap<Field, IFieldAccessor> accessors = new WeakHashMap<>();
+    public static IFieldAccessor access(@Nonnull Field field) {
+        IFieldAccessor acc = accessors.get(field);
+        if(acc != null)
+            return acc;
         try {
             return new U.UFA(field);
         } catch (Throwable e) {
             if((field.getModifiers() & AccessFlag.FINAL) == 0) {
-                accessor = DirectAccessor
+                acc = DirectAccessor
                         .builder(IFieldAccessor.class)
                         .makeCache(field.getDeclaringClass())
                         .useCache()
@@ -258,10 +233,10 @@ public final class ReflectionUtils {
                                 new String[]{"set" + accessorName(field)})
                         .build();
             } else {
-                accessor = new VH(field);
+                acc = new VH(field);
             }
-            accessorWeakHashMap.put(field, accessor);
-            return accessor;
+            accessors.put(field, acc);
+            return acc;
         }
     }
 
@@ -281,7 +256,7 @@ public final class ReflectionUtils {
 
     public static List<Class<?>> getFathersAndItfOrdered(Class<?> clazz) {
         ArrayList<Class<?>> classes = new ArrayList<>();
-        MyList<Class<?>> pending = new MyList<>();
+        SimpleList<Class<?>> pending = new SimpleList<>();
         pending.add(clazz);
 
         while (!pending.isEmpty()) {
@@ -300,15 +275,6 @@ public final class ReflectionUtils {
             pending.removeRange(0, size);
         }
         return classes;
-    }
-
-    private static class MyList<T> extends ArrayList<T> {
-        static final long serialVersionUID = 1;
-
-        @Override
-        public void removeRange(int fromIndex, int toIndex) {
-            super.removeRange(fromIndex, toIndex);
-        }
     }
 
     public static String accessorName(Field field) {

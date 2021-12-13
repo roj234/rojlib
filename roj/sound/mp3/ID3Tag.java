@@ -50,9 +50,6 @@ import java.nio.charset.UnsupportedCharsetException;
  * <a href="http://www.id3.org/id3v2-00">id3 v2.2</a><br>
  * <a href="http://www.id3.org/id3v2.3.0">id3 v2.3</a><br>
  * <a href="http://www.id3.org/id3v2.4.0-structure">id3 v2.4</a><br>
- * <p>
- * ID2 v2 支持MP3文件内置歌词文本和唱片集图片，实际的情况是，很多网络MP3文件利用它在MP3文件内置广告。所以ID3Tag没有解析内置的歌词，
- * 如果你对其内置的图片感兴趣，可以用{@link #getPicture()}方法获取，图片的媒体类型为"image/png" 或 "image/jpeg"。
  */
 
 public class ID3Tag {
@@ -68,7 +65,11 @@ public class ID3Tag {
     private int exheaderSize;
     private boolean haveID3v2Footer;
 
-    private static final Charset[] TEXT_ENCODING = {charsetOrDefault("GBK", StandardCharsets.ISO_8859_1), StandardCharsets.UTF_16, StandardCharsets.UTF_16BE, StandardCharsets.UTF_8};
+    private static final Charset[] TEXT_ENCODING = {
+            charsetOrDefault("GBK", StandardCharsets.ISO_8859_1),
+            StandardCharsets.UTF_16,
+            StandardCharsets.UTF_16BE,
+            StandardCharsets.UTF_8};
 
     private static Charset charsetOrDefault(String gbk, Charset charset) {
         try {

@@ -25,17 +25,18 @@
  */
 package roj.net.tcp.serv;
 
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.util.Action;
 import roj.net.tcp.util.Code;
 import roj.net.tcp.util.Shared;
-import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 
 public class Reply implements Response {
@@ -55,9 +56,9 @@ public class Reply implements Response {
         this.headerOnly = (action == Action.HEAD);
     }
 
-    private ByteList buf = null;
+    private ByteBuffer buf = null;
 
-    protected ByteList headers() {
+    protected ByteBuffer headers() {
         Object[] data = Shared.SYNC_BUFFER.get();
 
         CharList header = (CharList) data[2];
@@ -72,7 +73,7 @@ public class Reply implements Response {
 
             ByteWriter.writeUTF(bl, header, -1);
 
-            return bl;
+            return ByteBuffer.wrap(bl.list, 0, bl.pos());
         } finally {
             if (header.arrayLength() > Shared.MAX_CHAR_BUFFER_CAPACITY)
                 data[0] = new CharList(Shared.MAX_CHAR_BUFFER_CAPACITY);
@@ -86,7 +87,7 @@ public class Reply implements Response {
         if (buf == null)
             buf = headers();
         else
-            buf.rewrite();
+            buf.position(0);
     }
 
     public boolean send(WrappedSocket channel) throws IOException {

@@ -26,12 +26,11 @@
 package roj.net.tcp.voice;
 
 import roj.io.NonblockingUtil;
+import roj.net.tcp.PlainSocket;
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.client.ClientSocket;
-import roj.net.tcp.util.InsecureSocket;
-import roj.net.tcp.util.WrappedSocket;
 import roj.sound.record.Recorder;
 import roj.sound.record.VoiceHandler;
-import roj.util.ByteList;
 
 import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
@@ -52,7 +51,7 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
 
     public VoiceClient() {
         try {
-            this.recorder = new Recorder(3072, 1024, this);
+            this.recorder = new Recorder(1024, this);
         } catch (LineUnavailableException e) {
             throw new UnsupportedOperationException("没有录音设备!", e);
         }
@@ -60,7 +59,7 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
 
     @Override
     protected WrappedSocket createChannel() {
-        return new InsecureSocket(server.socket(), NonblockingUtil.fd(server));
+        return new PlainSocket(server.socket(), NonblockingUtil.fd(server));
     }
 
     public void connect(String address, int port) throws IOException {
@@ -87,7 +86,7 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
     long t = System.currentTimeMillis();
 
     @Override
-    public void handle(ByteList buffer) {
+    public void handle(byte[] buffer, int length) {
         //while (!ai.compareAndSet(0, -1)) {
         //    Thread.yield();
         //}
@@ -101,7 +100,7 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
             e.printStackTrace();
         }*/
 
-        System.out.println(buffer.pos());
+        System.out.println(length);
         if (System.currentTimeMillis() - t >= 2000) {
             System.exit(0);
         }

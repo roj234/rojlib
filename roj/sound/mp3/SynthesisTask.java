@@ -41,12 +41,6 @@ final class SynthesisTask implements ITask, Runnable {
 
     private volatile boolean done;
 
-    /**
-     * 构造SynthesisConcurrent实例。便于调用者实现多相合成滤波并发运算。
-     *
-     * @param owner 拥有此多相合成滤波器的对象。
-     * @param ch    指定的声道：0或1。
-     */
     public SynthesisTask(Layer3 owner, int ch) {
         this.owner = owner;
         this.ch = ch;
@@ -57,9 +51,7 @@ final class SynthesisTask implements ITask, Runnable {
     }
 
     /**
-     * 交换缓冲区
-     *
-     * @return 一个空闲的缓冲区，该缓冲区用于使用SynthesisConcurrent线程的对象在逆量化、抗锯齿和IMDCT时暂存数据。
+     * 交换双缓冲
      */
     public float[][] swapBuf() {
         // 1. 交换缓冲区
@@ -74,17 +66,10 @@ final class SynthesisTask implements ITask, Runnable {
         return bufA;
     }
 
-    /**
-     * 获取一个空闲的缓冲区<br>
-     * 该缓冲区用于逆量化、抗锯齿和IMDCT时暂存数据。
-     */
     public float[][] getEmptyBuffer() {
         return bufA;
     }
 
-    /**
-     * 在独立执行的线程中进行多相合成滤波
-     */
     @Override
     public void calculate(Thread thread) {
         run();

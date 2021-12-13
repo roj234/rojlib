@@ -31,8 +31,6 @@ import roj.util.OS;
 import java.io.PrintStream;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51

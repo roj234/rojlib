@@ -100,10 +100,10 @@ public final class Config extends JSONConfiguration {
 
     private static void hackSubThreadPriority() {
         try {
-            IFieldAccessor accessor = ReflectionUtils.accessField(Thread.class.getDeclaredField("group"));
+            IFieldAccessor accessor = ReflectionUtils.access(Thread.class.getDeclaredField("group"));
             accessor.setInstance(Thread.currentThread());
             ThreadGroup tg = (ThreadGroup) accessor.getObject();
-            accessor = ReflectionUtils.accessField(ThreadGroup.class.getDeclaredField("threads"));
+            accessor = ReflectionUtils.access(ThreadGroup.class.getDeclaredField("threads"));
             accessor.setInstance(tg);
 
 

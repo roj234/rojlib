@@ -45,7 +45,6 @@ import roj.net.tcp.serv.Router;
 import roj.net.tcp.serv.response.HeadResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.serv.util.Request;
-import roj.net.tcp.util.Action;
 import roj.net.tcp.util.Code;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
@@ -1322,7 +1321,7 @@ public class DnsServer implements Router {
                 return new Reply(Code.FOUND, hp);
             }
             case "/set": {
-                if(request.action() != Action.POST) {
+                if(request.action() != roj.net.tcp.util.Action.POST) {
                     return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.forError(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
                 }
                 Map<String, String> postFields = request.postFields();
@@ -1395,7 +1394,7 @@ public class DnsServer implements Router {
 
     @Override
     public boolean checkAction(int action) {
-        return action == Action.POST || action == Action.GET;
+        return action == roj.net.tcp.util.Action.POST || action == roj.net.tcp.util.Action.GET;
     }
 
     public static void main(String[] args) throws IOException {

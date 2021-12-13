@@ -25,8 +25,8 @@
  */
 package roj.util;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 
 /**
@@ -49,33 +49,17 @@ public class ComboRandom extends Random {
 
     @Override
     protected int next(int bits) {
-        long seed = seeds[i == seeds.length ? i = 0 : i];
-        seed = (seed * multiplier + addend) & mask;
+        long seed = (seeds[i == seeds.length ? i = 0 : i] * multiplier + addend) & mask;
         seeds[i++] = seed;
         return (int)(seed >>> (48 - bits));
     }
 
     public static ComboRandom from(String keys) {
-        List<Long> randoms = new ArrayList<>();
-        long tmp = 0;
-        int i = 0;
-        while (i < keys.length()) {
-            char c = keys.charAt(i++);
-            tmp = tmp * 31 + c;
-            if((i & 31) == 0) {
-                randoms.add(tmp);
-                if((i & 63) == 0)
-                    tmp <<= 1;
-                else
-                    tmp --;
-            }
+        ByteBuffer buf = ByteBuffer.wrap(keys.getBytes(StandardCharsets.UTF_8));
+        long[] seed = new long[buf.remaining() >> 3];
+        for (int i = 0; i < seed.length; i++) {
+            seed[i] = buf.getLong();
         }
-        randoms.add(tmp);
-        long[] seed = new long[randoms.size()];
-        for (int j = 0; j < randoms.size(); j++) {
-            seed[j] = randoms.get(j);
-        }
-
         return new ComboRandom(seed);
     }
 }

@@ -61,9 +61,9 @@ public class FreezeRegistryInjector {
     public static void inject() {
         IFieldAccessor accessor, a2;
         try {
-            accessor = ReflectionUtils.accessField(ForgeRegistry.class.getDeclaredField("missing"));
+            accessor = ReflectionUtils.access(ForgeRegistry.class.getDeclaredField("missing"));
             if(entityClassRegistrations == null) {
-                a2 = ReflectionUtils.accessField(EntityRegistry.class.getDeclaredField("entityClassRegistrations"));
+                a2 = ReflectionUtils.access(EntityRegistry.class.getDeclaredField("entityClassRegistrations"));
                 a2.setInstance(EntityRegistry.instance());
                 entityClassRegistrations = (BiMap<Class<? extends Entity>, EntityRegistration>) a2.getObject();
                 entityClassRegistrations.put(FreezedEntity.class, EntityRegistry.instance().

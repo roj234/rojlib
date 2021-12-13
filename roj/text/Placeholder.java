@@ -82,13 +82,13 @@ public final class Placeholder {
         return new Placeholder(val, ps);
     }
 
-    public String replace(Map<String, String> replacer) throws ArgumentMissingException {
+    public String replace(Map<String, String> replacer) throws IllegalArgumentException {
         CharList sb = new CharList().append(value);
         int str, len, off = 0;
         for (P entry : points) {
             String value = replacer.get(entry.key);
             if (value == null) {
-                throw new ArgumentMissingException(entry.key);
+                throw new IllegalArgumentException("Missing" + entry.key);
             }
 
             for (int i : entry.val) {

@@ -35,7 +35,7 @@ import roj.sound.util.AudioBuffer;
 /**
  * 解码Layer Ⅲ。
  */
-public final class Layer3 extends Layer {
+final class Layer3 extends Layer {
     final int granules, channels;
 
     private final MainDataDecoder mainIn;

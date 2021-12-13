@@ -77,7 +77,7 @@ public class I18n {
         String path = System.getProperty("kscript.translate");
         Map<String, String> m;
         try {
-            m = TextUtil.loadLang(path == null ? IOUtil.readUTF("META-INF/kscript.lang") : IOUtil.readUTF(new FileInputStream(path)));
+            m = TextUtil.parseLang(path == null ? IOUtil.readUTF("META-INF/kscript.lang") : IOUtil.readUTF(new FileInputStream(path)));
         } catch (IOException e) {
             e.printStackTrace();
             m = Collections.emptyMap();

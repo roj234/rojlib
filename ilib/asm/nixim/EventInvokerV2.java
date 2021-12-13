@@ -52,7 +52,7 @@ import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.InstantiationUtil;
+import roj.reflect.Instantiator;
 import roj.util.ByteList;
 
 import net.minecraftforge.fml.common.eventhandler.Event;
@@ -61,7 +61,10 @@ import net.minecraftforge.fml.common.eventhandler.IGenericEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.io.IOException;
-import java.lang.reflect.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -190,9 +193,9 @@ public final class EventInvokerV2 implements IEventListener {
         Class<?> clazz = ClassDefiner.INSTANCE.defineClassC(data.name.replace('/', '.'), list.list, list.offset(), list.limit());
 
         try {
-            return (IEventListener) InstantiationUtil.createClass(clazz, new Class<?>[]{Object[].class}, targets);
-        } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
-            throw new InternalError(e);
+            return (IEventListener) Instantiator._new(clazz, new Class<?>[]{Object[].class}, targets);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("EventInvoker Lazy initialization failed!", e);
         }
     }
 
@@ -205,7 +208,7 @@ public final class EventInvokerV2 implements IEventListener {
             Object[] arr = (Object[]) handler;
             this.handler = new boolean[0];
             return createListener((Method) arr[0], arr[1]);
-        } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+        } catch (ReflectiveOperationException e) {
             throw new RuntimeException("EventInvoker Lazy initialization failed!", e);
         }
     }
@@ -221,7 +224,7 @@ public final class EventInvokerV2 implements IEventListener {
             Object[] arr = (Object[]) handler;
             try {
                 handler = createListener((Method) arr[0], arr[1]);
-            } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+            } catch (ReflectiveOperationException e) {
                 throw new RuntimeException("EventInvoker Lazy initialization failed!", e);
             }
         }
@@ -326,12 +329,12 @@ public final class EventInvokerV2 implements IEventListener {
         }
     }*/
 
-    public static IEventListener createListener(Method method, Object target) throws IllegalAccessException, InstantiationException, InvocationTargetException {
+    public static IEventListener createListener(Method method, Object target) throws ReflectiveOperationException {
         final Class<?> clazz = createWrapper(method);
         if (Modifier.isStatic(method.getModifiers())) {
-            return (IEventListener) InstantiationUtil.createClass(clazz);
+            return (IEventListener) Instantiator._new(clazz);
         } else {
-            return (IEventListener) InstantiationUtil.createClass(clazz, new Class<?>[]{Object.class}, target);
+            return (IEventListener) Instantiator._new(clazz, new Class<?>[]{Object.class}, target);
         }
     }
 

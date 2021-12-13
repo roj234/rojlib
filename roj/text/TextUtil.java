@@ -26,7 +26,6 @@
 package roj.text;
 
 import roj.collect.IBitSet;
-import roj.collect.IntMap;
 import roj.collect.LongBitSet;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
@@ -42,35 +41,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/19 0:14
  */
 public class TextUtil {
-    @Deprecated
-    private static final IntMap<Map<String, String>> langs = new IntMap<>();
-
-    @Deprecated
-    public static String translate(int type, String key) {
-        Map<String, String> map = langs.get(type);
-        if (map == null) {
-            Logger.getLogger("TextUtil").warning("LangId " + type + " not found");
-            return key;
-        }
-        return map.getOrDefault(key, key);
-    }
-
-    @Deprecated
-    public static void loadLang(int type, String string) {
-        langs.put(type, loadLang(string));
-    }
-
-    public static Map<String, String> loadLang(CharSequence content) {
+    public static Map<String, String> parseLang(CharSequence content) {
         MyHashMap<String, String> map = new MyHashMap<>();
         if (content == null) return map;
         try {
@@ -185,35 +163,6 @@ public class TextUtil {
             e.printStackTrace();
         }
         return "-";
-    }
-
-    public static StringBuilder unescape(final CharSequence src) {
-        int len;
-        StringBuilder tmp = new StringBuilder((len = src.length()) >> 1);
-        int i = 0, pos;
-
-        while (i < len) {
-            pos = limitedIndexOf(src, '%', i, len);
-            if (pos == i) {
-                if (src.charAt(pos + 1) == 'u') {
-                    int ch = MathUtils.parseInt(src, pos + 2, pos + 6, 16);
-
-                    tmp.append((char) ch);
-
-                    i = pos + 6;
-                } else {
-                    char ch = (char) MathUtils.parseInt(src, pos + 1, pos + 3, 16);
-                    tmp.append(ch);
-                    i = pos + 3;
-                }
-            } else if (pos == -1) {
-                return tmp.append(src.subSequence(i, src.length()));
-            } else {
-                tmp.append(src, i, pos);
-                i = pos;
-            }
-        }
-        return tmp;
     }
 
     public static int lastMatches(CharSequence a, int aIndex, CharSequence b, int bIndex, int max) {
@@ -392,10 +341,6 @@ public class TextUtil {
         return true;
     }
 
-    public static Boolean isBoolean(String s) {
-        return "true".equals(s) ? Boolean.TRUE : ("false".equals(s) ? Boolean.FALSE : null);
-    }
-
     public static String prettyPrint(Object o) {
         StringBuilder sb = new StringBuilder();
         prettyPrint(sb, o, "");
@@ -431,20 +376,39 @@ public class TextUtil {
 
     public static String concat(String[] args, char splitChar) {
         if (args.length == 0) return "";
-        StringBuilder sb = new StringBuilder();
-        for (String s : args) {
-            sb.append(s).append(splitChar);
+        int i = args.length - 1;
+        for (String arg : args) {
+            i += arg.length();
         }
-        return sb.deleteCharAt(sb.length() - 1).toString();
+        char[] tmp = new char[i];
+        i = 0;
+        for (String s : args) {
+            s.getChars(0, s.length(), tmp, i);
+            i += s.length();
+            if (i != tmp.length) {
+                tmp[i++] = splitChar;
+            }
+        }
+        return new String(tmp);
     }
 
-    public static String concat(String[] args, CharSequence splitSequence) {
+    public static String concat(String[] args, String splSeq) {
         if (args.length == 0) return "";
-        StringBuilder sb = new StringBuilder();
-        for (String s : args) {
-            sb.append(s).append(splitSequence);
+        int i = splSeq.length() * (args.length - 1);
+        for (String arg : args) {
+            i += arg.length();
         }
-        return sb.deleteCharAt(sb.length() - 1).toString();
+        char[] tmp = new char[i];
+        i = 0;
+        for (String s : args) {
+            s.getChars(0, s.length(), tmp, i);
+            i += s.length();
+            if (i != tmp.length) {
+                splSeq.getChars(0, splSeq.length(), tmp, i);
+                i += splSeq.length();
+            }
+        }
+        return new String(tmp);
     }
 
     public static void replaceVariable(Map<String, String> env, String tag, List<String> list) {

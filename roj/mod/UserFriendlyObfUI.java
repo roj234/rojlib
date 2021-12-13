@@ -25,18 +25,25 @@
  */
 package roj.mod;
 
-import roj.asm.mapper.SimpleObfuscator;
-import roj.asm.mapper.Util;
 import roj.asm.util.Context;
 import roj.config.JSONParser;
+import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.io.MutableZipFile;
+import roj.io.MutableZipFile.EFile;
+import roj.io.ZipFileWriter;
+import roj.mapper.SimpleObfuscator;
+import roj.mapper.Util;
+import roj.util.ByteReader;
+import roj.util.ComboRandom;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 import static roj.mod.Shared.BASE;
 
@@ -58,34 +65,77 @@ public class UserFriendlyObfUI {
         }
         Project project = Project.load(args[0]);
 
-        File jarFile = new File(BASE, project.name + '-' + project.version + ".jar");
-        if (!jarFile.isFile()) {
+        File src = new File(BASE, project.name + '-' + project.version + ".jar");
+        if (!src.isFile()) {
             System.err.println("构建输出不存在");
             return;
         }
+        System.out.println("!! 注意，本程序仅为FMD提供简易混淆功能 尚未完工");
 
         CMapping json = JSONParser.parse(IOUtil.readUTF(new File(BASE, "obfuscator.json"))).asMap();
-        CMapping projectSpec = json.containsKey(args[0]) ? json.getOrCreateMap(args[0]) : json.get("*").asMap();
+        CMapping set = json.containsKey(args[0]) ? json.getOrCreateMap(args[0]) : json.get("*").asMap();
+
         SimpleObfuscator obf = new SimpleObfuscator();
-        obf.setFlags(projectSpec.getInteger("flags"));
-        if (projectSpec.containsKey("随机种子")) {
-            obf.rand.setSeed(projectSpec.getLong("随机种子"));
+        obf.setFlags(set.getInteger("flags"));
+
+        if (!set.getString("随机种子").isEmpty()) {
+            byte[] b = set.getString("随机种子").getBytes(StandardCharsets.UTF_8);
+            long[] rnd = new long[b.length >> 3];
+            ByteReader r = new ByteReader(b);
+            for (int i = 0; i < rnd.length; i++) {
+                rnd[i] = r.readLong() + b[rnd.length << 3 + (i & 7)];
+            }
+            obf.rand = new ComboRandom(rnd);
         }
-        CList list = projectSpec.getOrCreateList("保留的包");
+
+
+
+
+
+        CList list = set.getOrCreateList("保留的包");
         for (int i = 0; i < list.size(); i++) {
             obf.packageExclusions.add(list.get(i).asString());
         }
-        json = projectSpec.getOrCreateMap("保留的类及方法/字段");
+        json = set.getOrCreateMap("保留的类及方法/字段");
+        for (Map.Entry<String, CEntry> entry : json.entrySet()) {
+            obf.classExclusions.add(entry.getKey());
+        }
         // todo 混淆方式
+        json = set.getOrCreateMap("混淆方式");
+        // todo 过滤器, 不要上面的了
 
-        List<Context> contexts = Util.ctxFromZip(jarFile, StandardCharsets.UTF_8);
+        // 混淆
+        List<Context> contexts = Util.ctxFromZip(src, StandardCharsets.UTF_8);
         obf.reset(FileUtil.findAllFiles(new File(BASE, "class")));
         obf.obfuscate(contexts);
-        // todo 覆盖现有文件
 
+        // 保存
+        MutableZipFile mzf = new MutableZipFile(src);
+        if (set.getString("覆盖现有文件").equals("true")) {
+            for (int i = 0; i < contexts.size(); i++) {
+                Context ctx = contexts.get(i);
+                mzf.setFileData(ctx.getFileName(), () -> ctx.get(true), true);
+            }
+            mzf.store();
+        } else {
+            File dest = new File(set.getString("覆盖现有文件"));
+            ZipFileWriter zfw = new ZipFileWriter(dest);
+            for (int i = 0; i < contexts.size(); i++) {
+                Context ctx = contexts.get(i);
+                zfw.writeNamed(ctx.getFileName(), ctx.get(true));
+            }
+            for(EFile eFile : mzf.getEntries().values()) {
+                if (eFile.getName().endsWith("/") || eFile.getName().endsWith(".class"))
+                    continue;
+                zfw.write(mzf, eFile);
+            }
+            zfw.close();
+        }
+        mzf.close();
 
-        if (projectSpec.containsKey("混淆映射表保存位置")) {
-            obf.writeObfuscationMap(new File(projectSpec.getString("混淆映射表保存位置")));
+        // 保存映射
+        if (!set.getString("混淆映射表保存位置").isEmpty()) {
+            obf.writeObfuscationMap(new File(set.getString("混淆映射表保存位置")));
         }
     }
 }

@@ -28,7 +28,6 @@ package roj.collect;
 import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -41,40 +40,44 @@ import java.util.NoSuchElementException;
  * @since  2021/4/13 23:25
  */
 public final class RingBuffer<T> implements Iterable<T> {
-    /*public static void main(String[] args) {
-        RingBuffer<Integer> buffer = new RingBuffer<>(9);
-        Random rnd = new Random(5342);
-        for (int i = 0; i < 999; i++) {
-            switch (rnd.nextInt(4)) {
-                case 0:
-                    if(buffer.size < 9) {
-                        buffer.push(i);
-                    }
-                    break;
-                case 1:
-                    if(buffer.size < 9) {
-                        buffer.unshift(i);
-                    }
-                    break;
-                case 2:
-                    if(buffer.size > 0) {
-                        buffer.pop();
-                    }
-                    break;
-                case 3:
-                    if(buffer.size > 0) {
-                        buffer.shift();
-                    }
-                    break;
-            }
+    private final class Itr extends AbstractIterator<T> {
+        int i;
+        int dir;
+        int fence;
+
+        @SuppressWarnings("unchecked")
+        public Itr(boolean rev) {
+            i = rev ? tail : head;
+            dir = rev ? -1 : 1;
+            fence = rev ? head : tail;
+            stage = AbstractIterator.CHECKED;
+            result = (T) array[i];
+            i += dir;
         }
-        System.out.println(buffer);
-        for (Object o : buffer)
-            System.out.println(o);
-    }*/
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public boolean computeNext() {
+            if (i == fence) return false;
+            if (i == -1) {
+                i = array.length - 1;
+            } else if (i == array.length) {
+                i = 0;
+            }
+            result = (T) array[i];
+            i += dir;
+            return true;
+        }
+
+        @Override
+        protected void remove(T obj) {
+            // todo support index change
+            //RingBuffer.this.remove(i - dir);
+        }
+    }
 
     Object[] array;
-    int begin, end, size;
+    int      head, tail, size;
 
     public RingBuffer(int capacity) {
         array = new Object[capacity];
@@ -94,177 +97,134 @@ public final class RingBuffer<T> implements Iterable<T> {
 
     @Nonnull
     public Iterator<T> iterator() {
-        return size == 0 ? Collections.emptyIterator() : new AbstractIterator<T>() {
-            int i = begin;
-            boolean f;
-
-            @Override
-            @SuppressWarnings("unchecked")
-            public boolean computeNext() {
-                if(f) {
-                    if (i == end) return false;
-                    if (i == array.length) {
-                        i = 0;
-                    }
-                }
-                f = true;
-                result = (T) array[i++];
-                return true;
-            }
-        };
+        return size == 0 ? Collections.emptyIterator() : new Itr(false);
     }
 
     @Nonnull
-    public Iterator<T> iteratorReverse() {
-        return size == 0 ? Collections.emptyIterator() : new AbstractIterator<T>() {
-            int i = end;
-            boolean f;
-
-            @Override
-            @SuppressWarnings("unchecked")
-            public boolean computeNext() {
-                if(f) {
-                    if (i == begin) return false;
-                    if (i == -1) {
-                        i = array.length - 1;
-                    }
-                }
-                f = true;
-                result = (T) array[i--];
-                return true;
-            }
-        };
+    public Iterator<T> descendingIterator() {
+        return size == 0 ? Collections.emptyIterator() : new Itr(true);
     }
 
-    //  0  1  2  3
-    //           E
-    //  ------------
-    //     0  1  2
-    //     S
-    //  ------------
-    //    [4, 5, 6]
     @SuppressWarnings("unchecked")
-    public T push(T t) {
+    public T getLast() {
+        if (size == 0)
+            throw new NoSuchElementException();
+        return (T) array[tail];
+    }
+
+    @SuppressWarnings("unchecked")
+    public T peekLast() {
+        return size == 0 ? null : (T) array[tail];
+    }
+
+    @SuppressWarnings("unchecked")
+    public T addLast(T t) {
+        int end = tail;
         if(size < array.length) {
             size++;
         } else {
-            if (end == begin) {
-                begin++;
-                if (begin == array.length) {
-                    begin = 0;
-                }
+            int h = head;
+            if (end == h) {
+                head = ++h == array.length ? 0 : h;
             }
         }
 
         T orig = (T) array[end];
         array[end++] = t;
-        if(end == array.length) {
-            end = 0;
+        if((tail = end) == array.length) {
+            tail = 0;
         }
         return orig;
     }
 
-    //  0  1  2  3
-    //        E
-    //  ------------
-    //     0  1  2
-    //        S
-    //  ------------
-    //    [/, /, /]
     @SuppressWarnings("unchecked")
-    public T pop() {
+    public T removeLast() {
         if(size == 0)
             throw new NoSuchElementException();
-        size--;
 
-        int e = this.end;
-
-        if(e == 0) {
+        int e = tail;
+        if(e == 0)
             e = array.length;
-        }
 
         T val = (T) array[--e];
         array[e] = null;
 
-        if(e == begin) {
-            if(e == 0) {
-                begin = array.length - 1;
-            } else {
-                begin--;
+        if(--size == 0) {
+            head = tail = 0;
+        } else {
+            int h = head;
+            if (e == h) {
+                head = (e == 0 ? array.length : h) - 1;
             }
-        }
-        this.end = e;
-
-        if(size == 0) {
-            begin = end = 0;
+            tail = e;
         }
 
         return val;
     }
 
-    //  0  1  2  3
-    //           E
-    //  ------------
-    //     0  1  2
-    //     S
-    //  ------------
-    //    [4, 3, 2]
+    public T pollLast() {
+        return size == 0 ? null : removeLast();
+    }
+
     @SuppressWarnings("unchecked")
-    public T unshift(T t) {
-        if(size < array.length) {
+    public T getFirst() {
+        if (size == 0)
+            throw new NoSuchElementException();
+        return (T) array[head];
+    }
+
+    @SuppressWarnings("unchecked")
+    public T peekFirst() {
+        return size == 0 ? null : (T) array[head];
+    }
+
+    @SuppressWarnings("unchecked")
+    public T addFirst(T t) {
+        if(size < array.length)
             size++;
+
+        int h = head;
+        if(tail == 0) {
+            tail = array.length - 1;
+        }
+        if(tail == h) {
+            tail--;
         }
 
-        int b = begin;
-
-        if(end == 0) {
-            end = array.length - 1;
-        }
-        if(end == b) {
-            end--;
-        }
-
-        if(b == 0) {
-            begin = b = array.length - 1;
-        } else {
-            begin = --b;
-        }
-
-        T orig = (T) array[b];
-        array[b] = t;
-
+        head = h == 0 ? (h = array.length - 1) : --h;
+        T orig = (T) array[h];
+        array[h] = t;
         return orig;
     }
 
-    //     1  2  3
-    //     E
-    //  ------------
-    //     0  1  2
-    //     S
-    //  ------------
-    //    [/, /, /]
     @SuppressWarnings("unchecked")
-    public T shift() {
+    public T removeFirst() {
         if(size == 0)
             throw new NoSuchElementException();
-        size--;
 
-        T val = (T) array[begin];
-        array[begin++] = null;
+        int head = this.head;
+        T val = (T) array[head];
+        array[head++] = null;
 
-        if(begin == array.length)
-            begin = 0;
-
-        if(size == 0) {
-            begin = end = 0;
+        if(--size == 0) {
+            this.head = tail = 0;
+        } else {
+            // not using %
+            this.head = head == array.length ? 0 : head;
         }
 
         return val;
     }
 
+    public T pollFirst() {
+        return size == 0 ? null : removeFirst();
+    }
+
     public void clear() {
-        begin = end = size = 0;
-        Arrays.fill(array, null);
+        head = tail = size = 0;
+        for (int i = 0; i < array.length; i++) {
+            array[i] = null;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -279,8 +239,8 @@ public final class RingBuffer<T> implements Iterable<T> {
         return orig;
     }
 
-    public boolean remove(T entry) {
-        int i = indexOf(entry);
+    public boolean remove(Object o) {
+        int i = indexOf(o);
         if(i == -1)
             return false;
         remove(i);
@@ -288,33 +248,41 @@ public final class RingBuffer<T> implements Iterable<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public T remove(int index) {
-        T t = (T) array[index];
+    public T remove(int i) {
+        Object[] array = this.array;
+        T t = (T) array[i];
+        int tail = this.tail;
 
-        if(begin > end) {
+        if (head > tail) {
             /**
-             * E   S =>
+             *   E S =>
              * 0 1 2 3 4
              */
-            if(index > end && index < begin)
-                throw new IllegalStateException();
-            if(index > end) {
-                // 2, 3, or 4
-                // need move twice
-
+            if (i > tail) {
+                if (i < head)
+                    throw new IllegalStateException();
+                // i = 3:
+                // move 4 to 3
+                System.arraycopy(array, i + 1, array, i, array.length - i);
+                // move 0 to 4
+                array[array.length - 1] = array[0];
             }
-
+            // move 1 to 0
+            System.arraycopy(array, 1, array, 0, tail);
+            this.tail = (tail == 0 ? array.length : tail) - 1;
         } else {
-            if(index < begin || index > end)
+            if (i < head || i > tail)
                 throw new IllegalStateException();
             /**
-             *   S     E
+             *   S =>  E
              * 0 1 2 3 4
              */
-            if(end > index)
-                System.arraycopy(array, index + 1, array, index, end - index);
-            end--;
+            if (tail > i)
+                System.arraycopy(array, i + 1, array, i, tail - i);
+            this.tail = tail - 1;
         }
+        // clear ref
+        array[tail] = null;
 
         return t;
     }
@@ -344,11 +312,11 @@ public final class RingBuffer<T> implements Iterable<T> {
             sb.append(i).append(' ');
         }
         sb.append("\n  ");
-        for (int i = 0; i < begin; i++) {
+        for (int i = 0; i < head; i++) {
             sb.append("  ");
         }
         sb.append("S\n  ");
-        for (int i = 0; i < end; i++) {
+        for (int i = 0; i < tail; i++) {
             sb.append("  ");
         }
         return sb.append("E\n  ")

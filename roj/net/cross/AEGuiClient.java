@@ -33,13 +33,12 @@ import roj.io.NonblockingUtil;
 import roj.text.TextUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteWriter;
-import roj.util.FastLocalThread;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -49,13 +48,15 @@ import java.net.UnknownHostException;
 import static roj.net.cross.Util.PROTOCOL_VERSION;
 
 /**
- * Your description here
- *
  * @author Roj233
  * @version 0.1
  * @since 2021/9/11 2:00
  */
 public class AEGuiClient extends JFrame {
+    static {
+        AE_MSSKey.loadMSSCert();
+    }
+
     private final JButton        btnConnect;
     private final JCheckBox      chkSsl;
     private final JTextField     inpUrl;
@@ -116,11 +117,17 @@ public class AEGuiClient extends JFrame {
                 Util.out = System.out;
 
             Thread.currentThread().setName("Waiter");
-            client = new AEClient(cfg.getString("room"), cfg.getString("pass"), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), cfg.getBool("ssl"));
-            Thread runner = new FastLocalThread(client);
-            runner.setDaemon(true);
-            runner.setName("Client Thread");
-            runner.start();
+            client = new AEClient(address, cfg.getBool("ssl"), cfg.getString("room"), cfg.getString("pass"));
+            client.start();
+            try {
+                client.awaitLogin();
+                for (AEClient.PortMapEntry entry : client.portMap) {
+                    entry.enabled = true;
+                }
+                client.notifyPortMapModified();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 
             String title = cfg.containsKey("title") ? cfg.getString("title") : "AE客户端 v" + PROTOCOL_VERSION;
             InputStream stream = UIUtil.class.getClassLoader().getResourceAsStream("logo.png");
@@ -261,7 +268,6 @@ public class AEGuiClient extends JFrame {
         validate();
     }
 
-    static Thread   clientThread;
     static AEClient client;
 
     private void save(ActionEvent event) {
@@ -292,19 +298,7 @@ public class AEGuiClient extends JFrame {
             inpPort.setEnabled(true);
             inpUrl.setEnabled(true);
 
-            if(clientThread != null && clientThread.isAlive()) {
-                try {
-                    client.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                try {
-                    clientThread.join();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            clientThread = null;
+            client.shutdown();
             client = null;
         } else {
             String[] text = TextUtil.split(inpUrl.getText(), ':');
@@ -329,25 +323,17 @@ public class AEGuiClient extends JFrame {
                 return;
             }
 
-            int port;
+            client = new AEClient(address, chkSsl.isSelected(), inpHouse.getText(), inpPass.getText());
+            client.start();
             try {
-                port = Integer.parseInt(inpPort.getText());
-            } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this, "本地端口有误");
-                return;
-            }
-            try {
-                client = new AEClient(inpHouse.getText(), inpPass.getText(), address, new InetSocketAddress(InetAddress.getLoopbackAddress(), port), chkSsl.isSelected());
-            } catch (IOException e) {
+                client.awaitLogin();
+                for (AEClient.PortMapEntry entry : client.portMap) {
+                    entry.enabled = true;
+                }
+                client.notifyPortMapModified();
+            } catch (InterruptedException | IOException e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "证书错误/端口被占用");
-                return;
             }
-
-            Thread clientRunner = clientThread = new Thread(client);
-            clientRunner.setName("Client Thread");
-            clientRunner.setDaemon(true);
-            clientRunner.start();
 
             btnConnect.setText("断开");
 

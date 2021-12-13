@@ -40,6 +40,7 @@ import roj.math.MathUtils;
 import roj.opengl.text.FontTex;
 import roj.opengl.text.TextRenderer;
 import roj.opengl.vertex.VertexBuilder;
+import roj.reflect.TraceUtil;
 import roj.text.TextUtil;
 
 import javax.imageio.ImageIO;
@@ -357,7 +358,7 @@ public abstract class Game {
     protected void checkGLError(String msg) {
         int id = GL11.glGetError();
         if (id != 0) {
-            StackTraceElement[] es = new Throwable().getStackTrace();
+            StackTraceElement[] es = TraceUtil.getTraces(new Throwable());
             String name = GLU.gluErrorString(id);
             String err = msg + ": " + name + ": " + es[es.length - 2];
             if(!glErrors.contains(err)) {

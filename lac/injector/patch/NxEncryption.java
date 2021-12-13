@@ -25,17 +25,16 @@
  */
 package lac.injector.patch;
 
-import lac.client.Pa55w0rd;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
-import roj.text.crypt.SM4;
-import roj.util.ByteList;
+import roj.crypt.SM4;
 
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.CryptManager;
 
-import java.security.DigestException;
+import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 
 /**
@@ -64,14 +63,13 @@ class NxEncryption {
         this.verifyToken = buf.readByteArray();
         if (isMyCryptPacket) {
             SM4 sm4 = new SM4();
-            sm4.reset(SM4.SM4_DECRYPT | SM4.SM4_AUTO_PADDING | SM4.SM4_CBC);
-            sm4.setOption(SM4.SM4_CBC_IV, Pa55w0rd.getPassword());
-            sm4.setPassword(verifyToken);
-            ByteList out = new ByteList(key.length);
+            sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
+            sm4.setKey(verifyToken);
             try {
-                sm4.crypt(new ByteList(key), out);
-                key = out.toByteArray();
-            } catch (DigestException ignored) {}
+                sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
+            } catch (GeneralSecurityException e) {
+                e.printStackTrace();
+            }
         }
         this.publicKey = CryptManager.decodePublicKey(key);
     }
@@ -83,14 +81,13 @@ class NxEncryption {
         byte[] key = buf.readByteArray();
         this.verifyToken = buf.readByteArray();
         SM4 sm4 = new SM4();
-        sm4.reset(SM4.SM4_DECRYPT | SM4.SM4_AUTO_PADDING | SM4.SM4_CBC);
-        sm4.setOption(SM4.SM4_CBC_IV, Pa55w0rd.getPassword());
-        sm4.setPassword(verifyToken);
-        ByteList out = new ByteList(key.length);
+        sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
+        sm4.setKey(verifyToken);
         try {
-            sm4.crypt(new ByteList(key), out);
-            key = out.toByteArray();
-        } catch (DigestException ignored) {}
+            sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+        }
         this.publicKey = CryptManager.decodePublicKey(key);
     }
 }

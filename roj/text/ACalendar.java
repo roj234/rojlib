@@ -25,7 +25,6 @@
  */
 package roj.text;
 
-import roj.collect.LongBitSet;
 import roj.math.MathUtils;
 
 import javax.annotation.Nullable;
@@ -300,8 +299,6 @@ public class ACalendar {
         sb.append(number);
     }
 
-    private static final LongBitSet PATTERN = LongBitSet.from("LYydjlwNmntaAgGhHisOPcU");
-
     public String formatDate(String format, long stamp) {
         int[] date = get(stamp);
         StringBuilder sb = new StringBuilder(format.length());
@@ -424,7 +421,7 @@ public class ACalendar {
         for (int i = 0; i < TIME_DT.length; i++) {
             int time = TIME_DT[i];
             if (diff < time) {
-                return flag ? TIME_NAME[i] : new StringBuilder().append(Math.round(val)).append(TIME_NAME[i]).toString();
+                return flag ? TIME_NAME[i] : Math.round(val) + TIME_NAME[i];
             }
             int dt = TIME_FACTOR[i];
             flag = dt == 1;

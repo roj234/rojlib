@@ -108,21 +108,14 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
             try {
                 key = watcher.take();
             } catch (InterruptedException e) {
-                System.out.println("ProjectWatcher.pause()");
                 pause = true;
-                // noinspection all
-                Thread.interrupted();
                 LockSupport.park();
-                // noinspection all
-                Thread.interrupted();
                 pause = false;
-                System.out.println("ProjectWatcher.unpause()");
                 continue;
             }
 
             via.key = key;
             X csm = actions.find(via);
-            System.out.println("ProjectWatcher.onEvent(): " + key.watchable());
 
             x:
             for (WatchEvent<?> event : key.pollEvents()) {
@@ -214,6 +207,7 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
 
         do {
             LockSupport.unpark(t);
+            LockSupport.parkNanos(1000L);
         } while (pause);
     }
 
@@ -237,7 +231,6 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         while (pause) {
             LockSupport.unpark(t);
         }
-
     }
 
     public void register(Project proj) throws IOException {
@@ -253,28 +246,27 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
         if(arr != null) {
             for (X x : arr)
                 x.s.clear();
-            return;
+        } else {
+            arr = new X[2];
+            WatchKey key = proj.resource.toPath().register(watcher, new WatchEvent.Kind<?>[]{
+                   StandardWatchEventKinds.ENTRY_CREATE,
+                   StandardWatchEventKinds.ENTRY_DELETE,
+                   StandardWatchEventKinds.ENTRY_MODIFY
+            }, ExtendedWatchEventModifier.FILE_TREE);
+            actions.add(arr[0] = new X(proj.name, key, 0));
+            key = proj.source.toPath().register(watcher, new WatchEvent.Kind<?>[]{
+                   StandardWatchEventKinds.ENTRY_CREATE,
+                   StandardWatchEventKinds.ENTRY_DELETE,
+                   StandardWatchEventKinds.ENTRY_MODIFY
+            }, ExtendedWatchEventModifier.FILE_TREE);
+            actions.add(arr[1] = new X(proj.name, key, 1));
+
+            listeners.put(proj.name, arr);
         }
-
-        arr = new X[2];
-        WatchKey key = proj.resource.toPath().register(watcher, new WatchEvent.Kind<?>[]{
-                StandardWatchEventKinds.ENTRY_CREATE,
-                StandardWatchEventKinds.ENTRY_DELETE,
-                StandardWatchEventKinds.ENTRY_MODIFY
-        }, ExtendedWatchEventModifier.FILE_TREE);
-        actions.add(arr[0] = new X(proj.name, key, 0));
-        key = proj.source.toPath().register(watcher, new WatchEvent.Kind<?>[]{
-                StandardWatchEventKinds.ENTRY_CREATE,
-                StandardWatchEventKinds.ENTRY_DELETE,
-                StandardWatchEventKinds.ENTRY_MODIFY
-        }, ExtendedWatchEventModifier.FILE_TREE);
-        actions.add(arr[1] = new X(proj.name, key, 1));
-
-        listeners.put(proj.name, arr);
 
         do {
             LockSupport.unpark(t);
-            System.out.println("ProjectWatcher.asyncUnpause()");
+            LockSupport.parkNanos(1000L);
         } while (pause);
     }
 }

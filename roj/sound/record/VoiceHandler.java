@@ -25,16 +25,11 @@
  */
 package roj.sound.record;
 
-import roj.util.ByteList;
-
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/12/19 22:56
  */
-@FunctionalInterface
 public interface VoiceHandler {
-    void handle(ByteList buffer);
+    void handle(byte[] buffer, int length);
 }

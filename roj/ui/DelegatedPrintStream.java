@@ -25,14 +25,6 @@
  */
 package roj.ui;
 
-/**
- * No description provided
- *
- * @author Roj234
- * @version 0.1
- * @since 2021/5/29 20:45
- */
-
 import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
@@ -43,6 +35,11 @@ import javax.annotation.Nonnull;
 import java.io.PrintStream;
 import java.io.UTFDataFormatException;
 
+/**
+ * @author Roj234
+ * @version 0.1
+ * @since 2021/5/29 20:45
+ */
 public abstract class DelegatedPrintStream extends PrintStream {
     protected final CharList sb = new CharList();
     protected final int MAX;

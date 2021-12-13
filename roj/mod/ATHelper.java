@@ -27,20 +27,14 @@
 package roj.mod;
 
 import roj.asm.AccessTransformer;
-import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.io.IOUtil;
-import roj.io.ZipUtil;
+import roj.io.MutableZipFile;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.TMP_DIR;
@@ -53,42 +47,52 @@ import static roj.mod.Shared.TMP_DIR;
  * @since 2021/5/30 19:59
  */
 public final class ATHelper {
-    private static final List<ZipFile>       libraries = new ArrayList<>();
-    private static final Map<String, byte[]> classes   = new MyHashMap<>();
+    static final class Library {
+        final MutableZipFile source;
+        final long lastModify;
+
+        Library(File file) throws IOException {
+            this.source = new MutableZipFile(file, MutableZipFile.FLAG_READ_ATTR);
+            lastModify = file.lastModified();
+        }
+    }
+
+    private static final List<Library> libraries = new ArrayList<>();
 
     private File binJar;
     private ByteList atCfg;
 
     public void init(String name, ByteList atCfg, Map<String, Collection<String>> map) throws IOException {
-        if(libraries.isEmpty()) {
-            initZip(new File(BASE, "class"));
-            Shared.load_S2M_Map();
+        Shared.load_S2M_Map();
+        if (libraries.isEmpty()) {
+            for (File path : new File(BASE, "class").listFiles()) {
+                String fn = path.getName().trim().toLowerCase();
+                if (!fn.startsWith("[noread]") && (fn.endsWith(".jar") || fn.endsWith(".zip")))
+                    libraries.add(new Library(path));
+            }
         }
 
         this.atCfg = atCfg;
-        File binJar = this.binJar = new File(TMP_DIR, "at-" + atCfg.hashCode() + ".jar");
-        binJar.deleteOnExit();
+        File binJar = this.binJar = new File(TMP_DIR, "at-" + name.hashCode() + ".jar");
 
         MyHashSet<String> tmp = new MyHashSet<>();
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(binJar));
+        MutableZipFile mzf = new MutableZipFile(binJar);
+        mzf.clear();
         for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
-            String name1 = entry.getKey().replace('.', '/') + ".class";
-            ZipEntry ze = new ZipEntry(name1);
-            zos.putNextEntry(ze);
+            name = entry.getKey().replace('.', '/') + ".class";
 
             tmp.clear();
             for (String s : entry.getValue()) {
                 tmp.add(Shared.srg2mcp.getOrDefault(s, s));
             }
-            byte[] transform = transform(name1, tmp);
+            byte[] transform = transform(name, tmp);
             if(transform == null) {
                 CmdUtil.warning("无法转换 " + entry.getKey());
-            } else {
-                zos.write(transform);
-            }
-            zos.closeEntry();
+            } else
+                mzf.setFileData(name, new ByteList(transform));
         }
-        ZipUtil.close(zos);
+        mzf.store();
+        mzf.close();
     }
 
     public ByteList getAtCfgBytes() {
@@ -100,41 +104,58 @@ public final class ATHelper {
     }
 
     public static void gc() throws IOException {
-        classes.clear();
-        for (ZipFile zf : libraries) {
-            zf.close();
+        for (int i = 0; i < libraries.size(); i++) {
+            libraries.get(i).source.close();
         }
         libraries.clear();
     }
 
-    static byte[] transform(String name, Set<String> names) {
-        byte[] is = classes.get(name);
-        if(is == null) {
-            for (int i = 0; i < libraries.size(); i++) {
-                ZipFile zf = libraries.get(i);
-                ZipEntry ze = zf.getEntry(name);
-                if(ze != null) {
+    static byte[] transform(String name, Set<String> names) throws IOException {
+        byte[] is = null;
+        IOException ex = null;
+        for (int i = 0; i < libraries.size(); i++) {
+            Library library = libraries.get(i);
+            MutableZipFile zf = library.source;
+            if (zf.file.lastModified() != library.lastModify) {
+                try {
+                    zf.close();
+                } catch (IOException e) {
+                    if (ex == null)
+                        ex = e;
+                    else
+                        ex.addSuppressed(e);
+                }
+
+                if (zf.file.isFile()) {
                     try {
-                        classes.put(name, is = IOUtil.read(zf.getInputStream(ze)));
-                        break;
+                        libraries.set(i, new Library(zf.file));
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        libraries.remove(i--);
+                        if (ex == null)
+                            ex = e;
+                        else
+                            ex.addSuppressed(e);
                     }
+                } else {
+                    libraries.remove(i--);
                 }
             }
+
+            try {
+                is = zf.getFileData(name);
+                if (is != null)
+                    break;
+            } catch (IOException e) {
+                if (ex != null)
+                    e.addSuppressed(ex);
+                throw e;
+            }
         }
+        if (ex != null)
+            ex.printStackTrace();
         if(is != null) {
             is = AccessTransformer.openSome(is, names);
         }
         return is;
-    }
-
-    static void initZip(File cp) throws IOException {
-        for (File path : cp.listFiles()) {
-            String name = path.getName();
-            if (name.startsWith("[noread]") || !(name.endsWith(".jar") || name.endsWith(".zip")))
-                continue;
-            libraries.add(new ZipFile(path));
-        }
     }
 }

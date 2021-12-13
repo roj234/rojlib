@@ -27,9 +27,9 @@ package roj.net.tcp.serv.response;
 
 import roj.io.ByteBufferOutputStream;
 import roj.net.NetworkUtil;
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.serv.util.ReusableGZOutput;
 import roj.net.tcp.util.Shared;
-import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
 
@@ -68,7 +68,7 @@ public class GZipFileResponse extends FileResponse {
 
         ByteBuffer buf = channel.buffer();
         if (buf.hasRemaining()) {
-            channel.writeDirect(buf);
+            channel.write(buf);
             return true;
         }
 
@@ -95,7 +95,7 @@ public class GZipFileResponse extends FileResponse {
             }
 
             buf.flip();
-            channel.writeDirect(buf);
+            channel.write(buf);
         }
 
         return read > 0;

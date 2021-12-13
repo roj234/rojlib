@@ -26,13 +26,10 @@
 package ilib.api;
 
 import roj.math.MathUtils;
-import roj.util.MyRandom;
 
 import java.util.Random;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51
@@ -41,7 +38,7 @@ public class RandomEntry {
     public final int min, add;
     public final double[] cdf;
 
-    public static final Random rand = new MyRandom();
+    public static final Random rand = new Random();
 
     public RandomEntry(int min, int max, double[] factor) {
         this.min = min; //1

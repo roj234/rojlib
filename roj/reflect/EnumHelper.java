@@ -38,32 +38,28 @@ import java.util.*;
 /**
  * 动态修改Enum <BR>
  *     推荐preload
- */
-/**
- * No description provided
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/2 8:22
  */
 public final class EnumHelper<E extends Enum<E>> {
-    private static final Helper hlp;
+    private static final H H = DirectAccessor.builder(H.class).access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null).build();
     private static final IFieldAccessor ordinalAcc;
 
-    interface Helper {
+    interface H {
         Map<String, ?> getEnumConstantDirectory(Class<? extends Enum<?>> clazz);
     }
 
     static {
-        hlp = DirectAccessor.builder(Helper.class)
-                //.access(Enum.class, "ordinal", null, "setOrdinal")
-                .access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null)
-        .build();
+        IFieldAccessor t;
         try {
-            ordinalAcc = ReflectionUtils.accessField(Enum.class.getDeclaredField("ordinal"));
+            t = ReflectionUtils.access(Enum.class.getDeclaredField("ordinal"));
         } catch (NoSuchFieldException e) {
-            throw new ExceptionInInitializerError(e);
+            Helpers.athrow(e);
+            t = null;
         }
+        ordinalAcc = t;
     }
 
     private final Class<E> clazz;
@@ -167,7 +163,7 @@ public final class EnumHelper<E extends Enum<E>> {
         if (values == null) {
             for (Field field : fields) {
                 if (field.getName().equals(valueId) && (field.getModifiers() & AccessFlag.STATIC) != 0) {
-                    return values = ReflectionUtils.accessField(field);
+                    return values = ReflectionUtils.access(field);
                 }
             }
         }
@@ -243,7 +239,7 @@ public final class EnumHelper<E extends Enum<E>> {
 
         E cast = clazz.cast(cst.newInstance(param));
 
-        Map<String, ?> obj = hlp.getEnumConstantDirectory(clazz);
+        Map<String, ?> obj = H.getEnumConstantDirectory(clazz);
         if(obj != null) {
             Map<String, E> map = Helpers.cast(obj);
             map.put(value, cast);

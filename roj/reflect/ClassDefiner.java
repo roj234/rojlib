@@ -37,8 +37,6 @@ import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/16 1:31

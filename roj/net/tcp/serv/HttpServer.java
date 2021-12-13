@@ -26,25 +26,32 @@
 package roj.net.tcp.serv;
 
 import roj.collect.TimedHashMap;
+import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.io.NonblockingUtil;
-import roj.net.tcp.TCPServer;
+import roj.net.SecureUtil;
+import roj.net.ssl.EngineAllocator;
+import roj.net.ssl.ServerSslConf;
+import roj.net.tcp.PlainSocket;
+import roj.net.tcp.SSLSocket;
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.serv.util.ChannelRouter;
-import roj.net.tcp.util.InsecureSocket;
-import roj.net.tcp.util.SecureSocket;
-import roj.net.tcp.util.WrappedSocket;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class HttpServer extends TCPServer {
+public class HttpServer implements Runnable {
     public static final boolean THROTTLING_CHECK_ENABLED = false;
     public static final TimedHashMap<String, AtomicInteger> CONNECTING_ADDRESSES  = new TimedHashMap<>(1000);
 
+    protected final ServerSocket socket;
+    protected final EngineAllocator ssl;
     protected final Router router;
 
     public HttpServer(int port, int maxConnection, Router router, String keyStoreFile, char[] keyPassword) throws IOException, GeneralSecurityException {
@@ -52,7 +59,8 @@ public class HttpServer extends TCPServer {
     }
 
     public HttpServer(InetSocketAddress address, int maxConnection, Router router, String keyStoreFile, char[] keyPassword) throws IOException, GeneralSecurityException {
-        super(address, maxConnection, keyStoreFile, keyPassword);
+        this.ssl = enableSSL(keyStoreFile, keyPassword);
+        this.socket = socket(address, maxConnection);
         this.router = router;
     }
 
@@ -61,18 +69,55 @@ public class HttpServer extends TCPServer {
     }
 
     public HttpServer(InetSocketAddress address, int maxConnection, Router router) throws IOException {
-        super(address, maxConnection);
+        this.ssl = null;
+        this.socket = socket(address, maxConnection);
         this.router = router;
     }
 
+    protected static ServerSocket socket(InetSocketAddress address, int maxConnection) throws IOException {
+        ServerSocket socket = new ServerSocket();
+        socket.setReuseAddress(true);
+        socket.bind(address, maxConnection);
+        return socket;
+    }
+
+    protected static EngineAllocator enableSSL(String keyStore, char[] password) throws IOException, GeneralSecurityException {
+        return SecureUtil.getSslFactory(new ServerSslConf(keyStore, password));
+    }
+
+    public final ServerSocket getSocket() {
+        return socket;
+    }
+
+    protected TaskHandler getTaskHandler() {
+        final int cpus = Runtime.getRuntime().availableProcessors();
+        return new TaskPool(cpus >> 1, cpus << 1, 128);
+    }
+
     @Override
+    public void run() {
+        TaskHandler handler = getTaskHandler();
+        while (true) {
+            try {
+                Socket c = socket.accept();
+                c.setReuseAddress(true);
+                c.setKeepAlive(true);
+
+                handler.pushTask(getTaskFor(c));
+            } catch (IOException e) {
+                if(e.getMessage().contains("close")) return;
+                e.printStackTrace();
+            }
+        }
+    }
+
     protected ITask getTaskFor(Socket client) throws IOException {
         FileDescriptor fd = NonblockingUtil.fd(client);
 
         WrappedSocket cio = (
                 ssl != null ?
-                        SecureSocket.get(client, fd, ssl, false) :
-                        new InsecureSocket(client, fd)
+                        SSLSocket.get(client, fd, ssl, false) :
+                        new PlainSocket(client, fd)
         );
 
         return new ChannelRouter(cio, router);

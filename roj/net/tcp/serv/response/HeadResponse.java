@@ -26,7 +26,7 @@
 package roj.net.tcp.serv.response;
 
 import roj.collect.MyHashMap;
-import roj.net.tcp.util.WrappedSocket;
+import roj.net.tcp.WrappedSocket;
 import roj.text.CharList;
 import roj.text.TextUtil;
 

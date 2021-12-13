@@ -26,8 +26,6 @@
 package roj.util;
 
 /**
- * Your description here
- *
  * @author Roj233
  * @version 0.1
  * @since 2021/9/13 12:48

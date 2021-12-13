@@ -28,9 +28,9 @@ package roj.net.tcp.client;
 import roj.config.ParseException;
 import roj.math.MathUtils;
 import roj.math.Version;
+import roj.net.tcp.Notify;
 import roj.net.tcp.util.HTTPHeaderLexer;
 import roj.net.tcp.util.Headers;
-import roj.net.tcp.util.Notify;
 import roj.net.tcp.util.Shared;
 
 /**

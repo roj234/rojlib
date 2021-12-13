@@ -51,11 +51,6 @@ public class Player implements Closeable, AutoCloseable {
 
     public final IAudio audio;
 
-    /**
-     * 用指定的音频输出对象构造一个PlayBack对象。
-     *
-     * @param audio 指定的音频输出 若指定为 <b>null</b> 则只解码不播放输出。
-     */
     public Player(IAudio audio) {
         this(audio, false);
     }
@@ -69,11 +64,6 @@ public class Player implements Closeable, AutoCloseable {
         cutPos = -1;
     }
 
-    /**
-     * 暂停或继续此文件播放。这相当于一个单稳态的触发开关，第一次调用该方法暂停播放，第二次调用继续播放，以此类推。
-     *
-     * @return 返回当前状态。处于暂停状态返回true，否则返回false。
-     */
     public boolean pause() {
         audio.start(paused);
 
@@ -87,9 +77,6 @@ public class Player implements Closeable, AutoCloseable {
         return paused;
     }
 
-    /**
-     * 终止此文件播放。
-     */
     public void stop() {
         eof = true;
         synchronized (this) {
@@ -97,9 +84,6 @@ public class Player implements Closeable, AutoCloseable {
         }
     }
 
-    /**
-     * 关闭此文件播放并清除关联的资源。
-     */
     public void close() throws IOException {
         tag.clear();
         header.reset();
@@ -119,9 +103,6 @@ public class Player implements Closeable, AutoCloseable {
         return paused;
     }
 
-    /**
-     * 打开文件并解析文件信息。
-     */
     public boolean open(Source in) throws IOException {
         maxOff = off = 0;
         paused = eof = false;
@@ -186,28 +167,15 @@ public class Player implements Closeable, AutoCloseable {
         return tagSize;
     }
 
-    /**
-     * 获取帧头信息。
-     *
-     * @return 取帧 {@link Header} 对象。
-     * @see Header
-     */
     public Header getHeader() {
         return header;
     }
 
-    /**
-     * 获取文件的标签信息。
-     *
-     * @return 文件的标签信息
-     */
     public ID3Tag getID3Tag() {
         return tag;
     }
 
     /**
-     * 解码已打开的文件。
-     *
      * @return 成功播放指定的文件返回true，否则返回false。
      */
     public boolean decode() {

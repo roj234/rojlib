@@ -88,14 +88,7 @@ public abstract class MathUtils {
         return val < min ? min : val > max ? max : val;
     }
 
-    public static int max(int... ints) {
-        int i = 0, v = Integer.MIN_VALUE, cur;
-        while (i < ints.length)
-            if((cur = ints[i++]) > v)
-                v = cur;
-        return v;
-    }
-
+    @Deprecated
     public static int min(int... ints) {
         int i = 0, v = Integer.MAX_VALUE, cur;
         while (i < ints.length)
@@ -335,6 +328,10 @@ public abstract class MathUtils {
         }
 
         return totalDis;
+    }
+
+    public static boolean nearEps(double d1, double d2, double diff) {
+        return Math.abs(d1 - d2) <= diff;
     }
 
     /**

@@ -26,50 +26,28 @@
 package roj.text;
 
 import roj.io.IOUtil;
-import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import javax.annotation.Nonnull;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * Simple Line Reader
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/27 0:12
  */
-public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<String> {
+public class SimpleLineReader implements Iterable<String>, AutoCloseable, Iterator<String> {
     private final List<String> lines;
     private int index;
 
-    private InputStream stream;
-
-    /**
-     * 简单的LineReader
-     *
-     * @param stream InputStream
-     */
     public SimpleLineReader(InputStream stream) throws IOException {
-        this(readAsUTF(stream), true);
-        this.stream = stream;
+        this(IOUtil.readUTF(stream), true);
     }
 
     public SimpleLineReader(InputStream stream, boolean cleanEmptyLines) throws IOException {
-        this(readAsUTF(stream), cleanEmptyLines);
-        this.stream = stream;
-    }
-
-    private static CharSequence readAsUTF(InputStream stream) throws IOException {
-        ByteList in = IOUtil.getSharedByteBuf().readStreamFully(stream);
-        CharList out = new CharList((in.pos() / 3) << 1);
-        ByteReader.decodeUTF(-1, out, in);
-        in.clear();
-        return out;
+        this(IOUtil.readUTF(stream), cleanEmptyLines);
     }
 
     /**
@@ -143,10 +121,6 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
         return --line == 0 ? prev == i ? "" : keys.subSequence(prev, i).toString() : null;
     }
 
-    public SimpleLineReader(List<String> list) {
-        this.lines = list;
-    }
-
     public int index() {
         return this.index;
     }
@@ -181,10 +155,8 @@ public class SimpleLineReader implements Iterable<String>, Closeable, Iterator<S
     }
 
     @Override
-    public void close() throws IOException {
-        if (this.stream != null)
-            this.stream.close();
-    }
+    @Deprecated
+    public void close() {}
 
     @Override
     public boolean hasNext() {

@@ -1,0 +1,219 @@
+/*
+ * This file is a part of MI
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+package roj.net.tcp;
+
+import roj.io.IOUtil;
+import roj.io.NonblockingUtil;
+import roj.net.tcp.util.Shared;
+
+import java.io.FileDescriptor;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+
+public class PlainSocket implements WrappedSocket {
+    public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
+
+    Socket socket;
+    FileDescriptor fd;
+
+    ByteBuffer rBuf, wBuf;
+
+    public PlainSocket(Socket socket, FileDescriptor fd) {
+        this.socket = socket;
+        this.fd = fd;
+        this.rBuf = ByteBuffer.allocateDirect(4096);
+        this.wBuf = EMPTY;
+    }
+
+    @Override
+    public FileDescriptor fd() {
+        return fd;
+    }
+
+    @Override
+    public Socket socket() {
+        return socket;
+    }
+
+    @Override
+    public boolean handShake() throws IOException {
+        return true;
+    }
+
+    @Override
+    public int read() throws IOException {
+        return read(65536);
+    }
+
+    @Override
+    public int read(int max) throws IOException {
+        if(socket.isClosed())
+            return -1;
+
+        ByteBuffer buf = this.rBuf;
+        if (!buf.hasRemaining()) {
+            buf = expandReadBuffer(buf.capacity() << 1);
+        }
+
+        if(max >= 0) buf.limit(Math.min(buf.position() + max, buf.capacity()));
+        int read;
+        try {
+            do {
+                read = NonblockingUtil.normalize(
+                        NonblockingUtil.readToNativeBuffer(fd, buf,
+                                                           NonblockingUtil.SOCKET_FD));
+            } while (read == -3 && !socket.isClosed());
+        } finally {
+            buf.limit(buf.capacity());
+        }
+        return read;
+    }
+
+    ByteBuffer expandReadBuffer(int cap) {
+        ByteBuffer cur = rBuf;
+        ByteBuffer next = ByteBuffer.allocateDirect(cap);
+        cur.flip();
+        next.put(cur);
+        IOUtil.clean(cur);
+        return rBuf = next;
+    }
+
+    @Override
+    public ByteBuffer buffer() {
+        return rBuf;
+    }
+
+    @Override
+    public int write(ByteBuffer src) throws IOException {
+        if(socket.isClosed())
+            return -1;
+        if (!dataFlush()) return 0;
+
+        ByteBuffer tmp;
+        if (!src.isDirect()) {
+            if (!src.hasArray()) {
+                if (wBuf.capacity() < src.remaining())
+                    wBuf = ByteBuffer.allocate(src.remaining());
+                else
+                    wBuf.clear();
+                wBuf.put(src).flip();
+                tmp = wBuf;
+            } else {
+                tmp = src;
+            }
+        } else {
+            tmp = null;
+        }
+
+        int w;
+        do {
+            if (tmp != null) {
+                w = NonblockingUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(),
+                                           NonblockingUtil.SOCKET_FD);
+                if (w > 0) {
+                    tmp.position(tmp.position() + w);
+                }
+            } else {
+                w = NonblockingUtil.normalize(
+                        NonblockingUtil.writeFromNativeBuffer(fd, src,
+                                              NonblockingUtil.SOCKET_FD));
+            }
+        } while (w == -3 && !socket.isClosed());
+
+        return w;
+    }
+
+    @Override
+    public int write(InputStream src, int max) throws IOException {
+        if(socket.isClosed())
+            return -1;
+        if (!dataFlush()) return 0;
+
+        int cap = Math.min(Shared.WRITE_MAX, max);
+        if (wBuf.capacity() < cap)
+            wBuf = ByteBuffer.allocate(cap);
+        else
+            wBuf.clear();
+        int len = src.read(wBuf.array());
+        if (len <= 0)
+            return len;
+        wBuf.limit(len);
+
+        int w;
+        do {
+            w = NonblockingUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(),
+                                       NonblockingUtil.SOCKET_FD);
+            if (w > 0) {
+                wBuf.position(wBuf.position() + w);
+            }
+        } while (w == -3 && !socket.isClosed());
+        return w;
+    }
+
+    @Override
+    public boolean dataFlush() throws IOException {
+        if (wBuf.hasRemaining()) {
+            int w;
+            do {
+                w = NonblockingUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(), NonblockingUtil.SOCKET_FD);
+                if (w > 0)
+                    wBuf.position(wBuf.position() + w);
+            } while (w == -3 && !socket.isClosed());
+            if (w < 0)
+                socket.close();
+        }
+        return !wBuf.hasRemaining();
+    }
+
+    @Override
+    public boolean shutdown() throws IOException {
+        if (!dataFlush()) return false;
+        try {
+            socket.shutdownInput();
+        } catch (IOException ignored) {}
+        try {
+            socket.shutdownOutput();
+        } catch (IOException ignored) {}
+        return true;
+    }
+
+    @Override
+    public void close() throws IOException {
+        socket.close();
+    }
+
+    @Override
+    public void reuse() throws IOException {
+        rBuf.clear();
+    }
+
+    @Override
+    public String toString() {
+        return "WSocket{" + socket.getRemoteSocketAddress() + '}';
+    }
+}

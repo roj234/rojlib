@@ -29,46 +29,20 @@ import roj.collect.Int2IntBiMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.TrieTree;
-import roj.io.IOUtil;
-import roj.management.SystemInfo;
 
 import javax.annotation.Nullable;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/9/30 20:51
  */
 public class JPinyin {
     public static final boolean DEBUG = false;
-
-    public static void main(String[] args) throws IOException {
-        //System.out.println(SystemInfo.getMemoryUsage());
-        long t = System.currentTimeMillis();
-        long mem = SystemInfo.getMemoryUsed();
-        JPinyin pinyin = new JPinyin(IOUtil.readUTF(new FileInputStream(args[0])), IOUtil.readUTF(new FileInputStream(args[1])), IOUtil.readUTF(new FileInputStream(args[2])), IOUtil.readUTF(new FileInputStream(args[3])), 1);
-        System.out.println("加载时间: " + (System.currentTimeMillis() - t) + "ms");
-        System.out.println("占用内存: " + ((SystemInfo.getMemoryUsed() - mem) >> 10) + "KB");
-
-        System.out.print("拼音： ");
-        System.out.println(pinyin.toPinyin(args[4]));
-        System.out.print("拼音忽略： ");
-        System.out.println(pinyin.toPinyin(args[4], new StringBuilder(), 8));
-        System.out.print("简转繁： ");
-        System.out.println(args[4] = pinyin.toTraditionalChinese(args[4]));
-        System.out.print("繁转简： ");
-        System.out.println(pinyin.toSimplifiedChinese(args[4]));
-
-        //System.out.println(SystemInfo.getMemoryUsage());
-    }
 
     protected final IntMap<String> charYin;
     protected final TrieTree<String> wordYin, wordS2T, wordT2S;

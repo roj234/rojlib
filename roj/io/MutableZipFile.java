@@ -15,7 +15,10 @@ import roj.util.EmptyArrays;
 import javax.annotation.Nonnull;
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileChannel.MapMode;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
@@ -65,8 +68,8 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     static final int MAX_INFLATER_SIZE = 16;
 
     public static final int FLAG_KILL_EXT = 1;
-    public static final int FLAG_VERIFY = 2;
-    public static final int FLAG_ONLY_READ_LOC = 4;
+    public static final int FLAG_VERIFY    = 2;
+    public static final int FLAG_READ_ATTR = 4;
 
     public MutableZipFile(File file) throws IOException {
         this(file, Deflater.DEFAULT_COMPRESSION, FLAG_KILL_EXT | FLAG_VERIFY, 0, StandardCharsets.UTF_8);
@@ -98,18 +101,23 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         crc = new CRC32();
         flags = (byte) flag;
         this.charset = charset;
-        try {
-            readInternal();
-        } catch (EOFException e) {
-            ZipException ze = (ZipException) new ZipException(
-                    "Unexpected EOF at " + zip.getFilePointer()).initCause(e);
-            zip.close();
-            throw ze;
-        } catch (IOException e) {
-            zip.close();
-            throw e;
+        if (zip.length() > 0) {
+            try {
+                if ((flags & FLAG_READ_ATTR) != 0) readTail();
+                else readHead();
+            } catch (EOFException e) {
+                ZipException ze = (ZipException) new ZipException("Unexpected EOF at " + zip.getFilePointer()).initCause(e);
+                zip.close();
+                throw ze;
+            } catch (IOException e) {
+                zip.close();
+                throw e;
+            }
+        } else {
+            zip.setLength(22);
+            zip.writeInt(HEADER_EOF);
         }
-        if((flag & (FLAG_VERIFY | FLAG_ONLY_READ_LOC)) == FLAG_VERIFY)
+        if((flag & (FLAG_VERIFY | FLAG_READ_ATTR)) == FLAG_VERIFY)
             verify();
     }
 
@@ -136,7 +144,43 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
     }
 
-    private void readInternal() throws IOException {
+    private void readTail() throws IOException {
+        MappedByteBuffer mb = zip.getChannel().map(MapMode.READ_ONLY, Math.max(zip.length() - 66600, 0),
+                                              Math.min(66600, zip.length()));
+        mb.order(ByteOrder.BIG_ENDIAN);
+        int pos = mb.capacity();
+        CharList out = new CharList();
+        while (pos > 0) {
+            if ((mb.get(--pos) & 0xFF) == 'P') {
+                if (mb.getInt(pos) == HEADER_EOF) {
+                    IOUtil.clean(mb);
+                    zip.seek(Math.max(zip.length() - 66600, 0) + pos + 4);
+
+                    readEOF(out);
+                    zip.seek(eof.cDirOffset);
+                    long len = zip.length();
+                    while (zip.getFilePointer() < len) {
+                        int header = zip.readInt();
+                        switch (header) {
+                            case HEADER_EOF:
+                                return;
+                            case HEADER_ATTRIBUTE:
+                                readAttr(out);
+                                break;
+                            default:
+                                throw new ZipException("Unexpected ZIP Header: " + Integer.toHexString(header));
+                        }
+                    }
+                }
+            }
+        }
+        IOUtil.clean(mb);
+        zip.seek(0);
+        readHead();
+        //throw new ZipException("Could not find EOF header in last 66600 bytes");
+    }
+
+    private void readHead() throws IOException {
         CharList out = new CharList();
 
         long len = zip.length();
@@ -148,7 +192,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     readEOF(out);
                     break cyl;
                 case HEADER_ATTRIBUTE:
-                    if ((flags & FLAG_ONLY_READ_LOC) != 0)
+                    if ((flags & FLAG_READ_ATTR) != 0)
                         break cyl;
                     readAttr(out);
                     break;
@@ -172,7 +216,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         int cp = /*entry.compressMethod =*/ (buf[4] & 0xFF) | (buf[5] & 0xFF) << 8;
         int cSize = /*entry.cSize =*/ (buf[14] & 0xFF) | (buf[15] & 0xFF) << 8 | (buf[16] & 0xFF) << 16 | (buf[17] & 0xFF) << 24;
 
-        if ((flags & FLAG_ONLY_READ_LOC) != 0) {
+        if ((flags & FLAG_READ_ATTR) != 0) {
             Attr attr = entry.attr = new Attr();
             attr.cSize = cSize;
             attr.uSize = buf[18] | buf[19] << 8 | buf[20] << 16 | buf[21] << 24;
@@ -318,11 +362,6 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             //out.clear();
         //}
 
-        EFile file = entries.get(/*entry.name*/name);
-        if(file == null)
-            throw new ZipException("FileNode " + name + " is null");
-        file.attr = entry;
-
         if(extraLen > 0) {
             boolean checkZIP64 = entry.cSize == (int)U32_MAX || entry.uSize == (int)U32_MAX || fileHeader == (int)U32_MAX;
             if (!checkZIP64) {
@@ -335,6 +374,19 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     fileHeader = t;
             }
         }
+
+        EFile file;
+        if ((flags & FLAG_READ_ATTR) != 0) {
+            file = new EFile();
+            file.name = name;
+            file.offset = fileHeader + 30 + nameLen;
+            entries.put(name, file);
+        } else {
+            file = entries.get(/*entry.name*/name);
+            if(file == null)
+                throw new ZipException("FileNode " + name + " is null");
+        }
+        file.attr = entry;
 
         if(fileHeader != file.startPos()) {
             throw new ZipException(file.name + " offset mismatch: req " + fileHeader + " computed " + file.startPos());
@@ -392,7 +444,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         if (file.attr.uSize > MAXIMUM_BYTE_ARRAY_LENGTH)
             throw new ZipException("Compressed size >= 2Gbytes(1 << 30) limitation, streaming method is required!");
 
-        return getFileData(file, new ByteList((int) file.attr.uSize)).toByteArray();
+        return file.data = getFileData(file, new ByteList((int) file.attr.uSize)).getByteArray();
     }
 
     public ByteList getFileData(EFile file, ByteList buf) throws IOException {
@@ -442,13 +494,13 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         EFile file = entries.get(entry);
         if(file == null)
             return null;
-        return getFileDataStreaming(file);
+        return file.data != null ? new ByteArrayInputStream(file.data) : getFileDataStreaming(file);
     }
 
     public InputStream getFileDataStreaming(EFile file) throws IOException {
         return file.attr.compressMethod == ZipEntry.STORED ?
                 new ZipStoredStream(file, this.file) :
-                inflaters.isEmpty() ? new ZipInflatedStream(file, this) : inflaters.removeLast();
+                inflaters.isEmpty() ? new ZipInflatedStream(file, this) : inflaters.removeLast().reset(file);
     }
 
     // content == null : 删除
@@ -519,7 +571,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     }
 
     public void store() throws IOException {
-        if(modified.isEmpty()) return;
+        if (modified.isEmpty()) return;
+        if ((flags & FLAG_READ_ATTR) != 0)
+            throw new ZipException("This MutableZipFile is read-only!");
 
         EFile minFile = null;
 
@@ -807,7 +861,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
     public void clear() {
         entries.clear();
-        modified.clear();
+        for (ModFile mf : modified) {
+            mf.file = null;
+        }
         eof.cDirLen = eof.cDirOffset = 0;
     }
 
@@ -820,7 +876,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
     public void read() throws IOException {
         clear();
         zip.seek(0);
-        readInternal();
+        readHead();
     }
 
     public void reopen() throws IOException {
@@ -1241,6 +1297,12 @@ public class MutableZipFile implements Closeable, AutoCloseable {
             this.inf = new Inflater(true);
             this.buf = new byte[1024];
             this.owner = file;
+        }
+
+        public ZipInflatedStream reset(EFile file) throws IOException {
+            this.file.seek(file.offset);
+            this.eof = false;
+            return this;
         }
 
         final MutableZipFile owner;

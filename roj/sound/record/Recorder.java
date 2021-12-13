@@ -25,15 +25,9 @@
  */
 package roj.sound.record;
 
-import roj.util.ByteList;
-
 import javax.sound.sampled.*;
-import java.io.IOException;
-import java.io.InputStream;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/12/19 22:36
@@ -42,15 +36,15 @@ public class Recorder implements Runnable {
     public final AudioFormat format;
     protected final TargetDataLine line;
     protected final int once;
-    protected final ByteList buf;
+    protected final byte[] buf;
     protected final VoiceHandler handler;
 
-    public Recorder(int bufferCap, int once, VoiceHandler handler) throws LineUnavailableException {
+    public Recorder(int once, VoiceHandler handler) throws LineUnavailableException {
         DataLine.Info info = new DataLine.Info(TargetDataLine.class, this.format = getAudioFormat());
         line = (TargetDataLine) AudioSystem.getLine(info);
         this.once = once;
         this.handler = handler;
-        this.buf = new ByteList(bufferCap);
+        this.buf = new byte[once];
     }
 
     protected AudioFormat getAudioFormat() {
@@ -73,49 +67,20 @@ public class Recorder implements Runnable {
     @Override
     public void run() {
         final Thread self = Thread.currentThread();
-        final ByteList buf = this.buf;
-        final Adapter adapter = new Adapter(line);
+        final byte[] buf = this.buf;
 
-        try {
-            int got;
-            do {
-                got = buf.readStream(adapter, once);
-                if (got <= 0) {
-                    break;
-                }
-                handler.handle(buf);
-                buf.clear();
-            } while (!self.isInterrupted() && adapter.isOpen());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        int got;
+        do {
+            //line.available();
+            got = line.read(buf, 0, once);
+            if (got <= 0) {
+                break;
+            }
+            handler.handle(buf, got);
+        } while (!self.isInterrupted() && line.isOpen());
     }
 
     public void close() {
         line.close();
-    }
-
-    private static final class Adapter extends InputStream {
-        final TargetDataLine line;
-
-        public Adapter(TargetDataLine line) {
-            this.line = line;
-        }
-
-        @Override
-        public int read() {
-            byte[] k = new byte[1];
-            int r = line.read(k, 0, 1);
-            return r > 0 ? k[0] : -1;
-        }
-
-        @Override
-        public int read(byte[] b, int off, int len) {
-            return line.read(b, off, len);
-        }
-
-        public boolean isOpen() {
-            return line.isOpen();
-        }
     }
 }

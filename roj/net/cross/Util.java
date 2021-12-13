@@ -26,10 +26,10 @@
 package roj.net.cross;
 
 import roj.io.NonblockingUtil;
-import roj.net.ssl.SslEngineFactory;
-import roj.net.tcp.util.WrappedSocket;
+import roj.net.SecureUtil;
+import roj.net.tcp.WrappedSocket;
+import roj.text.TextUtil;
 import roj.ui.UIUtil;
-import roj.util.ByteList;
 
 import javax.swing.*;
 import java.awt.*;
@@ -56,33 +56,216 @@ public class Util {
         } catch (Error ignored) {}
     }
 
-    public static final String[] STATE_NAMES = {"握手", "连接", "运行", "错误", "断开", "结束", "cleanup"};
-    public static final int WAIT        = 0;
-    public static final int CONNECTED   = 1;
-    public static final int ESTABLISHED = 2;
-    public static final int ERROR       = 3;
-    public static final int DISCONNECT  = 4;
-    public static final int FINALIZED   = 5;
-    public static final int SHUTDOWN    = 6;
+    public static final int TIMEOUT          = 20000;
+    public static final int TIMEOUT_TRANSFER = 20000;
 
-    public static final int TIMEOUT_CONNECT     = 20000;
-    public static final int TIMEOUT_TRANSFER    = 20000;
 
-    public static final int PS_HEARTBEAT         = 1;
-    public static final int PS_CONNECT           = 2;
-    public static final int PS_DISCONNECT        = 3;
-    public static final int PS_SERVER_HALLO      = 233;
-    public static final int PS_LOGON             = 4;
-    public static final int PS_DATA              = 5;
-    public static final int PS_SERVER_DATA       = 6;
-    public static final int PS_STATE             = 7;
-    public static final int PS_KICK_SLAVE        = 8;
-    public static final int PS_SERVER_SLAVE_DATA = 9;
-    public static final int PS_SLAVE_CONNECT     = 10;
-    public static final int PS_SLAVE_DISCONNECT  = 11;
-    public static final int PS_RESET             = 12;
-    public static final int PS_VERSION_CONFLICT  = 13;
-    public static final int PS_LINK_OVERFLOW     = 255;
+    /**
+     * client/host握手
+     * {
+     * u4 magic;
+     * u1 PROTOCOL_VERSION;
+     * CHANNEL_TYPE CHANNEL_TYPE;
+     * [OPTIONAL when CHANNEL_TYPE == DATA
+     *     u8 data_channel_pass
+     * ]
+     * [OPTIONAL when CHANNEL_TYPE == CONTROL
+     *     ROLE role;
+     * ]
+     * }
+     *
+     * enum CHANNEL_TYPE {
+     *     0=CONTROL, 1=DATA
+     * }
+     *
+     * enum ROLE {
+     *     0=Client, 1=Host
+     * }
+     */
+    public static final int MAGIC = 0xAEAEAEAE;
+    public static final int PROTOCOL_VERSION = 40;
+
+    public static final int PCN_CONTROL   = 0;
+    public static final int PCN_DATA      = 1;
+
+    public static final int PR_CLIENT   = 0;
+    public static final int PR_HOST     = 1;
+
+    /**
+     * 服务端握手完毕
+     * {u1 id}
+     */
+    public static final int HS_OK        = 200;
+
+    public static final String[] HS_ERROR_NAMES = {"人数过多", "客户端过期", "服务器过期", "系统限制", "超时", "协议错误"};
+    public static final int HS_ERR_THROTTLING = 1;
+    public static final int HS_ERR_VERSION_LOW = 2;
+    public static final int HS_ERR_VERSION_HIGH = 3;
+    public static final int HS_ERR_POLICY = 4;
+    public static final int HS_ERR_TIMEOUT = 5;
+    public static final int HS_ERR_PROTOCOL = 5;
+
+    // region 控制频道数据包
+    /**
+     * 心跳
+     * {u1 id}
+     */
+    public static final int P_HEARTBEAT = 1;
+    /**
+     * 客户端登录
+     * {
+     * u1 id;
+     * u1 nameLen;
+     * u1 passLen;
+     * utf[nameLen] name;
+     * utf[passLen] pass;
+     * }
+     */
+    public static final int PS_LOGIN_C = 2;
+    /**
+     * 客户端登录完毕
+     * {
+     * u1 id;
+     * u1 infoLen;
+     * u1 motdLen;
+     * u1 portLen;
+     * u4 clientId;
+     * utf[infoLen] info;
+     * utf[motdLen] motd;
+     * u2[<N>] ports;
+     * }
+     */
+    public static final int PC_LOGON_C = 3;
+    /**
+     * 房主登录
+     * {
+     * u1 id;
+     * u1 nameLen;
+     * u1 passLen;
+     * u1 motdLen;
+     * u1 portLen;
+     * utf[nameLen] name;
+     * utf[passLen] pass;
+     * utf[motdLen] motd;
+     * u2[<N>] ports;
+     * }
+     */
+    public static final int PS_LOGIN_H = 4;
+    /**
+     * 房主登录完毕
+     * {
+     * u1 id;
+     * u1 infoLen;
+     * utf[infoLen] info;
+     * }
+     */
+    public static final int PC_LOGON_H = 5;
+    /**
+     * 退出登录（断开连接）
+     * {u1 id}
+     */
+    public static final int P_LOGOUT = 6;
+    /**
+     * 服务器告知客户端加入
+     * {
+     * u1 id;
+     * u4 ordinal;
+     * u2 port;
+     * u1 ipLen;
+     * u1[ipLen] ip;
+     * }
+     */
+    public static final int PH_CLIENT_LOGIN = 7;
+    /**
+     * 服务器告知客户端退出
+     * {
+     * u1 id;
+     * u4 ordinal;
+     * }
+     */
+    public static final int PH_CLIENT_LOGOUT = 8;
+    /**
+     * 房主踢出客户端
+     * {
+     * u1 id;
+     * u4 ordinal;
+     * }
+     */
+    public static final int PS_KICK_CLIENT = 9;
+    /**
+     * 客户端想开启一个数据频道，并提供加密密码第一部分
+     * {
+     * u1 id;
+     * u1 portId;
+     * u1[32] rnd1;
+     * }
+     */
+    public static final int PS_REQUEST_CHANNEL = 10;
+    /**
+     * A. 客户端想开启一个数据频道，并提供加密密码第一部分后，服务端创建SocketPair并发给host
+     * B. 房主同意开启，提供密码第二部分，服务端返回client
+     * {
+     * u1 id;
+     * u1 portId; (only when to host)
+     * u1[32] rnd;
+     * ORIGIN origin; (only when to host)
+     * DATA_CHANNEL data_channel_id;
+     * }
+     *
+     * DATA_CHANNEL {
+     *     u4 ordinal;
+     *     u4 login_pass; // 之后不传
+     * }
+     */
+    public static final int P_CHANNEL_RESULT  = 11;
+    /**
+     * 房主同意开启，并返回加密密码第二部分
+     * {
+     * u1 id;
+     * ORIGIN destination;
+     * u1[32] rnd;
+     * }
+     *
+     * enum ORIGIN {
+     *     -1=SERVER, 0=HOST, else = CLIENT
+     * }
+     */
+    public static final int PS_CHANNEL_OPEN     = 12;
+    /**
+     * 房主或服务端不同意开启数据频道
+     * {
+     * u1 id;
+     * ORIGIN origin;
+     * u1 reasonLen;
+     * utf[reasonLen] reason;
+     * }
+     */
+    public static final int P_CHANNEL_OPEN_FAIL = 13;
+    /**
+     * 任意一方关闭数据频道
+     * {
+     * u1 id;
+     * ORIGIN origin; (only when from server)
+     * DATA_CHANNEL.ordinal data_channel_id;
+     * }
+     */
+    public static final int PS_CHANNEL_CLOSE    = 14;
+    /**
+     * client/host对数据频道操作
+     * {
+     * u1 id;
+     * DATA_CHANNEL.ordinal data_channel_id;
+     * OP op;
+     * }
+     *
+     * enum OP {
+     *     0=SET_INACTIVE, 1=SET_ACTIVE
+     * }
+     */
+    public static final int P_CHANNEL_OP    = 15;
+
+    public static final int OP_SET_INACTIVE = 0, OP_SET_ACTIVE = 1;
+    // endregion
 
     public static final String[] ERROR_NAMES = {"IO错误", "登录失败(密码无效/房间不存在/房间已有房主)", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
     public static final int PS_ERROR_IO = 0x20;
@@ -95,17 +278,7 @@ public class Util {
     public static final int PS_ERROR_SYSTEM_LIMIT = 0x27;
     public static final int PS_ERROR_TIMEOUT = 0x28;
 
-    public static final String[] RSTATE_NAMES = {"超时", "IO错误", "无接收者"};
-    public static final int PS_STATE_TIMEOUT = 0;
-    public static final int PS_STATE_IO_ERROR = 1;
-    public static final int PS_STATE_DISCARD = 2;
-
-    public static final int PROTOCOL_VERSION = 3_5;
-    public static final ByteList CLIENT_HALLO = new ByteList(new byte[] {
-            'A','E','C','L','I','E','N','T','H','A','L','L','O'
-    });
-
-    public static final int T_SERVER_HEART_TIME     = 10000;
+    public static final int TIMEOUT_HEART_SERVER = 10000;
 
     public static final int T_CLIENT_HEARTBEAT_TIME  = 2000;
     public static final int T_CLIENT_HEARTBEAT_RETRY = 100;
@@ -274,7 +447,7 @@ public class Util {
                 certPass = inpPass.getPassword();
 
                 try {
-                    KeyStore ks = KeyStore.getInstance(SslEngineFactory.KEY_FORMAT);
+                    KeyStore ks = KeyStore.getInstance(SecureUtil.KEY_FORMAT);
                     try (InputStream in = new FileInputStream(certFile)) {
                         ks.load(in, certPass);
                     }
@@ -289,9 +462,9 @@ public class Util {
         }
     }
 
-    static PrintStream out;
-    static String certFile;
-    static char[] certPass;
+    public static PrintStream out;
+    public static String certFile;
+    public static char[] certPass;
 
     public static void syncPrint(String msg) {
         if(out == null) return;
@@ -300,56 +473,58 @@ public class Util {
         }
     }
 
-    static void initSocketPref(Socket client) throws SocketException {
+    public static void initSocketPref(Socket client) throws SocketException {
         client.setTcpNoDelay(true);
         client.setTrafficClass(0b10010000);
     }
 
-    static int handshakeClient(WrappedSocket channel) throws IOException {
-        int wait = TIMEOUT_CONNECT;
-        while (!channel.handShake()) {
-            LockSupport.parkNanos(200);
+    public static void handshakeClient(WrappedSocket ch, Long pipeId) throws IOException {
+        int wait = TIMEOUT;
+        while (!ch.handShake()) {
+            LockSupport.parkNanos(50);
             if(wait-- <= 0) {
-                return 1;
+                throw new IOException("握手超时");
             }
         }
 
-        ByteBuffer buf = channel.buffer();
+        ByteBuffer buf = ch.buffer();
         buf.clear();
-        buf.put(CLIENT_HALLO.list).put((byte) PROTOCOL_VERSION).flip();
-        wait = writeAndFlush(channel, buf, wait);
+        buf.putInt(MAGIC).put((byte) PROTOCOL_VERSION);
+        if (pipeId != null) {
+            buf.put((byte) PCN_DATA).putLong(pipeId);
+        } else {
+            buf.put((byte) PCN_CONTROL);
+        }
+        buf.flip();
+        wait = writeAndFlush(ch, buf, wait);
         buf.clear();
 
         int read;
-        while ((read = channel.read(1)) == 0) {
-            LockSupport.parkNanos(100);
+        while ((read = ch.read(1)) == 0) {
+            LockSupport.parkNanos(50);
             if(wait-- <= 0) {
-                return 3;
+                throw new IOException("读取超时");
             }
         }
-        if(read < 0)
-            return 4;
+        if(read < 0) throw new IOException("未预料的连接断开");
         read = buf.get(0) & 0xFF;
-        buf.clear();
-        switch (read) {
-            case PS_SERVER_HALLO:
-                buf.clear();
-                return 0;
-            case PS_LINK_OVERFLOW:
-                syncPrint("服务端报告超过最大连接数");
-                return 5;
-            case PS_VERSION_CONFLICT:
-                syncPrint("服务端报告不兼容当前版本 " + PROTOCOL_VERSION);
-                return 5;
-            default:
-                throw new SocketException("协议错误: " + buf);
+        try {
+            if (read != HS_OK) {
+                try {
+                    throw new IOException("握手失败: " + HS_ERROR_NAMES[read - 1]);
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    throw new IOException("协议错误: " + dumpBuffer(buf));
+                }
+            }
+        } finally {
+            buf.clear();
         }
     }
 
-    static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, int timeout) throws IOException {
+    public static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, int timeout) throws IOException {
         Thread t = Thread.currentThread();
         do {
-            int w = channel.writeDirect(buf);
+            int w = channel.write(buf);
             if(w < 0)
                 return w;
             if (!buf.hasRemaining())
@@ -365,14 +540,14 @@ public class Util {
         return timeout;
     }
 
-    static int write1(WrappedSocket channel, byte buf) throws IOException {
-        ByteBuffer nx = NonblockingUtil.getNativeDirectBuffer();
+    public static int write1(WrappedSocket channel, byte buf) throws IOException {
+        ByteBuffer nx = NonblockingUtil.getSharedDirectBuffer();
         nx.position(0).limit(1);
         nx.put(0, buf);
 
         int timeout = 10;
         int wrote;
-        while ((wrote = channel.writeDirect(nx)) == 0 && timeout > 0) {
+        while ((wrote = channel.write(nx)) == 0 && timeout > 0) {
             LockSupport.parkNanos(20);
             timeout--;
         }
@@ -380,10 +555,23 @@ public class Util {
         return wrote < 0 ? wrote : timeout <= 0 ? -7 : 0;
     }
 
-    static String dumpBuffer(ByteBuffer rb) {
-        rb.flip();
+    public static boolean readSome(WrappedSocket channel, int count, int time) throws IOException {
+        while (count > 0) {
+            int r = channel.read(count);
+            if (r < 0) return false;
+            count -= r;
+            LockSupport.parkNanos(100);
+            if (time-- <= 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static String dumpBuffer(ByteBuffer rb) {
+        if (rb.position() > 0) rb.flip();
         byte[] tmp = new byte[rb.limit()];
-        rb.get(tmp);
-        return new ByteList(tmp).toString();
+        rb.get(tmp).position(0);
+        return TextUtil.dumpBytes(tmp);
     }
 }

@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 18:40

@@ -26,13 +26,14 @@
 package roj.net.tcp.util;
 
 import roj.collect.IBitSet;
+import roj.crypt.Base64;
 import roj.io.FileUtil;
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.text.CharList;
-import roj.text.crypt.Base64;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -83,7 +84,7 @@ public class WebSocketUtil {
                     .put((byte) ($len >> 8))
                     .put((byte) $len);
         }
-        in.putInto(out);
+        //in.putInto(out);
     }
 
     /**

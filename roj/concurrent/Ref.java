@@ -33,7 +33,7 @@ package roj.concurrent;
  * @since 2021/4/21 22:51
  */
 public final class Ref<T> {
-    T t;
+    private T t;
 
     public Ref(T t) {
         this.t = t;
@@ -49,8 +49,5 @@ public final class Ref<T> {
 
     public static <X> Ref<X> from() {
         return new Ref<>(null);
-    }
-    public static <X> Ref<X> from(X x) {
-        return new Ref<>(x);
     }
 }

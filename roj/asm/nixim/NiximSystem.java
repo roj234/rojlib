@@ -390,7 +390,8 @@ public class NiximSystem {
             }
             break;
             case "MIDDLE": {
-
+                CList occurrence = s.occurrence;
+                // todo find it!
             }
             break;
             case "TAIL": {
@@ -1017,8 +1018,8 @@ public class NiximSystem {
             }
             break;
             case "MIDDLE": {
-                if (true)
-                    throw new NiximException("暂未支持...");
+                // todo backup & restore
+                System.err.println("?哈?");
             }
             break;
             case "TAIL": {

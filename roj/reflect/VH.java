@@ -36,7 +36,7 @@ import java.lang.reflect.Field;
  * @version 0.1
  * @since 2021/8/15 23:36
  */
-class VH extends IFieldAccessor {
+final class VH extends IFieldAccessor {
     //VarHandle handle;
     Object[] tmpG, tmpS;
 

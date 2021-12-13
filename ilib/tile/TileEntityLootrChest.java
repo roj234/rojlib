@@ -29,6 +29,8 @@ import ilib.autoreg.TileRegister;
 import ilib.block.BlockLootrChest;
 import ilib.item.handler.StandardItemHandler;
 import ilib.item.handler.inv.InventoryArray;
+import roj.collect.MyHashSet;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
@@ -39,8 +41,6 @@ import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.storage.loot.LootContext;
 import net.minecraft.world.storage.loot.LootTable;
-import roj.collect.MyHashSet;
-import roj.util.MyRandom;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -56,7 +56,7 @@ import java.util.Set;
  */
 @TileRegister("ilib:loot_chest")
 public class TileEntityLootrChest extends TileEntityChest {
-    static Random random = new MyRandom();
+    private static final Random random = new Random();
     Set<String> opened = new MyHashSet<>();
 
     //@Override

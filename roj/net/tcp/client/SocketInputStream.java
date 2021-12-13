@@ -25,7 +25,7 @@
  */
 package roj.net.tcp.client;
 
-import roj.net.tcp.util.WrappedSocket;
+import roj.net.tcp.WrappedSocket;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;

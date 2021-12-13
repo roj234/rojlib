@@ -25,9 +25,9 @@
  */
 package roj.net.tcp.serv.response;
 
+import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
-import roj.net.tcp.util.WrappedSocket;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteWriter;
@@ -35,6 +35,7 @@ import roj.util.ByteWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 
 public class StringResponse implements HTTPResponse {
     final String mime;
@@ -82,7 +83,7 @@ public class StringResponse implements HTTPResponse {
         return new StringResponse(sw.toString(), "text/html");
     }
 
-    ByteList buf;
+    ByteBuffer buf;
 
     public void prepare() throws IOException {
         if (buf == null) {
@@ -90,10 +91,9 @@ public class StringResponse implements HTTPResponse {
             ByteWriter.writeUTF(list, content, (byte) -1);
             list.add((byte) '\r');
             list.add((byte) '\n'); // EOF flag
-            buf = list;
+            buf = ByteBuffer.wrap(list.list, 0, list.pos());
         } else {
-            buf.trimToSize();
-            buf.rewrite();
+            buf.position(0);
         }
     }
 
@@ -101,12 +101,10 @@ public class StringResponse implements HTTPResponse {
         if (buf == null)
             throw new IllegalStateException("Not prepared");
         channel.write(buf);
-
         return buf.remaining() > 0;
     }
 
-    public void release() {
-    }
+    public void release() {}
 
     @Override
     public void writeHeader(CharList list) {

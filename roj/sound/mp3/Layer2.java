@@ -30,7 +30,7 @@ import roj.sound.util.AudioBuffer;
 /**
  * 解码Layer Ⅱ。
  */
-public final class Layer2 extends Layer {
+final class Layer2 extends Layer {
     private final int channels, max_sb;
 
     private final byte[][] allocation;    //[channels][sblimit]

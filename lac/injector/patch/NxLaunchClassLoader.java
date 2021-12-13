@@ -32,13 +32,13 @@ import roj.asm.nixim.Inject;
 import roj.asm.nixim.Inject.At;
 import roj.asm.nixim.Nixim;
 import roj.collect.MyHashSet;
+import roj.crypt.NotMd5;
+import roj.crypt.SM3;
+import roj.crypt.SM4;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
 import roj.text.DottedStringPool;
 import roj.text.StringPool;
-import roj.text.crypt.NotMd5;
-import roj.text.crypt.SM3;
-import roj.text.crypt.SM4;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
@@ -48,8 +48,9 @@ import net.minecraft.launchwrapper.Launch;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.DigestException;
+import java.security.GeneralSecurityException;
 import java.util.*;
 
 /**
@@ -88,21 +89,23 @@ class NxLaunchClassLoader extends ClassLoader implements AccessHelper {
     }
 
     @Copy
-    static ByteList decodeModInfo(File file) throws IOException, DigestException {
+    static ByteList decodeModInfo(File file) throws IOException, GeneralSecurityException {
         NotMd5 notMd5 = new NotMd5();
 
         ByteWriter bw = new ByteWriter();
         digestModFiles(notMd5, bw);
 
         SM4 sm4 = new SM4();
-        sm4.reset(SM4.SM4_DECRYPT | SM4.SM4_AUTO_PADDING | SM4.SM4_CBC);
-        sm4.setOption(SM4.SM4_CBC_IV, Arrays.copyOf(notMd5.digest(), 16));
-        sm4.setPassword(bw.toByteArray());
+        sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_STREAMED);
+        sm4.setOption(SM4.SM4_IV, Arrays.copyOf(notMd5.digest(), 16));
+        sm4.setKey(bw.toByteArray());
 
         ByteList out = bw.list;
         out.clear();
 
-        sm4.crypt(new ByteList(IOUtil.read(file)), out);
+        ByteBuffer in = ByteBuffer.wrap(IOUtil.read(file));
+        out.ensureCapacity(in.limit());
+        sm4.crypt(in, ByteBuffer.wrap(out.list));
         return out;
     }
 

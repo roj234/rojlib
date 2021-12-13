@@ -1,0 +1,105 @@
+/*
+ * This file is a part of MoreItems
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2021 Roj234
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+package roj.net.cross.server;
+
+import roj.net.tcp.WrappedSocket;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.concurrent.locks.LockSupport;
+
+import static roj.net.cross.Util.*;
+
+/**
+ * @author Roj233
+ * @version 0.1
+ * @since 2021/12/21 13:17
+ */
+final class Handshake extends Stated {
+    static final Stated HANDSHAKE = new Handshake();
+
+    private static byte handshake(AEServer.Worker worker) throws IOException {
+        WrappedSocket channel = worker.ch;
+
+        int wait = TIMEOUT;
+        while (!channel.handShake()) {
+            LockSupport.parkNanos(100);
+            if (worker.server.shutdown) return HS_ERR_POLICY;
+            if (wait-- <= 0) {
+                write1(channel, (byte) HS_ERR_TIMEOUT);
+                return HS_ERR_TIMEOUT;
+            }
+        }
+
+        if (!readSome(channel, 6, wait)) {
+            return HS_ERR_TIMEOUT;
+        }
+
+        ByteBuffer rb = channel.buffer();
+        if (rb.getInt(0) != MAGIC) return HS_ERR_PROTOCOL;
+        int v = rb.get(4) & 0xFF;
+        if (v < PROTOCOL_VERSION) {
+            return HS_ERR_VERSION_LOW;
+        } else if (v > PROTOCOL_VERSION) {
+            return HS_ERR_VERSION_HIGH;
+        }
+
+        return (byte) HS_OK;
+    }
+
+    @Override
+    public Stated next(AEServer.Worker self) throws IOException {
+        byte heart = handshake(self);
+        WrappedSocket channel = self.ch;
+        write1(channel, heart);
+        if (heart != (byte) HS_OK) {
+            syncPrint(this + ": 握手失败: " + heart);
+            return null;
+        }
+        ByteBuffer rb = channel.buffer();
+        int channel_type = rb.get(5) & 0xFF;
+        switch (channel_type) {
+            case PCN_CONTROL:
+                if (!readSome(channel, 1, TIMEOUT))
+                    return null;
+                int role = rb.get(6) & 0xFF;
+                switch (role) {
+                    case PR_CLIENT:
+                        return ClientLogin.CLIENT_LOGIN;
+                    case PR_HOST:
+                        return HostLogin.HOST_LOGIN;
+                    default:
+                        syncPrint(this + ": 握手失败: 无效的角色类型");
+                        return null;
+                }
+            case PCN_DATA:
+                return PipeLogin.PIPE_LOGIN;
+            default:
+                syncPrint(this + ": 握手失败: 无效的频道类型");
+                return null;
+        }
+    }
+}
