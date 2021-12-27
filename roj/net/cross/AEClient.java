@@ -26,7 +26,7 @@
 package roj.net.cross;
 
 import roj.concurrent.task.ITaskNaCl;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.tcp.MSSSocket;
 import roj.net.tcp.PlainSocket;
 import roj.net.tcp.WrappedSocket;
@@ -128,8 +128,8 @@ public class AEClient extends IAEClient implements Shutdownable {
         }
 
         WrappedSocket ch = ssl ?
-                new MSSSocket(c, NonblockingUtil.fd(c)) :
-                new PlainSocket(c, NonblockingUtil.fd(c));
+                new MSSSocket(c, NIOUtil.fd(c)) :
+                new PlainSocket(c, NIOUtil.fd(c));
 
         try {
             LoginResult p = clientLogin(ch);
@@ -456,7 +456,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                 try {
                     initSocketPref(c);
                     Pipe pair = requestSocketPair(portId);
-                    pair.setClient(NonblockingUtil.fd(c));
+                    pair.setClient(NIOUtil.fd(c));
                     PipeIOThread.syncRegister(AEClient.this, pair, this);
                 } catch (IOException e) {
                     e.printStackTrace();

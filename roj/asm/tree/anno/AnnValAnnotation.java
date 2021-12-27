@@ -42,7 +42,7 @@ public final class AnnValAnnotation extends AnnVal {
     public Annotation value;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        value.toByteArray(pool, w.writeByte((byte) ANNOTATION));
+        value.toByteArray(pool, w.put((byte) ANNOTATION));
     }
 
     public String toString() {

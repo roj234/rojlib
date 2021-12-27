@@ -26,7 +26,7 @@
 package roj.misc;
 
 import roj.io.IOUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -48,7 +48,7 @@ public class Stripper {
         int lineBegin = Integer.parseInt(args[1]);
         int begin = lineOffset(ln, 0, lineBegin - 1);
         int end = args[2].equals("-1") ? ln.length() : lineOffset(ln, begin, Integer.parseInt(args[2]) - lineBegin);
-        ByteWriter.encodeUTF(ln.substring(begin, end)).writeToStream(new FileOutputStream(args[0]));
+        ByteList.encodeUTF(ln.substring(begin, end)).writeToStream(new FileOutputStream(args[0]));
     }
 
     @SuppressWarnings("fallthrough")

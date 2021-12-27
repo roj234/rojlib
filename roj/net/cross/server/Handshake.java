@@ -42,23 +42,23 @@ final class Handshake extends Stated {
     static final Stated HANDSHAKE = new Handshake();
 
     private static byte handshake(AEServer.Worker worker) throws IOException {
-        WrappedSocket channel = worker.ch;
+        WrappedSocket ch = worker.ch;
 
         int wait = TIMEOUT;
-        while (!channel.handShake()) {
+        while (!ch.handShake()) {
             LockSupport.parkNanos(100);
             if (worker.server.shutdown) return HS_ERR_POLICY;
             if (wait-- <= 0) {
-                write1(channel, (byte) HS_ERR_TIMEOUT);
+                write1Direct(ch, (byte) HS_ERR_TIMEOUT);
                 return HS_ERR_TIMEOUT;
             }
         }
 
-        if (!readSome(channel, 6, wait)) {
+        if (!readSome(ch, 6, wait)) {
             return HS_ERR_TIMEOUT;
         }
 
-        ByteBuffer rb = channel.buffer();
+        ByteBuffer rb = ch.buffer();
         if (rb.getInt(0) != MAGIC) return HS_ERR_PROTOCOL;
         int v = rb.get(4) & 0xFF;
         if (v < PROTOCOL_VERSION) {
@@ -85,14 +85,15 @@ final class Handshake extends Stated {
             case PCN_CONTROL:
                 if (!readSome(channel, 1, TIMEOUT))
                     return null;
-                int role = rb.get(6) & 0xFF;
+                rb.compact().flip();
+                int role = rb.get(0) & 0xFF;
                 switch (role) {
-                    case PR_CLIENT:
+                    case PS_LOGIN_C:
                         return ClientLogin.CLIENT_LOGIN;
-                    case PR_HOST:
+                    case PS_LOGIN_H:
                         return HostLogin.HOST_LOGIN;
                     default:
-                        syncPrint(this + ": 握手失败: 无效的角色类型");
+                        syncPrint(this + ": 握手失败: 无效的角色类型 " + role);
                         return null;
                 }
             case PCN_DATA:

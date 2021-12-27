@@ -83,7 +83,7 @@ public class Test {
                     HttpHeader header = client.response();
                     System.out.println(header);
                     ByteList list = new ByteList().readStreamFully(client.getInputStream());
-                    System.out.println("DL " + list.pos());
+                    System.out.println("DL " + list.wIndex());
                     System.out.println("Keep-Alive: " + header.headers.get("connection"));
                     LockSupport.parkNanos(2_000_000_000L);
                     client.send();

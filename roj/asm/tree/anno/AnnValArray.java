@@ -44,7 +44,7 @@ public final class AnnValArray extends AnnVal {
     public List<AnnVal> value;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeByte((byte) ARRAY).writeShort(value.size());
+        w.put((byte) ARRAY).putShort(value.size());
         for (int i = 0; i < value.size(); i++) {
             value.get(i).toByteArray(pool, w);
         }

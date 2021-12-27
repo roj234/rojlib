@@ -35,7 +35,7 @@ package roj.config;
 
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -83,7 +83,7 @@ public abstract class JSONConfiguration {
     private void resetConfig(CMapping map, File config) {
         readConfig(map);
         try (FileOutputStream fos = new FileOutputStream(config)) {
-            ByteWriter.encodeUTF(map.toJSON()).writeToStream(fos);
+            ByteList.encodeUTF(map.toJSON()).writeToStream(fos);
         } catch (IOException e) {
             e.printStackTrace();
         }

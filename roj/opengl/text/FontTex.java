@@ -28,16 +28,15 @@ package roj.opengl.text;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 import roj.collect.*;
-import roj.io.IOUtil;
+import roj.io.NIOUtil;
 import roj.opengl.texture.TextureManager;
 import roj.opengl.util.Util;
 import roj.text.CharList;
 
 import java.awt.*;
-import java.awt.font.FontRenderContext;
-import java.awt.font.GlyphVector;
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
+import java.awt.font.*;
+import java.awt.geom.*;
+import java.awt.image.*;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.PrimitiveIterator;
@@ -331,7 +330,7 @@ public class FontTex {
                                  GL12.GL_BGRA, GL_UNSIGNED_BYTE, buf);
 
             if(buf != TextureManager.UPLOAD_LOCK) {
-                IOUtil.clean(buf);
+                NIOUtil.clean(buf);
             }
         }
 

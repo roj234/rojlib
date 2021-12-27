@@ -50,9 +50,9 @@ public abstract class CstRef extends Constant {
 
     @Override
     public final void write(ByteWriter w) {
-        w.writeByte(type())
-         .writeShort(getClassIndex())
-         .writeShort(getDescIndex());
+        w.put(type())
+         .putShort(getClassIndex())
+         .putShort(getDescIndex());
     }
 
     public final String toString() {

@@ -29,7 +29,8 @@ package ilib.network;
 import io.netty.buffer.ByteBuf;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -50,7 +51,7 @@ public interface IMessage extends net.minecraftforge.fml.common.network.simpleim
     default void toBytes(ByteBuf byteBuf) {
         ByteWriter w = new ByteWriter();
         toBytes(w);
-        byteBuf.writeBytes(w.list.list, w.list.pos(), w.list.limit());
+        byteBuf.writeBytes(w.list.list, w.list.wIndex(), w.list.limit());
     }
 
     void fromBytes(ByteReader buf);

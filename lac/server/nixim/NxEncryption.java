@@ -29,6 +29,7 @@ import lac.server.Config;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
+import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 
 import net.minecraft.network.PacketBuffer;
@@ -58,10 +59,9 @@ class NxEncryption {
         buf.writeByte(99);
         buf.writeString(this.hashedServerId);
 
-        SM4 sm4 = new SM4();
-        sm4.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_STREAMED);
-        sm4.setOption(SM4.SM4_IV, Config.ENCRYPT_IV);
-        sm4.setKey(this.verifyToken);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
+        sm4.setKey(verifyToken, MyCipher.ENCRYPT | MyCipher.PKCS5_PADDING);
+        sm4.setOption(MyCipher.IV, Config.ENCRYPT_IV);
 
         byte[] encoded = this.publicKey.getEncoded();
         try {

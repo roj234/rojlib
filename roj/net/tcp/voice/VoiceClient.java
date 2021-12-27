@@ -25,7 +25,7 @@
  */
 package roj.net.tcp.voice;
 
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.tcp.PlainSocket;
 import roj.net.tcp.WrappedSocket;
 import roj.net.tcp.client.ClientSocket;
@@ -59,7 +59,7 @@ public class VoiceClient extends ClientSocket implements VoiceHandler, Runnable 
 
     @Override
     protected WrappedSocket createChannel() {
-        return new PlainSocket(server.socket(), NonblockingUtil.fd(server));
+        return new PlainSocket(server.socket(), NIOUtil.fd(server));
     }
 
     public void connect(String address, int port) throws IOException {

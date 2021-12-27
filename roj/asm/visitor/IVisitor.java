@@ -87,44 +87,44 @@ public class IVisitor extends Holder {
     }
 
     public void visitNodes(int count) {
-        amountIndex = bw.list.pos();
+        amountIndex = bw.list.wIndex();
         amount = 0;
-        bw.writeShort(0);
+        bw.putShort(0);
     }
 
     public void visitNode(int acc, String name, String desc, int count) {
-        bw.writeShort(acc).writeShort(cw.getUtfId(name)).writeShort(cw.getUtfId(desc));
-        attrAmountIndex = bw.list.pos();
+        bw.putShort(acc).putShort(cw.getUtfId(name)).putShort(cw.getUtfId(desc));
+        attrAmountIndex = bw.list.wIndex();
         attrAmount = 0;
-        bw.writeShort(0);
+        bw.putShort(0);
     }
 
     public void visitAttribute(String name, int length) {
-        int end = br.index + length;
+        int end = br.rIndex + length;
         if (attributeVisitor != null) {
             if (attributeVisitor.visit(name, length)) {
                 attrAmount++;
             }
         }
-        br.index = end;
+        br.rIndex = end;
     }
 
     public void visitEndNode() {
         if (attrAmount > 0) {
-            int pos = bw.list.pos();
-            bw.list.pos(attrAmountIndex);
-            bw.writeShort(attrAmount);
-            bw.list.pos(pos);
+            int pos = bw.list.wIndex();
+            bw.list.wIndex(attrAmountIndex);
+            bw.putShort(attrAmount);
+            bw.list.wIndex(pos);
         }
         amount++;
     }
 
     public void visitEndNodes() {
         if (amount > 0) {
-            int pos = bw.list.pos();
-            bw.list.pos(amountIndex);
-            bw.writeShort(amount);
-            bw.list.pos(pos);
+            int pos = bw.list.wIndex();
+            bw.list.wIndex(amountIndex);
+            bw.putShort(amount);
+            bw.list.wIndex(pos);
         }
     }
 

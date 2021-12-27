@@ -70,9 +70,9 @@ public final class AttrModulePackages extends Attribute {
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         final List<String> packages = this.packages;
-        w.writeShort(packages.size());
+        w.putShort(packages.size());
         for (int i = 0; i < packages.size(); i++) {
-            w.writeShort(pool.getPackageId(packages.get(i)));
+            w.putShort(pool.getPackageId(packages.get(i)));
         }
     }
 

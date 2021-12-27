@@ -28,7 +28,6 @@ package roj.net.cross.server;
 import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
-import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
 
@@ -45,8 +44,7 @@ final class Logout extends Stated {
         try {
             write1(self.ch, (byte) P_LOGOUT);
         } catch (IOException ignored) {}
-        LockSupport.parkNanos(2000);
-        syncPrint(this + ": 断开");
+        syncPrint(self + ": 断开");
         return null;
     }
 }

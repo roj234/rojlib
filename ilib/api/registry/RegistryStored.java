@@ -119,19 +119,19 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
 
         @Override
         public void fromBytes(ByteReader buf) {
-            id = buf.readVString();
+            id = buf.readVarIntUTF();
             int len = buf.readVarInt(false);
             mapping.ensureCapacity(len);
             for (int i = 0; i < len; i++) {
-                mapping.putInt(buf.readVString(), buf.readVarInt(false));
+                mapping.putInt(buf.readVarIntUTF(), buf.readVarInt(false));
             }
         }
 
         @Override
         public void toBytes(ByteWriter buf) {
-            buf.writeVString(id).writeVarInt(mapping.size(), false);
+            buf.putVarIntUTF(id).putVarInt(mapping.size(), false);
             for(ToIntMap.Entry<String> entry : mapping.selfEntrySet()) {
-                buf.writeVarInt(entry.v, false).writeVString(entry.k);
+                buf.putVarInt(entry.v, false).putVarIntUTF(entry.k);
             }
         }
 

@@ -64,15 +64,15 @@ public class ClassInfo {
 
     public void toByteArray(ByteWriter w, StringPool pool, ConstantPool cw) {
         pool.writeString(w, internalName);
-        w.writeVarInt(interfaces.size(), false);
+        w.putVarInt(interfaces.size(), false);
         for (String s : interfaces) {
             pool.writeString(w, s);
         }
-        w.writeVarInt(annotations.size(), false);
+        w.putVarInt(annotations.size(), false);
         for (Map.Entry<String, Collection<Annotation>> entry : annotations.asMap().entrySet()) {
             pool.writeString(w, entry.getKey());
             Collection<Annotation> as = entry.getValue();
-            w.writeVarInt(as.size(), false);
+            w.putVarInt(as.size(), false);
             for (Annotation annotation : as) {
                 annotation.toByteArray(cw, w);
             }

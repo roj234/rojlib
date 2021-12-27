@@ -45,14 +45,14 @@ import java.util.*;
  */
 public final class EnumHelper<E extends Enum<E>> {
     private static final H H = DirectAccessor.builder(H.class).access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null).build();
-    private static final IFieldAccessor ordinalAcc;
+    private static final FieldAccessor ordinalAcc;
 
     interface H {
         Map<String, ?> getEnumConstantDirectory(Class<? extends Enum<?>> clazz);
     }
 
     static {
-        IFieldAccessor t;
+        FieldAccessor t;
         try {
             t = ReflectionUtils.access(Enum.class.getDeclaredField("ordinal"));
         } catch (NoSuchFieldException e) {
@@ -63,8 +63,8 @@ public final class EnumHelper<E extends Enum<E>> {
     }
 
     private final Class<E> clazz;
-    private final Field[] fields;
-    private IFieldAccessor values;
+    private final Field[]           fields;
+    private       FieldAccessor     values;
     private final Collection<Field> switchFields;
     private final Deque<UndoInfo<E>> undoStack = new LinkedList<>();
 
@@ -134,7 +134,7 @@ public final class EnumHelper<E extends Enum<E>> {
 
         undoStack.push(new UndoInfo<>(this));
 
-        IFieldAccessor vf = findValuesField(valueName);
+        FieldAccessor vf = findValuesField(valueName);
 
         E[] values = values();
         for (int i = 0; i < values.length; i++) {
@@ -159,10 +159,10 @@ public final class EnumHelper<E extends Enum<E>> {
         addSwitch();
     }
 
-    private IFieldAccessor findValuesField(String valueId) {
+    private FieldAccessor findValuesField(String valueId) {
         if (values == null) {
             for (Field field : fields) {
-                if (field.getName().equals(valueId) && (field.getModifiers() & AccessFlag.STATIC) != 0) {
+                if ((valueId == null ? field.getType().getComponentType() == clazz : field.getName().equals(valueId)) && (field.getModifiers() & AccessFlag.STATIC) != 0) {
                     return values = ReflectionUtils.access(field);
                 }
             }

@@ -63,7 +63,7 @@ public final class Base64 {
     public static ByteList encode(ByteList in, ByteList out, byte[] chars) {
         int bits, i = 0;
 
-        int e = in.pos();
+        int e = in.wIndex();
         int r = e % 3; // 0, 1 or 2
         e -= r;
 
@@ -71,25 +71,25 @@ public final class Base64 {
             bits = in.getU(i++) << 16 | in.getU(i++) << 8 | in.getU(i++);
 
             // no for...
-            out.add(chars[bits >> 18 & 0x3f]);
-            out.add(chars[bits >> 12 & 0x3f]);
-            out.add(chars[bits >> 6 & 0x3f]);
-            out.add(chars[bits & 0x3f]);
+            out.put(chars[bits >> 18 & 0x3f]);
+            out.put(chars[bits >> 12 & 0x3f]);
+            out.put(chars[bits >> 6 & 0x3f]);
+            out.put(chars[bits & 0x3f]);
         } while (i < e);
 
         if(r != 0) {
             int r1 = in.getU(i++);
-            out.add(chars[r1 >> 2]);
+            out.put(chars[r1 >> 2]);
             if (r == 1) {
-                out.add(chars[(r1 << 4) & 0x3f]);
+                out.put(chars[(r1 << 4) & 0x3f]);
             } else {
                 int r2 = in.getU(i);
-                out.add(chars[(r1 << 4) & 0x3f | (r2 >> 4)]);
-                out.add(chars[(r2 << 2) & 0x3f]);
+                out.put(chars[(r1 << 4) & 0x3f | (r2 >> 4)]);
+                out.put(chars[(r2 << 2) & 0x3f]);
             }
 
             for (r = 3 - r, i = 0; i < r; i++)
-                out.add(chars[64]);
+                out.put(chars[64]);
         }
 
         return out;
@@ -102,7 +102,7 @@ public final class Base64 {
     public static CharList encode(ByteList in, CharList out, byte[] chars) {
         int bits, i = 0;
 
-        int e = in.pos();
+        int e = in.wIndex();
         int r = e % 3; // 0, 1 or 2
         e -= r;
 
@@ -150,14 +150,14 @@ public final class Base64 {
             o2 = bits >> 8 & 0xff;
 
             if (h3 == 64) {
-                out.add((byte) o1);
+                out.put((byte) o1);
             } else if (h4 == 64) {
-                out.add((byte) o1);
-                out.add((byte) o2);
+                out.put((byte) o1);
+                out.put((byte) o2);
             } else {
-                out.add((byte) o1);
-                out.add((byte) o2);
-                out.add((byte) bits);
+                out.put((byte) o1);
+                out.put((byte) o2);
+                out.put((byte) bits);
             }
         } while (i < len);
         return out;
@@ -180,16 +180,16 @@ public final class Base64 {
             o2 = bits >> 8 & 0xff;
 
             if (h3 == 64) {
-                out.add((byte) o1);
+                out.put((byte) o1);
             } else if (h4 == 64) {
-                out.add((byte) o1);
-                out.add((byte) o2);
+                out.put((byte) o1);
+                out.put((byte) o2);
             } else {
-                out.add((byte) o1);
-                out.add((byte) o2);
-                out.add((byte) bits);
+                out.put((byte) o1);
+                out.put((byte) o2);
+                out.put((byte) bits);
             }
-        } while (i < in.pos()); // support not pad
+        } while (i < in.wIndex()); // support not pad
         return out;
     }
 

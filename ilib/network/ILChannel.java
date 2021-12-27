@@ -179,12 +179,12 @@ public class ILChannel implements ITickable {
 
     private static byte[] encodePackets(ByteWriter[] messages) {
         ByteWriter writer = new ByteWriter(64)
-                .writeVarInt(0, false) // internal packet id
+                .putVarInt(0, false) // internal packet id
 
-                .writeVarInt(messages.length, false);
+                .putVarInt(messages.length, false);
         for (ByteWriter w : messages) {
-            writer.writeVarInt(w.list.pos(), false)
-                    .writeBytes(w);
+            writer.putVarInt(w.list.wIndex(), false)
+                    .put(w);
         }
         return writer.toByteArray();
     }

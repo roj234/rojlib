@@ -29,7 +29,7 @@ import roj.collect.TimedHashMap;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.SecureUtil;
 import roj.net.ssl.EngineAllocator;
 import roj.net.ssl.ServerSslConf;
@@ -112,7 +112,7 @@ public class HttpServer implements Runnable {
     }
 
     protected ITask getTaskFor(Socket client) throws IOException {
-        FileDescriptor fd = NonblockingUtil.fd(client);
+        FileDescriptor fd = NIOUtil.fd(client);
 
         WrappedSocket cio = (
                 ssl != null ?

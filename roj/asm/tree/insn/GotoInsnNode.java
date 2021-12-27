@@ -107,9 +107,9 @@ public class GotoInsnNode extends InsnNode {
     public void toByteArray(ConstantPool cw, ByteWriter w) {
         int delta = this.delta;
         if (((short) delta) != delta) {
-            w.writeByte(this.code = GOTO_W).writeInt(delta);
+            w.put(this.code = GOTO_W).putInt(delta);
         } else {
-            w.writeByte(this.code = GOTO).writeShort(delta);
+            w.put(this.code = GOTO).putShort(delta);
         }
     }
 

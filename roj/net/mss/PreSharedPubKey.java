@@ -42,6 +42,7 @@ public final class PreSharedPubKey implements MSSPubKey<X509Certificate> {
     private final X509Certificate[] certificates;
 
     public PreSharedPubKey(X509Certificate... cert) {
+        assert cert.length > 0;
         this.certificates = cert;
     }
 

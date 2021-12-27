@@ -89,7 +89,7 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
         if (code == Opcodes.NEW && owner.startsWith("[")) {
             throw new IllegalArgumentException("The new instruction cannot be used to create an array.");
         }
-        w.writeByte(code).writeShort(cw.getClassId(owner));
+        w.put(code).putShort(cw.getClassId(owner));
     }
 
     @Override

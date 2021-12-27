@@ -58,7 +58,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import roj.collect.SimpleList;
 import roj.config.data.CEntry;
-import roj.reflect.IFieldAccessor;
+import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.TextUtil;
 
@@ -432,7 +432,7 @@ public class ImpLib {
      */
     @SuppressWarnings("unchecked")
     public static void cleanTrash() {
-        IFieldAccessor acc;
+        FieldAccessor acc;
         try {
             LaunchClassLoader loader = Launch.classLoader;
 

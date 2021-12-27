@@ -95,6 +95,7 @@ public final class MSSEngineServer extends MSSEngine {
     static final int S_HS_WAIT = 0, S_RNDA_WAIT = 1;
 
     @Override
+    @SuppressWarnings("fallthrough")
     public int handshake(ByteBuffer snd, ByteBuffer rcv) throws MSSException {
         if (rcv.remaining() > 0 && rcv.get(0) == PH_ERROR) {
             return packetError(snd);
@@ -139,34 +140,32 @@ public final class MSSEngineServer extends MSSEngine {
                 }
                 if (rcv.remaining() < rcv.getChar(1) + 3) return uf(rcv.getChar(1) + 3);
                 if (snd.remaining() < 3) return of(3);
-                rcv.position(3);
-                byte[] encoded = new byte[rcv.remaining()];
+                rcv.position(1);
+                byte[] encoded = new byte[rcv.getChar()];
                 rcv.get(encoded);
                 try {
                     ByteBuffer data = ByteBuffer.wrap(priDecoder.doFinal(encoded));
-                    halfSharedKeySize = (char) (data.remaining() - 3);
                     if (data.get() != PH_CLIENT_RNDA)
                         return error("无效的RNDA哈希");
 
                     MSSCiphers selected = supportedCiphers[data.getChar()];
+                    int hsk = data.remaining();
+                    if (hsk != selected.getSharedKeySize() >> 1)
+                        return error("无效的RNDA密钥长度");
                     encoder = selected.createEncoder();
                     decoder = selected.createDecoder();
-                    chunkSize = (char) (likeChunkedMode ? selected.preferChunkSize() : 65535);
 
-                    sharedKey = new byte[halfSharedKeySize << 1];
-                    data.get(sharedKey, 0, halfSharedKeySize);
-                    byte[] rndB = new byte[halfSharedKeySize];
+                    sharedKey = new byte[hsk << 1];
+                    data.get(sharedKey, 0, hsk);
+                    byte[] rndB = new byte[hsk];
                     random.nextBytes(rndB);
-                    System.arraycopy(rndB, 0, sharedKey, halfSharedKeySize, halfSharedKeySize);
+                    System.arraycopy(rndB, 0, sharedKey, hsk, hsk);
 
-                    System.arraycopy(sharedKey, 0, rndB, 0, halfSharedKeySize);
-                    encoder.setKey(rndB);
+                    System.arraycopy(sharedKey, 0, rndB, 0, hsk);
+                    encoder.setKey(rndB, CipheR.ENCRYPT);
 
-                    if (!selected.isCipherTextSame()) flag |= DIFF_CIPHER;
-
-                    hasher.reset();
-                    hasher.update(sharedKey);
-                    snd.put(PH_SERVER_RNDB).putInt((int) hasher.getValue()).putChar((char) 0);
+                    int hash = this.hash.computeHandshakeHash(sharedKey);
+                    snd.put(PH_SERVER_RNDB).putInt(hash).putChar((char) 0);
                     stage = TMP_2;
                 } catch (GeneralSecurityException | ArrayIndexOutOfBoundsException e) {
                     return error("无效的RNDA数据包", e);
@@ -174,7 +173,8 @@ public final class MSSEngineServer extends MSSEngine {
             case TMP_2:
                 int sndPos = snd.position();
 
-                ByteBuffer tmp = ByteBuffer.wrap(sharedKey, halfSharedKeySize, halfSharedKeySize);
+                int hsk = sharedKey.length >> 1;
+                ByteBuffer tmp = ByteBuffer.wrap(sharedKey, hsk, hsk);
                 try {
                     if (encoder.crypt(tmp, snd) == CipheR.BUFFER_OVERFLOW)
                         return of(tmp.remaining() << 1);
@@ -187,8 +187,8 @@ public final class MSSEngineServer extends MSSEngine {
                     return error("RNDB加密后数据过长");
                 snd.putChar(sndPos - 2, (char) i);
 
-                encoder.setKey(sharedKey);
-                decoder.setKey(sharedKey);
+                encoder.setKey(sharedKey, CipheR.ENCRYPT);
+                decoder.setKey(sharedKey, CipheR.DECRYPT);
 
                 stage = DONE_WAIT;
                 return HS_OK;
@@ -199,11 +199,12 @@ public final class MSSEngineServer extends MSSEngine {
                 }
                 if (rcv.remaining() < rcv.getChar(1) + 3) return uf(rcv.getChar(1) + 3);
 
-                rcv.position(3);
-                encoded = new byte[rcv.remaining()];
+                rcv.position(1);
+                // Change note: may have received more!
+                encoded = new byte[rcv.getChar()];
                 rcv.get(encoded);
 
-                ByteBuffer copySec = ByteBuffer.wrap(new byte[halfSharedKeySize << 1]);
+                ByteBuffer copySec = ByteBuffer.wrap(new byte[sharedKey.length]);
                 try {
                     int r = decoder.crypt(ByteBuffer.wrap(encoded), copySec);
                     if (r == CipheR.BUFFER_OVERFLOW)

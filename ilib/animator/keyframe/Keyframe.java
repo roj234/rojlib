@@ -120,20 +120,20 @@ public final class Keyframe extends Mat4x3f {
     }
 
     public void toByteArray(ByteWriter w, StringPool pool) {
-        w.writeVarInt(tick, false).writeByte(flag);
+        w.putVarInt(tick, false).put(flag);
 
-        w.writeFloat(m00)
-                .writeFloat(m01)
-                .writeFloat(m02)
-                .writeFloat(m03)
-                .writeFloat(m10)
-                .writeFloat(m11)
-                .writeFloat(m12)
-                .writeFloat(m13)
-                .writeFloat(m20)
-                .writeFloat(m21)
-                .writeFloat(m22)
-                .writeFloat(m23);
+        w.putFloat(m00)
+                .putFloat(m01)
+                .putFloat(m02)
+                .putFloat(m03)
+                .putFloat(m10)
+                .putFloat(m11)
+                .putFloat(m12)
+                .putFloat(m13)
+                .putFloat(m20)
+                .putFloat(m21)
+                .putFloat(m22)
+                .putFloat(m23);
 
         fn.toByteArray(w, pool);
     }

@@ -47,7 +47,7 @@ public final class AttrConstantValue extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.reset(c).getIndex());
+        w.putShort(pool.reset(c).getIndex());
     }
 
     public String toString() {

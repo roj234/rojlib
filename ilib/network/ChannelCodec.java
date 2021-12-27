@@ -72,7 +72,7 @@ public class ChannelCodec {
         if (id <= 0) {
             throw new RuntimeException("Sending undefined packet " + msg.getClass().getName());
         }
-        ByteWriter writer = new ByteWriter(64).writeVarInt(id, false);
+        ByteWriter writer = new ByteWriter(64).putVarInt(id, false);
         msg.toBytes(writer);
         return writer;
     }
@@ -80,7 +80,7 @@ public class ChannelCodec {
     protected final void decode(ProxyPacket packet, INetHandler handler) {
         if (!validPacket(packet)) return;
         ByteReader payload = packet.payload();
-        if (payload.isFinished()) {
+        if (payload.hasRemaining()) {
             ImpLib.logger().error("Packet decoder {} received an empty packet!", channel);
             return;
         }
@@ -98,7 +98,7 @@ public class ChannelCodec {
         int len = r.readVarInt(false);
         ByteReader[] brs = new ByteReader[len];
         for (int i = 0; i < len; i++) {
-            brs[i] = new ByteReader(r.readBytesDelegated(r.readVarInt(false)));
+            brs[i] = new ByteReader(r.slice(r.readVarInt(false)));
         }
         return brs;
     }

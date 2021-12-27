@@ -25,15 +25,13 @@
  */
 package roj.net.cross;
 
-import roj.net.SecureUtil;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.PreSharedPubKey;
 
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
@@ -44,16 +42,11 @@ public final class AE_MSSKey {
     //while(!thing.red) { await(); } else try { killRelationShip() && enjoy() } catch(e) { delete thing; } finally { print (loved.ever) }
     public static void loadMSSCert() {
         try {
-            InputStream stream = AE_MSSKey.class.getResourceAsStream("/META-INF/client.ks");
-            TrustManager[] tmf = SecureUtil.makeTrustManagers(stream, "123456".toCharArray());
-            for (TrustManager manager : tmf) {
-                if (manager instanceof X509TrustManager) {
-                    X509TrustManager tm = (X509TrustManager) manager;
-                    MSSEngineClient.setDefaultKeyFormats(new PreSharedPubKey(tm.getAcceptedIssuers()));
-                    break;
-                }
-            }
-        } catch (IOException | GeneralSecurityException e) {
+            InputStream stream = AE_MSSKey.class.getResourceAsStream("/META-INF/ae/client.cer");
+            CertificateFactory factory = CertificateFactory.getInstance("X.509");
+            X509Certificate cer = (X509Certificate) factory.generateCertificate(stream);
+            MSSEngineClient.setDefaultKeyFormats(new PreSharedPubKey(cer));
+        } catch (GeneralSecurityException e) {
             e.printStackTrace();
             System.err.println("MSS引擎预共享根证书模式初始化失败");
         }

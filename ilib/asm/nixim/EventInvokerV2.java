@@ -190,7 +190,7 @@ public final class EventInvokerV2 implements IEventListener {
 
         ByteList list = Parser.toByteArrayShared(data);
 
-        Class<?> clazz = ClassDefiner.INSTANCE.defineClassC(data.name.replace('/', '.'), list.list, list.offset(), list.limit());
+        Class<?> clazz = ClassDefiner.INSTANCE.defineClassC(data.name.replace('/', '.'), list.list, list.arrayOffset(), list.limit());
 
         try {
             return (IEventListener) Instantiator._new(clazz, new Class<?>[]{Object[].class}, targets);
@@ -287,7 +287,7 @@ public final class EventInvokerV2 implements IEventListener {
             insns.add(AttrCode.METHOD_END_MARK);
 
             try (FileOutputStream fos = new FileOutputStream(new File("object.class"))) {
-                clazz.getBytes().writeToStream(fos);
+                clazz.bytes().writeToStream(fos);
             }
         }
 
@@ -325,7 +325,7 @@ public final class EventInvokerV2 implements IEventListener {
         insns.add(AttrCode.METHOD_END_MARK);
 
         try (FileOutputStream fos = new FileOutputStream(new File("static.class"))) {
-            clazz.getBytes().writeToStream(fos);
+            clazz.bytes().writeToStream(fos);
         }
     }*/
 
@@ -363,7 +363,7 @@ public final class EventInvokerV2 implements IEventListener {
                 list = Parser.toByteArrayShared(data);
             }
 
-            Class<?> ret = ClassDefiner.INSTANCE.defineClassC(name, list.list, list.offset(), list.limit());
+            Class<?> ret = ClassDefiner.INSTANCE.defineClassC(name, list.list, list.arrayOffset(), list.limit());
             cache.put(callback, ret);
             return ret;
         }

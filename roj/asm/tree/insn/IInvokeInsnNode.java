@@ -84,7 +84,7 @@ public abstract class IInvokeInsnNode extends InsnNode {
     }
 
     /**
-     * asm/util/ByteWriter.writeShort:(I)Lasm/util/ByteWriter;
+     * asm/util/ByteWriter.putShort:(I)Lasm/util/ByteWriter;
      *
      * @param desc javap格式的描述符
      */

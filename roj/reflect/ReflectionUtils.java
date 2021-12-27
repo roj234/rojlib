@@ -62,7 +62,7 @@ public final class ReflectionUtils {
         for (Field f : getFields(obj)) {
 
             Class<?> tmp = f.getType();
-            while (tmp != null) {
+            while (tmp != Object.class) {
                 if (tmp == targetClass) {
                     f.setAccessible(true);
                     return f;
@@ -78,7 +78,7 @@ public final class ReflectionUtils {
      */
     public static List<Field> getFields(Class<?> clazz) {
         MyHashSet<Field> fields = new MyHashSet<>();
-        while (clazz != null) {
+        while (clazz != Object.class) {
             Collections.addAll(fields, clazz.getDeclaredFields());
             clazz = clazz.getSuperclass();
         }
@@ -86,7 +86,7 @@ public final class ReflectionUtils {
     }
 
     public static void consumeFields(Class<?> clazz, Consumer<Field> consumer) {
-        while (clazz != null) {
+        while (clazz != Object.class) {
             for (Field field : clazz.getDeclaredFields())
                 consumer.accept(field);
             clazz = clazz.getSuperclass();
@@ -98,7 +98,7 @@ public final class ReflectionUtils {
      */
     public static List<Method> getMethods(Class<?> clazz) {
         MyHashSet<Method> methods = new MyHashSet<>();
-        while (clazz != null) {
+        while (clazz != Object.class) {
             methods.addAll(clazz.getDeclaredMethods());
             clazz = clazz.getSuperclass();
         }
@@ -210,30 +210,30 @@ public final class ReflectionUtils {
     }
 
     public static void setFinal(Object o, Field field, Object value) {
-        IFieldAccessor acc = access(field);
+        FieldAccessor acc = access(field);
         acc.setInstance(o);
         acc.setObject(value);
     }
 
-    private static final WeakHashMap<Field, IFieldAccessor> accessors = new WeakHashMap<>();
-    public static IFieldAccessor access(@Nonnull Field field) {
-        IFieldAccessor acc = accessors.get(field);
+    private static final WeakHashMap<Field, FieldAccessor> accessors = new WeakHashMap<>();
+    public static FieldAccessor access(@Nonnull Field field) {
+        FieldAccessor acc = accessors.get(field);
         if(acc != null)
             return acc;
         try {
-            return new U.UFA(field);
+            return new UFA(field);
         } catch (Throwable e) {
             if((field.getModifiers() & AccessFlag.FINAL) == 0) {
                 acc = DirectAccessor
-                        .builder(IFieldAccessor.class)
+                        .builder(FieldAccessor.class)
                         .makeCache(field.getDeclaringClass())
                         .useCache()
-                        .access(field.getDeclaringClass(), new String[]{field.getName()},
-                                new String[]{"get" + accessorName(field)},
-                                new String[]{"set" + accessorName(field)})
+                        .access(field.getDeclaringClass(), field.getName(),
+                                "get" + accessorName(field),
+                                "set" + accessorName(field))
                         .build();
             } else {
-                acc = new VH(field);
+                acc = new VHFA(field);
             }
             accessors.put(field, acc);
             return acc;
@@ -246,7 +246,7 @@ public final class ReflectionUtils {
 
     public static List<Class<?>> getFathers(Class<?> clazz) {
         List<Class<?>> classes = new ArrayList<>();
-        while (clazz != null) {
+        while (clazz != Object.class) {
             classes.add(clazz);
             Collections.addAll(classes, clazz.getInterfaces());
             clazz = clazz.getSuperclass();
@@ -268,7 +268,7 @@ public final class ReflectionUtils {
 
                     Collections.addAll(pending, c.getInterfaces());
                     Class<?> s = c.getSuperclass();
-                    if(s != null)
+                    if(s != Object.class)
                         pending.add(s);
                 }
             }

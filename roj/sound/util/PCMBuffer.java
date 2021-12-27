@@ -44,7 +44,7 @@ public class PCMBuffer implements IAudio {
 
     @Override
     public int write(byte[] b, int size) {
-        buf.addAll(b, 0, size);
+        buf.put(b, 0, size);
         return size;
     }
 

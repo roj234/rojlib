@@ -54,7 +54,7 @@ public final class AttrUTFRef extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.reset(cst).getIndex());
+        w.putShort(pool.reset(cst).getIndex());
     }
 
     public String toString() {

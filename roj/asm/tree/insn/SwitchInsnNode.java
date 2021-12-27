@@ -101,9 +101,9 @@ public final class SwitchInsnNode extends InsnNode {
         int self = pcRev.getInt(this);
 
         // 共享... 问题在这
-        byte[] data = w.writeByte(code).list.list;
-        int pos = w.list.pos();
-        w.list.pos(pos + pad);
+        byte[] data = w.put(code).list.list;
+        int pos = w.list.wIndex();
+        w.list.wIndex(pos + pad);
         for (int i = 0; i < pad; i++) {
             data[pos++] = 0;
         }
@@ -119,17 +119,17 @@ public final class SwitchInsnNode extends InsnNode {
             if (hi < lo)
                 throw new IllegalArgumentException(switcher.toString());
 
-            w.writeInt(pcRev.getInt(validate(def)) - self)
-                    .writeInt(lo).writeInt(hi);
+            w.putInt(pcRev.getInt(validate(def)) - self)
+             .putInt(lo).putInt(hi);
             for (InsnNode node : switcher.values()) {
-                w.writeInt(pcRev.getInt(validate(node)) - self);
+                w.putInt(pcRev.getInt(validate(node)) - self);
             }
         } else {
-            w.writeInt(pcRev.getInt(validate(def)) - self)
-                    .writeInt(switcher.size());
+            w.putInt(pcRev.getInt(validate(def)) - self)
+                    .putInt(switcher.size());
             for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
-                w.writeInt(entry.getKey())
-                        .writeInt(pcRev.getInt(validate(entry.getValue())) - self);
+                w.putInt(entry.getKey())
+                        .putInt(pcRev.getInt(validate(entry.getValue())) - self);
             }
         }
 

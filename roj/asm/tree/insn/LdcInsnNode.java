@@ -161,9 +161,9 @@ public final class LdcInsnNode extends InsnNode {
     public void toByteArray(ConstantPool cw, ByteWriter w) {
         int cpi = (c = cw.reset(c)).getIndex();
         if (this.code == Opcodes.LDC2_W || (this.code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
-            w.writeByte(code).writeShort(cpi);
+            w.put(code).putShort(cpi);
         } else {
-            w.writeByte(code).writeByte((byte) cpi);
+            w.put(code).put((byte) cpi);
         }
     }
 

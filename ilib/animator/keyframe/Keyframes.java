@@ -175,7 +175,7 @@ public final class Keyframes implements Iterable<Keyframe> {
     }
 
     public void toByteArray(ByteWriter w, StringPool pool) {
-        w.writeVarInt(this.keyframes.size(), false);
+        w.putVarInt(this.keyframes.size(), false);
 
         List<Keyframe> keyframes = this.keyframes;
         for (int i = 0; i < keyframes.size(); i++) {

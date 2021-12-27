@@ -89,8 +89,8 @@ public final class Method implements MethodNode, MoFNode {
 
                 attr = handleAttribute(pool, r, name, r.length());
 
-                if (!r.isFinished()) {
-                    throw new IllegalStateException("[M.W.A] " + name + " has " + (r.length() - r.index) + " bytes left: " + attr);
+                if (!r.hasRemaining()) {
+                    throw new IllegalStateException("[M.W.A] " + name + " has " + (r.length() - r.rIndex) + " bytes left: " + attr);
                 }
             } else {
                 attributes.add(attr);
@@ -115,16 +115,16 @@ public final class Method implements MethodNode, MoFNode {
         for (int i = 0; i < len; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
             int length = r.readInt();
-            int end = r.index + length;
+            int end = r.rIndex + length;
 
             Attribute attr = handleAttribute(pool, r, name, length);
 
-            if (r.index != end) {
+            if (r.rIndex != end) {
                 new IllegalStateException(
-                "[M.I.A] " + name + " has " + (end - r.index) + " bytes left(total: " + length + "): \n"
-                + attr + "\nAt " + owner + "." + this.name + "\n" + r.getBytes().subList(r.index,
-                end - r.index)).printStackTrace();
-                r.index = end;
+                "[M.I.A] " + name + " has " + (end - r.rIndex) + " bytes left(total: " + length + "): \n"
+                + attr + "\nAt " + owner + "." + this.name + "\n" + r.bytes().slice(r.rIndex,
+                                                                                    end - r.rIndex)).printStackTrace();
+                r.rIndex = end;
             }
         }
     }
@@ -171,7 +171,7 @@ public final class Method implements MethodNode, MoFNode {
                 // 弃用
             case "Deprecated":
             default:
-                attr = new AttrUnknown(name, r.readBytesDelegated(length));
+                attr = new AttrUnknown(name, r.slice(length));
         }
         attributes.add(attr);
         return attr;
@@ -215,7 +215,7 @@ public final class Method implements MethodNode, MoFNode {
         }
         if (signature != null) {
             w.list.clear();
-            w.writeShort(cw.getUtfId(signature.toGeneric()));
+            w.putShort(cw.getUtfId(signature.toGeneric()));
             m.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
         }
         if (code != null) {
@@ -230,20 +230,20 @@ public final class Method implements MethodNode, MoFNode {
     }
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeShort(accesses.flag).writeShort(pool.getUtfId(name));
+        w.putShort(accesses.flag).putShort(pool.getUtfId(name));
 
         if (params != null) {
             params.add(returnType);
             rawDesc = ParamHelper.getMethod(params);
             params.remove(params.size() - 1);
         }
-        w.writeShort(pool.getUtfId(rawDesc));
+        w.putShort(pool.getUtfId(rawDesc));
 
         aOn(code);
         if (signature != null)
             attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
 
-        w.writeShort(attributes.size());
+        w.putShort(attributes.size());
         for (int i = 0; i < attributes.size(); i++) {
             attributes.get(i).toByteArray(pool, w);
         }

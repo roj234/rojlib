@@ -53,14 +53,14 @@ public class StringPool {
         String[] array = new String[length];
         this.ordered = Arrays.asList(array);
         for (int i = 0; i < length; i++) {
-            array[i] = reader.readVString();
+            array[i] = reader.readVarIntUTF();
         }
     }
 
     public ByteWriter writePool(ByteWriter data) {
-        data.writeVarInt(ordered.size(), false);
+        data.putVarInt(ordered.size(), false);
         for (String s : ordered) {
-            data.writeVString(s);
+            data.putVarIntUTF(s);
         }
         return data;
     }
@@ -71,7 +71,7 @@ public class StringPool {
             list.putByValue(id = list.size(), string);
             ordered.add(string);
         }
-        return w.writeVarInt(id, false);
+        return w.putVarInt(id, false);
     }
 
     public String readString(ByteReader r) {

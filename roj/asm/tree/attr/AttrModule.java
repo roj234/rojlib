@@ -142,31 +142,31 @@ public final class AttrModule extends Attribute {
         self.write(w, pool);
 
         final List<ModuleInfo> requires = this.requires;
-        w.writeShort(requires.size());
+        w.putShort(requires.size());
         for (int i = 0; i < requires.size(); i++) {
             requires.get(i).write(w, pool);
         }
 
         final List<ExportInfo> exports = this.exports;
-        w.writeShort(exports.size());
+        w.putShort(exports.size());
         for (int i = 0; i < exports.size(); i++) {
             exports.get(i).write(w, pool);
         }
 
         final List<ExportInfo> opens = this.opens;
-        w.writeShort(opens.size());
+        w.putShort(opens.size());
         for (int i = 0; i < opens.size(); i++) {
             opens.get(i).write(w, pool);
         }
 
         final List<String> uses = this.uses;
-        w.writeShort(uses.size());
+        w.putShort(uses.size());
         for (int i = 0; i < uses.size(); i++) {
-            w.writeShort(pool.getClassId(uses.get(i)));
+            w.putShort(pool.getClassId(uses.get(i)));
         }
 
         final List<Provider> providers = this.providers;
-        w.writeShort(providers.size());
+        w.putShort(providers.size());
         for (int i = 0; i < providers.size(); i++) {
             providers.get(i).write(w, pool);
         }
@@ -224,7 +224,7 @@ public final class AttrModule extends Attribute {
         }
 
         public void write(ByteWriter w, ConstantPool writer) {
-            w.writeShort(writer.getModuleId(name)).writeShort(access).writeShort(version == null ? 0 : writer.getUtfId(name));
+            w.putShort(writer.getModuleId(name)).putShort(access).putShort(version == null ? 0 : writer.getUtfId(name));
         }
 
         @Override
@@ -252,9 +252,9 @@ public final class AttrModule extends Attribute {
         }
 
         public void write(ByteWriter w, ConstantPool writer) {
-            w.writeShort(writer.getPackageId(Package)).writeShort(access).writeShort(accessible.size());
+            w.putShort(writer.getPackageId(Package)).putShort(access).putShort(accessible.size());
             for (int i = 0, s = accessible.size(); i < s; i++) {
-                w.writeShort(writer.getModuleId(accessible.get(i)));
+                w.putShort(writer.getModuleId(accessible.get(i)));
             }
         }
 
@@ -283,9 +283,9 @@ public final class AttrModule extends Attribute {
         }
 
         public void write(ByteWriter w, ConstantPool writer) {
-            w.writeShort(writer.getClassId(serviceName)).writeShort(implement.size());
+            w.putShort(writer.getClassId(serviceName)).putShort(implement.size());
             for (int i = 0, s = implement.size(); i < s; i++) {
-                w.writeShort(writer.getClassId(implement.get(i)));
+                w.putShort(writer.getClassId(implement.get(i)));
             }
         }
 

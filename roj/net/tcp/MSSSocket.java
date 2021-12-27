@@ -26,8 +26,7 @@
 package roj.net.tcp;
 
 
-import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.MSSException;
@@ -69,15 +68,14 @@ public class MSSSocket extends PlainSocket {
         ByteBuffer bb = ByteBuffer.allocateDirect(_size);
         networkIn.flip();
         bb.put(networkIn);
-        IOUtil.clean(networkIn);
+        NIOUtil.clean(networkIn);
         networkIn = bb;
     }
 
     private void expandNetOut(int _size) {
         ByteBuffer bb = ByteBuffer.allocateDirect(_size);
-        networkOut.flip();
         bb.put(networkOut);
-        IOUtil.clean(networkOut);
+        NIOUtil.clean(networkOut);
         outCopy = bb.duplicate();
         bb.flip();
         networkOut = bb;
@@ -87,9 +85,8 @@ public class MSSSocket extends PlainSocket {
         if (bb.hasRemaining()) {
             int w;
             do {
-                w = NonblockingUtil.normalize(
-                        NonblockingUtil.writeFromNativeBuffer(fd, bb,
-                                                              NonblockingUtil.SOCKET_FD));
+                w = NIOUtil.writeFromNativeBuffer(fd, bb,
+                                                  NIOUtil.SOCKET_FD);
             } while (w == -3 && !socket.isClosed());
         }
         return !bb.hasRemaining();
@@ -152,15 +149,19 @@ public class MSSSocket extends PlainSocket {
     }
 
     private int _read(ByteBuffer buffer) throws IOException {
-        return NonblockingUtil.normalize(
-                NonblockingUtil.readToNativeBuffer(fd, buffer,
-                                                   NonblockingUtil.SOCKET_FD));
+        return NIOUtil.readToNativeBuffer(fd, buffer,
+                                          NIOUtil.SOCKET_FD);
+    }
+
+    @Override
+    public void poll() {
+        rBuf.position(rBuf.position() + pushback);
+        pushback = 0;
     }
 
     int pushback;
     public int read(int max) throws IOException {
-        if (!hsDone)
-            throw new MSSException("Not handshake");
+        if (!hsDone) throw new MSSException("Not handshake");
 
         int nread;
         if(pushback > 0) {
@@ -199,6 +200,8 @@ public class MSSSocket extends PlainSocket {
                 result = -result;
                 if (result > rBuf.capacity()) {
                     expandReadBuffer(result);
+                } else {
+                    break;
                 }
             } else if (result > 0) {
                 // UNDERFLOW

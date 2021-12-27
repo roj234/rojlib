@@ -149,7 +149,7 @@ public class ControllHelper {
                     //cancelled = true;
                 } else {
                     //}
-                    //if ((preyX != x && /*prevY != y &&*/ prevZ != z) || (this.path != null && this.path.isFinished())) {
+                    //if ((preyX != x && /*prevY != y &&*/ prevZ != z) || (this.path != null && this.path.hasRemaining())) {
                     path = entity.getNavigator().getPathToXYZ(entity.posX + x, entity.posY + y, entity.posZ + z);
                     entity.getNavigator().setPath(path, entity.getEntityAttribute(SharedMonsterAttributes.MOVEMENT_SPEED).getAttributeValue());
                     //}

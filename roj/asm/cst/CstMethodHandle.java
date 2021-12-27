@@ -53,9 +53,9 @@ public final class CstMethodHandle extends Constant {
 
     @Override
     public final void write(ByteWriter w) {
-        w.writeByte(CstType.METHOD_HANDLE)
-         .writeByte(kind)
-         .writeShort(getRefIndex());
+        w.put(CstType.METHOD_HANDLE)
+         .put(kind)
+         .putShort(getRefIndex());
     }
 
     public final String toString() {

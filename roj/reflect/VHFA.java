@@ -36,11 +36,11 @@ import java.lang.reflect.Field;
  * @version 0.1
  * @since 2021/8/15 23:36
  */
-final class VH extends IFieldAccessor {
+final class VHFA extends FieldAccessor {
     //VarHandle handle;
     Object[] tmpG, tmpS;
 
-    public VH(Field field) {
+    public VHFA(Field field) {
         super(field);
         field.setAccessible(true);
         //handle = MethodHandles.lookup().unreflectVarHandle(field);

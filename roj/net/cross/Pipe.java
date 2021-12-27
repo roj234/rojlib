@@ -26,8 +26,7 @@
 package roj.net.cross;
 
 import roj.crypt.SM4;
-import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.util.Helpers;
 
 import java.io.FileDescriptor;
@@ -93,7 +92,7 @@ public class Pipe implements Runnable {
 
         boolean flag = false;
         if (toh.hasRemaining()) {
-            int w = NonblockingUtil.writeFromNativeBuffer(upstream, toh, NonblockingUtil.SOCKET_FD);
+            int w = NIOUtil.writeFromNativeBuffer(upstream, toh, NIOUtil.SOCKET_FD);
             if (w < 0) {
                 release();
                 return S_CLOSED;
@@ -103,7 +102,7 @@ public class Pipe implements Runnable {
             if (!toh.hasRemaining()) { toh.clear(); } else flag = true;
         }
         if (toc.hasRemaining()) {
-            int w = NonblockingUtil.writeFromNativeBuffer(downstream, toc, NonblockingUtil.SOCKET_FD);
+            int w = NIOUtil.writeFromNativeBuffer(downstream, toc, NIOUtil.SOCKET_FD);
             if (w < 0) {
                 this.eof = 2;
                 return S_CLOSED;
@@ -114,7 +113,7 @@ public class Pipe implements Runnable {
         }
         if (flag | bufferOnly) return flag ? S_BUFFER : S_NOTHING;
 
-        int r = NonblockingUtil.readToNativeBuffer(upstream, toc, NonblockingUtil.SOCKET_FD);
+        int r = NIOUtil.readToNativeBuffer(upstream, toc, NIOUtil.SOCKET_FD);
         if (r > 0) {
             toc.flip();
             flag = true;
@@ -123,7 +122,7 @@ public class Pipe implements Runnable {
             return S_CLOSED;
         }
 
-        r = NonblockingUtil.readToNativeBuffer(downstream, toh, NonblockingUtil.SOCKET_FD);
+        r = NIOUtil.readToNativeBuffer(downstream, toh, NIOUtil.SOCKET_FD);
         if (r > 0) {
             toh.flip();
             flag = true;
@@ -174,11 +173,11 @@ public class Pipe implements Runnable {
     public final void release() throws IOException {
         if (upstream == null) return;
         eof = 3;
-        IOUtil.clean(toh);
-        IOUtil.clean(toc);
+        NIOUtil.clean(toh);
+        NIOUtil.clean(toc);
         try {
-            NonblockingUtil.close(upstream);
-            NonblockingUtil.close(downstream);
+            NIOUtil.close(upstream);
+            NIOUtil.close(downstream);
         } finally {
             upstream = null;
             downstream = null;
@@ -206,16 +205,16 @@ public class Pipe implements Runnable {
             super(up, down);
             byte[] iv = Arrays.copyOf(pass, 16);
 
-            sm4_h = new SM4();
-            sm4_h.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_STREAMED);
+            sm4_h = new SM4();/*
+            sm4_h.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_CBC);
             sm4_h.setOption(SM4.SM4_IV, iv);
-            sm4_h.setKey(pass);
+            sm4_h.setKey(pass);*/
             tmp_h = toh.duplicate();
 
-            sm4_c = new SM4();
-            sm4_c.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_STREAMED);
+            sm4_c = new SM4();/*
+            sm4_c.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CBC);
             sm4_c.setOption(SM4.SM4_IV, iv);
-            sm4_c.setKey(pass);
+            sm4_c.setKey(pass);*/
             tmp_c = toc.duplicate();
         }
 

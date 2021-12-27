@@ -60,7 +60,7 @@ public final class AttrUTF extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.getUtfId(value));
+        w.putShort(pool.getUtfId(value));
     }
 
     public String toString() {

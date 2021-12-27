@@ -73,7 +73,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(annotations.size());
+        w.putShort(annotations.size());
         for (TypeAnno annotation : annotations) {
             annotation.toByteArray(pool, w);
         }
@@ -487,10 +487,10 @@ public final class AttrTypeAnnotation extends Attribute {
         abstract boolean check(byte type);
 
         public void toByteArray(ConstantPool pool, ByteWriter w) {
-            _t(pool, w.writeByte(type));
-            w.writeByte((byte) typePaths.size());
+            _t(pool, w.put(type));
+            w.put((byte) typePaths.size());
             for (int i = 0; i < typePaths.size(); i++) {
-                w.writeBytes(typePaths.get(i), 0, 2);
+                w.put(typePaths.get(i), 0, 2);
             }
             annotation.toByteArray(pool, w);
         }
@@ -645,7 +645,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
         @Override
         void _t(ConstantPool pool, ByteWriter w) {
-            w.writeShort(offset);
+            w.putShort(offset);
         }
     }
 
@@ -674,7 +674,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
         @Override
         void _t(ConstantPool pool, ByteWriter w) {
-            w.writeShort(offset).writeByte((byte) arg_id);
+            w.putShort(offset).put((byte) arg_id);
         }
     }
 
@@ -693,7 +693,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
         @Override
         void _t(ConstantPool pool, ByteWriter w) {
-            w.writeByte((byte) id);
+            w.put((byte) id);
         }
 
         @Override
@@ -720,7 +720,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
         @Override
         void _t(ConstantPool pool, ByteWriter w) {
-            w.writeByte((byte) id).writeByte((byte) boundId);
+            w.put((byte) id).put((byte) boundId);
         }
 
         @Override
@@ -746,7 +746,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
         @Override
         void _t(ConstantPool pool, ByteWriter w) {
-            w.writeShort(id);
+            w.putShort(id);
         }
 
         @Override
@@ -772,11 +772,11 @@ public final class AttrTypeAnnotation extends Attribute {
 
         @Override
         void _t(ConstantPool pool, ByteWriter w) {
-            w.writeShort(list.size());
+            w.putShort(list.size());
             for (int i = 0; i < list.size(); i++) {
                 int[] arr = list.get(i);
                 for (int j = 0; j < 3; j++) {
-                    w.writeShort(arr[j]);
+                    w.putShort(arr[j]);
                 }
             }
         }

@@ -83,17 +83,17 @@ public class SerialVersion {
         }
 
         ByteWriter w = new ByteWriter(128);
-        w.writeJavaUTF(cz.className().replace('/', '.'));
+        w.putJavaUTF(cz.className().replace('/', '.'));
         int access = cz.accessFlag().flag;
         if ((access & INTERFACE) != 0) {
             access = methods.size() > 0 ? access | ABSTRACT : access & -1025;
         }
 
-        w.writeInt(access & (PUBLIC | FINAL | INTERFACE | ABSTRACT));
+        w.putInt(access & (PUBLIC | FINAL | INTERFACE | ABSTRACT));
         String[] itf = cz.interfaces().toArray(new String[cz.interfaces().size()]);
         Arrays.sort(itf);
         for (String s : itf) {
-            w.writeJavaUTF(s.replace('/', '.'));
+            w.putJavaUTF(s.replace('/', '.'));
         }
 
         BSLowHeap<Item> fields = new BSLowHeap<>(ITEM_SORTER);
@@ -105,25 +105,25 @@ public class SerialVersion {
             }
         }
         for(int i = 0; i < fields.size(); ++i) {
-            w.writeJavaUTF(fields.get(i).name);
-            w.writeInt(fields.get(i).access)
-             .writeJavaUTF(fields.get(i).desc);
+            w.putJavaUTF(fields.get(i).name);
+            w.putInt(fields.get(i).access)
+             .putJavaUTF(fields.get(i).desc);
         }
         if (clInit) {
-            w.writeJavaUTF("<clinit>");
-            w.writeInt(STATIC)
-             .writeJavaUTF("()V");
+            w.putJavaUTF("<clinit>");
+            w.putInt(STATIC)
+             .putJavaUTF("()V");
         }
 
         for(int i = 0; i < constructors.size(); ++i) {
-            w.writeJavaUTF(constructors.get(i).name);
-            w.writeInt(constructors.get(i).access)
-             .writeJavaUTF(constructors.get(i).desc.replace('/', '.'));
+            w.putJavaUTF(constructors.get(i).name);
+            w.putInt(constructors.get(i).access)
+             .putJavaUTF(constructors.get(i).desc.replace('/', '.'));
         }
         for(int i = 0; i < methods.size(); ++i) {
-            w.writeJavaUTF(methods.get(i).name);
-            w.writeInt(methods.get(i).access)
-             .writeJavaUTF(methods.get(i).desc.replace('/', '.'));
+            w.putJavaUTF(methods.get(i).name);
+            w.putInt(methods.get(i).access)
+             .putJavaUTF(methods.get(i).desc.replace('/', '.'));
         }
 
         ByteList bl = w.list;
@@ -134,11 +134,11 @@ public class SerialVersion {
             } catch (NoSuchAlgorithmException e) {
                 throw new RuntimeException("Unexpected: 不支持SHA1");
             }
-            localSha.update(bl.list, 0, bl.pos());
+            localSha.update(bl.list, 0, bl.wIndex());
 
             bl.clear();
             bl.ensureCapacity(20);
-            bl.pos(8);
+            bl.wIndex(8);
             try {
                 localSha.digest(bl.list, 0, 20);
             } catch (DigestException e) {

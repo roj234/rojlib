@@ -42,7 +42,7 @@ import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.reflect.ClassDefiner;
-import roj.reflect.IFieldAccessor;
+import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 
 import java.io.File;
@@ -100,14 +100,14 @@ public final class Config extends JSONConfiguration {
 
     private static void hackSubThreadPriority() {
         try {
-            IFieldAccessor accessor = ReflectionUtils.access(Thread.class.getDeclaredField("group"));
+            FieldAccessor accessor = ReflectionUtils.access(Thread.class.getDeclaredField("group"));
             accessor.setInstance(Thread.currentThread());
             ThreadGroup tg = (ThreadGroup) accessor.getObject();
             accessor = ReflectionUtils.access(ThreadGroup.class.getDeclaredField("threads"));
             accessor.setInstance(tg);
 
 
-            IFieldAccessor finalAccessor = accessor;
+            FieldAccessor finalAccessor = accessor;
             final Thread thread1 = new Thread(() -> {
                 Thread self = Thread.currentThread();
                 Set<Thread> done = new MyHashSet<>();

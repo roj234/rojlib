@@ -30,7 +30,6 @@ import roj.net.tcp.util.Code;
 import roj.net.tcp.util.IllegalRequestException;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -88,10 +87,10 @@ public class StringResponse implements HTTPResponse {
     public void prepare() throws IOException {
         if (buf == null) {
             ByteList list = new ByteList(content.length());
-            ByteWriter.writeUTF(list, content, (byte) -1);
-            list.add((byte) '\r');
-            list.add((byte) '\n'); // EOF flag
-            buf = ByteBuffer.wrap(list.list, 0, list.pos());
+            ByteList.writeUTF(list, content, (byte) -1);
+            list.put((byte) '\r');
+            list.put((byte) '\n'); // EOF flag
+            buf = ByteBuffer.wrap(list.list, 0, list.wIndex());
         } else {
             buf.position(0);
         }

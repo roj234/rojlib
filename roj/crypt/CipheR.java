@@ -39,13 +39,10 @@ public interface CipheR {
     int ENCRYPT = 0, DECRYPT = 1;
 
     String name();
-    void reset(int cryptFlags);
-    void setKey(byte[] password);
+    void setKey(byte[] key, int flags);
     default void setOption(String key, Object value) {}
-    int getBlockSize();
 
     int OK              = 0;
     int BUFFER_OVERFLOW = 1;
-    int BUFFER_UNDERFLOW= 2;
     int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException;
 }

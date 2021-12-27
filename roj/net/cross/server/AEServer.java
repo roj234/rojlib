@@ -28,7 +28,7 @@ package roj.net.cross.server;
 import roj.collect.IntMap;
 import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CMapping;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.SecureUtil;
 import roj.net.cross.Pipe;
 import roj.net.cross.Shutdownable;
@@ -41,9 +41,7 @@ import roj.net.tcp.WrappedSocket;
 import roj.util.FastLocalThread;
 
 import javax.net.ssl.KeyManager;
-import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509KeyManager;
-import javax.net.ssl.X509TrustManager;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -93,16 +91,7 @@ public class AEServer implements Runnable, Shutdownable {
     public AEServer(InetSocketAddress address, int maxConnection, String keyStore, char[] pass) throws
             IOException, GeneralSecurityException {
 
-        TrustManager[] tmf = SecureUtil.makeTrustManagers(new FileInputStream(keyStore), pass);
         KeyManager[] kmf = SecureUtil.makeKeyManagers(new FileInputStream(keyStore), pass);
-
-        PreSharedPubKey pubKeyFormat = null;
-        for (TrustManager manager : tmf) {
-            if (manager instanceof X509TrustManager) {
-                pubKeyFormat = new PreSharedPubKey(((X509TrustManager) manager).getAcceptedIssuers());
-                break;
-            }
-        }
 
         X509Certificate pubKey = null;
         PrivateKey privateKey = null;
@@ -115,9 +104,10 @@ public class AEServer implements Runnable, Shutdownable {
                 break;
             }
         }
-        if (pubKeyFormat == null || pubKey == null || privateKey == null)
+        if (pubKey == null || privateKey == null)
             throw new NoSuchAlgorithmException("One or more critical parameter to construct the MSS engine is missing");
 
+        PreSharedPubKey pubKeyFormat = new PreSharedPubKey(pubKey);
         this.factory = new MSSServerEngineFactory(pubKeyFormat, pubKey, privateKey);
         this.socket = socket(address, maxConnection);
         this.maxConn = maxConnection;
@@ -150,7 +140,7 @@ public class AEServer implements Runnable, Shutdownable {
                         c.close();
                     }
 
-                    FileDescriptor fd = NonblockingUtil.fd(c);
+                    FileDescriptor fd = NIOUtil.fd(c);
                     initSocketPref(c);
 
                     WrappedSocket cio;
@@ -256,6 +246,7 @@ public class AEServer implements Runnable, Shutdownable {
             this.master = owner;
             this.id = id;
             this.token = token;
+            this.clients.put(0, owner);
             this.index = 1;
             this.creation = System.currentTimeMillis() / 1000;
             owner.room = this;
@@ -311,12 +302,10 @@ public class AEServer implements Runnable, Shutdownable {
             return json;
         }
 
-        public boolean hostInit(Worker w, byte[] motd, ByteBuffer port) {
+        public void hostInit(Worker w, byte[] motd, byte[] port) {
             this.motd = motd;
             motdString = new String(motd, StandardCharsets.UTF_8);
-            this.portMap = new byte[port.remaining()];
-            port.get(portMap);
-            return portMap.length < 64;
+            this.portMap = port;
         }
     }
 
@@ -356,13 +345,11 @@ public class AEServer implements Runnable, Shutdownable {
             try {
                 System.out.println("客户端连接 " + ch);
                 while (state != null && !server.shutdown) {
-                    System.out.println("状态转移F " + state);
                     state = state.next(this);
-                    System.out.println("状态转移T " + state);
                 }
 
                 state = Closed.CLOSED;
-                if (ch == null) return;
+                if (ch == null) break catcher;
 
                 while (!ch.shutdown()) {
                     LockSupport.parkNanos(100);
@@ -370,8 +357,7 @@ public class AEServer implements Runnable, Shutdownable {
                 ch.close();
             } catch (Throwable e) {
                 if (room != null && clientId == 0) {
-                    syncPrint(this + ": 解散");
-                    break catcher;
+                    syncPrint(this + ": 解散 " + room.id);
                 }
 
                 try {
@@ -381,7 +367,7 @@ public class AEServer implements Runnable, Shutdownable {
                 String msg = e.getMessage();
 
                 if (!"Broken pipe".equals(msg) && !"Connection reset by peer".equals(msg)) {
-                    syncPrint(this + ": Error: " + e);
+                    syncPrint(this + ": Error");
                     e.printStackTrace();
                 }
 
@@ -469,6 +455,7 @@ public class AEServer implements Runnable, Shutdownable {
         private final ConcurrentLinkedQueue<byte[]> packets = new ConcurrentLinkedQueue<>();
         public void sync(ByteBuffer rb) {
             byte[] data = new byte[rb.remaining()];
+            rb.get(data);
             packets.add(data);
         }
 

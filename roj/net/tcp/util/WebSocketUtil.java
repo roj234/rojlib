@@ -36,7 +36,6 @@ import roj.net.tcp.serv.util.Request;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.nio.ByteBuffer;
 import java.util.Set;
@@ -69,7 +68,7 @@ public class WebSocketUtil {
      * @param opcode FRAME_操作码
      */
     public static void encode(byte opcode, ByteList in, ByteBuffer out) {
-        int $len = in.pos();
+        int $len = in.wIndex();
         out.put((byte) (256 | opcode));
         if ($len <= 125) {
             out.put((byte) $len);
@@ -110,15 +109,15 @@ public class WebSocketUtil {
 
         ByteList $data;
         if ($len == 126) {
-            $data = r.readBytesDelegated(r.readUnsignedShort());
+            $data = r.slice(r.readUnsignedShort());
         } else if ($len == 127) {
-            $data = r.readBytesDelegated((int) r.readLong());
+            $data = r.slice((int) r.readLong());
         } else {
-            $data = r.readBytesDelegated($len);
+            $data = r.slice($len);
         }
 
-        for (int i = 0; i < $data.pos(); i++) {
-            in.set(i, (byte) ($data.get(i) ^ (($masks >>> ((i & 3) * 8)) & 255)));
+        for (int i = 0; i < $data.wIndex(); i++) {
+            in.put(i, (byte) ($data.get(i) ^ (($masks >>> ((i & 3) * 8)) & 255)));
         }
 
         return fin == 0;
@@ -128,9 +127,9 @@ public class WebSocketUtil {
         FileUtil.SHA1.reset();
         String sec = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-        int len = ByteWriter.byteCountUTF8(key);
+        int len = ByteList.byteCountUTF8(key);
         ByteList bl = new ByteList(len + sec.length());
-        ByteWriter.writeUTF(bl, key, -1);
+        ByteList.writeUTF(bl, key, -1);
         for (int i = len; i < sec.length(); i++) {
             bl.list[i] = (byte) sec.charAt(i - len);
         }

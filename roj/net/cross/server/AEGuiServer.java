@@ -30,7 +30,7 @@ import roj.collect.RingBuffer;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.cross.Util;
 import roj.net.cross.server.AEServer.Room;
 import roj.net.cross.server.AEServer.Worker;
@@ -76,7 +76,7 @@ public class AEGuiServer extends JFrame {
     static AEGuiServer instance;
 
     public static void main(String[] args) {
-        if(!NonblockingUtil.available()) {
+        if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }

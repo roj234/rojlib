@@ -189,32 +189,32 @@ public final class ConstantData implements IClass {
         ConstantPool cw = this.cp;
 
         ByteWriter w = new ByteWriter(buf)
-         .writeShort(accesses.flag)
-         .writeShort(cw.reset(nameCst).getIndex())
-         .writeShort(parentCst == null ? 0 : cw.reset(parentCst).getIndex())
-         .writeShort(interfaces.size());
+         .putShort(accesses.flag)
+         .putShort(cw.reset(nameCst).getIndex())
+         .putShort(parentCst == null ? 0 : cw.reset(parentCst).getIndex())
+         .putShort(interfaces.size());
 
         for (int i = 0; i < interfaces.size(); i++) {
             CstClass it = interfaces.get(i);
-            w.writeShort(cw.reset(it).getIndex());
+            w.putShort(cw.reset(it).getIndex());
         }
 
-        w.writeShort(fields.size());
+        w.putShort(fields.size());
         for (int i = 0, l = fields.size(); i < l; i++) {
             ((MoFNode) fields.get(i)).toByteArray(cw, w);
         }
 
-        w.writeShort(methods.size());
+        w.putShort(methods.size());
         for (int i = 0, l = methods.size(); i < l; i++) {
             ((MoFNode) methods.get(i)).toByteArray(cw, w);
         }
 
-        w.writeShort(attributes.size());
+        w.putShort(attributes.size());
         for (int i = 0, l = attributes.size(); i < l; i++) {
             attributes.get(i).toByteArray(cw, w);
         }
 
-        int pos = buf.pos();
+        int pos = buf.wIndex();
         byte[] tmp = buf.list;
         int cpl = cw.byteLength() + 10;
         if (tmp.length < pos + cpl) {
@@ -223,10 +223,10 @@ public final class ConstantData implements IClass {
         System.arraycopy(buf.list, 0, tmp, cpl, pos);
         buf.list = tmp;
 
-        buf.pos(0);
-        cw.write(w.writeInt(0xCAFEBABE).writeShort(version).writeShort(version >> 16));
-        assert buf.pos() == cpl;
-        buf.pos(pos + cpl);
+        buf.wIndex(0);
+        cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
+        assert buf.wIndex() == cpl;
+        buf.wIndex(pos + cpl);
 
         return buf;
     }

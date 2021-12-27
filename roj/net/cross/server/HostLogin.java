@@ -50,10 +50,10 @@ final class HostLogin extends Stated {
         rb.clear();
 
         int heart = TIMEOUT_HEART_SERVER;
-        int except = -1;
+        int except = 1;
         while (!W.server.shutdown) {
             int read;
-            if ((read = ch.read(except == -1 ? 1 : except - rb.position())) == 0 || rb.position() < except) {
+            if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(20);
                 if (heart-- < 0) {
                     syncPrint(W + ": 登录超时");
@@ -83,6 +83,11 @@ final class HostLogin extends Stated {
                     }
                     rb.position(5);
 
+                    if (portLen > 64) {
+                        syncPrint(W + ": PortMap协议有误");
+                        return Logout.LOGOUT;
+                    }
+
                     int code = W.server.createRoom(W,
                                                    true,
                                                    getUTF(rb, nameLen),
@@ -95,10 +100,10 @@ final class HostLogin extends Stated {
 
                     byte[] motd = new byte[motdLen];
                     rb.get(motd);
-                    if (!W.room.hostInit(W, motd, rb)) {
-                        syncPrint(W + ": PortMap协议有误");
-                        return Logout.LOGOUT;
-                    }
+
+                    byte[] port = new byte[portLen << 1];
+                    rb.get(port);
+                    W.room.hostInit(W, motd, port);
 
                     rb.clear();
                     rb.put((byte) PC_LOGON_H)

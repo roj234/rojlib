@@ -32,9 +32,7 @@ import roj.asm.nixim.Inject;
 import roj.asm.nixim.Inject.At;
 import roj.asm.nixim.Nixim;
 import roj.collect.MyHashSet;
-import roj.crypt.NotMd5;
-import roj.crypt.SM3;
-import roj.crypt.SM4;
+import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
 import roj.text.DottedStringPool;
@@ -95,10 +93,9 @@ class NxLaunchClassLoader extends ClassLoader implements AccessHelper {
         ByteWriter bw = new ByteWriter();
         digestModFiles(notMd5, bw);
 
-        SM4 sm4 = new SM4();
-        sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_STREAMED);
-        sm4.setOption(SM4.SM4_IV, Arrays.copyOf(notMd5.digest(), 16));
-        sm4.setKey(bw.toByteArray());
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CBC);
+        sm4.setOption(MyCipher.IV, Arrays.copyOf(notMd5.digest(), 16));
+        sm4.setKey(bw.toByteArray(), CipheR.DECRYPT | MyCipher.PKCS5_PADDING);
 
         ByteList out = bw.list;
         out.clear();
@@ -131,7 +128,7 @@ class NxLaunchClassLoader extends ClassLoader implements AccessHelper {
                         remain -= in.skip(1024);
                 }
             }
-            bw.writeBytes(sm3.digest());
+            bw.put(sm3.digest());
         }
     }
 

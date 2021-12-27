@@ -85,12 +85,12 @@ public final class AttrInnerClasses extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(classes.size());
+        w.putShort(classes.size());
         for (int i = 0; i < classes.size(); i++) {
             InnerClass clazz = classes.get(i);
-            w.writeShort(pool.getClassId(clazz.self)).writeShort(clazz.parent == null ? (short) 0 :
-                    pool.getClassId(clazz.parent)).writeShort(clazz.name == null ? (short) 0 :
-                    pool.getUtfId(clazz.name)).writeShort(clazz.flags);
+            w.putShort(pool.getClassId(clazz.self)).putShort(clazz.parent == null ? (short) 0 :
+                    pool.getClassId(clazz.parent)).putShort(clazz.name == null ? (short) 0 :
+                    pool.getUtfId(clazz.name)).putShort(clazz.flags);
         }
     }
 

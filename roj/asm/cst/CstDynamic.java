@@ -60,9 +60,9 @@ public final class CstDynamic extends Constant {
 
     @Override
     public final void write(ByteWriter w) {
-        w.writeByte(type())
-         .writeShort(tableIdx)
-         .writeShort(getDescIndex());
+        w.put(type())
+         .putShort(tableIdx)
+         .putShort(getDescIndex());
     }
 
     public final String toString() {

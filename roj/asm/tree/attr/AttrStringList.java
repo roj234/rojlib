@@ -84,17 +84,17 @@ public final class AttrStringList extends Attribute {
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
         final List<String> ex = this.classes;
 
-        w.writeShort(ex.size());
+        w.putShort(ex.size());
         int i = 0;
         switch (isMethod) {
             case 0:
                 for (; i < ex.size(); i++) {
-                    w.writeShort(pool.getClassId(ex.get(i)));
+                    w.putShort(pool.getClassId(ex.get(i)));
                 }
                 break;
             case 1:
                 for (; i < ex.size(); i++) {
-                    w.writeShort(pool.getUtfId(ex.get(i)));
+                    w.putShort(pool.getUtfId(ex.get(i)));
                 }
                 break;
         }

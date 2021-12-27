@@ -25,7 +25,7 @@
  */
 package roj.net.cross;
 
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.SecureUtil;
 import roj.net.tcp.WrappedSocket;
 import roj.text.TextUtil;
@@ -56,8 +56,8 @@ public class Util {
         } catch (Error ignored) {}
     }
 
-    public static final int TIMEOUT          = 20000;
-    public static final int TIMEOUT_TRANSFER = 20000;
+    public static final int TIMEOUT          = 3000;
+    public static final int TIMEOUT_TRANSFER = 6000;
 
 
     /**
@@ -87,9 +87,6 @@ public class Util {
 
     public static final int PCN_CONTROL   = 0;
     public static final int PCN_DATA      = 1;
-
-    public static final int PR_CLIENT   = 0;
-    public static final int PR_HOST     = 1;
 
     /**
      * 服务端握手完毕
@@ -280,9 +277,9 @@ public class Util {
 
     public static final int TIMEOUT_HEART_SERVER = 10000;
 
-    public static final int T_CLIENT_HEARTBEAT_TIME  = 2000;
-    public static final int T_CLIENT_HEARTBEAT_RETRY = 100;
-    public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 2000;
+    public static final int T_CLIENT_HEARTBEAT_TIME  = 5000;
+    public static final int T_CLIENT_HEARTBEAT_RETRY = 200;
+    public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 5000;
 
     public static class SslDialog extends JDialog {
         private final JPasswordField inpPass;
@@ -521,38 +518,54 @@ public class Util {
         }
     }
 
-    public static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, int timeout) throws IOException {
-        Thread t = Thread.currentThread();
+    public static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, int T) throws IOException {
         do {
             int w = channel.write(buf);
             if(w < 0)
                 return w;
             if (!buf.hasRemaining())
                 break;
-            channel.dataFlush();
             LockSupport.parkNanos(20);
-            if(t.isInterrupted())
-                return NonblockingUtil.INTERRUPTED;
-            if (timeout-- <= 0) {
+            if (T-- <= 0) {
                 return -7;
             }
         } while (true);
-        return timeout;
+        while (!channel.dataFlush()) {
+            LockSupport.parkNanos(20);
+            if (T-- <= 0) {
+                return -7;
+            }
+        }
+        return T;
     }
 
     public static int write1(WrappedSocket channel, byte buf) throws IOException {
-        ByteBuffer nx = NonblockingUtil.getSharedDirectBuffer();
+        ByteBuffer nx = NIOUtil.getSharedDirectBuffer();
         nx.position(0).limit(1);
         nx.put(0, buf);
 
-        int timeout = 10;
+        int T = 100;
         int wrote;
-        while ((wrote = channel.write(nx)) == 0 && timeout > 0) {
+        while ((wrote = channel.write(nx)) == 0 && T-- > 0) {
             LockSupport.parkNanos(20);
-            timeout--;
+        }
+        while (!channel.dataFlush() && T-- > 0) {
+            LockSupport.parkNanos(20);
         }
         nx.clear();
-        return wrote < 0 ? wrote : timeout <= 0 ? -7 : 0;
+        return wrote < 0 ? wrote : T <= 0 ? -7 : 0;
+    }
+
+    public static int write1Direct(WrappedSocket channel, byte buf) throws IOException {
+        ByteBuffer nx = NIOUtil.getSharedDirectBuffer();
+        nx.position(0).limit(1);
+        nx.put(0, buf);
+
+        int w;
+        do {
+            w = NIOUtil.writeFromNativeBuffer(channel.fd(), nx, NIOUtil.SOCKET_FD);
+        } while (w == NIOUtil.INTERRUPTED);
+        return w;
     }
 
     public static boolean readSome(WrappedSocket channel, int count, int time) throws IOException {
@@ -569,9 +582,10 @@ public class Util {
     }
 
     public static String dumpBuffer(ByteBuffer rb) {
-        if (rb.position() > 0) rb.flip();
+        int p = rb.position();
+        rb.position(0);
         byte[] tmp = new byte[rb.limit()];
-        rb.get(tmp).position(0);
+        rb.get(tmp).position(p);
         return TextUtil.dumpBytes(tmp);
     }
 }

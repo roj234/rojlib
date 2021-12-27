@@ -324,7 +324,7 @@ public class Main extends JFrame {
             sm3.reset();
             try (FileInputStream in = new FileInputStream(file)) {
                 shared.readStream(in, 4096);
-                sm3.update(shared.list, 0, shared.pos());
+                sm3.update(shared.list, 0, shared.wIndex());
                 shared.clear();
             }
             String fn = file.getPath().substring(beginLength);

@@ -128,9 +128,9 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
                     case "exit":
                     case "halt":
                         warn();
-                        bw.writeByte(Opcodes.INVOKESTATIC)
-                          .writeShort(cw.getMethodRefId(callbackOwner,
-                                                        name.equals("exit") ? "runtimeExitCalled" : "runtimeHaltCalled", "(I)V"));
+                        bw.put(Opcodes.INVOKESTATIC)
+                          .putShort(cw.getMethodRefId(callbackOwner,
+                                                      name.equals("exit") ? "runtimeExitCalled" : "runtimeHaltCalled", "(I)V"));
                         dirty = true;
                         return;
                 }

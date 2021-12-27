@@ -56,7 +56,7 @@ final class PipeLogin extends Stated {
         int heart = TIMEOUT_HEART_SERVER;
         while (!W.server.shutdown) {
             int read;
-            if ((read = ch.read(14 - rb.position())) == 0 || rb.position() < 14) {
+            if ((read = ch.read(14 - rb.position())) == 0 && rb.position() < 14) {
                 LockSupport.parkNanos(20);
                 if (heart-- < 0) {
                     syncPrint(W + ": 登录超时");

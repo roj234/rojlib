@@ -56,12 +56,12 @@ public class JarInfo {
     }
 
     public void toByteArray(ByteWriter w, StringPool pool, ConstantPool cw) {
-        w.writeVarInt(classes.size(), false);
+        w.putVarInt(classes.size(), false);
         for (Map.Entry<String, ClassInfo> entry : classes.entrySet()) {
             pool.writeString(w, entry.getKey());
             entry.getValue().toByteArray(w, pool, cw);
         }
-        w.writeVarInt(mainClasses.size(), false);
+        w.putVarInt(mainClasses.size(), false);
         for (String s : mainClasses) {
             pool.writeString(w, s);
         }

@@ -42,14 +42,13 @@ import java.security.InvalidKeyException;
  * @since 2021/12/22 19:18
  */
 public final class JCiphers implements MSSCiphers {
-    public static final JCiphers AES_CFB8 = new JCiphers("AES/CFB8/NoPadding", 512, 32);
+    public static final JCiphers AES_CFB8 = new JCiphers("AES/CFB8/NoPadding", 32);
 
     private final String alg;
-    private final int chunkSize, sharedKeySize;
+    private final int sharedKeySize;
 
-    public JCiphers(String alg, int chunkSize, int sharedKeySize) {
+    public JCiphers(String alg, int sharedKeySize) {
         this.alg = alg;
-        this.chunkSize = chunkSize;
         this.sharedKeySize = sharedKeySize;
     }
 
@@ -61,11 +60,6 @@ public final class JCiphers implements MSSCiphers {
     @Override
     public int specificationId() {
         return 0x00000015;
-    }
-
-    @Override
-    public int preferChunkSize() {
-        return chunkSize;
     }
 
     @Override
@@ -99,37 +93,28 @@ public final class JCiphers implements MSSCiphers {
         }
 
         @Override
-        public void reset(int cryptFlags) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void setKey(byte[] password) {
+        public void setKey(byte[] key, int flags) {
             try {
-                cip.init(mode, new SecretKeySpec(password, cip.getAlgorithm().substring(0, cip.getAlgorithm().indexOf('/'))), new IvParameterSpec(new byte[16]));
+                cip.init(mode, new SecretKeySpec(key, cip.getAlgorithm().substring(0, cip.getAlgorithm().indexOf('/'))), new IvParameterSpec(new byte[16]));
             } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
                 e.printStackTrace();
             }
         }
 
         @Override
-        public int getBlockSize() {
-            return cip.getBlockSize();
-        }
-
-        @Override
         public int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
-            int tmpSize = cip.getOutputSize(in.remaining());
-            if (out.remaining() < tmpSize) return CipheR.BUFFER_OVERFLOW;
-            if (tmp.length < tmpSize)
-                tmp = new byte[tmpSize];
+            int rm = in.remaining();
+            if (out.remaining() < rm) return CipheR.BUFFER_OVERFLOW;
+            if (tmp.length < rm)
+                tmp = new byte[rm];
             if (in.hasArray()) {
                 int len = cip.doFinal(in.array(), in.arrayOffset() + in.position(), in.remaining(), tmp);
+                in.position(in.limit());
                 out.put(tmp, 0, len);
             } else {
                 int r = in.remaining();
-                if (tmp.length < tmpSize + r)
-                    tmp = new byte[tmpSize + r];
+                if (tmp.length < rm + r)
+                    tmp = new byte[rm + r];
                 in.get(tmp, 0, r);
                 int len = cip.doFinal(tmp, 0, r, tmp, r);
                 out.put(tmp, r, len);

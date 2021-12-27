@@ -43,7 +43,7 @@ public class AsIsAttributeVisitor extends AttributeVisitor {
 
     @Override
     public boolean visit(String name, int length) {
-        bw.writeShort(cw.getUtfId(name)).writeInt(length).writeBytes(br.getBytes().list, br.index, length);
+        bw.putShort(cw.getUtfId(name)).putInt(length).put(br.bytes().list, br.rIndex, length);
         return true;
     }
 }

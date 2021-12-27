@@ -82,7 +82,7 @@ public class Pack125 {
 
     private static int hashCode(ByteList in) {
         int hash = 1;
-        for (int i = 0; i < in.pos(); i++) {
+        for (int i = 0; i < in.wIndex(); i++) {
             hash = hash * 31 + in.get(i);
         }
         return hash;
@@ -163,7 +163,7 @@ public class Pack125 {
                     u = nat;
                     break;
                 case UTF:
-                    u = new CstUTF(r.readVString());
+                    u = new CstUTF(r.readVarIntUTF());
                     break;
                 case INT:
                     u = new CstInt(r.readInt());
@@ -190,13 +190,13 @@ public class Pack125 {
         for (int i = 0; i < len; i++) {
             int version = r.readInt();
             if (version == 0) {
-                con.accept(r.readVString(), null);
+                con.accept(r.readVarIntUTF(), null);
                 continue;
             }
 
-            w.writeInt(0xcafebabe).writeInt(version);
+            w.putInt(0xcafebabe).putInt(version);
             int mapLen = r.readVarInt(false);
-            w.writeShort(mapLen + 1);
+            w.putShort(mapLen + 1);
             if (map.length < mapLen) {
                 map = new Constant[mapLen];
             }
@@ -220,11 +220,11 @@ public class Pack125 {
                 map[j].write(w);
             }
             mapLen = r.readVarInt(false);
-            w.writeBytes(r.getBytes().list, r.index + r.getBytes().offset(), mapLen);
-            r.index += 2;
+            w.put(r.bytes().list, r.rIndex + r.bytes().arrayOffset(), mapLen);
+            r.rIndex += 2;
             j = ((CstClass) map[r.readUnsignedShort() - 1]).getValueIndex();
             con.accept(((CstUTF) map[j - 1]).getString(), w.list);
-            r.index += mapLen - 4;
+            r.rIndex += mapLen - 4;
             w.list.clear();
         }
     }
@@ -233,7 +233,7 @@ public class Pack125 {
         oa.clear();
         ob.clear();
         this.w1 = new ByteWriter(oa);
-        this.w1.writeInt(HEADER).writeInt(0);
+        this.w1.putInt(HEADER).putInt(0);
         this.w2 = new ByteWriter(ob);
         this.w3 = new ByteWriter(4096);
         this.cw = Helpers.cast(new MyHashSet<?>[4]);
@@ -248,7 +248,7 @@ public class Pack125 {
     }
 
     public Pack125 section(CharSequence commentOrAnyYouWant) {
-        w2.writeInt(0).writeVString(commentOrAnyYouWant);
+        w2.putInt(0).putVarIntUTF(commentOrAnyYouWant);
         cLen++;
         return this;
     }
@@ -271,27 +271,27 @@ public class Pack125 {
         }
         // original id to cp id
         ByteWriter w = this.w2;
-        w.writeInt(version).writeVarInt(pool.index - 1, false);
+        w.putInt(version).putVarInt(pool.index - 1, false);
         int[] map = storeConstantPool(pool);
         for (int i = pool.index - 2; i >= 0; i--) {
-            w.writeVarInt(map[i], false);
+            w.putVarInt(map[i], false);
         }
-        w2.writeBytes(w3);
+        w2.put(w3);
 
-        int len = in.limit() - r.index;
-        w.writeVarInt(len, false).writeBytes(in.list, r.index + in.offset(), len);
+        int len = in.limit() - r.rIndex;
+        w.putVarInt(len, false).put(in.list, r.rIndex + in.arrayOffset(), len);
         this.cLen++;
         return this;
     }
 
     public ByteList toByteArray() {
         ByteList wl = w1.list;
-        int pos = wl.pos();
-        wl.pos(4);
-        w1.writeInt(cpLen);
-        wl.pos(pos);
+        int pos = wl.wIndex();
+        wl.wIndex(4);
+        w1.putInt(cpLen);
+        wl.wIndex(pos);
 
-        ByteList list = w1.writeInt(cLen).writeBytes(w2).list;
+        ByteList list = w1.putInt(cLen).put(w2).list;
 
         reset();
 
@@ -329,14 +329,14 @@ public class Pack125 {
 
     public void writeToStream(OutputStream out) throws IOException {
         ByteList wl = w1.list;
-        int pos = wl.pos();
-        wl.pos(4);
-        w1.writeInt(cpLen);
-        wl.pos(pos);
+        int pos = wl.wIndex();
+        wl.wIndex(4);
+        w1.putInt(cpLen);
+        wl.wIndex(pos);
 
         wl.writeToStream(out);
         wl.clear();
-        w1.writeInt(cLen).list.writeToStream(out);
+        w1.putInt(cLen).list.writeToStream(out);
 
         w2.list.writeToStream(out);
 
@@ -349,7 +349,7 @@ public class Pack125 {
         }
         cpLen = cLen = 0;
         w1.list.clear();
-        w1.writeInt(HEADER).writeInt(0);
+        w1.putInt(HEADER).putInt(0);
         w2.list.clear();
     }
 
@@ -381,44 +381,44 @@ public class Pack125 {
                     f = LongerCst.one();
 
                     w3.list.clear();
-                    w3.writeByte(NAME_AND_TYPE);
+                    w3.put(NAME_AND_TYPE);
 
                     LongerCst f2;
                     String name = nat.getName().getString();
                     f.data = name;
                     if (f == (f2 = cw[STR].intern(f))) {
-                        w1.writeByte(UTF).writeVString(name);
+                        w1.put(UTF).putVarIntUTF(name);
                         f.index = ++cpLen;
                         f = LongerCst.one();
                     }
-                    w3.writeVarInt(f2.index, false);
+                    w3.putVarInt(f2.index, false);
 
                     String type = nat.getType().getString();
                     f.data = type;
                     if (f == (f2 = cw[STR].intern(f))) {
                         f = LongerCst.one();
 
-                        int p = w3.list.pos();
-                        w3.writeByte((byte) TYPES);
+                        int p = w3.list.wIndex();
+                        w3.put((byte) TYPES);
 
                         if (type.charAt(0) == '(') {
                             tmp.clear();
                             ParamHelper.parseMethod(type, tmp);
-                            w3.writeVarInt(tmp.size(), false);
+                            w3.putVarInt(tmp.size(), false);
                             for (int j = 0; j < tmp.size(); j++) {
                                 f = writeType(f, tmp.get(j), w3);
                             }
                         } else {
                             Type t = ParamHelper.parseField(type);
-                            w3.writeByte((byte) 0);
+                            w3.put((byte) 0);
                             f = writeType(f, t, w3);
                         }
-                        w1.writeBytes(w3.list.list, p, w3.list.pos() - p);
-                        w3.list.pos(p);
+                        w1.put(w3.list.list, p, w3.list.wIndex() - p);
+                        w3.list.wIndex(p);
                         f2.index = ++cpLen;
                     }
-                    w3.writeVarInt(f2.index, false);
-                    w1.writeBytes(w3);
+                    w3.putVarInt(f2.index, false);
+                    w1.put(w3);
                     f1.index = ++cpLen;
                 }
 
@@ -434,7 +434,7 @@ public class Pack125 {
                 case _TOP_:
                     f.data = new Object();
                     if (f == (f1 = cw[STR].intern(f))) {
-                        w1.writeByte(_TOP_);
+                        w1.put(_TOP_);
                         f.index = ++cpLen;
                         f = LongerCst.one();
                     }
@@ -444,7 +444,7 @@ public class Pack125 {
                     CstUTF u = (CstUTF) c;
                     f.data = u.getString();
                     if (f == (f1 = cw[STR].intern(f))) {
-                        w1.writeByte(UTF).writeVString(u.getString());
+                        w1.put(UTF).putVarIntUTF(u.getString());
                         f.index = ++cpLen;
                         f = LongerCst.one();
                     }
@@ -487,24 +487,24 @@ public class Pack125 {
         if (f == (f1 = cw[TYP].intern(f))) {
             f = LongerCst.one();
 
-            int p = tmp.list.pos();
-            tmp.writeByte((byte) TYP).writeByte(t.type).writeVarInt(t.array, false);
+            int p = tmp.list.wIndex();
+            tmp.put((byte) TYP).put(t.type).putVarInt(t.array, false);
 
             if (t.owner != null) {
                 f.data = t.owner;
                 LongerCst f2;
                 if (f == (f2 = cw[STR].intern(f))) {
-                    w1.writeByte(UTF).writeVString(t.owner);
+                    w1.put(UTF).putVarIntUTF(t.owner);
                     f.index = ++cpLen;
                     f = LongerCst.one();
                 }
-                tmp.writeVarInt(f2.index, false);
+                tmp.putVarInt(f2.index, false);
             }
-            w1.writeBytes(tmp.list.list, p, tmp.list.pos() - p);
-            tmp.list.pos(p);
+            w1.put(tmp.list.list, p, tmp.list.wIndex() - p);
+            tmp.list.wIndex(p);
             f1.index = ++cpLen;
         }
-        tmp.writeVarInt(f1.index, false);
+        tmp.putVarInt(f1.index, false);
         return f;
     }
 }

@@ -77,8 +77,8 @@ public final class Field implements MoFNode {
 
                 handleAttribute(pool, r, name, r.length());
 
-                if (!r.isFinished()) {
-                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
+                if (!r.hasRemaining()) {
+                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.rIndex) + " bytes not " + "read correctly!");
                 }
             } else {
                 attributes.add(attr);
@@ -92,12 +92,12 @@ public final class Field implements MoFNode {
             String name = ((CstUTF) pool.get(r)).getString();
             final int length = r.readInt();
 
-            final int end = r.index + length;
+            final int end = r.rIndex + length;
             handleAttribute(pool, r, name, length);
 
-            if (r.index != end) {
-                System.err.println("[Warning] Attribute " + name + " has " + (end - r.index) + " bytes not read correctly!");
-                r.index = end;
+            if (r.rIndex != end) {
+                System.err.println("[Warning] Attribute " + name + " has " + (end - r.rIndex) + " bytes not read correctly!");
+                r.rIndex = end;
             }
         }
     }
@@ -127,7 +127,7 @@ public final class Field implements MoFNode {
                 // 弃用
             case "Deprecated":
             default:
-                attr = new AttrUnknown(name, r.readBytesDelegated(length));
+                attr = new AttrUnknown(name, r.slice(length));
         }
         attributes.add(attr);
     }
@@ -139,11 +139,11 @@ public final class Field implements MoFNode {
     public Signature signature;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeShort(accesses.flag).writeShort(pool.getUtfId(name)).writeShort(pool.getUtfId(ParamHelper.getField(type)));
+        w.putShort(accesses.flag).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(ParamHelper.getField(type)));
 
         if (signature != null)
             attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
-        w.writeShort((short) attributes.size());
+        w.putShort((short) attributes.size());
         for (Attribute attribute : attributes) {
             attribute.toByteArray(pool, w);
         }
@@ -179,7 +179,7 @@ public final class Field implements MoFNode {
         }
         if (signature != null) {
             w.list.clear();
-            w.writeShort(cw.getUtfId(signature.toGeneric()));
+            w.putShort(cw.getUtfId(signature.toGeneric()));
             f.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
         }
         return f;

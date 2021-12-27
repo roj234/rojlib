@@ -33,17 +33,18 @@ import ilib.math.PositionProvider;
 import ilib.math.Section;
 import ilib.util.DimensionHelper;
 import ilib.util.PlayerUtil;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.Chunk;
 import roj.collect.Int2IntMap;
 import roj.collect.IntMap;
 import roj.collect.IntSet;
 import roj.collect.LongMap;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraft.world.chunk.Chunk;
 
 import java.util.*;
 
@@ -405,10 +406,10 @@ public class Network implements PositionProvider {
     }
 
     public byte[] write() {
-        ByteWriter w = new ByteWriter(128).writeVarInt(id, false).writeVarInt(world).writeVarInt(aabb.xmin).writeVarInt(aabb.ymin).writeVarInt(aabb.zmin).writeVarInt(aabb.xmax).writeVarInt(aabb.ymax).writeVarInt(aabb.zmax).writeVarInt(allBlocks.size(), false);
+        ByteWriter w = new ByteWriter(128).putVarInt(id, false).putVarInt(world).putVarInt(aabb.xmin).putVarInt(aabb.ymin).putVarInt(aabb.zmin).putVarInt(aabb.xmax).putVarInt(aabb.ymax).putVarInt(aabb.zmax).putVarInt(allBlocks.size(), false);
         for (PrimitiveIterator.OfInt iterator = allBlocks.keySet().iterator(); iterator.hasNext(); ) {
             int key = iterator.nextInt();
-            w.writeVarInt(key, false);
+            w.putVarInt(key, false);
         }
 
         return w.toByteArray();

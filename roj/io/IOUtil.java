@@ -28,14 +28,10 @@ package roj.io;
 
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.FastThreadLocal;
-import sun.nio.ch.DirectBuffer;
 import sun.reflect.Reflection;
 
 import java.io.*;
-import java.nio.Buffer;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
 
@@ -75,7 +71,7 @@ public class IOUtil {
             return readUTF(in);
         } else {
             ByteList bl = read0(in, getSharedByteBuf());
-            return new String(bl.list, 0, bl.pos(), Charset.forName(encoding));
+            return new String(bl.list, 0, bl.wIndex(), Charset.forName(encoding));
         }
     }
 
@@ -118,7 +114,7 @@ public class IOUtil {
         bl.clear();
         CharList cl = (CharList) x[1];
         cl.clear();
-        ByteReader.decodeUTF(-1, cl, read1(jar, path, bl));
+        ByteList.decodeUTF(-1, cl, read1(jar, path, bl));
         if(cl.length() > 8192) {
             x[1] = new CharList(8192);
         }
@@ -135,7 +131,7 @@ public class IOUtil {
         bl.clear();
         CharList cl = (CharList) x[1];
         cl.clear();
-        ByteReader.decodeUTF(-1, cl, read0(new FileInputStream(f), bl));
+        ByteList.decodeUTF(-1, cl, read0(new FileInputStream(f), bl));
         if(cl.length() > 8192) {
             x[1] = new CharList(8192);
         }
@@ -148,23 +144,10 @@ public class IOUtil {
         bl.clear();
         CharList cl = (CharList) x[1];
         cl.clear();
-        ByteReader.decodeUTF(-1, cl, read0(in, bl));
+        ByteList.decodeUTF(-1, cl, read0(in, bl));
         if(cl.length() > 8192) {
             x[1] = new CharList(8192);
         }
         return cl.toString();
-    }
-
-    public static void clean(Buffer shared) {
-        try {
-            DirectBuffer db = (DirectBuffer) shared;
-            while (db.cleaner() == null)
-                db = (DirectBuffer) db.attachment();
-            db.cleaner().clean();
-        } catch (Throwable ignored) {}
-    }
-
-    public static boolean directBufferEquals(ByteBuffer a, ByteBuffer b) {
-        return ((DirectBuffer) a).address() == ((DirectBuffer) b).address();
     }
 }

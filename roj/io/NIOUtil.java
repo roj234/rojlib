@@ -25,38 +25,55 @@
  */
 package roj.io;
 
-import roj.io.misc.FileNIODispatcher;
-import roj.io.misc.SocketNIODispatcher;
+import roj.io.misc.FCNative;
+import roj.io.misc.SCNative;
 import roj.reflect.DirectAccessor;
 import roj.util.FastThreadLocal;
+import roj.util.Helpers;
 
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketImpl;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
  * @version 0.1
  * @since  2020/12/6 14:15
  */
-public final class NonblockingUtil {
-    private static final SocketNIODispatcher sdp;
-    private static final FileNIODispatcher fdp;
-    private static final H                 U;
+public final class NIOUtil {
+    public static final SCNative SCN;
+    public static final FCNative FCN;
+    public static final H        UTIL;
+    public static final Consumer<Object> CLEAN;
 
     static {
         try {
-            U = DirectAccessor.builder(H.class)
-                              .delegate(sun.nio.ch.IOUtil.class, "configureBlocking")
-                              .access(Socket.class, "impl", "getSocketImpl", null)
-                              .access(SocketImpl.class, "fd", "getSocketImplFd", null)
-                              .access(Class.forName("sun.nio.ch.SocketChannelImpl"), "fd", "getSocketChannelFd", null)
-                              .access(Class.forName("sun.nio.ch.FileChannelImpl"), "fd", "getFileChannelFd", null)
-                              .build();
+            ByteBuffer b = ByteBuffer.allocateDirect(1);
+
+            SocketChannel sc = SocketChannel.open();
+            sc.close();
+            File tmp = File.createTempFile("nio", null);
+            FileChannel fc = FileChannel.open(tmp.toPath());
+            fc.close();
+            tmp.delete();
+
+            UTIL = DirectAccessor
+                    .builder(H.class)
+                    .access(Socket.class, "impl", "socketImpl", null)
+                    .access(SocketImpl.class, "fd", "socketFd", null)
+                    .access(FileDescriptor.class, "fd", null, "fdFd")
+                    .access(sc.getClass(), new String[]{ "fd", "nd" }, new String[] { "sChFd", "sChNd" }, null)
+                    .access(fc.getClass(), new String[]{ "fd", "nd" }, new String[] { "fChFd", "fChNd" }, null)
+                    .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
+                    .delegate_o(b.getClass(), new String[] { "address", "attachment", "cleaner" })
+                    .build();
 
             String[] ss1 = new String[]{
                     "read", "readv", "write", "writev", "preClose", "close"
@@ -64,7 +81,8 @@ public final class NonblockingUtil {
             String[] ss2 = new String[]{
                     "read0", "readv0", "write0", "writev0", "preClose0", "close0"
             };
-            sdp = DirectAccessor.builder(SocketNIODispatcher.class).delegate(Class.forName("sun.nio.ch.SocketDispatcher"), ss2, ss1).build();
+            SCN = DirectAccessor.builder(SCNative.class)
+                                .delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
 
             ss1 = new String[]{
                     "read", "readv", "write", "writev", "duplicateHandle", "close"
@@ -72,9 +90,17 @@ public final class NonblockingUtil {
             ss2 = new String[]{
                     "read0", "readv0", "write0", "writev0", "duplicateHandle", "close0"
             };
-            fdp = DirectAccessor.builder(FileNIODispatcher.class).delegate(Class.forName("sun.nio.ch.FileDispatcherImpl"), ss2, ss1).build();
+            FCN = DirectAccessor.builder(FCNative.class)
+                                .delegate(UTIL.fChNd(fc).getClass(), ss2, ss1).build();
+
+            CLEAN = Helpers.cast(
+                    DirectAccessor.builder(Consumer.class)
+                                  .delegate(UTIL.cleaner(b).getClass(), "clean", "accept")
+                                  .build());
+
+            clean(b);
         } catch (Throwable e) {
-            throw new Error("Failed to initialize NonblockingUtil: Unsupported java version",e );
+            throw new Error("Failed to initialize NIOUtil: Unsupported java version",e );
         }
     }
 
@@ -99,10 +125,6 @@ public final class NonblockingUtil {
         return DIRECT_CACHE.get();
     }
 
-    public static int normalize(int length) {
-        return length == UNAVAILABLE ? 0 : length;
-    }
-
     public static int swrite(FileDescriptor fd, byte[] array, int pos, int lim, int socket) throws IOException {
         assert lim > pos;
         lim = Math.min(DIRECT_CACHE_MAX, lim - pos);
@@ -110,7 +132,7 @@ public final class NonblockingUtil {
         ByteBuffer shared = DIRECT_CACHE.get();
         if (shared == null || shared.capacity() < lim) {
             if (shared != null) {
-                IOUtil.clean(shared);
+                clean(shared);
             }
             DIRECT_CACHE.set(shared = ByteBuffer.allocateDirect(lim));
         }
@@ -129,13 +151,13 @@ public final class NonblockingUtil {
         } else {
             if(!fd.valid())
                 throw new IOException();
-            int wrote = flag == 1 ? sdp.write(fd, addr(buf) + pos, len) : fdp.write(fd, addr(buf) + pos, len, (flag & 2) == 2);
+            int wrote = flag == 1 ? SCN.write(fd, UTIL.address(buf) + pos, len) : FCN.write(fd, UTIL.address(buf) + pos, len, (flag & 2) == 2);
 
             if (wrote > 0) {
                 buf.position(pos + wrote);
             }
 
-            return wrote;
+            return wrote == UNAVAILABLE ? 0 : wrote;
         }
     }
 
@@ -149,31 +171,27 @@ public final class NonblockingUtil {
         } else {
             if(!fd.valid())
                 throw new IOException();
-            int read = socket == 1 ? sdp.read(fd, addr(buf) + pos, len) : fdp.read(fd, addr(buf) + pos, len);
+            int read = socket == 1 ? SCN.read(fd, UTIL.address(buf) + pos, len) : FCN.read(fd, UTIL.address(buf) + pos, len);
 
             if (read > 0) {
                 buf.position(pos + read);
             }
 
-            return read;
+            return read == UNAVAILABLE ? 0 : read;
         }
-    }
-
-    public static long addr(ByteBuffer buf) {
-        return ((sun.nio.ch.DirectBuffer) buf).address();
     }
 
     public static void configureBlocking(FileDescriptor fd, boolean tag) throws IOException {
         if(fd.valid())
-            U.configureBlocking(fd, tag);
+            UTIL.configureBlocking(fd, tag);
         else
             throw new IOException("Invalid FileDescriptor");
     }
 
     public static FileDescriptor fd(Socket socket) throws IOException {
-        FileDescriptor fd = U.getSocketImplFd(U.getSocketImpl(socket));
+        FileDescriptor fd = UTIL.socketFd(UTIL.socketImpl(socket));
         if(fd.valid())
-            U.configureBlocking(fd, false);
+            UTIL.configureBlocking(fd, false);
         else
             throw new IOException("Invalid FileDescriptor");
 
@@ -181,45 +199,60 @@ public final class NonblockingUtil {
     }
 
     public static FileDescriptor fd(SocketChannel socket) {
-        return U.getSocketChannelFd(socket);
+        return UTIL.sChFd(socket);
     }
 
     public static FileDescriptor fd(FileChannel fc) {
-        return U.getFileChannelFd(fc);
-    }
-
-    public static void preClose(FileDescriptor fd) throws IOException {
-        if(!fd.valid())
-            throw new IOException("Invalid FileDescriptor");
-        sdp.preClose(fd);
+        return UTIL.fChFd(fc);
     }
 
     public static void close(FileDescriptor fd) throws IOException {
         if(!fd.valid())
             throw new IOException("Invalid FileDescriptor");
-        H.FDA.set(fd, -1);
-        sdp.close(fd);
+        UTIL.fdFd(fd, -1);
+        SCN.close(fd);
     }
 
     public static boolean available() {
-        return U != null;
+        return UTIL != null;
     }
 
     public static void setBlockState(Socket socket, boolean block) throws IOException {
-        FileDescriptor fd = U.getSocketImplFd(U.getSocketImpl(socket));
+        FileDescriptor fd = UTIL.socketFd(UTIL.socketImpl(socket));
         if(!fd.valid())
             throw new IOException("Invalid FileDescriptor");
-        U.configureBlocking(fd, block);
+        UTIL.configureBlocking(fd, block);
     }
 
     private interface H {
-        sun.misc.JavaIOFileDescriptorAccess FDA = sun.misc.SharedSecrets.getJavaIOFileDescriptorAccess();
+        SocketImpl socketImpl(Socket socket);
 
-        SocketImpl getSocketImpl(Socket socket);
-        FileDescriptor getSocketImplFd(SocketImpl impl);
-        FileDescriptor getSocketChannelFd(SocketChannel socketChannelImpl);
-        FileDescriptor getFileChannelFd(FileChannel channel);
+        FileDescriptor socketFd(SocketImpl impl);
+        FileDescriptor sChFd(SocketChannel ch);
+        FileDescriptor fChFd(FileChannel ch);
+        void fdFd(FileDescriptor fd, int fd2);
+
+        Object fChNd(FileChannel ch);
+        Object sChNd();
+
+        long address(Object buf);
+        Object attachment(Object buf);
+        Object cleaner(Object buf);
 
         void configureBlocking(FileDescriptor fd, boolean var1) throws IOException;
+    }
+
+    private static Object topMost(Object o) {
+        while (UTIL.attachment(o) != null)
+            o = UTIL.attachment(o);
+        return o;
+    }
+
+    public static void clean(Buffer shared) {
+        CLEAN.accept(UTIL.cleaner(topMost(shared)));
+    }
+
+    public static boolean directBufferEquals(ByteBuffer a, ByteBuffer b) {
+        return UTIL.address(topMost(a)) == UTIL.address(topMost(b));
     }
 }

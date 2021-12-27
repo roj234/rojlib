@@ -40,7 +40,6 @@ import roj.net.tcp.client.HttpConnection;
 import roj.net.tcp.client.HttpHeader;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -321,8 +320,8 @@ public final class FileUtil {
                 if (aoc.contains("ETag") && !infoFile.delete()) {
                     throw new IOException("fInfoFile文件已被占用");
                 }
-                aoc.append("ETag", ByteWriter.encodeUTF(conn.getHeaderField("ETag")));
-                aoc.append("Last-Modified", ByteWriter.encodeUTF(conn.getHeaderField("Last-Modified")));
+                aoc.append("ETag", ByteList.encodeUTF(conn.getHeaderField("ETag")));
+                aoc.append("Last-Modified", ByteList.encodeUTF(conn.getHeaderField("Last-Modified")));
             }
             aoc.close();
         }
@@ -459,7 +458,7 @@ public final class FileUtil {
                 cf.read(direct, fOffset);
                 direct.position(0);
                 int amount = cf.position(tOffset).write(direct);
-                IOUtil.clean(direct);
+                NIOUtil.clean(direct);
                 return amount;
             } else {
                 File tmpFile = new File("FUT~" + (System.nanoTime() % 1000000) + ".tmp");

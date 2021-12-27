@@ -78,11 +78,11 @@ public final class IncrInsnNode extends InsnNode implements IIndexInsnNode {
 
     @Override
     public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code);
+        w.put(code);
         if (variableId > 255 || amount != (byte) amount) {
-            w.writeShort(variableId).writeShort(amount);
+            w.putShort(variableId).putShort(amount);
         } else {
-            w.writeByte((byte) variableId).writeByte((byte) amount);
+            w.put((byte) variableId).put((byte) amount);
         }
     }
 

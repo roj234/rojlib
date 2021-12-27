@@ -26,6 +26,7 @@
 package roj.net.mss;
 
 import roj.crypt.CipheR;
+import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 
 /**
@@ -33,20 +34,15 @@ import roj.crypt.SM4;
  * @version 0.1
  * @since 2021/12/22 19:18
  */
-public final class SM4Ciphers implements MSSCiphers {
+public final class SM4CFB implements MSSCiphers {
     @Override
     public String name() {
-        return "SM4";
+        return "SM4_CFB";
     }
 
     @Override
     public int specificationId() {
         return 0x00000010;
-    }
-
-    @Override
-    public int preferChunkSize() {
-        return 512;
     }
 
     @Override
@@ -56,15 +52,11 @@ public final class SM4Ciphers implements MSSCiphers {
 
     @Override
     public CipheR createEncoder() {
-        SM4 sm4 = new SM4();
-        sm4.reset(CipheR.ENCRYPT | SM4.SM4_STREAMED | SM4.SM4_PADDING);
-        return sm4;
+        return new MyCipher(new SM4(), MyCipher.MODE_CFB);
     }
 
     @Override
     public CipheR createDecoder() {
-        SM4 sm4 = new SM4();
-        sm4.reset(CipheR.DECRYPT | SM4.SM4_STREAMED | SM4.SM4_PADDING);
-        return sm4;
+        return new MyCipher(new SM4(), MyCipher.MODE_CFB);
     }
 }

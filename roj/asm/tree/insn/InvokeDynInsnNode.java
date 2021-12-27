@@ -77,7 +77,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
             rawParam = ParamHelper.getMethod(params);
             params.remove(params.size() - 1);
         }
-        w.writeByte(code).writeShort(cw.getInvokeDynId(tableIdx, name, rawParam)).writeShort(0);
+        w.put(code).putShort(cw.getInvokeDynId(tableIdx, name, rawParam)).putShort(0);
     }
 
     @Override

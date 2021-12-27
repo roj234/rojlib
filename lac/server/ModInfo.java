@@ -118,28 +118,28 @@ public final class ModInfo {
 
         mods.clear();
         for (int i = r.readVarInt(false) - 1; i >= 0; i--) {
-            String name = r.readVString();
+            String name = r.readVarIntUTF();
             int xl = r.readVarInt(false);
             String[] arr = new String[r.readVarInt(false)];
             for (int j = 0; j < arr.length; j++) {
-                arr[j] = r.readVString();
+                arr[j] = r.readVarIntUTF();
             }
             mods.put(name, arr);
         }
 
         optional.clear();
         for (int i = r.readVarInt(false) - 1; i >= 0; i--) {
-            String name = r.readVString();
+            String name = r.readVarIntUTF();
             int xl = r.readVarInt(false);
             String[] arr = new String[r.readVarInt(false)];
             for (int j = 0; j < arr.length; j++) {
-                arr[j] = r.readVString();
+                arr[j] = r.readVarIntUTF();
             }
             optional.put(name, arr);
         }
 
-        r.getBytes().clear();
-        r = new ByteReader(mod_info.get("classes", r.getBytes()));
+        r.bytes().clear();
+        r = new ByteReader(mod_info.get("classes", r.bytes()));
 
         if (r.readInt() != (('C' << 24) | ('L' << 16) | ('S' << 8) | 'S'))
             throw new IOException("CLSS header error");

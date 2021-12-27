@@ -80,7 +80,7 @@ public final class InvokeItfInsnNode extends InvokeInsnNode {
             rawParam = ParamHelper.getMethod(params);
             params.remove(params.size() - 1);
         }
-        w.writeByte(code).writeShort(cw.getItfRefId(owner, name, rawParam));
+        w.put(code).putShort(cw.getItfRefId(owner, name, rawParam));
 
         // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary
         // to store the arguments to be passed to the interface method.
@@ -92,9 +92,9 @@ public final class InvokeItfInsnNode extends InvokeInsnNode {
         } else {
             cnt += ParamHelper.paramSize(rawParam);
         }
-        w.writeByte((byte) cnt)
+        w.put((byte) cnt)
          // The fourth operand byte of each invokeinterface instruction must have the value zero.
          // Thus, we ignore it.
-         .writeByte((byte) 0);
+         .put((byte) 0);
     }
 }

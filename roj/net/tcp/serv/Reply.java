@@ -32,7 +32,6 @@ import roj.net.tcp.util.Code;
 import roj.net.tcp.util.Shared;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -71,9 +70,9 @@ public class Reply implements Response {
 
             ByteList bl = new ByteList(header.append(CRLF).length());
 
-            ByteWriter.writeUTF(bl, header, -1);
+            ByteList.writeUTF(bl, header, -1);
 
-            return ByteBuffer.wrap(bl.list, 0, bl.pos());
+            return ByteBuffer.wrap(bl.list, 0, bl.wIndex());
         } finally {
             if (header.arrayLength() > Shared.MAX_CHAR_BUFFER_CAPACITY)
                 data[0] = new CharList(Shared.MAX_CHAR_BUFFER_CAPACITY);

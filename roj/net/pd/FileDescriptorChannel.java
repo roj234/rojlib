@@ -25,7 +25,7 @@
  */
 package roj.net.pd;
 
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import sun.nio.ch.Net;
 import sun.nio.ch.SelChImpl;
 import sun.nio.ch.SelectionKeyImpl;
@@ -116,16 +116,16 @@ public class FileDescriptorChannel extends AbstractSelectableChannel implements 
 
     @Override
     public void kill() throws IOException {
-        NonblockingUtil.close(socket);
+        NIOUtil.close(socket);
     }
 
     @Override
     protected void implCloseSelectableChannel() throws IOException {
-        NonblockingUtil.close(socket);
+        NIOUtil.close(socket);
     }
 
     @Override
     protected void implConfigureBlocking(boolean block) throws IOException {
-        NonblockingUtil.configureBlocking(socket, block);
+        NIOUtil.configureBlocking(socket, block);
     }
 }

@@ -73,7 +73,7 @@ public class MethodAttributeVisitor extends AttributeVisitor {
             case "Deprecated":
                 if(length != 0)
                     throw new IllegalArgumentException("Length must be zero");
-                return visitKnown(new AttrUnknown(name, br.readBytesDelegated(length)));
+                return visitKnown(new AttrUnknown(name, br.slice(length)));
             default:
                 return visitUnknown(name, length);
         }

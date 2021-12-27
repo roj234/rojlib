@@ -118,7 +118,7 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
             rawParam = ParamHelper.getMethod(params);
             params.remove(params.size() - 1);
         }
-        w.writeByte(code).writeShort(cw.getMethodRefId(owner, name, rawParam));
+        w.put(code).putShort(cw.getMethodRefId(owner, name, rawParam));
     }
 
     @Override

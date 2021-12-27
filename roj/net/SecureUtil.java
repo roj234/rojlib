@@ -67,7 +67,7 @@ public final class SecureUtil {
         return ctx;
     }
 
-    public static TrustManager[] makeTrustManagers(InputStream caPath, char[] passwd) throws GeneralSecurityException, IOException {
+    private static TrustManager[] makeTrustManagers(InputStream caPath, char[] passwd) throws GeneralSecurityException, IOException {
         KeyStore tks = KeyStore.getInstance(KEY_FORMAT);
         try (InputStream in = caPath) {
             tks.load(in, passwd);

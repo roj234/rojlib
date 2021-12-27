@@ -33,7 +33,7 @@ import roj.config.data.AbstXML;
 import roj.config.data.XElement;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -115,7 +115,7 @@ public class ADownloader {
                 System.out.println("Skip " + tmp);
                 continue;
             }
-            ByteWriter.encodeUTF(tmp.trim().append("\r\n\r\n\r\n")).writeToStream(fos);
+            ByteList.encodeUTF(tmp.trim().append("\r\n\r\n\r\n")).writeToStream(fos);
         }
 
         fos.close();

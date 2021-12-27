@@ -29,7 +29,7 @@ import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.io.EmptyInputStream;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.SecureUtil;
 import roj.net.ssl.EngineAllocator;
 import roj.net.tcp.PlainSocket;
@@ -40,7 +40,7 @@ import roj.net.tcp.util.Action;
 import roj.net.tcp.util.HTTPHeaderLexer;
 import roj.net.tcp.util.Shared;
 import roj.text.CharList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -112,7 +112,7 @@ public class HttpClient extends ClientSocket {
 
     @Override
     protected WrappedSocket createChannel() throws IOException {
-        return clientEngine != null ? SSLSocket.get(server.socket(), NonblockingUtil.fd(server), clientEngine, true) : new PlainSocket(server.socket(), NonblockingUtil.fd(server));
+        return clientEngine != null ? SSLSocket.get(server.socket(), NIOUtil.fd(server), clientEngine, true) : new PlainSocket(server.socket(), NIOUtil.fd(server));
     }
 
     EngineAllocator clientEngine;
@@ -163,7 +163,7 @@ public class HttpClient extends ClientSocket {
         text.clear();
 
         if (body != null && body.length() != 0) {
-            header.put("Content-Length", Integer.toString(ByteWriter.byteCountUTF8(body)));
+            header.put("Content-Length", Integer.toString(ByteList.byteCountUTF8(body)));
         }
 
         text.append(action).append(" ").append(path).append(" HTTP/1.1").append(CRLF);

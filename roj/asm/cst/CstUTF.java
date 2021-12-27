@@ -53,7 +53,7 @@ public final class CstUTF extends Constant {
 
     @Override
     public void write(ByteWriter w) {
-        w.writeByte(CstType.UTF).writeJavaUTF(data);
+        w.put(CstType.UTF).putJavaUTF(data);
     }
 
     public String toString() {

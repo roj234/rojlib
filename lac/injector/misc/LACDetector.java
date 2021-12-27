@@ -26,7 +26,7 @@
 package lac.injector.misc;
 
 import lac.client.AccessHelper;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import net.minecraft.launchwrapper.Launch;
 
@@ -58,7 +58,7 @@ public class LACDetector implements Runnable {
         List<Class<?>> classes = ((AccessHelper) Launch.classLoader).getRaw(null);
         try (FileOutputStream fos = new FileOutputStream("lac-sorted-classes.txt")) {
             for (int i = 0; i < classes.size(); i++) {
-                ByteWriter.encodeUTF(classes.get(i).getName()).writeToStream(fos);
+                ByteList.encodeUTF(classes.get(i).getName()).writeToStream(fos);
             }
             fos.write('\n');
         }
@@ -67,9 +67,9 @@ public class LACDetector implements Runnable {
         try (FileOutputStream fos = new FileOutputStream("lac-mods.txt")) {
             for (int i = 0; i < modList.size(); i++) {
                 ModContainer mod = modList.get(i);
-                ByteWriter.encodeUTF(mod.getModId()).writeToStream(fos);
+                ByteList.encodeUTF(mod.getModId()).writeToStream(fos);
                 fos.write('|');
-                ByteWriter.encodeUTF(mod.getVersion()).writeToStream(fos);
+                ByteList.encodeUTF(mod.getVersion()).writeToStream(fos);
             }
             fos.write('\n');
         }

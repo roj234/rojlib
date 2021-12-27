@@ -52,8 +52,6 @@ import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.OS;
 
 import javax.annotation.Nonnull;
@@ -416,7 +414,7 @@ public class MCLauncher extends JFrame {
             CList versions;
             try {
                 CharList out = new CharList(10000);
-                ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
+                ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
 
                 versions = JSONParser.parseIntern(out).asList();
             } catch (ParseException | IOException e) {
@@ -435,7 +433,7 @@ public class MCLauncher extends JFrame {
         if(versions == null) {
             try {
                 CharList out = new CharList(100000);
-                ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址"))));
+                ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址"))));
 
                 cache_mc_versions = versions = JSONParser.parseIntern(out).asMap().get("versions").asList();
             } catch (ParseException | IOException e) {
@@ -955,7 +953,7 @@ public class MCLauncher extends JFrame {
             }
 
             try (FileOutputStream fos = new FileOutputStream(new File(installDir, ver + ".json"))) {
-                ByteWriter.writeUTF(bl, instConf.get("versionInfo").toShortJSON(), -1);
+                ByteList.writeUTF(bl, instConf.get("versionInfo").toShortJSON(), -1);
                 bl.writeToStream(fos);
                 bl.clear();
             }

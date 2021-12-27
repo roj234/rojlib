@@ -51,7 +51,7 @@ public final class AttrUnknown extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeBytes(data);
+        w.put(data);
     }
 
     public String toString() {

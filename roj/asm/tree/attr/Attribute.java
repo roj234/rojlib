@@ -45,16 +45,16 @@ public abstract class Attribute {
     public final String name;
 
     public final ByteWriter toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.getUtfId(name)).writeInt(-1);
+        w.putShort(pool.getUtfId(name)).putInt(-1);
         ByteList list = w.list;
 
-        int lenIdx = list.pos();
+        int lenIdx = list.wIndex();
         toByteArray1(pool, w);
-        int cp = list.pos();
+        int cp = list.wIndex();
 
-        list.pos(lenIdx - 4);
-        w.writeInt(cp - lenIdx);
-        list.pos(cp);
+        list.wIndex(lenIdx - 4);
+        w.putInt(cp - lenIdx);
+        list.wIndex(cp);
 
         return w;
     }

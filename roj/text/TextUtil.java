@@ -34,7 +34,6 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.math.MathUtils;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import java.io.UTFDataFormatException;
 import java.util.ArrayList;
@@ -144,7 +143,7 @@ public class TextUtil {
                     throw new IllegalStateException();
                 } else {
                     byte ch = (byte) MathUtils.parseInt(src, pos + 1, pos + 3, 16);
-                    tmp.add(ch);
+                    tmp.put(ch);
                     i = pos + 3;
                 }
             } else {
@@ -152,13 +151,13 @@ public class TextUtil {
                     pos = len;
                 }
                 while (i < pos) {
-                    tmp.add((byte) src.charAt(i));
+                    tmp.put((byte) src.charAt(i));
                     i++;
                 }
             }
         }
         try {
-            return ByteReader.readUTF(tmp);
+            return ByteList.readUTF(tmp);
         } catch (UTFDataFormatException e) {
             e.printStackTrace();
         }

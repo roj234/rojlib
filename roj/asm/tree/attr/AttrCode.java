@@ -38,6 +38,7 @@ import roj.asm.util.ExceptionEntry;
 import roj.asm.util.InsnList;
 import roj.collect.*;
 import roj.util.ByteList;
+import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
@@ -88,8 +89,8 @@ public class AttrCode extends Attribute {
         this.localSize = r.readChar();
 
         int largestIndex = r.readInt();
-        if (largestIndex < 1 || largestIndex > r.remain())
-            throw new IllegalStateException("Wrong code attribute: " + largestIndex + " of length at " + owner.ownerClass() + "." + owner.name() + " remaining " + r.remain());
+        if (largestIndex < 1 || largestIndex > r.remaining())
+            throw new IllegalStateException("Wrong code attribute: " + largestIndex + " of length at " + owner.ownerClass() + "." + owner.name() + " remaining " + r.remaining());
         IntMap<InsnNode> pc = parseCode(cp, r, largestIndex);
 
         int len = r.readUnsignedShort();
@@ -115,7 +116,7 @@ public class AttrCode extends Attribute {
             attributes.ensureCapacity(len);
             for (int i = 0; i < len; i++) {
                 String name = ((CstUTF) cp.get(r)).getString();
-                int end = r.readInt() + r.index;
+                int end = r.readInt() + r.rIndex;
                 switch (name) {
                     case "LineNumberTable":
                         attributes.add(new AttrLineNumber(r, pc));
@@ -139,9 +140,9 @@ public class AttrCode extends Attribute {
                     default:
                         System.err.println("[R.A.AC]Skip unknown " + name + " for " + (owner.ownerClass() + '.' + owner.name()));
                 }
-                if (r.index != end) {
-                    System.err.println("[R.A.AC]" + (end - r.index) + " bytes not read correctly!");
-                    r.index = end;
+                if (r.rIndex != end) {
+                    System.err.println("[R.A.AC]" + (end - r.rIndex) + " bytes not read correctly!");
+                    r.rIndex = end;
                 }
             }
         } catch (Throwable e) {
@@ -151,10 +152,10 @@ public class AttrCode extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool cw, ByteWriter w) {
-        w.writeShort(this.stackSize).writeShort(this.localSize).writeInt(0);
+        w.putShort(this.stackSize).putShort(this.localSize).putInt(0);
 
         final ByteList list = w.list;
-        int lenIdx = list.pos();
+        int lenIdx = list.wIndex();
 
         ToIntMap<InsnNode> pcRev = reIndex(instructions, cw, new ToIntMap<InsnNode>(instructions.size()) {
             @Override
@@ -173,11 +174,11 @@ public class AttrCode extends Attribute {
             insn.get(i).toByteArray(cw, w);
         }
 
-        int cp = list.pos();
-        list.pos(lenIdx - 4);
-        w.writeInt(cp - lenIdx).list.pos(cp);
+        int cp = list.wIndex();
+        list.wIndex(lenIdx - 4);
+        w.putInt(cp - lenIdx).list.wIndex(cp);
 
-        w.writeShort(this.exceptions.size());
+        w.putShort(this.exceptions.size());
         ArrayList<ExceptionEntry> exs = this.exceptions;
 
         for (int i = 0; i < exs.size(); i++) {
@@ -185,24 +186,24 @@ public class AttrCode extends Attribute {
             ex.start  = InsnNode.validate(ex.start);
             ex.end    = InsnNode.validate(ex.end);
             ex.handler= InsnNode.validate(ex.handler);
-            w.writeShort(pcRev.getInt(ex.start))
-             .writeShort(pcRev.getInt(ex.end))
-             .writeShort(pcRev.getInt(ex.handler))
-             .writeShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : cw.getClassId(ex.type));
+            w.putShort(pcRev.getInt(ex.start))
+             .putShort(pcRev.getInt(ex.end))
+             .putShort(pcRev.getInt(ex.handler))
+             .putShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : cw.getClassId(ex.type));
         }
 
         final AttributeList attrs = this.attributes;
-        w.writeShort(attrs.size() + (frames == null ?0 : 1));
+        w.putShort(attrs.size() + (frames == null ?0 : 1));
         for (int i = 0; i < attrs.size(); i++) {
             Attribute attribute = attrs.get(i);
             if(attribute instanceof ICodeAttribute) {
-                w.writeShort(cw.getUtfId(attribute.name)).writeInt(0);
+                w.putShort(cw.getUtfId(attribute.name)).putInt(0);
 
-                lenIdx = list.pos();
+                lenIdx = list.wIndex();
                 ((ICodeAttribute) attribute).toByteArray(cw, w, pcRev);
-                cp = list.pos();
-                list.pos(lenIdx - 4);
-                w.writeInt(cp - lenIdx).list.pos(cp);
+                cp = list.wIndex();
+                list.wIndex(lenIdx - 4);
+                w.putInt(cp - lenIdx).list.wIndex(cp);
             } else {
                 attribute.toByteArray(cw, w);
             }
@@ -212,14 +213,14 @@ public class AttrCode extends Attribute {
             recalculateFrames(pcRev);
         interpretFlags = 0;
         if (this.frames != null) {
-            w.writeShort(cw.getUtfId("StackMapTable")).writeInt(0);
+            w.putShort(cw.getUtfId("StackMapTable")).putInt(0);
 
-            lenIdx = list.pos();
-            writeFrames(cw, w.writeShort(frames.size()), pcRev);
+            lenIdx = list.wIndex();
+            writeFrames(cw, w.putShort(frames.size()), pcRev);
 
-            cp = list.pos();
-            list.pos(lenIdx - 4);
-            w.writeInt(cp - lenIdx).list.pos(cp);
+            cp = list.wIndex();
+            list.wIndex(lenIdx - 4);
+            w.putInt(cp - lenIdx).list.wIndex(cp);
         }
 
         insn.add(EndOfInsn.MARKER);
@@ -240,7 +241,7 @@ public class AttrCode extends Attribute {
         }
 
         int pos = 0;
-        ByteWriter w = new ByteWriter(new ByteList.EmptyByteList());
+        ByteWriter w = new ByteWriter(new WriteOnly());
 
         for (int i = 0; i < insn.size(); i++) {
             InsnNode node = insn.get(i);
@@ -248,7 +249,7 @@ public class AttrCode extends Attribute {
                 node.toByteArray(cw, w);
             }
         }
-        w.list.pos(0);
+        w.list.wIndex(0);
 
         int j = 3;
         o:
@@ -262,10 +263,10 @@ public class AttrCode extends Attribute {
                     case InsnNode.T_LDC:
                         int t = node.nodeSize();
                         node.toByteArray(cw, w);
-                        if (w.list.pos() != t) {
+                        if (w.list.wIndex() != t) {
                             lciRf = true;
                         }
-                        w.list.pos(0);
+                        w.list.wIndex(0);
                         break;
                     case InsnNode.T_SWITCH:
                         ((SwitchInsnNode) node).pad(pos, pcRev);
@@ -312,7 +313,7 @@ public class AttrCode extends Attribute {
                 return node;
             }
         };
-        int begin = r.index;
+        int begin = r.rIndex;
         len += begin;
 
         int negXXX = 0;
@@ -320,7 +321,7 @@ public class AttrCode extends Attribute {
         int idxBegin = 0;
         InsnNode curr = null;
         boolean widen = false;
-        while (r.index < len) {
+        while (r.rIndex < len) {
             try {
                 byte code = OpcodeUtil.byId(r.readByte());
                 if (widen) Interpreter.checkWide(code);
@@ -421,11 +422,11 @@ public class AttrCode extends Attribute {
                         break;
                     case TABLESWITCH:
                         // align
-                        r.index += (4 - ((r.index - begin) & 3)) & 3;
+                        r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
                         curr = parseTableSwitch(r);
                         break;
                     case LOOKUPSWITCH:
-                        r.index += (4 - ((r.index - begin) & 3)) & 3;
+                        r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
                         curr = parseLookupSwitch(r);
                         break;
                     default:
@@ -439,17 +440,17 @@ public class AttrCode extends Attribute {
                 err.println("Please report to Roj234 with all messages below.");
                 err.println("====================PARSING NODE====================");
                 err.println("Prev: " + curr);
-                r.index = begin + idxBegin;
+                r.rIndex = begin + idxBegin;
                 try {
                     err.println("Except: " + OpcodeUtil.toString0(r.readByte()));
                 } catch (Throwable e111) {
-                    r.index = begin + idxBegin;
+                    r.rIndex = begin + idxBegin;
                     err.println("Except: " + r.readByte());
                 }
                 err.println();
                 err.println("PrevIndex: " + idxBegin);
-                err.println("Index: " + (r.index - begin));
-                err.println(r.getBytes().subList(begin, len - begin));
+                err.println("Index: " + (r.rIndex - begin));
+                err.println(r.bytes().slice(begin, len - begin));
                 err.println("====================PARSING NODE====================");
 
                 throw new InternalError("At " + (owner.ownerClass() + '.' + owner.name()), e);
@@ -469,7 +470,7 @@ public class AttrCode extends Attribute {
 
             widen = curr.code == Opcodes.WIDE;
             pci.put(idxBegin, curr);
-            idxBegin = r.index - begin;
+            idxBegin = r.rIndex - begin;
         }
         // 为什么初始化容量是 len / 2 :
         /*float v = (float) MathUtils.getMin2PowerOf(pci.size()) / MathUtils.getMin2PowerOf(len - begin);
@@ -618,34 +619,34 @@ public class AttrCode extends Attribute {
                 case FrameType.full:
                     break;
             }
-            w.writeByte((byte) type);
+            w.put((byte) type);
             switch (curr.type) {
                 case FrameType.same:
                     break;
                 case FrameType.same_local_1_stack_ex:
-                    w.writeShort(offset);
+                    w.putShort(offset);
                 case FrameType.same_local_1_stack:
                     putVar(curr.stacks.get(0), w, pool, pcRev);
                     break;
                 case FrameType.chop:
                     // 251 - type
                 case FrameType.same_ex:
-                    w.writeShort(offset);
+                    w.putShort(offset);
                     break;
                 case FrameType.append:
-                    w.writeShort(offset);
+                    w.putShort(offset);
                     //writeVerify(curr.stacks.get(0), w, pool);
                     for (int i = curr.locals.size + 251 - type, e = curr.locals.size; i < e; i++) {
                         putVar(curr.locals.get(i), w, pool, pcRev);
                     }
                     break;
                 case FrameType.full:
-                    w.writeShort(offset).writeShort(curr.locals.size);
+                    w.putShort(offset).putShort(curr.locals.size);
                     for (int i = 0, e = curr.locals.size; i < e; i++) {
                         putVar(curr.locals.get(i), w, pool, pcRev);
                     }
 
-                    w.writeShort(curr.stacks.size);
+                    w.putShort(curr.stacks.size);
                     for (int i = 0, e = curr.stacks.size; i < e; i++) {
                         putVar(curr.stacks.get(i), w, pool, pcRev);
                     }
@@ -656,13 +657,13 @@ public class AttrCode extends Attribute {
     }
 
     private static void putVar(Var v, ByteWriter w, ConstantPool pool, ToIntMap<InsnNode> pcRev) {
-        w.writeByte(v.type);
+        w.put(v.type);
         switch (v.type) {
             case VarType.REFERENCE:
-                w.writeShort(pool.getClassId(v.owner));
+                w.putShort(pool.getClassId(v.owner));
                 break;
             case VarType.UNINITIAL:
-                w.writeShort(pcRev.getInt(InsnNode.validate(v.node)));
+                w.putShort(pcRev.getInt(InsnNode.validate(v.node)));
                 break;
         }
     }

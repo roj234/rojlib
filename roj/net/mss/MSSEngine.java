@@ -26,14 +26,13 @@
 package roj.net.mss;
 
 import roj.crypt.CipheR;
-import roj.net.cross.Util;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Random;
-import java.util.zip.Adler32;
 
 /**
  * MSS协议处理器：My Secure Socket
@@ -42,19 +41,13 @@ import java.util.zip.Adler32;
  * @since 2021/12/22 12:21
  */
 public abstract class MSSEngine {
-    //KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
-    //KeyPair kp = kpg.generateKeyPair();
-    //server.init(new JPubKey(), kp);
-
     MSSEngine() { random = new SecureRandom(); }
     MSSEngine(Random rnd) { this.random = rnd; }
 
-    final Random  random;
-    final Adler32 hasher = new Adler32();
+    final Random random;
+    MSSHash hash = new Adler32Hash();
 
-    boolean likeChunkedMode;
-
-    static MSSCiphers[] defaultSupportedCiphers = {JCiphers.AES_CFB8 };
+    static MSSCiphers[] defaultSupportedCiphers = { new SM4CFB(), JCiphers.AES_CFB8 };
     MSSCiphers[] supportedCiphers = defaultSupportedCiphers;
 
     public static void setDefaultSupportedCiphers(MSSCiphers[] ciphers) {
@@ -69,32 +62,39 @@ public abstract class MSSEngine {
         this.supportedCiphers = ciphers;
     }
 
-    static final byte CLOSED = 1, DIFF_CIPHER = 2, VERIFY = 4;
+    static final byte CLOSED = 1, STREAMING = 2;
 
     byte flag;
     int stage, bufferSize;
-    char chunkSize, halfSharedKeySize;
     CipheR encoder, decoder;
-    byte[] sharedKey, closePkt;
+    byte[] sharedKey, closeReason;
 
     /**
      * 客户端模式
      */
     public abstract boolean isClientMode();
 
-    /**
-     * 是否使用加密套件推荐的数据包分块大小
-     */
-    public final void setLikeChunkedMode(boolean b) {
-        if (stage != 0) throw new IllegalStateException();
-        this.likeChunkedMode = b;
+    public void setHashAlgorithm(MSSHash hash) {
+        this.hash = hash;
+    }
+
+    public MSSHash getHashAlgorithm() {
+        return hash;
     }
 
     /**
-     * 数据包分块大小
+     * 是否使用流模式
      */
-    public final int getChunkSize() {
-        return chunkSize;
+    public final void setStreamMode(boolean b) {
+        if (stage != 0) throw new IllegalStateException();
+        if (b)
+            flag |= STREAMING;
+        else
+            flag &= ~STREAMING;
+    }
+
+    public final boolean isStreamMode() {
+        return (flag & STREAMING) != 0;
     }
 
     public final boolean isClosed() {
@@ -106,31 +106,24 @@ public abstract class MSSEngine {
      * 若reason!=null会在下次调用wrap时向对等端发送关闭消息
      */
     public final void close(String reason) {
-        if (reason == null || sharedKey == null || isClosed()) return;
-        flag |= CLOSED;
-
-        byte[] strs = reason.getBytes(StandardCharsets.UTF_8);
-        closePkt = new byte[6 + strs.length];
-        System.arraycopy(strs, 0, closePkt, 6, strs.length);
-        for (int i = 0; i < strs.length; i++) {
-            strs[i] ^= sharedKey[i % sharedKey.length];
+        if (reason == null || stage != HS_DONE || (flag & (STREAMING | CLOSED)) != 0) {
+            flag |= CLOSED;
+            return;
         }
-        hasher.reset();
-        hasher.update(strs);
-        int v = (int) hasher.getValue();
-        closePkt[0] = PH_CLOSE;
-        closePkt[1] = (byte) (v >> 24);
-        closePkt[2] = (byte) (v >> 16);
-        closePkt[3] = (byte) (v >> 8);
-        closePkt[4] = (byte) v;
-        closePkt[5] = (byte) strs.length;
+
+        byte[] r = closeReason = reason.getBytes(StandardCharsets.UTF_8);
+        if (r.length > 255)
+            r = closeReason = Arrays.copyOf(r, 255);
+        for (int i = 0; i < r.length; i++) {
+            r[i] ^= sharedKey[i % sharedKey.length];
+        }
     }
 
     public final void reset() {
         this.stage = 0;
         this.encoder = this.decoder = null;
-        this.sharedKey = this.closePkt = null;
-        this.flag = VERIFY;
+        this.sharedKey = this.closeReason = null;
+        this.flag = 0;
     }
 
     public final boolean isHandshakeDone() {
@@ -219,70 +212,82 @@ public abstract class MSSEngine {
     public final int unwrap(ByteBuffer rcv, ByteBuffer dst) throws MSSException {
         if (stage != HS_DONE) throw new MSSException("请先握手");
         if ((flag & CLOSED) != 0) throw new MSSException("引擎已关闭");
-        if (closePkt != null) throw new MSSException("输入已关闭");
+        if (closeReason != null) throw new MSSException("输入已关闭");
+        if ((flag & STREAMING) != 0) {
+            if (dst.remaining() < rcv.remaining()) return dst.remaining() - rcv.remaining();
+            try {
+                decoder.crypt(rcv, dst);
+            } catch (GeneralSecurityException e) {
+                _close("解密失败");
+            }
+            return 0;
+        }
 
         if (!rcv.hasRemaining()) return 1;
         switch (rcv.get(0)) {
             case PH_CHUNK:
-                // u1 hdr, u2 encoded_len, opt[u2 decoded_len], opt[u4 hash], u1[encoded_len]
-                int j = 3 + (flag & (DIFF_CIPHER | VERIFY)), k;
-                if (rcv.remaining() < j) return j - rcv.remaining();
-                if (rcv.remaining() < rcv.getChar(1) + j)
-                    return rcv.getChar(1) + j - rcv.remaining();
-                // 3,7 12,124; 5,9 14,18
-                if (dst.remaining() < rcv.getChar(k = (j & 2) == 0 ? 3 : 1))
-                    return dst.remaining() - rcv.getChar(k);
+                // u1 hdr, u2 len, opt[? hash], u1[len]
+                int ph = 3 + hash.length();
+                if (rcv.remaining() < ph) return ph - rcv.remaining();
 
-                rcv.position(j);
+                int len = rcv.getChar(1);
+                if (rcv.remaining() < len + ph)
+                    return len + ph - rcv.remaining();
+                if (dst.remaining() < len)
+                    return dst.remaining() - len;
+
+                int lim = rcv.limit();
+                rcv.position(3).limit(ph);
+                Object _hash = null;
+                try {
+                    _hash = hash.readHash(rcv, decoder);
+                } catch (GeneralSecurityException e) {
+                    _close("Hash计算失败");
+                }
+                rcv.position(ph).limit(ph + len);
                 int pos = dst.position();
+                dst.mark();
                 try {
                     decoder.crypt(rcv, dst);
                 } catch (GeneralSecurityException e) {
                     _close("解密失败");
                 }
-                int len = dst.position() - pos;
-                if (len != rcv.getChar(k)) {
-                    System.out.println("RLen " + (int)rcv.getChar(k));
-                    System.out.println("MLen " + len);
-                    _close("消息长度有误");
-                }
-                int lim = dst.limit();
-                dst.position(pos).limit(pos + len);
+                rcv.limit(lim);
 
-                if (j > 5) {
-                    hasher.reset();
-                    hasher.update(dst);
-                    dst.limit(lim).position(pos + len);
-                    if (hasher.getValue() != rcv.getInt(3 + (flag & DIFF_CIPHER))) {
-                        _close("Adler32验证失败");
-                    }
+                if (dst.position() - pos != len) {
+                    _close("消息长度有误 exc " + len + ", got " + (dst.position() - pos));
                 }
 
-                if (rcv.hasRemaining()) rcv.compact();
-                else rcv.clear();
+                if (_hash != null) {
+                    lim = dst.limit();
+                    dst.limit(dst.position()).reset();
+                    pos = rcv.position();
+                    rcv.position(3);
+                    if (!hash.checkHash(_hash, dst))
+                        _close("Hash验证失败");
+                    rcv.position(pos);
+                    dst.position(dst.limit()).limit(lim);
+                }
+
                 return 0;
             case PH_CLOSE:
-                // u1 hdr, u4 hash, u1 len, utf[len] msg
+                // u1 hdr, u1 len, u4 hash, utf[len] msg
                 if (rcv.remaining() < 6) return BUFFER_UNDERFLOW;
-                if (rcv.remaining() < (rcv.get(5) & 0xFF) + 6) return BUFFER_UNDERFLOW;
+                if (rcv.remaining() < (rcv.get(1) & 0xFF) + 6) return BUFFER_UNDERFLOW;
                 flag |= CLOSED;
 
                 rcv.position(6);
-                byte[] msgs = new byte[rcv.remaining()];
+                byte[] msgs = new byte[rcv.get(1) & 0xFF];
                 rcv.get(msgs);
-                String v = new String(msgs, StandardCharsets.UTF_8);
-
                 for (int i = 0; i < msgs.length; i++) {
                     msgs[i] ^= sharedKey[i % sharedKey.length];
                 }
-                hasher.reset();
-                hasher.update(msgs);
+                String v = new String(msgs, StandardCharsets.UTF_8);
 
-                throw new MSSException(hasher.getValue() != rcv.getInt(1) ?
+                throw new MSSException(hash.computeHandshakeHash(sharedKey) != rcv.getInt(2) ?
                                 "不可信的关闭数据包: " + v :
                                 "对等端关闭连接: " + v);
             default:
-                Util.dumpBuffer(rcv);
                 _close("无效的数据包");
                 return 0;
         }
@@ -297,57 +302,52 @@ public abstract class MSSEngine {
     public final int wrap(ByteBuffer src, ByteBuffer snd) throws MSSException {
         if (stage != HS_DONE) throw new MSSException("请先握手");
         if ((flag & CLOSED) != 0) throw new MSSException("引擎已关闭");
-        if (closePkt != null) {
-            if (snd.remaining() < closePkt.length) return snd.remaining() - closePkt.length;
-            snd.put(closePkt);
-            int l = closePkt.length;
-            closePkt = null;
+        if ((flag & STREAMING) != 0) {
+            if (snd.remaining() < src.remaining()) return snd.remaining() - src.remaining();
+            try {
+                encoder.crypt(src, snd);
+            } catch (GeneralSecurityException e) {
+                _close("加密失败");
+            }
+            return 0;
+        }
+
+        if (closeReason != null) {
+            int l = 6 + closeReason.length;
+            if (snd.remaining() < l) return snd.remaining() - l;
+            snd.put(PH_CLOSE).put((byte) closeReason.length)
+               .putInt(hash.computeHandshakeHash(sharedKey)).put(closeReason);
+            closeReason = null;
             flag |= CLOSED;
             return l;
         }
 
         int lim = src.limit();
-        int tw = 0;
         try {
-            while (src.remaining() > 0) {
-                int w = Math.min(src.remaining(), chunkSize);
+            while (src.position() < lim) {
+                int w = Math.min(lim - src.position(), 65535);
 
-                if (snd.remaining() < 9 + w) {
-                    return snd.remaining() - 9 - w;
+                int t = 3 + hash.length() + w;
+                if (snd.remaining() < t) {
+                    return snd.remaining() - t;
                 }
 
                 src.limit(src.position() + w);
 
-                snd.put(PH_CHUNK);
-                if ((flag & DIFF_CIPHER) != 0) snd.putChar((char) 0);
-                // u1 hdr, u2 encoded_len, u2 decoded_len, u4 hash, u1[encoded_len]
-                snd.putChar((char) w);
-                if ((flag & VERIFY) != 0) {
-                    hasher.reset();
-                    hasher.update(src);
-                    snd.putInt((int) hasher.getValue());
-                }
+                // u1 hdr, u2 len, opt[? hash], u1[len]
+                snd.put(PH_CHUNK).putChar((char) w);
 
-                int sp = snd.position();
                 try {
-                    if (CipheR.BUFFER_OVERFLOW == encoder.crypt(src, snd)) {
-                        snd.position(snd.position() - 9);
-                        return -1024;
-                    }
+                    hash.writeHash(src, snd, encoder);
+                    encoder.crypt(src, snd);
                 } catch (GeneralSecurityException e) {
                     _close("加密失败");
-                }
-
-                if ((flag & DIFF_CIPHER) != 0) {
-                    int el = snd.position() - sp;
-                    if (el > 65535) _close("密文长度无效");
-                    snd.putChar(sp - flag & (DIFF_CIPHER | VERIFY), (char) el);
                 }
             }
         } finally {
             src.limit(lim);
         }
-        return tw;
+        return 0;
     }
 
     private void _close(String reason) throws MSSException {

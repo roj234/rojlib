@@ -95,30 +95,30 @@ public class CodeVisitor extends Holder {
     }
 
     public void visitCode(int stackSize, int localSize, int len) {
-        bw.writeShort(cw.getUtfId("Code"));
-        bw.writeInt(0);
-        codeIndex = bw.list.pos();
-        bw.writeShort(stackSize).writeShort(localSize).writeInt(0);
+        bw.putShort(cw.getUtfId("Code"));
+        bw.putInt(0);
+        codeIndex = bw.list.wIndex();
+        bw.putShort(stackSize).putShort(localSize).putInt(0);
 
-        codeAttrAmountIndex = bw.list.pos();
+        codeAttrAmountIndex = bw.list.wIndex();
     }
 
     protected void visitCodeNoWrap(int stackSize, int localSize) {
         codeIndex = 0;
-        bw.writeShort(stackSize).writeShort(localSize).writeInt(0);
-        codeAttrAmountIndex = bw.list.pos();
+        bw.putShort(stackSize).putShort(localSize).putInt(0);
+        codeAttrAmountIndex = bw.list.wIndex();
     }
 
     public void visitBytecode(int len) {
         ByteReader r = this.br;
         ConstantPool pool = this.cp;
 
-        int begin = r.index;
+        int begin = r.rIndex;
         len += begin;
 
         byte prev = 0, code;
-        while (r.index < len) {
-            bci = r.index - begin;
+        while (r.rIndex < len) {
+            bci = r.rIndex - begin;
             code = OpcodeUtil.byId(r.readByte());
 
             boolean widen = prev == Opcodes.WIDE;
@@ -246,11 +246,11 @@ public class CodeVisitor extends Holder {
                     break;
                 case TABLESWITCH:
                     // align
-                    r.index += (4 - ((r.index - begin) & 3)) & 3;
+                    r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
                     parse_table_switch(r);
                     break;
                 case LOOKUPSWITCH:
-                    r.index += (4 - ((r.index - begin) & 3)) & 3;
+                    r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
                     parse_lookup_switch(r);
                     break;
                 default:
@@ -262,45 +262,45 @@ public class CodeVisitor extends Holder {
     }
 
     public void multi_dimension_array(CstClass clz, int dimension) {
-        bw.writeByte(MULTIANEWARRAY).writeShort(cw.reset(clz).getIndex()).writeByte((byte) dimension);
+        bw.put(MULTIANEWARRAY).putShort(cw.reset(clz).getIndex()).put((byte) dimension);
     }
 
     public void clazz(byte code, CstClass clz) {
-        bw.writeByte(code).writeShort(cw.reset(clz).getIndex());
+        bw.put(code).putShort(cw.reset(clz).getIndex());
     }
 
     public void increase(boolean widen, int var_id, int count) {
-        bw.writeByte(IINC);
+        bw.put(IINC);
         if (widen) {
-            bw.writeShort(var_id).writeShort(count);
+            bw.putShort(var_id).putShort(count);
         } else {
-            bw.writeByte((byte) var_id).writeByte((byte) count);
+            bw.put((byte) var_id).put((byte) count);
         }
     }
 
     public void ldc(byte code, Constant c) {
         int cpi = cw.reset(c).getIndex();
         if (code == Opcodes.LDC2_W || (code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
-            bw.writeByte(code).writeShort(cpi);
+            bw.put(code).putShort(cpi);
         } else {
-            bw.writeByte(code).writeByte((byte) cpi);
+            bw.put(code).put((byte) cpi);
         }
     }
 
     public void invoke_dynamic(CstDynamic dyn, int type) {
-        bw.writeByte(INVOKEDYNAMIC).writeShort(cw.reset(dyn).getIndex()).writeShort(type);
+        bw.put(INVOKEDYNAMIC).putShort(cw.reset(dyn).getIndex()).putShort(type);
     }
 
     public void invoke_interface(CstRefItf itf, short argc) {
-        bw.writeByte(INVOKEINTERFACE).writeShort(cw.reset(itf).getIndex()).writeShort(argc);
+        bw.put(INVOKEINTERFACE).putShort(cw.reset(itf).getIndex()).putShort(argc);
     }
 
     public void invoke(byte code, CstRef method) {
-        bw.writeByte(code).writeShort(cw.reset(method).getIndex());
+        bw.put(code).putShort(cw.reset(method).getIndex());
     }
 
     public void field(byte code, CstRefField field) {
-        bw.writeByte(code).writeShort(cw.reset(field).getIndex());
+        bw.put(code).putShort(cw.reset(field).getIndex());
     }
 
     // 关于jump的offset问题还有待处理
@@ -313,19 +313,19 @@ public class CodeVisitor extends Holder {
     }
 
     public void std(byte code) {
-        bw.writeByte(code);
+        bw.put(code);
     }
 
     public void std_u1(byte code, int value) {
-        bw.writeByte(code).writeByte((byte) value);
+        bw.put(code).put((byte) value);
     }
 
     public void std_u2(byte code, int value) {
-        bw.writeByte(code).writeShort(value);
+        bw.put(code).putShort(value);
     }
 
     public void std_u4(byte code, int value) {
-        bw.writeByte(code).writeInt(value);
+        bw.put(code).putInt(value);
     }
 
     public void parse_table_switch(ByteReader r) {
@@ -336,7 +336,7 @@ public class CodeVisitor extends Holder {
         int hig = r.readInt();
         int count = hig - low + 1;
 
-        bw.writeInt(def).writeInt(low).writeInt(hig);
+        bw.putInt(def).putInt(low).putInt(hig);
 
         if(count > 100000)
             throw new IllegalArgumentException("length > 100000");
@@ -346,13 +346,13 @@ public class CodeVisitor extends Holder {
             int key = i++ + low;
             int offset = r.readInt();
 
-            bw.writeInt(offset);
+            bw.putInt(offset);
         }
     }
 
     public void align_out() {
         ByteList out = bw.list;
-        out.pos(out.pos() + (3 - ((out.pos() - codeAttrAmountIndex - 4) & 3)));
+        out.wIndex(out.wIndex() + (3 - ((out.wIndex() - codeAttrAmountIndex - 4) & 3)));
     }
 
     public void parse_lookup_switch(ByteReader r) {
@@ -361,7 +361,7 @@ public class CodeVisitor extends Holder {
         int def = r.readInt();
         int count = r.readInt();
 
-        bw.writeInt(def).writeInt(count);
+        bw.putInt(def).putInt(count);
 
         if(count > 100000)
             throw new IllegalArgumentException("length > 100000");
@@ -372,57 +372,57 @@ public class CodeVisitor extends Holder {
             int offset = r.readInt();
             count--;
 
-            bw.writeInt(key).writeInt(offset);
+            bw.putInt(key).putInt(offset);
         }
     }
 
     public void visitEndBytecodes(int exLen) {
-        int pos = bw.list.pos();
-        bw.list.pos(codeAttrAmountIndex - 4);
-        bw.writeInt(pos - codeAttrAmountIndex);
-        bw.list.pos(pos);
+        int pos = bw.list.wIndex();
+        bw.list.wIndex(codeAttrAmountIndex - 4);
+        bw.putInt(pos - codeAttrAmountIndex);
+        bw.list.wIndex(pos);
 
-        codeAttrAmountIndex = bw.list.pos();
+        codeAttrAmountIndex = bw.list.wIndex();
         codeAttrAmount = 0;
-        bw.writeShort(0);
+        bw.putShort(0);
     }
 
     public void visitException(int start, int end, int handler, CstClass type) {
-        bw.writeShort(start).writeShort(end).writeShort(handler).writeShort(type == null ? 0 : cw.reset(type).getIndex());
+        bw.putShort(start).putShort(end).putShort(handler).putShort(type == null ? 0 : cw.reset(type).getIndex());
         // 在这里是exception的数量
         codeAttrAmount++;
     }
 
     public void visitCodeAttributes(int l) {
-        int pos = bw.list.pos();
-        bw.list.pos(codeAttrAmountIndex);
-        bw.writeShort(codeAttrAmount);
-        bw.list.pos(pos);
+        int pos = bw.list.wIndex();
+        bw.list.wIndex(codeAttrAmountIndex);
+        bw.putShort(codeAttrAmount);
+        bw.list.wIndex(pos);
 
         codeAttrAmountIndex = pos;
         codeAttrAmount = 0;
-        bw.writeShort(0);
+        bw.putShort(0);
     }
 
     public void visitCodeAttribute(String name, int length) {
-        int end = br.index + length;
+        int end = br.rIndex + length;
         if (attributeVisitor != null) {
             if (attributeVisitor.visit(name, length)) {
                 codeAttrAmount++;
             }
         }
-        br.index = end;
+        br.rIndex = end;
     }
 
     public void visitEndCode() {
-        int pos = bw.list.pos();
-        bw.list.pos(codeAttrAmountIndex);
-        bw.writeShort(codeAttrAmount);
+        int pos = bw.list.wIndex();
+        bw.list.wIndex(codeAttrAmountIndex);
+        bw.putShort(codeAttrAmount);
 
         if (codeIndex > 0) {
-            bw.list.pos(codeIndex - 4);
-            bw.writeInt(pos - codeIndex);
+            bw.list.wIndex(codeIndex - 4);
+            bw.putInt(pos - codeIndex);
         }
-        bw.list.pos(pos);
+        bw.list.wIndex(pos);
     }
 }

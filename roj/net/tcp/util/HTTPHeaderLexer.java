@@ -29,7 +29,7 @@ import roj.config.ParseException;
 import roj.math.MathUtils;
 import roj.net.tcp.Notify;
 import roj.text.CharList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import static roj.config.word.AbstLexer.WHITESPACE;
 
@@ -162,7 +162,7 @@ public final class HTTPHeaderLexer {
             while (byteLen < len) {
                 final char c = input.charAt(index++);
                 list[j++] = c;
-                byteLen += ByteWriter.byteCountUTF8(c);
+                byteLen += ByteList.byteCountUTF8(c);
             }
 
         } catch (ArrayIndexOutOfBoundsException ignored) {

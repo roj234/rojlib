@@ -116,15 +116,15 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
     */
     @Override
     public void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
-        w.writeShort(list.size());
+        w.putShort(list.size());
         for (LocalVariable c : list) {
             InsnNode s = validate(c.start);
             InsnNode e = validate(c.end);
-            w.writeShort(pcRev.getInt(s))
-                    .writeShort(pcRev.getInt(e) - pcRev.getInt(s))
-                    .writeShort(pool.getUtfId(c.name))
-                    .writeShort(pool.getUtfId(c.type.isGeneric() ? c.type.toGeneric() : ParamHelper.getField((Type) c.type)))
-                    .writeShort(c.slot);
+            w.putShort(pcRev.getInt(s))
+                    .putShort(pcRev.getInt(e) - pcRev.getInt(s))
+                    .putShort(pool.getUtfId(c.name))
+                    .putShort(pool.getUtfId(c.type.isGeneric() ? c.type.toGeneric() : ParamHelper.getField((Type) c.type)))
+                    .putShort(c.slot);
         }
     }
 

@@ -72,15 +72,15 @@ public class GIFDecoder {
         ByteReader r = new ByteReader(out);
         Gif gif = new Gif();
 
-        String cl = r.readUTF0(6);
+        String cl = r.readUTF(6);
         if (!cl.equals("GIF87a") && !cl.equals("GIF89a"))
             throw new IOException("Illegal header " + cl);
 
         int colorTableSize = 0;
 
         // Block LSD
-        gif.width = r.readUShortR();
-        gif.height = r.readUShortR();
+        gif.width = r.readUShortLE();
+        gif.height = r.readUShortLE();
         gif.wh = gif.width * gif.height;
         byte flag = r.readByte();
         gif.sorted = isBitTrue(flag, 3);
@@ -101,7 +101,7 @@ public class GIFDecoder {
         }
 
         while (true) {
-            if (r.index >= r.length()) {
+            if (r.rIndex >= r.length()) {
                 throw new IOException("Unexpected end of input.");
             }
             byte blockId = r.readByte();
@@ -159,7 +159,7 @@ public class GIFDecoder {
                 System.err.println("[GIFDecoder - PictureTextExtension]: No one *ever* uses this.\n    If you use it, deal with parsing it YOURSELF.");
                 //r.readByte(); // Always 12
                 //r.readBytes(12);
-                r.index += 13;
+                r.rIndex += 13;
                 skipSubBlock(r);
                 break;
             case 0xF9:
@@ -176,20 +176,20 @@ public class GIFDecoder {
     }
 
     public static int skipSubBlock(ByteReader r) {
-        int startIndex = r.index;
+        int startIndex = r.rIndex;
         short subBlockLen = r.readUByte();
-        while (subBlockLen != 0 && !r.isFinished()) {
-            r.index += subBlockLen;
+        while (subBlockLen != 0 && !r.hasRemaining()) {
+            r.rIndex += subBlockLen;
             subBlockLen = r.readUByte();
             startIndex++;
         }
-        return r.index - startIndex - 1;
+        return r.rIndex - startIndex - 1;
     }
 
     public static byte[] skipSubBlock(ByteReader r, ByteList buf) {
         byte b = r.readByte();
         while (b != 0) {
-            buf.add(b);
+            buf.put(b);
             b = r.readByte();
         }
 
@@ -198,20 +198,20 @@ public class GIFDecoder {
 
     public static void readGraphicController(Gif gif, ByteReader r) {
         Frame frame = gif.currFrame;
-        r.index++;
+        r.rIndex++;
         byte flag = r.readByte();
         frame.disposalMethod = (flag & 0x1C) >>> 2;
         frame.transparent = isBitTrue(flag, 0);
-        frame.delay = r.readUShortR();
+        frame.delay = r.readUShortLE();
         frame.transpantColorIndex = r.readUByte();
-        r.index++;
+        r.rIndex++;
     }
 
     public static void readAppExtensions(Gif gif, ByteReader r) {
         short len = r.readUByte();
         try {
-            gif.appName = r.readUTF0(8);
-            gif.appCode = r.readUTF0(3);
+            gif.appName = r.readUTF(8);
+            gif.appCode = r.readUTF(3);
         } catch (UTFDataFormatException ignored) {}
         //if(len > 11)
         skipSubBlock(r);
@@ -220,10 +220,10 @@ public class GIFDecoder {
     public static void readDescriptor(Gif gif, ByteReader r) {
         gif.beginFrame();
         Frame frame = gif.currFrame;
-        frame.offsetX = r.readUShortR();
-        frame.offsetY = r.readUShortR();
-        frame.width = r.readUShortR();
-        frame.height = r.readUShortR();
+        frame.offsetX = r.readUShortLE();
+        frame.offsetY = r.readUShortLE();
+        frame.width = r.readUShortLE();
+        frame.height = r.readUShortLE();
         byte flag = r.readByte();
         frame.sorted = isBitTrue(flag, 5);
         frame.interlace = isBitTrue(flag, 6);
@@ -234,9 +234,9 @@ public class GIFDecoder {
 
         frame.minCodeSize = r.readByte();
 
-        int thisIndex = r.index;
+        int thisIndex = r.rIndex;
         int subBlockDataSize = skipSubBlock(r);
-        r.index = thisIndex;
+        r.rIndex = thisIndex;
 
         frame.imgData = skipSubBlock(r, new ByteList(subBlockDataSize + 2));
 

@@ -44,7 +44,7 @@ public final class CstDouble extends Constant {
 
     @Override
     public void write(ByteWriter w) {
-        w.writeByte(CstType.DOUBLE).writeDouble(value);
+        w.put(CstType.DOUBLE).putDouble(value);
     }
 
     @Override

@@ -54,7 +54,7 @@ final class ClientWork extends Stated {
         int except = 1;
         while (!W.server.shutdown && isInRoom(W)) {
             int read;
-            if ((read = ch.read(except - rb.position())) == 0 || rb.position() < except) {
+            if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 W.pollPackets();
                 LockSupport.parkNanos(20);
                 if (heart-- < 0) {

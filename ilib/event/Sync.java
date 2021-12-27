@@ -37,6 +37,7 @@ import roj.collect.MyHashSet;
 import roj.collect.ToLongMap;
 import roj.io.FileUtil;
 import roj.util.ByteList;
+import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -64,7 +65,7 @@ import java.util.Map;
  * @since  2021/5/30 22:59
  */
 public class Sync {
-    static ByteList NULL_BYTES = new ByteList.EmptyByteList();
+    static ByteList NULL_BYTES = new WriteOnly();
     static ILChannel SYNC = new ILChannel("IL_SYN");
 
     ToLongMap<String> fileMD5 = new ToLongMap<>();
@@ -90,7 +91,7 @@ public class Sync {
         byte[] md5 = new byte[16];
         for (Map.Entry<String, ByteList> entry : fileData.entrySet()) {
             ByteList bl = entry.getValue();
-            FileUtil.MD5.update(bl.list, 0, bl.pos());
+            FileUtil.MD5.update(bl.list, 0, bl.wIndex());
             FileUtil.MD5.digest(md5);
             ByteReader r = new ByteReader(md5);
             FileUtil.MD5.reset();
@@ -138,15 +139,15 @@ public class Sync {
         public void fromBytes(ByteReader buf) {
             int len = buf.readVarInt(false);
             for (int i = 0; i < len; i++) {
-                serverMD5.put(buf.readVString(), buf.readLong());
+                serverMD5.put(buf.readVarIntUTF(), buf.readLong());
             }
         }
 
         @Override
         public void toBytes(ByteWriter buf) {
-            buf.writeVarInt(serverMD5.size(), false);
+            buf.putVarInt(serverMD5.size(), false);
             for (ToLongMap.Entry<String> entry : serverMD5.selfEntrySet()) {
-                buf.writeVString(entry.k).writeLong(entry.v);
+                buf.putVarIntUTF(entry.k).putLong(entry.v);
             }
         }
 
@@ -199,14 +200,14 @@ public class Sync {
             int len = buf.readVarInt(false);
             if(buf.readBoolean()) { // fromClient
                 for (int i = 0; i < len; i++) {
-                    String key = buf.readVString();
+                    String key = buf.readVarIntUTF();
                     files.put(key, null);
                 }
                 fromClient = false;
             } else {
                 for (int i = 0; i < len; i++) {
-                    String key = buf.readVString();
-                    ByteList data = buf.readBytesDelegated(buf.readVarInt(false));
+                    String key = buf.readVarIntUTF();
+                    ByteList data = buf.slice(buf.readVarInt(false));
                     files.put(key, data);
                 }
             }
@@ -214,14 +215,14 @@ public class Sync {
 
         @Override
         public void toBytes(ByteWriter buf) {
-            buf.writeVarInt(files.size(), false).writeBoolean(fromClient);
+            buf.putVarInt(files.size(), false).putBool(fromClient);
             if(fromClient) {
                 for(String key : files.keySet()) {
-                    buf.writeVString(key);
+                    buf.putVarIntUTF(key);
                 }
             } else {
                 for(Map.Entry<String, ByteList> entry : files.entrySet()) {
-                    buf.writeVString(entry.getKey()).writeVarInt(entry.getValue().pos(), false).writeBytes(entry.getValue());
+                    buf.putVarIntUTF(entry.getKey()).putVarInt(entry.getValue().wIndex(), false).put(entry.getValue());
                 }
             }
         }

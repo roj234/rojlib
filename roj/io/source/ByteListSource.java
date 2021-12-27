@@ -49,8 +49,8 @@ public class ByteListSource implements Source {
 
     public ByteListSource(ByteList bytes) {
         this.array = bytes.list;
-        this.offset = bytes.offset();
-        this.length = bytes.pos();
+        this.offset = bytes.arrayOffset();
+        this.length = bytes.wIndex();
     }
 
     public void setDedicated(boolean dedicated) {

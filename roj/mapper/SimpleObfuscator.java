@@ -31,6 +31,7 @@ import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.util.ByteList;
+import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 
@@ -201,7 +202,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
         if (lineLog != null) {
             try(FileOutputStream fos = new FileOutputStream(new File(lineLog))) {
-                ByteWriter.encodeUTF(obf.lineLog).writeToStream(fos);
+                ByteList.encodeUTF(obf.lineLog).writeToStream(fos);
             }
         }
 
@@ -380,7 +381,7 @@ public final class SimpleObfuscator extends Obfuscator {
                         ByteList sh = Parser.toByteArrayShared(dg);
                         Class<?> df = ClassDefiner.INSTANCE.defineClassC(
                                 dg.name.replace('/', '.'),
-                                sh.list, 0, sh.pos());
+                                sh.list, 0, sh.wIndex());
                         Decoder dar = DirectAccessor.builder(Decoder.class)
                                 .delegate(df, desc.name, "decode").build();
                         mcv.methods.put(desc, dar);
@@ -463,7 +464,7 @@ public final class SimpleObfuscator extends Obfuscator {
         public void initNil(ByteList data) {
             this.br.refresh(data);
             this.cw = new ConstantPoolEmpty();
-            this.bw.list = new ByteList.EmptyByteList();
+            this.bw.list = new WriteOnly();
         }
 
         int ldcPos;
@@ -473,13 +474,13 @@ public final class SimpleObfuscator extends Obfuscator {
         @Override
         public void ldc(byte code, Constant c) {
             if (c.type() == CstType.STRING) {
-                ldcPos = br.index;
+                ldcPos = br.rIndex;
             }
         }
 
         @Override
         public void invoke(byte code, CstRef method) {
-            if (code == Opcodes.INVOKESTATIC && method.desc().getType().getString().equals("(Ljava/lang/String;)Ljava/lang/String;") && br.index == ldcPos + 3) {
+            if (code == Opcodes.INVOKESTATIC && method.desc().getType().getString().equals("(Ljava/lang/String;)Ljava/lang/String;") && br.rIndex == ldcPos + 3) {
                 methods.putIfAbsent(tmp.read(method).copy(), null);
             }
         }
@@ -579,33 +580,33 @@ public final class SimpleObfuscator extends Obfuscator {
                 continue;
 
             ByteReader r = Parser.reader(au);
-            ByteWriter w = new ByteWriter(r.remain());
-            r.index += 4; // stack size
+            ByteList w = new ByteList(r.remaining());
+            r.rIndex += 4; // stack size
             int codeLen = r.readInt();
-            r.index += codeLen; // code
+            r.rIndex += codeLen; // code
 
             int len = r.readUnsignedShort(); // exception
-            r.index += len << 3;
-            w.writeBytes(r.getBytes().subList(0, r.index));
+            r.rIndex += len << 3;
+            w.put(r.bytes().slice(0, r.rIndex));
 
             ConstantPool pool = data.cp;
             len = r.readUnsignedShort();
 
             int count = 0;
-            int countIdx = w.list.pos();
-            w.writeShort(0);
+            int countIdx = w.wIndex();
+            w.putShort(0);
 
             System.out.println(m);
             for (int j = 0; j < len; j++) {
                 String name = ((CstUTF) pool.get(r)).getString();
-                int end = r.readInt() + r.index;
+                int end = r.readInt() + r.rIndex;
                 switch (name) {
                     case "LocalVariableTable":
                         if ((flags & (INVALID_VAR_NAME | DESTROY_VAR)) != 0) {
                             count++;
                             List<SimpleVar> list = CodeMapper.readVar(pool, r);
-                            w.writeShort(data.cp.getUtfId(name)).writeInt(len)
-                             .writeShort(list.size());
+                            w.putShort(data.cp.getUtfId(name)).putInt(len)
+                             .putShort(list.size());
                             for (int k = 0; k < list.size(); k++) {
                                 SimpleVar v = list.get(k);
                                 v.name = data.cp.getUtf("");
@@ -623,16 +624,16 @@ public final class SimpleObfuscator extends Obfuscator {
                             continue;
                         } else {
                             count++;
-                            w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                            w.put(r.bytes().slice(w.wIndex(), len + 6));
                         }
                         break;
                     case "LocalVariableTypeTable":
                         if ((flags & (DESTROY_VAR | FAKE_VAR_SIGN)) != 0) {
                             count++;
                             List<SimpleVar> list = CodeMapper.readVar(pool, r);
-                            int pos = w.list.pos();
-                            w.writeShort(data.cp.getUtfId(name)).writeInt(len)
-                             .writeShort(list.size());
+                            int pos = w.wIndex();
+                            w.putShort(data.cp.getUtfId(name)).putInt(len)
+                             .putShort(list.size());
                             for (int k = 0; k < list.size(); k++) {
                                 SimpleVar v = list.get(k);
                                 v.name = data.cp.getUtf("");
@@ -652,15 +653,15 @@ public final class SimpleObfuscator extends Obfuscator {
                             continue;
                         } else {
                             count++;
-                            w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                            w.put(r.bytes().slice(w.wIndex(), len + 6));
                         }
                         break;
                     case "LineNumberTable":
                         if ((flags & DESTROY_LINE) != 0) {
                             count++;
                             int tableLen = r.readUnsignedShort();
-                            w.writeShort(data.cp.getUtfId(name)).writeInt(len)
-                             .writeShort(tableLen);
+                            w.putShort(data.cp.getUtfId(name)).putInt(len)
+                             .putShort(tableLen);
 
                             if(lineLog != null)
                                 lineLog.append(' ').append(m.name.getString())
@@ -673,26 +674,26 @@ public final class SimpleObfuscator extends Obfuscator {
                                 if(lineLog != null)
                                     lineLog.append("  ").append(line).append(' ').append(v).append('\n');
 
-                                w.writeShort(index).writeShort(v);
+                                w.putShort(index).putShort(v);
                             }
                         } else if((flags & (CLEAR_CODE_ATTR | KEEP_LINES)) == CLEAR_CODE_ATTR) {
                             continue;
                         } else {
                             count++;
-                            w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                            w.put(r.bytes().slice(w.wIndex(), len + 6));
                         }
                         break;
                     default:
                         count++;
-                        w.writeBytes(r.getBytes().subList(w.list.pos(), len + 6));
+                        w.put(r.bytes().slice(w.wIndex(), len + 6));
                     break;
                 }
-                r.index = end;
+                r.rIndex = end;
             }
-            int pos = w.list.pos();
-            w.list.pos(countIdx);
-            w.writeShort(count);
-            w.list.pos(pos);
+            int pos = w.wIndex();
+            w.wIndex(countIdx);
+            w.putShort(count);
+            w.wIndex(pos);
 
             au.setRawData(new ByteList(w.toByteArray()));
         }

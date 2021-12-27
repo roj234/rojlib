@@ -47,6 +47,8 @@ public interface WrappedSocket extends AutoCloseable {
 
     int read(int max) throws IOException;
 
+    default void poll() {}
+
     ByteBuffer buffer();
 
     int write(ByteBuffer src) throws IOException;

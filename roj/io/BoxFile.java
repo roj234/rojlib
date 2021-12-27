@@ -29,8 +29,6 @@ import roj.collect.LinkedMyHashMap;
 import roj.collect.Unioner.Range;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -78,14 +76,14 @@ public class BoxFile implements Closeable {
     public static void main(String[] args) throws IOException {
         File file = new File("t.bf");
         BoxFile bf = new BoxFile(file);
-        bf.append("ETag", ByteWriter.encodeUTF("11111"));
-        bf.append("Last-Modified", ByteWriter.encodeUTF("ddddddddddddddd"));
+        bf.append("ETag", ByteList.encodeUTF("11111"));
+        bf.append("Last-Modified", ByteList.encodeUTF("ddddddddddddddd"));
         System.out.println(bf.getUTF("Last-Modified"));
         System.out.println(bf.getUTF("ETag"));
         System.out.println("===========");
         bf.load();
-        bf.append("ETag", ByteWriter.encodeUTF("222"));
-        bf.append("Last-Modified", ByteWriter.encodeUTF("dddddddddddddddddddddddddddddddddddddddd"));
+        bf.append("ETag", ByteList.encodeUTF("222"));
+        bf.append("Last-Modified", ByteList.encodeUTF("dddddddddddddddddddddddddddddddddddddddd"));
         System.out.println(bf.getUTF("Last-Modified"));
         System.out.println(bf.getUTF("ETag"));
         System.out.println("===========");
@@ -167,8 +165,8 @@ public class BoxFile implements Closeable {
             if(rf.read(bl.list, 0, slen) < slen) {
                 throw new EOFException("Truncated data #" + pos + " prev " + infoMap.lastEntry() + ", sl " + slen);
             }
-            bl.pos(slen);
-            ByteReader.decodeUTF(-1, tmp, bl);
+            bl.wIndex(slen);
+            ByteList.decodeUTF(-1, tmp, bl);
             String key = tmp.toString();
             tmp.clear();
 
@@ -193,7 +191,7 @@ public class BoxFile implements Closeable {
         rf.seek(arr.offset);
         list.ensureCapacity(arr.length);
         rf.readFully(list.list, 0, arr.length);
-        list.pos(arr.length);
+        list.wIndex(arr.length);
         return list;
     }
 
@@ -208,7 +206,7 @@ public class BoxFile implements Closeable {
         ByteList bl = get(name, new ByteList());
         if(bl == null)
             return null;
-        return ByteReader.readUTF(bl);
+        return ByteList.readUTF(bl);
     }
 
     public long getOffset(String key) {
@@ -224,7 +222,7 @@ public class BoxFile implements Closeable {
         F fe = infoMap.get(name);
         if(fe == null)
             return false;
-        int nameBytes = ByteWriter.byteCountUTF8(name);
+        int nameBytes = ByteList.byteCountUTF8(name);
 
         int off = fe.length + nameBytes + 6;
         if (infoMap.lastEntry().v != fe) {
@@ -262,7 +260,7 @@ public class BoxFile implements Closeable {
         F fe = infoMap.get(name);
         if(fe == null) { // append
             long off = rf.length() - freeBytes;
-            long dataLen = list.pos() + ByteWriter.byteCountUTF8(name) + 6;
+            long dataLen = list.wIndex() + ByteList.byteCountUTF8(name) + 6;
             if(dataLen > freeBytes) {
                 if(freeBytes != 0) {
                     rf.seek(4);
@@ -274,20 +272,20 @@ public class BoxFile implements Closeable {
                 rf.writeLong(freeBytes);
             }
 
-            infoMap.put(name, new F(off + dataLen - list.pos(), list.pos()));
+            infoMap.put(name, new F(off + dataLen - list.wIndex(), list.wIndex()));
             rf.seek(off);
 
             rf.writeShort(name.length());
-            ByteList li = ByteWriter.encodeUTF(name);
-            rf.write(li.list, 0, li.pos());
-            rf.writeInt(list.pos());
+            ByteList li = ByteList.encodeUTF(name);
+            rf.write(li.list, 0, li.wIndex());
+            rf.writeInt(list.wIndex());
         } else { // replace
-            int delta = list.pos() - fe.length;
+            int delta = list.wIndex() - fe.length;
             if(infoMap.lastEntry().v != fe) {
                 long prevEnd = fe.offset + fe.length;
 
                 FileUtil.transferFileSelf(rf.getChannel(), prevEnd,
-                                          fe.offset + list.pos(),
+                                          fe.offset + list.wIndex(),
                                           rf.length() - freeBytes - prevEnd);
 
                 if (delta != 0) {
@@ -311,10 +309,10 @@ public class BoxFile implements Closeable {
             }
 
             rf.seek(fe.offset - 4);
-            rf.writeInt(fe.length = list.pos());
+            rf.writeInt(fe.length = list.wIndex());
         }
 
-        rf.write(list.list, list.offset(), list.limit());
+        rf.write(list.list, list.arrayOffset(), list.limit());
         return fe == null;
     }
 
@@ -328,13 +326,13 @@ public class BoxFile implements Closeable {
         F fe = infoMap.get(name);
         if(fe == null) { // append
             long off = rf.length() - freeBytes;
-            int dataLen = ByteWriter.byteCountUTF8(name) + 6;
+            int dataLen = ByteList.byteCountUTF8(name) + 6;
             infoMap.put(name, new F(off + dataLen, dataLen));
             rf.seek(off);
 
             rf.writeShort(name.length());
-            ByteList li = ByteWriter.encodeUTF(name);
-            rf.write(li.list, 0, li.pos());
+            ByteList li = ByteList.encodeUTF(name);
+            rf.write(li.list, 0, li.wIndex());
             rf.writeInt(0);
 
             return stream = new RandomAccessOutputStream(name);

@@ -42,7 +42,7 @@ public final class AnnValFloat extends AnnVal {
     public float value;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeByte((byte) FLOAT).writeShort(pool.getFloatId(value));
+        w.put((byte) FLOAT).putShort(pool.getFloatId(value));
     }
 
     public String toString() {

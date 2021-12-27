@@ -58,9 +58,9 @@ public final class AttrParamAnnotation extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeByte((byte) annotations.size());
+        w.put((byte) annotations.size());
         for (List<Annotation> list : annotations) {
-            w.writeShort(list.size());
+            w.putShort(list.size());
             for (Annotation anno : list) {
                 anno.toByteArray(pool, w);
             }

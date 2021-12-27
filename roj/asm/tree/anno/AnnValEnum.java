@@ -44,9 +44,9 @@ public final class AnnValEnum extends AnnVal {
     public String clazz, value;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeByte((byte) ENUM)
-         .writeShort(pool.getUtfId("L" + this.clazz + ';'))
-         .writeShort(pool.getUtfId(value));
+        w.put((byte) ENUM)
+         .putShort(pool.getUtfId("L" + this.clazz + ';'))
+         .putShort(pool.getUtfId(value));
     }
 
     public String toString() {

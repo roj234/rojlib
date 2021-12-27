@@ -37,13 +37,7 @@ import java.security.GeneralSecurityException;
 public interface MSSCiphers {
     String name();
     int specificationId();
-    int preferChunkSize();
     int getSharedKeySize();
     CipheR createEncoder() throws GeneralSecurityException;
     CipheR createDecoder() throws GeneralSecurityException;
-
-    /**
-     * 此种加密方式密文与明文长度相同
-     */
-    default boolean isCipherTextSame() { return false; }
 }

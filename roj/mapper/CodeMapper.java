@@ -43,7 +43,6 @@ import roj.collect.LongBitSet;
 import roj.mapper.util.Desc;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -406,19 +405,19 @@ public final class CodeMapper extends Mapping {
         AttrUnknown au = (AttrUnknown) method.attributes.getByName("Code");
         if(au != null) {
             ByteReader r = Parser.reader(au);
-            r.index += 4; // stack size
+            r.rIndex += 4; // stack size
             int codeLen = r.readInt();
-            r.index += codeLen; // code
+            r.rIndex += codeLen; // code
 
             int len = r.readUnsignedShort(); // exception
-            r.index += len << 3;
+            r.rIndex += len << 3;
 
             String methodDesc = method.name.getString() + '|' + method.rawDesc();
             ConstantPool pool = data.cp;
             len = r.readUnsignedShort();
             for (int i = 0; i < len; i++) {
                 String name = ((CstUTF) pool.get(r)).getString();
-                int end = r.readInt() + r.index;
+                int end = r.readInt() + r.rIndex;
                 switch (name) {
                     case "LocalVariableTable":
                         List<SimpleVar> list = readVar(pool, r);
@@ -438,11 +437,11 @@ public final class CodeMapper extends Mapping {
                             if(!n.equals(entry.name.getString())) {
                                 int id = data.cp.getUtfId(n);
 
-                                ByteList bl = r.getBytes();
+                                ByteList bl = r.bytes();
                                 byte[] arr = bl.list;
                                 int ni = entry.nameId;
-                                arr[bl.offset() + ni] = (byte) (id >>> 8);
-                                arr[bl.offset() + ni + 1] = (byte) id;
+                                arr[bl.arrayOffset() + ni] = (byte) (id >>> 8);
+                                arr[bl.arrayOffset() + ni + 1] = (byte) id;
                             }
                         }
                         break;
@@ -458,16 +457,16 @@ public final class CodeMapper extends Mapping {
                             if(!n.equals(entry.name.getString())) {
                                 int id = data.cp.getUtfId(n);
 
-                                ByteList bl = r.getBytes();
+                                ByteList bl = r.bytes();
                                 byte[] arr = bl.list;
                                 int ni = entry.nameId;
-                                arr[bl.offset() + ni] = (byte) (id >>> 8);
-                                arr[bl.offset() + ni + 1] = (byte) id;
+                                arr[bl.arrayOffset() + ni] = (byte) (id >>> 8);
+                                arr[bl.arrayOffset() + ni + 1] = (byte) id;
                             }
                         }
                         break;
                 }
-                r.index = end;
+                r.rIndex = end;
             }
         }
     }
@@ -480,7 +479,7 @@ public final class CodeMapper extends Mapping {
             SimpleVar sv = new SimpleVar();
             sv.start = r.readUnsignedShort();
             sv.end = r.readUnsignedShort();
-            sv.nameId = r.index;
+            sv.nameId = r.rIndex;
             sv.name = ((CstUTF) cp.get(r));
             sv.refType = ((CstUTF) cp.get(r));
             sv.slot = r.readUnsignedShort();
@@ -494,10 +493,10 @@ public final class CodeMapper extends Mapping {
         int slot, nameId;
         int start, end;
 
-        void write(ByteWriter w) {
-            w.writeShort(start).writeShort(end)
-             .writeShort(name.getIndex()).writeShort(refType.getIndex())
-             .writeShortR(slot);
+        void write(ByteList w) {
+            w.putShort(start).putShort(end)
+             .putShort(name.getIndex()).putShort(refType.getIndex())
+             .putShortLE(slot);
         }
     }
 

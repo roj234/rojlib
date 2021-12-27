@@ -49,7 +49,7 @@ public final class MSSEngineClient extends MSSEngine {
 
     static {
         try {
-            defaultKeyFormats = new MSSPubKey[] {
+            defaultKeyFormats = new MSSPubKey<?>[] {
                     JPubKey.JAVARSA, new X509PubKey()
             };
         } catch (GeneralSecurityException e) {
@@ -102,6 +102,7 @@ public final class MSSEngineClient extends MSSEngine {
     static final int C_HS_INIT = 0, C_RNDB_WAIT = 1, DONE_WAIT = 4;
 
     @Override
+    @SuppressWarnings("fallthrough")
     public int handshake(ByteBuffer snd, ByteBuffer rcv) throws MSSException {
         if (rcv.remaining() > 0 && rcv.get(0) == PH_ERROR) {
             return packetError(rcv);
@@ -134,13 +135,14 @@ public final class MSSEngineClient extends MSSEngine {
                 } catch (GeneralSecurityException | ArrayIndexOutOfBoundsException e) {
                     return error("公钥有误", e);
                 }
-                for (int i = rcv.getChar() - 1; i >= 0; i--) {
+                int len = rcv.getChar();
+                for (int i = 0; i < len; i++) {
                     int spec = rcv.getInt();
                     for (MSSCiphers selected : supportedCiphers) {
                         if (selected.specificationId() == spec) {
-                            halfSharedKeySize = (char) (selected.getSharedKeySize() >> 1);
-                            ByteBuffer tmp = ByteBuffer.allocate(3 + halfSharedKeySize);
-                            byte[] rndA = new byte[halfSharedKeySize];
+                            int hsk = selected.getSharedKeySize() >> 1;
+                            ByteBuffer tmp = ByteBuffer.allocate(3 + hsk);
+                            byte[] rndA = new byte[hsk];
                             random.nextBytes(rndA);
                             tmp.put(PH_CLIENT_RNDA).putChar((char) i).put(rndA);
                             try {
@@ -151,13 +153,10 @@ public final class MSSEngineClient extends MSSEngine {
 
                                 this.encoder = selected.createEncoder();
                                 this.decoder = selected.createDecoder();
-                                this.decoder.setKey(rndA);
-                                chunkSize = (char) (likeChunkedMode ? selected.preferChunkSize() : 65535);
+                                this.decoder.setKey(rndA, CipheR.DECRYPT);
 
-                                this.sharedKey = new byte[halfSharedKeySize << 1];
-                                System.arraycopy(rndA, 0, sharedKey, 0, halfSharedKeySize);
-
-                                if (!selected.isCipherTextSame()) flag |= DIFF_CIPHER;
+                                this.sharedKey = new byte[hsk << 1];
+                                System.arraycopy(rndA, 0, sharedKey, 0, hsk);
                                 stage = TMP_2;
                             } catch (GeneralSecurityException e) {
                                 return error("公钥加密失败", e);
@@ -187,7 +186,8 @@ public final class MSSEngineClient extends MSSEngine {
                 byte[] encoded = new byte[rcv.getChar()];
                 rcv.get(encoded);
 
-                ByteBuffer dst = ByteBuffer.wrap(this.sharedKey, halfSharedKeySize, halfSharedKeySize);
+                int hsk = this.sharedKey.length >> 1;
+                ByteBuffer dst = ByteBuffer.wrap(this.sharedKey, hsk, hsk);
 
                 try {
                     decoder.crypt(ByteBuffer.wrap(encoded), dst);
@@ -198,13 +198,11 @@ public final class MSSEngineClient extends MSSEngine {
                 if (dst.hasRemaining())
                     return error("RNDB解密失败");
 
-                hasher.reset();
-                hasher.update(this.sharedKey);
-                if ((int) hasher.getValue() != hash)
+                if (this.hash.computeHandshakeHash(sharedKey) != hash)
                     return error("RNDB哈希有误");
 
-                this.encoder.setKey(sharedKey);
-                this.decoder.setKey(sharedKey);
+                this.encoder.setKey(sharedKey, CipheR.ENCRYPT);
+                this.decoder.setKey(sharedKey, CipheR.DECRYPT);
 
                 snd.put(PH_DONE).putChar((char) 0);
 
@@ -219,7 +217,7 @@ public final class MSSEngineClient extends MSSEngine {
                 dst = ByteBuffer.wrap(this.sharedKey);
                 try {
                     if (CipheR.BUFFER_OVERFLOW == encoder.crypt(dst, snd))
-                        return of((flag & DIFF_CIPHER) == 0 ? dst.remaining() : dst.remaining() << 1);
+                        return of(dst.remaining());
                 } catch (GeneralSecurityException e) {
                     return error("DONE加密失败", e);
                 }

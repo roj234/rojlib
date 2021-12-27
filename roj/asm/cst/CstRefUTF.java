@@ -59,8 +59,8 @@ public abstract class CstRefUTF extends Constant {
 
     @Override
     public final void write(ByteWriter w) {
-        w.writeByte(type())
-         .writeShort(getValueIndex());
+        w.put(type())
+         .putShort(getValueIndex());
     }
 
     public final String toString() {

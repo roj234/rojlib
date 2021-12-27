@@ -30,7 +30,6 @@ import roj.config.YAMLParser;
 import roj.config.data.CMapping;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -66,7 +65,7 @@ public class PluginRenamer {
                     //in.close();
 
                     cl.clear();
-                    ByteReader.decodeUTF(-1, cl, bl);
+                    ByteList.decodeUTF(-1, cl, bl);
 
                     CMapping map = YAMLParser.parse(cl).asMap();
 

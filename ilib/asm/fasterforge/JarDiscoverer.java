@@ -32,10 +32,6 @@ import ilib.asm.Preloader;
 import ilib.asm.fasterforge.anc.ClassInfo;
 import ilib.asm.fasterforge.anc.FastParser;
 import ilib.asm.fasterforge.anc.JarInfo;
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -48,6 +44,11 @@ import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -81,7 +82,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 int len = r.readVarInt(false);
                 store.ensureCapacity(len);
                 for (int i = 0; i < len; i++) {
-                    store.put(r.readVString(), JarInfo.fromByteArray(r, pool, cp));
+                    store.put(r.readVarIntUTF(), JarInfo.fromByteArray(r, pool, cp));
                 }
             } catch (Throwable e) {
                 e.printStackTrace();
@@ -100,9 +101,9 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
 
                 ByteWriter w = new ByteWriter(2333);
 
-                w.writeVarInt(store.size(), false);
+                w.putVarInt(store.size(), false);
                 for (Map.Entry<String, JarInfo> entry : store.entrySet()) {
-                    w.writeVString(entry.getKey());
+                    w.putVarIntUTF(entry.getKey());
                     entry.getValue().toByteArray(w, sp, cw);
                 }
 
@@ -249,7 +250,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
 
     private static byte[] doManifest(byte[] bytes) {
         ByteList bl = new ByteList(bytes);
-        return bl.subList(0, bl.lastIndexOf(new byte[]{
+        return bl.slice(0, bl.lastIndexOf(new byte[]{
                 '\n', 'N', 'a', 'm', 'e', ':', ' '
         })).getByteArray();
     }

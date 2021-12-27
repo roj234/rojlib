@@ -44,7 +44,6 @@ import roj.mod.util.Patcher;
 import roj.text.CharList;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -135,7 +134,7 @@ public final class Proc1_16 extends Processor {
             ze = zf.getEntry("install_profile.json");
             if (ze == null)
                 throw OperationDone.INSTANCE;
-            CMapping installconf = JSONParser.parse(ByteReader.readUTF(new ByteList().readStreamFully(zf.getInputStream(ze)))).asMap();
+            CMapping installconf = JSONParser.parse(ByteList.readUTF(new ByteList().readStreamFully(zf.getInputStream(ze)))).asMap();
 
             zf.close();
 

@@ -55,7 +55,7 @@ public final class ConstantNamePool {
     }
 
     public void skip(ByteReader r) {
-        this.begin = r.index;
+        this.begin = r.rIndex;
         int i = 1;
         int len = this.len;
         while (i < len) {
@@ -64,7 +64,7 @@ public final class ConstantNamePool {
                 throw new IllegalArgumentException("Illegal constant type " + b);
             switch (b) {
                 case UTF:
-                    r.index = r.readUnsignedShort() + r.index;
+                    r.rIndex = r.readUnsignedShort() + r.rIndex;
                     break;
                 case INT:
                 case INVOKE_DYNAMIC:
@@ -73,13 +73,13 @@ public final class ConstantNamePool {
                 case FLOAT:
                 case INTERFACE:
                 case NAME_AND_TYPE:
-                    r.index += 4;
+                    r.rIndex += 4;
                     break;
 
                 case LONG:
                 case DOUBLE:
                     i++;
-                    r.index += 8;
+                    r.rIndex += 8;
                     break;
 
                 case METHOD_TYPE:
@@ -87,11 +87,11 @@ public final class ConstantNamePool {
                 case MODULE:
                 case PACKAGE:
                 case CLASS:
-                    r.index += 2;
+                    r.rIndex += 2;
                     break;
 
                 case METHOD_HANDLE:
-                    r.index += 3;
+                    r.rIndex += 3;
                     break;
             }
             i++;
@@ -99,7 +99,7 @@ public final class ConstantNamePool {
     }
 
     public void init(ByteReader r) {
-        r.index = begin;
+        r.rIndex = begin;
         int i = 1;
         while (i < len) {
             switch (r.readUnsignedByte()) {
@@ -111,7 +111,7 @@ public final class ConstantNamePool {
                             throw new RuntimeException(e);
                         }
                     } else
-                        r.index = r.readUnsignedShort() + r.index;
+                        r.rIndex = r.readUnsignedShort() + r.rIndex;
                     break;
                 case INT:
                 case INVOKE_DYNAMIC:
@@ -120,20 +120,20 @@ public final class ConstantNamePool {
                 case FLOAT:
                 case INTERFACE:
                 case NAME_AND_TYPE:
-                    r.index += 4;
+                    r.rIndex += 4;
                     break;
 
                 case LONG:
                 case DOUBLE:
                     i++;
-                    r.index += 8;
+                    r.rIndex += 8;
                     break;
 
                 case METHOD_TYPE:
                 case STRING:
                 case MODULE:
                 case PACKAGE:
-                    r.index += 2;
+                    r.rIndex += 2;
                     break;
 
                 case CLASS:
@@ -143,17 +143,17 @@ public final class ConstantNamePool {
                             map.put((char) idx, null);
                         map.put((char) i, new CstClass(idx));
                     } else
-                        r.index += 2;
+                        r.rIndex += 2;
                     break;
 
                 case METHOD_HANDLE:
-                    r.index += 3;
+                    r.rIndex += 3;
                     break;
             }
 
             i++;
         }
-        r.index = begin;
+        r.rIndex = begin;
         i = 1;
         while (i < len) {
             switch (r.readUnsignedByte()) {
@@ -165,7 +165,7 @@ public final class ConstantNamePool {
                             throw new RuntimeException(e);
                         }
                     } else
-                        r.index = r.readUnsignedShort() + r.index;
+                        r.rIndex = r.readUnsignedShort() + r.rIndex;
                     break;
                 case INT:
                 case INVOKE_DYNAMIC:
@@ -174,22 +174,22 @@ public final class ConstantNamePool {
                 case FLOAT:
                 case INTERFACE:
                 case NAME_AND_TYPE:
-                    r.index += 4;
+                    r.rIndex += 4;
                     break;
                 case LONG:
                 case DOUBLE:
                     i++;
-                    r.index += 8;
+                    r.rIndex += 8;
                     break;
                 case METHOD_TYPE:
                 case STRING:
                 case MODULE:
                 case PACKAGE:
                 case CLASS:
-                    r.index += 2;
+                    r.rIndex += 2;
                     break;
                 case METHOD_HANDLE:
-                    r.index += 3;
+                    r.rIndex += 3;
                     break;
             }
             i++;

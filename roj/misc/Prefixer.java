@@ -29,8 +29,6 @@ import roj.io.FileUtil;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -107,7 +105,7 @@ public class Prefixer {
                 bl.clear();
 
                 FileInputStream fis = new FileInputStream(file);
-                ByteReader.decodeUTF(-1, cl1, bl.readStreamFully(fis));
+                ByteList.decodeUTF(-1, cl1, bl.readStreamFully(fis));
                 fis.close();
 
                 if(cl1.regionMatches(0, license)) {
@@ -195,7 +193,7 @@ public class Prefixer {
                 //System.out.println(cl1);
 
                 bl.clear();
-                ByteWriter.writeUTF(bl, cl1, -1);
+                ByteList.writeUTF(bl, cl1, -1);
                 try(FileOutputStream fos = new FileOutputStream(file)) {
                     bl.writeToStream(fos);
                     bl.clear();

@@ -29,10 +29,10 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.text.TextUtil;
 import roj.ui.UIUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -65,7 +65,7 @@ public class AEGuiClient extends JFrame {
     private final JPasswordField inpPass;
 
     public static void main(String[] args) throws IOException, ParseException {
-        if(!NonblockingUtil.available()) {
+        if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }
@@ -278,7 +278,7 @@ public class AEGuiClient extends JFrame {
         x.put("ssl", chkSsl.isSelected());
         x.put("url", inpUrl.getText());
         try (FileOutputStream fos = new FileOutputStream("asc.json")) {
-            ByteWriter.encodeUTF(x.toJSONb()).writeToStream(fos);
+            ByteList.encodeUTF(x.toJSONb()).writeToStream(fos);
             JOptionPane.showMessageDialog(this, "保存在asc.json");
         } catch (IOException e) {
             e.printStackTrace();

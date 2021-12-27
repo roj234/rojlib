@@ -105,8 +105,7 @@ public class ClassVisitor {
         bw.list = pb;
         cw.write(bw);
         cw.clear();
-        pb.addAll(kb, 0, kb.pos());
-        return pb;
+        return pb.put(kb);
     }
 
     public void postVisit() {
@@ -123,7 +122,7 @@ public class ClassVisitor {
      * @param minor 次版本号
      */
     public void visitBegin(int major, int minor) {
-        bw.writeInt(0xCAFEBABE).writeShort(major).writeShort(minor);
+        bw.putInt(0xCAFEBABE).putShort(major).putShort(minor);
     }
 
     /**
@@ -140,31 +139,31 @@ public class ClassVisitor {
      * @param interfaces 接口
      */
     public void visitClass(int acc, String name, String parent, String[] interfaces) {
-        bw.writeShort(acc).writeShort(cw.getClassId(name)).writeShort(cw.getClassId(parent)).writeShort(interfaces.length);
+        bw.putShort(acc).putShort(cw.getClassId(name)).putShort(cw.getClassId(parent)).putShort(interfaces.length);
         for(String s : interfaces)
-            bw.writeShort(cw.getClassId(s));
+            bw.putShort(cw.getClassId(s));
     }
 
     public void visitAttributes() {
-        attrAmountIndex = bw.list.pos();
+        attrAmountIndex = bw.list.wIndex();
         attrAmount = 0;
-        bw.writeShort(0);
+        bw.putShort(0);
     }
 
     public void visitAttribute(String name, int length) {
-        int end = br.index + length;
+        int end = br.rIndex + length;
         if (attributeVisitor != null) {
             if (attributeVisitor.visit(name, length)) {
                 attrAmount++;
             }
         }
-        br.index = end;
+        br.rIndex = end;
     }
 
     public void visitEnd() {
-        int pos = bw.list.pos();
-        bw.list.pos(attrAmountIndex);
-        bw.writeShort(attrAmount);
-        bw.list.pos(pos);
+        int pos = bw.list.wIndex();
+        bw.list.wIndex(attrAmountIndex);
+        bw.putShort(attrAmount);
+        bw.list.wIndex(pos);
     }
 }

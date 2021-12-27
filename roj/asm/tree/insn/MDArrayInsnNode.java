@@ -83,9 +83,9 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
 
     @Override
     public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code)
-         .writeShort(cw.getClassId(owner))
-         .writeByte((byte) this.dimension);
+        w.put(code)
+         .putShort(cw.getClassId(owner))
+         .put((byte) this.dimension);
     }
 
     @Override

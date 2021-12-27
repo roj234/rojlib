@@ -191,7 +191,7 @@ public final class Parser {
             for (int j = 0; j < attrLen; j++) {
                 String name0 = ((CstUTF) pool.get(r)).getString();
 
-                Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+                Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
                 attributes.add(attr);
             }
             fields.add(field);
@@ -210,7 +210,7 @@ public final class Parser {
             for (int j = 0; j < attrLen; j++) {
                 String name0 = ((CstUTF) pool.get(r)).getString();
 
-                Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+                Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
                 attributes.add(attr);
             }
             methods.add(method);
@@ -223,7 +223,7 @@ public final class Parser {
         for (int i = 0; i < len; i++) {
             String name0 = ((CstUTF) pool.get(r)).getString();
 
-            Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
+            Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
 
             attributes.add(attr);
         }
@@ -257,12 +257,12 @@ public final class Parser {
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
-        r.index += 4; // ver
+        r.rIndex += 4; // ver
 
         ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
         pool.skip(r);
         CharMap<Constant> map = pool.map;
-        r.index += 2;
+        r.rIndex += 2;
         map.put(r.readChar(), null);
         map.put(r.readChar(), null);
 
@@ -274,24 +274,24 @@ public final class Parser {
         for (int k = 0; k < 2; k++) {
             len = r.readUnsignedShort();
             for (int i = 0; i < len; i++) {
-                r.index += 2;
+                r.rIndex += 2;
                 map.put(r.readChar(), null);
                 map.put(r.readChar(), null);
 
                 int attrs = r.readUnsignedShort();
                 for (int j = 0; j < attrs; j++) {
-                    r.index += 2;
+                    r.rIndex += 2;
                     int ol = r.readInt();
-                    r.index += ol;
+                    r.rIndex += ol;
                 }
             }
         }
 
         pool.init(r);
 
-        int cfo = r.index; // acc
+        int cfo = r.rIndex; // acc
 
-        r.index += 2;
+        r.rIndex += 2;
 
         String self = pool.getName(r);
         String parent = pool.getName(r);
@@ -307,7 +307,7 @@ public final class Parser {
             len = r.readUnsignedShort();
             List<AccessData.MOF> com = new ArrayList<>(len);
             for (int i = 0; i < len; i++) {
-                int offset = r.index;
+                int offset = r.rIndex;
 
                 char acc = r.readChar();
 
@@ -318,9 +318,9 @@ public final class Parser {
 
                 int attrs = r.readUnsignedShort();
                 for (int j = 0; j < attrs; j++) {
-                    r.index += 2;
+                    r.rIndex += 2;
                     int ol = r.readInt();
-                    r.index += ol;
+                    r.rIndex += ol;
                 }
             }
             arr[k] = com;
@@ -342,12 +342,12 @@ public final class Parser {
             throw new IllegalArgumentException("Illegal header");
         }
 
-        r.index += 4; // ver
+        r.rIndex += 4; // ver
 
         ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
         pool.skip(r);
         CharMap<Constant> map = pool.map;
-        r.index += 2;
+        r.rIndex += 2;
         map.put(r.readChar(), null);
         map.put(r.readChar(), null);
 
@@ -358,7 +358,7 @@ public final class Parser {
 
         pool.init(r);
 
-        r.index += 2;
+        r.rIndex += 2;
 
         List<String> list = new ArrayList<>();
 

@@ -25,12 +25,8 @@
  */
 package roj.reflect;
 
-import roj.text.TextUtil;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 抽象字段访问者
@@ -39,13 +35,13 @@ import java.util.List;
  * @version 0.1
  * @since  2020/10/17 18:24
  */
-public abstract class IFieldAccessor {
-    static final List<String> arr = TextUtil.split(new ArrayList<>(9), "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT", ',');
+public abstract class FieldAccessor {
+    static final String[] arr = "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT".split(",");
 
     public final Field field;
     public final byte flag;
 
-    public IFieldAccessor(Field field) {
+    FieldAccessor(Field field) {
         this.field = field;
         byte flag;
         Class<?> type = field.getType();
@@ -85,14 +81,14 @@ public abstract class IFieldAccessor {
         this.flag = flag;
     }
 
-    protected void checkObjectType(Object obj) {
+    final void checkObjectType(Object obj) {
         if (!field.getDeclaringClass().isInstance(obj)) // include null
             throw new IllegalArgumentException("Cannot set instance (not instance) to " + field.getDeclaringClass().getName());
     }
 
-    protected void checkType(byte required) {
+    final void checkType(byte required) {
         if ((flag & 15) != required)
-            throw new IllegalArgumentException(arr.get(flag & 15) + " cannot cast to " + arr.get(required));
+            throw new IllegalArgumentException(arr[flag & 15] + " cannot cast to " + arr[required]);
     }
 
     public abstract void setInstance(Object instance);

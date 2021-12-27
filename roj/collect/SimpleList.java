@@ -368,38 +368,13 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         return false;
     }
 
-    public void removeRange(int index, int length) {
-        if (index >= 0 && index + length < size) {
-            if (length == 0)
-                return;
+    public void removeRange(int begin, int end) {
+        // will throw exceptions if out of bounds...
+        System.arraycopy(list, end, list, begin, size - end);
 
-            //[0, 1, 2, 3] remove 1, 1
-
-            // end = 2
-            // off = 4 - 2 - 1 = 1
-            int end = length + 1;
-            int off = size - end - 1;
-
-            if (off > 0) {
-                // src = 1 + 2, dest = 1, length = 1
-                System.arraycopy(list, index + end, list, index, off);
-
-                // i = 3; i < 4; i++
-                for (int i = index + end; i < size; i++) { // after
-                    list[i] = null;
-                }
-            }
-
-            // set 2 => null
-            // i = 2, i < 3; i++
-            for (int i = index + off; i < index + end; i++) { // before
-                list[i] = null;
-            }
-
-            size -= length;
-
-        } else {
-            throw new ArrayIndexOutOfBoundsException(index + " to " + (index + length) + " in " + size);
+        int size1 = size;
+        for (int i = size = begin + size - end; i < size1; i++) {
+            list[i] = null;
         }
     }
 

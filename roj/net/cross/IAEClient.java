@@ -28,7 +28,7 @@ package roj.net.cross;
 import roj.collect.IntMap;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.cross.Pipe.CipherPipe;
 import roj.net.tcp.MSSSocket;
 import roj.net.tcp.PlainSocket;
@@ -91,7 +91,9 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
     @Override
     public final void run() {
         try {
+            shutdown = false;
             call();
+            shutdown = true;
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -177,8 +179,8 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
         }
 
         WrappedSocket ch = ssl ?
-                new MSSSocket(c, NonblockingUtil.fd(c)) :
-                new PlainSocket(c, NonblockingUtil.fd(c));
+                new MSSSocket(c, NIOUtil.fd(c)) :
+                new PlainSocket(c, NIOUtil.fd(c));
 
         try {
             handshakeClient(ch, pipeId);

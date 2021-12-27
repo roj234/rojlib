@@ -231,11 +231,11 @@ public final class AttrBootstrapMethods extends Attribute {
                 rawDesc = ParamHelper.getMethod(params);
                 params.remove(params.size() - 1);
             }
-            w.writeShort(pool.getMethodHandleId(owner, name, rawDesc, kind, methodType));
+            w.putShort(pool.getMethodHandleId(owner, name, rawDesc, kind, methodType));
 
-            w.writeShort(arguments.size());
+            w.putShort(arguments.size());
             for (int i = 0; i < arguments.size(); i++) {
-                w.writeShort(pool.reset(arguments.get(i)).getIndex());
+                w.putShort(pool.reset(arguments.get(i)).getIndex());
             }
         }
 
@@ -309,7 +309,7 @@ public final class AttrBootstrapMethods extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(methods.size());
+        w.putShort(methods.size());
         for (BootstrapMethod method : methods) {
             method.toByteArray(pool, w);
         }

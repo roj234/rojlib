@@ -108,7 +108,7 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code).writeShort(cw.getFieldRefId(owner, name, ParamHelper.getField(type)));
+        w.put(code).putShort(cw.getFieldRefId(owner, name, ParamHelper.getField(type)));
     }
 
     @Override

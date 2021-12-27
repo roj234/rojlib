@@ -38,7 +38,7 @@ import roj.ui.CmdUtil;
 import roj.ui.TextAreaPrintStream;
 import roj.ui.UIUtil;
 import roj.util.ArrayUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -91,7 +91,7 @@ public class FMDGui extends JFrame {
             File af = new File(TMP_DIR, "noFirstUse");
             if(!af.isFile() || !IOUtil.readUTF(new FileInputStream(af)).equals(VERSION)) {
                 try(FileOutputStream fos = new FileOutputStream(af)) {
-                    ByteWriter.encodeUTF(VERSION).writeToStream(fos);
+                    ByteList.encodeUTF(VERSION).writeToStream(fos);
                 }
                 about(null);
             }

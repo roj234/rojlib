@@ -42,7 +42,6 @@ import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -298,7 +297,7 @@ public class MappingHelper {
             int pos = 0;
             while (pos < ob.length()) {
                 int len = Math.min(44444, ob.length() - pos);
-                ByteWriter.writeUTF(output, ob.subSequence(pos, pos + len), -1);
+                ByteList.writeUTF(output, ob.subSequence(pos, pos + len), -1);
                 output.writeToStream(fos);
                 output.clear();
                 pos += len;

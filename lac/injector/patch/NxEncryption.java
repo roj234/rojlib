@@ -28,6 +28,7 @@ package lac.injector.patch;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
+import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 
 import net.minecraft.network.PacketBuffer;
@@ -62,9 +63,8 @@ class NxEncryption {
         byte[] key = buf.readByteArray();
         this.verifyToken = buf.readByteArray();
         if (isMyCryptPacket) {
-            SM4 sm4 = new SM4();
-            sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
-            sm4.setKey(verifyToken);
+            MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
+            sm4.setKey(verifyToken, MyCipher.DECRYPT | MyCipher.PKCS5_PADDING);
             try {
                 sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
             } catch (GeneralSecurityException e) {
@@ -80,9 +80,8 @@ class NxEncryption {
         this.hashedServerId = buf.readString(20);
         byte[] key = buf.readByteArray();
         this.verifyToken = buf.readByteArray();
-        SM4 sm4 = new SM4();
-        sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
-        sm4.setKey(verifyToken);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
+        sm4.setKey(verifyToken, MyCipher.DECRYPT | MyCipher.PKCS5_PADDING);
         try {
             sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
         } catch (GeneralSecurityException e) {

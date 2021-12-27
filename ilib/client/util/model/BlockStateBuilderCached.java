@@ -29,8 +29,6 @@ import ilib.ImpLib;
 import roj.io.BoxFile;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.io.File;
 import java.io.IOException;
@@ -81,7 +79,7 @@ public final class BlockStateBuilderCached extends BlockStateBuilder {
             return storedData.toString();
         String val = super.build();
         try {
-            cache.append(cacheId, ByteWriter.encodeUTF(val));
+            cache.append(cacheId, ByteList.encodeUTF(val));
         } catch (IOException e) {
             ImpLib.logger().error(e);
         }
@@ -98,7 +96,7 @@ public final class BlockStateBuilderCached extends BlockStateBuilder {
                 if(!ImpLib.MODEL_HASH.equals(v)) {
                     if(v != null)
                         cache.clear();
-                    cache.append("version", ByteWriter.encodeUTF(ImpLib.MODEL_HASH));
+                    cache.append("version", ByteList.encodeUTF(ImpLib.MODEL_HASH));
                 }
             } catch (IOException e) {
                 ImpLib.logger().error(e);
@@ -107,9 +105,9 @@ public final class BlockStateBuilderCached extends BlockStateBuilder {
 
         try {
             ByteList data = cache.get(cacheId, new ByteList());
-            if(data != null && data.pos() > 0) {
+            if(data != null && data.wIndex() > 0) {
                 CharList out = new CharList();
-                ByteReader.decodeUTF(-1, out, data);
+                ByteList.decodeUTF(-1, out, data);
                 return new BlockStateBuilderCached(out);
             } else {
                 return new BlockStateBuilderCached(json, isItem, cacheId);

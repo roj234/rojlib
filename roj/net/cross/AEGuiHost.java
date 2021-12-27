@@ -31,7 +31,7 @@ import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.cross.AEHost.Client;
 import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
@@ -39,7 +39,6 @@ import roj.net.tcp.serv.response.EmptyResponse;
 import roj.net.tcp.serv.response.StringResponse;
 import roj.net.tcp.util.Code;
 import roj.text.TextUtil;
-import roj.ui.TextAreaPrintStream;
 import roj.ui.UIUtil;
 
 import javax.swing.*;
@@ -69,7 +68,7 @@ public class AEGuiHost extends JFrame {
     private final JPasswordField inpPass;
 
     public static void main(String[] args) throws IOException, ParseException {
-        if(!NonblockingUtil.available()) {
+        if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }
@@ -244,7 +243,7 @@ public class AEGuiHost extends JFrame {
         gbc.fill = GridBagConstraints.BOTH;
         panel1.add(scroll, gbc);
         JTextArea text = new JTextArea();
-        text.setEditable(false);
+        text.setEditable(true);
         scroll.setViewportView(text);
         JButton btnX = new JButton();
         btnX.setEnabled(false);
@@ -257,7 +256,8 @@ public class AEGuiHost extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnX, gbc);
         JButton btnClear = new JButton();
-        btnClear.setText("清空");
+        btnClear.setText("无效");
+        btnClear.setEnabled(false);
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 5;
@@ -325,10 +325,6 @@ public class AEGuiHost extends JFrame {
             btnHttp.setText(":" + port);
         });
         btnConnect.addActionListener(this::toggle);
-        Util.out = new TextAreaPrintStream(text, 66666);
-        System.setErr(Util.out);
-        System.setOut(Util.out);
-        btnClear.addActionListener(e -> text.setText(""));
 
         new Thread() {
             {

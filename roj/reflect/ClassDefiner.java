@@ -35,6 +35,7 @@ import java.lang.reflect.Method;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
+import java.util.Vector;
 
 /**
  * @author Roj234
@@ -42,11 +43,12 @@ import java.security.cert.Certificate;
  * @since 2021/6/16 1:31
  */
 public final class ClassDefiner extends ClassLoader {
-    private interface FastInvoke {
+    private interface FastDef {
         Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len,
                 ProtectionDomain protectionDomain);
         Class<?> defineClass1(ClassLoader loader, String name, byte[] b, int off, int len,
                 ProtectionDomain protectionDomain, String source);
+        Vector<Class<?>> getClasses(ClassLoader loader);
     }
 
     private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
@@ -56,25 +58,45 @@ public final class ClassDefiner extends ClassLoader {
         return new ClassDefiner(getParentClassLoader(loader.getClass()));
     }
 
-    private static Method defineClassMethod;
     public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
 
-    private static final FastInvoke invoker;
+    private static final FastDef def;
+    private static final Method  slowDef;
     static {
         ClassLoader.registerAsParallelCapable();
-        FastInvoke fi = null;
+
+        FastDef fi = null;
         try {
             SharedBuf.alloc().setLevel(true);
-            fi = DirectAccessor.builder(FastInvoke.class).delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1" }).build();
+            fi = DirectAccessor.builder(FastDef.class)
+                               .delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1" })
+                               .access(ClassLoader.class, "classes", "getClasses", null)
+                               .build();
             SharedBuf.alloc().setLevel(false);
         } catch (Throwable e) {
             e.printStackTrace();
         }
-        invoker = fi;
+        def = fi;
+
+        Method slowDef1 = null;
+        if (fi == null) {
+            try {
+                slowDef1 = getDefineClassMethod();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        slowDef = slowDef1;
     }
 
     private ClassDefiner(ClassLoader parent) {
         super(parent);
+    }
+
+    public void clearLoadedClasses() {
+        if (def == null)
+            throw new UnsupportedOperationException();
+        def.getClasses(this).clear();
     }
 
     public Class<?> loadClass(String className, boolean init) throws ClassNotFoundException {
@@ -93,9 +115,9 @@ public final class ClassDefiner extends ClassLoader {
         }
         try {
             // 使用同样的加载器加载，保证Access
-            return invoker == null ?
+            return def == null ?
                     (Class<?>) getDefineClassMethod().invoke(getParent(), name, bytes, off, len, getClass().getProtectionDomain())
-                    : invoker.defineClass(getParent(), name, bytes, off, len, getClass().getProtectionDomain());
+                    : def.defineClass(getParent(), name, bytes, off, len, getClass().getProtectionDomain());
         } catch (Exception ignored) {
             // 使用自己加载（这样会没有protected的权限!）
         }
@@ -103,13 +125,13 @@ public final class ClassDefiner extends ClassLoader {
         try {
             return defineClass(name, bytes, off, len, getClass().getProtectionDomain());
         } catch (Exception e1) {
-            if(invoker == null)
+            if(def == null)
                 throw e1;
         }
 
         ProtectionDomain pd = getClass().getProtectionDomain();
 
-        Class<?> clazz = invoker.defineClass1(getParent(), name, bytes, off, len, pd, defineClassSourceLocation(pd));
+        Class<?> clazz = def.defineClass1(getParent(), name, bytes, off, len, pd, defineClassSourceLocation(pd));
 
         if (pd.getCodeSource() != null) {
             Certificate[] certs = pd.getCodeSource().getCertificates();
@@ -136,14 +158,11 @@ public final class ClassDefiner extends ClassLoader {
     }
 
     private static Method getDefineClassMethod() throws Exception {
-        if (defineClassMethod == null) {
-            defineClassMethod = ClassLoader.class.getDeclaredMethod("defineClass",
-                    String.class, byte[].class, int.class, int.class, ProtectionDomain.class);
-            try {
-                defineClassMethod.setAccessible(true);
-            } catch (Exception ignored) {
-            }
-        }
-        return defineClassMethod;
+        Method slowDef = ClassLoader.class.getDeclaredMethod("defineClass",
+                         String.class, byte[].class, int.class, int.class, ProtectionDomain.class);
+        try {
+            slowDef.setAccessible(true);
+        } catch (Exception ignored) {}
+        return slowDef;
     }
 }

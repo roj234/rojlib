@@ -25,20 +25,19 @@
  */
 package roj.crypt;
 
-import roj.util.ByteList;
-
-import java.security.DigestException;
+import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 
 /**
- * 【不】包含状态的密码算法
- *
  * @author Roj233
  * @version 0.1
- * @since 2021/9/7 13:07
+ * @since 2021/12/28 0:05
  */
-@Deprecated
-public interface ICrypt {
+public interface DeCipher {
     String name();
-    ByteList encrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
-    ByteList decrypt(ByteList data, ByteList password, ByteList output) throws DigestException;
+    void setKey(byte[] key, int flags);
+    default void setOption(String key, Object value) {}
+    int getBlockSize();
+
+    int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException;
 }

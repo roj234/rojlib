@@ -37,7 +37,6 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import javax.swing.*;
 import java.awt.*;
@@ -163,7 +162,7 @@ public class FMDInstall extends JFrame {
         CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
         try {
             CharList out = new CharList(10000);
-            ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
+            ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
 
             versions = JSONParser.parse(out).asList();
         } catch (ParseException | IOException e) {
@@ -285,7 +284,7 @@ public class FMDInstall extends JFrame {
 
         try {
             CharList out = new CharList(10000);
-            ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
+            ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
 
             vList = JSONParser.parseIntern(out).asList();
         } catch (ParseException | IOException e) {

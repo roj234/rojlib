@@ -37,7 +37,7 @@ public class BugHelper {
         ZipUtil.ICallback cb = (fileName, s) -> {
             bl.clear();
             bl.readStreamFully(s);
-            if(bl.pos() < 32)
+            if(bl.wIndex() < 32)
                 return;
 
             AccessData data;

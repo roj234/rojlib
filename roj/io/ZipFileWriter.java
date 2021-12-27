@@ -27,7 +27,6 @@ package roj.io;
 
 import roj.collect.MyHashSet;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -61,7 +60,6 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     private final Deflater deflater;
     private final List<byte[]> attrList;
     private final ByteList buffer;
-    private final ByteWriter bw;
     private final CRC32 crc;
     private final MyHashSet<String> duplicate;
 
@@ -82,7 +80,6 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         this.deflater = new Deflater(compressionLevel, true);
         this.attrList = new ArrayList<>();
         this.buffer = new ByteList();
-        this.bw = new ByteWriter(buffer);
         this.crc = new CRC32();
         this.eof = new EEOF();
         this.eof.setComment(DEFAULT_COMMENT);
@@ -109,31 +106,31 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         if (duplicate != null && !duplicate.add(name))
             throw new ZipException("Duplicate entry " + name);
 
-        crc.update(data.list, data.offset(), data.limit());
+        crc.update(data.list, data.arrayOffset(), data.limit());
 
         int time = java2DosTime(System.currentTimeMillis());
         ByteList buf = this.buffer;
         buf.clear();
-        bw.writeInt(HEADER_FILE)
-          .writeShortR(20)
-          .writeShortR(2048)
-          .writeShortR(method)
-          .writeIntR(time)
-          .writeIntR((int) crc.getValue())
-          .writeIntR(0) // cSize
-          .writeIntR(data.pos())
-          .writeShortR(ByteWriter.byteCountUTF8(name))
-          .writeShortR(0)
-          .writeAllUTF(name);
+        buf.putInt(HEADER_FILE)
+          .putShortLE(20)
+          .putShortLE(2048)
+          .putShortLE(method)
+          .putIntLE(time)
+          .putIntLE((int) crc.getValue())
+          .putIntLE(0) // cSize
+          .putIntLE(data.wIndex())
+          .putShortLE(ByteList.byteCountUTF8(name))
+          .putShortLE(0)
+          .putUTFData(name);
         long beginOffset = file.getFilePointer();
-        file.write(buf.list, 0, buf.pos());
+        file.write(buf.list, 0, buf.wIndex());
         buf.clear();
         long endOffset = file.getFilePointer();
 
         int cSize;
         if (method == ZipEntry.DEFLATED) {
             Deflater def = this.deflater;
-            def.setInput(data.list, data.offset(), data.limit());
+            def.setInput(data.list, data.arrayOffset(), data.limit());
             def.finish();
             buf.ensureCapacity(8192);
             while (!def.finished()) {
@@ -145,8 +142,8 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
             cSize = (int) def.getBytesWritten();
             def.reset();
         } else {
-            cSize = data.pos();
-            file.write(data.list, data.offset(), data.limit());
+            cSize = data.wIndex();
+            file.write(data.list, data.arrayOffset(), data.limit());
         }
 
         long curr = file.getFilePointer();
@@ -155,24 +152,24 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         file.seek(curr);
 
         boolean attrZip64 = beginOffset >= U32_MAX;
-        bw.writeInt(HEADER_ATTRIBUTE)
-          .writeShortR(attrZip64 ? 45 : 20)
-          .writeShortR(attrZip64 ? 45 : 20)
-          .writeShortR(2048)
-          .writeShortR(method)
-          .writeIntR(time)
-          .writeIntR((int) crc.getValue())
-          .writeIntR(cSize)
-          .writeIntR(data.pos())
-          .writeShortR(ByteWriter.byteCountUTF8(name))
-          .writeShortR(attrZip64 ? 10 : 0)
-          .writeShortR(0)
-          .writeIntR(0) // 四个short 0
-          .writeIntR(0)
-          .writeIntR((int) (attrZip64 ? U32_MAX : beginOffset))
-          .writeAllUTF(name);
+        buf.putInt(HEADER_ATTRIBUTE)
+          .putShortLE(attrZip64 ? 45 : 20)
+          .putShortLE(attrZip64 ? 45 : 20)
+          .putShortLE(2048)
+          .putShortLE(method)
+          .putIntLE(time)
+          .putIntLE((int) crc.getValue())
+          .putIntLE(cSize)
+          .putIntLE(data.wIndex())
+          .putShortLE(ByteList.byteCountUTF8(name))
+          .putShortLE(attrZip64 ? 10 : 0)
+          .putShortLE(0)
+          .putIntLE(0) // 四个short 0
+          .putIntLE(0)
+          .putIntLE((int) (attrZip64 ? U32_MAX : beginOffset))
+          .putUTFData(name);
         if (attrZip64) {
-            bw.writeShortR(1).writeShortR(8).writeLongR(entryBeginOffset);
+            buf.putShortLE(1).putShortLE(8).putLongLE(entryBeginOffset);
         }
         attrList.add(buf.toByteArray());
         buf.clear();
@@ -191,7 +188,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         long delta = entryBeginOffset - entry.startPos();
         // zip64 supporting
         entry.offset += delta;
-        MutableZipFile.writeAttr(bw, entry);
+        MutableZipFile.writeAttr(buffer, entry);
         entry.offset -= delta;
         attrList.add(buffer.toByteArray());
         buffer.clear();
@@ -214,22 +211,22 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
 
         byte[] extra = ze.getExtra();
 
-        bw.writeInt(HEADER_FILE)
-            .writeShortR(20)
-            .writeShortR(2048) // EFS
-            .writeShortR(ze.getMethod())
-            .writeIntR(MutableZipFile.java2DosTime(ze.getTime()))
-            .writeIntR(0) // crc32
-            .writeIntR(0) // csize
-            .writeIntR(0) // usize
-            .writeShortR(ByteWriter.byteCountUTF8(ze.getName()))
-            .writeShortR(extra == null ? 0 : extra.length)
-            .writeAllUTF(ze.getName());
+        buffer.putInt(HEADER_FILE)
+          .putShortLE(20)
+          .putShortLE(2048) // EFS
+          .putShortLE(ze.getMethod())
+          .putIntLE(MutableZipFile.java2DosTime(ze.getTime()))
+          .putIntLE(0) // crc32
+          .putIntLE(0) // csize
+          .putIntLE(0) // usize
+          .putShortLE(ByteList.byteCountUTF8(ze.getName()))
+          .putShortLE(extra == null ? 0 : extra.length)
+          .putUTFData(ze.getName());
         entryBeginOffset = file.getFilePointer();
-        file.write(buffer.list, 0, buffer.pos());
+        file.write(buffer.list, 0, buffer.wIndex());
         if (extra != null)
             file.write(extra);
-        entryEndOffset = entryBeginOffset + buffer.pos();
+        entryEndOffset = entryBeginOffset + buffer.wIndex();
         buffer.clear();
     }
 
@@ -257,9 +254,9 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
                 def.setInput(b, off, len);
                 ByteList buf = this.buffer;
                 while (!def.needsInput()) {
-                    buf.ensureCapacity(buf.pos() + 1024);
-                    off = deflater.deflate(buf.list, buf.pos(), 1024);
-                    buf.pos(buf.pos() + off);
+                    buf.ensureCapacity(buf.wIndex() + 1024);
+                    off = deflater.deflate(buf.list, buf.wIndex(), 1024);
+                    buf.wIndex(buf.wIndex() + off);
                 }
             } else {
                 throw new ZipException("Entry asynchronously closed");
@@ -274,7 +271,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
             f.seek(entryEndOffset);
             Deflater def = this.deflater;
             ByteList buf = this.buffer;
-            f.write(buf.list, 0, buf.pos());
+            f.write(buf.list, 0, buf.wIndex());
             buf.clear();
             if (!def.finished()) {
                 def.finish();
@@ -297,25 +294,25 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         deflater.reset();
 
         boolean attrZip64 = entryBeginOffset >= U32_MAX;
-        bw.writeInt(HEADER_ATTRIBUTE)
-          .writeShortR(attrZip64 ? 45 : 20)
-          .writeShortR(attrZip64 ? 45 : 20)
-          .writeShortR(2048) // EFS
-          .writeShortR(entry.getMethod())
-          .writeIntR(MutableZipFile.java2DosTime(entry.getTime()))
-          .writeIntR((int) crc.getValue())
-          .writeIntR(cSize)
-          .writeIntR(uSize)
-          .writeShortR(ByteWriter.byteCountUTF8(entry.getName()))
-          .writeShortR(attrZip64 ? 12 : 0) // ext
-          .writeShortR(0) // comment
-          .writeShortR(0) // disk
-          .writeShortR(0) // attrIn
-          .writeIntR(0) // attrEx
-          .writeIntR((int) (attrZip64 ? U32_MAX : entryBeginOffset))
-          .writeAllUTF(entry.getName());
+        buffer.putInt(HEADER_ATTRIBUTE)
+          .putShortLE(attrZip64 ? 45 : 20)
+          .putShortLE(attrZip64 ? 45 : 20)
+          .putShortLE(2048) // EFS
+          .putShortLE(entry.getMethod())
+          .putIntLE(MutableZipFile.java2DosTime(entry.getTime()))
+          .putIntLE((int) crc.getValue())
+          .putIntLE(cSize)
+          .putIntLE(uSize)
+          .putShortLE(ByteList.byteCountUTF8(entry.getName()))
+          .putShortLE(attrZip64 ? 12 : 0) // ext
+          .putShortLE(0) // comment
+          .putShortLE(0) // disk
+          .putShortLE(0) // attrIn
+          .putIntLE(0) // attrEx
+          .putIntLE((int) (attrZip64 ? U32_MAX : entryBeginOffset))
+          .putUTFData(entry.getName());
         if (attrZip64) {
-            bw.writeShortR(1).writeShortR(8).writeLongR(entryBeginOffset);
+            buffer.putShortLE(1).putShortLE(8).putLongLE(entryBeginOffset);
         }
         attrList.add(buffer.toByteArray());
 
@@ -341,8 +338,8 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
 
         eof.cDirOffset = cDirOffset;
         eof.cDirLen = f.getFilePointer() - cDirOffset;
-        MutableZipFile.writeEOF(bw, eof, attrs.size(), f.getFilePointer());
-        f.write(buffer.list, 0, buffer.pos());
+        MutableZipFile.writeEOF(buffer, eof, attrs.size(), f.getFilePointer());
+        f.write(buffer.list, 0, buffer.wIndex());
 
         attrList.clear();
         deflater.end();

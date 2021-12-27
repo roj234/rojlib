@@ -53,7 +53,7 @@ final class ClientLogin extends Stated {
         int except = 1;
         while (!W.server.shutdown) {
             int read;
-            if ((read = ch.read(except - rb.position())) == 0 || rb.position() < except) {
+            if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(50);
                 if (heart-- < 0) {
                     syncPrint(W + ": 登录超时");
@@ -106,6 +106,7 @@ final class ClientLogin extends Stated {
                       .put(addr).flip();
 
                     W.room.master.sync(rb);
+                    rb.clear();
                     return ClientWork.CLIENT_WORK;
                 case P_LOGOUT:
                     rb.clear();

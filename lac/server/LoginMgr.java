@@ -30,8 +30,7 @@ import ilib.ImpLib;
 import lac.server.packets.PacketLogin;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 import roj.util.FixedString;
 
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -88,7 +87,7 @@ public final class LoginMgr {
         }
     }
 
-    private static final ByteWriter writer = new ByteWriter(128 + 2);
+    private static final ByteList writer = new ByteList(128 + 2);
 
     private static final RandomAccessFile userData;
 
@@ -122,8 +121,8 @@ public final class LoginMgr {
         FORMAT.write(writer, account.name);
         FORMAT.write(writer, account.pass);
 
-        userData.write(writer.list.list, 0, writer.list.pos());
-        writer.list.clear();
+        userData.write(writer.list, 0, writer.wIndex());
+        writer.clear();
     }
 
     public static void save() {
@@ -149,12 +148,12 @@ public final class LoginMgr {
             userData.seek(4);
             byte[] all = new byte[(int) userData.length() - 4];
             userData.readFully(all);
-            ByteReader reader = new ByteReader(all);
-            int length = reader.readUnsignedShort();
+            ByteList r = new ByteList(all);
+            int length = r.readUnsignedShort();
             for (int i = 0; i < length; i++) {
-                String name = FORMAT.read0(reader);
-                String pass = FORMAT.read0(reader);
-                accounts.put(name, new Account(name, pass, reader.index + 4));
+                String name = FORMAT.read(r);
+                String pass = FORMAT.read(r);
+                accounts.put(name, new Account(name, pass, r.rIndex() + 4));
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

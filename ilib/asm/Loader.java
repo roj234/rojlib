@@ -43,7 +43,7 @@ import roj.asm.AccessTransformer;
 import roj.io.DummyOutputStream;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
-import roj.reflect.IFieldAccessor;
+import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 
@@ -402,7 +402,7 @@ public class Loader implements IFMLLoadingPlugin {
                 ilTransformers.add(new Transformer());
                 ilTransformers.add(NiximProxy.instance);
 
-                IFieldAccessor accessor = ReflectionUtils.access(LaunchClassLoader.class.getDeclaredField("transformers"));
+                FieldAccessor accessor = ReflectionUtils.access(LaunchClassLoader.class.getDeclaredField("transformers"));
                 accessor.setInstance(Launch.classLoader);
                 onUpdate(wrapper = new WrappedTransformers((List<IClassTransformer>) accessor.getObject()));
                 accessor.setObject(wrapper);

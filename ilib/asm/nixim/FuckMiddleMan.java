@@ -28,6 +28,7 @@ package ilib.asm.nixim;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
+import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 
 import net.minecraft.network.PacketBuffer;
@@ -60,9 +61,8 @@ public class FuckMiddleMan extends SPacketEncryptionRequest {
         this.hashedServerId = _lvt_1_.readString(20);
         byte[] key = _lvt_1_.readByteArray();
         this.verifyToken = _lvt_1_.readByteArray();
-        SM4 sm4 = new SM4();
-        sm4.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
-        sm4.setKey(verifyToken);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
+        sm4.setKey(verifyToken, MyCipher.DECRYPT | MyCipher.PKCS5_PADDING);
         try {
             sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
         } catch (GeneralSecurityException e) {
@@ -76,10 +76,9 @@ public class FuckMiddleMan extends SPacketEncryptionRequest {
         buf.writeString(this.hashedServerId);
 
         byte[] encoded = this.publicKey.getEncoded();
-        SM4 sm4 = new SM4();
-        sm4.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_CHUNKED);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
         byte[] token = this.verifyToken;
-        sm4.setKey(token);
+        sm4.setKey(token, MyCipher.ENCRYPT | MyCipher.PKCS5_PADDING);
         try {
             sm4.crypt(ByteBuffer.wrap(encoded), ByteBuffer.wrap(encoded));
         } catch (GeneralSecurityException e) {

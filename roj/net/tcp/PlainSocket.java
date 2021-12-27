@@ -25,8 +25,7 @@
  */
 package roj.net.tcp;
 
-import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.tcp.util.Shared;
 
 import java.io.FileDescriptor;
@@ -84,9 +83,8 @@ public class PlainSocket implements WrappedSocket {
         int read;
         try {
             do {
-                read = NonblockingUtil.normalize(
-                        NonblockingUtil.readToNativeBuffer(fd, buf,
-                                                           NonblockingUtil.SOCKET_FD));
+                read = NIOUtil.readToNativeBuffer(fd, buf,
+                                                  NIOUtil.SOCKET_FD);
             } while (read == -3 && !socket.isClosed());
         } finally {
             buf.limit(buf.capacity());
@@ -99,7 +97,7 @@ public class PlainSocket implements WrappedSocket {
         ByteBuffer next = ByteBuffer.allocateDirect(cap);
         cur.flip();
         next.put(cur);
-        IOUtil.clean(cur);
+        NIOUtil.clean(cur);
         return rBuf = next;
     }
 
@@ -133,15 +131,14 @@ public class PlainSocket implements WrappedSocket {
         int w;
         do {
             if (tmp != null) {
-                w = NonblockingUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(),
-                                           NonblockingUtil.SOCKET_FD);
+                w = NIOUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(),
+                                   NIOUtil.SOCKET_FD);
                 if (w > 0) {
                     tmp.position(tmp.position() + w);
                 }
             } else {
-                w = NonblockingUtil.normalize(
-                        NonblockingUtil.writeFromNativeBuffer(fd, src,
-                                              NonblockingUtil.SOCKET_FD));
+                w = NIOUtil.writeFromNativeBuffer(fd, src,
+                                                  NIOUtil.SOCKET_FD);
             }
         } while (w == -3 && !socket.isClosed());
 
@@ -166,8 +163,8 @@ public class PlainSocket implements WrappedSocket {
 
         int w;
         do {
-            w = NonblockingUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(),
-                                       NonblockingUtil.SOCKET_FD);
+            w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(),
+                               NIOUtil.SOCKET_FD);
             if (w > 0) {
                 wBuf.position(wBuf.position() + w);
             }
@@ -180,7 +177,7 @@ public class PlainSocket implements WrappedSocket {
         if (wBuf.hasRemaining()) {
             int w;
             do {
-                w = NonblockingUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(), NonblockingUtil.SOCKET_FD);
+                w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(), NIOUtil.SOCKET_FD);
                 if (w > 0)
                     wBuf.position(wBuf.position() + w);
             } while (w == -3 && !socket.isClosed());
@@ -214,6 +211,6 @@ public class PlainSocket implements WrappedSocket {
 
     @Override
     public String toString() {
-        return "WSocket{" + socket.getRemoteSocketAddress() + '}';
+        return "Socket[" + socket.getRemoteSocketAddress() + ']';
     }
 }

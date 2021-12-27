@@ -55,7 +55,7 @@ public final class U4InsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code).writeInt(index);
+        w.put(code).putInt(index);
     }
 
     @Override

@@ -44,7 +44,7 @@ public final class CstFloat extends Constant {
 
     @Override
     public final void write(ByteWriter w) {
-        w.writeByte(CstType.FLOAT).writeFloat(value);
+        w.put(CstType.FLOAT).putFloat(value);
     }
 
     public final String toString() {

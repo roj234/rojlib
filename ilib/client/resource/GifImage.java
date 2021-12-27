@@ -96,7 +96,7 @@ public class GifImage {
             ByteReader r = new ByteReader(IOUtil.read(s));
             if (r.readInt() != 0x23336688)
                 System.err.println("Invalid cache file header");
-            String fileName = r.readString();
+            String fileName = r.readIntUTF();
             if (!info.getName().equals(fileName))
                 System.err.println("File name " + fileName + " does not fit " + info);
             this.width = r.readInt();
@@ -105,7 +105,7 @@ public class GifImage {
             for (int i = 0; i < frameCount; i++) {
                 frameTicks[i] = r.readUnsignedShort();
             }
-            BufferedImage image = ImageIO.read(r.getBytes().asInputStream());
+            BufferedImage image = ImageIO.read(r.bytes().asInputStream());
 
             uploadTexture(image);
 
@@ -162,11 +162,11 @@ public class GifImage {
 
         try (OutputStream fos = new FileOutputStream(file)) {
             ByteWriter w = new ByteWriter(imageBuffer.length << 4);
-            w.writeInt(0x23336688);
-            w.writeString(file.toString());
-            w.writeInt(this.width).writeInt(this.height).writeShort(frameCount);
+            w.putInt(0x23336688);
+            w.putIntUTF(file.toString());
+            w.putInt(this.width).putInt(this.height).putShort(frameCount);
             for (int tick : frameTicks) {
-                w.writeShort(tick);
+                w.putShort(tick);
             }
             w.list.writeToStream(fos);
             ImageIO.write(allImage, "png", fos);

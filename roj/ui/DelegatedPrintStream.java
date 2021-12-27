@@ -29,7 +29,7 @@ import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
+import roj.util.ByteList.Slice;
 
 import javax.annotation.Nonnull;
 import java.io.PrintStream;
@@ -62,7 +62,7 @@ public abstract class DelegatedPrintStream extends PrintStream {
         }
 
         try {
-            ByteReader.decodeUTF(-1, sb, new ByteList.ReadOnlySubList(arr, off, len));
+            ByteList.decodeUTF(-1, sb, new Slice(arr, off, len));
         } catch (UTFDataFormatException e) {
             e.printStackTrace();
         }

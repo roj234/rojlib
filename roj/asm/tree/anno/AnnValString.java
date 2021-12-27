@@ -42,8 +42,8 @@ public final class AnnValString extends AnnVal {
     public String value;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeByte((byte) STRING)
-         .writeShort(pool.getUtfId(value));
+        w.put((byte) STRING)
+         .putShort(pool.getUtfId(value));
     }
 
     public String toString() {

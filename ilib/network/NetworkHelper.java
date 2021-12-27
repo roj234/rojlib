@@ -39,12 +39,12 @@ public class NetworkHelper {
     // Utilities method
     public static void writeStringList(ByteWriter buf, String[] list) {
         if (list == null) {
-            buf.writeVarInt(-1);
+            buf.putVarInt(-1);
             return;
         }
-        buf.writeVarInt(list.length);
+        buf.putVarInt(list.length);
         for (String s : list) {
-            buf.writeString(s);
+            buf.putIntUTF(s);
         }
     }
 
@@ -53,7 +53,7 @@ public class NetworkHelper {
         if (length == -1) return null;
         String[] result = new String[length];
         for (int i = 0; i < length; i++) {
-            result[i] = buf.readString();
+            result[i] = buf.readIntUTF();
         }
         return result;
     }

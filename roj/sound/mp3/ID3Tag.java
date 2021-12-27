@@ -30,6 +30,7 @@
 package roj.sound.mp3;
 
 import roj.util.ByteList;
+import roj.util.ByteList.Slice;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -184,7 +185,7 @@ public class ID3Tag {
         if (b.length - off < 128 || !checkID3V1(b, off))
             return false;
 
-        ByteList bl = new ByteList.ReadOnlySubList(b, 3 + off, 125);
+        ByteList bl = new Slice(b, 3 + off, 125);
 
         int i;
         for (i = 0; i < 30 && bl.get(i) != 0; i++) ;

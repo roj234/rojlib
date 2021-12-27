@@ -138,28 +138,23 @@ public class ScalableImage extends JComponent {
         public void keyReleased(KeyEvent e) {}
     }
 
-    /**
-     *
-     * @param image The image
-     * @param zoomMin Zoom modifier minimum
-     * @param zoomMax Zoom modifier maximum
-     */
+    final ScaleAdapter adapter;
+    private final Image img;
+    private final int imageW, imageH;
+    private int offX, offY;
+    private float zoom = 1;
+
     public ScalableImage(Image image, float zoomMin, float zoomMax) {
         this.img = image;
         this.imageW = image.getWidth(null);
         this.imageH = image.getHeight(null);
 
-        ScaleAdapter adapter = new ScaleAdapter(zoomMin, zoomMax);
+        ScaleAdapter adapter = this.adapter = new ScaleAdapter(zoomMin, zoomMax);
         addMouseListener(adapter);
         addMouseMotionListener(adapter);
         addMouseWheelListener(adapter);
         addKeyListener(adapter);
     }
-
-    private final Image img;
-    private final int imageW, imageH;
-    private int offX, offY;
-    private float zoom = 1;
 
     @Override
     protected void paintComponent(Graphics g) {

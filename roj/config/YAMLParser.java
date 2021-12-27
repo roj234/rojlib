@@ -38,7 +38,6 @@ import roj.math.MathUtils;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -81,7 +80,7 @@ public class YAMLParser {
 
     public static void main(String[] args) throws ParseException, IOException {
         CharList yaml = new CharList();
-        ByteReader.decodeUTF(-1, yaml, new ByteList(IOUtil.read(new File(args[0]))));
+        ByteList.decodeUTF(-1, yaml, new ByteList(IOUtil.read(new File(args[0]))));
 
         System.out.print("YML = " + parse(yaml).toYAML());
     }

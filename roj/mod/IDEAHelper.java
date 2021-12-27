@@ -31,7 +31,7 @@ import roj.config.data.AbstXML;
 import roj.config.data.XElement;
 import roj.config.data.XHeader;
 import roj.io.IOUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -74,7 +74,7 @@ public class IDEAHelper {
         }
 
         try (FileOutputStream fos = new FileOutputStream(imlPath)) {
-            ByteWriter.encodeUTF(header.toXML(new StringBuilder())).writeToStream(fos);
+            ByteList.encodeUTF(header.toXML(new StringBuilder())).writeToStream(fos);
         }
     }
 }

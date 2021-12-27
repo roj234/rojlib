@@ -26,9 +26,10 @@
 package ilib.client.renderer.mirror;
 
 import ilib.network.IMessage;
-import net.minecraft.entity.Entity;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
+
+import net.minecraft.entity.Entity;
 
 public class PktEntityData implements IMessage {
     public int id;
@@ -94,19 +95,19 @@ public class PktEntityData implements IMessage {
 
     @Override
     public void toBytes(ByteWriter buf) {
-        buf.writeVarInt(id, false);
-        buf.writeDouble(lX);
-        buf.writeDouble(lY);
-        buf.writeDouble(lZ);
-        buf.writeDouble(x);
-        buf.writeDouble(y);
-        buf.writeDouble(z);
-        buf.writeFloat(prevYaw);
-        buf.writeFloat(prevPitch);
-        buf.writeFloat(yaw);
-        buf.writeFloat(pitch);
-        buf.writeDouble(mX);
-        buf.writeDouble(mY);
-        buf.writeDouble(mZ);
+        buf.putVarInt(id, false);
+        buf.putDouble(lX);
+        buf.putDouble(lY);
+        buf.putDouble(lZ);
+        buf.putDouble(x);
+        buf.putDouble(y);
+        buf.putDouble(z);
+        buf.putFloat(prevYaw);
+        buf.putFloat(prevPitch);
+        buf.putFloat(yaw);
+        buf.putFloat(pitch);
+        buf.putDouble(mX);
+        buf.putDouble(mY);
+        buf.putDouble(mZ);
     }
 }

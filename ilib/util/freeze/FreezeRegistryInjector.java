@@ -29,7 +29,7 @@ import com.google.common.collect.BiMap;
 import ilib.Config;
 import ilib.util.ForgeUtil;
 import ilib.util.Registries;
-import roj.reflect.IFieldAccessor;
+import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 
 import net.minecraft.entity.Entity;
@@ -59,7 +59,7 @@ public class FreezeRegistryInjector {
      */
     @SuppressWarnings("unchecked")
     public static void inject() {
-        IFieldAccessor accessor, a2;
+        FieldAccessor accessor, a2;
         try {
             accessor = ReflectionUtils.access(ForgeRegistry.class.getDeclaredField("missing"));
             if(entityClassRegistrations == null) {

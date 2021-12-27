@@ -5,7 +5,6 @@ import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.text.SimpleLineReader;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -45,8 +44,8 @@ public class CpFilter {
             ByteList b = new ByteList();
             try(FileOutputStream out = new FileOutputStream(dst)) {
                 for (String name : dt) {
-                    ByteWriter.writeUTF(b, name, -1);
-                    b.add((byte) '\n');
+                    ByteList.writeUTF(b, name, -1);
+                    b.put((byte) '\n');
                     b.writeToStream(out);
                     b.clear();
                 }

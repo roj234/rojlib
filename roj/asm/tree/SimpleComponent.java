@@ -73,7 +73,7 @@ public abstract class SimpleComponent implements MoFNode {
     public final AttributeList attributes = new AttributeList();
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeShort(accesses.flag).writeShort(pool.reset(name).getIndex()).writeShort(pool.reset(type).getIndex()).writeShort(attributes.size());
+        w.putShort(accesses.flag).putShort(pool.reset(name).getIndex()).putShort(pool.reset(type).getIndex()).putShort(attributes.size());
         for (int i = 0; i < attributes.size(); i++) {
            attributes.get(i).toByteArray(pool, w);
         }

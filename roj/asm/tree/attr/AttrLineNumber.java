@@ -75,10 +75,10 @@ public final class AttrLineNumber extends Attribute implements ICodeAttribute {
 
     @Override
     public void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
-        w.writeShort(map.size());
+        w.putShort(map.size());
         for (ToIntMap.Entry<InsnNode> entry : map.selfEntrySet()) {
-            w.writeShort(pcRev.getInt(validate(entry.getKey())))
-                    .writeShort(entry.getInt());
+            w.putShort(pcRev.getInt(validate(entry.getKey())))
+                    .putShort(entry.getInt());
         }
     }
 }

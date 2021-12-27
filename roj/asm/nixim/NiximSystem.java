@@ -44,6 +44,7 @@ import roj.config.data.CList;
 import roj.io.IOUtil;
 import roj.mapper.Util;
 import roj.util.ByteList;
+import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.Helpers;
@@ -1331,7 +1332,7 @@ public class NiximSystem {
             this.destClass = destClass;
 
             this.cw = new ConstantPoolEmpty();
-            this.bw = new ByteWriter(new ByteList.EmptyByteList());
+            this.bw = new ByteWriter(new WriteOnly());
             this.br = new ByteReader();
         }
 
@@ -1349,8 +1350,8 @@ public class NiximSystem {
         @Override
         public void invoke(byte code, CstRef method) {
             if (code == INVOKEVIRTUAL && method.desc().getName().getString().equals("<init>")) {
-                System.out.println("INVOKEINIT " + (br.getBytes().get(br.index - 3) == INVOKEVIRTUAL));
-                br.getBytes().set(br.index - 3, INVOKESPECIAL);
+                System.out.println("INVOKEINIT " + (br.bytes().get(br.rIndex - 3) == INVOKEVIRTUAL));
+                br.bytes().put(br.rIndex - 3, INVOKESPECIAL);
             }
             checkAccess(method);
             if (tester2 != null) checkInvokeTarget(method);
@@ -1359,8 +1360,8 @@ public class NiximSystem {
         private void checkInvokeTarget(CstRef ref) {
             if (ref.getClassName().equals(destClass) && tester.read(ref).equals(tester2)) {
                 int id = data.cp.getMethodRefId("//MARKER", ref.desc().getName().getString(), ref.desc().getType().getString());
-                br.getBytes().set(br.index - 2, (byte) (id >> 8));
-                br.getBytes().set(br.index - 1, (byte) id);
+                br.bytes().put(br.rIndex - 2, (byte) (id >> 8));
+                br.bytes().put(br.rIndex - 1, (byte) id);
             }
         }
 

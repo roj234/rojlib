@@ -64,12 +64,12 @@ public final class AttrEnclosingMethod extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.getClassId(this.owner));
+        w.putShort(pool.getClassId(this.owner));
         if (PREDEFINED == this.name) {
-            w.writeShort(0);
+            w.putShort(0);
         } else {
             this.parameters.add(this.returnType);
-            w.writeShort(pool.getDescId(this.name, ParamHelper.getMethod(this.parameters)));
+            w.putShort(pool.getDescId(this.name, ParamHelper.getMethod(this.parameters)));
             this.parameters.remove(this.parameters.size() - 1);
         }
     }

@@ -101,8 +101,8 @@ public final class Clazz implements IClass {
 
                 handleAttribute(pool, r, name, r.length());
 
-                if (!r.isFinished()) {
-                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
+                if (!r.hasRemaining()) {
+                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.rIndex) + " bytes not " + "read correctly!");
                 }
             } else {
                 attributes.add(attr);
@@ -183,22 +183,22 @@ public final class Clazz implements IClass {
         ConstantPool cw = new ConstantPool();
 
         ByteWriter w = new ByteWriter(buf)
-                .writeShort(accesses.flag)
-                .writeShort(cw.getClassId(name))
-                .writeShort(parent == null ? 0 : cw.getClassId(parent))
+                .putShort(accesses.flag)
+                .putShort(cw.getClassId(name))
+                .putShort(parent == null ? 0 : cw.getClassId(parent))
 
-                .writeShort(interfaces.size());
+                .putShort(interfaces.size());
 
         for (int i = 0; i < interfaces.size(); i++) {
-            w.writeShort(cw.getClassId(interfaces.get(i)));
+            w.putShort(cw.getClassId(interfaces.get(i)));
         }
 
-        w.writeShort(fields.size());
+        w.putShort(fields.size());
         for (int i = 0, l = fields.size(); i < l; i++) {
             fields.get(i).toByteArray(cw, w);
         }
 
-        w.writeShort(methods.size());
+        w.putShort(methods.size());
         for (int i = 0, l = methods.size(); i < l; i++) {
             methods.get(i).toByteArray(cw, w);
         }
@@ -206,12 +206,12 @@ public final class Clazz implements IClass {
         if (signature != null)
             attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
 
-        w.writeShort(attributes.size());
+        w.putShort(attributes.size());
         for (int i = 0, l = attributes.size(); i < l; i++) {
             attributes.get(i).toByteArray(cw, w);
         }
 
-        int pos = buf.pos();
+        int pos = buf.wIndex();
         byte[] tmp = buf.list;
         int cpl = cw.byteLength() + 10;
         if (tmp.length < pos + cpl) {
@@ -220,10 +220,10 @@ public final class Clazz implements IClass {
         System.arraycopy(buf.list, 0, tmp, cpl, pos);
         buf.list = tmp;
 
-        buf.pos(0);
-        cw.write(w.writeInt(0xCAFEBABE).writeShort(version).writeShort(version >> 16));
-        assert buf.pos() == cpl;
-        buf.pos(pos + cpl);
+        buf.wIndex(0);
+        cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
+        assert buf.wIndex() == cpl;
+        buf.wIndex(pos + cpl);
 
         return buf;
     }
@@ -234,13 +234,13 @@ public final class Clazz implements IClass {
             String name = ((CstUTF) pool.get(r)).getString();
             final int length = r.readInt();
 
-            final int end = r.index + length;
+            final int end = r.rIndex + length;
 
             handleAttribute(pool, r, name, length);
 
-            if (r.index != end) {
-                System.err.println("[Warning] Attribute " + name + " has " + (end - r.index) + " bytes not read correctly!");
-                r.index = end;
+            if (r.rIndex != end) {
+                System.err.println("[Warning] Attribute " + name + " has " + (end - r.rIndex) + " bytes not read correctly!");
+                r.rIndex = end;
             }
         }
     }
@@ -299,7 +299,7 @@ public final class Clazz implements IClass {
                     throw new IllegalArgumentException("Deprecated.length must be zero");
             case "SourceDebugExtension":
             default:
-                attr = new AttrUnknown(name, r.readBytesDelegated(length));
+                attr = new AttrUnknown(name, r.slice(length));
         }
         attributes.add(attr);
     }

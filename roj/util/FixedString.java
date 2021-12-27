@@ -54,36 +54,36 @@ public class FixedString {
     final byte len;
 
     @Nonnull
-    public String read0(@Nonnull ByteReader reader) {
+    public String read(@Nonnull ByteList r) {
         int sLen = 0;
         String string;
         switch (len) {
             case 1:
-                sLen = reader.readUByte();
+                sLen = r.readUByte();
                 break;
             case 2:
-                sLen = reader.readUnsignedShort();
+                sLen = r.readUnsignedShort();
                 break;
             case 4:
-                sLen = reader.readInt();
+                sLen = r.readInt();
                 break;
         }
         if (sLen <= 0) {
             string = "";
             sLen = 0;
         } else {
-            byte[] bytes = reader.readBytes(sLen);
+            byte[] bytes = r.readBytes(sLen);
             string = new String(bytes, StandardCharsets.UTF_8);
         }
-        reader.index += this.max - sLen;
+        r.rIndex += this.max - sLen;
         return string;
     }
 
-    public void write(@Nonnull ByteWriter writer, @Nonnull String string) {
-        int fullIndex = writer.list.pos() + this.len + this.max;
+    public void write(@Nonnull ByteList w, @Nonnull String string) {
+        int fullIndex = w.wIndex() + this.len + this.max;
         byte[] arr = string.getBytes(StandardCharsets.UTF_8);
         if (arr.length == 0) {
-            writer.list.pos(fullIndex);
+            w.wIndex(fullIndex);
             return;
         }
         if (arr.length > max) {
@@ -91,17 +91,17 @@ public class FixedString {
         }
         switch (len) {
             case 1:
-                writer.writeByte((byte) arr.length);
+                w.put((byte) arr.length);
                 break;
             case 2:
-                writer.writeShort(arr.length);
+                w.putShort(arr.length);
                 break;
             case 4:
-                writer.writeInt(arr.length);
+                w.putInt(arr.length);
                 break;
         }
-        writer.writeBytes(arr);
-        writer.list.pos(fullIndex);
+        w.put(arr);
+        w.wIndex(fullIndex);
     }
 
     public int getLength() {

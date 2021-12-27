@@ -59,7 +59,7 @@ public final class NPInsnNode extends InsnNode {
 
     @Override
     public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code);
+        w.put(code);
     }
 
     @Override

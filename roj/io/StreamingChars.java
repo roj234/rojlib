@@ -28,7 +28,6 @@ package roj.io;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -97,7 +96,7 @@ public class StreamingChars implements CharSequence {
                 read = buffer.readStream(in, MathUtils.clamp(in.available(), 128, 4096));
                 if (read >= 0) {
                     if (read > 0) {
-                        start += ByteReader.decodeUTFPartialExternal(start, -1, cl, buf);
+                        start += ByteList.decodeUTFPartialExternal(start, -1, cl, buf);
                     }
 
                     LockSupport.parkNanos(50);
@@ -109,8 +108,8 @@ public class StreamingChars implements CharSequence {
                     throw new IOException("in.read() got " + read);
                 }
 
-                if(buf.pos() > max) {
-                    throw new IOException("Buffer read " + buf.pos() + " which is over the limitation " + max);
+                if(buf.wIndex() > max) {
+                    throw new IOException("Buffer read " + buf.wIndex() + " which is over the limitation " + max);
                 }
             }
         } catch (IOException e) {

@@ -44,7 +44,7 @@ public final class CstLong extends Constant {
 
     @Override
     public final void write(ByteWriter w) {
-        w.writeByte(CstType.LONG).writeLong(value);
+        w.put(CstType.LONG).putLong(value);
     }
 
     @Override

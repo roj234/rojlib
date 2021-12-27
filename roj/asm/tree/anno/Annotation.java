@@ -65,10 +65,10 @@ public final class Annotation {
     }
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.getUtfId("L" + clazz + ';'))
-         .writeShort(values.size());
+        w.putShort(pool.getUtfId("L" + clazz + ';'))
+         .putShort(values.size());
         for (Map.Entry<String, AnnVal> e : values.entrySet()) {
-            e.getValue().toByteArray(pool, w.writeShort(pool.getUtfId(e.getKey())));
+            e.getValue().toByteArray(pool, w.putShort(pool.getUtfId(e.getKey())));
         }
     }
 

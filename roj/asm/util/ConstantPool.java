@@ -32,6 +32,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 import roj.text.TextUtil;
+import roj.util.ByteList;
 import roj.util.ByteReader;
 import roj.util.ByteWriter;
 import roj.util.Idx;
@@ -640,7 +641,7 @@ public class ConstantPool {
     }
 
     public void write(ByteWriter w) {
-        w.writeShort(index);
+        w.putShort(index);
         List<Constant> csts = this.constants;
         for (int i = 0; i < csts.size(); i++) {
             csts.get(i).write(w);
@@ -671,7 +672,7 @@ public class ConstantPool {
             Constant c = constants.get(i);
             switch (c.type()) {
                 case UTF:
-                    length += 3 + ByteWriter.byteCountUTF8(((CstUTF) c).getString());
+                    length += 3 + ByteList.byteCountUTF8(((CstUTF) c).getString());
                     break;
                 case INT:
                 case INVOKE_DYNAMIC:

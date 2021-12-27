@@ -28,7 +28,7 @@ package roj.net.cross;
 import roj.collect.IntMap;
 import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CList;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.tcp.MSSSocket;
 import roj.net.tcp.PlainSocket;
 import roj.net.tcp.WrappedSocket;
@@ -84,8 +84,8 @@ public class AEHost extends IAEClient {
         }
 
         WrappedSocket ch = ssl ?
-                new MSSSocket(c, NonblockingUtil.fd(c)) :
-                new PlainSocket(c, NonblockingUtil.fd(c));
+                new MSSSocket(c, NIOUtil.fd(c)) :
+                new PlainSocket(c, NIOUtil.fd(c));
 
         try {
             if (!hostLogin(ch, "阿伟死了么")) return;
@@ -351,7 +351,7 @@ public class AEHost extends IAEClient {
                 c.setReuseAddress(true);
                 initSocketPref(c);
                 c.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 10000);
-                fd = NonblockingUtil.fd(c);
+                fd = NIOUtil.fd(c);
             } catch (IOException e) {
                 e.printStackTrace();
                 try {

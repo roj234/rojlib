@@ -75,6 +75,6 @@ public final class IfInsnNode extends GotoInsnNode {
     }
 
     public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code).writeShort(delta);
+        w.put(code).putShort(delta);
     }
 }

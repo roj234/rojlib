@@ -26,8 +26,7 @@
 package roj.net.tcp;
 
 
-import roj.io.IOUtil;
-import roj.io.NonblockingUtil;
+import roj.io.NIOUtil;
 import roj.net.ssl.EngineAllocator;
 import roj.net.tcp.util.Shared;
 
@@ -139,7 +138,7 @@ public class SSLSocket extends PlainSocket {
         ByteBuffer bb = ByteBuffer.allocateDirect(netBufSize);
         networkIn.flip();
         bb.put(networkIn);
-        IOUtil.clean(networkIn);
+        NIOUtil.clean(networkIn);
         networkIn = bb;
     }
 
@@ -147,9 +146,8 @@ public class SSLSocket extends PlainSocket {
         if (bb.hasRemaining()) {
             int wrote;
             do {
-                wrote = NonblockingUtil.normalize(
-                        NonblockingUtil.writeFromNativeBuffer(fd, bb,
-                                                              NonblockingUtil.SOCKET_FD));
+                wrote = NIOUtil.writeFromNativeBuffer(fd, bb,
+                                                      NIOUtil.SOCKET_FD);
             } while (wrote == -3 && !socket.isClosed());
         }
         return !bb.hasRemaining();
@@ -284,9 +282,8 @@ public class SSLSocket extends PlainSocket {
     }
 
     private int _read(ByteBuffer buffer) throws IOException {
-        return NonblockingUtil.normalize(
-                NonblockingUtil.readToNativeBuffer(fd, buffer,
-                                                   NonblockingUtil.SOCKET_FD));
+        return NIOUtil.readToNativeBuffer(fd, buffer,
+                                          NIOUtil.SOCKET_FD);
     }
 
     private SSLEngineResult.HandshakeStatus doTasks() {
@@ -297,6 +294,12 @@ public class SSLSocket extends PlainSocket {
             runnable.run();
         }
         return engine.getHandshakeStatus();
+    }
+
+    @Override
+    public void poll() {
+        rBuf.position(rBuf.position() + pushback);
+        pushback = 0;
     }
 
     int pushback;

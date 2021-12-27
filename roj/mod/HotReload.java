@@ -29,7 +29,7 @@ package roj.mod;
 import roj.asm.Parser;
 import roj.io.IOUtil;
 import roj.ui.UIUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import net.minecraft.launchwrapper.Launch;
 
@@ -59,7 +59,7 @@ public final class HotReload {
         }
 
         InetSocketAddress addr = new InetSocketAddress(InetAddress.getLoopbackAddress(), Integer.parseInt(args[0]));
-        ByteWriter bw = new ByteWriter().writeByte((byte) 0x66).writeShort(0);
+        ByteList bw = new ByteList().put((byte) 0x66).putShort(0);
         int dataAmount = 0;
 
         while (true) {
@@ -67,18 +67,18 @@ public final class HotReload {
 
             if(ques.equals("CLR")) {
                 dataAmount = 0;
-                bw.list.clear();
-                bw.writeByte((byte) 0x66).writeShort(0);
+                bw.clear();
+                bw.put((byte) 0x66).putShort(0);
             } else if(ques.length() == 0) {
-                int pos = bw.list.pos();
-                bw.list.pos(1);
-                bw.writeShort(dataAmount);
-                bw.list.pos(pos);
+                int pos = bw.wIndex();
+                bw.wIndex(1);
+                bw.putShort(dataAmount);
+                bw.wIndex(pos);
 
                 try (Socket socket = new Socket()) {
                     socket.setSoTimeout(1000);
                     socket.connect(addr);
-                    bw.list.writeToStream(socket.getOutputStream());
+                    bw.writeToStream(socket.getOutputStream());
                     System.out.println("重载请求已发送...");
                 } catch (IOException e) {
                     System.out.println("连接失败");
@@ -86,8 +86,8 @@ public final class HotReload {
                 }
 
                 dataAmount = 0;
-                bw.list.clear();
-                bw.writeByte((byte) 0x66).writeShort(0);
+                bw.clear();
+                bw.put((byte) 0x66).putShort(0);
             } else {
                 File clz = new File(ques);
                 if (!clz.isFile()) {
@@ -107,10 +107,10 @@ public final class HotReload {
 
                 dataAmount++;
                 byte[] nb = name.replace('/', '.').getBytes(StandardCharsets.UTF_8);
-                bw.writeShort(nb.length)
-                  .writeBytes(nb)
-                  .writeInt(buf.length)
-                  .writeBytes(buf);
+                bw.putShort(nb.length)
+                  .put(nb)
+                  .putInt(buf.length)
+                  .put(buf);
             }
         }
     }

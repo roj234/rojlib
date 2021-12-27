@@ -31,7 +31,7 @@ import roj.mapper.util.MapperList;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.io.*;
 import java.util.*;
@@ -201,7 +201,7 @@ public class Mapping {
         }
 
         try (FileOutputStream fos = new FileOutputStream(target)) {
-            ByteWriter.encodeUTF(ob).writeToStream(fos);
+            ByteList.encodeUTF(ob).writeToStream(fos);
         }
     }
 

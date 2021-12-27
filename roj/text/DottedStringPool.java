@@ -60,10 +60,10 @@ public class DottedStringPool extends StringPool {
             tmp.clear();
         int id = dottedList.getInt(string);
         if(id != -1) {
-            return w.writeVarInt(id, false);
+            return w.putVarInt(id, false);
         }
         List<String> clipped = TextUtil.split(tmp, string, delimChar);
-        w.writeByte((byte) 0).writeByte((byte) clipped.size());
+        w.put((byte) 0).put((byte) clipped.size());
         for (int i = 0; i < clipped.size() - 1; i++) {
             String string1;
             id = list.getInt(string1 = clipped.get(i));
@@ -71,9 +71,9 @@ public class DottedStringPool extends StringPool {
                 list.putByValue(id = list.size(), string1);
                 ordered.add(string1);
             }
-            w.writeVarInt(id, false);
+            w.putVarInt(id, false);
         }
-        w.writeVString(clipped.get(clipped.size() - 1));
+        w.putVarIntUTF(clipped.get(clipped.size() - 1));
         dottedList.putByValue(dottedList.size() + 1, string);
         return w;
     }
@@ -91,7 +91,7 @@ public class DottedStringPool extends StringPool {
             for (int j = 0; j < blocks; j++) {
                 cl.append(ordered.get(r.readVarInt(false))).append(delimChar);
             }
-            cl.append(r.readVString());
+            cl.append(r.readVarIntUTF());
             String e = cl.toString();
             dottedList.putByValue(dottedList.size() + 1, e);
             return e;

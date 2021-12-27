@@ -48,7 +48,7 @@ public final class AttrSourceFile extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(pool.getUtfId(this.file));
+        w.putShort(pool.getUtfId(this.file));
     }
 
     public String toString() {

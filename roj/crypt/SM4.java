@@ -25,9 +25,7 @@
  */
 package roj.crypt;
 
-import javax.crypto.BadPaddingException;
 import java.nio.ByteBuffer;
-import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import static roj.crypt.Conv.IRL;
@@ -35,49 +33,24 @@ import static roj.crypt.Conv.IRL;
 /**
  * 国密SM4 - 对称加解密
  */
-public final class SM4 implements CipheR {
-    public static final String SM4_IV = "SM4_IV";
-
-    public static final int SM4_CHUNKED = 0, SM4_STREAMED = 2, SM4_PADDING = 4;
-
+public final class SM4 implements DeCipher {
     private final int[] sKey = new int[32];
     private final int[] tmp  = new int[36];
-
-    private int mode;
-    private final ByteBuffer iv = ByteBuffer.allocate(16);
 
     public SM4() {}
 
     @Override
     public String name() {
-        return "SM4 1.1.2";
+        return "SM4 1.2.0";
     }
 
     @Override
-    public void reset(int cryptMode) {
-        this.mode = cryptMode;
-        Arrays.fill(sKey, 0);
-        iv.putLong(0, 0).putLong(8, 0);
-    }
-
-    @Override
-    public void setKey(byte[] pass) {
+    public void setKey(byte[] pass, int cryptFlags) {
         if(pass.length == 0 || pass.length > 128)
             throw new IllegalArgumentException("pass.length should be (0, 128]!");
         sm4_set_key(tmp, sKey, pass, 0, pass.length);
-        if ((mode & DECRYPT) != 0)
-            Conv.reverse(sKey, 0, 32);
-    }
-
-    @Override
-    public void setOption(String key, Object value) {
-        if(key.equals(SM4_IV)) {
-            byte[] iv = ((byte[]) value);
-            if (iv.length != 16)
-                throw new IllegalArgumentException("iv.length != 16");
-            this.iv.clear();
-            this.iv.put(iv);
-        }
+        boolean enc = (cryptFlags & CipheR.DECRYPT) == 0;
+        if (!enc) Conv.reverse(sKey, 0, 32);
     }
 
     @Override
@@ -85,96 +58,19 @@ public final class SM4 implements CipheR {
         return 16;
     }
 
-    public static void pad(ByteBuffer buf, boolean unpad) throws BadPaddingException {
-        if (unpad) {
-            for (int i = buf.position() - 1; i >= 0; i--) {
-                byte b = buf.get(i);
-                if(b == (byte) 0x80) {
-                    buf.position(i);
-                    break;
-                } else if (b != 0)
-                    throw new BadPaddingException();
-            }
-        } else {
-            int lim = buf.limit();
-            int p = 16 - (lim & 15);
-            buf.limit(lim + p);
-            buf.put(lim++, (byte) 0x80);
-            while (--p > 0) buf.put(lim++, (byte) 0);
-        }
-    }
-
     @Override
-    public int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
-        if ((mode & (SM4_PADDING | DECRYPT)) == SM4_PADDING) {
-            int p = 16 - in.remaining() & 15;
-            if (in.capacity() - in.limit() < p)
-                return BUFFER_UNDERFLOW;
-            if (out.remaining() < in.remaining() + p)
-                return BUFFER_OVERFLOW;
-            pad(in, false);
-        }
-
-        if ((in.remaining() & 15) != 0)
-            throw new BadPaddingException(in.remaining() + ", excepting n*16");
-        if (out.remaining() < in.remaining())
-            return BUFFER_OVERFLOW;
-
-        int k = in.remaining() >> 4;
-
+    public int crypt(ByteBuffer in, ByteBuffer out) {
         int[] T = this.tmp;
         int[] sKey = this.sKey;
 
-        ByteBuffer iv = this.iv;
-        if ((mode & DECRYPT) == 0) {
-            ByteBuffer clone = out.duplicate();
-
-            while (k-- > 0) {
-                T[0] = in.getInt() ^ iv.getInt(); T[1] = in.getInt() ^ iv.getInt();
-                T[2] = in.getInt() ^ iv.getInt(); T[3] = in.getInt() ^ iv.getInt();
-                int i = 0;
-                while (i < 32) {
-                    T[i + 4] = T[i] ^ sm4_Lt(T[i + 1] ^ T[i + 2] ^ T[i + 3] ^ sKey[i]);
-                    i++;
-                }
-                out.putInt(T[35]).putInt(T[34]).putInt(T[33]).putInt(T[32]);
-
-                iv = clone;
-            }
-
-            this.iv.clear();
-            if ((mode & SM4_STREAMED) != 0) {
-                iv.limit(iv.position())
-                  .position(iv.position() - 16);
-                this.iv.put(iv);
-            }
-        } else {
-            int iv0 = iv.getInt(), iv1 = iv.getInt(),
-                iv2 = iv.getInt(), iv3 = iv.getInt();
-
-            boolean pad = (mode & SM4_PADDING) != 0;
-            while (k-- > 0) {
-                T[0] = in.getInt(); T[1] = in.getInt(); T[2] = in.getInt(); T[3] = in.getInt();
-                int i = 0;
-                while (i < 32) {
-                    T[i + 4] = T[i] ^ sm4_Lt(T[i + 1] ^ T[i + 2] ^ T[i + 3] ^ sKey[i]);
-                    i++;
-                }
-
-                out.putInt(T[35] ^ iv0).putInt(T[34] ^ iv1).putInt(T[33] ^ iv2).putInt(T[32] ^ iv3);
-                iv0 = T[0]; iv1 = T[1]; iv2 = T[2]; iv3 = T[3];
-            }
-
-            this.iv.clear();
-            if ((mode & SM4_STREAMED) != 0) {
-                this.iv.putInt(iv0).putInt(iv1).putInt(iv2).putInt(iv3);
-            }
-
-            if (pad) {
-                pad(out, true);
-            }
+        T[0] = in.getInt(); T[1] = in.getInt(); T[2] = in.getInt(); T[3] = in.getInt();
+        int i = 0;
+        while (i < 32) {
+            T[i + 4] = T[i] ^ sm4_Lt(T[i + 1] ^ T[i + 2] ^ T[i + 3] ^ sKey[i]);
+            i++;
         }
-        return OK;
+        out.putInt(T[35]).putInt(T[34]).putInt(T[33]).putInt(T[32]);
+        return CipheR.OK;
     }
 
     private static final byte[] SBOX = {

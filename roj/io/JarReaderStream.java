@@ -56,17 +56,17 @@ public class JarReaderStream extends JarOutputStream {
 
     @Override
     public void write(int i) {
-        byteCache.add((byte) i);
+        byteCache.put((byte) i);
     }
 
     @Override
     public void write(byte[] bytes, int i, int i1) {
-        byteCache.addAll(bytes, i, i1);
+        byteCache.put(bytes, i, i1);
     }
 
     @Override
     public void write(@Nonnull byte[] bytes) {
-        byteCache.addAll(bytes);
+        byteCache.put(bytes);
     }
 
     @Override

@@ -42,7 +42,7 @@ public final class AnnValDouble extends AnnVal {
     public double value;
 
     public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeByte((byte) DOUBLE).writeShort(pool.getDoubleId(value));
+        w.put((byte) DOUBLE).putShort(pool.getDoubleId(value));
     }
 
     public String toString() {

@@ -33,7 +33,6 @@ import roj.collect.MyHashMap;
 import roj.io.JarReaderStream;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -63,7 +62,7 @@ public final class Patcher {
         static final int VERSION_4 = 4;
 
         public static void patch(ByteList src, byte[] patch, ByteList dst) {
-            ByteReader r = new ByteReader(patch);
+            ByteList r = new ByteList(patch);
             if (r.readInt() == DIFF_HEADER && r.readUnsignedByte() == VERSION_4) {
                 while(true) {
                     int cmd = r.readUnsignedByte();
@@ -131,16 +130,16 @@ public final class Patcher {
         }
 
         private static void copy(int off, int len, ByteList src, ByteList dst) {
-            dst.ensureCapacity(dst.pos() + len);
-            System.arraycopy(src.list, off, dst.list, dst.pos(), len);
-            dst.pos(dst.pos() + len);
+            dst.ensureCapacity(dst.wIndex() + len);
+            System.arraycopy(src.list, off, dst.list, dst.wIndex(), len);
+            dst.wIndex(dst.wIndex() + len);
         }
 
-        private static void append(int len, ByteReader src, ByteList dst) {
-            dst.ensureCapacity(dst.pos() + len);
-            System.arraycopy(src.getBytes().list, src.index, dst.list, dst.pos(), len);
-            src.index += len;
-            dst.pos(dst.pos() + len);
+        private static void append(int len, ByteList src, ByteList dst) {
+            dst.ensureCapacity(dst.wIndex() + len);
+            System.arraycopy(src.list, src.rIndex, dst.list, dst.wIndex(), len);
+            src.rIndex += len;
+            dst.wIndex(dst.wIndex() + len);
         }
     }
 
@@ -175,17 +174,17 @@ public final class Patcher {
             System.out.println("开始给" + name + "打补丁 数量 " + patches.size());
         for (Patch patch : patches) {
             if (!patch.exist) {
-                if(input.pos() != 0) {
+                if(input.wIndex() != 0) {
                     CmdUtil.warning("期待空class " + patch.source);
                     errorCount++;
                     input = new ByteList(0);
                 }
             } else {
-                if (input.pos() == 0) {
+                if (input.wIndex() == 0) {
                     throw new RuntimeException("期待非空class " + patch.source);
                 }
                 Adler32 adler32 = patchMap == serverPatches ? adler321 : adler322;
-                adler32.update(input.list, input.offset(), input.pos());
+                adler32.update(input.list, input.arrayOffset(), input.wIndex());
                 int inputChecksum = (int) adler32.getValue();
                 adler32.reset();
                 if (patch.checksum != inputChecksum) {
@@ -204,7 +203,7 @@ public final class Patcher {
                 return clazz.getBytes();
             }
             try {
-                ByteList out = new ByteList(input.pos());
+                ByteList out = new ByteList(input.wIndex());
                 GDP.patch(input, patch.patch, out);
                 return out;
             } catch (Throwable e) {
@@ -227,7 +226,7 @@ public final class Patcher {
                     if(ze.getName().endsWith(".binpatch")) {
                         list.clear();
                         list.readStreamFully(zis);
-                        Patch cp = read113Patch(new ByteReader(list));
+                        Patch cp = read113Patch(list);
                         String cn = unmapper.getOrDefault(cp.source, cp.source);
 
                         serverPatches.computeIfAbsent(cn + ".class", Helpers.fnArrayList()).add(cp);
@@ -248,9 +247,9 @@ public final class Patcher {
             try (LzmaInputStream decompressed = new LzmaInputStream(stream)) {
                 clientPatches = new MyHashMap<>();
                 serverPatches = new MyHashMap<>();
-                JarOutputStream jos = new JarReaderStream(((entry, byteList) -> {
+                JarOutputStream jos = new JarReaderStream(((entry, bl) -> {
                     try {
-                        Patch cp = readPatch(new ByteReader(byteList));
+                        Patch cp = readPatch(bl);
                         if(entry.getName().startsWith("binpatch/client")) {
                             clientPatches.computeIfAbsent(cp.source + ".class", Helpers.fnArrayList()).add(cp);
                         } else if(entry.getName().startsWith("binpatch/server")) {

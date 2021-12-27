@@ -85,7 +85,7 @@ class LaunchInjector implements Acceptor {
 
             ByteList list = ctx.get(true);
             rd.buf1 = list.list;
-            rd.pos1 = list.pos();
+            rd.pos1 = list.wIndex();
         } finally {
             level.setLevel(false);
             Loader.classLoadElapse = System.nanoTime() - cn;

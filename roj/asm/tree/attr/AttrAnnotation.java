@@ -63,7 +63,7 @@ public final class AttrAnnotation extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeShort(annotations.size());
+        w.putShort(annotations.size());
         for (Annotation annotation : annotations) {
             annotation.toByteArray(pool, w);
         }

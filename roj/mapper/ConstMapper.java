@@ -120,56 +120,56 @@ public class ConstMapper extends Mapping {
         ByteWriter w = new ByteWriter(200000);
         // 原则上为了压缩可以再把name和desc做成constant
 
-        w.writeVarInt(classMap.size(), false);
+        w.putVarInt(classMap.size(), false);
         for (Map.Entry<String, String> s : classMap.entrySet()) {
             pool.writeDlm(pool.writeDlm(w, s.getKey()),
                     s.getValue());
         }
-        w.writeInt(FILE_HEADER);
+        w.putInt(FILE_HEADER);
 
-        w.writeVarInt(fieldMap.size(), false);
+        w.putVarInt(fieldMap.size(), false);
         for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
             Desc descriptor = s.getKey();
             pool.writeString(pool.writeString(pool.writeString(pool.writeDlm(w,
                     descriptor.owner),
                     descriptor.name),
                     descriptor.param)
-                    .writeShort(descriptor.flags.flag),
+                    .putShort(descriptor.flags.flag),
                     s.getValue());
         }
-        w.writeInt(FILE_HEADER);
+        w.putInt(FILE_HEADER);
 
-        w.writeVarInt(methodMap.size(), false);
+        w.putVarInt(methodMap.size(), false);
         for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
             Desc descriptor = s.getKey();
             pool.writeString(pool.writeString(pool.writeString(pool.writeDlm(w,
                     descriptor.owner),
                     descriptor.name),
                     descriptor.param)
-                    .writeShort(descriptor.flags.flag),
+                    .putShort(descriptor.flags.flag),
                     s.getValue());
         }
-        w.writeInt(FILE_HEADER);
+        w.putInt(FILE_HEADER);
 
-        w.writeVarInt(libSupers.size(), false);
+        w.putVarInt(libSupers.size(), false);
         for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
             pool.writeDlm(w, s.getKey());
 
             List<String> list = s.getValue();
-            w.writeVarInt(list.size(), false);
+            w.putVarInt(list.size(), false);
             for (String c : list) {
                 pool.writeDlm(w, c);
             }
         }
-        w.writeInt(FILE_HEADER);
+        w.putInt(FILE_HEADER);
 
-        w.writeVarInt(libSkipped.size(), false);
+        w.putVarInt(libSkipped.size(), false);
         for (Desc s : libSkipped) {
             pool.writeString(pool.writeString(pool.writeDlm(w, s.owner),
                     s.name), s.param);
         }
 
-        pool.writePool(globalWriter.writeInt(FILE_HEADER).writeLong(hash)).writeBytes(w);
+        pool.writePool(globalWriter.putInt(FILE_HEADER).putLong(hash)).put(w);
 
         try (FileOutputStream fos = new FileOutputStream(cache)) {
             globalWriter.writeToStream(fos);
