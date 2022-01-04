@@ -34,10 +34,10 @@ package roj.config.data;
  */
 public enum Type {
     LIST, MAP, STRING, INTEGER, NULL, BOOL, DOUBLE, LONG, OBJECT, COMMENT,
-    YAML_TIMESTAMP, YAML_DATE, YAML_ORDERED_MAP;
+    YAML_TIMESTAMP, YAML_DATE;
 
     public boolean isNumber() {
-        return this == INTEGER || this == DOUBLE;
+        return this == INTEGER || this == DOUBLE || this == LONG;
     }
 
     public boolean fits(Type type) {

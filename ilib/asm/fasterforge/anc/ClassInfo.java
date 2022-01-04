@@ -30,8 +30,7 @@ import com.google.common.collect.Multimap;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
 import roj.text.StringPool;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,11 +38,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
- * @since 2021/4/21 22:51java
+ * @since 2021/4/21 22:51
  */
 public class ClassInfo {
     public final String internalName;
@@ -62,7 +59,7 @@ public class ClassInfo {
         this.annotations = annotations;
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool, ConstantPool cw) {
+    public void toByteArray(ByteList w, StringPool pool, ConstantPool cw) {
         pool.writeString(w, internalName);
         w.putVarInt(interfaces.size(), false);
         for (String s : interfaces) {
@@ -79,7 +76,7 @@ public class ClassInfo {
         }
     }
 
-    public static ClassInfo fromByteArray(ByteReader r, StringPool pool, ConstantPool cp) {
+    public static ClassInfo fromByteArray(ByteList r, StringPool pool, ConstantPool cp) {
         String internalName = pool.readString(r);
         int len = r.readVarInt(false);
         List<String> list = new ArrayList<>(len);

@@ -33,8 +33,6 @@ import javax.annotation.Nonnull;
 import java.util.Objects;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/31 21:17
@@ -125,7 +123,7 @@ public final class CString extends CEntry {
                     return false;
             }
         }
-        if((value.length() == 1 ? YAMLParser.YAML_SPEC_CHARS_NOT_SINGLE : YAMLParser.YAML_SPEC_CHARS_NOT_BEGIN).indexOf(value.charAt(0)) != -1)
+        if((value.length() == 1 ? YAMLParser.YAML_ESCAPE_SINGLE : YAMLParser.YAML_ESCAPE_MULTI).indexOf(value.charAt(0)) != -1)
             return false;
 
         char last = value.charAt(value.length() - 1);
@@ -150,6 +148,11 @@ public final class CString extends CEntry {
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
         return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
+    }
+
+    @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        return toJSON(sb, depth);
     }
 
     @Override

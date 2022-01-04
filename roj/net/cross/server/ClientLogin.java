@@ -47,15 +47,14 @@ final class ClientLogin extends Stated {
         WrappedSocket ch = W.ch;
 
         ByteBuffer rb = ch.buffer();
-        rb.clear();
 
-        int heart = TIMEOUT_HEART_SERVER;
-        int except = 1;
+        int t = TIMEOUT_TRANSFER;
+        int except = 3;
         while (!W.server.shutdown) {
             int read;
             if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(50);
-                if (heart-- < 0) {
+                if (t-- < 0) {
                     syncPrint(W + ": 登录超时");
                     write1(ch, (byte) PS_ERROR_TIMEOUT);
                     break;
@@ -64,58 +63,45 @@ final class ClientLogin extends Stated {
             }
 
             if (read < 0) break;
-            switch (rb.get(0) & 0xFF) {
-                case PS_LOGIN_C:
-                    if (rb.position() < 3) {
-                        except = 3;
-                        continue;
-                    }
-                    int nameLen = rb.get(1) & 0xFF;
-                    int passLen = rb.get(2) & 0xFF;
-                    if (rb.position() < nameLen + passLen + 3) {
-                        except = nameLen + passLen + 3;
-                        continue;
-                    }
-                    rb.position(3);
 
-                    int code = W.server.createRoom(W,
-                                                   false,
-                                                   getUTF(rb, nameLen),
-                                                   getUTF(rb, passLen));
-                    if (code != -1) {
-                        syncPrint(W + ": 连接失败(协议): " + ERROR_NAMES[code - 0x20]);
-                        write1(ch, (byte) code);
-                        return Logout.LOGOUT;
-                    }
-
-                    rb.clear();
-                    rb.put((byte) PC_LOGON_C)
-                      .put((byte) W.server.info.length)
-                      .put((byte) W.room.motd.length)
-                      .put((byte) (W.room.portMap.length / 2))
-                      .putInt(W.clientId).put(W.server.info)
-                      .put(W.room.motd).put(W.room.portMap).flip();
-                    writeAndFlush(ch, rb, 500);
-
-                    byte[] addr = ch.socket().getInetAddress().getAddress();
-                    rb.clear();
-                    rb.put((byte) PH_CLIENT_LOGIN)
-                      .putInt(W.clientId)
-                      .putShort((short) ch.socket().getPort())
-                      .put((byte) addr.length)
-                      .put(addr).flip();
-
-                    W.room.master.sync(rb);
-                    rb.clear();
-                    return ClientWork.CLIENT_WORK;
-                case P_LOGOUT:
-                    rb.clear();
-                    syncPrint(W + ": 断开连接(协议)");
-                    return Logout.LOGOUT;
-                default:
-                    unknownPacket(W, rb);
-                    return Logout.LOGOUT;
+            int nameLen = rb.get(1) & 0xFF;
+            int passLen = rb.get(2) & 0xFF;
+            if (rb.position() < nameLen + passLen + 3) {
+                except = nameLen + passLen + 3;
+                continue;
             }
+            rb.position(3);
+
+            int code = W.server.createRoom(W,
+                                           false,
+                                           getUTF(rb, nameLen),
+                                           getUTF(rb, passLen));
+            if (code != -1) {
+                syncPrint(W + ": 连接失败(协议): " + ERROR_NAMES[code - 0x20]);
+                write1(ch, (byte) code);
+                return Logout.LOGOUT;
+            }
+
+            rb.clear();
+            rb.put((byte) PC_LOGON_C)
+              .put((byte) W.server.info.length)
+              .put((byte) W.room.motd.length)
+              .put((byte) (W.room.portMap.length / 2))
+              .putInt(W.clientId).put(W.server.info)
+              .put(W.room.motd).put(W.room.portMap).flip();
+            writeAndFlush(ch, rb, 500);
+
+            byte[] addr = ch.socket().getInetAddress().getAddress();
+            rb.clear();
+            rb.put((byte) PH_CLIENT_LOGIN)
+              .putInt(W.clientId)
+              .putShort((short) ch.socket().getPort())
+              .put((byte) addr.length)
+              .put(addr).flip();
+
+            W.room.master.sync(rb);
+            rb.clear();
+            return ClientWork.CLIENT_WORK;
         }
 
         return Logout.LOGOUT;

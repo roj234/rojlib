@@ -33,5 +33,5 @@ package roj.net.cross;
 final class SpAttach {
     int  channelId;
     byte portId;
-    int idleTimer;
+    int clientId;
 }

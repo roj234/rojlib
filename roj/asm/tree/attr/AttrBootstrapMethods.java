@@ -32,8 +32,8 @@ import roj.asm.cst.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.util.ArrayList;
@@ -222,7 +222,7 @@ public final class AttrBootstrapMethods extends Attribute {
 
         public byte kind, methodType;
 
-        public void toByteArray(ConstantPool pool, ByteWriter w) {
+        public void toByteArray(ConstantPool pool, ByteList w) {
             if (!Kind.verifyType(kind, methodType)) {
                 throw new IllegalArgumentException("Method type " + methodType + " doesn't fit with lambda kind " + kind);
             }
@@ -308,10 +308,10 @@ public final class AttrBootstrapMethods extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort(methods.size());
-        for (BootstrapMethod method : methods) {
-            method.toByteArray(pool, w);
+        for (int i = 0; i < methods.size(); i++) {
+            methods.get(i).toByteArray(pool, w);
         }
     }
 

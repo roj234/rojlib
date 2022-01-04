@@ -26,8 +26,7 @@
 package ilib.client.renderer.mirror;
 
 import ilib.network.IMessage;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import net.minecraft.entity.Entity;
 
@@ -76,7 +75,7 @@ public class PktEntityData implements IMessage {
     }
 
     @Override
-    public void fromBytes(ByteReader buf) {
+    public void fromBytes(ByteList buf) {
         id = buf.readVarInt(false);
         lX = buf.readDouble();
         lY = buf.readDouble();
@@ -94,20 +93,20 @@ public class PktEntityData implements IMessage {
     }
 
     @Override
-    public void toBytes(ByteWriter buf) {
-        buf.putVarInt(id, false);
-        buf.putDouble(lX);
-        buf.putDouble(lY);
-        buf.putDouble(lZ);
-        buf.putDouble(x);
-        buf.putDouble(y);
-        buf.putDouble(z);
-        buf.putFloat(prevYaw);
-        buf.putFloat(prevPitch);
-        buf.putFloat(yaw);
-        buf.putFloat(pitch);
-        buf.putDouble(mX);
-        buf.putDouble(mY);
-        buf.putDouble(mZ);
+    public void toBytes(ByteList buf) {
+        buf.putVarInt(id, false)
+        .putDouble(lX)
+        .putDouble(lY)
+        .putDouble(lZ)
+        .putDouble(x)
+        .putDouble(y)
+        .putDouble(z)
+        .putFloat(prevYaw)
+        .putFloat(prevPitch)
+        .putFloat(yaw)
+        .putFloat(pitch)
+        .putDouble(mX)
+        .putDouble(mY)
+        .putDouble(mZ);
     }
 }

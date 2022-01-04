@@ -28,7 +28,12 @@ package roj.net.cross;
 import roj.collect.IntMap;
 import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CList;
+import roj.config.word.AbstLexer;
 import roj.io.NIOUtil;
+import roj.net.misc.MSSClientKey;
+import roj.net.misc.PacketBuffer;
+import roj.net.misc.Pipe;
+import roj.net.misc.PipeIOThread;
 import roj.net.tcp.MSSSocket;
 import roj.net.tcp.PlainSocket;
 import roj.net.tcp.WrappedSocket;
@@ -40,8 +45,10 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
@@ -56,23 +63,35 @@ import static roj.net.cross.Util.*;
  */
 public class AEHost extends IAEClient {
     static {
-        AE_MSSKey.loadMSSCert();
+        MSSClientKey.loadMSSCert();
     }
 
     IntMap<Client> clients;
     char[] portMap;
 
-    Queue<int[]> kick;
+    PacketBuffer kick;
 
     public AEHost(SocketAddress server, boolean ssl, String id, String token) {
         super(server, ssl, id, token);
         this.clients = new IntMap<>();
-        this.portMap = new char[10];
-        this.kick = new ConcurrentLinkedQueue<>();
+        this.portMap = new char[1];
+        this.kick = new PacketBuffer();
     }
 
-    public void kickSome(int... clientId) {
-        kick.offer(clientId);
+    public void kickSome(int... clientIds) {
+        ByteBuffer tmp = ByteBuffer.allocate(clientIds.length * 5);
+        for (int i : clientIds) {
+            tmp.put((byte) PS_KICK_CLIENT).putInt(i);
+        }
+        tmp.flip();
+        kick.offer(tmp);
+    }
+
+    public void chat(int clientId, String message) {
+        byte[] mb = message.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer tmp = ByteBuffer.allocate(6 + mb.length);
+        tmp.put((byte) P_MSG).putInt(clientId).put((byte) mb.length).put(mb).flip();
+        kick.offer(tmp);
     }
 
     protected void call() throws IOException {
@@ -101,18 +120,14 @@ public class AEHost extends IAEClient {
             conn:
             while (!shutdown) {
                 int read;
-                if ((read = ch.read(except - rb.position())) == 0 || rb.position() < except) {
+                if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                     LockSupport.parkNanos(50);
-                    kick:
+                    intr:
                     if (rb.position() == 0) {
-                        int[] data = kick.poll();
-                        if (data == null) break kick;
-                        for (int i : data) {
-                            rb.put((byte) PS_KICK_CLIENT).putInt(i);
-                        }
+                        if (!kick.take(rb)) break intr;
                         rb.flip();
                         if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                            syncPrint(this + ": KICK 超时");
+                            syncPrint(this + ": PBW超时");
                             break;
                         }
                         rb.clear();
@@ -120,13 +135,14 @@ public class AEHost extends IAEClient {
                     if (heartbeat(ch, --heart, true)) continue;
                     break;
                 }
-                if (read < 0) throw new IOException("连接非正常断开: " + read);
+
+                if (read < 0) throw new EOFException("未预料的连接关闭: " + read);
 
                 switch (rb.get(0) & 0xFF) {
                     case P_HEARTBEAT:
                         break;
                     case P_LOGOUT:
-                        syncPrint(this + ": 连接断开");
+                        syncPrint(" 连接断开");
                         break conn;
                     case PS_CHANNEL_CLOSE:
                         if(rb.position() < 9) {
@@ -146,11 +162,13 @@ public class AEHost extends IAEClient {
                         rb.flip().position(1);
 
                         int portId = rb.get() & 0xFF;
-                        int clientId = rb.getInt();
 
                         byte[] ciphers = new byte[64];
                         rnd.nextBytes(ciphers);
                         rb.get(ciphers, 0, 32);
+
+                        int clientId = rb.getInt();
+                        syncPrint(" 客户端 #" + clientId + " 尝试开启频道");
 
                         if (socketsById.size() > MAX_CHANNEL_COUNT) {
                             rb.clear();
@@ -159,7 +177,7 @@ public class AEHost extends IAEClient {
                             rb.put((byte) reasonBytes.length).put(reasonBytes).flip();
 
                             if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                                syncPrint(this + ": COF 超时");
+                                syncPrint(" COF 超时");
                                 break conn;
                             }
                         } else {
@@ -169,13 +187,17 @@ public class AEHost extends IAEClient {
                             rb.put((byte) PS_CHANNEL_OPEN).putInt(clientId)
                               .put(ciphers, 32, 32).flip();
                             if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                                syncPrint(this + ": CO 超时");
+                                syncPrint(" CO 超时");
                                 break conn;
                             }
 
-                            socketsById.put((int) (pipeId >> 32), pair = pipeLogin(pipeId, ciphers));
-                            // todo async
+                            SpAttach att = new SpAttach();
+                            socketsById.put(att.channelId = (int) (pipeId >>> 32),
+                                            pair = pipeLogin(pipeId, ciphers));
+                            att.portId = (byte) portId;
+                            pair.att = att;
                             new AsyncConnector(portMap[portId], pair).run();
+                            clients.get(clientId).channels.add(pair);
                         }
                         break;
                     case PH_CLIENT_LOGIN:
@@ -196,7 +218,7 @@ public class AEHost extends IAEClient {
                         cli.address = new InetSocketAddress(InetAddress.getByAddress(ip), port);
                         cli.channels = new ArrayList<>();
                         clients.put(cli.clientId, cli);
-                        syncPrint(this + " 客户端 #" + cli.clientId + " 上线了, 它来自 " + cli.address);
+                        syncPrint(" 客户端 #" + cli.clientId + " 上线了, 它来自 " + cli.address);
                         break;
                     case PH_CLIENT_LOGOUT:
                         if(rb.position() < 5) {
@@ -205,14 +227,31 @@ public class AEHost extends IAEClient {
                         }
                         clientId = rb.getInt(1);
                         clients.remove(clientId);
-                        syncPrint(this + " 客户端 #" + clientId + " 下线了.");
+                        syncPrint(" 客户端 #" + clientId + " 下线了.");
+                        break;
+                    case P_MSG:
+                        if (rb.position() < 6) {
+                            except = 6;
+                            continue;
+                        }
+                        if (rb.position() < (rb.get(5) & 0xFF) + 6) {
+                            except = (rb.get(5) & 0xFF) + 6;
+                            continue;
+                        }
+                        rb.flip().position(4);
+                        byte[] tmp = new byte[rb.get() & 0xFF];
+                        rb.get(tmp);
+
+                        int target = rb.getInt(1);
+                        syncPrint(" 客户端 #" + rb.getInt(1) + " 向你说 \"" + AbstLexer.addSlashes(
+                                new String(tmp, StandardCharsets.UTF_8)) + "\"");
                         break;
                     default:
                         int bc = (rb.get(0) & 0xFF) - 0x20;
                         if(rb.position() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
-                            syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+                            syncPrint(" 错误 " + ERROR_NAMES[bc]);
                         } else {
-                            syncPrint(this + ": 未知数据包: " + dumpBuffer(rb));
+                            syncPrint(" 未知数据包: " + dumpBuffer(rb));
                         }
                         rb.clear();
                         break conn;
@@ -225,6 +264,11 @@ public class AEHost extends IAEClient {
             try {
                 write1(ch, (byte) P_LOGOUT);
             } catch (IOException ignored) {}
+            rb.clear();
+            int t = 1000;
+            while (ch.read() == 0 && t-- > 0) {
+                LockSupport.parkNanos(10);
+            }
         } catch (Throwable e) {
             onError(ch, e);
         } finally {
@@ -264,23 +308,25 @@ public class AEHost extends IAEClient {
         }
         rb.flip();
         if(writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-            throw new SocketTimeoutException("登录发送超时");
+            throw new IOException("登录发送超时");
         }
+        rb.clear();
 
-        int heart = TIMEOUT_HEART_SERVER;
+        int heart = TIMEOUT_TRANSFER;
         int except = 1;
 
         while (!shutdown) {
             int read;
-            if ((read = ch.read( except - rb.position())) == 0 || rb.position() < except) {
+            if ((read = ch.read( except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(50);
                 if (heart-- < 0) {
-                    throw new SocketTimeoutException("等待登录回复超时");
+                    throw new IOException("等待登录回复超时");
                 }
                 continue;
             }
 
-            if (read < 0) throw new EOFException("未预料的连接关闭");
+            if (read < 0) throw new IOException("未预料的连接关闭");
+
             switch (rb.get(0) & 0xFF) {
                 case PC_LOGON_H:
                     if (rb.position() < 2) {
@@ -288,26 +334,27 @@ public class AEHost extends IAEClient {
                         continue;
                     }
                     int infoLen = rb.get(1) & 0xFF;
-                    if (rb.position() < infoLen + 1) {
-                        except = infoLen + 1;
+                    if (rb.position() < infoLen + 2) {
+                        except = infoLen + 2;
                         continue;
                     }
-                    rb.position(1);
+                    rb.position(2);
                     byte[] infoBytes = new byte[infoLen];
                     rb.get(infoBytes);
                     String info = new String(infoBytes, StandardCharsets.UTF_8);
-                    syncPrint(this + " 服务器欢迎消息: " + info);
+                    syncPrint(" 服务器欢迎消息: " + info);
+                    ch.poll();
 
                     return true;
                 case P_LOGOUT:
-                    syncPrint(this + ": 服务端断开连接");
+                    syncPrint(" 服务端断开连接");
                     return false;
                 default:
                     int bc;
                     if(rb.position() == 1 && (bc = (0xFF & rb.get(0)) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
-                        syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+                        syncPrint(" 错误 " + ERROR_NAMES[bc]);
                     } else {
-                        syncPrint(this + ": 无效数据包");
+                        syncPrint(" 无效数据包");
                     }
                     return false;
             }
@@ -331,6 +378,7 @@ public class AEHost extends IAEClient {
     }
 
     static final Consumer<Pipe> PIPE_INVALID_CB = pipe -> {
+        System.out.println("管道失效回调: " + pipe);
         if (pipe.isUpstreamEof() || pipe.isReleased()) return;
         pipe.setClient(null);
     };
@@ -360,7 +408,11 @@ public class AEHost extends IAEClient {
                 return;
             }
             pair.setClient(fd);
-            PipeIOThread.syncRegister(AEHost.this, pair, PIPE_INVALID_CB);
+            try {
+                PipeIOThread.syncRegister(AEHost.this, pair, PIPE_INVALID_CB);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         @Override

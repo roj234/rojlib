@@ -31,7 +31,7 @@ import roj.asm.cst.CstNameAndType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.List;
 
@@ -63,7 +63,7 @@ public final class AttrEnclosingMethod extends Attribute {
     public Type returnType;
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort(pool.getClassId(this.owner));
         if (PREDEFINED == this.name) {
             w.putShort(0);

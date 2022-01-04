@@ -26,11 +26,9 @@
 package ilib.animator.interpolate;
 
 import roj.text.StringPool;
-import roj.util.ByteReader;
+import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/5/27 22:52
@@ -47,7 +45,7 @@ abstract class Simple extends TimeFunc implements TimeFunc.Factory {
     }
 
     @Override
-    public TimeFunc readFrom(ByteReader r, StringPool pool) {
+    public TimeFunc readFrom(ByteList r, StringPool pool) {
         return this;
     }
 }

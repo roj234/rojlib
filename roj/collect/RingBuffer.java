@@ -76,11 +76,39 @@ public final class RingBuffer<T> implements Iterable<T> {
         }
     }
 
-    Object[] array;
-    int      head, tail, size;
+    private Object[] array;
+    private int      head, tail, size;
 
     public RingBuffer(int capacity) {
         array = new Object[capacity];
+    }
+
+    public void expand(int capacity) {
+        if (array.length >= capacity) return;
+        Object[] newArray = new Object[capacity];
+        if (size > 0) {
+            int i = 0;
+            for (T t : this) {
+                newArray[i++] = t;
+            }
+        }
+        array = newArray;
+    }
+
+    public int capacity() {
+        return array.length;
+    }
+
+    public int head() {
+        return head;
+    }
+
+    public int tail() {
+        return tail;
+    }
+
+    public Object[] getArray() {
+        return array;
     }
 
     public int size() {

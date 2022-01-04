@@ -30,15 +30,10 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.SimpleSpinLock;
 import roj.concurrent.collect.ConcurrentTimedHashMap;
-import roj.config.JSONParser;
-import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.config.data.CString;
-import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.NetworkUtil;
-import roj.net.tcp.serv.HttpServer;
 import roj.net.tcp.serv.Reply;
 import roj.net.tcp.serv.Response;
 import roj.net.tcp.serv.Router;
@@ -66,45 +61,41 @@ import java.util.function.Function;
  * @version 0.1
  * @since 2021/7/23 20:49
  */
-public class DnsServer implements Router {
-    static final ConcurrentHashMap<RecordKey, List<Record>> resolvedCache = new ConcurrentHashMap<>();
+public class DnsServer implements Router, Runnable {
+    static final ConcurrentHashMap<RecordKey, List<Record>> resolved = new ConcurrentHashMap<>();
 
     MyHashSet<String> blocked = new MyHashSet<>();
 
-    ConcurrentTimedHashMap<XAddr, ForwardQuery> pendingRequest;
+    ConcurrentTimedHashMap<XAddr, ForwardQuery> waiting;
 
-    DatagramSocket receiveSocket, serverSocket;
+    DatagramSocket forwardRcv, local;
 
-    TimedCleaner cleaner;
+    public List<InetSocketAddress> forwardDns;
+    public InetSocketAddress       fakeDns;
 
-    List<InetSocketAddress> trustedForwardDnsServers;
-    InetSocketAddress fakeDnsServer;
-
-    public DnsServer(CMapping config, InetSocketAddress address) throws SocketException {
-        receiveSocket = new DatagramSocket(new InetSocketAddress(config.getInteger("forwarderReceive")));
-        serverSocket = new DatagramSocket(address);
-        pendingRequest = new ConcurrentTimedHashMap<>(config.getInteger("requestTimeout"));
-        trustedForwardDnsServers = new ArrayList<>();
-        CList list = config.getOrCreateList("trustedDnsServers");
+    public DnsServer(CMapping cfg, InetSocketAddress address) throws SocketException {
+        forwardRcv = new DatagramSocket(new InetSocketAddress(cfg.getInteger("forwarderReceive")));
+        local = new DatagramSocket(address);
+        waiting = new ConcurrentTimedHashMap<>(cfg.getInteger("requestTimeout"));
+        forwardDns = new ArrayList<>();
+        CList list = cfg.getOrCreateList("trustedDnsServers");
         for (int i = 0; i < list.size(); i++) {
             String id = list.get(i).asString();
             int j = id.lastIndexOf(':');
-            trustedForwardDnsServers.add(
+            forwardDns.add(
                     new InetSocketAddress(id.substring(0, j), MathUtils.parseInt(id.substring(j + 1))));
         }
-        if(!config.getString("fakeDnsServer").isEmpty())
-            fakeDnsServer = new InetSocketAddress(config.getString("fakeDnsServer"), 53);
+        if(!cfg.getString("fakeDnsServer").isEmpty())
+            fakeDns = new InetSocketAddress(cfg.getString("fakeDnsServer"), 53);
+    }
 
-        TimedCleaner cleaner = this.cleaner = new TimedCleaner(this);
-        cleaner.start();
-
-        ForwardQueryHandler fwd = new ForwardQueryHandler(this);
-        fwd.start();
+    public void launch() {
+        new ForwardQueryHandler(this).start();
     }
 
     // Save / Load
 
-    File cacheFile;
+    public File cacheFile;
     AtomicBoolean dirty = new AtomicBoolean();
     public void save() throws IOException {
         if (dirty.getAndSet(false) && cacheFile != null) {
@@ -112,7 +103,7 @@ public class DnsServer implements Router {
                 ByteList w = new ByteList();
                 w.putInt(0x2a6789fa).putInt(0);
                 int i = 0;
-                for (Map.Entry<RecordKey, List<Record>> entry : resolvedCache.entrySet()) {
+                for (Map.Entry<RecordKey, List<Record>> entry : resolved.entrySet()) {
                     RecordKey key = entry.getKey();
                     w.putVarIntUTF(key.url)
                      .put((byte) key.qClass); // u2 if needed
@@ -141,8 +132,6 @@ public class DnsServer implements Router {
     }
 
     public void load() throws IOException {
-        assert !cleaner.isAlive();
-
         if(cacheFile == null || !cacheFile.isFile())
             return;
 
@@ -150,7 +139,7 @@ public class DnsServer implements Router {
         if(0x2a6789fa != r.readInt()) {
             throw new IOException("File header error");
         }
-        resolvedCache.clear();
+        resolved.clear();
         int count = r.readInt();
         for (int i = 0; i < count; i++) {
             RecordKey key = new RecordKey();
@@ -165,13 +154,11 @@ public class DnsServer implements Router {
                 e.TTL = r.readVarInt(false);
                 records.add(e);
             }
-            resolvedCache.put(key, records);
+            resolved.put(key, records);
         }
     }
 
     public void loadHosts(InputStream in) throws IOException {
-        assert !cleaner.isAlive();
-
         try (SimpleLineReader scan = new SimpleLineReader(in)) {
             for (String line : scan) {
                 if(line.isEmpty() || line.startsWith("#"))
@@ -189,14 +176,12 @@ public class DnsServer implements Router {
                 record.data = value;
                 record.TTL = Integer.MAX_VALUE;
 
-                resolvedCache.computeIfAbsent(key, Helpers.fnArrayList()).add(record);
+                resolved.computeIfAbsent(key, Helpers.fnArrayList()).add(record);
             }
         }
     }
 
     public void loadBlocked(InputStream in) throws IOException {
-        assert !cleaner.isAlive();
-
         try (SimpleLineReader scan = new SimpleLineReader(in)) {
             for (String ln : scan) {
                 if(ln.isEmpty() || ln.startsWith("!"))
@@ -208,19 +193,21 @@ public class DnsServer implements Router {
     }
 
     public String dumpIpAddress() {
-        return TextUtil.prettyPrint(resolvedCache.entrySet());
+        return TextUtil.prettyPrint(resolved.entrySet());
     }
 
     // Utility classes
 
-    static final class XAddr {
+    static final class XAddr implements Cloneable {
         InetAddress addr;
         char port, id;
 
-        public XAddr() {}
+        XAddr() {}
 
-        public XAddr(DatagramPacket packet) {
-            init(packet);
+        XAddr(InetSocketAddress socketAddress, char sessionId) {
+            this.addr = socketAddress.getAddress();
+            this.port = (char) socketAddress.getPort();
+            this.id = sessionId;
         }
 
         XAddr init(DatagramPacket packet) {
@@ -231,17 +218,13 @@ public class DnsServer implements Router {
             return this;
         }
 
-        public XAddr(InetSocketAddress socketAddress, char sessionId) {
-            this.addr = socketAddress.getAddress();
-            this.port = (char) socketAddress.getPort();
-            this.id = sessionId;
-        }
-
-        public XAddr copy() {
-            XAddr n = new XAddr();
-            n.addr = addr;
-            n.port = port;
-            n.id = id;
+        protected XAddr clone() {
+            XAddr n = null;
+            try {
+                n = (XAddr) super.clone();
+            } catch (CloneNotSupportedException e) {
+                e.printStackTrace();
+            }
             return n;
         }
 
@@ -271,58 +254,33 @@ public class DnsServer implements Router {
         }
     }
 
-    static final class TimedCleaner extends Thread {
-        DnsServer server;
-
-        public TimedCleaner(DnsServer server) {
-            setName("DNS Forward Query Cleaner");
-            setDaemon(true);
-            this.server = server;
-        }
-
-        @Override
-        public void run() {
-            while (true) {
-                try {
-                    server.pendingRequest.clearOutdatedEntry();
-                } catch (ConcurrentModificationException ignored) {
-                    server.pendingRequest.FORCE_RELEASE_LOCK();
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ignored) {}
-            }
-        }
-    }
-
     static final class ForwardQueryHandler extends Thread {
         DnsServer server;
 
         public ForwardQueryHandler(DnsServer server) {
-            setName("DNS Forward Query Handler");
+            setName("DNS Forward Query");
             setDaemon(true);
             this.server = server;
         }
 
         @Override
         public void run() {
-            byte[] buf = new byte[512];
-            DatagramPacket packet = new DatagramPacket(buf, 512);
+            DatagramPacket packet = new DatagramPacket(new byte[512], 512);
             XAddr xAddr = new XAddr();
-            while (true) {
+            while (!Thread.interrupted()) {
                 packet.setLength(512);
                 try {
-                    server.receiveSocket.receive(packet);
+                    server.forwardRcv.receive(packet);
 
-                    ForwardQuery req = server.pendingRequest.remove(xAddr.init(packet));
-                    if(req == null) {
-                        if(server.trustedForwardDnsServers.contains(packet.getSocketAddress())) {
-                            server.maybeRecvData(packet, xAddr);
+                    ForwardQuery req = server.waiting.get(xAddr.init(packet));
+                    if(req == null) { // expired or finished
+                        System.out.println("潜在的DNS污染可能: " + xAddr);
+                        if(server.forwardDns.contains(packet.getSocketAddress())) {
+                            server.handleUnknown(packet, xAddr);
                         } else {
                             System.out.println("[Warn] 未授权的数据包 " + xAddr);
                         }
                     } else {
-                        //System.out.println("[Dbg]接收到来自 " + xAddr + " 的消息");
                         req.handle(server, packet, xAddr);
                     }
                 } catch (IOException e) {
@@ -332,17 +290,22 @@ public class DnsServer implements Router {
         }
     }
 
-    static final class ForwardQuery {
+    static final class ForwardQuery extends DnsQuery {
         int remain;
-        MyHashMap<InetSocketAddress, DnsResponse> truncated = new MyHashMap<>(2);
+        Map<InetSocketAddress, DnsResponse> truncated;
         DnsResponse[] responses;
 
-        DnsQuery query;
-
-        public ForwardQuery(DnsQuery query, int remain) {
+        public ForwardQuery(DnsQuery q, int remain) {
             this.remain = remain;
-            this.responses = new DnsResponse[remain];
-            this.query = query;
+            responses = new DnsResponse[remain];
+            truncated = Collections.emptyMap();
+
+            sessionId = q.sessionId;
+            senderIp = q.senderIp;
+            senderPort = q.senderPort;
+            opcode = q.opcode;
+            iterate = q.iterate;
+            records = q.records;
         }
 
         public void handle(DnsServer server, DatagramPacket packet, XAddr xAddr) {
@@ -350,37 +313,29 @@ public class DnsServer implements Router {
             r.wIndex(packet.getLength());
 
             try {
-                DnsResponse resp = server.processDnsResponse(packet, r);
-                if(remain == 0) {
-                    System.out.println("啊我毒了: " + resp);
-                    return;
-                }
-
-                InetSocketAddress iAddr = (InetSocketAddress) packet.getSocketAddress();
+                DnsResponse resp = readDnsResponse(packet, r);
+                InetSocketAddress addr = (InetSocketAddress) packet.getSocketAddress();
                 if(resp.truncated) {
-                    System.out.println("[Dbg]TC of " + xAddr);
-
-                    DnsResponse TCResp = truncated.putIfAbsent(iAddr, resp);
-                    if(TCResp != null) {
-                        TCResp.response.putAll(resp.response);
+                    if (truncated.isEmpty()) truncated = new MyHashMap<>(2);
+                    DnsResponse prev = truncated.putIfAbsent(addr, resp);
+                    if(prev != null) {
+                        prev.response.putAll(resp.response);
                     }
-
-                    server.pendingRequest.put(xAddr.copy(), this);
                 } else {
-                    DnsResponse TCResp = truncated.get(iAddr);
-                    if(TCResp != null) {
-                        TCResp.response.putAll(resp.response);
-                        resp = TCResp;
-                        System.out.println("[Dbg]TC end: " + resp);
+                    DnsResponse prev = truncated.get(addr);
+                    if(prev != null) {
+                        prev.response.putAll(resp.response);
+                        resp = prev;
                     }
 
                     responses[--remain] = resp;
                     if (remain == 0) {
-                        server.processResolvedResponse(this);
+                        server.waiting.remove(xAddr);
+                        server.forwardQueryDone(this);
                     }
                 }
             } catch (Throwable e) {
-                System.err.println("[Error]DnsResp process error: ");
+                System.err.println("[Error]FQ process error: ");
                 e.printStackTrace();
             }
         }
@@ -536,7 +491,7 @@ public class DnsServer implements Router {
                 case Q_PTR: {
                     CharList sb = new CharList(30);
                     try {
-                        _r_domain_name(r, sb);
+                        readDomain(r, sb);
                     } catch (Throwable e) {
                         e.printStackTrace();
                         break;
@@ -545,8 +500,8 @@ public class DnsServer implements Router {
                 }
                 case Q_HINFO:
                     try {
-                        String CPU = _r_character_string(r);
-                        String OS = _r_character_string(r);
+                        String CPU = readCharacter(r);
+                        String OS = readCharacter(r);
                         return "CPU: " + CPU + ", OS: " + OS;
                     } catch (Throwable e) {
                         e.printStackTrace();
@@ -556,7 +511,7 @@ public class DnsServer implements Router {
                     int pref = r.readUnsignedShort();
                     CharList sb = new CharList(30).append("Preference: ").append(Integer.toString(pref)).append(", Ex: ");
                     try {
-                        _r_domain_name(r, sb);
+                        readDomain(r, sb);
                     } catch (Throwable e) {
                         e.printStackTrace();
                         break;
@@ -566,8 +521,8 @@ public class DnsServer implements Router {
                 case Q_SOA: {
                     CharList sb = new CharList(100).append("Src: ");
                     try {
-                        _r_domain_name(r, sb);
-                        _r_domain_name(r, sb.append(", Owner: "));
+                        readDomain(r, sb);
+                        readDomain(r, sb.append(", Owner: "));
                         sb.append(", ZoneId(SERIAL): ").append(Long.toString(r.readUInt()))
                           .append(", ZoneTtl(REFRESH): ").append(Long.toString(r.readUInt()))
                           .append(", Retry: ").append(Long.toString(r.readUInt()))
@@ -583,7 +538,7 @@ public class DnsServer implements Router {
                     CharList sb = new CharList(100).append("[");
                     try {
                         while (r.remaining() > 0) {
-                            sb.append(_r_character_string(r)).append(", ");
+                            sb.append(readCharacter(r)).append(", ");
                         }
                         sb.setIndex(sb.length() - 2);
                         sb.append(']');
@@ -640,8 +595,8 @@ public class DnsServer implements Router {
                 case Q_PTR:
                     try {
                         CharList sb = new CharList(30);
-                        _r_mayindex_dn(rd, rx, sb);
-                        _w_domain_name(wd, sb);
+                        readDomainEx(rd, rx, sb);
+                        writeDomain(wd, sb);
                     } catch (Throwable e) {
                         e.printStackTrace();
                     }
@@ -650,8 +605,8 @@ public class DnsServer implements Router {
                     try {
                         int pref = rd.readUnsignedShort();
                         CharList sb = new CharList(30);
-                        _r_mayindex_dn(rd, rx, sb);
-                        _w_domain_name(wd.putShort(pref), sb);
+                        readDomainEx(rd, rx, sb);
+                        writeDomain(wd.putShort(pref), sb);
                     } catch (Throwable e) {
                         e.printStackTrace();
                     }
@@ -659,11 +614,11 @@ public class DnsServer implements Router {
                 case Q_SOA: {
                     try {
                         CharList sb = new CharList(30);
-                        _r_mayindex_dn(rd, rx, sb);
-                        _w_domain_name(wd, sb);
+                        readDomainEx(rd, rx, sb);
+                        writeDomain(wd, sb);
                         sb.clear();
-                        _r_mayindex_dn(rd, rx, sb);
-                        _w_domain_name(wd, sb);
+                        readDomainEx(rd, rx, sb);
+                        writeDomain(wd, sb);
                         wd.put(rd.list, rd.rIndex, len - rd.rIndex);
                     } catch (Throwable e) {
                         e.printStackTrace();
@@ -676,7 +631,7 @@ public class DnsServer implements Router {
 
         }
     }
-    
+
     /**
      * 由域名获得IPv4地址
      */
@@ -859,7 +814,7 @@ public class DnsServer implements Router {
         CharList sb = new CharList();
         DnsQuery query = new DnsQuery();
 
-        DatagramSocket server = this.serverSocket;
+        DatagramSocket server = this.local;
 
         while (!Thread.interrupted()) {
             try {
@@ -915,7 +870,7 @@ public class DnsServer implements Router {
                     DnsRecord q = records[i] = new DnsRecord();
                     q.ptr = (short) (0xC000 | bytes.rIndex);
 
-                    _r_domain_name(bytes, sb);
+                    readDomain(bytes, sb);
 
                     q.url = sb.toString();
                     sb.clear();
@@ -927,7 +882,7 @@ public class DnsServer implements Router {
 
                 if(processQuery(bytes, query, false)) {
                     pkt.setLength(bytes.wIndex());
-                    serverSocket.send(pkt);
+                    local.send(pkt);
                 }
             } catch (Exception e) {
                 System.err.println("[Warn] " + pkt.getSocketAddress() + " 的无效数据包");
@@ -942,7 +897,7 @@ public class DnsServer implements Router {
             if(blocked.contains(s))
                 return Collections.emptyList();
             key.url = s;
-            return resolvedCache.getOrDefault(key, Collections.emptyList());
+            return resolved.getOrDefault(key, Collections.emptyList());
         };
 
         int sum = 0, sumA = 0, sumEx = 0;
@@ -955,7 +910,7 @@ public class DnsServer implements Router {
             key.url = dReq.url;
             key.qClass = dReq.qClass;
 
-            List<Record> cRecords = resolvedCache.get(key);
+            List<Record> cRecords = resolved.get(key);
             if (cRecords == null) {
                 if(!isResolved) {
                     forwardDnsRequest(query, w);
@@ -981,8 +936,8 @@ public class DnsServer implements Router {
                     } else {
                         if(cRecord.TTL != 0) {
                             System.out.println("[Warn]这TTL过期有亿点快啊: " + key + ": " + cRecord);
-                            setRCode(query, w, RCODE_SERVER_ERROR);
-                            continue;
+                            //setRCode(query, w, RCODE_SERVER_ERROR);
+                            //continue;
                         }
                     }
                 }
@@ -1046,7 +1001,7 @@ public class DnsServer implements Router {
     public void forwardDnsRequest(DnsQuery query, ByteList clientRequest) {
         //System.out.println("[Dbg]前向请求, " + query);
 
-        List<InetSocketAddress> target = trustedForwardDnsServers;
+        List<InetSocketAddress> target = forwardDns;
 
         DatagramPacket pkt = new DatagramPacket(clientRequest.list, clientRequest.wIndex());
 
@@ -1057,32 +1012,31 @@ public class DnsServer implements Router {
             pkt.setAddress(query.senderIp);
             pkt.setPort(query.senderPort);
             try {
-                serverSocket.send(pkt);
+                local.send(pkt);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             return;
         }
 
-        cleaner.interrupt();
         ForwardQuery request = new ForwardQuery(query, target.size());
         try {
             for (int i = 0; i < target.size(); i++) {
                 pkt.setSocketAddress(target.get(i));
-                pendingRequest.put(new XAddr(target.get(i), query.sessionId), request);
-                receiveSocket.send(pkt);
+                waiting.put(new XAddr(target.get(i), query.sessionId), request);
+                forwardRcv.send(pkt);
             }
-            if(fakeDnsServer != null) {
-                pkt.setSocketAddress(fakeDnsServer);
-                pendingRequest.put(new XAddr(fakeDnsServer, query.sessionId), request);
-                receiveSocket.send(pkt);
+            if(fakeDns != null) {
+                pkt.setSocketAddress(fakeDns);
+                waiting.put(new XAddr(fakeDns, query.sessionId), request);
+                forwardRcv.send(pkt);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public DnsResponse processDnsResponse(DatagramPacket pkt, ByteList r) throws UTFDataFormatException {
+    public static DnsResponse readDnsResponse(DatagramPacket pkt, ByteList r) throws UTFDataFormatException {
         DnsResponse resp = new DnsResponse();
 
         resp.sessionId = (char) r.readUnsignedShort();
@@ -1125,7 +1079,7 @@ public class DnsServer implements Router {
             DnsRecord q = records[i] = new DnsRecord();
             q.ptr = (short) (0xC000 | r.rIndex);
 
-            _r_domain_name(r, sb);
+            readDomain(r, sb);
 
             q.url = sb.toString();
             sb.clear();
@@ -1141,9 +1095,9 @@ public class DnsServer implements Router {
         return resp;
     }
 
-    public static void gather(ByteList r, int num, CharList sb, MyHashMap<RecordKey, List<Record>> map, byte flag) throws UTFDataFormatException {
+    private static void gather(ByteList r, int num, CharList sb, MyHashMap<RecordKey, List<Record>> map, byte flag) throws UTFDataFormatException {
         for (int i = 0; i < num; i++) {
-            _r_mayindex_dn(r, r, sb);
+            readDomainEx(r, r, sb);
 
             RecordKey key = new RecordKey();
             key.url = sb.toString();
@@ -1162,54 +1116,56 @@ public class DnsServer implements Router {
         }
     }
 
-    void processResolvedResponse(ForwardQuery fq) {
+    void forwardQueryDone(ForwardQuery fq) {
         DnsResponse[] responses = fq.responses;
         //System.out.println("[Info]前向请求完成 " + Arrays.toString(responses));
         DnsResponse response = mergeResponse(responses);
-        resolvedCache.putAll(response.response);
+        resolved.putAll(response.response);
         dirty.getAndSet(true);
 
         ByteList w = new ByteList(512);
-        DnsQuery query = fq.query;
-        w.putShort(query.sessionId)
-         .putShort((1 << 15) | (query.opcode << 12) | (response.authorizedAnswer ? 1 << 11 : 0) | (response.iterate ? 1 << 8 : 0) | RCODE_OK) // flag
-         .putShort(query.records.length).putShort(0).putInt(0);
+        w.putShort(fq.sessionId)
+         .putShort((1 << 15) | (fq.opcode << 12) | (response.authorizedAnswer ? 1 << 11 : 0) | (response.iterate ? 1 << 8 : 0) | RCODE_OK) // flag
+         .putShort(fq.records.length).putShort(0).putInt(0);
 
-        for (DnsRecord req : query.records) {
-            _w_domain_name(w, req.url);
+        for (DnsRecord req : fq.records) {
+            writeDomain(w, req.url);
             w.putShort(req.qType).putShort(req.qClass);
         }
 
-        processQuery(w, query, true);
+        processQuery(w, fq, true);
 
         DatagramPacket pkt = new DatagramPacket(w.list, w.wIndex());
-        pkt.setAddress(query.senderIp);
-        pkt.setPort(query.senderPort);
+        pkt.setAddress(fq.senderIp);
+        pkt.setPort(fq.senderPort);
 
         try {
-            serverSocket.send(pkt);
+            local.send(pkt);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
+    /**
+     * todo merge better？
+     */
     private DnsResponse mergeResponse(DnsResponse[] responses) {
         return responses[0];
     }
 
-    void maybeRecvData(DatagramPacket pkt, XAddr addr) {
+    void handleUnknown(DatagramPacket pkt, XAddr addr) {
         DnsResponse response;
         try {
-            response = processDnsResponse(pkt, new ByteList(pkt.getData()));
+            response = readDnsResponse(pkt, new ByteList(pkt.getData()));
             System.out.println("[Warn] 接受未被处理的数据包 " + addr);
-            resolvedCache.putAll(response.response);
+            resolved.putAll(response.response);
         } catch (Throwable e) {
             System.err.println("[Error] 未被处理的'可信'数据包无效 " + addr);
             e.printStackTrace();
         }
     }
 
-    public static void _r_mayindex_dn(ByteList r, ByteList rx, CharList sb) throws UTFDataFormatException {
+    public static void readDomainEx(ByteList r, ByteList rx, CharList sb) throws UTFDataFormatException {
         int len;
         do {
             len = r.readUnsignedByte();
@@ -1218,7 +1174,7 @@ public class DnsServer implements Router {
                     throw new RuntimeException("Illegal label length " + len);
                 int ri = rx.rIndex;
                 rx.rIndex = ((len & ~0xC0) << 8) | r.readUByte();
-                _r_mayindex_dn(rx, rx, sb);
+                readDomainEx(rx, rx, sb);
                 rx.rIndex = ri + (r == rx ? 1:0);
                 return;
             }
@@ -1227,7 +1183,18 @@ public class DnsServer implements Router {
         sb.setIndex(sb.length() - 2);
     }
 
-    public static void _w_domain_name(ByteList w, CharSequence sb) {
+    public static void readDomain(ByteList r, CharList sb) throws UTFDataFormatException {
+        int len;
+        do {
+            len = r.readUnsignedByte();
+            if((len & 0xC0) != 0)
+                throw new IllegalArgumentException("Illegal label length " + len);
+            sb.append(r.readUTF(len)).append(".");
+        } while (len > 0);
+        sb.setIndex(sb.length() - 2);
+    }
+
+    public static void writeDomain(ByteList w, CharSequence sb) {
         int prev = 0, i = 0;
         for (; i < sb.length(); i++) {
             char c = sb.charAt(i);
@@ -1253,24 +1220,13 @@ public class DnsServer implements Router {
         }
     }
 
-    public static void _r_domain_name(ByteList r, CharList sb) throws UTFDataFormatException {
-        int len;
-        do {
-            len = r.readUnsignedByte();
-            if((len & 0xC0) != 0)
-                throw new IllegalArgumentException("Illegal label length " + len);
-            sb.append(r.readUTF(len)).append(".");
-        } while (len > 0);
-        sb.setIndex(sb.length() - 2);
-    }
-
-    public static String _r_character_string(ByteList r) throws UTFDataFormatException {
+    public static String readCharacter(ByteList r) throws UTFDataFormatException {
         return r.readUTF(r.readUnsignedByte());
     }
 
     @Override
     public int readTimeout() {
-        return 10000;
+        return 5000;
     }
 
     @Override
@@ -1280,7 +1236,7 @@ public class DnsServer implements Router {
                 return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
             case "/":
             case "": {
-                StringBuilder sb = new StringBuilder().append("<title>AsyncDns 1.0</title><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.0</h1>");
+                StringBuilder sb = new StringBuilder().append("<title>AsyncDns 1.2</title><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.2</h1>");
 
                 String msg = request.getFields().get("msg");
                 if (msg != null) {
@@ -1333,7 +1289,7 @@ public class DnsServer implements Router {
 
                     if (type.startsWith("-")) {
                         if(type.equals("-1"))
-                            msg = (resolvedCache.remove(key) == null) ? "不存在" : "已清除";
+                            msg = (resolved.remove(key) == null) ? "不存在" : "已清除";
                         else
                             msg = blocked.add(url) ? "屏蔽完成" : "已存在";
                     } else {
@@ -1354,7 +1310,7 @@ public class DnsServer implements Router {
                                 case Q_NS:
                                 case Q_PTR:
                                     ByteList w = new ByteList(32);
-                                    _w_domain_name(w, cnt);
+                                    writeDomain(w, cnt);
                                     e.data = w.toByteArray();
                                     break;
                                 default:
@@ -1363,7 +1319,7 @@ public class DnsServer implements Router {
                         }
 
                         if(msg == null) {
-                            List<Record> records = resolvedCache.computeIfAbsent(key, Helpers.fnArrayList());
+                            List<Record> records = resolved.computeIfAbsent(key, Helpers.fnArrayList());
                             key.lock.enqueueWriteLock();
                             records.clear();
                             records.add(e);
@@ -1390,128 +1346,5 @@ public class DnsServer implements Router {
     @Override
     public boolean checkAction(int action) {
         return action == roj.net.tcp.util.Action.POST || action == roj.net.tcp.util.Action.GET;
-    }
-
-    public static void main(String[] args) throws IOException {
-        int httpPort = -1, dnsPort = 53;
-        String controlIp = "127.0.0.1";
-        MyHashSet<InputStream> files = new MyHashSet<>(), blocked = new MyHashSet<>();
-        File cache = null;
-
-        CMapping cfg = new CMapping();
-        cfg.getOrCreateList("trustedDnsServers").add(new CString("223.5.5.5:53"));
-        cfg.put("forwarderReceive", 40000);
-        cfg.put("requestTimeout", 5000);
-
-        for(int i = 0; i < args.length; i++) {
-            switch(args[i]) {
-                case "-auto":
-                    httpPort = 8818;
-                    blocked.add(DnsServer.class.getClassLoader().getResourceAsStream("META-INF/15_optimized.txt"));
-                    blocked.add(DnsServer.class.getClassLoader().getResourceAsStream("META-INF/adguard.txt"));
-                    break;
-                case "-config":
-                    try {
-                        cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[++i]))).asMap();
-                    } catch (ClassCastException | ParseException e) {
-                        e.printStackTrace();
-                        return;
-                    }
-                    break;
-                case "-http":
-                    httpPort = Integer.parseInt(args[++i]);
-                    break;
-                case "-control":
-                    controlIp = args[++i].equals("*") ? null : args[i];
-                    break;
-                case "-cache":
-                    cache = new File(args[++i]);
-                    break;
-                case "-hosts":
-                    while (!args[++i].equals("---"))
-                        files.add(new FileInputStream(args[i]));
-                    break;
-                case "-block":
-                    while (!args[++i].equals("---"))
-                        blocked.add(new FileInputStream(args[i]));
-                    break;
-                default:
-                    throw new IllegalArgumentException("未知 " + args[i]);
-            }
-        }
-
-        InetAddress addr = controlIp == null ? null : InetAddress.getByAddress(NetworkUtil.ip2bytes(controlIp));
-
-        /**
-         * Init DNS Server
-         */
-
-
-        InetSocketAddress address = new InetSocketAddress(addr, dnsPort);
-        System.out.println("Dns listening on " + address);
-        DnsServer dns = new DnsServer(cfg, address);
-        for (InputStream file : files) {
-            dns.loadHosts(file);
-        }
-        for (InputStream file : blocked) {
-            dns.loadBlocked(file);
-        }
-        dns.cacheFile = cache;
-        if (cache != null && cache.isFile())
-            try {
-                dns.load();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        /**
-         * Run HTTP Server
-         */
-
-        if(httpPort != -1) {
-            InetSocketAddress ha = new InetSocketAddress(addr, httpPort);
-            Thread http = new Thread(new HttpServer(ha, 256, dns));
-            http.setDaemon(true);
-            http.setName("Http Server");
-            http.start();
-            System.out.println("Http listening on " + ha);
-        }
-
-        /**
-         * Auto save
-         */
-
-        if(cache != null) {
-            Thread saver = new Thread(() -> {
-                while (true) {
-                    try {
-                        Thread.sleep(600 * 1000);
-                        dns.save();
-                    } catch (InterruptedException | IOException e) {
-                        break;
-                    }
-                }
-            });
-            saver.setDaemon(true);
-            saver.setName("Dns Saver");
-            saver.start();
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                try {
-                    dns.save();
-                } catch (IOException ignored) {
-                }
-            }));
-        }
-
-        /**
-         * Use main thread as DNS Server
-         */
-
-        System.out.println("Welcome, to a cleaner world, " + System.getProperty("user.name", "user") + " !\n");
-        //roj.misc.CpFilter.registerShutdownHook();
-
-        Thread.currentThread().setName("Dns Server");
-        dns.run();
     }
 }

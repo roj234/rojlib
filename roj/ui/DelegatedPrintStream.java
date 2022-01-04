@@ -191,4 +191,12 @@ public abstract class DelegatedPrintStream extends PrintStream {
         this.print(var2);
         this.newLine();
     }
+
+    public CharList getChars() {
+        return sb;
+    }
+
+    public int getMax() {
+        return MAX;
+    }
 }

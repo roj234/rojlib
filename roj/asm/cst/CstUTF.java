@@ -26,7 +26,7 @@
 
 package roj.asm.cst;
 
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * @author Roj234
@@ -52,7 +52,7 @@ public final class CstUTF extends Constant {
     }
 
     @Override
-    public void write(ByteWriter w) {
+    public void write(ByteList w) {
         w.put(CstType.UTF).putJavaUTF(data);
     }
 

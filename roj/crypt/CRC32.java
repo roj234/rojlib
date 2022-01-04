@@ -48,7 +48,7 @@ public class CRC32 implements Checksum {
                 if ((c & 1) == 1) {
                     c = (c >>> 1) ^ 0xEDB88320;
                 } else {
-                    c = c >>> 1;
+                    c >>>= 1;
                 }
 
             }

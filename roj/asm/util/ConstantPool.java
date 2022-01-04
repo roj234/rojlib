@@ -34,7 +34,6 @@ import roj.concurrent.OperationDone;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.Idx;
 
 import javax.annotation.Nonnull;
@@ -71,7 +70,20 @@ public class ConstantPool {
         this.refMap = new MyHashSet<>(cst.length);
     }
 
+    @Deprecated
     public void read(ByteReader r) {
+        ByteList l = r.bytes;
+        int ri = l.rIndex;
+        l.rIndex = r.rIndex;
+        try {
+            read(l);
+        } finally {
+            r.rIndex = l.rIndex;
+            l.rIndex = ri;
+        }
+    }
+
+    public void read(ByteList r) {
         Constant[] cst = this.cst;
         Idx idx = new Idx(cst.length);
 
@@ -188,7 +200,7 @@ public class ConstantPool {
         return null;
     }
 
-    static Constant readConstant(ByteReader r) {
+    static Constant readConstant(ByteList r) {
         short b = r.readUByte();
         if (CstType.toString(b) == null)
             throw new IllegalArgumentException("Illegal constant type " + b);
@@ -248,12 +260,27 @@ public class ConstantPool {
     }
 
     @Nonnull
+    public Constant get(ByteList r) {
+        int id = r.readUnsignedShort();
+        // noinspection all
+        return id == 0 ? null : constants.get(id - 1);
+    }
+
+    public String getName(ByteList r) {
+        int id = r.readUnsignedShort() - 1;
+
+        return id < 0 ? null : ((CstClass) constants.get(id)).getValue().getString();
+    }
+
+    @Nonnull
+    @Deprecated
     public Constant get(ByteReader r) {
         int id = r.readUnsignedShort();
         // noinspection all
         return id == 0 ? null : constants.get(id - 1);
     }
 
+    @Deprecated
     public String getName(ByteReader r) {
         int id = r.readUnsignedShort() - 1;
 
@@ -640,7 +667,7 @@ public class ConstantPool {
         return constants;
     }
 
-    public void write(ByteWriter w) {
+    public void write(ByteList w) {
         w.putShort(index);
         List<Constant> csts = this.constants;
         for (int i = 0; i < csts.size(); i++) {

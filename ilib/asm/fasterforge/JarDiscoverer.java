@@ -43,7 +43,6 @@ import roj.io.MutableZipFile;
 import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import net.minecraftforge.fml.common.*;
 import net.minecraftforge.fml.common.discovery.ASMDataTable;
@@ -68,8 +67,10 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
 
         File file = new File("modAnnotationCache.bin");
         if (file.isFile()) {
+            ByteList r = IOUtil.getSharedByteBuf();
             try (FileInputStream fis = new FileInputStream(file)) {
-                ByteReader r = new ByteReader(IOUtil.read(fis));
+                r.clear();
+                r.readStreamFully(fis);
 
                 if (r.readInt() != 0x22332233) {
                     FMLLog.bigWarning("缓存文件错误");
@@ -78,7 +79,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
 
                 StringPool pool = new StringPool(r);
                 ConstantPool cp = new ConstantPool(r.readUnsignedShort());
-                cp.read(r);
+                cp.read(new ByteReader(r));
                 int len = r.readVarInt(false);
                 store.ensureCapacity(len);
                 for (int i = 0; i < len; i++) {
@@ -99,7 +100,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 StringPool sp = new StringPool();
                 ConstantPool cw = new ConstantPool();
 
-                ByteWriter w = new ByteWriter(2333);
+                ByteList w = new ByteList(2333);
 
                 w.putVarInt(store.size(), false);
                 for (Map.Entry<String, JarInfo> entry : store.entrySet()) {
@@ -113,12 +114,11 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 fos.write(0x33);
                 sp.writePool(fos);
 
-                ByteList list = w.list;
-                w.list = new ByteList();
-                cw.write(w);
+                ByteList list = new ByteList();
+                cw.write(list);
 
-                w.list.writeToStream(fos);
                 list.writeToStream(fos);
+                w.writeToStream(fos);
             } catch (IOException e) {
                 e.printStackTrace();
             }

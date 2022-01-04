@@ -25,14 +25,15 @@
  */
 package roj.net.cross.server;
 
-import roj.net.cross.Pipe;
-import roj.net.cross.PipeIOThread;
 import roj.net.cross.server.AEServer.PipeGroup;
 import roj.net.cross.server.AEServer.Worker;
+import roj.net.misc.Pipe;
+import roj.net.misc.PipeIOThread;
 import roj.net.tcp.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.TIMEOUT_HEART_SERVER;
@@ -45,6 +46,7 @@ import static roj.net.cross.Util.syncPrint;
  */
 final class PipeLogin extends Stated {
     public static final PipeLogin PIPE_LOGIN = new PipeLogin();
+    public static final Stated PIPE_OK = new PipeLogin();
 
     @Override
     Stated next(Worker W) throws IOException {
@@ -56,7 +58,7 @@ final class PipeLogin extends Stated {
         int heart = TIMEOUT_HEART_SERVER;
         while (!W.server.shutdown) {
             int read;
-            if ((read = ch.read(14 - rb.position())) == 0 && rb.position() < 14) {
+            if ((read = ch.read(8 - rb.position())) == 0 && rb.position() < 8) {
                 LockSupport.parkNanos(20);
                 if (heart-- < 0) {
                     syncPrint(W + ": 登录超时");
@@ -66,30 +68,40 @@ final class PipeLogin extends Stated {
             }
 
             if (read < 0) break;
-            Integer user = rb.getInt(6);
-            int pass = rb.getInt(10);
+            Integer user = rb.getInt(0);
+            W.clientId = user;
+            int pass = rb.getInt(4);
 
             PipeGroup group = W.server.pipes.get(user);
-            if (group == null) syncPrint(W + ": 无效的管道ID");
+            if (group == null) syncPrint(W + ": 无效的管道 @" + pass);
             else {
-                if (group.upPass != null && group.upPass == pass) {
+                if (group.upConnFD == null && group.upPass == pass) {
                     group.upConnFD = ch.fd();
-                    W.ch = null;
-                } else if (group.downPass != null && group.downPass == pass) {
+                } else if (group.downConnFD == null && group.downPass == pass) {
                     group.downConnFD = ch.fd();
-                    W.ch = null;
                 } else {
-                    syncPrint(W + ": 无效的管道密码");
+                    syncPrint(W + " 密码无效");
                     break;
                 }
-                if (group.downPass == null && group.upPass == null) {
+                if (group.upConnFD != null && group.downConnFD != null) {
                     W.server.pipes.remove(user);
                     group.life = 1;
                     Pipe sp = new Pipe(group.downConnFD, group.upConnFD);
                     group.pairRef = sp;
+                    group.downOwner.pendingPipeOpen();
 
-                    PipeIOThread.syncRegister(W.server, sp, null);
+                    syncPrint(" 管道 #" + user + " 已开启");
+                    AtomicInteger i = W.server.connected;
+                    try {
+                        PipeIOThread.syncRegister(W.server, sp, pipe -> {
+                            i.decrementAndGet(); i.decrementAndGet();
+                            syncPrint("管道 #" + user + " 已终止");
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
+                return PIPE_OK;
             }
             break;
         }

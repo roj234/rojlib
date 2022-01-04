@@ -27,8 +27,7 @@ package ilib.asm.fasterforge.anc;
 
 import roj.asm.util.ConstantPool;
 import roj.text.StringPool;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,11 +35,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
- * @since 2021/4/21 22:51java
+ * @since 2021/4/21 22:51
  */
 public class JarInfo {
     public final Map<String, ClassInfo> classes;
@@ -55,7 +52,7 @@ public class JarInfo {
         this.mainClasses = mainClasses;
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool, ConstantPool cw) {
+    public void toByteArray(ByteList w, StringPool pool, ConstantPool cw) {
         w.putVarInt(classes.size(), false);
         for (Map.Entry<String, ClassInfo> entry : classes.entrySet()) {
             pool.writeString(w, entry.getKey());
@@ -67,7 +64,7 @@ public class JarInfo {
         }
     }
 
-    public static JarInfo fromByteArray(ByteReader r, StringPool pool, ConstantPool cp) {
+    public static JarInfo fromByteArray(ByteList r, StringPool pool, ConstantPool cp) {
         int len = r.readVarInt(false);
         Map<String, ClassInfo> map = new HashMap<>(len);
         for (int i = 0; i < len; i++) {

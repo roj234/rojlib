@@ -30,8 +30,8 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -84,7 +84,7 @@ public final class AttrInnerClasses extends Attribute {
     public final List<InnerClass> classes;
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort(classes.size());
         for (int i = 0; i < classes.size(); i++) {
             InnerClass clazz = classes.get(i);

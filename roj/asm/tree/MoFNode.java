@@ -31,7 +31,7 @@ import roj.asm.type.Type;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.List;
 
@@ -43,7 +43,7 @@ import java.util.List;
  * @since 2021/5/12 0:23
  */
 public interface MoFNode {
-    void toByteArray(ConstantPool pool, ByteWriter w);
+    void toByteArray(ConstantPool pool, ByteList w);
 
     String name();
 

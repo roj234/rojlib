@@ -28,8 +28,8 @@ package roj.asm.tree.anno;
 
 import roj.asm.cst.*;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,7 +56,20 @@ public abstract class AnnVal {
 
     AnnVal() {}
 
+    @Deprecated
     public static AnnVal parse(ConstantPool pool, ByteReader r) {
+        ByteList l = r.bytes;
+        int ri = l.rIndex;
+        l.rIndex = r.rIndex;
+        try {
+            return parse(pool, l);
+        } finally {
+            r.rIndex = l.rIndex;
+            l.rIndex = ri;
+        }
+    }
+
+    public static AnnVal parse(ConstantPool pool, ByteList r) {
         int type = r.readUByte();
 
         switch (type) {
@@ -102,7 +115,7 @@ public abstract class AnnVal {
 
     public abstract byte type();
 
-    public abstract void toByteArray(ConstantPool pool, ByteWriter w);
+    public abstract void toByteArray(ConstantPool pool, ByteList w);
 
     public abstract String toString();
 }

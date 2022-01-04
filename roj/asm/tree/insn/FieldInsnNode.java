@@ -33,7 +33,7 @@ import roj.asm.tree.Field;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import static roj.asm.Opcodes.*;
 
@@ -107,7 +107,7 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
         return owner;
     }
 
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         w.put(code).putShort(cw.getFieldRefId(owner, name, ParamHelper.getField(type)));
     }
 

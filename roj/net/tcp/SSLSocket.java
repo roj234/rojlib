@@ -71,33 +71,10 @@ public class SSLSocket extends PlainSocket {
 
     private int appBufSize, netBufSize;
 
-    /*
-     * All I/O goes through these buffers.
-     * <P>
-     * It might be nice to use a cache of ByteBuffers so we're
-     * not alloc/dealloc'ing ByteBuffer's for each new SSLEngine.
-     * <P>
-     * We use our superclass' requestBB for our application input buffer.
-     * Outbound application data is supplied to us by our callers.
-     */
     private ByteBuffer networkIn, networkOut;
 
-    /*
-     * An empty ByteBuffer for use when one isn't available, say
-     * as a source buffer during initial handshake wraps or for close
-     * operations.
-     */
     static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
-    /*
-     * During our initial handshake, keep track of the next
-     * SSLEngine operation that needs to occur:
-     *
-     *     NEED_WRAP/NEED_UNWRAP
-     *
-     * Once the initial handshake has completed, we can short circuit
-     * handshake checks with initialHSComplete.
-     */
     private HandshakeStatus status;
     private boolean hsDone;
 
@@ -479,9 +456,17 @@ public class SSLSocket extends PlainSocket {
     }
 
     @Override
-    public void reuse() throws IOException {
+    public void close() throws IOException {
+        super.close();
+        NIOUtil.clean(networkIn);
+        NIOUtil.clean(networkOut);
+        networkIn = networkOut = null;
+    }
+
+    @Override
+    public void reset() throws IOException {
         if (shutdown)
-            throw new IOException("Stream closed.");
+            throw new IOException("Socket closed.");
         hsDone = false;
         rBuf.clear();
 

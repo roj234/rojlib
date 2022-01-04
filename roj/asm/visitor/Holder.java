@@ -26,8 +26,8 @@
 package roj.asm.visitor;
 
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 /**
  * 公共数据容器
@@ -37,8 +37,9 @@ import roj.util.ByteWriter;
  * @since 2021/10/4 11:57
  */
 public abstract class Holder {
-    public ByteWriter   bw;
+    public ByteList     bw;
     public ConstantPool cw;
+
     public ByteReader   br;
     public ConstantPool cp;
 

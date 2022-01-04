@@ -29,7 +29,7 @@ import roj.asm.tree.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -47,7 +47,7 @@ public final class ReflectMNode implements MoFNode {
     public ReflectMNode(Method method) {this.method = method;}
 
     @Override
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         throw new UnsupportedOperationException();
     }
 

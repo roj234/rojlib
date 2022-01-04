@@ -31,8 +31,6 @@ import roj.util.ByteReader;
 import roj.util.Helpers;
 
 /**
- * Your description here
- *
  * @author Roj233
  * @version 0.1
  * @since 2021/8/16 18:12
@@ -87,14 +85,14 @@ public class IVisitor extends Holder {
     }
 
     public void visitNodes(int count) {
-        amountIndex = bw.list.wIndex();
+        amountIndex = bw.wIndex();
         amount = 0;
         bw.putShort(0);
     }
 
     public void visitNode(int acc, String name, String desc, int count) {
         bw.putShort(acc).putShort(cw.getUtfId(name)).putShort(cw.getUtfId(desc));
-        attrAmountIndex = bw.list.wIndex();
+        attrAmountIndex = bw.wIndex();
         attrAmount = 0;
         bw.putShort(0);
     }
@@ -111,20 +109,20 @@ public class IVisitor extends Holder {
 
     public void visitEndNode() {
         if (attrAmount > 0) {
-            int pos = bw.list.wIndex();
-            bw.list.wIndex(attrAmountIndex);
+            int pos = bw.wIndex();
+            bw.wIndex(attrAmountIndex);
             bw.putShort(attrAmount);
-            bw.list.wIndex(pos);
+            bw.wIndex(pos);
         }
         amount++;
     }
 
     public void visitEndNodes() {
         if (amount > 0) {
-            int pos = bw.list.wIndex();
-            bw.list.wIndex(amountIndex);
+            int pos = bw.wIndex();
+            bw.wIndex(amountIndex);
             bw.putShort(amount);
-            bw.list.wIndex(pos);
+            bw.wIndex(pos);
         }
     }
 

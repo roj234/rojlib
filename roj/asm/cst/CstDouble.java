@@ -26,11 +26,9 @@
 
 package roj.asm.cst;
 
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
@@ -43,7 +41,7 @@ public final class CstDouble extends Constant {
     }
 
     @Override
-    public void write(ByteWriter w) {
+    public void write(ByteList w) {
         w.put(CstType.DOUBLE).putDouble(value);
     }
 

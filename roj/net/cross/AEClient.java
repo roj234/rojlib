@@ -26,10 +26,15 @@
 package roj.net.cross;
 
 import roj.concurrent.task.ITaskNaCl;
+import roj.config.word.AbstLexer;
 import roj.io.NIOUtil;
+import roj.net.misc.Pipe;
+import roj.net.misc.PipeIOThread;
+import roj.net.misc.Shutdownable;
 import roj.net.tcp.MSSSocket;
 import roj.net.tcp.PlainSocket;
 import roj.net.tcp.WrappedSocket;
+import roj.util.FastLocalThread;
 import roj.util.Helpers;
 
 import java.io.EOFException;
@@ -86,6 +91,12 @@ public class AEClient extends IAEClient implements Shutdownable {
         }
     }
 
+    public void chat(int clientId, String message) throws IOException, InterruptedException {
+        if (!lock.tryTransfer(new Object[] { clientId, message.getBytes(StandardCharsets.UTF_8) }, 100, TimeUnit.MILLISECONDS)) {
+            throw new IOException("Int-wait timeout");
+        }
+    }
+
     final Pipe requestSocketPair(int portMapId) throws IOException {
         if (free == null)
             throw new IOException("Client closed");
@@ -136,7 +147,7 @@ public class AEClient extends IAEClient implements Shutdownable {
             if (p == null) return;
             this.portMap = p.ports;
 
-            this.free = Helpers.cast(new ArrayList<?>[p.ports.size()]);
+            this.free = Helpers.cast(new List<?>[p.ports.size()]);
             Arrays.fill(free, Collections.emptyList());
             this.servers = new FakeServer[p.ports.size()];
 
@@ -151,7 +162,7 @@ public class AEClient extends IAEClient implements Shutdownable {
             conn:
             while (!shutdown) {
                 int read;
-                if ((read = ch.read(except - rb.position())) == 0 || rb.position() < except) {
+                if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                     LockSupport.parkNanos(50);
 
                     checkInterrupt:
@@ -162,7 +173,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                             SpAttach att = (SpAttach) ((Pipe) _int).att;
                             rb.put((byte) P_CHANNEL_OP)
                               .putInt(att.channelId)
-                              .put((byte) OP_SET_INACTIVE).flip();
+                              .put((byte) OP_SET_INACTIVE);
 
                             List<Pipe> pairs = free[att.portId];
                             if (pairs == Collections.EMPTY_LIST)
@@ -171,6 +182,10 @@ public class AEClient extends IAEClient implements Shutdownable {
 
                             msgbox = 无事发生;
                             state = CheckServerAlive;
+                        } else if (_int instanceof Object[]) {
+                            Object[] msg = (Object[]) _int;
+                            byte[] mb = (byte[]) msg[1];
+                            rb.put((byte) P_MSG).putInt((int) msg[0]).put((byte) mb.length).put(mb).flip();
                         } else {
                             if (socketsById.size() > MAX_CHANNEL_COUNT) {
                                 msgbox = "频道过多";
@@ -179,6 +194,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                             }
 
                             int i = (int) _int;
+                            integerInt:
                             if (i == -1) {
                                 lock.poll();
                             } else if (i == -2) {
@@ -194,48 +210,55 @@ public class AEClient extends IAEClient implements Shutdownable {
                                     PortMapEntry entry = portMap.get(i);
                                     if (entry.enabled) {
                                         servers[i] = new FakeServer(entry.port, i, MAX_CHANNEL_COUNT);
+                                        System.out.println("FSL #" + i + " 已在端口 " + (int)entry.port + " 上启动");
+                                        servers[i].start();
                                     }
                                 }
                                 lock.poll();
                             } else {
                                 List<Pipe> pairs = free[i];
-                                if (pairs.isEmpty()) {
-                                    byte[] cipher = new byte[32];
-                                    rnd.nextBytes(cipher);
-                                    rb.put((byte) PS_REQUEST_CHANNEL)
-                                      .put((byte) i)
-                                      .put(cipher).flip();
-                                    state = cipher;
-
-                                    msgbox = 无事发生;
-                                } else {
+                                useCurrentPipe:
+                                if (!pairs.isEmpty()) {
                                     Pipe target = pairs.get(pairs.size() - 1);
                                     if (!target.isEof() || target.isReleased()) {
-                                        syncPrint("不应在此时出现 NOT_EOF/RELEASED #" + target.att);
+                                        syncPrint("管道 #" + ((SpAttach) target.att).channelId + " 报废了");
+                                        break useCurrentPipe;
                                     }
 
                                     rb.put((byte) P_CHANNEL_OP)
                                       .putInt(((SpAttach) target.att).channelId)
-                                      .put((byte) OP_SET_ACTIVE).flip();
+                                      .put((byte) OP_SET_ACTIVE);
 
                                     msgbox = target;
                                     lock.poll();
                                     state = CheckServerAlive;
+                                    break integerInt;
                                 }
+                                byte[] cipher = new byte[32];
+                                rnd.nextBytes(cipher);
+                                rb.put((byte) PS_REQUEST_CHANNEL)
+                                  .put((byte) i)
+                                  .put(cipher);
+                                state = cipher;
+
+                                msgbox = 无事发生;
                             }
                         }
 
-                        if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
+                        rb.flip();
+                        if (rb.limit() > 0 && writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
                             msgbox = "操作超时";
                             lock.poll();
                             break;
                         }
+                        rb.clear();
                     }
 
                     if (heartbeat(ch, --heart, false)) continue;
                     break;
                 }
-                if (read < 0) throw new IOException( "连接非正常断开: " + read);
+
+                if (read < 0) throw new EOFException("未预料的连接关闭: " + read);
 
                 if (state == CheckServerAlive) {
                     if (msgbox == 无事发生)
@@ -248,7 +271,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                     case P_HEARTBEAT:
                         break;
                     case P_LOGOUT:
-                        syncPrint(this + ": 连接断开");
+                        syncPrint(" 连接断开");
                         break conn;
                     case PS_CHANNEL_CLOSE:
                         if(rb.position() < 9) {
@@ -291,16 +314,36 @@ public class AEClient extends IAEClient implements Shutdownable {
                         rb.get(ciphers, 32, 32);
                         long pipeId = rb.getLong();
                         pair = pipeLogin(pipeId, ciphers);
-                        socketsById.put((int) (pipeId >> 32), pair);
+                        SpAttach att = new SpAttach();
+                        pair.att = att;
+                        socketsById.put(att.channelId = (int) (pipeId >> 32), pair);
                         msgbox = pair;
-                        lock.poll();
+                        att.portId = ((Number)lock.poll()).byteValue();
+                        syncPrint(" 申请管道 #" + Long.toHexString(pipeId >>> 32) + "@" + Long.toHexString(pipeId));
+                        break;
+                    case P_MSG:
+                        if (rb.position() < 6) {
+                            except = 6;
+                            continue;
+                        }
+                        if (rb.position() < (rb.get(5) & 0xFF) + 6) {
+                            except = (rb.get(5) & 0xFF) + 6;
+                            continue;
+                        }
+                        rb.flip().position(4);
+                        byte[] tmp = new byte[rb.get() & 0xFF];
+                        rb.get(tmp);
+
+                        int target = rb.getInt(1);
+                        syncPrint(" 客户端 #" + rb.getInt(1) + " 向你说 \"" + AbstLexer.addSlashes(
+                                new String(tmp, StandardCharsets.UTF_8)) + "\"");
                         break;
                     default:
                         int bc = (rb.get(0) & 0xFF) - 0x20;
                         if(rb.position() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
-                            syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+                            syncPrint(" 错误 " + ERROR_NAMES[bc]);
                         } else {
-                            syncPrint(this + ": 未知数据包: " + dumpBuffer(rb));
+                            syncPrint(" 未知数据包: " + dumpBuffer(rb));
                         }
                         rb.clear();
                         break conn;
@@ -313,6 +356,10 @@ public class AEClient extends IAEClient implements Shutdownable {
             try {
                 write1(ch, (byte) P_LOGOUT);
             } catch (IOException ignored) {}
+            int t = 1000;
+            while (ch.read() == 0 && t-- > 0) {
+                LockSupport.parkNanos(10);
+            }
         } catch (Throwable e) {
             onError(ch, e);
         } finally {
@@ -328,6 +375,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                 } catch (IOException ignored) {}
             }
             socketsById.clear();
+            if (servers != null)
             for (FakeServer cn : servers) {
                 if (cn != null) {
                     try {
@@ -355,13 +403,14 @@ public class AEClient extends IAEClient implements Shutdownable {
         if(writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
             throw new SocketTimeoutException("登录发送超时");
         }
+        rb.clear();
 
-        int heart = TIMEOUT_HEART_SERVER;
+        int heart = TIMEOUT_TRANSFER;
         int except = 1;
 
         while (!shutdown) {
             int read;
-            if ((read = ch.read( except - rb.position())) == 0 || rb.position() < except) {
+            if ((read = ch.read( except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(50);
                 if (heart-- < 0) {
                     throw new SocketTimeoutException("等待登录回复超时");
@@ -369,7 +418,8 @@ public class AEClient extends IAEClient implements Shutdownable {
                 continue;
             }
 
-            if (read < 0) throw new EOFException("未预料的连接关闭");
+            if (read < 0) throw new EOFException("未预料的连接关闭: " + read);
+
             switch (rb.get(0) & 0xFF) {
                 case PC_LOGON_C:
                     if (rb.position() < 8) {
@@ -379,8 +429,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                     int infoLen = rb.get(1) & 0xFF;
                     int motdLen = rb.get(2) & 0xFF;
                     int portLen = rb.get(3) & 0xFF;
-                    if (rb.position() < infoLen + motdLen + (portLen << 1) + 8) {
-                        except = infoLen + motdLen + portLen + 8;
+                    if (rb.position() < (except = infoLen + motdLen + (portLen << 1) + 8)) {
                         continue;
                     }
                     rb.position(4);
@@ -398,28 +447,29 @@ public class AEClient extends IAEClient implements Shutdownable {
 
                     syncPrint(this + " 客户端ID: " + clientId);
 
-                    List<PortMapEntry> ports = new ArrayList<>();
-                    while (rb.hasRemaining()) {
+                    if (portLen > 32)
+                        throw new IllegalArgumentException("系统限制: 端口映射数量 < 32");
+                    List<PortMapEntry> ports = new ArrayList<>(portLen);
+                    while (portLen-- > 0) {
                         PortMapEntry port = new PortMapEntry();
                         port.port = rb.getChar();
                         ports.add(port);
                     }
-                    if (ports.size() > 32)
-                        throw new IllegalArgumentException("系统限制: 端口映射数量 < 32");
+                    ch.poll();
 
                     LoginResult logon = new LoginResult();
                     logon.clientId = clientId;
                     logon.ports = ports;
                     return logon;
                 case P_LOGOUT:
-                    syncPrint(this + ": 服务端断开连接");
+                    syncPrint(" 服务端断开连接");
                     return null;
                 default:
                     int bc;
                     if(rb.position() == 1 && (bc = (0xFF & rb.get(0)) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
-                        syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
+                        syncPrint(" 错误 " + ERROR_NAMES[bc]);
                     } else {
-                        syncPrint(this + ": 无效数据包");
+                        syncPrint(" 无效数据包");
                     }
                     return null;
             }
@@ -432,11 +482,13 @@ public class AEClient extends IAEClient implements Shutdownable {
         int                clientId;
     }
 
-    final class FakeServer implements Runnable, ITaskNaCl, Consumer<Pipe> {
+    final class FakeServer extends FastLocalThread implements Runnable, ITaskNaCl, Consumer<Pipe> {
         private final ServerSocket local;
         private final int portId;
 
         public FakeServer(char port, int portId, int backlog) throws IOException {
+            setDaemon(true);
+            setName("AE本地监听器 " + port + "=" + portId);
             ServerSocket s = this.local = new ServerSocket();
             s.setReuseAddress(true);
             s.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), backlog);
@@ -448,8 +500,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                 Socket c;
                 try {
                     c = local.accept();
-                } catch (IOException e) {
-                    e.printStackTrace();
+                } catch (IOException ignored) {
                     break;
                 }
 
@@ -458,7 +509,7 @@ public class AEClient extends IAEClient implements Shutdownable {
                     Pipe pair = requestSocketPair(portId);
                     pair.setClient(NIOUtil.fd(c));
                     PipeIOThread.syncRegister(AEClient.this, pair, this);
-                } catch (IOException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
@@ -481,6 +532,7 @@ public class AEClient extends IAEClient implements Shutdownable {
         @Override
         public void accept(Pipe pair) {
             if (pair.isUpstreamEof() || pair.isReleased()) return;
+            System.out.println("管道已炸 " + pair);
             try {
                 releaseSocketPair(pair);
             } catch (IOException e) {

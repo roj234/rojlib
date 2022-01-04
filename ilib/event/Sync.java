@@ -38,8 +38,6 @@ import roj.collect.ToLongMap;
 import roj.io.FileUtil;
 import roj.util.ByteList;
 import roj.util.ByteList.WriteOnly;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -88,14 +86,15 @@ public class Sync {
             }
         }
 
-        byte[] md5 = new byte[16];
+        ByteList md5 = new ByteList(16);
+        md5.wIndex(16);
         for (Map.Entry<String, ByteList> entry : fileData.entrySet()) {
             ByteList bl = entry.getValue();
             FileUtil.MD5.update(bl.list, 0, bl.wIndex());
-            FileUtil.MD5.digest(md5);
-            ByteReader r = new ByteReader(md5);
+            FileUtil.MD5.digest(md5.list);
             FileUtil.MD5.reset();
-            fileMD5.put(entry.getKey(), r.readLong() ^ r.readLong());
+            md5.rIndex = 0;
+            fileMD5.put(entry.getKey(), md5.readLong() ^ md5.readLong());
         }
 
         ImpLib.logger().info("File syncer registered for " + dir);
@@ -136,7 +135,7 @@ public class Sync {
         ToLongMap<String> serverMD5;
 
         @Override
-        public void fromBytes(ByteReader buf) {
+        public void fromBytes(ByteList buf) {
             int len = buf.readVarInt(false);
             for (int i = 0; i < len; i++) {
                 serverMD5.put(buf.readVarIntUTF(), buf.readLong());
@@ -144,7 +143,7 @@ public class Sync {
         }
 
         @Override
-        public void toBytes(ByteWriter buf) {
+        public void toBytes(ByteList buf) {
             buf.putVarInt(serverMD5.size(), false);
             for (ToLongMap.Entry<String> entry : serverMD5.selfEntrySet()) {
                 buf.putVarIntUTF(entry.k).putLong(entry.v);
@@ -196,7 +195,7 @@ public class Sync {
         }
 
         @Override
-        public void fromBytes(ByteReader buf) {
+        public void fromBytes(ByteList buf) {
             int len = buf.readVarInt(false);
             if(buf.readBoolean()) { // fromClient
                 for (int i = 0; i < len; i++) {
@@ -214,7 +213,7 @@ public class Sync {
         }
 
         @Override
-        public void toBytes(ByteWriter buf) {
+        public void toBytes(ByteList buf) {
             buf.putVarInt(files.size(), false).putBool(fromClient);
             if(fromClient) {
                 for(String key : files.keySet()) {

@@ -84,18 +84,17 @@ final class ClientWork extends Stated {
                     int[] tmp = new int[2];
                     String refused = W.generatePipe(tmp);
                     if (refused != null) {
+                        syncPrint(W + ": 拒绝创建管道: " + refused);
                         openFail(rb, refused);
                         writeAndFlush(ch, rb, 500);
                         break;
                     }
 
-                    rb.limit(rb.limit() + 12);
                     rb.put(0, (byte) P_CHANNEL_RESULT)
                       .putInt(W.clientId)
-                      .putInt(tmp[0]).putInt(tmp[1]); // target is up
+                      .putInt(tmp[0]).putInt(tmp[1]).flip(); // target is up
 
                     W.room.master.sync(rb);
-
                     break;
                 case PS_CHANNEL_CLOSE:
                     if (rb.position() < 5) {
@@ -121,7 +120,8 @@ final class ClientWork extends Stated {
                     pipeId = rb.getInt(1);
                     PipeGroup group = W.getPipe(pipeId);
                     if (group == null || group.pairRef == null) {
-                        syncPrint(W + ": PCOP 无效的管道: " + pipeId);
+                        syncPrint(W + ": 1 无效 #" + pipeId);
+                        write1(ch, (byte) P_FAIL);
                         break;
                     }
                     switch (rb.get() & 0xFF) {
@@ -132,7 +132,27 @@ final class ClientWork extends Stated {
                             group.pairRef.setInactive();
                             break;
                     }
+                    break;
+                case P_MSG:
+                    if (rb.position() < 6) {
+                        except = 6;
+                        continue;
+                    }
+                    if (rb.position() < (rb.get(5) & 0xFF) + 6) {
+                        except = (rb.get(5) & 0xFF) + 6;
+                        continue;
+                    }
+                    except = 1;
 
+                    int target = rb.getInt(1);
+                    Worker to = W.room.clients.get(target);
+                    if (null == to) {
+                        syncPrint(W + ": 2 无效 " + target);
+                        write1(ch, (byte) P_FAIL);
+                        break;
+                    }
+                    rb.putInt(1, W.clientId).flip();
+                    to.sync(rb);
                     break;
                 default:
                     unknownPacket(W, rb);

@@ -43,7 +43,7 @@ public final class JPubKey implements MSSPubKey<PublicKey> {
             JAVARSA = new JPubKey("RSA");
         } catch (NoSuchAlgorithmException e) {
             Helpers.athrow(e);
-            throw (RuntimeException)(Throwable) e;
+            throw null;
         }
     }
 

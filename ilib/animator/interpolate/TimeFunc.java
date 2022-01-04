@@ -26,25 +26,22 @@
 package ilib.animator.interpolate;
 
 import roj.text.StringPool;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/5/27 21:59
  */
 public abstract class TimeFunc {
-    public static TimeFunc fromByteArray(ByteReader r, StringPool pool) {
+    public static TimeFunc fromByteArray(ByteList r, StringPool pool) {
         Factory factory = TFRegistry.registry.get(pool.readString(r));
         if(factory == null)
             throw new IllegalArgumentException("Undefined interpolate function ");
         return factory.readFrom(r, pool);
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool) {
+    public void toByteArray(ByteList w, StringPool pool) {
         pool.writeString(w, factory().name());
     }
 
@@ -59,6 +56,6 @@ public abstract class TimeFunc {
     interface Factory {
         String name();
         TimeFunc createNew();
-        TimeFunc readFrom(ByteReader r, StringPool pool);
+        TimeFunc readFrom(ByteList r, StringPool pool);
     }
 }

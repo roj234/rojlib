@@ -28,11 +28,8 @@ package roj.asm.tree.attr;
 
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/26 23:26
@@ -44,22 +41,19 @@ public abstract class Attribute {
 
     public final String name;
 
-    public final ByteWriter toByteArray(ConstantPool pool, ByteWriter w) {
+    public final void toByteArray(ConstantPool pool, ByteList w) {
         w.putShort(pool.getUtfId(name)).putInt(-1);
-        ByteList list = w.list;
 
-        int lenIdx = list.wIndex();
+        int lenIdx = w.wIndex();
         toByteArray1(pool, w);
-        int cp = list.wIndex();
+        int cp = w.wIndex();
 
-        list.wIndex(lenIdx - 4);
-        w.putInt(cp - lenIdx);
-        list.wIndex(cp);
-
-        return w;
+        w.wIndex(lenIdx - 4);
+        w.putInt(cp - lenIdx)
+         .wIndex(cp);
     }
 
-    void toByteArray1(ConstantPool pool, ByteWriter w) {
+    void toByteArray1(ConstantPool pool, ByteList w) {
         throw new UnsupportedOperationException("On " + this.getClass().getName());
     }
 

@@ -5,7 +5,6 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 /**
  * Class visitor
@@ -16,10 +15,10 @@ import roj.util.ByteWriter;
  */
 public class ClassVisitor {
     public final ConstantPool cw = new ConstantPool();
-    public final ByteWriter   bw = new ByteWriter();
+    public final ByteList     bw = new ByteList();
     public final ByteReader   br = new ByteReader();
 
-    protected final ByteList poolBuf = new ByteList(), klassBuf = new ByteList();
+    protected final ByteList poolBuf = new ByteList();
 
     public IVisitor fieldVisitor, methodVisitor;
     public AttributeVisitor attributeVisitor;
@@ -39,7 +38,7 @@ public class ClassVisitor {
         ByteReader r = this.br;
         r.refresh(b);
 
-        ByteList pb = bw.list = this.poolBuf;
+        ByteList pb = this.poolBuf;
         pb.ensureCapacity(r.length());
         pb.clear();
 
@@ -52,12 +51,11 @@ public class ClassVisitor {
         ConstantPool pool = new ConstantPool(r.readUnsignedShort());
         pool.read(r);
 
-        if (!clearConstant)
-            cw.init(pool);
+        if (!clearConstant) cw.init(pool);
 
         visitConstants(pool);
 
-        ByteList kb = bw.list = this.klassBuf;
+        ByteList kb = bw;
         kb.ensureCapacity(r.length());
         kb.clear();
 
@@ -102,8 +100,7 @@ public class ClassVisitor {
         }
         visitEnd();
 
-        bw.list = pb;
-        cw.write(bw);
+        cw.write(pb);
         cw.clear();
         return pb.put(kb);
     }
@@ -122,7 +119,7 @@ public class ClassVisitor {
      * @param minor 次版本号
      */
     public void visitBegin(int major, int minor) {
-        bw.putInt(0xCAFEBABE).putShort(major).putShort(minor);
+        poolBuf.putInt(0xCAFEBABE).putShort(major).putShort(minor);
     }
 
     /**
@@ -145,7 +142,7 @@ public class ClassVisitor {
     }
 
     public void visitAttributes() {
-        attrAmountIndex = bw.list.wIndex();
+        attrAmountIndex = bw.wIndex();
         attrAmount = 0;
         bw.putShort(0);
     }
@@ -161,9 +158,9 @@ public class ClassVisitor {
     }
 
     public void visitEnd() {
-        int pos = bw.list.wIndex();
-        bw.list.wIndex(attrAmountIndex);
+        int pos = bw.wIndex();
+        bw.wIndex(attrAmountIndex);
         bw.putShort(attrAmount);
-        bw.list.wIndex(pos);
+        bw.wIndex(pos);
     }
 }

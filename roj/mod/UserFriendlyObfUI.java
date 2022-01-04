@@ -37,7 +37,7 @@ import roj.io.MutableZipFile.EFile;
 import roj.io.ZipFileWriter;
 import roj.mapper.SimpleObfuscator;
 import roj.mapper.Util;
-import roj.util.ByteReader;
+import roj.util.ByteList;
 import roj.util.ComboRandom;
 
 import java.io.File;
@@ -81,7 +81,7 @@ public class UserFriendlyObfUI {
         if (!set.getString("随机种子").isEmpty()) {
             byte[] b = set.getString("随机种子").getBytes(StandardCharsets.UTF_8);
             long[] rnd = new long[b.length >> 3];
-            ByteReader r = new ByteReader(b);
+            ByteList r = new ByteList(b);
             for (int i = 0; i < rnd.length; i++) {
                 rnd[i] = r.readLong() + b[rnd.length << 3 + (i & 7)];
             }

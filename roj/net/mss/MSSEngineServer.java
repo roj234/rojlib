@@ -103,6 +103,10 @@ public final class MSSEngineServer extends MSSEngine {
 
         switch (stage) {
             case S_HS_WAIT:
+                // fast-fail preventing useless waiting
+                if (rcv.remaining() < 1) return uf(1);
+                if (rcv.get(0) != (byte) 0x53) return error("无效的协议头, 这也许不是一个MSS客户端");
+
                 if (rcv.remaining() < 6) return uf(6);
                 if (rcv.remaining() < (rcv.getChar(4) << 2) + 6)
                     return uf((rcv.getChar(4) << 2) + 6);
@@ -187,7 +191,6 @@ public final class MSSEngineServer extends MSSEngine {
                     return error("RNDB加密后数据过长");
                 snd.putChar(sndPos - 2, (char) i);
 
-                encoder.setKey(sharedKey, CipheR.ENCRYPT);
                 decoder.setKey(sharedKey, CipheR.DECRYPT);
 
                 stage = DONE_WAIT;
@@ -221,6 +224,8 @@ public final class MSSEngineServer extends MSSEngine {
                         return error("共享密钥有误");
                 }
 
+                encoder.setKey(sharedKey, CipheR.ENCRYPT);
+                decoder.setKey(sharedKey, CipheR.DECRYPT);
                 stage = HS_DONE;
                 return HS_OK;
             case HS_DONE:

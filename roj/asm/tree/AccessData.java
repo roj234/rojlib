@@ -28,7 +28,7 @@ package roj.asm.tree;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.Collections;
 import java.util.List;
@@ -127,7 +127,7 @@ public final class AccessData implements IClass {
         }
 
         @Override
-        public void toByteArray(ConstantPool pool, ByteWriter w) {
+        public void toByteArray(ConstantPool pool, ByteList w) {
             throw new UnsupportedOperationException();
         }
 

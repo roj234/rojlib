@@ -33,7 +33,9 @@ import roj.collect.MyHashSet;
 import roj.io.MutableZipFile;
 import roj.io.MutableZipFile.EFile;
 import roj.math.MutableInt;
-import roj.util.*;
+import roj.util.ByteList;
+import roj.util.EmptyArrays;
+import roj.util.Helpers;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -74,7 +76,7 @@ public class Pack125 {
 
         t = System.currentTimeMillis();
         MutableInt i = new MutableInt();
-        unpack(new ByteReader(data), (name, in) -> {
+        unpack(data, (name, in) -> {
             if (a.get(i.getAndIncrement()) != hashCode(in)) throw new IllegalStateException("At " + name);
         });
         System.out.println("Unpack " + (System.currentTimeMillis() - t));
@@ -117,13 +119,13 @@ public class Pack125 {
         }
     }
 
-    private final ByteWriter w1, w2, w3;
+    private final ByteList w1, w2, w3;
     private int cLen, cpLen;
     private final MyHashSet<LongerCst>[] cw;
 
     static final int HEADER = ('P' << 24) | ('k' << 16) | ('3' << 8) | '0';
 
-    public static void unpack(ByteReader r, BiConsumer<String, ByteList> con) {
+    public static void unpack(ByteList r, BiConsumer<String, ByteList> con) {
         if (r.readInt() != HEADER) throw new IllegalArgumentException("Header mismatch");
         int len = r.readInt() + 1;
         Object[] cp = new Object[len];
@@ -183,7 +185,7 @@ public class Pack125 {
             cp[i] = u;
         }
 
-        ByteWriter w = new ByteWriter();
+        ByteList w = new ByteList();
         Constant[] map = new Constant[512];
         IntList empty = new IntList();
         len = r.readInt();
@@ -220,22 +222,22 @@ public class Pack125 {
                 map[j].write(w);
             }
             mapLen = r.readVarInt(false);
-            w.put(r.bytes().list, r.rIndex + r.bytes().arrayOffset(), mapLen);
+            w.put(r.list, r.rIndex + r.arrayOffset(), mapLen);
             r.rIndex += 2;
             j = ((CstClass) map[r.readUnsignedShort() - 1]).getValueIndex();
-            con.accept(((CstUTF) map[j - 1]).getString(), w.list);
+            con.accept(((CstUTF) map[j - 1]).getString(), w);
             r.rIndex += mapLen - 4;
-            w.list.clear();
+            w.clear();
         }
     }
 
     public Pack125(ByteList oa, ByteList ob) {
         oa.clear();
         ob.clear();
-        this.w1 = new ByteWriter(oa);
+        this.w1 = oa;
         this.w1.putInt(HEADER).putInt(0);
-        this.w2 = new ByteWriter(ob);
-        this.w3 = new ByteWriter(4096);
+        this.w2 = ob;
+        this.w3 = new ByteList(4096);
         this.cw = Helpers.cast(new MyHashSet<?>[4]);
         for (int i = 0; i < 4; i++) {
             cw[i] = new MyHashSet<>();
@@ -253,11 +255,8 @@ public class Pack125 {
         return this;
     }
 
-    public Pack125 pack(ByteList in) {
-        if (in == null) throw new NullPointerException("Bytecode is null!");
-
-        ByteReader r = new ByteReader(in);
-
+    public Pack125 pack(ByteList r) {
+        r.rIndex = 0;
         if (r.readInt() != 0xcafebabe) {
             throw new IllegalArgumentException("Illegal header");
         }
@@ -270,7 +269,7 @@ public class Pack125 {
             throw new RuntimeException("Corrupted constant pool: ", e);
         }
         // original id to cp id
-        ByteWriter w = this.w2;
+        ByteList w = this.w2;
         w.putInt(version).putVarInt(pool.index - 1, false);
         int[] map = storeConstantPool(pool);
         for (int i = pool.index - 2; i >= 0; i--) {
@@ -278,20 +277,20 @@ public class Pack125 {
         }
         w2.put(w3);
 
-        int len = in.limit() - r.rIndex;
-        w.putVarInt(len, false).put(in.list, r.rIndex + in.arrayOffset(), len);
+        int len = r.limit() - r.rIndex;
+        w.putVarInt(len, false).put(r.list, r.rIndex + r.arrayOffset(), len);
         this.cLen++;
         return this;
     }
 
     public ByteList toByteArray() {
-        ByteList wl = w1.list;
+        ByteList wl = w1;
         int pos = wl.wIndex();
         wl.wIndex(4);
         w1.putInt(cpLen);
         wl.wIndex(pos);
 
-        ByteList list = w1.putInt(cLen).put(w2).list;
+        ByteList list = w1.putInt(cLen).put(w2);
 
         reset();
 
@@ -328,7 +327,7 @@ public class Pack125 {
     }
 
     public void writeToStream(OutputStream out) throws IOException {
-        ByteList wl = w1.list;
+        ByteList wl = w1;
         int pos = wl.wIndex();
         wl.wIndex(4);
         w1.putInt(cpLen);
@@ -336,9 +335,9 @@ public class Pack125 {
 
         wl.writeToStream(out);
         wl.clear();
-        w1.putInt(cLen).list.writeToStream(out);
+        w1.putInt(cLen).writeToStream(out);
 
-        w2.list.writeToStream(out);
+        w2.writeToStream(out);
 
         reset();
     }
@@ -348,9 +347,9 @@ public class Pack125 {
             cw[i].clear();
         }
         cpLen = cLen = 0;
-        w1.list.clear();
+        w1.clear();
         w1.putInt(HEADER).putInt(0);
-        w2.list.clear();
+        w2.clear();
     }
 
     static final int STR = 0, NUM = 1, TYP = 2, NAT = 3, TYPES = 13;
@@ -371,7 +370,7 @@ public class Pack125 {
         }
 
         List<Type> tmp = new ArrayList<>();
-        ByteWriter w3 = this.w3;
+        ByteList w3 = this.w3;
         for (int i = 0; i < array.size(); i++) {
             Constant c = array.get(i);
             if (c.type() == NAME_AND_TYPE) {
@@ -380,7 +379,7 @@ public class Pack125 {
                 if (f == (f1 = cw[NAT].intern(f))) {
                     f = LongerCst.one();
 
-                    w3.list.clear();
+                    w3.clear();
                     w3.put(NAME_AND_TYPE);
 
                     LongerCst f2;
@@ -398,7 +397,7 @@ public class Pack125 {
                     if (f == (f2 = cw[STR].intern(f))) {
                         f = LongerCst.one();
 
-                        int p = w3.list.wIndex();
+                        int p = w3.wIndex();
                         w3.put((byte) TYPES);
 
                         if (type.charAt(0) == '(') {
@@ -413,8 +412,8 @@ public class Pack125 {
                             w3.put((byte) 0);
                             f = writeType(f, t, w3);
                         }
-                        w1.put(w3.list.list, p, w3.list.wIndex() - p);
-                        w3.list.wIndex(p);
+                        w1.put(w3.list, p, w3.wIndex() - p);
+                        w3.wIndex(p);
                         f2.index = ++cpLen;
                     }
                     w3.putVarInt(f2.index, false);
@@ -426,7 +425,7 @@ public class Pack125 {
             }
         }
 
-        w3.list.clear();
+        w3.clear();
         for (int i = 0; i < array.size(); i++) {
             Constant c = array.get(i);
             if (map[i] != 0) continue;
@@ -481,13 +480,13 @@ public class Pack125 {
         return map;
     }
 
-    private LongerCst writeType(LongerCst f, Type t, ByteWriter tmp) {
+    private LongerCst writeType(LongerCst f, Type t, ByteList tmp) {
         LongerCst f1;
         f.data = t;
         if (f == (f1 = cw[TYP].intern(f))) {
             f = LongerCst.one();
 
-            int p = tmp.list.wIndex();
+            int p = tmp.wIndex();
             tmp.put((byte) TYP).put(t.type).putVarInt(t.array, false);
 
             if (t.owner != null) {
@@ -500,8 +499,8 @@ public class Pack125 {
                 }
                 tmp.putVarInt(f2.index, false);
             }
-            w1.put(tmp.list.list, p, tmp.list.wIndex() - p);
-            tmp.list.wIndex(p);
+            w1.put(tmp.list, p, tmp.wIndex() - p);
+            tmp.wIndex(p);
             f1.index = ++cpLen;
         }
         tmp.putVarInt(f1.index, false);

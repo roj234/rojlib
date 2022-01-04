@@ -28,8 +28,6 @@ package roj.config.data;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/31 21:17
@@ -101,6 +99,16 @@ public final class CDouble extends CEntry {
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
+        return sb.append(value);
+    }
+
+    @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        return sb.append(value);
+    }
+
+    @Override
+    public StringBuilder toTOML(StringBuilder sb, int depth) {
         return sb.append(value);
     }
 

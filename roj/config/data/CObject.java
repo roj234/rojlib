@@ -102,6 +102,28 @@ public final class CObject<T> extends CMapping {
     }
 
     @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        if (this.object == null) return sb.append("null");
+        map.clear();
+        map.put("==", new CString(object.getClass().getName()));
+
+        ObjSerializer.find(this.object).serialize(this, this.object);
+
+        return super.toINI(sb, depth);
+    }
+
+    @Override
+    public StringBuilder toTOML(StringBuilder sb, int depth) {
+        if (this.object == null) return sb.append("null");
+        map.clear();
+        map.put("==", new CString(object.getClass().getName()));
+
+        ObjSerializer.find(this.object).serialize(this, this.object);
+
+        return super.toTOML(sb, depth);
+    }
+
+    @Override
     public Object toNudeObject() {
         return this.object;
     }

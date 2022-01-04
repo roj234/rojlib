@@ -43,7 +43,7 @@ public class DnsClientTest {
     public static void main(String[] args) throws IOException {
         ByteList w = new ByteList();
         w.putShort(0).putShort(0).putShort(1).putShort(0).putShort(0).putShort(0);
-        DnsServer._w_domain_name(w, "www.baidu.com");
+        DnsServer.writeDomain(w, "www.baidu.com");
         w.putShort(DnsServer.Q_ANY).putShort(DnsServer.C_IN);
 
         DatagramPacket pkt = new DatagramPacket(w.list, w.wIndex());

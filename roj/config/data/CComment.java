@@ -62,6 +62,16 @@ public final class CComment extends CEntry {
     }
 
     @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        return sb.append(";").append(comment);
+    }
+
+    @Override
+    public StringBuilder toTOML(StringBuilder sb, int depth) {
+        return sb.append("#").append(comment);
+    }
+
+    @Override
     public Object toNudeObject() {
         throw new UnsupportedOperationException("Comment couldn't cast!");
     }

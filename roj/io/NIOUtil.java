@@ -209,8 +209,8 @@ public final class NIOUtil {
     public static void close(FileDescriptor fd) throws IOException {
         if(!fd.valid())
             throw new IOException("Invalid FileDescriptor");
-        UTIL.fdFd(fd, -1);
         SCN.close(fd);
+        UTIL.fdFd(fd, -1);
     }
 
     public static boolean available() {
@@ -249,10 +249,13 @@ public final class NIOUtil {
     }
 
     public static void clean(Buffer shared) {
+        if (!shared.isDirect()) return;
+        // Java做了多次运行的处理，无须担心
         CLEAN.accept(UTIL.cleaner(topMost(shared)));
     }
 
     public static boolean directBufferEquals(ByteBuffer a, ByteBuffer b) {
+        if (!a.isDirect() || !b.isDirect()) { return a.array() == b.array(); }
         return UTIL.address(topMost(a)) == UTIL.address(topMost(b));
     }
 }

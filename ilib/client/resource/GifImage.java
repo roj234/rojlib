@@ -29,8 +29,7 @@ package ilib.client.resource;
 import ilib.client.util.RenderUtils;
 import org.lwjgl.opengl.GL11;
 import roj.io.IOUtil;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 import roj.util.GIFDecoder;
 import roj.util.GIFDecoder.Gif;
 
@@ -93,7 +92,7 @@ public class GifImage {
     private boolean loadFromCache(File info) {
         if (!info.exists()) return false;
         try (InputStream s = new FileInputStream(info)) {
-            ByteReader r = new ByteReader(IOUtil.read(s));
+            ByteList r = new ByteList(IOUtil.read(s));
             if (r.readInt() != 0x23336688)
                 System.err.println("Invalid cache file header");
             String fileName = r.readIntUTF();
@@ -105,7 +104,7 @@ public class GifImage {
             for (int i = 0; i < frameCount; i++) {
                 frameTicks[i] = r.readUnsignedShort();
             }
-            BufferedImage image = ImageIO.read(r.bytes().asInputStream());
+            BufferedImage image = ImageIO.read(r.asInputStream());
 
             uploadTexture(image);
 
@@ -161,14 +160,14 @@ public class GifImage {
         uploadTexture(allImage);
 
         try (OutputStream fos = new FileOutputStream(file)) {
-            ByteWriter w = new ByteWriter(imageBuffer.length << 4);
+            ByteList w = new ByteList(imageBuffer.length << 4);
             w.putInt(0x23336688);
             w.putIntUTF(file.toString());
             w.putInt(this.width).putInt(this.height).putShort(frameCount);
             for (int tick : frameTicks) {
                 w.putShort(tick);
             }
-            w.list.writeToStream(fos);
+            w.writeToStream(fos);
             ImageIO.write(allImage, "png", fos);
         } catch (IOException e) {
             e.printStackTrace();

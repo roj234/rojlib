@@ -37,7 +37,6 @@ import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,7 +100,7 @@ public final class Clazz implements IClass {
 
                 handleAttribute(pool, r, name, r.length());
 
-                if (!r.hasRemaining()) {
+                if (r.hasRemaining()) {
                     System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.rIndex) + " bytes not " + "read correctly!");
                 }
             } else {
@@ -177,17 +176,13 @@ public final class Clazz implements IClass {
         return getBytes(new ByteList(1024));
     }
 
-    public ByteList getBytes(ByteList buf) {
-        buf.clear();
-
+    public ByteList getBytes(ByteList w) {
         ConstantPool cw = new ConstantPool();
 
-        ByteWriter w = new ByteWriter(buf)
-                .putShort(accesses.flag)
-                .putShort(cw.getClassId(name))
-                .putShort(parent == null ? 0 : cw.getClassId(parent))
-
-                .putShort(interfaces.size());
+        w.putShort(accesses.flag)
+         .putShort(cw.getClassId(name))
+         .putShort(parent == null ? 0 : cw.getClassId(parent))
+         .putShort(interfaces.size());
 
         for (int i = 0; i < interfaces.size(); i++) {
             w.putShort(cw.getClassId(interfaces.get(i)));
@@ -211,21 +206,21 @@ public final class Clazz implements IClass {
             attributes.get(i).toByteArray(cw, w);
         }
 
-        int pos = buf.wIndex();
-        byte[] tmp = buf.list;
+        int pos = w.wIndex();
+        byte[] tmp = w.list;
         int cpl = cw.byteLength() + 10;
         if (tmp.length < pos + cpl) {
             tmp = new byte[pos + cpl];
         }
-        System.arraycopy(buf.list, 0, tmp, cpl, pos);
-        buf.list = tmp;
+        System.arraycopy(w.list, 0, tmp, cpl, pos);
+        w.list = tmp;
 
-        buf.wIndex(0);
+        w.wIndex(0);
         cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
-        assert buf.wIndex() == cpl;
-        buf.wIndex(pos + cpl);
+        assert w.wIndex() == cpl;
+        w.wIndex(pos + cpl);
 
-        return buf;
+        return w;
     }
 
     public void initAttributes(ConstantPool pool, ByteReader r) {

@@ -30,12 +30,9 @@ import ilib.animator.interpolate.TimeFunc;
 import roj.math.Mat4x3f;
 import roj.math.MathUtils;
 import roj.text.StringPool;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/5/27 21:58
@@ -119,7 +116,7 @@ public final class Keyframe extends Mat4x3f {
         scale(sx, sy, sz).rotateX(rx).rotateY(ry).rotateZ(rz).translateAbs(tx, ty, tz);
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool) {
+    public void toByteArray(ByteList w, StringPool pool) {
         w.putVarInt(tick, false).put(flag);
 
         w.putFloat(m00)
@@ -138,7 +135,7 @@ public final class Keyframe extends Mat4x3f {
         fn.toByteArray(w, pool);
     }
 
-    public static Keyframe fromByteArray(ByteReader r, StringPool pool) {
+    public static Keyframe fromByteArray(ByteList r, StringPool pool) {
         Keyframe kf = new Keyframe();
         kf.tick = r.readVarInt(false);
         kf.flag = r.readByte();

@@ -30,7 +30,7 @@ import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.OpcodeUtil;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
 /**
@@ -128,7 +128,7 @@ public abstract class InsnNode implements Helpers.Node {
         return T_OTHER;
     }
 
-    public abstract void toByteArray(ConstantPool cw, ByteWriter w);
+    public abstract void toByteArray(ConstantPool cw, ByteList w);
 
     public int nodeSize() { return -1; }
 

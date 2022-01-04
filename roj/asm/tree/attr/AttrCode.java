@@ -40,7 +40,6 @@ import roj.collect.*;
 import roj.util.ByteList;
 import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -151,11 +150,10 @@ public class AttrCode extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantPool cw, ByteWriter w) {
+    protected void toByteArray1(ConstantPool cw, ByteList w) {
         w.putShort(this.stackSize).putShort(this.localSize).putInt(0);
 
-        final ByteList list = w.list;
-        int lenIdx = list.wIndex();
+        int lenIdx = w.wIndex();
 
         ToIntMap<InsnNode> pcRev = reIndex(instructions, cw, new ToIntMap<InsnNode>(instructions.size()) {
             @Override
@@ -174,9 +172,9 @@ public class AttrCode extends Attribute {
             insn.get(i).toByteArray(cw, w);
         }
 
-        int cp = list.wIndex();
-        list.wIndex(lenIdx - 4);
-        w.putInt(cp - lenIdx).list.wIndex(cp);
+        int cp = w.wIndex();
+        w.wIndex(lenIdx - 4);
+        w.putInt(cp - lenIdx).wIndex(cp);
 
         w.putShort(this.exceptions.size());
         ArrayList<ExceptionEntry> exs = this.exceptions;
@@ -199,11 +197,11 @@ public class AttrCode extends Attribute {
             if(attribute instanceof ICodeAttribute) {
                 w.putShort(cw.getUtfId(attribute.name)).putInt(0);
 
-                lenIdx = list.wIndex();
+                lenIdx = w.wIndex();
                 ((ICodeAttribute) attribute).toByteArray(cw, w, pcRev);
-                cp = list.wIndex();
-                list.wIndex(lenIdx - 4);
-                w.putInt(cp - lenIdx).list.wIndex(cp);
+                cp = w.wIndex();
+                w.wIndex(lenIdx - 4);
+                w.putInt(cp - lenIdx).wIndex(cp);
             } else {
                 attribute.toByteArray(cw, w);
             }
@@ -215,12 +213,12 @@ public class AttrCode extends Attribute {
         if (this.frames != null) {
             w.putShort(cw.getUtfId("StackMapTable")).putInt(0);
 
-            lenIdx = list.wIndex();
+            lenIdx = w.wIndex();
             writeFrames(cw, w.putShort(frames.size()), pcRev);
 
-            cp = list.wIndex();
-            list.wIndex(lenIdx - 4);
-            w.putInt(cp - lenIdx).list.wIndex(cp);
+            cp = w.wIndex();
+            w.wIndex(lenIdx - 4);
+            w.putInt(cp - lenIdx).wIndex(cp);
         }
 
         insn.add(EndOfInsn.MARKER);
@@ -241,7 +239,7 @@ public class AttrCode extends Attribute {
         }
 
         int pos = 0;
-        ByteWriter w = new ByteWriter(new WriteOnly());
+        ByteList w = new WriteOnly();
 
         for (int i = 0; i < insn.size(); i++) {
             InsnNode node = insn.get(i);
@@ -249,7 +247,7 @@ public class AttrCode extends Attribute {
                 node.toByteArray(cw, w);
             }
         }
-        w.list.wIndex(0);
+        w.wIndex(0);
 
         int j = 3;
         o:
@@ -263,10 +261,10 @@ public class AttrCode extends Attribute {
                     case InsnNode.T_LDC:
                         int t = node.nodeSize();
                         node.toByteArray(cw, w);
-                        if (w.list.wIndex() != t) {
+                        if (w.wIndex() != t) {
                             lciRf = true;
                         }
-                        w.list.wIndex(0);
+                        w.wIndex(0);
                         break;
                     case InsnNode.T_SWITCH:
                         ((SwitchInsnNode) node).pad(pos, pcRev);
@@ -574,7 +572,7 @@ public class AttrCode extends Attribute {
     // region StackFrameTable
 
     @SuppressWarnings("fallthrough")
-    private void writeFrames(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
+    private void writeFrames(ConstantPool pool, ByteList w, ToIntMap<InsnNode> pcRev) {
         Frame prev = getFirstFrame();
         for (int j = 0; j < frames.size(); j++) {
             Frame curr = frames.get(j);
@@ -656,7 +654,7 @@ public class AttrCode extends Attribute {
         }
     }
 
-    private static void putVar(Var v, ByteWriter w, ConstantPool pool, ToIntMap<InsnNode> pcRev) {
+    private static void putVar(Var v, ByteList w, ConstantPool pool, ToIntMap<InsnNode> pcRev) {
         w.put(v.type);
         switch (v.type) {
             case VarType.REFERENCE:
@@ -891,5 +889,13 @@ public class AttrCode extends Attribute {
 
     public AttrLocalVars getLVTT() {
         return (AttrLocalVars) attributes.getByName("LocalVariableTypeTable");
+    }
+
+    public void clear() {
+        exceptions.clear();
+        instructions.clear();
+        frames = null;
+        attributes.clear();
+        interpretFlags = COMPUTE_FRAMES | COMPUTE_SIZES;
     }
 }

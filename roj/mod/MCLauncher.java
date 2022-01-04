@@ -25,6 +25,14 @@
  */
 package roj.mod;
 
+import roj.asm.Opcodes;
+import roj.asm.Parser;
+import roj.asm.cst.CstString;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
+import roj.asm.tree.insn.LdcInsnNode;
+import roj.asm.tree.insn.NPInsnNode;
+import roj.asm.util.InsnList;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -44,6 +52,7 @@ import roj.config.word.AbstLexer;
 import roj.io.BOMInputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
+import roj.io.MutableZipFile;
 import roj.io.down.IProgressHandler;
 import roj.io.down.STDProgress;
 import roj.math.Version;
@@ -52,6 +61,7 @@ import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
+import roj.util.Helpers;
 import roj.util.OS;
 
 import javax.annotation.Nonnull;
@@ -416,7 +426,7 @@ public class MCLauncher extends JFrame {
                 CharList out = new CharList(10000);
                 ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
 
-                versions = JSONParser.parseIntern(out).asList();
+                versions = JSONParser.parse(out, JSONParser.INTERN).asList();
             } catch (ParseException | IOException e) {
                 error("获取数据出了点错...\n请查看控制台");
                 e.printStackTrace();
@@ -435,7 +445,7 @@ public class MCLauncher extends JFrame {
                 CharList out = new CharList(100000);
                 ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址"))));
 
-                cache_mc_versions = versions = JSONParser.parseIntern(out).asMap().get("versions").asList();
+                cache_mc_versions = versions = JSONParser.parse(out, JSONParser.INTERN).asMap().get("versions").asList();
             } catch (ParseException | IOException e) {
                 error("获取数据出了点错...\n请查看控制台");
                 e.printStackTrace();
@@ -1642,13 +1652,19 @@ public class MCLauncher extends JFrame {
 
         String file = sb.append('.').append(ext).toString();
 
+        if(DEBUG) {
+            CmdUtil.info("Name " + name + " File " + file);
+        }
         File libFile = new File(libPath, file);
         if(!libFile.isFile()) {
             if(mirror != null) {
                 final CMapping downloads = data.containsKey("downloads") ? data.get("downloads").asMap() : data;
-                downloadLibrary(downloads, mirror, libFile, handler, nt ? () -> {
+                Runnable cb = nt ? () -> {
                     extractNatives(data, libFile, nativePath);
-                } : null, classifiers, file);
+                } : name.endsWith("log4j-core") ? () -> {
+                    fixLog4j(libFile);
+                } : null;
+                downloadLibrary(downloads, mirror, libFile, handler, cb, classifiers, file);
                 if(nt)
                     return;
             } else {
@@ -1658,6 +1674,10 @@ public class MCLauncher extends JFrame {
         } else if(nt) {
             extractNatives(data, libFile, nativePath);
             return;
+        } else {
+            // Log4j2漏洞
+            if (name.endsWith("log4j-core"))
+                fixLog4j(libFile);
         }
 
         if(sameVersion) {
@@ -1668,6 +1688,36 @@ public class MCLauncher extends JFrame {
 
         versions.put(name, currVer);
         libraries.put(name, file);
+    }
+
+    private static void fixLog4j(File lib) {
+        try {
+            MutableZipFile mzf = new MutableZipFile(lib);
+            byte[] b = mzf.getFileData("org/apache/logging/log4j/core/lookup/JndiLookup.class");
+            if (b != null) {
+                ConstantData data = Parser.parseConstants(b);
+                int i = data.getMethodByName("lookup");
+                Method mn = new Method(data, data.methods.get(i));
+                data.methods.set(i, Helpers.cast(mn));
+
+                InsnList insn = mn.code.instructions;
+                if (insn.size() > 3) {
+                    mn.code.clear();
+
+                    insn.add(new LdcInsnNode(new CstString("JNDI功能已关闭")));
+                    insn.add(new NPInsnNode(Opcodes.ARETURN));
+                    mzf.setFileData("org/apache/logging/log4j/core/lookup/JndiLookup.class",
+                                    new ByteList(Parser.toByteArray(data)));
+                    mzf.store();
+                    CmdUtil.success("修补了Log4j2漏洞");
+                } else {
+                    CmdUtil.success("之前修补了Log4j2漏洞");
+                }
+            }
+            mzf.close();
+        } catch (Throwable e) {
+            CmdUtil.warning("无法修补Log4j2漏洞: ", e);
+        }
     }
 
     private static void downloadLibrary(CMapping map, String mirror, File libFile, TaskHandler handler, Runnable cb, String classifiers, String libFileName) {

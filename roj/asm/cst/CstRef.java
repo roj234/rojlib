@@ -26,7 +26,7 @@
 
 package roj.asm.cst;
 
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -49,7 +49,7 @@ public abstract class CstRef extends Constant {
     CstRef() {}
 
     @Override
-    public final void write(ByteWriter w) {
+    public final void write(ByteList w) {
         w.put(type())
          .putShort(getClassIndex())
          .putShort(getDescIndex());

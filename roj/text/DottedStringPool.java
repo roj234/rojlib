@@ -26,15 +26,12 @@
 package roj.text;
 
 import roj.collect.IntBiMap;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Your description here
- *
  * @author solo6975
  * @version 0.1
  * @since 2021/9/30 22:42
@@ -47,13 +44,13 @@ public class DottedStringPool extends StringPool {
         this.delimChar = c;
     }
 
-    public DottedStringPool(ByteReader r, char c) {
+    public DottedStringPool(ByteList r, char c) {
         super(r);
         this.delimChar = c;
     }
 
     private List<String> tmp;
-    public ByteWriter writeDlm(ByteWriter w, String string) {
+    public ByteList writeDlm(ByteList w, String string) {
         if(tmp == null)
             tmp = new ArrayList<>();
         else
@@ -79,7 +76,7 @@ public class DottedStringPool extends StringPool {
     }
 
     private CharList tmp2;
-    public String readDlm(ByteReader r) {
+    public String readDlm(ByteList r) {
         int blocks = r.readVarInt(false);
         if(blocks == 0) {
             blocks = r.readUByte() - 1;

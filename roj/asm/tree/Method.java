@@ -37,7 +37,6 @@ import roj.asm.util.FlagList;
 import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -89,7 +88,7 @@ public final class Method implements MethodNode, MoFNode {
 
                 attr = handleAttribute(pool, r, name, r.length());
 
-                if (!r.hasRemaining()) {
+                if (r.hasRemaining()) {
                     throw new IllegalStateException("[M.W.A] " + name + " has " + (r.length() - r.rIndex) + " bytes left: " + attr);
                 }
             } else {
@@ -209,12 +208,12 @@ public final class Method implements MethodNode, MoFNode {
         m.attributes.ensureCapacity(attributes.size() +
                                             (code == null ? 0 : 1) +
                                             (signature == null ? 0 : 1));
-        ByteWriter w = new ByteWriter(SharedBuf.i_get());
+        ByteList w = SharedBuf.i_get();
         for (int i = 0; i < attributes.size(); i++) {
             m.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
         }
         if (signature != null) {
-            w.list.clear();
+            w.clear();
             w.putShort(cw.getUtfId(signature.toGeneric()));
             m.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
         }
@@ -229,7 +228,7 @@ public final class Method implements MethodNode, MoFNode {
         return attributes;
     }
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.putShort(accesses.flag).putShort(pool.getUtfId(name));
 
         if (params != null) {

@@ -38,8 +38,8 @@ import roj.asm.type.ParamHelper;
 import roj.asm.util.Context;
 import roj.asm.visitor.AsIsAttributeVisitor;
 import roj.asm.visitor.CodeVisitor;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.FMLSecurityManager;
@@ -48,7 +48,7 @@ import java.util.List;
 
 public class TerminalTransformer extends CodeVisitor implements ContextClassTransformer {
     public TerminalTransformer() {
-        bw = new ByteWriter();
+        bw = new ByteList();
         br = new ByteReader();
 
         attributeVisitor = new AsIsAttributeVisitor();
@@ -103,7 +103,7 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
                         attr.toByteArray(cw, bw);
                     } else {
                         br.refresh(attr.getRawData());
-                        bw.list.clear();
+                        bw.clear();
                         visit(cw);
                         if (dirty) {
                             attr.getRawData().setValue(bw.toByteArray());

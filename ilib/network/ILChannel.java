@@ -39,7 +39,7 @@ import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.util.InsnList;
 import roj.collect.MyHashMap;
 import roj.reflect.DirectAccessor;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -167,7 +167,7 @@ public class ILChannel implements ITickable {
             if (list.size() == 1) {
                 sendTo(serverCodec.encode(list.get(0)), entry.getKey());
             } else {
-                ByteWriter[] messages = new ByteWriter[list.size()];
+                ByteList[] messages = new ByteList[list.size()];
                 for (int i = 0; i < list.size(); i++) {
                     messages[i] = serverCodec.encode0(list.get(i));
                 }
@@ -177,13 +177,13 @@ public class ILChannel implements ITickable {
         pending.clear();
     }
 
-    private static byte[] encodePackets(ByteWriter[] messages) {
-        ByteWriter writer = new ByteWriter(64)
+    private static byte[] encodePackets(ByteList[] messages) {
+        ByteList writer = new ByteList(64)
                 .putVarInt(0, false) // internal packet id
 
                 .putVarInt(messages.length, false);
-        for (ByteWriter w : messages) {
-            writer.putVarInt(w.list.wIndex(), false)
+        for (ByteList w : messages) {
+            writer.putVarInt(w.wIndex(), false)
                     .put(w);
         }
         return writer.toByteArray();

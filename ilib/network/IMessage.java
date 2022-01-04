@@ -27,12 +27,10 @@
 package ilib.network;
 
 import io.netty.buffer.ByteBuf;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.io.IOUtil;
+import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51
@@ -40,21 +38,26 @@ import roj.util.ByteWriter;
 public interface IMessage extends net.minecraftforge.fml.common.network.simpleimpl.IMessage {
     @Override
     @Deprecated
-    default void fromBytes(ByteBuf byteBuf) {
-        byte[] arr = new byte[byteBuf.readableBytes()];
-        byteBuf.readBytes(arr);
-        fromBytes(new ByteReader(arr));
+    default void fromBytes(ByteBuf buf) {
+        ByteList tmp = IOUtil.getSharedByteBuf();
+        tmp.clear();
+        tmp.ensureCapacity(buf.readableBytes());
+        tmp.wIndex(buf.readableBytes());
+        buf.readBytes(tmp.list, 0, buf.readableBytes());
+        fromBytes(tmp);
     }
 
     @Override
     @Deprecated
-    default void toBytes(ByteBuf byteBuf) {
-        ByteWriter w = new ByteWriter();
-        toBytes(w);
-        byteBuf.writeBytes(w.list.list, w.list.wIndex(), w.list.limit());
+    default void toBytes(ByteBuf buf) {
+        ByteList tmp = IOUtil.getSharedByteBuf();
+        tmp.clear();
+        toBytes(tmp);
+        buf.writeBytes(tmp.list, 0, tmp.wIndex());
+        tmp.clear();
     }
 
-    void fromBytes(ByteReader buf);
+    void fromBytes(ByteList buf);
 
-    void toBytes(ByteWriter buf);
+    void toBytes(ByteList buf);
 }

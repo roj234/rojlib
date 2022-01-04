@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2021 Roj234
+ * Copyright (c) 2022 Roj234
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,24 +23,29 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.cross;
+package roj.net;
 
-import roj.concurrent.TaskExecutor;
-import roj.concurrent.TaskPool;
-import roj.concurrent.task.ITask;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * @author Roj233
- * @version 0.1
- * @since 2021/10/13 0:16
+ * @since 2022/1/8 18:19
  */
-public final class TaskManager extends TaskPool {
-    public TaskManager() {
-        super(0, Integer.parseInt(System.getProperty("ae.pooled_threads", "6")), 1, 1, pool -> new TaskExecutor(pool, "AE C2C连接器 - 空闲", 120000));
-    }
+public interface Pipeline {
+    /**
+     * 解码收到的数据
+     * @param rcv 接收缓冲
+     * @param dst 目的缓冲
+     * @return 0ok，正数代表rcv还需要至少n个字节，负数代表dst还需要n个字节
+     */
+    int unwrap(ByteBuffer rcv, ByteBuffer dst) throws IOException;
 
-    @Override
-    protected void onReject(ITask task, int minPending) {
-        ((Thread) task).start();
-    }
+    /**
+     * 编码数据用于发送
+     * @param src 源缓冲
+     * @param snd 发送缓冲
+     * @return 非负数ok(写出)，负数代表snd还需要至少n个字节
+     */
+    int wrap(ByteBuffer src, ByteBuffer snd) throws IOException;
 }

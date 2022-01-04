@@ -30,22 +30,16 @@ import roj.config.data.*;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
-import roj.util.ByteList;
+import roj.io.IOUtil;
 
-import java.io.FileInputStream;
+import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * JSON - JavaScript 对象表示法（JavaScript Object Notation）
- * <BR>
- * 它是JavaScript的子集
- * 可以直接复制到JavaScript中
- * <p>
+ * JSON解析器
  * @author Roj234
  */
-public final class JSONParser {
+public final class JSONParser implements Parser {
     static final short
             TRUE = 10,
             FALSE = 11,
@@ -56,11 +50,17 @@ public final class JSONParser {
             right_m_bracket = 16,
             comma = 17,
             colon = 18;
-    public static final int NO_DUPLICATE_KEY = 1, LITERAL_KEY = 2, UNESCAPED_SINGLE_YH = 4, NO_EOF = 8;
+
+    public static final int
+            NO_DUPLICATE_KEY       = 1,
+            LITERAL_KEY            = 2,
+            UNESCAPED_SINGLE_QUOTE = 4,
+            NO_EOF                 = 8,
+            INTERN                 = 16,
+            COMMENT                = 32;
 
     public static void main(String[] args) throws ParseException, IOException {
-        String s = ByteList.readUTF(new ByteList().readStreamFully(new FileInputStream(args[0])));
-        System.out.println(parse(s));
+        System.out.println(parse(IOUtil.readUTF(new File(args[0]))));
     }
 
     public static CEntry parse(CharSequence string) throws ParseException {
@@ -71,31 +71,16 @@ public final class JSONParser {
         return parse(new JSONLexer().init(string), flag);
     }
 
-    public static CEntry parseIntern(CharSequence string) throws ParseException {
-        return parse(new InternLexer().init(string), 0);
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        return parse(string, flag);
     }
 
-    public static List<CEntry> parseMulti(CharSequence string) throws ParseException {
-        return parseMulti(new InternLexer().init(string), 0);
+    @Override
+    public String format() {
+        return "JSON";
     }
 
-    public static List<CEntry> parseMulti(AbstLexer wr, int flag) throws ParseException {
-        JSONLexer l = (JSONLexer) wr;
-        l.flag = (byte) flag;
-
-        List<CEntry> list = new ArrayList<>();
-        while (wr.hasNext()) {
-            list.add(jsonRead(l, (byte) flag));
-        }
-        return list;
-    }
-
-    /**
-     * @param flag <BR>
-     *             1: 对重复的key报错 <BR>
-     *             2: 仁慈模式 (忽略key中的literal string) <BR>
-     *             4: 不对单引号转义
-     */
     public static CEntry parse(AbstLexer wr, int flag) throws ParseException {
         JSONLexer l = (JSONLexer) wr;
         l.flag = (byte) flag;
@@ -112,7 +97,7 @@ public final class JSONParser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    static CList jsonArray(JSONLexer wr, byte flag) throws ParseException {
+    static CList jsonArray(AbstLexer wr, byte flag) throws ParseException {
         CList list = new CList();
 
         boolean more = false;
@@ -145,7 +130,7 @@ public final class JSONParser {
      * {xxx: yyy, zzz: uuu}
      */
     @SuppressWarnings("fallthrough")
-    static CMapping jsonObject(JSONLexer wr, byte flag) throws ParseException {
+    static CMapping jsonObject(AbstLexer wr, byte flag) throws ParseException {
         CMapping map = new CMapping();
 
         boolean more = false;
@@ -165,13 +150,13 @@ public final class JSONParser {
                 case WordPresets.STRING:
                     break;
                 case WordPresets.LITERAL:
-                    if((flag & 2) != 0)
+                    if((flag & LITERAL_KEY) != 0)
                         break;
                 default:
                     unexpected(wr, name.val(), "字符串");
             }
 
-            if((flag & 1) != 0 && map.containsKey(name.val()))
+            if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name.val()))
                 throw wr.err("重复的key: " + name.val());
 
             more = false;
@@ -194,7 +179,7 @@ public final class JSONParser {
     }
 
     @SuppressWarnings("fallthrough")
-    private static CEntry jsonRead(JSONLexer wr, byte flag) throws ParseException {
+    static CEntry jsonRead(AbstLexer wr, byte flag) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case left_m_bracket:
@@ -229,7 +214,9 @@ public final class JSONParser {
         throw wr.err("未预料的: " + got);
     }
 
-    private static class JSONLexer extends AbstLexer {
+    public static class JSONLexer extends AbstLexer {
+        final MyHashSet<String> ipool = new MyHashSet<>();
+
         public byte flag;
 
         @Override
@@ -280,7 +267,7 @@ public final class JSONParser {
 
         @Override
         protected final Word readConstString(char key) throws ParseException {
-            return formClip(WordPresets.STRING, readSlashString(key, key != '\'' || (flag & 4) == 0));
+            return formClip(WordPresets.STRING, readSlashString(key, key != '\'' || (flag & UNESCAPED_SINGLE_QUOTE) == 0));
         }
 
         @Override
@@ -310,7 +297,9 @@ public final class JSONParser {
             if(cached == null) {
                 cached = new Word();
             }
-            return cached.reset(id, index, s.toString());
+            String word = s.toString();
+            if ((flag & INTERN) != 0) word = ipool.intern(word);
+            return cached.reset(id, index, word);
         }
 
         @Override
@@ -350,15 +339,5 @@ public final class JSONParser {
 
             return formClip(id, v);
         }
-    }
-
-    private static class InternLexer extends JSONLexer {
-        final MyHashSet<String> set = new MyHashSet<>();
-
-        @Override
-        protected Word formClip(short id, CharSequence s) {
-            return super.formClip(id, set.intern(s.toString()));
-        }
-
     }
 }

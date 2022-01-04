@@ -37,8 +37,7 @@ import roj.collect.Int2IntMap;
 import roj.collect.IntMap;
 import roj.collect.IntSet;
 import roj.collect.LongMap;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -406,7 +405,11 @@ public class Network implements PositionProvider {
     }
 
     public byte[] write() {
-        ByteWriter w = new ByteWriter(128).putVarInt(id, false).putVarInt(world).putVarInt(aabb.xmin).putVarInt(aabb.ymin).putVarInt(aabb.zmin).putVarInt(aabb.xmax).putVarInt(aabb.ymax).putVarInt(aabb.zmax).putVarInt(allBlocks.size(), false);
+        ByteList w = new ByteList(128)
+                .putVarInt(id, false).putVarInt(world)
+                .putVarInt(aabb.xmin).putVarInt(aabb.ymin).putVarInt(aabb.zmin)
+                .putVarInt(aabb.xmax).putVarInt(aabb.ymax).putVarInt(aabb.zmax)
+                .putVarInt(allBlocks.size(), false);
         for (PrimitiveIterator.OfInt iterator = allBlocks.keySet().iterator(); iterator.hasNext(); ) {
             int key = iterator.nextInt();
             w.putVarInt(key, false);
@@ -416,7 +419,7 @@ public class Network implements PositionProvider {
     }
 
     public static Primer readFrom(byte[] tag) {
-        ByteReader r = new ByteReader(tag);
+        ByteList r = new ByteList(tag);
         int id = r.readVarInt(false);
         int world = r.readVarInt();
         Section aabb = new Section(r.readVarInt(), r.readVarInt(), r.readVarInt(), r.readVarInt(), r.readVarInt(), r.readVarInt());

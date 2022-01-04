@@ -83,7 +83,7 @@ final class HostWork extends Stated {
 
                     int clientId = rb.getInt(1);
                     Worker w = W.room.clients.remove(clientId);
-                    if (w == null) syncPrint(W + ": PKC 无效的客户端");
+                    if (w == null) syncPrint(W + ": 4 无效 " + clientId);
                     break;
                 case PS_CHANNEL_OPEN:
                     if (rb.position() < 37) {
@@ -98,10 +98,11 @@ final class HostWork extends Stated {
                         rb.position(5);
                         byte[] rnd2 = new byte[32];
                         rb.get(rnd2).clear();
-                        w.sync(rb.put((byte) P_CHANNEL_RESULT)
-                                 .put(rnd2).putInt(0)
-                                 .putLong(w.getPendingPipeId()));
-                    } else syncPrint(W + ": PCO 无效的客户端");
+                        rb.put((byte) P_CHANNEL_RESULT)
+                          .put(rnd2).putLong(w.getPendingPipeId())
+                          .flip();
+                        w.sync(rb);
+                    } else syncPrint(W + ": 3 无效 " + clientId);
 
                     break;
                 case P_CHANNEL_OPEN_FAIL:
@@ -118,8 +119,9 @@ final class HostWork extends Stated {
                     clientId = rb.getInt(1);
                     w = W.room.clients.get(clientId);
                     if (w != null) {
+                        rb.flip();
                         w.sync(rb.putInt(1, 0));
-                    } else syncPrint(W + ": PCOF 无效的客户端");
+                    } else syncPrint(W + ": 0 无效 " + clientId);
                     break;
                 case PS_CHANNEL_CLOSE:
                     if (rb.position() < 5) {
@@ -131,7 +133,7 @@ final class HostWork extends Stated {
                     int pipeId = rb.getInt(1);
                     rb.limit(9);
                     rb.putInt(1, W.clientId)
-                      .putInt(5, pipeId);
+                      .putInt(5, pipeId).flip();
                     w = W.closePipe(pipeId);
                     if (w != null) w.sync(rb);
                     break;
@@ -145,7 +147,7 @@ final class HostWork extends Stated {
                     pipeId = rb.getInt(1);
                     PipeGroup group = W.getPipe(pipeId);
                     if (group == null || group.pairRef == null) {
-                        syncPrint(W + ": PCOP 无效的管道: " + pipeId);
+                        syncPrint(W + ": 1 无效 #" + pipeId);
                         break;
                     }
                     switch (rb.get(2) & 0xFF) {
@@ -156,7 +158,29 @@ final class HostWork extends Stated {
                             group.pairRef.setInactive();
                             break;
                     }
+                    rb.flip();
                     group.downOwner.sync(rb);
+                    break;
+                case P_MSG:
+                    if (rb.position() < 6) {
+                        except = 6;
+                        continue;
+                    }
+                    if (rb.position() < (rb.get(5) & 0xFF) + 6) {
+                        except = (rb.get(5) & 0xFF) + 6;
+                        continue;
+                    }
+                    except = 1;
+
+                    int target = rb.getInt(1);
+                    Worker to = W.room.clients.get(target);
+                    if (null == to) {
+                        syncPrint(W + ": 2 无效 " + target);
+                        write1(ch, (byte) P_FAIL);
+                        break;
+                    }
+                    rb.putInt(1, W.clientId).flip();
+                    to.sync(rb);
                     break;
                 default:
                     unknownPacket(W, rb);

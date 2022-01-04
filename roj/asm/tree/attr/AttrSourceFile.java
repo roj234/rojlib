@@ -27,7 +27,7 @@
 package roj.asm.tree.attr;
 
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -47,7 +47,7 @@ public final class AttrSourceFile extends Attribute {
     public String file;
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort(pool.getUtfId(this.file));
     }
 

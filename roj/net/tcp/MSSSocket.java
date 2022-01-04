@@ -26,13 +26,13 @@
 package roj.net.tcp;
 
 
+import roj.crypt.CipheR;
 import roj.io.NIOUtil;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.MSSException;
 import roj.net.tcp.util.Shared;
 
-import java.io.EOFException;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,263 +40,216 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 
 /**
- * My Secure Socket No Certificate
+ * My Secure Socket
  */
 public class MSSSocket extends PlainSocket {
+    // A RSA public key is ~900B in X.509 format
+    // Hoping expandNetOut would never be called
+    private static final int BUFFER_CAPACITY = 1536;
+
     private final MSSEngine engine;
 
-    private ByteBuffer networkIn, networkOut, outCopy;
-
-    private boolean hsDone, shutdown;
+    private ByteBuffer outCopy;
 
     public MSSSocket(Socket sc, FileDescriptor fd, MSSEngine server) {
         super(sc, fd);
 
         engine = server;
 
-        networkIn = ByteBuffer.allocateDirect(4096);
-        networkOut = ByteBuffer.allocateDirect(4096);
-        outCopy = networkOut.duplicate();
-        networkOut.limit(0);
+        hsOut = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        outCopy = hsOut.duplicate();
+        hsOut.limit(0);
     }
 
     public MSSSocket(Socket sc, FileDescriptor fd) {
         this(sc, fd, new MSSEngineClient());
     }
 
-    private void expandNetIn(int _size) {
-        ByteBuffer bb = ByteBuffer.allocateDirect(_size);
-        networkIn.flip();
-        bb.put(networkIn);
-        NIOUtil.clean(networkIn);
-        networkIn = bb;
-    }
+    // region handshake
+
+    private ByteBuffer hsOut;
 
     private void expandNetOut(int _size) {
         ByteBuffer bb = ByteBuffer.allocateDirect(_size);
-        bb.put(networkOut);
-        NIOUtil.clean(networkOut);
+        bb.put(hsOut);
+        NIOUtil.clean(hsOut);
         outCopy = bb.duplicate();
         bb.flip();
-        networkOut = bb;
-    }
-
-    private boolean _write(ByteBuffer bb) throws IOException {
-        if (bb.hasRemaining()) {
-            int w;
-            do {
-                w = NIOUtil.writeFromNativeBuffer(fd, bb,
-                                                  NIOUtil.SOCKET_FD);
-            } while (w == -3 && !socket.isClosed());
-        }
-        return !bb.hasRemaining();
+        hsOut = bb;
     }
 
     @SuppressWarnings("fallthrough")
     public boolean handShake() throws IOException {
-        if (hsDone) {
+        if (hsOut == null) {
             return true;
         }
 
-        if (networkOut.hasRemaining()) {
-            if (!_write(networkOut)) {
+        if (hsOut.hasRemaining()) {
+            super.write(hsOut);
+            if (hsOut.hasRemaining()) {
                 return false;
             }
 
-            if (engine.isHandshakeDone())
-                hsDone = true;
-            return hsDone;
+            if (engine.isHandshakeDone()) hsDone();
+            return hsOut == null;
         }
 
-        if (_read(networkIn) < 0) {
+        if (super.read(rBuf.remaining() + 1) < 0) {
             engine.close(null);
-            return hsDone;
+            return hsOut == null;
         }
 
         needIO:
         do {
-            networkIn.flip();
-            int result = engine.handshake(outCopy, networkIn);
-            networkIn.compact();
+            rBuf.flip();
+            int result = engine.handshake(outCopy, rBuf);
+            rBuf.compact();
 
             switch (result) {
                 case MSSEngine.HS_OK:
                     if (engine.getHandShakeStatus() == MSSEngine.HS_FINISHED) {
-                        hsDone = true;
+                        hsDone();
                         break needIO;
                     }
                     if (outCopy.position() > 0) {
-                        networkOut.position(0).limit(outCopy.position());
+                        hsOut.position(0).limit(outCopy.position());
                         outCopy.clear();
                         break needIO;
                     }
                     break;
                 case MSSEngine.BUFFER_UNDERFLOW:
                     result = engine.getBufferSize();
-                    if (result > networkIn.capacity()) {
-                        expandNetIn(result);
+                    if (result > rBuf.capacity()) {
+                        expandReadBuffer(result);
                     }
 
                     break needIO;
                 case MSSEngine.BUFFER_OVERFLOW:
-                    result = outCopy.capacity() + engine.getBufferSize();
-                    expandNetOut(result);
+                    expandNetOut(outCopy.capacity() + engine.getBufferSize());
                     break;
             }
         } while (true);
 
-        return hsDone;
+        return hsOut == null;
     }
 
-    private int _read(ByteBuffer buffer) throws IOException {
-        return NIOUtil.readToNativeBuffer(fd, buffer,
-                                          NIOUtil.SOCKET_FD);
+    private void hsDone() {
+        NIOUtil.clean(hsOut);
+        hsOut = null;
+
+        outCopy = rBuf.duplicate();
+
+        d = engine.getDecoder();
+        e = engine.getEncoder();
     }
 
-    @Override
-    public void poll() {
-        rBuf.position(rBuf.position() + pushback);
-        pushback = 0;
-    }
+    // endregion
 
-    int pushback;
+    private CipheR d, e;
+
     public int read(int max) throws IOException {
-        if (!hsDone) throw new MSSException("Not handshake");
+        if (hsOut != null) throw new MSSException("Not handshake");
 
-        int nread;
-        if(pushback > 0) {
-            nread = Math.min(pushback, max);
-            rBuf.position(rBuf.position() + nread);
-            pushback -= nread;
-            if (nread == max) {
-                return max;
-            }
-            max -= nread;
-        } else {
-            nread = 0;
+        int begin = rBuf.position();
+        int nread = super.read(max);
+        if (nread <= 0) return nread;
+
+        if (!NIOUtil.directBufferEquals(outCopy, rBuf))
+            outCopy = rBuf.duplicate();
+        outCopy.position(begin).limit(rBuf.position());
+        rBuf.position(begin);
+        try {
+            d.crypt(outCopy, rBuf);
+        } catch (Throwable e) {
+            rBuf.position(begin + nread);
+            throw new MSSException("Cipher fault", e);
         }
-
-        if (_read(networkIn) < 0) {
-            engine.close(null);
-            return -1;
-        }
-
-        do {
-            int dt = rBuf.position();
-            networkIn.flip();
-            int result = engine.unwrap(networkIn, rBuf);
-            networkIn.compact();
-            dt = rBuf.position() - dt;
-
-            if (dt > max) {
-                max = 0;
-                int of = pushback = dt - max;
-                rBuf.position(rBuf.position() - of);
-            }
-
-            if (result < 0) {
-                // OVERFLOW
-                // Reset the application buffer size.
-                result = -result;
-                if (result > rBuf.capacity()) {
-                    expandReadBuffer(result);
-                } else {
-                    break;
-                }
-            } else if (result > 0) {
-                // UNDERFLOW
-                // Resize buffer if needed.
-                if (result > networkIn.capacity()) {
-                    expandNetIn(result);
-                }
-                break;
-            } else {
-                nread += dt;
-            }
-        } while (max > 0);
         return nread;
     }
 
     @Override
     public int write(ByteBuffer src) throws IOException {
-        if (!hsDone) throw new MSSException("Not handshake");
+        if (hsOut != null) throw new MSSException("Not handshake");
         if (!dataFlush()) return 0;
 
-        networkOut.clear();
-        int dt = src.remaining();
-        engine.wrap(src, networkOut);
-        dt -= src.remaining();
-        networkOut.flip();
+        if (wBuf.capacity() < src.remaining()) wBuf = ByteBuffer.allocate(src.remaining());
+        else wBuf.clear();
 
-        if (networkOut.hasRemaining())
-            _write(networkOut);
+        int pos = src.position();
+        try {
+            e.crypt(src, wBuf);
+        } catch (Throwable e) {
+            src.position(pos);
+            wBuf.position(0).limit(0);
+            throw new MSSException("Cipher fault", e);
+        }
+        wBuf.flip();
 
-        return dt;
+        dataFlush();
+        return src.position() - pos;
     }
 
     @Override
     public int write(InputStream src, int max) throws IOException {
-        if (!hsDone) throw new MSSException("Not handshake");
+        if (hsOut != null) throw new MSSException("Not handshake");
         if (!dataFlush()) return 0;
 
-        int cap = Math.min(Shared.WRITE_MAX, max);
+        int cap = Math.min(Shared.WRITE_MAX, max) << 1;
         if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
         else wBuf.clear();
-        int len = src.read(wBuf.array(), 0, cap);
+        int len = src.read(wBuf.array(), 0, cap >> 1);
         if (len <= 0) return len;
         wBuf.limit(len);
 
-        networkOut.clear();
-        engine.wrap(wBuf, networkOut);
-        networkOut.flip();
+        try {
+            ByteBuffer clone = wBuf.duplicate();
+            clone.position(len).limit(clone.capacity());
+            e.crypt(wBuf, clone);
+            wBuf.position(len).limit(clone.position());
+        } catch (Throwable e) {
+            wBuf.position(0).limit(0);
+            throw new MSSException("Cipher fault", e);
+        }
 
+        dataFlush();
         return len;
     }
 
-    public boolean dataFlush() throws IOException {
-        if (networkOut.hasRemaining()) {
-            _write(networkOut);
-        } else if (wBuf.hasRemaining()) {
-            networkOut.clear();
-            int dt = wBuf.position();
-            engine.wrap(wBuf, networkOut);
-            dt = wBuf.position() - dt;
-            networkOut.flip();
-            if (dt == 0)
-                throw new EOFException("Unknown state occurred");
-        }
-
-        return !networkOut.hasRemaining();
-    }
-
     public boolean shutdown() throws IOException {
-        if (!shutdown) {
-            engine.close("SHUTDOWN");
-            shutdown = true;
+        if (outCopy != null) {
+            engine.close(null);
+            outCopy = null;
         }
-
-        if (networkOut.hasRemaining() && _write(networkOut)) {
-            return false;
-        }
-        if (engine.isClosed()) return true;
-
-        networkOut.clear();
-        engine.wrap(null, networkOut);
-        networkOut.flip();
-
-        if (networkOut.hasRemaining()) {
-            _write(networkOut);
-        }
-
-        return !networkOut.hasRemaining() && engine.isClosed();
+        return dataFlush();
     }
 
     @Override
-    public void reuse() throws IOException {
-        if (shutdown)
-            throw new IOException("Stream closed.");
-        hsDone = false;
+    public void close() throws IOException {
+        super.close();
+        if (hsOut != null) {
+            NIOUtil.clean(hsOut);
+            hsOut = null;
+        }
+
+        if (outCopy != null) {
+            engine.close(null);
+            outCopy = null;
+        }
+    }
+
+    @Override
+    public void reset() throws IOException {
+        if (outCopy == null)
+            throw new IOException("Socket closed.");
+        if (hsOut != null) {
+            hsOut.position(0).limit(0);
+            outCopy.clear();
+            engine.reset();
+        } else {
+            e.setKey(engine._getSharedKey(), CipheR.ENCRYPT);
+            d.setKey(engine._getSharedKey(), CipheR.DECRYPT);
+        }
+        wBuf.position(0).limit(0);
         rBuf.clear();
-        engine.reset();
     }
 }

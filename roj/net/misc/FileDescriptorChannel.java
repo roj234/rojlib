@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.pd;
+package roj.net.misc;
 
 import roj.io.NIOUtil;
 import sun.nio.ch.Net;
@@ -48,6 +48,9 @@ public class FileDescriptorChannel extends AbstractSelectableChannel implements 
     public FileDescriptorChannel(FileDescriptor socket) {
         super(SelectorProvider.provider());
         this.socket = socket;
+        try {
+            configureBlocking(false);
+        } catch (IOException ignored) {}
     }
 
     @Override

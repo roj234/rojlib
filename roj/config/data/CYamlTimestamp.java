@@ -53,8 +53,8 @@ public final class CYamlTimestamp extends CLong {
         return sb.append(time[ACalendar.YEAR]).append('-').append(time[ACalendar.MONTH]).append('-').append(time[ACalendar.DAY]).append('T').append(time[ACalendar.HOUR]).append(':').append(time[ACalendar.MINUTE]).append(':').append(time[ACalendar.SECOND]).append('.').append(time[ACalendar.MILLISECOND]).append('Z');
     }
 
-    @Override
-    public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append("new Date(").append(value).append(")");
-    }
+//    @Override
+//    public StringBuilder toJSON(StringBuilder sb, int depth) {
+//        return sb.append("new Date(").append(value).append(")");
+//    }
 }

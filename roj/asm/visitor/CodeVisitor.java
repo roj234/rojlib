@@ -97,16 +97,16 @@ public class CodeVisitor extends Holder {
     public void visitCode(int stackSize, int localSize, int len) {
         bw.putShort(cw.getUtfId("Code"));
         bw.putInt(0);
-        codeIndex = bw.list.wIndex();
+        codeIndex = bw.wIndex();
         bw.putShort(stackSize).putShort(localSize).putInt(0);
 
-        codeAttrAmountIndex = bw.list.wIndex();
+        codeAttrAmountIndex = bw.wIndex();
     }
 
     protected void visitCodeNoWrap(int stackSize, int localSize) {
         codeIndex = 0;
         bw.putShort(stackSize).putShort(localSize).putInt(0);
-        codeAttrAmountIndex = bw.list.wIndex();
+        codeAttrAmountIndex = bw.wIndex();
     }
 
     public void visitBytecode(int len) {
@@ -351,7 +351,7 @@ public class CodeVisitor extends Holder {
     }
 
     public void align_out() {
-        ByteList out = bw.list;
+        ByteList out = bw;
         out.wIndex(out.wIndex() + (3 - ((out.wIndex() - codeAttrAmountIndex - 4) & 3)));
     }
 
@@ -377,12 +377,12 @@ public class CodeVisitor extends Holder {
     }
 
     public void visitEndBytecodes(int exLen) {
-        int pos = bw.list.wIndex();
-        bw.list.wIndex(codeAttrAmountIndex - 4);
+        int pos = bw.wIndex();
+        bw.wIndex(codeAttrAmountIndex - 4);
         bw.putInt(pos - codeAttrAmountIndex);
-        bw.list.wIndex(pos);
+        bw.wIndex(pos);
 
-        codeAttrAmountIndex = bw.list.wIndex();
+        codeAttrAmountIndex = bw.wIndex();
         codeAttrAmount = 0;
         bw.putShort(0);
     }
@@ -394,10 +394,10 @@ public class CodeVisitor extends Holder {
     }
 
     public void visitCodeAttributes(int l) {
-        int pos = bw.list.wIndex();
-        bw.list.wIndex(codeAttrAmountIndex);
+        int pos = bw.wIndex();
+        bw.wIndex(codeAttrAmountIndex);
         bw.putShort(codeAttrAmount);
-        bw.list.wIndex(pos);
+        bw.wIndex(pos);
 
         codeAttrAmountIndex = pos;
         codeAttrAmount = 0;
@@ -415,14 +415,14 @@ public class CodeVisitor extends Holder {
     }
 
     public void visitEndCode() {
-        int pos = bw.list.wIndex();
-        bw.list.wIndex(codeAttrAmountIndex);
+        int pos = bw.wIndex();
+        bw.wIndex(codeAttrAmountIndex);
         bw.putShort(codeAttrAmount);
 
         if (codeIndex > 0) {
-            bw.list.wIndex(codeIndex - 4);
+            bw.wIndex(codeIndex - 4);
             bw.putInt(pos - codeIndex);
         }
-        bw.list.wIndex(pos);
+        bw.wIndex(pos);
     }
 }

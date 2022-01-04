@@ -80,10 +80,12 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
     @Override
     void afterRemove(Entry<K, V> entry) {
         list.remove(entry);
+        clearOutdatedEntry();
     }
 
     @Override
     void afterPut(Entry<K, V> entry) {
+        clearOutdatedEntry();
         list.add(0, (TimedEntry<K, V>) entry);
     }
 

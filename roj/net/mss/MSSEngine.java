@@ -26,6 +26,7 @@
 package roj.net.mss;
 
 import roj.crypt.CipheR;
+import roj.net.Pipeline;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -40,7 +41,7 @@ import java.util.Random;
  * @version 0.1
  * @since 2021/12/22 12:21
  */
-public abstract class MSSEngine {
+public abstract class MSSEngine implements Pipeline {
     MSSEngine() { random = new SecureRandom(); }
     MSSEngine(Random rnd) { this.random = rnd; }
 
@@ -107,6 +108,7 @@ public abstract class MSSEngine {
      */
     public final void close(String reason) {
         if (reason == null || stage != HS_DONE || (flag & (STREAMING | CLOSED)) != 0) {
+            endCipher();
             flag |= CLOSED;
             return;
         }
@@ -119,7 +121,20 @@ public abstract class MSSEngine {
         }
     }
 
+    void endCipher() {
+        if (sharedKey != null) {
+            try {
+                encoder.setKey(new byte[1], CipheR.ENCRYPT);
+                decoder.setKey(new byte[1], CipheR.ENCRYPT);
+            } catch (Throwable ignored) {}
+            encoder = decoder = null;
+            Arrays.fill(sharedKey, (byte) 0);
+            sharedKey = null;
+        }
+    }
+
     public final void reset() {
+        endCipher();
         this.stage = 0;
         this.encoder = this.decoder = null;
         this.sharedKey = this.closeReason = null;
@@ -128,6 +143,11 @@ public abstract class MSSEngine {
 
     public final boolean isHandshakeDone() {
         return stage >= HS_DONE;
+    }
+
+    public final byte[] _getSharedKey() {
+        if (stage != HS_DONE) throw new IllegalStateException();
+        return sharedKey;
     }
 
     public final byte[] getSharedKey() {
@@ -274,6 +294,7 @@ public abstract class MSSEngine {
                 // u1 hdr, u1 len, u4 hash, utf[len] msg
                 if (rcv.remaining() < 6) return BUFFER_UNDERFLOW;
                 if (rcv.remaining() < (rcv.get(1) & 0xFF) + 6) return BUFFER_UNDERFLOW;
+                endCipher();
                 flag |= CLOSED;
 
                 rcv.position(6);
@@ -318,6 +339,7 @@ public abstract class MSSEngine {
             snd.put(PH_CLOSE).put((byte) closeReason.length)
                .putInt(hash.computeHandshakeHash(sharedKey)).put(closeReason);
             closeReason = null;
+            endCipher();
             flag |= CLOSED;
             return l;
         }

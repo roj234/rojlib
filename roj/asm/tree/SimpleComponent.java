@@ -31,7 +31,7 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * 简单组件基类
@@ -72,7 +72,7 @@ public abstract class SimpleComponent implements MoFNode {
 
     public final AttributeList attributes = new AttributeList();
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.putShort(accesses.flag).putShort(pool.reset(name).getIndex()).putShort(pool.reset(type).getIndex()).putShort(attributes.size());
         for (int i = 0; i < attributes.size(); i++) {
            attributes.get(i).toByteArray(pool, w);

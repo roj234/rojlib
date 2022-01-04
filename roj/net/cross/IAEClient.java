@@ -29,7 +29,9 @@ import roj.collect.IntMap;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.NIOUtil;
-import roj.net.cross.Pipe.CipherPipe;
+import roj.net.misc.Pipe;
+import roj.net.misc.Pipe.CipherPipe;
+import roj.net.misc.Shutdownable;
 import roj.net.tcp.MSSSocket;
 import roj.net.tcp.PlainSocket;
 import roj.net.tcp.WrappedSocket;
@@ -42,7 +44,9 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
-import java.util.*;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
 
 import static roj.net.cross.Util.*;
 
@@ -72,7 +76,7 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
         this.rnd = new SecureRandom();
         this.socketsById = new IntMap<>();
         setDaemon(true);
-        setName("AE - 控制性连接线程");
+        setName("AE - 控制连接");
     }
 
     @Override
@@ -109,7 +113,7 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
     final boolean heartbeat(WrappedSocket ch, int heart, boolean host) throws IOException {
         if(heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
             if (write1(ch, (byte) P_HEARTBEAT) < 0) {
-                syncPrint(this + ": 心跳发送失败");
+                syncPrint(this + ": 传输失败");
             }
             if (ch.buffer().position() == 0 && !socketsById.isEmpty()) {
                 for (Iterator<Pipe> itr = socketsById.values().iterator(); itr.hasNext(); ) {
@@ -123,25 +127,27 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
                         ByteBuffer rb = ch.buffer();
                         SpAttach att = (SpAttach) pair.att;
                         List<Pipe> pairs = free[att.portId];
-                        if (att.idleTimer++ == 0 && host) {
+                        // 不能这么干，又不是啥都有心跳
+                        /*if (pair.idleTime++ > 1000 && host) {
                             rb.put((byte) P_CHANNEL_OP)
                               .putInt(att.channelId)
                               .put((byte) OP_SET_INACTIVE).flip();
                             if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                                syncPrint(this + ": 频道暂停超时");
+                                syncPrint(this + ": 传输失败");
                                 return false;
                             }
 
                             if (pairs == Collections.EMPTY_LIST)
                                 pairs = free[att.portId] = new ArrayList<>(3);
                             pairs.add(pair);
-                        } else if (att.idleTimer > 10000) {
+                        } else */if (pair.idleTime++ > 50000) {
                             rb.put((byte) PS_CHANNEL_CLOSE)
                               .putLong(att.channelId).flip();
                             if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                                syncPrint(this + ": 频道关闭超时");
+                                syncPrint(this + ": 传输失败");
                                 return false;
                             }
+                            syncPrint(this + ": #" + att.channelId + " 超时关闭");
 
                             pair.release();
                             if (!pairs.isEmpty()) pairs.remove(pair);

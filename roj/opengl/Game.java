@@ -71,15 +71,17 @@ public abstract class Game {
         Display.setResizable(true);
         Display.setTitle("3D游戏？就这？");
 
-        BufferedImage img = ImageIO.read(Game.class.getClassLoader().getResourceAsStream("META-INF/testgame.png"));
-        byte[] array = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
-        ByteBuffer buf = ByteBuffer.allocate((array.length * 3) >> 2);
-        for (int i = 0; i < array.length; i += 4) {
-            buf.put(array, i, 3);
-        }
-        buf.rewind();
-        // should use 16x16 + 32x32
-        Display.setIcon(new ByteBuffer[] { buf, buf });
+        try {
+            BufferedImage img = ImageIO.read(Game.class.getClassLoader().getResourceAsStream("META-INF/testgame.png"));
+            byte[] array = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
+            ByteBuffer buf = ByteBuffer.allocate((array.length * 3) >> 2);
+            for (int i = 0; i < array.length; i += 4) {
+                buf.put(array, i, 3);
+            }
+            buf.rewind();
+            // should use 16x16 + 32x32
+            Display.setIcon(new ByteBuffer[]{buf, buf});
+        } catch (Throwable ignored) {}
 
         try {
             Display.create(new PixelFormat().withDepthBits(24));

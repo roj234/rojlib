@@ -27,7 +27,7 @@ package ilib.animator.model;
 
 import roj.config.data.CMapping;
 import roj.text.StringPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -44,6 +44,6 @@ public interface IModel {
 
     void render(double ticks);
 
-    void toByteArray(ByteWriter w, StringPool pool);
+    void toByteArray(ByteList w, StringPool pool);
     void toJSON(CMapping mapping);
 }

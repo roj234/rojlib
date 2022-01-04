@@ -28,7 +28,7 @@ package ilib.network;
 import ilib.ATHandler;
 import ilib.ImpLib;
 import org.apache.logging.log4j.Level;
-import roj.util.ByteReader;
+import roj.util.ByteList;
 
 import net.minecraft.network.EnumConnectionState;
 import net.minecraft.network.INetHandler;
@@ -41,8 +41,6 @@ import javax.annotation.Nonnull;
 import java.util.Arrays;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/10/1 17:53
@@ -104,8 +102,8 @@ public class ProxyPacket implements Packet<INetHandler> {
         }
     }
 
-    public ByteReader payload() {
-        return new ByteReader(this.payload);
+    public ByteList payload() {
+        return new ByteList(this.payload);
     }
 
     @Override

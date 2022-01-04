@@ -27,7 +27,6 @@ package roj.asm.tree.attr;
 
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 
 /**
  * @author Roj234
@@ -35,11 +34,10 @@ import roj.util.ByteWriter;
  * @since  2020/10/21 22:45
  */
 public final class AttrUnknown extends Attribute {
-    public static Attribute downgrade(ConstantPool cw, ByteWriter w, Attribute attr) {
-        ByteList l = w.list;
-        l.clear();
+    public static Attribute downgrade(ConstantPool cw, ByteList w, Attribute attr) {
+        w.clear();
         attr.toByteArray1(cw, w);
-        return new AttrUnknown(attr.name, new ByteList(l.toByteArray()));
+        return new AttrUnknown(attr.name, new ByteList(w.toByteArray()));
     }
 
     public AttrUnknown(String attrName, ByteList bytes) {
@@ -50,7 +48,7 @@ public final class AttrUnknown extends Attribute {
     private ByteList data;
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.put(data);
     }
 

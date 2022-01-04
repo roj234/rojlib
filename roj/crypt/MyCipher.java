@@ -25,6 +25,8 @@
  */
 package roj.crypt;
 
+import roj.text.TextUtil;
+
 import javax.crypto.BadPaddingException;
 import javax.crypto.ShortBufferException;
 import java.nio.ByteBuffer;
@@ -139,39 +141,97 @@ public class MyCipher implements CipheR, DeCipher {
         }
     }
 
-    public byte[][] backup() {
-        return new byte[][] { iv.array().clone(), t0.array().clone() };
+    public Object backup() {
+        switch (type) {
+            default:
+            case MODE_ECB:
+            case MODE_CBC:
+                return null;
+            case MODE_PCBC:
+                return iv.array().clone();
+            case MODE_OFB:
+                return new Object[] { iv.array().clone(), iv.position() };
+            case MODE_CFB:
+                if ((mode & DECRYPT) != 0) {
+                    return new Object[] { iv.array().clone(), iv.position() };
+                }
+            case MODE_CTR:
+                byte[] b0 = iv.array().clone();
+                byte[] b1 = t0.array().clone();
+                return new Object[] { b0, b1, ((((long) iv.position()) << 32) | t0.position()) };
+        }
     }
 
-    public void restore(byte[][] data) {
-        iv.position(0);
-        iv.put(data[0]);
-        iv.position(0);
-        t0.position(0);
-        t0.put(data[1]);
-        t0.position(0);
+    public void restore(Object data) {
+        switch (type) {
+            default:
+            case MODE_ECB:
+            case MODE_CBC:
+                break;
+            case MODE_PCBC:
+                System.arraycopy(data, 0, iv.array(), 0, iv.capacity());
+                break;
+            case MODE_OFB:
+                Object[] arr = (Object[]) data;
+                System.arraycopy(arr[0], 0, iv.array(), 0, iv.capacity());
+                iv.position((Integer) arr[1]);
+                break;
+            case MODE_CFB:
+                if ((mode & DECRYPT) != 0) {
+                    arr = (Object[]) data;
+                    System.arraycopy(arr[0], 0, iv.array(), 0, iv.capacity());
+                    iv.position((Integer) arr[1]);
+                    break;
+                }
+            case MODE_CTR:
+                arr = (Object[]) data;
+                System.arraycopy(arr[0], 0, iv.array(), 0, iv.capacity());
+                System.arraycopy(arr[1], 0, t0.array(), 0, t0.capacity());
+                iv.position((Integer) arr[2]);
+                t0.position((Integer) arr[3]);
+        }
     }
 
     @Override
     public int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
         if (out.remaining() < in.remaining()) return BUFFER_OVERFLOW;
 
-        ByteBuffer b0 = this.iv;
-        ByteBuffer b1 = this.t0;
-        int blockSize = b0.capacity();
-
+        int blockSize = iv.capacity();
         if ((mode & (DECRYPT | PKCS5_PADDING)) == PKCS5_PADDING)
             PKCS5(in, false, blockSize);
 
         switch (type) {
             case MODE_ECB: // Electronic Cipher Book
-                while (in.hasRemaining()) cip.crypt(in, out);
+            case MODE_CBC: // Cipher Block Chaining
+            case MODE_PCBC: // Plain Cipher Block Chaining
+                blockCipher(in, out);
                 break;
-            case MODE_CBC: { // Cipher Block Chaining
-                int k = in.remaining() / blockSize;
+            default:
+                if((blockSize & 3) != 0 || !try4(in, out))
+                    try1(in, out, in.remaining());
+        }
+
+        if ((mode & (DECRYPT | PKCS5_PADDING)) == (DECRYPT | PKCS5_PADDING))
+            PKCS5(out, true, blockSize);
+
+        return OK;
+    }
+
+    private void blockCipher(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
+        ByteBuffer b0 = this.iv;
+        ByteBuffer b1 = this.t0;
+        int blockSize = b0.capacity();
+
+        int cyl = in.remaining() / blockSize;
+
+        switch (type) {
+            case MODE_ECB:
+                while (cyl-- > 0) cip.crypt(in, out);
+                break;
+            case MODE_CBC: {
                 byte[] bb0 = b0.array();
                 byte[] bb1 = b1.array();
-                while (k-- > 0) {
+                while (cyl-- > 0) {
                     for (int i = 0; i < blockSize; i++) {
                         bb1[i] = (byte) (in.get() ^ bb0[i]);
                     }
@@ -182,11 +242,10 @@ public class MyCipher implements CipheR, DeCipher {
                 }
             }
             break;
-            case MODE_PCBC: { // Plain Cipher Block Chaining
-                int k = in.remaining() / blockSize;
+            case MODE_PCBC: {
                 byte[] bb0 = b0.array();
                 if ((mode & DECRYPT) == 0) {
-                    while (k-- > 0) {
+                    while (cyl-- > 0) {
                         for (int i = 0; i < blockSize; i++) {
                             bb0[i] ^= in.get();
                         }
@@ -204,7 +263,7 @@ public class MyCipher implements CipheR, DeCipher {
                         }
                     }
                 } else {
-                    while (k-- > 0) {
+                    while (cyl-- > 0) {
                         cip.crypt(in, out);
                         in.position(in.position() - blockSize);
                         int p = out.position() - blockSize;
@@ -217,8 +276,16 @@ public class MyCipher implements CipheR, DeCipher {
                 }
             }
             break;
+        }
+    }
+
+    private void try1(ByteBuffer in, ByteBuffer out, int cyl) throws GeneralSecurityException {
+        ByteBuffer b0 = this.iv;
+        ByteBuffer b1 = this.t0;
+
+        switch (type) {
             case MODE_OFB: { // Output Feedback
-                while (in.hasRemaining()) {
+                while (cyl-- > 0) {
                     if (!b0.hasRemaining()) {
                         b0.position(0);
                         cip.crypt(b0, b1);
@@ -226,34 +293,110 @@ public class MyCipher implements CipheR, DeCipher {
                         b0.position(0);
                         b1.position(0);
 
-                        System.arraycopy(b0.array(), 0, b1.array(), 0, blockSize);
+                        System.arraycopy(b1.array(), 0, b0.array(), 0, b0.capacity());
                     }
                     out.put((byte) (in.get() ^ b0.get()));
                 }
             }
             break;
             case MODE_CFB: { // Cipher Feedback
-                ByteBuffer T = (mode & DECRYPT) == 0 ? b1 : in;
-                int lim = T.limit();
-                while (in.hasRemaining()) {
+                boolean ENC = (mode & DECRYPT) == 0;
+                while (cyl-- > 0) {
                     if (!b0.hasRemaining()) {
                         b0.position(0);
-                        T.limit(T.position())
-                         .position(T.position() - blockSize);
-                        cip.crypt(T, b0);
-                        if (T == b1) T.position(0);
-                        else T.limit(lim);
+                        b1.position(0);
+                        cip.crypt(b1, b0);
+                        b1.position(0);
                         b0.position(0);
                     }
-                    byte b = (byte) (in.get() ^ b0.get());
-                    if (T == b1) b1.put(b);
+                    byte b = in.get();
+                    if (ENC) b1.put(b);
+                    b ^= b0.get();
+                    if (!ENC) b1.put(b);
                     out.put(b);
                 }
             }
             break;
             case MODE_CTR: {// Counter
+                byte[] ctr = b1.array();
+                while (cyl-- > 0) {
+                    if (!b0.hasRemaining()) {
+                        b0.position(0);
+                        b1.position(0);
+                        cip.crypt(b1, b0);
+                        for (int i = 0; i < ctr.length; i++) {
+                            if (ctr[i]++ != 0) break;
+                        }
+                        b0.position(0);
+                    }
+                    out.put((byte) (in.get() ^ b0.get()));
+                }
+            }
+            break;
+        }
+    }
+
+    private boolean try4(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
+        ByteBuffer b0 = this.iv;
+        ByteBuffer b1 = this.t0;
+
+        if (in.remaining() < 4) return false;
+        if ((b0.position() & 3) != 0) {
+            try1(in, out, 4 - (b0.position() & 3));
+            // integer align
+        }
+        int cyl = in.remaining() >> 2;
+        if (cyl == 0) return false;
+
+        switch (type) {
+            case MODE_OFB:
+                do {
+                    if (!b0.hasRemaining()) {
+                        b0.position(0);
+                        cip.crypt(b0, b1);
+
+                        b0.position(0);
+                        b1.position(0);
+
+                        System.arraycopy(b1.array(), 0, b0.array(), 0, b0.capacity());
+                    }
+                    out.putInt(in.getInt() ^ b0.getInt());
+                } while (--cyl > 0);
+            break;
+            case MODE_CFB: {
+                boolean ENC = (mode & DECRYPT) == 0;
+                if (ENC) {
+                    do {
+                        if (!b0.hasRemaining()) {
+                            b0.position(0);
+                            b1.position(0);
+                            cip.crypt(b1, b0);
+                            b1.position(0);
+                            b0.position(0);
+                        }
+                        int b = in.getInt();
+                        b1.putInt(b);
+                        out.putInt(b ^ b0.getInt());
+                    } while (--cyl > 0);
+                } else {
+                    do {
+                        if (!b0.hasRemaining()) {
+                            b0.position(0);
+                            b1.position(0);
+                            cip.crypt(b1, b0);
+                            b1.position(0);
+                            b0.position(0);
+                        }
+                        int b = in.getInt() ^ b0.getInt();
+                        b1.putInt(b);
+                        out.putInt(b);
+                    } while (--cyl > 0);
+                }
+            }
+            break;
+            case MODE_CTR: {
                 byte[] counter = b1.array();
-                while (in.hasRemaining()) {
+                do {
                     if (!b0.hasRemaining()) {
                         b0.position(0);
                         b1.position(0);
@@ -263,17 +406,22 @@ public class MyCipher implements CipheR, DeCipher {
                         }
                         b0.position(0);
                     }
-                    out.put((byte) (in.get() ^ b0.get()));
-                }
+                    out.putInt(in.getInt() ^ b0.getInt());
+                } while (--cyl > 0);
             }
             break;
-            //case 6:
-            //    break;
         }
 
-        if ((mode & (DECRYPT | PKCS5_PADDING)) == (DECRYPT | PKCS5_PADDING))
-            PKCS5(out, true, blockSize);
+        return !in.hasRemaining();
+    }
 
-        return OK;
+    @Override
+    public String toString() {
+        return "MyCipher{" +
+                "cip=" + cip +
+                ", iv=" + TextUtil.dumpBytes(iv.array()) +
+                ", t0=" + TextUtil.dumpBytes(t0.array()) +
+                ", type=" + type +
+                ", mode=" + mode + '}';
     }
 }

@@ -23,32 +23,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.cross;
-
-import roj.net.mss.MSSEngineClient;
-import roj.net.mss.PreSharedPubKey;
-
-import java.io.InputStream;
-import java.security.GeneralSecurityException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
+package roj.net.misc;
 
 /**
  * @author Roj233
- * @version 0.3.1
- * @since 2021/8/18 0:09
+ * @version 0.1
+ * @since 2021/12/25 0:27
  */
-public final class AE_MSSKey {
-    //while(!thing.red) { await(); } else try { killRelationShip() && enjoy() } catch(e) { delete thing; } finally { print (loved.ever) }
-    public static void loadMSSCert() {
-        try {
-            InputStream stream = AE_MSSKey.class.getResourceAsStream("/META-INF/ae/client.cer");
-            CertificateFactory factory = CertificateFactory.getInstance("X.509");
-            X509Certificate cer = (X509Certificate) factory.generateCertificate(stream);
-            MSSEngineClient.setDefaultKeyFormats(new PreSharedPubKey(cer));
-        } catch (GeneralSecurityException e) {
-            e.printStackTrace();
-            System.err.println("MSS引擎预共享根证书模式初始化失败");
-        }
-    }
+public interface Shutdownable {
+    boolean wasShutdown();
+    void shutdown();
 }

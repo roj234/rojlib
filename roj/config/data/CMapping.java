@@ -36,8 +36,6 @@ import javax.annotation.Nullable;
 import java.util.*;
 
 /**
- * Config Mapping
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/31 21:17
@@ -339,6 +337,87 @@ public class CMapping extends CEntry {
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
+        sb.append('{');
+        if (!map.isEmpty()) {
+            if (depth < 0) {
+                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                    sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':');
+                    entry.getValue().toJSON(sb, -9999999).append(',');
+                }
+                sb.delete(sb.length() - 1, sb.length());
+            } else {
+                sb.append('\n');
+                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                    for (int i = 0; i < depth + 4; i++) {
+                        sb.append(' ');
+                    }
+
+                    sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':').append(' ');
+                    entry.getValue().toJSON(sb, depth + 4).append(',').append('\n');
+                }
+                sb.delete(sb.length() - 2, sb.length() - 1);
+                for (int i = 0; i < depth; i++) {
+                    sb.append(' ');
+                }
+            }
+        }
+        return sb.append('}');
+    }
+
+    @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        if (!map.isEmpty()) {
+            if (depth == 0) {
+                CEntry root = map.get("");
+                if (root != null) {
+                    if (!(root instanceof CMapping))
+                        throw new IllegalArgumentException("INI文件格式第二级必须是映射");
+                    root.toINI(sb.append('\n'), 0);
+                }
+                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                    String key = entry.getKey();
+                    if (key.equals("")) continue;
+                    sb.append('[');
+                    if (key.indexOf(']') >= 0) {
+                        sb.append('"').append(AbstLexer.addSlashes(key)).append('"');
+                    } else {
+                        sb.append(key);
+                    }
+                    sb.append(']').append('\n');
+
+                    CEntry value = entry.getValue();
+                    if (!(value instanceof CMapping))
+                        throw new IllegalArgumentException("INI文件格式第二级必须是映射");
+                    value.toINI(sb, 1).append('\n');
+                }
+                sb.delete(sb.length() - 1, sb.length());
+            } else if (depth == 1) {
+                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                    String key = entry.getKey();
+                    int i = 0;
+                    for (; i < key.length(); i++) {
+                        if (AbstLexer.SPECIAL.contains(key.charAt(i))) {
+                            i = -1;
+                            break;
+                        }
+                    }
+                    if (i < 0)
+                        sb.append('"').append(AbstLexer.addSlashes(key)).append('"');
+                    else
+                        sb.append(key);
+                    entry.getValue().toINI(sb.append(' ').append('=').append(' '), 2).append('\n');
+                }
+                sb.delete(sb.length() - 1, sb.length());
+            } else {
+                throw new IllegalArgumentException("INI不支持两级以上的映射");
+            }
+        }
+        return sb;
+    }
+
+    @Override
+    public StringBuilder toTOML(StringBuilder sb, int depth) {
+        // todo
         sb.append('{');
         if (!map.isEmpty()) {
             if (depth < 0) {

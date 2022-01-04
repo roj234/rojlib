@@ -46,7 +46,6 @@ import roj.mapper.Util;
 import roj.util.ByteList;
 import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -1332,7 +1331,7 @@ public class NiximSystem {
             this.destClass = destClass;
 
             this.cw = new ConstantPoolEmpty();
-            this.bw = new ByteWriter(new WriteOnly());
+            this.bw = new WriteOnly();
             this.br = new ByteReader();
         }
 

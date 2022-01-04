@@ -25,6 +25,7 @@
  */
 package roj.net.mss;
 
+import roj.collect.Int2IntMap;
 import roj.crypt.CipheR;
 import roj.util.Helpers;
 
@@ -119,10 +120,11 @@ public final class MSSEngineClient extends MSSEngine {
                 return HS_OK;
             case TMP_1:
                 // u1 hdr, u4 len, u4 pkLen, byte[pkLen] data, u2 keyFmt, u2 cipherLen, u4[cipherLen] cpSpec
-                if (rcv.remaining() < 5) return uf(5);
+                if (rcv.remaining() < 1) return uf(1); // fast-fail preventing useless waiting
                 if (rcv.get(0) != PH_SERVER_HALLO) {
                     return error("无效的协议头, 这也许不是一个MSS服务器");
                 }
+                if (rcv.remaining() < 5) return uf(5);
                 if (rcv.remaining() < rcv.getInt(1) + 5) return uf(rcv.getInt(1) + 5);
                 if (snd.remaining() < 3) return of(3);
                 rcv.position(5);
@@ -135,39 +137,49 @@ public final class MSSEngineClient extends MSSEngine {
                 } catch (GeneralSecurityException | ArrayIndexOutOfBoundsException e) {
                     return error("公钥有误", e);
                 }
+
+                Int2IntMap map = new Int2IntMap(supportedCiphers.length);
+                for (int i = 0; i < supportedCiphers.length; i++) {
+                    int j = map.putInt(supportedCiphers[i].specificationId(), i);
+                    if (0 <= j)
+                        return error("重复的specificationId " + supportedCiphers[i].getClass().getName() + " - " + supportedCiphers[j].getClass().getName());
+                }
+
                 int len = rcv.getChar();
                 for (int i = 0; i < len; i++) {
-                    int spec = rcv.getInt();
-                    for (MSSCiphers selected : supportedCiphers) {
-                        if (selected.specificationId() == spec) {
-                            int hsk = selected.getSharedKeySize() >> 1;
-                            ByteBuffer tmp = ByteBuffer.allocate(3 + hsk);
-                            byte[] rndA = new byte[hsk];
-                            random.nextBytes(rndA);
-                            tmp.put(PH_CLIENT_RNDA).putChar((char) i).put(rndA);
-                            try {
-                                Cipher cipher = Cipher.getInstance(pub.getAlgorithm());
-                                cipher.init(Cipher.ENCRYPT_MODE, pub);
-                                this.tmp = cipher.doFinal(tmp.array());
-                                if (this.tmp.length > 65535) return error("公钥加密后数据过长");
+                    int j = map.get(rcv.getInt());
+                    if (j >= 0) {
+                        MSSCiphers selected = supportedCiphers[j];
 
-                                this.encoder = selected.createEncoder();
-                                this.decoder = selected.createDecoder();
-                                this.decoder.setKey(rndA, CipheR.DECRYPT);
+                        int hsk = selected.getSharedKeySize() >> 1;
+                        ByteBuffer tmp = ByteBuffer.allocate(3 + hsk);
+                        byte[] rndA = new byte[hsk];
+                        random.nextBytes(rndA);
+                        tmp.put(PH_CLIENT_RNDA).putChar((char) i).put(rndA);
+                        try {
+                            Cipher cipher = Cipher.getInstance(pub.getAlgorithm());
+                            cipher.init(Cipher.ENCRYPT_MODE, pub);
+                            this.tmp = cipher.doFinal(tmp.array());
+                            if (this.tmp.length > 65535) return error("公钥加密后数据过长");
 
-                                this.sharedKey = new byte[hsk << 1];
-                                System.arraycopy(rndA, 0, sharedKey, 0, hsk);
-                                stage = TMP_2;
-                            } catch (GeneralSecurityException e) {
-                                return error("公钥加密失败", e);
-                            }
-                            pubKey = null;
-                            break;
+                            this.encoder = selected.createEncoder();
+                            this.decoder = selected.createDecoder();
+                            this.decoder.setKey(rndA, CipheR.DECRYPT);
+
+                            this.sharedKey = new byte[hsk << 1];
+                            System.arraycopy(rndA, 0, sharedKey, 0, hsk);
+                            stage = TMP_2;
+                        } catch (GeneralSecurityException e) {
+                            return error("公钥加密失败", e);
                         }
+                        len -= i + 1;
+                        pubKey = null;
+                        break;
                     }
                 }
                 if (pubKey != null)
                     return error("没有共同的对称加密方式");
+                rcv.position(rcv.position() + (len << 2));
             case TMP_2:
                 if (snd.remaining() < 3 + tmp.length) return of(3 + tmp.length);
                 snd.put(PH_CLIENT_RNDA).putChar((char) tmp.length).put(tmp);
@@ -201,8 +213,7 @@ public final class MSSEngineClient extends MSSEngine {
                 if (this.hash.computeHandshakeHash(sharedKey) != hash)
                     return error("RNDB哈希有误");
 
-                this.encoder.setKey(sharedKey, CipheR.ENCRYPT);
-                this.decoder.setKey(sharedKey, CipheR.DECRYPT);
+                encoder.setKey(sharedKey, CipheR.ENCRYPT);
 
                 snd.put(PH_DONE).putChar((char) 0);
 
@@ -211,6 +222,8 @@ public final class MSSEngineClient extends MSSEngine {
                 int sndPos = snd.position();
                 if (sndPos == 0) {
                     stage = HS_DONE;
+                    encoder.setKey(sharedKey, CipheR.ENCRYPT);
+                    decoder.setKey(sharedKey, CipheR.DECRYPT);
                     return HS_OK;
                 }
 

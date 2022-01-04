@@ -90,7 +90,7 @@ class FileFilter implements Predicate<File> {
                             }
                         }
                     }.reset(in1);
-                    CList list = JSONParser.parse(reader, JSONParser.NO_DUPLICATE_KEY | JSONParser.NO_EOF | JSONParser.UNESCAPED_SINGLE_YH).asList();
+                    CList list = JSONParser.parse(reader, JSONParser.NO_DUPLICATE_KEY | JSONParser.NO_EOF | JSONParser.UNESCAPED_SINGLE_QUOTE).asList();
                     for (int j = 0; j < list.size(); j++) {
                         CEntry e1 = list.get(j);
                         if (e1.getType() != Type.LIST)

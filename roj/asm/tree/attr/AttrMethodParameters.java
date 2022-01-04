@@ -31,8 +31,8 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.collect.LinkedMyHashMap;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.Map;
 import java.util.PrimitiveIterator;
@@ -78,7 +78,7 @@ public final class AttrMethodParameters extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort((short) flags.size());
         for (Map.Entry<String, FlagList> e : flags.entrySet()) {
             w.putShort(pool.getUtfId(e.getKey())).putShort(e.getValue().flag);

@@ -31,15 +31,13 @@ import roj.asm.cst.CstPackage;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 17:16
@@ -138,7 +136,7 @@ public final class AttrModule extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         self.write(w, pool);
 
         final List<ModuleInfo> requires = this.requires;
@@ -223,7 +221,7 @@ public final class AttrModule extends Attribute {
             return this;
         }
 
-        public void write(ByteWriter w, ConstantPool writer) {
+        public void write(ByteList w, ConstantPool writer) {
             w.putShort(writer.getModuleId(name)).putShort(access).putShort(version == null ? 0 : writer.getUtfId(name));
         }
 
@@ -251,7 +249,7 @@ public final class AttrModule extends Attribute {
             return this;
         }
 
-        public void write(ByteWriter w, ConstantPool writer) {
+        public void write(ByteList w, ConstantPool writer) {
             w.putShort(writer.getPackageId(Package)).putShort(access).putShort(accessible.size());
             for (int i = 0, s = accessible.size(); i < s; i++) {
                 w.putShort(writer.getModuleId(accessible.get(i)));
@@ -282,7 +280,7 @@ public final class AttrModule extends Attribute {
             return this;
         }
 
-        public void write(ByteWriter w, ConstantPool writer) {
+        public void write(ByteList w, ConstantPool writer) {
             w.putShort(writer.getClassId(serviceName)).putShort(implement.size());
             for (int i = 0, s = implement.size(); i < s; i++) {
                 w.putShort(writer.getClassId(implement.get(i)));

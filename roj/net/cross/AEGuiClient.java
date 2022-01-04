@@ -30,6 +30,7 @@ import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
+import roj.net.misc.MSSClientKey;
 import roj.text.TextUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
@@ -54,7 +55,7 @@ import static roj.net.cross.Util.PROTOCOL_VERSION;
  */
 public class AEGuiClient extends JFrame {
     static {
-        AE_MSSKey.loadMSSCert();
+        MSSClientKey.loadMSSCert();
     }
 
     private final JButton        btnConnect;
@@ -122,6 +123,7 @@ public class AEGuiClient extends JFrame {
             try {
                 client.awaitLogin();
                 for (AEClient.PortMapEntry entry : client.portMap) {
+                    entry.port = (char) cfg.getInteger("port");
                     entry.enabled = true;
                 }
                 client.notifyPortMapModified();
@@ -328,6 +330,7 @@ public class AEGuiClient extends JFrame {
             try {
                 client.awaitLogin();
                 for (AEClient.PortMapEntry entry : client.portMap) {
+                    entry.port = (char) Integer.parseInt(inpPort.getText());
                     entry.enabled = true;
                 }
                 client.notifyPortMapModified();

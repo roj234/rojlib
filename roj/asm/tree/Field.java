@@ -38,7 +38,6 @@ import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.PrimitiveIterator;
 
@@ -77,7 +76,7 @@ public final class Field implements MoFNode {
 
                 handleAttribute(pool, r, name, r.length());
 
-                if (!r.hasRemaining()) {
+                if (r.hasRemaining()) {
                     System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.rIndex) + " bytes not " + "read correctly!");
                 }
             } else {
@@ -138,7 +137,7 @@ public final class Field implements MoFNode {
     public AttributeList attributes = new AttributeList();
     public Signature signature;
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.putShort(accesses.flag).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(ParamHelper.getField(type)));
 
         if (signature != null)
@@ -173,12 +172,12 @@ public final class Field implements MoFNode {
         FieldSimple f = new FieldSimple(accesses, cw.getUtf(name), cw.getUtf(rawDesc()));
         f.attributes.ensureCapacity(attributes.size() +
                                             (signature == null ? 0 : 1));
-        ByteWriter w = new ByteWriter(SharedBuf.i_get());
+        ByteList w = SharedBuf.i_get();
         for (int i = 0; i < attributes.size(); i++) {
             f.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
         }
         if (signature != null) {
-            w.list.clear();
+            w.clear();
             w.putShort(cw.getUtfId(signature.toGeneric()));
             f.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
         }

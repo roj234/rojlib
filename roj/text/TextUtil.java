@@ -235,35 +235,31 @@ public class TextUtil {
         return dumpBytes(new StringBuilder(), b, off, len).toString();
     }
 
-    public static String dumpBytes(byte[] b, int len) {
-        return dumpBytes(new StringBuilder(), b, 0, len).toString();
-    }
-
     public static StringBuilder dumpBytes(StringBuilder sb, byte[] b, int off, int len) {
         if (b.length - off < len) {
             System.err.println("Index out of bounds: len+" + (len - b.length + off));
             len = b.length - off;
         }
-        sb.append("\n             0 1  2 3  4 5  6 7  8 9  a b  c d  e f\n0x00000000   ");
-        int j = 1, v = 0;
-        for (int i = off; i < len; i++, j++) {
-            sb.append(i2h_char((b[i] >>> 4) & 0xf))
-                    .append(i2h_char(b[i] & 0xf));
-            if ((j & 1) == 0)
-                sb.append(' ');
-
-            if ((j & 15) == 0) {
-                v += 32;
-                sb.append("\n0x");
-                String s = Integer.toHexString(v);
-                for (int k = 7 - s.length(); k >= 0; k--) {
-                    sb.append('0');
-                }
-                sb.append(s).append("   ");
-            }
+        off &= ~31;
+        printOff(sb, off);
+        while (true) {
+            sb.append(i2h_char((b[off] >>> 4) & 0xf))
+              .append(i2h_char(b[off++] & 0xf));
+            if (off == len) break;
+            if ((off & 1) == 0) sb.append(' ');
+            if ((off & 15) == 0) printOff(sb, off);
         }
 
         return sb;
+    }
+
+    static void printOff(StringBuilder sb, int v) {
+        sb.append("\n0x");
+        String s = Integer.toHexString(v);
+        for (int k = 7 - s.length(); k >= 0; k--) {
+            sb.append('0');
+        }
+        sb.append(s).append("   ");
     }
 
     public static char i2h_char(int a) {

@@ -29,7 +29,7 @@ package roj.asm.tree.anno;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * @author Roj234
@@ -43,7 +43,7 @@ public final class AnnValClass extends AnnVal {
 
     public Type value;
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) CLASS).putShort(pool.getUtfId(ParamHelper.getField(value)));
     }
 

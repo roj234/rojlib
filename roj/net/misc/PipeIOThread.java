@@ -23,9 +23,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.cross;
+package roj.net.misc;
 
-import roj.net.pd.FileDescriptorChannel;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -40,7 +39,6 @@ import java.util.function.Consumer;
 /**
  * Pipe network IO threads
  * @author Roj233
- * @version 0.1
  * @since 2021/12/24 23:27
  */
 public final class PipeIOThread extends Thread {
@@ -48,6 +46,25 @@ public final class PipeIOThread extends Thread {
     private static PipeIOThread[] tmp = new PipeIOThread[0];
     private static int index;
     private static final int MAX_IO_THREADS = Runtime.getRuntime().availableProcessors();
+    private static final int IDLE_KILL_TIMEOUT = 50000;
+
+    public static synchronized int getIdleCount() {
+        if (tmp.length < PIPE_IO.activeCount()) {
+            tmp = new PipeIOThread[PIPE_IO.activeCount()];
+        }
+
+        int idle = 0;
+        int amount = PIPE_IO.enumerate(tmp);
+        for (int i = 0; i < amount; i++) {
+            PipeIOThread thread = tmp[i];
+            if (thread.idle) idle++;
+        }
+        return idle;
+    }
+
+    public static int getRunningCount() {
+        return PIPE_IO.activeCount();
+    }
 
     public static synchronized void syncWaitShutdown() {
         if (tmp.length < PIPE_IO.activeCount()) {
@@ -67,7 +84,7 @@ public final class PipeIOThread extends Thread {
         }
     }
 
-    public static synchronized void syncRegister(Shutdownable server, Pipe pair, Consumer<Pipe> callback) {
+    public static synchronized void syncRegister(Shutdownable server, Pipe pair, Consumer<Pipe> callback) throws Exception {
         if (tmp.length < PIPE_IO.activeCount()) {
             tmp = new PipeIOThread[PIPE_IO.activeCount()];
         }
@@ -80,25 +97,31 @@ public final class PipeIOThread extends Thread {
         att.callback = callback;
 
         int amount = PIPE_IO.enumerate(tmp);
+        Selector lowest = null;
         for (int i = 0; i < amount; i++) {
             PipeIOThread thread = tmp[i];
             Selector s = thread.selector;
-            try {
-                if (s.isOpen() && s.keys().size() < 128) {
-                    fdcA.register(s, SelectionKey.OP_READ, att);
-                    fdcB.register(s, SelectionKey.OP_READ, att);
-                    return;
+            if (s.isOpen() && s.keys().size() < 128) {
+                if (lowest == null || s.keys().size() < lowest.keys().size()) {
+                    lowest = s;
                 }
-            } catch (ClosedSelectorException | ClosedChannelException ignored) {}
+            }
         }
+        if (lowest != null) {
+            try {
+                fdcA.register(lowest, SelectionKey.OP_READ, att);
+                fdcB.register(lowest, SelectionKey.OP_READ, att);
+                return;
+            } catch (ClosedChannelException | ClosedSelectorException ignored) {}
+        }
+
         if (amount < MAX_IO_THREADS) {
             PipeIOThread thread = new PipeIOThread(server, index++);
             try {
                 fdcA.register(thread.selector, SelectionKey.OP_READ, att);
                 fdcB.register(thread.selector, SelectionKey.OP_READ, att);
             } catch (ClosedChannelException e) {
-                System.err.println("Impossible exception");
-                e.printStackTrace();
+                throw new IllegalStateException("Should not happen: closed channel", e);
             }
             thread.start();
         } else {
@@ -108,6 +131,7 @@ public final class PipeIOThread extends Thread {
 
     private final Shutdownable server;
     private final Selector selector;
+    volatile boolean idle;
 
     public PipeIOThread(Shutdownable server, int index) {
         super(PIPE_IO, "Pipe IO #" + index);
@@ -125,45 +149,55 @@ public final class PipeIOThread extends Thread {
 
     @Override
     public void run() {
-        while (!server.wasShutdown()) {
-            int i;
+        int idle = 0;
+        while (!server.wasShutdown() && idle < IDLE_KILL_TIMEOUT) {
             try {
-                i = selector.select();
+                selector.selectNow();
             } catch (IOException e) {
                 e.printStackTrace();
                 break;
+            } catch (ClosedSelectorException e) {
+                break;
             }
-            if (i == 0) break;
+            if (selector.selectedKeys().isEmpty() || Thread.interrupted()) {
+                LockSupport.parkNanos(10);
+                idle++;
+                this.idle = true;
+                continue;
+            }
+            this.idle = false;
+            idle = 0;
             for (SelectionKey key : selector.selectedKeys()) {
                 Att att = (Att) key.attachment();
                 Pipe pair = att.pair;
                 if (pair.isEof()) {
                     key.cancel();
-                    if (att.callback != null)
+                    if (att.callback != null) {
                         att.callback.accept(pair);
+                        att.callback = null;
+                    }
                     continue;
                 }
                 try {
                     pair.transfer(false);
-                } catch (IOException e) {
+                } catch (Throwable e) {
                     e.printStackTrace();
                     try {
                         pair.release();
-                    } catch (IOException e1) {
-                        e1.printStackTrace();
-                    }
+                    } catch (IOException ignored) {}
                     key.cancel();
-                    if (att.callback != null)
+                    if (att.callback != null) {
                         att.callback.accept(pair);
+                        att.callback = null;
+                    }
                 }
             }
             selector.selectedKeys().clear();
+            LockSupport.parkNanos(1);
         }
         try {
             selector.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        } catch (IOException ignored) {}
     }
 
     static final class Att {

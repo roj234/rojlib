@@ -30,9 +30,10 @@ import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CMapping;
 import roj.io.NIOUtil;
 import roj.net.SecureUtil;
-import roj.net.cross.Pipe;
-import roj.net.cross.Shutdownable;
-import roj.net.cross.TaskManager;
+import roj.net.misc.PacketBuffer;
+import roj.net.misc.Pipe;
+import roj.net.misc.Shutdownable;
+import roj.net.misc.TaskManager;
 import roj.net.mss.MSSServerEngineFactory;
 import roj.net.mss.PreSharedPubKey;
 import roj.net.tcp.MSSSocket;
@@ -57,7 +58,6 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
@@ -84,7 +84,6 @@ public class AEServer implements Runnable, Shutdownable {
     AtomicInteger connected = new AtomicInteger();
     int maxConn, maxConnPerIp = 128;
     static final Function<InetAddress, AtomicInteger> COUNTER = (x) -> new AtomicInteger();
-    ConcurrentHashMap<InetAddress, AtomicInteger> ipConnections = new ConcurrentHashMap<>();
 
     TaskManager watcher = new TaskManager();
 
@@ -134,12 +133,6 @@ public class AEServer implements Runnable, Shutdownable {
                     connected.getAndDecrement();
                     c.close();
                 } else {
-                    AtomicInteger cnt = ipConnections.computeIfAbsent(c.getInetAddress(), COUNTER);
-                    if (cnt.incrementAndGet() > maxConnPerIp) {
-                        cnt.decrementAndGet();
-                        c.close();
-                    }
-
                     FileDescriptor fd = NIOUtil.fd(c);
                     initSocketPref(c);
 
@@ -343,35 +336,24 @@ public class AEServer implements Runnable, Shutdownable {
         public void run() {
             catcher:
             try {
-                System.out.println("客户端连接 " + ch);
                 while (state != null && !server.shutdown) {
                     state = state.next(this);
+                    if (state == PipeLogin.PIPE_OK) break catcher;
                 }
 
                 state = Closed.CLOSED;
-                if (ch == null) break catcher;
 
                 while (!ch.shutdown()) {
                     LockSupport.parkNanos(100);
                 }
                 ch.close();
             } catch (Throwable e) {
-                if (room != null && clientId == 0) {
-                    syncPrint(this + ": 解散 " + room.id);
-                }
+                syncPrint(this + ": 异常 " + e.getMessage());
+                if (e.getClass() != IOException.class)
+                    e.printStackTrace();
 
                 try {
                     write1(ch, (byte) PS_ERROR_IO);
-                } catch (Throwable ignored) {}
-
-                String msg = e.getMessage();
-
-                if (!"Broken pipe".equals(msg) && !"Connection reset by peer".equals(msg)) {
-                    syncPrint(this + ": Error");
-                    e.printStackTrace();
-                }
-
-                try {
                     ch.shutdown();
                 } catch (IOException ignored) {}
 
@@ -382,6 +364,7 @@ public class AEServer implements Runnable, Shutdownable {
 
             if(room != null) {
                 if(room.master == this) {
+                    syncPrint(this + ": 解散 " + room.id);
                     room.master = null;
                     server.rooms.remove(room.id);
                     room.close();
@@ -389,16 +372,16 @@ public class AEServer implements Runnable, Shutdownable {
                     synchronized (room.clients) {
                         room.clients.remove(clientId);
                     }
-                    ByteBuffer b = ch.buffer();
-                    b.clear();
-                    b.put((byte) PH_CLIENT_LOGOUT).putInt(clientId).flip();
                     Worker mw = room.master;
-                    if (mw != null)
-                        mw.sync(b);
+                    if (mw != null) {
+                        ByteBuffer x = ByteBuffer.allocate(5)
+                                                 .put((byte) PH_CLIENT_LOGOUT)
+                                                 .putInt(clientId);
+                        x.flip();
+                        mw.sync(x);
+                    }
                 }
             }
-            if (0 == server.ipConnections.get(ch.socket().getInetAddress()).decrementAndGet())
-                server.ipConnections.remove(ch.socket().getInetAddress());
 
             ch = null;
             server.connected.getAndDecrement();
@@ -452,22 +435,22 @@ public class AEServer implements Runnable, Shutdownable {
             }
         }
 
-        private final ConcurrentLinkedQueue<byte[]> packets = new ConcurrentLinkedQueue<>();
+        private final PacketBuffer packets = new PacketBuffer();
         public void sync(ByteBuffer rb) {
-            byte[] data = new byte[rb.remaining()];
-            rb.get(data);
-            packets.add(data);
+            packets.offer(rb);
         }
 
         private final IntMap<PipeGroup> selfPipes = new IntMap<>();
         private       PipeGroup         pending;
         public String generatePipe(int[] tmp) {
-            if (pending != null) return "管道#" + pending.id + "处于等待主机回复状态";
-            if (clientId <= 1) return "只有客户端才能请求管道";
-            if (server.pipes.isEmpty()) server.pipeId = 0;
-            else if (server.pipes.size() > 100) return "服务器等待打开的管道过多";
+            if (pending != null) return "管道 #" + pending.id + " 处于等待状态";
+            if (clientId == 0) return "只有客户端才能请求管道";
+            /*if (server.pipes.isEmpty()) server.pipeId = 0;
+            else */if (server.pipes.size() > 30) return "服务器等待打开的管道过多";
+            if (selfPipes.size() > 10) return "你打开的管道过多";
 
             PipeGroup group = pending = new PipeGroup();
+            group.downOwner = this;
             group.id = server.pipeId++;
             group.upPass = (int) (new Object().hashCode() ^ hashCode() ^ System.currentTimeMillis()) + 1;
             group.downPass = (int) (new Object().hashCode() ^ hashCode() ^ System.currentTimeMillis()) + 2;
@@ -501,20 +484,23 @@ public class AEServer implements Runnable, Shutdownable {
                 } catch (IOException ignored) {}
             }
             group.life = -1;
-            // todo test
-            return this == group.downOwner ? group.upOwner : group.downOwner;
+            return clientId != 0 ? room.master : group.downOwner;
         }
 
         public PipeGroup getPipe(int pipeId) {
             return selfPipes.get(pipeId);
         }
+
+        public void pendingPipeOpen() {
+            pending = null;
+        }
     }
 
     static final class PipeGroup {
         int life;
-        Integer id, upPass, downPass;
+        int id, upPass, downPass;
         FileDescriptor upConnFD, downConnFD;
-        Worker upOwner, downOwner;
+        Worker downOwner;
         Pipe pairRef;
     }
 }

@@ -36,8 +36,8 @@ import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -115,7 +115,7 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
         }
     */
     @Override
-    public void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
+    public void toByteArray(ConstantPool pool, ByteList w, ToIntMap<InsnNode> pcRev) {
         w.putShort(list.size());
         for (LocalVariable c : list) {
             InsnNode s = validate(c.start);

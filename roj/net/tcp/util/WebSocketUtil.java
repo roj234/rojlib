@@ -35,14 +35,11 @@ import roj.net.tcp.serv.response.HTTPResponse;
 import roj.net.tcp.serv.util.Request;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import java.nio.ByteBuffer;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2021/2/14 18:26
@@ -90,17 +87,16 @@ public class WebSocketUtil {
      * 解析数据帧
      * @return 后面还有消息吗
      */
-    public static boolean decode(ByteList in, IBitSet opcodes) {
+    public static boolean decode(ByteList r, IBitSet opcodes) {
         int $len;
-        ByteReader r = new ByteReader(in);
-        int id = r.readUnsignedByte();
+        int id = r.readUByte();
         // 0
 
         if(!opcodes.contains(id & 15))
             throw new IllegalArgumentException("Not valid opcode.");
         int fin = id & 255;
 
-        $len = r.readUnsignedByte(); // 1
+        $len = r.readUByte(); // 1
         if(($len & 128) == 0)
             throw new IllegalArgumentException("Client data does not masked.");
 
@@ -117,7 +113,7 @@ public class WebSocketUtil {
         }
 
         for (int i = 0; i < $data.wIndex(); i++) {
-            in.put(i, (byte) ($data.get(i) ^ (($masks >>> ((i & 3) * 8)) & 255)));
+            r.put(i, (byte) ($data.get(i) ^ (($masks >>> ((i & 3) * 8)) & 255)));
         }
 
         return fin == 0;

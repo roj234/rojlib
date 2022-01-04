@@ -27,7 +27,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.List;
 
@@ -43,7 +43,7 @@ public final class AnnValArray extends AnnVal {
 
     public List<AnnVal> value;
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) ARRAY).putShort(value.size());
         for (int i = 0; i < value.size(); i++) {
             value.get(i).toByteArray(pool, w);

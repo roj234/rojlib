@@ -30,7 +30,7 @@ import roj.asm.cst.CstRef;
 import roj.asm.tree.MoFNode;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * 对象描述符
@@ -94,7 +94,7 @@ public final class Desc implements MoFNode {
     }
 
     @Override
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         throw new UnsupportedOperationException();
     }
 

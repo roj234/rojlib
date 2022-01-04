@@ -33,7 +33,6 @@ import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.ByteList.WriteOnly;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -455,7 +454,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
     static class MyCodeVisitor extends CodeVisitor {
         MyCodeVisitor() {
-            this.bw = new ByteWriter(null);
+            //this.bw = new ByteList();
             this.br = new ByteReader();
             this.methods = new MyHashMap<>();
             this.tmp = new Desc("", "");
@@ -464,7 +463,7 @@ public final class SimpleObfuscator extends Obfuscator {
         public void initNil(ByteList data) {
             this.br.refresh(data);
             this.cw = new ConstantPoolEmpty();
-            this.bw.list = new WriteOnly();
+            this.bw = new WriteOnly();
         }
 
         int ldcPos;

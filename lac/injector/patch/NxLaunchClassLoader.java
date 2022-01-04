@@ -38,8 +38,6 @@ import roj.reflect.DirectAccessor;
 import roj.text.DottedStringPool;
 import roj.text.StringPool;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import net.minecraft.launchwrapper.Launch;
 
@@ -78,7 +76,7 @@ class NxLaunchClassLoader extends ClassLoader implements AccessHelper {
 
     @Copy
     static void loadClasses(File file) throws Exception {
-        ByteReader r = new ByteReader(decodeModInfo(file));
+        ByteList r = decodeModInfo(file);
         StringPool p = new DottedStringPool(r, '.');
         classes = new MyHashSet<>();
         for (int i = r.readInt() - 1; i >= 0; i--) {
@@ -90,24 +88,23 @@ class NxLaunchClassLoader extends ClassLoader implements AccessHelper {
     static ByteList decodeModInfo(File file) throws IOException, GeneralSecurityException {
         NotMd5 notMd5 = new NotMd5();
 
-        ByteWriter bw = new ByteWriter();
+        ByteList bw = new ByteList();
         digestModFiles(notMd5, bw);
 
         MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CBC);
         sm4.setOption(MyCipher.IV, Arrays.copyOf(notMd5.digest(), 16));
         sm4.setKey(bw.toByteArray(), CipheR.DECRYPT | MyCipher.PKCS5_PADDING);
 
-        ByteList out = bw.list;
-        out.clear();
+        bw.clear();
 
         ByteBuffer in = ByteBuffer.wrap(IOUtil.read(file));
-        out.ensureCapacity(in.limit());
-        sm4.crypt(in, ByteBuffer.wrap(out.list));
-        return out;
+        bw.ensureCapacity(in.limit());
+        sm4.crypt(in, ByteBuffer.wrap(bw.list));
+        return bw;
     }
 
     @Copy
-    static void digestModFiles(NotMd5 notMd5, ByteWriter bw) throws IOException {
+    static void digestModFiles(NotMd5 notMd5, ByteList bw) throws IOException {
         SM3 sm3 = new SM3();
 
         File[] mods = new File("mods").listFiles();

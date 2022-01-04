@@ -69,7 +69,7 @@ public class GIFDecoder {
     }
 
     public static Gif decode(final byte[] out) throws IOException {
-        ByteReader r = new ByteReader(out);
+        ByteList r = new ByteList(out);
         Gif gif = new Gif();
 
         String cl = r.readUTF(6);
@@ -120,7 +120,7 @@ public class GIFDecoder {
         }
     }
 
-    public static void parseColorTable(int[] colorTable, ByteReader rd) {
+    public static void parseColorTable(int[] colorTable, ByteList rd) {
         int size = colorTable.length;
         if (size == 0)
             return;
@@ -145,7 +145,7 @@ public class GIFDecoder {
         return 0;
     }
 
-    public static void readExtension(Gif gif, ByteReader r) throws IOException {
+    public static void readExtension(Gif gif, ByteList r) throws IOException {
         short ext = r.readUByte();
         switch (ext) {
             case 0xFE:
@@ -175,7 +175,7 @@ public class GIFDecoder {
 
     }
 
-    public static int skipSubBlock(ByteReader r) {
+    public static int skipSubBlock(ByteList r) {
         int startIndex = r.rIndex;
         short subBlockLen = r.readUByte();
         while (subBlockLen != 0 && !r.hasRemaining()) {
@@ -186,7 +186,7 @@ public class GIFDecoder {
         return r.rIndex - startIndex - 1;
     }
 
-    public static byte[] skipSubBlock(ByteReader r, ByteList buf) {
+    public static byte[] skipSubBlock(ByteList r, ByteList buf) {
         byte b = r.readByte();
         while (b != 0) {
             buf.put(b);
@@ -196,7 +196,7 @@ public class GIFDecoder {
         return buf.toByteArray();
     }
 
-    public static void readGraphicController(Gif gif, ByteReader r) {
+    public static void readGraphicController(Gif gif, ByteList r) {
         Frame frame = gif.currFrame;
         r.rIndex++;
         byte flag = r.readByte();
@@ -207,7 +207,7 @@ public class GIFDecoder {
         r.rIndex++;
     }
 
-    public static void readAppExtensions(Gif gif, ByteReader r) {
+    public static void readAppExtensions(Gif gif, ByteList r) {
         short len = r.readUByte();
         try {
             gif.appName = r.readUTF(8);
@@ -217,7 +217,7 @@ public class GIFDecoder {
         skipSubBlock(r);
     }
 
-    public static void readDescriptor(Gif gif, ByteReader r) {
+    public static void readDescriptor(Gif gif, ByteList r) {
         gif.beginFrame();
         Frame frame = gif.currFrame;
         frame.offsetX = r.readUShortLE();

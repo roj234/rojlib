@@ -46,7 +46,7 @@ final class Handshake extends Stated {
 
         int wait = TIMEOUT;
         while (!ch.handShake()) {
-            LockSupport.parkNanos(100);
+            LockSupport.parkNanos(20);
             if (worker.server.shutdown) return HS_ERR_POLICY;
             if (wait-- <= 0) {
                 write1Direct(ch, (byte) HS_ERR_TIMEOUT);
@@ -83,9 +83,8 @@ final class Handshake extends Stated {
         int channel_type = rb.get(5) & 0xFF;
         switch (channel_type) {
             case PCN_CONTROL:
-                if (!readSome(channel, 1, TIMEOUT))
-                    return null;
-                rb.compact().flip();
+                rb.clear();
+                if (!readSome(channel, 1, TIMEOUT)) return null;
                 int role = rb.get(0) & 0xFF;
                 switch (role) {
                     case PS_LOGIN_C:

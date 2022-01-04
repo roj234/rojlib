@@ -28,8 +28,8 @@ package roj.asm.tree.attr;
 
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 /**
  * No description provided
@@ -48,7 +48,7 @@ public final class AttrAnnotationDefault extends Attribute {
 
     public AnnVal def;
 
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         def.toByteArray(pool, w);
     }
 

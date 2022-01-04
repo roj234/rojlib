@@ -28,7 +28,7 @@ package roj.asm.tree.attr;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.util.ConstantPool;
 import roj.collect.ToIntMap;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * @author Roj234
@@ -36,5 +36,5 @@ import roj.util.ByteWriter;
  * @since  2021/1/16 22:33
  */
 public interface ICodeAttribute {
-    void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev);
+    void toByteArray(ConstantPool pool, ByteList w, ToIntMap<InsnNode> pcRev);
 }

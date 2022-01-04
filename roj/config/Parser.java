@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2021 Roj234
+ * Copyright (c) 2022 Roj234
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,14 +23,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.cross;
+package roj.config;
+
+import roj.config.data.CEntry;
 
 /**
  * @author Roj233
  * @version 0.1
- * @since 2021/12/25 0:27
+ * @since 2022/1/6 13:46
  */
-public interface Shutdownable {
-    boolean wasShutdown();
-    void shutdown();
+public interface Parser {
+    default CEntry Parse(CharSequence string) throws ParseException {
+        return Parse(string, 0);
+    }
+    CEntry Parse(CharSequence string, int flag) throws ParseException;
+
+    String format();
 }

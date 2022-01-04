@@ -35,7 +35,6 @@ import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.collect.MyHashSet;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.io.FileOutputStream;
@@ -183,13 +182,10 @@ public final class ConstantData implements IClass {
         return (Attribute) attributes.getByName(name);
     }
 
-    public ByteList getBytes(ByteList buf) {
-        buf.clear();
-
+    public ByteList getBytes(ByteList w) {
         ConstantPool cw = this.cp;
 
-        ByteWriter w = new ByteWriter(buf)
-         .putShort(accesses.flag)
+        w.putShort(accesses.flag)
          .putShort(cw.reset(nameCst).getIndex())
          .putShort(parentCst == null ? 0 : cw.reset(parentCst).getIndex())
          .putShort(interfaces.size());
@@ -214,21 +210,21 @@ public final class ConstantData implements IClass {
             attributes.get(i).toByteArray(cw, w);
         }
 
-        int pos = buf.wIndex();
-        byte[] tmp = buf.list;
+        int pos = w.wIndex();
+        byte[] tmp = w.list;
         int cpl = cw.byteLength() + 10;
         if (tmp.length < pos + cpl) {
             tmp = new byte[pos + cpl];
         }
-        System.arraycopy(buf.list, 0, tmp, cpl, pos);
-        buf.list = tmp;
+        System.arraycopy(w.list, 0, tmp, cpl, pos);
+        w.list = tmp;
 
-        buf.wIndex(0);
+        w.wIndex(0);
         cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
-        assert buf.wIndex() == cpl;
-        buf.wIndex(pos + cpl);
+        assert w.wIndex() == cpl;
+        w.wIndex(pos + cpl);
 
-        return buf;
+        return w;
     }
 
     public void normalize() {

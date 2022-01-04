@@ -33,7 +33,7 @@ import roj.asm.cst.CstDynamic;
 import roj.asm.type.NativeType;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import static roj.asm.cst.CstType.*;
 
@@ -158,7 +158,7 @@ public final class LdcInsnNode extends InsnNode {
     public Constant c;
 
     @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         int cpi = (c = cw.reset(c)).getIndex();
         if (this.code == Opcodes.LDC2_W || (this.code = (cpi < 256) ? Opcodes.LDC : Opcodes.LDC_W) != Opcodes.LDC) {
             w.put(code).putShort(cpi);

@@ -26,7 +26,7 @@
 
 package roj.asm.cst;
 
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -53,7 +53,7 @@ public final class CstNameAndType extends Constant {
     }
 
     @Override
-    public final void write(ByteWriter w) {
+    public final void write(ByteList w) {
         w.put(CstType.NAME_AND_TYPE)
          .putShort(getNameIndex())
          .putShort(getTypeIndex());

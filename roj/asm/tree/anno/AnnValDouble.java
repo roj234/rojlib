@@ -27,7 +27,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * @author Roj234
@@ -41,7 +41,7 @@ public final class AnnValDouble extends AnnVal {
 
     public double value;
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) DOUBLE).putShort(pool.getDoubleId(value));
     }
 

@@ -49,8 +49,6 @@ import roj.mapper.util.SubImpl;
 import roj.text.DottedStringPool;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import javax.annotation.Nullable;
@@ -116,9 +114,8 @@ public class ConstMapper extends Mapping {
         if(!checkFieldType)
             pool.add("");
 
-        ByteWriter globalWriter = new ByteWriter(1000000);
-        ByteWriter w = new ByteWriter(200000);
-        // 原则上为了压缩可以再把name和desc做成constant
+        ByteList w1 = new ByteList(200000);
+        ByteList w = new ByteList(200000);
 
         w.putVarInt(classMap.size(), false);
         for (Map.Entry<String, String> s : classMap.entrySet()) {
@@ -169,19 +166,20 @@ public class ConstMapper extends Mapping {
                     s.name), s.param);
         }
 
-        pool.writePool(globalWriter.putInt(FILE_HEADER).putLong(hash)).put(w);
-
         try (FileOutputStream fos = new FileOutputStream(cache)) {
-            globalWriter.writeToStream(fos);
-            fos.flush();
+            w1.putInt(FILE_HEADER).putLong(hash);
+            pool.writePool(w1);
+            w1.writeToStream(fos);
+            w.writeToStream(fos);
         }
     }
 
     private boolean readCache(long hash, File cache) throws IOException {
         if(cache.length() == 0) throw new FileNotFoundException();
-        ByteReader r;
+        ByteList r = IOUtil.getSharedByteBuf();
         try (FileInputStream fis = new FileInputStream(cache)) {
-            r = new ByteReader(IOUtil.read(fis));
+            r.clear();
+            r.readStreamFully(fis);
         }
 
         if(r.readInt() != FILE_HEADER)

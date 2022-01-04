@@ -25,19 +25,15 @@
  */
 package ilib.network;
 
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/9/25 13:25
  */
 public class NetworkHelper {
-    // Utilities method
-    public static void writeStringList(ByteWriter buf, String[] list) {
+    public static void writeStringList(ByteList buf, String[] list) {
         if (list == null) {
             buf.putVarInt(-1);
             return;
@@ -48,7 +44,7 @@ public class NetworkHelper {
         }
     }
 
-    public static String[] getStringList(ByteReader buf) {
+    public static String[] getStringList(ByteList buf) {
         int length = buf.readVarInt();
         if (length == -1) return null;
         String[] result = new String[length];

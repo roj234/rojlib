@@ -99,6 +99,16 @@ public final class CNull extends CEntry {
     }
 
     @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        return sb.append("null");
+    }
+
+    @Override
+    public StringBuilder toTOML(StringBuilder sb, int depth) {
+        return sb.append("null");
+    }
+
+    @Override
     public Object toNudeObject() {
         return null;
     }

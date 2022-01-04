@@ -29,7 +29,7 @@ package roj.asm.tree.insn;
 import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -77,7 +77,7 @@ public final class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         w.put(code);
         if (variableId > 255 || amount != (byte) amount) {
             w.putShort(variableId).putShort(amount);

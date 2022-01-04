@@ -28,8 +28,8 @@ package roj.asm.tree.attr;
 
 import roj.asm.cst.CstPackage;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +68,7 @@ public final class AttrModulePackages extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         final List<String> packages = this.packages;
         w.putShort(packages.size());
         for (int i = 0; i < packages.size(); i++) {

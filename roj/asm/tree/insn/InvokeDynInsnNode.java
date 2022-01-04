@@ -31,7 +31,7 @@ import roj.asm.cst.CstDynamic;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -71,7 +71,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
      * Thus, we ignore it again(Previous in InvokeItfInsnNode).
      */
     @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         if (params != null) {
             params.add(returnType);
             rawParam = ParamHelper.getMethod(params);

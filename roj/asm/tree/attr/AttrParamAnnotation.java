@@ -28,8 +28,8 @@ package roj.asm.tree.attr;
 
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +57,7 @@ public final class AttrParamAnnotation extends Attribute {
     public List<List<Annotation>> annotations;
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.put((byte) annotations.size());
         for (List<Annotation> list : annotations) {
             w.putShort(list.size());

@@ -27,8 +27,7 @@ package ilib.animator.keyframe;
 
 import roj.math.Mat4x3f;
 import roj.text.StringPool;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -163,7 +162,7 @@ public final class Keyframes implements Iterable<Keyframe> {
         }
     }
 
-    public static Keyframes fromByteArray(ByteReader r, StringPool pool) {
+    public static Keyframes fromByteArray(ByteList r, StringPool pool) {
         Keyframes kfs = new Keyframes();
 
         for (int i = 0, len = r.readVarInt(false); i < len; i++) {
@@ -174,7 +173,7 @@ public final class Keyframes implements Iterable<Keyframe> {
         return kfs;
     }
 
-    public void toByteArray(ByteWriter w, StringPool pool) {
+    public void toByteArray(ByteList w, StringPool pool) {
         w.putVarInt(this.keyframes.size(), false);
 
         List<Keyframe> keyframes = this.keyframes;

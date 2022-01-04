@@ -27,7 +27,7 @@
 package roj.asm.cst;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * @author Roj234
@@ -40,7 +40,7 @@ public abstract class Constant implements Cloneable {
     Constant() {}
 
     @Internal
-    public abstract void write(ByteWriter writer);
+    public abstract void write(ByteList w);
 
     @Override
     public abstract boolean equals(Object o);

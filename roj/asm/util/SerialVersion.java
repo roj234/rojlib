@@ -32,7 +32,6 @@ import roj.asm.type.NativeType;
 import roj.asm.type.Type;
 import roj.collect.BSLowHeap;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
 import roj.util.Helpers;
 
 import java.security.DigestException;
@@ -43,6 +42,7 @@ import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static roj.asm.util.AccessFlag.*;
+
 /**
  * 计算SerialVersionUID
  *
@@ -82,7 +82,7 @@ public class SerialVersion {
             }
         }
 
-        ByteWriter w = new ByteWriter(128);
+        ByteList w = new ByteList(128);
         w.putJavaUTF(cz.className().replace('/', '.'));
         int access = cz.accessFlag().flag;
         if ((access & INTERFACE) != 0) {
@@ -126,7 +126,6 @@ public class SerialVersion {
              .putJavaUTF(methods.get(i).desc.replace('/', '.'));
         }
 
-        ByteList bl = w.list;
         MessageDigest localSha = LOCAL_SHA.getAndSet(null);
         if(localSha == null) {
             try {
@@ -134,13 +133,13 @@ public class SerialVersion {
             } catch (NoSuchAlgorithmException e) {
                 throw new RuntimeException("Unexpected: 不支持SHA1");
             }
-            localSha.update(bl.list, 0, bl.wIndex());
+            localSha.update(w.list, 0, w.wIndex());
 
-            bl.clear();
-            bl.ensureCapacity(20);
-            bl.wIndex(8);
+            w.clear();
+            w.ensureCapacity(20);
+            w.wIndex(8);
             try {
-                localSha.digest(bl.list, 0, 20);
+                localSha.digest(w.list, 0, 20);
             } catch (DigestException e) {
                 throw new RuntimeException("Unexpected: SHA1 Error", e);
             }
@@ -149,7 +148,7 @@ public class SerialVersion {
 
         long svuid = 0;
         for(int i = 7; i >= 0; --i) {
-            svuid = svuid << 8 | (long)(bl.list[i] & 255);
+            svuid = svuid << 8 | (long)(w.list[i] & 255);
         }
 
         Field fl = new Field(new FlagList(STATIC | FINAL), "serialVersionUID", Type.std(NativeType.LONG));

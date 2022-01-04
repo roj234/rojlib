@@ -33,11 +33,14 @@ import roj.config.data.*;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Set;
@@ -50,30 +53,35 @@ import static roj.config.JSONParser.unexpected;
  * 元数据（有关数据的数据）应当存储为属性，而数据本身应当存储为元素。
  * <p>
  * @author Roj234
- * Filename: XMLParser.java
  */
-public class XMLParser {
+public class XMLParser implements Parser {
     public static final short
             left_curly_bracket = 10,
             right_curly_bracket = 11,
             slash = 12, equ = 13, ask = 14,
             semicolon = 15, not = 16, colon = 17,
             namespace = 18, unknown = 19;
+
     public static final MyHashSet<String> HTML_CLOSE_TAGS;
     static {
         HTML_CLOSE_TAGS = new MyHashSet<>("meta", "link", "input", "img");
     }
 
-    public static void main(String[] args) throws ParseException {
-        String xml = TextUtil.concat(args, ' ');
-
-        System.out.println("INPUT = " + xml);
-
-        final XHeader xmls = parse(xml);
-        System.out.print("XML = " + xmls.toString());
+    public static void main(String[] args) throws ParseException, IOException {
+        System.out.print("XML = " + parse(IOUtil.readUTF(new File(args[0]))).toString());
     }
 
-    public static XHeader parse(String string) throws ParseException {
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        return parse(string).toJSON();
+    }
+
+    @Override
+    public String format() {
+        return "XML";
+    }
+
+    public static XHeader parse(CharSequence string) throws ParseException {
         return parse((XMLexer) new XMLexer().init(string));
     }
 

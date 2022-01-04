@@ -63,7 +63,7 @@ public interface WrappedSocket extends AutoCloseable {
     boolean dataFlush() throws IOException;
 
     /**
-     * Start any connection shutdown processing.
+     * Start any connection shutdown process.
      *
      * @return true if successful, and the data has been flushed.
      */
@@ -71,7 +71,7 @@ public interface WrappedSocket extends AutoCloseable {
 
     void close() throws IOException;
 
-    void reuse() throws IOException;
+    void reset() throws IOException;
 
     FileDescriptor fd();
 }

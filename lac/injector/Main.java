@@ -59,7 +59,6 @@ import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 import roj.util.ComboRandom;
 
 import javax.swing.*;
@@ -210,7 +209,7 @@ public class Main extends JFrame {
         Inflater inf = new Inflater(true);
         try (InputStream in = new InflaterInputStream(file.get("lib classes", list).asInputStream(), inf)) {
             ByteList shared = IOUtil.getSharedByteBuf();
-            Pack125.unpack(new ByteReader(shared.readStreamFully(in)), (name, data) -> {
+            Pack125.unpack(shared.readStreamFully(in), (name, data) -> {
 
             });
         }

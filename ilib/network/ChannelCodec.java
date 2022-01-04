@@ -28,8 +28,7 @@ package ilib.network;
 import ilib.ImpLib;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
 import net.minecraft.network.INetHandler;
@@ -67,26 +66,26 @@ public class ChannelCodec {
     }
 
     @Nonnull
-    ByteWriter encode0(@Nonnull IMessage msg) {
+    ByteList encode0(@Nonnull IMessage msg) {
         int id = this.types.getOrDefault(msg.getClass(), -1);
         if (id <= 0) {
             throw new RuntimeException("Sending undefined packet " + msg.getClass().getName());
         }
-        ByteWriter writer = new ByteWriter(64).putVarInt(id, false);
+        ByteList writer = new ByteList(64).putVarInt(id, false);
         msg.toBytes(writer);
         return writer;
     }
 
     protected final void decode(ProxyPacket packet, INetHandler handler) {
         if (!validPacket(packet)) return;
-        ByteReader payload = packet.payload();
+        ByteList payload = packet.payload();
         if (payload.hasRemaining()) {
             ImpLib.logger().error("Packet decoder {} received an empty packet!", channel);
             return;
         }
         int id = payload.readVarInt(false);
         if (id == 0) {
-            for (ByteReader payload1 : decodeMergePackets(payload)) {
+            for (ByteList payload1 : decodeMergePackets(payload)) {
                 handlePacket(handler, payload1, payload1.readVarInt(false));
             }
         } else {
@@ -94,16 +93,16 @@ public class ChannelCodec {
         }
     }
 
-    protected static ByteReader[] decodeMergePackets(ByteReader r) {
+    protected static ByteList[] decodeMergePackets(ByteList r) {
         int len = r.readVarInt(false);
-        ByteReader[] brs = new ByteReader[len];
+        ByteList[] brs = new ByteList[len];
         for (int i = 0; i < len; i++) {
-            brs[i] = new ByteReader(r.slice(r.readVarInt(false)));
+            brs[i] = r.slice(r.readVarInt(false));
         }
         return brs;
     }
 
-    private void handlePacket(INetHandler handler, ByteReader payload, int id) {
+    private void handlePacket(INetHandler handler, ByteList payload, int id) {
         HandlerWrap<?> clazz = this.indexes.get(id);
         if (clazz == null) {
             ImpLib.logger().catching(new IllegalArgumentException("Receiving unknown " + id));

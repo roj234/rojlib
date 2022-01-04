@@ -66,7 +66,7 @@ public class PlainSocket implements WrappedSocket {
 
     @Override
     public int read() throws IOException {
-        return read(65536);
+        return read(rBuf.remaining() + 1);
     }
 
     @Override
@@ -75,11 +75,12 @@ public class PlainSocket implements WrappedSocket {
             return -1;
 
         ByteBuffer buf = this.rBuf;
-        if (!buf.hasRemaining()) {
+        if (buf.position() == buf.capacity()) {
             buf = expandReadBuffer(buf.capacity() << 1);
         }
 
-        if(max >= 0) buf.limit(Math.min(buf.position() + max, buf.capacity()));
+        int lim = buf.limit();
+        if(max >= 0) buf.limit(Math.min(buf.position() + max, lim));
         int read;
         try {
             do {
@@ -87,16 +88,16 @@ public class PlainSocket implements WrappedSocket {
                                                   NIOUtil.SOCKET_FD);
             } while (read == -3 && !socket.isClosed());
         } finally {
-            buf.limit(buf.capacity());
+            buf.limit(lim);
         }
         return read;
     }
 
-    ByteBuffer expandReadBuffer(int cap) {
+    protected ByteBuffer expandReadBuffer(int cap) {
         ByteBuffer cur = rBuf;
         ByteBuffer next = ByteBuffer.allocateDirect(cap);
         cur.flip();
-        next.put(cur);
+        next.put(cur).limit(cur.remaining());
         NIOUtil.clean(cur);
         return rBuf = next;
     }
@@ -142,7 +143,7 @@ public class PlainSocket implements WrappedSocket {
             }
         } while (w == -3 && !socket.isClosed());
 
-        return w;
+        return tmp == wBuf ? tmp.limit() : w;
     }
 
     @Override
@@ -152,13 +153,11 @@ public class PlainSocket implements WrappedSocket {
         if (!dataFlush()) return 0;
 
         int cap = Math.min(Shared.WRITE_MAX, max);
-        if (wBuf.capacity() < cap)
-            wBuf = ByteBuffer.allocate(cap);
-        else
-            wBuf.clear();
+        if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
+        else wBuf.clear();
+
         int len = src.read(wBuf.array());
-        if (len <= 0)
-            return len;
+        if (len <= 0) return len;
         wBuf.limit(len);
 
         int w;
@@ -189,23 +188,22 @@ public class PlainSocket implements WrappedSocket {
 
     @Override
     public boolean shutdown() throws IOException {
-        if (!dataFlush()) return false;
-        try {
-            socket.shutdownInput();
-        } catch (IOException ignored) {}
-        try {
-            socket.shutdownOutput();
-        } catch (IOException ignored) {}
-        return true;
+        return dataFlush();
     }
 
     @Override
     public void close() throws IOException {
         socket.close();
+        // NIOUtil.close(fd); // upper line would do that
+        NIOUtil.clean(rBuf);
+        NIOUtil.clean(wBuf);
+        rBuf = wBuf = null;
     }
 
     @Override
-    public void reuse() throws IOException {
+    public void reset() throws IOException {
+        if (socket.isClosed())
+            throw new IOException("Socket closed");
         rBuf.clear();
     }
 

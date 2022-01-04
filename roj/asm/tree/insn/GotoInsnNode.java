@@ -30,7 +30,7 @@ import roj.asm.Opcodes;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
 import roj.collect.IIntMap;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import static roj.asm.Opcodes.*;
 
@@ -104,7 +104,7 @@ public class GotoInsnNode extends InsnNode {
             throw new IllegalArgumentException("Jump target must not \"after\" wide instruction");
     }
 
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         int delta = this.delta;
         if (((short) delta) != delta) {
             w.put(this.code = GOTO_W).putInt(delta);

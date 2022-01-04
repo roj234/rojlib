@@ -29,8 +29,8 @@ package roj.asm.tree.anno;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
 import roj.collect.LinkedMyHashMap;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.Map;
 
@@ -54,7 +54,20 @@ public final class Annotation {
         this.values = another.values;
     }
 
+    @Deprecated
     public static Annotation deserialize(ConstantPool pool, ByteReader r) {
+        ByteList l = r.bytes;
+        int ri = l.rIndex;
+        l.rIndex = r.rIndex;
+        try {
+            return deserialize(pool, l);
+        } finally {
+            r.rIndex = l.rIndex;
+            l.rIndex = ri;
+        }
+    }
+
+    public static Annotation deserialize(ConstantPool pool, ByteList r) {
         String type = ((CstUTF) pool.get(r)).getString();
         int len = r.readUnsignedShort();
         Map<String, AnnVal> params = new LinkedMyHashMap<>(len);
@@ -64,7 +77,7 @@ public final class Annotation {
         return new Annotation(type, params);
     }
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.putShort(pool.getUtfId("L" + clazz + ';'))
          .putShort(values.size());
         for (Map.Entry<String, AnnVal> e : values.entrySet()) {

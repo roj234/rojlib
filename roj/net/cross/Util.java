@@ -260,6 +260,20 @@ public class Util {
      * }
      */
     public static final int P_CHANNEL_OP    = 15;
+    /**
+     * 骚气的聊天功能
+     * {
+     * ORIGIN to;
+     * u1 msgLen;
+     * utf[msgLen] msg;
+     * }
+     *
+     * enum OP {
+     *     0=SET_INACTIVE, 1=SET_ACTIVE
+     * }
+     */
+    public static final int P_MSG = 16;
+    public static final int P_FAIL = 17;
 
     public static final int OP_SET_INACTIVE = 0, OP_SET_ACTIVE = 1;
     // endregion
@@ -275,9 +289,9 @@ public class Util {
     public static final int PS_ERROR_SYSTEM_LIMIT = 0x27;
     public static final int PS_ERROR_TIMEOUT = 0x28;
 
-    public static final int TIMEOUT_HEART_SERVER = 10000;
+    public static final int TIMEOUT_HEART_SERVER = 15000;
 
-    public static final int T_CLIENT_HEARTBEAT_TIME  = 5000;
+    public static final int T_CLIENT_HEARTBEAT_TIME  = 6000;
     public static final int T_CLIENT_HEARTBEAT_RETRY = 200;
     public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 5000;
 
@@ -569,16 +583,16 @@ public class Util {
     }
 
     public static boolean readSome(WrappedSocket channel, int count, int time) throws IOException {
-        while (count > 0) {
+        while (true) {
             int r = channel.read(count);
             if (r < 0) return false;
             count -= r;
-            LockSupport.parkNanos(100);
+            if (count <= 0) return true;
+            LockSupport.parkNanos(20);
             if (time-- <= 0) {
                 return false;
             }
         }
-        return true;
     }
 
     public static String dumpBuffer(ByteBuffer rb) {

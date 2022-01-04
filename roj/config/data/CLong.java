@@ -105,6 +105,16 @@ public class CLong extends CEntry {
     }
 
     @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        return sb.append(value);
+    }
+
+    @Override
+    public StringBuilder toTOML(StringBuilder sb, int depth) {
+        return sb.append(value);
+    }
+
+    @Override
     public Object toNudeObject() {
         return value;
     }

@@ -38,15 +38,13 @@ import roj.asm.visitor.MethodAttributeVisitor;
 import roj.collect.CharMap;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/3/7 13:36
@@ -72,7 +70,7 @@ public final class AttrTypeAnnotation extends Attribute {
     public List<TypeAnno> annotations;
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort(annotations.size());
         for (TypeAnno annotation : annotations) {
             annotation.toByteArray(pool, w);
@@ -486,7 +484,7 @@ public final class AttrTypeAnnotation extends Attribute {
 
         abstract boolean check(byte type);
 
-        public void toByteArray(ConstantPool pool, ByteWriter w) {
+        public void toByteArray(ConstantPool pool, ByteList w) {
             _t(pool, w.put(type));
             w.put((byte) typePaths.size());
             for (int i = 0; i < typePaths.size(); i++) {
@@ -495,7 +493,7 @@ public final class AttrTypeAnnotation extends Attribute {
             annotation.toByteArray(pool, w);
         }
 
-        abstract void _t(ConstantPool pool, ByteWriter w);
+        abstract void _t(ConstantPool pool, ByteList w);
 
         /**
          * The type_path structure has the following format:
@@ -619,7 +617,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {}
+        void _t(ConstantPool pool, ByteList w) {}
     }
 
     // u2
@@ -644,7 +642,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {
+        void _t(ConstantPool pool, ByteList w) {
             w.putShort(offset);
         }
     }
@@ -673,7 +671,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {
+        void _t(ConstantPool pool, ByteList w) {
             w.putShort(offset).put((byte) arg_id);
         }
     }
@@ -692,7 +690,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {
+        void _t(ConstantPool pool, ByteList w) {
             w.put((byte) id);
         }
 
@@ -719,7 +717,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {
+        void _t(ConstantPool pool, ByteList w) {
             w.put((byte) id).put((byte) boundId);
         }
 
@@ -745,7 +743,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {
+        void _t(ConstantPool pool, ByteList w) {
             w.putShort(id);
         }
 
@@ -771,7 +769,7 @@ public final class AttrTypeAnnotation extends Attribute {
         }
 
         @Override
-        void _t(ConstantPool pool, ByteWriter w) {
+        void _t(ConstantPool pool, ByteList w) {
             w.putShort(list.size());
             for (int i = 0; i < list.size(); i++) {
                 int[] arr = list.get(i);

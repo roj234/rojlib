@@ -27,7 +27,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * @author Roj234
@@ -43,7 +43,7 @@ public final class AnnValEnum extends AnnVal {
 
     public String clazz, value;
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
+    public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) ENUM)
          .putShort(pool.getUtfId("L" + this.clazz + ';'))
          .putShort(pool.getUtfId(value));

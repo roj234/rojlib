@@ -28,8 +28,8 @@ package roj.asm.tree.attr;
 
 import roj.asm.cst.CstUTF;
 import roj.asm.util.ConstantPool;
+import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.ByteWriter;
 
 /**
  * No description provided
@@ -59,7 +59,7 @@ public final class AttrUTF extends Attribute {
     }
 
     @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
+    protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort(pool.getUtfId(value));
     }
 

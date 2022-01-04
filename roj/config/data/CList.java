@@ -34,8 +34,6 @@ import javax.annotation.Nullable;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/31 21:17
@@ -58,17 +56,7 @@ public final class CList extends CEntry implements Iterable<CEntry> {
     public static CList of(Object... objects) {
         CList list = new CList(objects.length);
         for (Object o : objects) {
-            if (o instanceof CharSequence) {
-                list.add(CString.valueOf(o.toString()));
-            } else if (o instanceof Number) {
-                Number num = (Number) o;
-                list.add(num.doubleValue() == num.longValue() ? CInteger.valueOf(num.intValue()) :
-                        CDouble.valueOf(num.doubleValue()));
-            } else if (o instanceof CEntry) {
-                list.add((CEntry) o);
-            } else if (o instanceof Boolean) {
-                list.add(CBoolean.valueOf((Boolean) o));
-            } else throw new ClassCastException(o.getClass() + " is unable cast. ");
+            list.add(wrapNudeObject(o));
         }
         return list;
     }
@@ -203,6 +191,11 @@ public final class CList extends CEntry implements Iterable<CEntry> {
             }
         }
         return sb.append(']');
+    }
+
+    @Override
+    public StringBuilder toINI(StringBuilder sb, int depth) {
+        throw new UnsupportedOperationException("INI file format does not support Type.LIST");
     }
 
     @Override

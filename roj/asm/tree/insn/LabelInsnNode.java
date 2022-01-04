@@ -26,7 +26,7 @@
 package roj.asm.tree.insn;
 
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * Your description here
@@ -46,7 +46,7 @@ public final class LabelInsnNode extends InsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         throw new UnsupportedOperationException();
     }
 }

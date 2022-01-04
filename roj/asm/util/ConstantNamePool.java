@@ -59,7 +59,7 @@ public final class ConstantNamePool {
         int i = 1;
         int len = this.len;
         while (i < len) {
-            int b = r.readUnsignedByte();
+            int b = r.readUByte();
             if (CstType.toString(b) == null)
                 throw new IllegalArgumentException("Illegal constant type " + b);
             switch (b) {
@@ -102,7 +102,7 @@ public final class ConstantNamePool {
         r.rIndex = begin;
         int i = 1;
         while (i < len) {
-            switch (r.readUnsignedByte()) {
+            switch (r.readUByte()) {
                 case UTF:
                     if (map.containsKey((char) i)) {
                         try {
@@ -156,7 +156,7 @@ public final class ConstantNamePool {
         r.rIndex = begin;
         i = 1;
         while (i < len) {
-            switch (r.readUnsignedByte()) {
+            switch (r.readUByte()) {
                 case UTF:
                     if (map.containsKey((char) i) && map.get((char) i) == null) {
                         try {

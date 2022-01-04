@@ -268,7 +268,7 @@ public final class ReflectionUtils {
 
                     Collections.addAll(pending, c.getInterfaces());
                     Class<?> s = c.getSuperclass();
-                    if(s != Object.class)
+                    if(s != Object.class && s != null)
                         pending.add(s);
                 }
             }

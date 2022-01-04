@@ -70,8 +70,8 @@ public final class CYamlDate extends CLong {
         return sb.append(time[ACalendar.YEAR]).append('-').append(time[ACalendar.MONTH]).append('-').append(time[ACalendar.DAY]);
     }
 
-    @Override
-    public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append("new Date(\"").append(toYAML(sb, 0)).append("\")");
-    }
+//    @Override
+//    public StringBuilder toJSON(StringBuilder sb, int depth) {
+//        return sb.append("new Date(\"").append(toYAML(sb, 0)).append("\")");
+//    }
 }

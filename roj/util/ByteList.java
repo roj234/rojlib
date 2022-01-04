@@ -636,7 +636,7 @@ public class ByteList implements DataInput {
     }
 
     public final long readVarLong() {
-        return readVarInt(true);
+        return readVarLong(true);
     }
 
     public final long readVarLong(boolean mayNeg) {

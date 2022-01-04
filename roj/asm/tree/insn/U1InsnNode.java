@@ -28,7 +28,7 @@ package roj.asm.tree.insn;
 
 import roj.asm.OpcodeUtil;
 import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * bipush / newarray / etc
@@ -73,7 +73,7 @@ public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
         this.index = (byte) index;
     }
 
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         w.put(code).put(index);
     }
 

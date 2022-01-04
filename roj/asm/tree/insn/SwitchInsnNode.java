@@ -31,13 +31,11 @@ import roj.asm.util.ConstantPool;
 import roj.collect.IIntMap;
 import roj.collect.IntMap;
 import roj.collect.LinkedIntMap;
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/29 1:55
@@ -92,7 +90,7 @@ public final class SwitchInsnNode extends InsnNode {
     }
 
     @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
+    public void toByteArray(ConstantPool cw, ByteList w) {
         if(pad == -1) {
             throw new IllegalStateException();
         }
@@ -101,9 +99,9 @@ public final class SwitchInsnNode extends InsnNode {
         int self = pcRev.getInt(this);
 
         // 共享... 问题在这
-        byte[] data = w.put(code).list.list;
-        int pos = w.list.wIndex();
-        w.list.wIndex(pos + pad);
+        byte[] data = w.put(code).list;
+        int pos = w.wIndex();
+        w.wIndex(pos + pad);
         for (int i = 0; i < pad; i++) {
             data[pos++] = 0;
         }

@@ -23,8 +23,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.cross;
+package roj.net.misc;
 
+import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 import roj.io.NIOUtil;
 import roj.util.Helpers;
@@ -36,16 +37,18 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 /**
- * 这里不管加密，加密有Host和Client使用SM4 Cipher
+ * @author Roj233
+ * @since 2021/12/24 23:27
  */
 public class Pipe implements Runnable {
     public Object att;
 
-    FileDescriptor upstream, downstream;
-    final ByteBuffer toh, toc;
+    protected FileDescriptor upstream, downstream;
+    protected final ByteBuffer toh, toc;
+    public int idleTime;
 
     // state / flag
-    long nBytesToH, nBytesToC;
+    public long nBytesToH, nBytesToC;
     private byte eof;
 
     public final boolean isEof() {
@@ -84,54 +87,77 @@ public class Pipe implements Runnable {
         this.downstream = downstream;
 
         this.toh = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        this.toh.limit(0);
         this.toc = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        this.toc.limit(0);
     }
 
     public final int transfer(boolean bufferOnly) throws IOException {
         if (eof != 0) return S_CLOSED;
 
-        boolean flag = false;
+        int c;
         if (toh.hasRemaining()) {
-            int w = NIOUtil.writeFromNativeBuffer(upstream, toh, NIOUtil.SOCKET_FD);
-            if (w < 0) {
+            try {
+                c = NIOUtil.writeFromNativeBuffer(upstream, toh, NIOUtil.SOCKET_FD);
+            } catch (IOException e) {
+                c = -1;
+            }
+            if (c < 0) {
                 release();
                 return S_CLOSED;
             }
-            nBytesToH += w;
-
-            if (!toh.hasRemaining()) { toh.clear(); } else flag = true;
+            idleTime = 0;
+            nBytesToH += c;
         }
+        if (toh.hasRemaining()) return S_BUFFER;
         if (toc.hasRemaining()) {
-            int w = NIOUtil.writeFromNativeBuffer(downstream, toc, NIOUtil.SOCKET_FD);
-            if (w < 0) {
+            try {
+                c = NIOUtil.writeFromNativeBuffer(downstream, toc, NIOUtil.SOCKET_FD);
+            } catch (IOException e) {
+                c = -1;
+            }
+            if (c < 0) {
                 this.eof = 2;
                 return S_CLOSED;
             }
-            nBytesToC += w;
-
-            if (!toc.hasRemaining()) { toc.clear(); } else flag = true;
+            idleTime = 0;
+            nBytesToC += c;
         }
-        if (flag | bufferOnly) return flag ? S_BUFFER : S_NOTHING;
+        if (toc.hasRemaining()) return S_BUFFER;
+        if (bufferOnly) return S_NOTHING;
 
-        int r = NIOUtil.readToNativeBuffer(upstream, toc, NIOUtil.SOCKET_FD);
-        if (r > 0) {
-            toc.flip();
+        boolean flag = false;
+
+        toc.clear();
+        try {
+            c = NIOUtil.readToNativeBuffer(upstream, toc, NIOUtil.SOCKET_FD);
+        } catch (IOException e) {
+            c = -1;
+        }
+        toc.flip();
+        if (c > 0) {
             flag = true;
-        } else if (r < 0) {
+        } else if (c < 0) {
             release();
             return S_CLOSED;
         }
 
-        r = NIOUtil.readToNativeBuffer(downstream, toh, NIOUtil.SOCKET_FD);
-        if (r > 0) {
-            toh.flip();
+        toh.clear();
+        try {
+            c = NIOUtil.readToNativeBuffer(downstream, toh, NIOUtil.SOCKET_FD);
+        } catch (IOException e) {
+            c = -1;
+        }
+        toh.flip();
+        if (c > 0) {
             flag = true;
-        } else if (r < 0) {
+        } else if (c < 0) {
             this.eof = 2;
             return S_CLOSED;
         }
 
         if (flag) {
+            idleTime = 0;
             try {
                 doCipher();
             } catch (GeneralSecurityException e) {
@@ -149,15 +175,16 @@ public class Pipe implements Runnable {
             setInactive();
         else
             setActive();
+        idleTime = 0;
         this.downstream = client;
     }
 
-    public final void setActive() {
+    public void setActive() {
         if (this.upstream == null)
-            throw new IllegalStateException("Buffers have been released.");
+            throw new IllegalStateException("Pipe Closed.");
         this.eof = 0;
-        this.toc.clear();
-        this.toh.clear();
+        this.toc.position(0).limit(0);
+        this.toh.position(0).limit(0);
         this.nBytesToC = this.nBytesToH = 0;
     }
 
@@ -165,7 +192,7 @@ public class Pipe implements Runnable {
 
     public final void setInactive() {
         if (upstream == null)
-            throw new IllegalStateException("Buffers have been released.");
+            throw new IllegalStateException("Pipe Closed.");
         this.eof = 4;
         this.nBytesToC = this.nBytesToH = 0;
     }
@@ -177,7 +204,8 @@ public class Pipe implements Runnable {
         NIOUtil.clean(toc);
         try {
             NIOUtil.close(upstream);
-            NIOUtil.close(downstream);
+            if (downstream != null)
+                NIOUtil.close(downstream);
         } finally {
             upstream = null;
             downstream = null;
@@ -198,43 +226,55 @@ public class Pipe implements Runnable {
     }
 
     public static class CipherPipe extends Pipe {
-        final SM4 sm4_h, sm4_c;
-        final ByteBuffer tmp_h, tmp_c;
+        final MyCipher sm4_h, sm4_c;
+        final ByteBuffer tmp;
+        final Object bak0, bak1;
 
         public CipherPipe(FileDescriptor up, FileDescriptor down, byte[] pass) {
             super(up, down);
             byte[] iv = Arrays.copyOf(pass, 16);
 
-            sm4_h = new SM4();/*
-            sm4_h.reset(SM4.ENCRYPT | SM4.SM4_PADDING | SM4.SM4_CBC);
-            sm4_h.setOption(SM4.SM4_IV, iv);
-            sm4_h.setKey(pass);*/
-            tmp_h = toh.duplicate();
+            tmp = ByteBuffer.allocate(BUFFER_CAPACITY);
 
-            sm4_c = new SM4();/*
-            sm4_c.reset(SM4.DECRYPT | SM4.SM4_PADDING | SM4.SM4_CBC);
-            sm4_c.setOption(SM4.SM4_IV, iv);
-            sm4_c.setKey(pass);*/
-            tmp_c = toc.duplicate();
+            sm4_h = new MyCipher(new SM4(), MyCipher.MODE_CFB);
+            sm4_h.setKey(pass, MyCipher.ENCRYPT);
+            sm4_h.setOption(MyCipher.IV, iv);
+            bak0 = sm4_h.backup();
+
+            sm4_c = new MyCipher(new SM4(), MyCipher.MODE_CFB);
+            sm4_c.setKey(pass, MyCipher.DECRYPT);
+            sm4_c.setOption(MyCipher.IV, iv);
+            bak1 = sm4_c.backup();
+        }
+
+        @Override
+        public void setActive() {
+            super.setActive();
+            sm4_h.restore(bak0);
+            sm4_c.restore(bak1);
         }
 
         @Override
         final void doCipher() throws GeneralSecurityException {
             ByteBuffer target = toh;
-            ByteBuffer tmp;
+            ByteBuffer tmp = this.tmp;
             if (target.hasRemaining()) {
-                tmp = tmp_h;
                 tmp.clear();
                 sm4_h.crypt(target, tmp);
-                target.position(0).limit(tmp.position());
+                tmp.flip();
+                target.clear();
+                target.put(tmp).flip();
             }
 
             target = toc;
             if (target.hasRemaining()) {
-                tmp = tmp_c;
+                System.out.println("TOC1 " + target);
                 tmp.clear();
                 sm4_c.crypt(target, tmp);
-                target.position(0).limit(tmp.position());
+                tmp.flip();
+                target.clear();
+                target.put(tmp).flip();
+                System.out.println("TOC2 " + target);
             }
         }
     }

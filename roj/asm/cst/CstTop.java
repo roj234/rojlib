@@ -25,7 +25,7 @@
  */
 package roj.asm.cst;
 
-import roj.util.ByteWriter;
+import roj.util.ByteList;
 
 /**
  * No description provided
@@ -40,7 +40,7 @@ public final class CstTop extends Constant {
     private CstTop() {}
 
     @Override
-    public void write(ByteWriter w) {
+    public void write(ByteList w) {
         // no-op so that needn't to filter in ConstantPool#write
     }
 

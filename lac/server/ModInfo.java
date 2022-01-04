@@ -5,7 +5,7 @@ import roj.collect.MyHashSet;
 import roj.io.BoxFile;
 import roj.text.DottedStringPool;
 import roj.text.StringPool;
-import roj.util.ByteReader;
+import roj.util.ByteList;
 
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.common.ModContainer;
@@ -111,7 +111,7 @@ public final class ModInfo {
 
     public static void init(File f) throws IOException {
         BoxFile mod_info = new BoxFile(f);
-        ByteReader r = new ByteReader(mod_info.getBytes("mods"));
+        ByteList r = new ByteList(mod_info.getBytes("mods"));
 
         if (r.readInt() != (('M' << 24) | ('O' << 16) | ('D' << 8) | 'S'))
             throw new IOException("MODS header error");
@@ -138,8 +138,8 @@ public final class ModInfo {
             optional.put(name, arr);
         }
 
-        r.bytes().clear();
-        r = new ByteReader(mod_info.get("classes", r.bytes()));
+        r.clear();
+        mod_info.get("classes", r);
 
         if (r.readInt() != (('C' << 24) | ('L' << 16) | ('S' << 8) | 'S'))
             throw new IOException("CLSS header error");

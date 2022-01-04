@@ -286,7 +286,7 @@ public class FMDInstall extends JFrame {
             CharList out = new CharList(10000);
             ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
 
-            vList = JSONParser.parseIntern(out).asList();
+            vList = JSONParser.parse(out, JSONParser.INTERN).asList();
         } catch (ParseException | IOException e) {
             error("获取forge版本数据出错");
             e.printStackTrace();

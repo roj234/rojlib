@@ -44,7 +44,7 @@ public final class ByteReader {
     public ByteReader() {}
 
     public ByteReader(byte[] bytes) {
-        refresh(bytes);
+        this.bytes = new ByteList(bytes);
     }
 
     public ByteReader(ByteList bytes) {
@@ -53,16 +53,7 @@ public final class ByteReader {
 
     public final void refresh(ByteList bytes) {
         this.bytes = bytes;
-        this.rIndex = 0;
-    }
-
-    public final void refresh(byte[] bytes) {
-        this.bytes = new ByteList(bytes);
-        this.rIndex = 0;
-    }
-
-    public final boolean readBoolean() {
-        return readByte() == 1;
+        this.rIndex = bytes.rIndex;
     }
 
     public ByteList bytes() {
@@ -70,110 +61,26 @@ public final class ByteReader {
     }
 
     public final byte readByte() {
-        //checkLength(1);
         return bytes.get(rIndex++);
     }
 
-    public int readUnsignedByte() {
-        return bytes.getU(rIndex++);
-    }
-
     public final short readUByte() {
-        //checkLength(1);
         return (short) bytes.getU(rIndex++);
-    }
-
-    public final int readVarInt() {
-        return readVarInt(true);
-    }
-
-    public final int readVarInt(boolean canBeNegative) {
-        int value = 0;
-        int i = 0;
-
-        while (i <= 28) {
-            int chunk = this.readByte();
-            value |= (chunk & 0x7F) << i;
-            i += 7;
-            if ((chunk & 0x80) == 0) {
-                return canBeNegative ? ByteList.zag(value) : value;
-            }
-        }
-
-        throw new RuntimeException("VarInt end tag!");
     }
 
     public final boolean hasRemaining() {
         return rIndex >= bytes.limit();
     }
 
-    public final String readIntUTF() {
-        int count = readInt();
-        if (count < 0)
-            return null;
-        if (count == 0)
-            return "";
-        try {
-            return DUC(count, bytes, rIndex);
-        } catch (UTFDataFormatException e) {
-            rIndex += count;
-            return bytes.getString();
-        }
-    }
-
-    public String readVarIntUTF() {
-        int count = readVarInt(false);
-        if (count < 0)
-            throw new NegativeArraySizeException(String.valueOf(count));
-        if (count == 0)
-            return "";
-        try {
-            return DUC(count, bytes, rIndex);
-        } catch (UTFDataFormatException e) {
-            rIndex += count;
-            return bytes.getString();
-        }
-    }
-
-    // &0xff将byte值无差异转成int,避免Java自动类型提升后,会保留高位的符号位
     public final int readInt() {
-        //checkLength(4);
         int i = rIndex;
         rIndex = i + 4;
         final ByteList bytes = this.bytes;
         return (bytes.getU(i++)) << 24 | (bytes.getU(i++)) << 16 | (bytes.getU(i++)) << 8 | (bytes.getU(i));
     }
 
-    public final long readLong() {
-        //checkLength(8);
-        int i = rIndex;
-        rIndex = i + 8;
-        final ByteList bytes = this.bytes;
-        return (long) (bytes.getU(i++)) << 56 |
-                (long) (bytes.getU(i++)) << 48 |
-                (long) (bytes.getU(i++)) << 40 |
-                (long) (bytes.getU(i++)) << 32 |
-                (long) (bytes.getU(i++)) << 24 |
-                (long) (bytes.getU(i++)) << 16 |
-                (long) (bytes.getU(i++)) << 8 |
-                (long) bytes.getU(i);
-
-    }
-
-    public final float readFloat() {
-        return Float.intBitsToFloat(readInt());
-    }
-
-    public final double readDouble() {
-        return Double.longBitsToDouble(readLong());
-    }
-
     public String readUTF() throws UTFDataFormatException {
         return DUC(readUnsignedShort(), bytes, rIndex);
-    }
-
-    public String readUTF(int len) throws UTFDataFormatException {
-        return DUC(len, bytes, rIndex);
     }
 
     private CharList cache;
@@ -189,21 +96,12 @@ public final class ByteReader {
     }
 
     public final int readUnsignedShort() {
-        //checkLength(2);
         int i = rIndex;
         rIndex += 2;
         return (bytes.getU(i++)) << 8 | (bytes.getU(i));
     }
 
-    public final int readUShortLE() {
-        //checkLength(2);
-        int i = rIndex;
-        rIndex += 2;
-        return (bytes.getU(i++)) | (bytes.getU(i)) << 8;
-    }
-
     public final short readShort() {
-        //checkLength(2);
         int i = rIndex;
         rIndex += 2;
         return (short) ((bytes.getU(i++)) << 8 | (bytes.getU(i)));

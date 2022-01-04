@@ -37,68 +37,60 @@ import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.text.ACalendar;
 import roj.text.CharList;
-import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
 
-import static roj.config.JSONParser.unexpected;
+import static roj.config.JSONParser.*;
 
 /**
- * Yaml解释器二代 <BR>
- *     !第一代只支持Set,Map和Scalars <BR>
- *     难道这不比SnakeYAML好么?
- *
+ * Yaml解析器
  * @author Roj234
- * @version 0.1
  * @since 2021/7/7 2:03
  */
-public class YAMLParser {
-    public static final String YAML_SPEC_CHARS = "~+-[]{},;?<>&*:|!";
-    public static final String YAML_SPEC_CHARS_NOT_BEGIN = "[]{},>&*|!'\"\r\n\t";
-    public static final String YAML_SPEC_CHARS_NOT_SINGLE = "~-[]{},>&*|!'\"\r\n\t";
+public class YAMLParser implements Parser {
+    public static final String YAML_SPEC_CHARS    = "~+-[]{},;?<>&*:|!";
+    // 是否需要escape (CString)
+    public static final String YAML_ESCAPE_MULTI  = "[]{},>&*|!'\"\r\n\t";
+    public static final String YAML_ESCAPE_SINGLE = "~-[]{},>&*|!'\"\r\n\t";
     static final short
-            TRUE = 10,
-            FALSE = 11,
-            NULL = 12,
-            left_m_bracket = 13,
-            right_m_bracket = 14,
-            left_l_bracket = 15,
-            right_l_bracket = 16,
-            comma = 17, // ,
-            colon = 18, // :
             delim = 19, // -
             ask   = 20, // ?
             join  = 21, // <<
             anchor = 22,// &
             ref = 23,
-    multiline = 24,
-    multiline_clump = 25,
-    multiline_keep = 26,
-    multiline_trim = 27,
-    force_cast = 28;
+            multiline = 24,
+            multiline_clump = 25,
+            multiline_keep = 26,
+            multiline_trim = 27,
+            force_cast = 28;
+
+    private static final int TEXT_MODE = 1;
 
     public static void main(String[] args) throws ParseException, IOException {
-        CharList yaml = new CharList();
-        ByteList.decodeUTF(-1, yaml, new ByteList(IOUtil.read(new File(args[0]))));
-
-        System.out.print("YML = " + parse(yaml).toYAML());
+        System.out.print(parse(IOUtil.readUTF(new File(args[0]))).toYAML());
     }
 
     public static CEntry parse(CharSequence string) throws ParseException {
         return parse(new YAMLLexer().init(string), 0);
     }
 
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        return parse(new YAMLLexer().init(string), 0);
+    }
+
+    @Override
+    public String format() {
+        return "YAML";
+    }
+
     /**
-     * @param flag <BR>
-     *             1: 解析注释 <BR>
-     *             2: 仁慈模式 <BR>
-     *             4: null <BR>
-     *             8: 复k报错 <BR>
+     * @param flag COMMENT NO_DUPLICATE_KEY LITERAL_KEY
      */
     public static CEntry parse(YAMLLexer wr, int flag) throws ParseException {
-        wr.flag = (short) flag;
-        CEntry ce = yamlRead(wr, (byte) (flag & 10));
+        wr.flag = (byte) (flag & (COMMENT));
+        CEntry ce = yamlRead(wr, (byte) (flag & (NO_DUPLICATE_KEY | LITERAL_KEY)));
         if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
@@ -160,13 +152,13 @@ public class YAMLParser {
                 case WordPresets.STRING:
                     break;
                 case WordPresets.LITERAL:
-                    if((flag & 2) != 0)
+                    if((flag & LITERAL_KEY) != 0)
                         break;
                 default:
                     unexpected(wr, name.val(), "字符串");
             }
 
-            if((flag & 8) != 0 && map.containsKey(name.val()))
+            if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name.val()))
                 throw wr.err("重复的key: " + name.val());
 
             more = false;
@@ -219,7 +211,7 @@ public class YAMLParser {
             if(off < selfOff) {
                 list.add(CNull.NULL);
             } else {
-                wr.flag |= YAMLLexer.TEXT_MODE;
+                wr.flag |= TEXT_MODE;
                 list.add(yamlRead(wr, flag));
             }
 
@@ -276,14 +268,14 @@ public class YAMLParser {
                 case WordPresets.LONG:
                 case WordPresets.DECIMAL_D:
                 case NULL:
-                    if((flag & 8) != 0 && map.containsKey(name.val()))
+                    if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name.val()))
                         throw wr.err("重复的key: " + name.val());
 
                     Word w = wr.nextWord();
                     if (w.type() != colon)
                         unexpected(wr, w.val(), ":");
 
-                    wr.flag |= YAMLLexer.TEXT_MODE;
+                    wr.flag |= TEXT_MODE;
                     map.put(name.val(), yamlRead(wr, flag));
                     break;
                 case WordPresets.EOF:
@@ -441,18 +433,15 @@ public class YAMLParser {
         }
     }
 
-    public static final class YAMLLexer extends AbstLexer {
-        public static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
-                                SPECIAL_0 = LongBitSet.from(YAML_SPEC_CHARS_NOT_BEGIN),
-                                SPECIAL_1 = LongBitSet.from(YAML_SPEC_CHARS_NOT_SINGLE),
+    public static class YAMLLexer extends AbstLexer {
+        static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
+                                SPECIAL_0 = LongBitSet.from(YAML_ESCAPE_MULTI),
                                 DATE1 = LongBitSet.from("-Tt\r\n"),
                                 DATE2 = LongBitSet.from(":.\r\n");
 
-        static final int COMMENT = 1, LENIENT = 2, TEXT_MODE = 4;
-
-        short flag;
-        int[] dateBuffer = new int[3];
-        MyHashMap<String, CEntry> anchors = new MyHashMap<>();
+        public byte flag;
+        final int[] dateBuffer = new int[3];
+        protected final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
 
         @Override
         public YAMLLexer init(CharSequence s) {

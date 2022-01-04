@@ -87,7 +87,22 @@ public class Transformer implements ContextClassTransformer {
             case "net.minecraft.server.management":
                 transformPlayerChunkMap(ctx);
                 break;
+            case "org.apache.logging.log4j.core.lookup.JndiLookup":
+                transformLOG4J2(ctx);
+                break;
         }
+    }
+
+    private static void transformLOG4J2(Context ctx) {
+        ConstantData data = ctx.getData();
+        int i = data.getMethodByName("lookup");
+        Method mn = new Method(data, data.methods.get(i));
+        data.methods.set(i, Helpers.cast(mn));
+
+        InsnList insn = mn.code.instructions;
+        insn.clear();
+        insn.add(new LdcInsnNode(new CstString("JNDI功能已关闭")));
+        insn.add(new NPInsnNode(Opcodes.ARETURN));
     }
 
     private static void transformAnvilSlot(Context ctx) {

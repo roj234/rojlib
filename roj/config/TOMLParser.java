@@ -33,7 +33,6 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,13 +40,11 @@ import java.io.IOException;
 import static roj.config.JSONParser.unexpected;
 
 /**
- *
- *
+ * 汤小明的小巧明晰语言
  * @author Roj234
- * @version 0.1
- * @since /
+ * @since 2022/1/6 19:49
  */
-public class TOMLParser {
+public class TOMLParser implements Parser {
     static final short
             TRUE = 10,
             FALSE = 11,
@@ -62,14 +59,25 @@ public class TOMLParser {
             _DATE_ = 18;
 
     public static void main(String[] args) throws ParseException, IOException {
-        CharList yaml = new CharList();
-        ByteList.decodeUTF(-1, yaml, new ByteList(IOUtil.read(new File(args[0]))));
-
-        System.out.print("YML = " + parse(yaml).toYAML());
+        System.out.print(parse(IOUtil.readUTF(new File(args[0]))).toTOML());
     }
 
     public static CMapping parse(CharSequence string) throws ParseException {
         return parse((TOMLLexer) new TOMLLexer().init(string), 0);
+    }
+
+    public static CMapping parse(CharSequence string, int flag) throws ParseException {
+        return parse((TOMLLexer) new TOMLLexer().init(string), flag);
+    }
+
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        return parse(string, flag);
+    }
+
+    @Override
+    public String format() {
+        return "TOML";
     }
 
     /**

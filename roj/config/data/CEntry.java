@@ -84,6 +84,11 @@ public abstract class CEntry {
 
     ////// toString methods
 
+    @Override
+    public final String toString() {
+        return toShortJSON();
+    }
+
     public abstract StringBuilder toYAML(StringBuilder sb, int depth);
 
     public final String toYAML() {
@@ -104,17 +109,32 @@ public abstract class CEntry {
         return toJSON(new StringBuilder(), 0);
     }
 
-    @Override
-    public final String toString() {
-        return toShortJSON();
-    }
-
     public final String toShortJSON() {
         return toJSON(new StringBuilder(), -9999999).toString();
     }
 
     public final StringBuilder toShortJSONb() {
         return toJSON(new StringBuilder(), -9999999);
+    }
+
+    public abstract StringBuilder toINI(StringBuilder sb, int depth);
+
+    public final String toINI() {
+        return toINI(new StringBuilder(), 0).toString();
+    }
+
+    public final StringBuilder toINIb() {
+        return toINI(new StringBuilder(), 0);
+    }
+
+    public abstract StringBuilder toTOML(StringBuilder sb, int depth);
+
+    public final String toTOML() {
+        return toTOML(new StringBuilder(), 0).toString();
+    }
+
+    public final StringBuilder toTOMLb() {
+        return toTOML(new StringBuilder(), 0);
     }
 
     // Convert util
@@ -131,7 +151,6 @@ public abstract class CEntry {
      * @param o 裸对象
      * @return Config对象
      */
-    @Deprecated
     public static CEntry wrapNudeObject(Object o) {
         if(o instanceof Map) {
             Map<String, Object> map = Helpers.cast(o);
