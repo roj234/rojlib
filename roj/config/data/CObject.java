@@ -25,10 +25,12 @@
  */
 package roj.config.data;
 
-import roj.collect.MyHashMap;
-import roj.config.ObjSerializer;
+import roj.config.serial.Serializer;
+import roj.config.serial.Serializers;
+import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
+import java.util.Map;
 
 /**
  * Config Java Object
@@ -38,17 +40,16 @@ import javax.annotation.Nonnull;
  * @since 2021/4/21 22:51
  */
 public final class CObject<T> extends CMapping {
-    private T object;
+    public T value;
 
     public CObject(T object) {
-        super(new MyHashMap<>());
-        this.object = object;
+        this.value = object;
     }
 
     @SuppressWarnings("unchecked")
-    public CObject(CMapping map, ObjSerializer<?> deserializer) {
-        super(map.map);
-        this.object = ((ObjSerializer<T>) deserializer).deserialize(this);
+    public CObject(Map<String, CEntry> map, Serializer<?> deser) {
+        super(map);
+        this.value = (T) deser.deserialize(this);
     }
 
     @Nonnull
@@ -57,74 +58,78 @@ public final class CObject<T> extends CMapping {
         return Type.OBJECT;
     }
 
-    public void setObject(T object) {
-        this.object = object;
-    }
-
-    public T getObject() {
-        return this.object;
-    }
-
     @Nonnull
     @Override
     @SuppressWarnings("unchecked")
     public <O> CObject<O> asObject(Class<O> clazz) {
-        if (this.object == null)
+        if (this.value == null)
             return (CObject<O>) this;
         else {
-            if (clazz.isInstance(object)) {
+            if (clazz.isInstance(value)) {
                 return (CObject<O>) this;
             }
-            throw new ClassCastException(object.getClass() + " to " + clazz.getName());
+            throw new ClassCastException(value.getClass() + " to " + clazz.getName());
         }
+    }
+
+    public void serialize() {
+        map.clear();
+        if (null != value) {
+            map.put("==", new CString(value.getClass().getName()));
+            Serializers.find(value.getClass().getName()).serialize(this, value);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void deserialize() {
+        value = (T) Serializers.find(getString("==")).deserialize(this);
     }
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        if (this.object == null) return sb.append("null");
-        map.clear();
-        map.put("==", new CString(object.getClass().getName()));
-
-        ObjSerializer.find(this.object).serialize(this, this.object);
+        if (this.value == null) return sb.append("null");
+        serialize();
 
         return super.toJSON(sb, depth);
     }
 
     @Override
     public StringBuilder toYAML(StringBuilder sb, int depth) {
-        if (this.object == null) return sb.append("null");
-        map.clear();
-        map.put("==", new CString(object.getClass().getName()));
-
-        ObjSerializer.find(this.object).serialize(this, this.object);
+        if (this.value == null) return sb.append("null");
+        serialize();
 
         return super.toYAML(sb, depth);
     }
 
     @Override
     public StringBuilder toINI(StringBuilder sb, int depth) {
-        if (this.object == null) return sb.append("null");
-        map.clear();
-        map.put("==", new CString(object.getClass().getName()));
-
-        ObjSerializer.find(this.object).serialize(this, this.object);
+        if (this.value == null) return sb.append("null");
+        serialize();
 
         return super.toINI(sb, depth);
     }
 
     @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth) {
-        if (this.object == null) return sb.append("null");
-        map.clear();
-        map.put("==", new CString(object.getClass().getName()));
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
+        if (this.value == null) return sb.append("null");
+        serialize();
 
-        ObjSerializer.find(this.object).serialize(this, this.object);
-
-        return super.toTOML(sb, depth);
+        return super.toTOML(sb, depth, chain);
     }
 
     @Override
-    public Object toNudeObject() {
-        return this.object;
+    public Object unwrap() {
+        return this.value;
+    }
+
+    @Override
+    public void toBinary(ByteList w) {
+        if (this.value == null) {
+            w.put((byte) Type.NULL.ordinal());
+        } else {
+            int i = w.wIndex();
+            super.toBinary(w);
+            w.put(i, (byte) Type.OBJECT.ordinal());
+        }
     }
 }

@@ -78,7 +78,7 @@ public class ConstMapper extends Mapping {
     /**
      * 来自依赖的数据
      */
-    private final MyHashSet<Desc>                 libSkipped;
+    public final MyHashSet<Desc>                 libSkipped;
     private final MyHashMap<String, List<String>> libSupers;
 
     /**

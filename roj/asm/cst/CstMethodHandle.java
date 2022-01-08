@@ -48,12 +48,12 @@ public final class CstMethodHandle extends Constant {
 
     @Override
     public byte type() {
-        return CstType.METHOD_HANDLE;
+        return Constant.METHOD_HANDLE;
     }
 
     @Override
     public final void write(ByteList w) {
-        w.put(CstType.METHOD_HANDLE)
+        w.put(Constant.METHOD_HANDLE)
          .put(kind)
          .putShort(getRefIndex());
     }

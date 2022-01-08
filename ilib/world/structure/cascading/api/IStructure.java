@@ -27,14 +27,13 @@ package ilib.world.structure.cascading.api;
 
 import ilib.math.Section;
 import ilib.world.structure.cascading.GenerateContext;
+
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since  2020/9/19 21:08
@@ -53,5 +52,4 @@ public interface IStructure {
      */
     @Nonnull
     Section getSection(@Nonnull BlockPos offset);
-
 }

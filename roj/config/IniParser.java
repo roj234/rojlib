@@ -75,8 +75,7 @@ public class IniParser implements Parser {
      */
     public static CMapping parse(AbstLexer wr, int flag) throws ParseException {
         IniLexer l = (IniLexer) wr;
-        l.flag = (byte) (flag & (COMMENT));
-        CMapping ce = iniRoot(l, (byte) (flag & (UNESCAPE | NO_DUPLICATE_KEY)));
+        CMapping ce = iniRoot(l, (byte) flag);
         if (l.nextWord().type() != WordPresets.EOF) {
             throw l.err("期待 /EOF");
         }
@@ -84,10 +83,10 @@ public class IniParser implements Parser {
     }
 
     static CMapping iniRoot(IniLexer wr, byte flag) throws ParseException {
-        CMapping map = new CMapping();
+        CMapping map = iniValue(wr, flag);
         CMapping top = iniValue(wr, flag);
         if (top.size() > 0)
-            map.put("", top);
+            map.put("<root>", top);
 
         while (true) {
             Word w = wr.nextWord();
@@ -160,8 +159,6 @@ public class IniParser implements Parser {
     }
 
     public static class IniLexer extends AbstLexer {
-        public byte flag;
-
         @Override
         @SuppressWarnings("fallthrough")
         public Word readWord() throws ParseException {
@@ -175,20 +172,14 @@ public class IniParser implements Parser {
                         this.index = i;
                         return readConstString((char) c);
                     case ';':
-                        int s = i, e = s;
+                        int s = i;
                         while (i < in.length()) { // 单行注释
                             c = in.charAt(i++);
                             if (c == '\r' || c == '\n') {
-                                e = i - 3;
                                 if (c == '\r' && i < in.length() && in.charAt(i) == '\n')
                                     i++;
                                 break;
                             }
-                        }
-
-                        if ((flag & COMMENT) != 0) {
-                            this.index = i;
-                            return formClip(WordPresets.COMMENT, in.subSequence(s, e));
                         }
                         break;
                     default: {

@@ -25,6 +25,7 @@
  */
 package roj.net.cross.server;
 
+import roj.io.NIOUtil;
 import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
@@ -46,7 +47,7 @@ abstract class Stated {
         if(rb.position() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
             syncPrint(self + ": 错误 " + ERROR_NAMES[bc]);
         } else {
-            syncPrint(self + ": 未知数据包: " + dumpBuffer(rb));
+            syncPrint(self + ": 未知数据包: " + NIOUtil.dumpBuffer(rb));
             write1(self.ch, (byte) PS_ERROR_UNKNOWN_PACKET);
         }
     }

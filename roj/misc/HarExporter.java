@@ -53,13 +53,13 @@ public class HarExporter {
         }
         File base = new File(args[1]);
         CMapping har = JSONParser.parse(IOUtil.readUTF(new File(args[0]))).asMap().getOrCreateMap("log");
-        har.dotMode(true);
+        har.dot(true);
         System.out.println("Version " + har.getString("version") + " Created by " + har.getString("creator.name") + " " + har.getString("creator.version"));
         CList entries = har.getOrCreateList("entries");
         ByteList tmp = new ByteList();
         for (int i = 0; i < entries.size(); i++) {
             CMapping entry = entries.get(i).asMap();
-            entry.dotMode(true);
+            entry.dot(true);
             String url = entry.getString("request.url");
             try {
                 URL url1 = new URL(url);

@@ -26,6 +26,7 @@
 package roj.asm.frame;
 
 import roj.asm.tree.insn.InsnNode;
+import roj.asm.type.ParamHelper;
 
 /**
  * No description provided
@@ -106,6 +107,10 @@ public final class Var {
     }
 
     public String toString() {
-        return owner == null ? (node == null ? VarType.toString(type) : " [未初始化]直到 " + node) : owner.substring(owner.lastIndexOf('/') + 1);
+        if (owner == null) {
+            return node == null ? VarType.toString(type) : " [未初始化]直到 " + node;
+        } else {
+            return owner.endsWith(";") ? ParamHelper.parseField(owner).toString() : owner.substring(owner.lastIndexOf('/') + 1);
+        }
     }
 }

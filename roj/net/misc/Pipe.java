@@ -33,6 +33,7 @@ import roj.util.Helpers;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
@@ -42,13 +43,14 @@ import java.util.Arrays;
  */
 public class Pipe implements Runnable {
     public Object att;
+    protected SelectionKey upKey, downKey;
 
     protected FileDescriptor upstream, downstream;
     protected final ByteBuffer toh, toc;
     public int idleTime;
 
     // state / flag
-    public long nBytesToH, nBytesToC;
+    public long uploaded, downloaded;
     private byte eof;
 
     public final boolean isEof() {
@@ -71,12 +73,12 @@ public class Pipe implements Runnable {
         return downstream;
     }
 
-    public long getnBytesToC() {
-        return nBytesToC;
+    public long getDownloaded() {
+        return downloaded;
     }
 
-    public long getnBytesToH() {
-        return nBytesToH;
+    public long getUploaded() {
+        return uploaded;
     }
 
     static final int S_BUFFER = -1, S_NET = 0, S_NOTHING = 1, S_CLOSED = 2;
@@ -106,8 +108,13 @@ public class Pipe implements Runnable {
                 release();
                 return S_CLOSED;
             }
-            idleTime = 0;
-            nBytesToH += c;
+            if (c > 0) {
+                idleTime = 0;
+                uploaded += c;
+            } else {
+                if (upKey.interestOps() != SelectionKey.OP_WRITE)
+                    upKey.interestOps(SelectionKey.OP_WRITE);
+            }
         }
         if (toh.hasRemaining()) return S_BUFFER;
         if (toc.hasRemaining()) {
@@ -120,8 +127,13 @@ public class Pipe implements Runnable {
                 this.eof = 2;
                 return S_CLOSED;
             }
-            idleTime = 0;
-            nBytesToC += c;
+            if (c > 0) {
+                idleTime = 0;
+                downloaded += c;
+            } else {
+                if (downKey.interestOps() != SelectionKey.OP_WRITE)
+                    downKey.interestOps(SelectionKey.OP_WRITE);
+            }
         }
         if (toc.hasRemaining()) return S_BUFFER;
         if (bufferOnly) return S_NOTHING;
@@ -140,6 +152,9 @@ public class Pipe implements Runnable {
         } else if (c < 0) {
             release();
             return S_CLOSED;
+        } else {
+            if (upKey.interestOps() != SelectionKey.OP_READ)
+                upKey.interestOps(SelectionKey.OP_READ);
         }
 
         toh.clear();
@@ -154,6 +169,9 @@ public class Pipe implements Runnable {
         } else if (c < 0) {
             this.eof = 2;
             return S_CLOSED;
+        } else {
+            if (downKey.interestOps() != SelectionKey.OP_READ)
+                downKey.interestOps(SelectionKey.OP_READ);
         }
 
         if (flag) {
@@ -185,7 +203,7 @@ public class Pipe implements Runnable {
         this.eof = 0;
         this.toc.position(0).limit(0);
         this.toh.position(0).limit(0);
-        this.nBytesToC = this.nBytesToH = 0;
+        this.downloaded = this.uploaded = 0;
     }
 
     void doCipher() throws GeneralSecurityException {}
@@ -194,7 +212,7 @@ public class Pipe implements Runnable {
         if (upstream == null)
             throw new IllegalStateException("Pipe Closed.");
         this.eof = 4;
-        this.nBytesToC = this.nBytesToH = 0;
+        this.downloaded = this.uploaded = 0;
     }
 
     public final void release() throws IOException {
@@ -223,6 +241,11 @@ public class Pipe implements Runnable {
         } catch (Throwable e) {
             Helpers.athrow(e);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "Pipe{" + "att=" + att + ", idle=" + idleTime + ", U=" + uploaded + ", D=" + downloaded + ", eof=" + eof + '}';
     }
 
     public static class CipherPipe extends Pipe {
@@ -268,13 +291,11 @@ public class Pipe implements Runnable {
 
             target = toc;
             if (target.hasRemaining()) {
-                System.out.println("TOC1 " + target);
                 tmp.clear();
                 sm4_c.crypt(target, tmp);
                 tmp.flip();
                 target.clear();
                 target.put(tmp).flip();
-                System.out.println("TOC2 " + target);
             }
         }
     }

@@ -26,6 +26,7 @@
 package roj.config.data;
 
 import roj.math.MathUtils;
+import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
 
@@ -110,13 +111,18 @@ public final class CInteger extends CEntry {
     }
 
     @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth) {
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append(value);
     }
 
     @Override
-    public Object toNudeObject() {
+    public Object unwrap() {
         return value;
+    }
+
+    @Override
+    public void toBinary(ByteList w) {
+        w.put((byte) Type.INTEGER.ordinal()).putInt(value);
     }
 
     @Override

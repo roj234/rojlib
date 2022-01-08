@@ -42,6 +42,6 @@ public final class CstRefItf extends CstRef {
 
     @Override
     public byte type() {
-        return CstType.INTERFACE;
+        return Constant.INTERFACE;
     }
 }

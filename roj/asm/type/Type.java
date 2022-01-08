@@ -148,7 +148,12 @@ public final class Type implements IType, IGeneric {
     public Class<?> toJavaClass() throws ClassNotFoundException {
         switch (type) {
             case CLASS:
-                return Class.forName(ParamHelper.normalize(owner, array), false, null);
+                String cn = ParamHelper.normalize(owner, array);
+                try {
+                    return Class.forName(cn, false, null);
+                } catch (ClassNotFoundException e) {
+                    return Class.forName(cn, false, getClass().getClassLoader());
+                }
             case VOID:
                 return void.class;
             case BOOLEAN:

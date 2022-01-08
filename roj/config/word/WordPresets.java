@@ -26,10 +26,7 @@
 package roj.config.word;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/31 14:17
  */
 public final class WordPresets {
@@ -48,5 +45,7 @@ public final class WordPresets {
 
             EOF = -1,      // 文件结束
             ERROR = -2,    // 出错
-            COMMENT = -3;  // 注释
+            RFCDATE_DATE = 5,
+            RFCDATE_DATETIME = 6,
+            RFCDATE_DATETIME_TZ = 7;
 }

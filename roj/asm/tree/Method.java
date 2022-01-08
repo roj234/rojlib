@@ -44,13 +44,11 @@ import java.util.PrimitiveIterator;
 import java.util.PrimitiveIterator.OfInt;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public final class Method implements MethodNode, MoFNode {
+    @Deprecated
     public Method(int accesses, IClass owner, String name, String desc) {
         this(AccessFlag.of((short) accesses), owner.className(), name, desc);
     }
@@ -99,14 +97,6 @@ public final class Method implements MethodNode, MoFNode {
         if (code == null && !accesses.hasAny(AccessFlag.ABSTRACT | AccessFlag.NATIVE)) {
             throw new IllegalArgumentException("Non-abstract method " + data.name + '.' + name + ':' + rawDesc + " did not contain Code attribute.");
         }
-    }
-
-    public Method(IClass owner, Method method) {
-        this.accesses = method.accesses.copy();
-        this.owner = owner.className();
-        this.name = method.name;
-        this.rawDesc = method.rawDesc();
-        this.attributes = new AttributeList(method.attributes);
     }
 
     public void initAttributes(ConstantPool pool, ByteReader r) {

@@ -28,7 +28,10 @@ package roj.asm.tree.attr;
 
 import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
-import roj.asm.cst.*;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstMethodHandle;
+import roj.asm.cst.CstMethodType;
+import roj.asm.cst.CstRef;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
@@ -38,8 +41,6 @@ import roj.util.Helpers;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import static roj.asm.cst.CstType.*;
 
 /**
  * No description provided
@@ -81,14 +82,14 @@ public final class AttrBootstrapMethods extends Attribute {
             for (int j = 0; j < argc; j++) {
                 Constant c = pool.get(r);
                 switch (c.type()) {
-                    case STRING:
-                    case CLASS:
-                    case INT:
-                    case LONG:
-                    case FLOAT:
-                    case DOUBLE:
-                    case METHOD_HANDLE:
-                    case METHOD_TYPE:
+                    case Constant.STRING:
+                    case Constant.CLASS:
+                    case Constant.INT:
+                    case Constant.LONG:
+                    case Constant.FLOAT:
+                    case Constant.DOUBLE:
+                    case Constant.METHOD_HANDLE:
+                    case Constant.METHOD_TYPE:
                         break;
                     default:
                         throw new IllegalStateException("Only accept STRING CLASS INT LONG FLOAT DOUBLE METHOD_HANDLE or METHOD_TYPE, got " + c);
@@ -134,15 +135,15 @@ public final class AttrBootstrapMethods extends Attribute {
                 case 2:
                 case 3:
                 case 4:
-                    return type == CstType.FIELD;
+                    return type == Constant.FIELD;
                 case 5:
                 case 8:
-                    return type == CstType.METHOD;
+                    return type == Constant.METHOD;
                 case 6:
                 case 7:
-                    return type == CstType.METHOD || type == CstType.INTERFACE;
+                    return type == Constant.METHOD || type == Constant.INTERFACE;
                 case 9:
-                    return type == CstType.INTERFACE;
+                    return type == Constant.INTERFACE;
             }
             return false;
         }

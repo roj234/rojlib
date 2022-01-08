@@ -30,6 +30,7 @@ import ilib.world.structure.cascading.api.IGenerationData;
 import ilib.world.structure.cascading.api.IStructure;
 import ilib.world.structure.cascading.api.IStructureData;
 import ilib.world.structure.cascading.api.StructureGroup;
+
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -41,9 +42,6 @@ import java.util.Random;
 
 /**
  * 新一代结构生成系统
- *//**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51

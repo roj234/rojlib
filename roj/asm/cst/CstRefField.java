@@ -42,6 +42,6 @@ public final class CstRefField extends CstRef {
 
     @Override
     public byte type() {
-        return CstType.FIELD;
+        return Constant.FIELD;
     }
 }

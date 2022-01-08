@@ -35,8 +35,6 @@ import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
 import roj.util.ByteList;
 
-import static roj.asm.cst.CstType.*;
-
 /**
  * @author Roj234
  * @version 0.1
@@ -59,7 +57,7 @@ public final class LdcInsnNode extends InsnNode {
 
     public LdcInsnNode(Constant c) {
         super(Opcodes.LDC);
-        if (c.type() == DOUBLE || c.type() == LONG)
+        if (c.type() == Constant.DOUBLE || c.type() == Constant.LONG)
             code = Opcodes.LDC2_W;
 
         _verify(code, c);
@@ -75,25 +73,25 @@ public final class LdcInsnNode extends InsnNode {
 
     public static void _verify(byte code, Constant c) {
         boolean dj = false;
-        if(c.type() == DYNAMIC) {
+        if(c.type() == Constant.DYNAMIC) {
             String v = ((CstDynamic) c).getDesc().getType().getString();
             dj = v.charAt(0) == NativeType.DOUBLE || v.charAt(0) == NativeType.LONG;
         }
 
         switch (c.type()) {
-            case STRING:
-            case FLOAT:
-            case INT:
-            case CLASS:
-            case METHOD_HANDLE:
-            case METHOD_TYPE:
+            case Constant.STRING:
+            case Constant.FLOAT:
+            case Constant.INT:
+            case Constant.CLASS:
+            case Constant.METHOD_HANDLE:
+            case Constant.METHOD_TYPE:
                 break;
-            case DYNAMIC:
+            case Constant.DYNAMIC:
                 if ((code == Opcodes.LDC2_W) != dj)
                     ex(code, c);
                 break;
-            case LONG:
-            case DOUBLE:
+            case Constant.LONG:
+            case Constant.DOUBLE:
                 if (code != Opcodes.LDC2_W) {
                     ex(code, c);
                 }
@@ -116,22 +114,22 @@ public final class LdcInsnNode extends InsnNode {
          * Int, Float, String, Class, MethodType, or MethodHandle if main >= 51
          */
          switch (c.type()) {
-             case INT:
-             case FLOAT:
-             case STRING:
-             case LONG:
-             case DOUBLE:
+             case Constant.INT:
+             case Constant.FLOAT:
+             case Constant.STRING:
+             case Constant.LONG:
+             case Constant.DOUBLE:
                  break;
-             case CLASS:
+             case Constant.CLASS:
                  if(mainVer < 49)
                      throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
                  break;
-             case METHOD_TYPE:
-             case METHOD_HANDLE:
+             case Constant.METHOD_TYPE:
+             case Constant.METHOD_HANDLE:
                  if(mainVer < 51)
                      throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
                  break;
-             case DYNAMIC:
+             case Constant.DYNAMIC:
                  if(mainVer < 55)
                      throw new IllegalArgumentException("Constant " + c + " is not loadable at version " + mainVer);
                  break;

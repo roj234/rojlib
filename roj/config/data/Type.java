@@ -33,8 +33,9 @@ package roj.config.data;
  * @since 2021/4/21 22:51
  */
 public enum Type {
-    LIST, MAP, STRING, INTEGER, NULL, BOOL, DOUBLE, LONG, OBJECT, COMMENT,
-    YAML_TIMESTAMP, YAML_DATE;
+    LIST, MAP, STRING, INTEGER, NULL, BOOL, DOUBLE, LONG, OBJECT, COMMENT, DATETIME, DATE;
+
+    public static final Type[] VALUES = values();
 
     public boolean isNumber() {
         return this == INTEGER || this == DOUBLE || this == LONG;

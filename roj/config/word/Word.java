@@ -25,6 +25,7 @@
  */
 package roj.config.word;
 
+import roj.config.ParseException;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 
@@ -71,7 +72,7 @@ public class Word {
         return index;
     }
 
-    public NumberWord number(boolean negative) {
+    public NumberWord number(AbstLexer lexer, boolean negative) throws ParseException {
         int v;
         switch (type) {
             case WordPresets.HEX:
@@ -86,19 +87,23 @@ public class Word {
             case WordPresets.INTEGER:
                 if(!TextUtil.checkInt(TextUtil.INT_MAXS, val, 0, negative)) {
                     if(TextUtil.checkInt(TextUtil.LONG_MAXS, val, 0, negative)) {
-                        return new Word_L(index, Long.parseLong(negative ? "-" + val : val), val);
+                        if (lexer != null)
+                        lexer.onNumberFlow(val, WordPresets.INTEGER, WordPresets.LONG);
+                        return new Word_L(index, (negative ? -1 : 1) * Long.parseLong(val), negative ? "-" + val : val);
                     }
+                    if (lexer != null)
+                    lexer.onNumberFlow(val, WordPresets.INTEGER, WordPresets.DECIMAL_D);
                     // too large
-                    return new Word_D(WordPresets.DECIMAL_D, index, Double.parseDouble(negative ? "-" + val : val), val);
+                    return new Word_D(WordPresets.DECIMAL_D, index, (negative ? -1 : 1) * Double.parseDouble(val), negative ? "-" + val : val);
                 }
 
                 v = MathUtils.parseIntChecked(val, 10, negative);
                 break;
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F:
-                return new Word_D(type, index, Double.parseDouble(negative ? "-" + val : val), val);
+                return new Word_D(type, index, (negative ? -1 : 1) * Double.parseDouble(val), negative ? "-" + val : val);
             case WordPresets.LONG:
-                return new Word_L(index, Long.parseLong(negative ? "-" + val : val), val);
+                return new Word_L(index, (negative ? -1 : 1) * Long.parseLong(val), negative ? "-" + val : val);
             default:
                 System.err.println("Unknown type " + type);
                 return null;
@@ -107,7 +112,11 @@ public class Word {
     }
 
     public NumberWord number() {
-        return number(false);
+        try {
+            return number(null, false);
+        } catch (ParseException e) {
+            return number();
+        }
     }
 
     public short type() {

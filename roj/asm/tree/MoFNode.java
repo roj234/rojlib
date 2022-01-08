@@ -26,18 +26,12 @@
 package roj.asm.tree;
 
 import roj.asm.tree.attr.Attribute;
-import roj.asm.type.ParamHelper;
-import roj.asm.type.Type;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.FlagList;
 import roj.util.ByteList;
 
-import java.util.List;
-
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/12 0:23
@@ -48,10 +42,6 @@ public interface MoFNode {
     String name();
 
     String rawDesc();
-
-    default List<Type> parameters() {
-        return ParamHelper.parseMethod(rawDesc());
-    }
 
     FlagList accessFlag();
 

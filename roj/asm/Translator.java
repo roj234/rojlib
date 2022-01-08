@@ -27,7 +27,6 @@ package roj.asm;
 
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstString;
-import roj.asm.cst.CstType;
 import roj.asm.tree.ConstantData;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
@@ -307,7 +306,7 @@ public class Translator {
         List<Constant> array = data.cp.array();
         for (int i = 0; i < array.size(); i++) {
             Constant s = array.get(i);
-            if (s.type() == CstType.STRING) {
+            if (s.type() == Constant.STRING) {
                 map.put(s.getIndex(), ((CstString) s).getValue().getString());
             }
         }

@@ -29,22 +29,16 @@ import roj.collect.IntMap;
 import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CMapping;
 import roj.io.NIOUtil;
-import roj.net.SecureUtil;
+import roj.net.MSSSocket;
+import roj.net.WrappedSocket;
 import roj.net.misc.PacketBuffer;
 import roj.net.misc.Pipe;
 import roj.net.misc.Shutdownable;
 import roj.net.misc.TaskManager;
 import roj.net.mss.MSSServerEngineFactory;
-import roj.net.mss.PreSharedPubKey;
-import roj.net.tcp.MSSSocket;
-import roj.net.tcp.PlainSocket;
-import roj.net.tcp.WrappedSocket;
 import roj.util.FastLocalThread;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.X509KeyManager;
 import java.io.FileDescriptor;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -52,10 +46,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -79,73 +69,41 @@ public class AEServer implements Runnable, Shutdownable {
     int pipeId;
     ConcurrentHashMap<Integer, PipeGroup> pipes = new ConcurrentHashMap<>();
     protected final ServerSocket socket;
-    MSSServerEngineFactory factory;
+    private final MSSServerEngineFactory factory;
 
-    AtomicInteger connected = new AtomicInteger();
-    int maxConn, maxConnPerIp = 128;
+    AtomicInteger remain;
+    int           maxConnPerIp = 128;
     static final Function<InetAddress, AtomicInteger> COUNTER = (x) -> new AtomicInteger();
 
     TaskManager watcher = new TaskManager();
 
-    public AEServer(InetSocketAddress address, int maxConnection, String keyStore, char[] pass) throws
-            IOException, GeneralSecurityException {
-
-        KeyManager[] kmf = SecureUtil.makeKeyManagers(new FileInputStream(keyStore), pass);
-
-        X509Certificate pubKey = null;
-        PrivateKey privateKey = null;
-        for (KeyManager manager : kmf) {
-            if (manager instanceof X509KeyManager) {
-                X509KeyManager km = (X509KeyManager) manager;
-                String alias = km.chooseServerAlias("RSA", null, null);
-                privateKey = km.getPrivateKey(alias);
-                pubKey = km.getCertificateChain(alias)[0];
-                break;
-            }
-        }
-        if (pubKey == null || privateKey == null)
-            throw new NoSuchAlgorithmException("One or more critical parameter to construct the MSS engine is missing");
-
-        PreSharedPubKey pubKeyFormat = new PreSharedPubKey(pubKey);
-        this.factory = new MSSServerEngineFactory(pubKeyFormat, pubKey, privateKey);
-        this.socket = socket(address, maxConnection);
-        this.maxConn = maxConnection;
-    }
-
-    public AEServer(InetSocketAddress address, int maxConnection) throws IOException {
-        this.socket = socket(address, maxConnection);
-        this.maxConn = maxConnection;
-    }
-
-    private static ServerSocket socket(InetSocketAddress addr, int conn) throws IOException {
-        ServerSocket s = new ServerSocket();
+    public AEServer(InetSocketAddress addr, int conn, MSSServerEngineFactory factory) throws IOException {
+        ServerSocket s = this.socket = new ServerSocket();
         s.setReuseAddress(true);
         s.bind(addr, conn);
-        return s;
+        this.remain = new AtomicInteger(conn);
+        this.factory = factory;
     }
 
     @Override
     public void run() {
         while (true) {
+            Socket c;
             try {
-                Socket c = socket.accept();
-                if(connected.incrementAndGet() >= maxConn) {
-                    connected.getAndDecrement();
+                c = socket.accept();
+            } catch (IOException e) {
+                break;
+            }
+            try {
+                if(remain.decrementAndGet() <= 0) {
+                    remain.getAndIncrement();
                     c.close();
                 } else {
                     FileDescriptor fd = NIOUtil.fd(c);
                     initSocketPref(c);
-
-                    WrappedSocket cio;
-                    if (factory != null) {
-                        cio = new MSSSocket(c, fd, factory.newEngine());
-                    } else {
-                        cio = new PlainSocket(c, fd);
-                    }
-                    watcher.pushTask(new Worker(this, cio));
+                    watcher.pushTask(new Worker(this, new MSSSocket(c, fd, factory.newEngine())));
                 }
-            } catch (IOException | GeneralSecurityException e) {
-                if(e.getMessage().contains("close")) return;
+            } catch (Throwable e) {
                 e.printStackTrace();
             }
         }
@@ -166,19 +124,21 @@ public class AEServer implements Runnable, Shutdownable {
         }
     }
 
-    protected int createRoom(Worker worker, boolean owner, String id, String token) {
+    protected int login(Worker worker, boolean owner, String id, String token) {
         Room room = rooms.get(id);
         if(owner != (room == null)) return PS_ERROR_AUTH;
         if(room == null) {
-            if(!canCreateRoom)
-                return PS_ERROR_SYSTEM_LIMIT;
+            if(!canCreateRoom) return PS_ERROR_SYSTEM_LIMIT;
             rooms.put(id, new Room(id, worker, token));
             return -1;
         }
-        if(!canJoinRoom || room.locked) {
-            return PS_ERROR_SYSTEM_LIMIT;
+        if(!canJoinRoom || room.locked) return PS_ERROR_SYSTEM_LIMIT;
+        if(!token.equals(room.token)) return PS_ERROR_AUTH;
+        synchronized (room.clients) {
+            room.clients.put(worker.clientId = room.index++, worker);
         }
-        return room.preLogin(worker, token);
+        worker.room = room;
+        return -1;
     }
 
     @Override
@@ -245,16 +205,6 @@ public class AEServer implements Runnable, Shutdownable {
             owner.room = this;
         }
 
-        public int preLogin(Worker worker, String token) {
-            if(!token.equals(this.token))
-                return PS_ERROR_AUTH;
-            synchronized (clients) {
-                clients.put(worker.clientId = index++, worker);
-            }
-            worker.room = this;
-            return -1;
-        }
-
         public void close() {
             token = null;
             synchronized (clients) {
@@ -270,13 +220,13 @@ public class AEServer implements Runnable, Shutdownable {
 
         public CMapping serialize() {
             long up = 0, down = 0;
-            synchronized (master.selfPipes) {
-                if (!master.selfPipes.isEmpty()) {
-                    for (PipeGroup group : master.selfPipes.values()) {
+            if (!master.pipes.isEmpty()) {
+                synchronized (master.pipes) {
+                    for (PipeGroup group : master.pipes.values()) {
                         Pipe ref = group.pairRef;
                         if (ref != null) {
-                            up += ref.getnBytesToH();
-                            down += ref.getnBytesToC();
+                            up += ref.getDownloaded();
+                            down += ref.getUploaded();
                         }
                     }
                 }
@@ -291,7 +241,7 @@ public class AEServer implements Runnable, Shutdownable {
             json.put("users", clients.size());
             json.put("index", index);
             json.put("motd", motdString);
-            json.put("master", master == null ? "断线" : master.ch.socket().getRemoteSocketAddress().toString());
+            json.put("master", master == null ? "" : master.ch.socket().getRemoteSocketAddress().toString());
             return json;
         }
 
@@ -319,7 +269,8 @@ public class AEServer implements Runnable, Shutdownable {
 
         @Override
         public String toString() {
-            return "[" + ch.socket().getRemoteSocketAddress() + "/" + state.getClass().getSimpleName() + "] #" + clientId;
+            String s = ch.socket().getRemoteSocketAddress().toString();
+            return "[" + (s.startsWith("/") ? s.substring(1) : s)/* + "/" + state.getClass().getSimpleName()*/ + "] " + (room == null ? "null" : room.id) + "#" + clientId;
         }
 
         public Worker(AEServer aeServer, WrappedSocket ch) {
@@ -348,7 +299,7 @@ public class AEServer implements Runnable, Shutdownable {
                 }
                 ch.close();
             } catch (Throwable e) {
-                syncPrint(this + ": 异常 " + e.getMessage());
+                syncPrint(this + ": 断开 " + e.getMessage());
                 if (e.getClass() != IOException.class)
                     e.printStackTrace();
 
@@ -364,11 +315,10 @@ public class AEServer implements Runnable, Shutdownable {
 
             if(room != null) {
                 if(room.master == this) {
-                    syncPrint(this + ": 解散 " + room.id);
                     room.master = null;
                     server.rooms.remove(room.id);
                     room.close();
-                } else if (clientId > 0) {
+                } else {
                     synchronized (room.clients) {
                         room.clients.remove(clientId);
                     }
@@ -384,7 +334,7 @@ public class AEServer implements Runnable, Shutdownable {
             }
 
             ch = null;
-            server.connected.getAndDecrement();
+            server.remain.getAndIncrement();
 
             synchronized (this) {
                 notify();
@@ -397,6 +347,19 @@ public class AEServer implements Runnable, Shutdownable {
             json.put("ip", ch.socket().getRemoteSocketAddress().toString());
             json.put("state", state.getClass().getSimpleName());
             json.put("time", creation);
+            long up = 0, down = 0;
+            if (!pipes.isEmpty()) {
+                synchronized (pipes) {
+                    for (PipeGroup pg : pipes.values()) {
+                        Pipe pr = pg.pairRef;
+                        if (pr == null) continue;
+                        up += pr.uploaded;
+                        down += pr.downloaded;
+                    }
+                }
+            }
+            json.put("up", clientId == 0 ? down : up);
+            json.put("down", clientId == 0 ? up : down);
             json.put("heart", lastHeart / 1000);
             return json;
         }
@@ -404,9 +367,7 @@ public class AEServer implements Runnable, Shutdownable {
         @Override
         public void calculate(Thread thread) {
             self = thread;
-            self.setName("SW " + ch.socket().getRemoteSocketAddress());
             run();
-            self.setName("SW Idle");
         }
 
         @Override
@@ -418,18 +379,42 @@ public class AEServer implements Runnable, Shutdownable {
             byte[] data = packets.poll();
             if (data != null) {
                 ByteBuffer src = ByteBuffer.wrap(data);
-                for (;;) {
+                int time = 10000;
+                while (time-- > 0) {
                     ch.write(src);
                     if (src.hasRemaining()) LockSupport.parkNanos(50);
                     else break;
                 }
+                if (time <= 0) throw new IOException("超时");
             }
 
-            if (!selfPipes.isEmpty()) {
-                for (Iterator<PipeGroup> itr = selfPipes.values().iterator(); itr.hasNext(); ) {
-                    PipeGroup group = itr.next();
-                    if (group.life < 0 || (group.pairRef != null && group.pairRef.isReleased())) {
-                        itr.remove();
+            if (!pipes.isEmpty()) {
+                synchronized (pipes) {
+                    for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
+                        PipeGroup group = itr.next();
+                        if (--group.life < 0 || (group.pairRef != null && group.pairRef.isReleased())) {
+                            itr.remove();
+                        } else if (group.pairRef != null) {
+                            if (group.pairRef.idleTime < group.lastIdleTime) {
+                                if (group.inactive) {
+                                    group.inactive = false;
+                                    ByteBuffer src = ByteBuffer.allocate(5);
+                                    src.put((byte) PS_CHANNEL_ACTIVE).putInt(group.id).flip();
+
+                                    int time = 10000;
+                                    while (time-- > 0) {
+                                        ch.write(src);
+                                        if (src.hasRemaining()) LockSupport.parkNanos(50);
+                                        else break;
+                                    }
+                                    src.rewind();
+                                    if (clientId > 0) room.master.sync(src);
+                                    else group.downOwner.sync(src);
+                                    if (time <= 0) throw new IOException("超时");
+                                }
+                            }
+                            group.lastIdleTime = group.pairRef.idleTime;
+                        }
                     }
                 }
             }
@@ -440,40 +425,44 @@ public class AEServer implements Runnable, Shutdownable {
             packets.offer(rb);
         }
 
-        private final IntMap<PipeGroup> selfPipes = new IntMap<>();
+        private final IntMap<PipeGroup> pipes = new IntMap<>();
         private       PipeGroup         pending;
         public String generatePipe(int[] tmp) {
             if (pending != null) return "管道 #" + pending.id + " 处于等待状态";
             if (clientId == 0) return "只有客户端才能请求管道";
-            /*if (server.pipes.isEmpty()) server.pipeId = 0;
-            else */if (server.pipes.size() > 30) return "服务器等待打开的管道过多";
-            if (selfPipes.size() > 10) return "你打开的管道过多";
+            if (server.pipes.size() > 100) return "服务器等待打开的管道过多";
+            if (pipes.size() > 16) return "你打开的管道过多";
 
             PipeGroup group = pending = new PipeGroup();
             group.downOwner = this;
             group.id = server.pipeId++;
             group.upPass = (int) (new Object().hashCode() ^ hashCode() ^ System.currentTimeMillis()) + 1;
             group.downPass = (int) (new Object().hashCode() ^ hashCode() ^ System.currentTimeMillis()) + 2;
-            group.life = 120;
+            group.life = 600;
 
             tmp[0] = group.id;
             tmp[1] = group.upPass;
 
-            selfPipes.put(group.id, group);
-            synchronized (room.master.selfPipes) {
-                room.master.selfPipes.put(group.id, group);
+            synchronized (pipes) {
+                pipes.put(group.id, group);
+            }
+            synchronized (room.master.pipes) {
+                room.master.pipes.put(group.id, group);
             }
             server.pipes.put(group.id, group);
 
             return null;
         }
 
-        public long getPendingPipeId() {
+        public long getPendingPipe() {
             return ((long)pending.id << 32) | pending.downPass;
         }
 
         public Worker closePipe(int pipeId) {
-            PipeGroup group = selfPipes.remove(pipeId);
+            PipeGroup group;
+            synchronized (pipes) {
+                group = pipes.remove(pipeId);
+            }
             if (group == null) {
                 syncPrint(this + ": PCC 无效的管道: " + pipeId);
                 return null;
@@ -488,7 +477,7 @@ public class AEServer implements Runnable, Shutdownable {
         }
 
         public PipeGroup getPipe(int pipeId) {
-            return selfPipes.get(pipeId);
+            return pipes.get(pipeId);
         }
 
         public void pendingPipeOpen() {
@@ -497,6 +486,8 @@ public class AEServer implements Runnable, Shutdownable {
     }
 
     static final class PipeGroup {
+        int lastIdleTime;
+        boolean inactive;
         int life;
         int id, upPass, downPass;
         FileDescriptor upConnFD, downConnFD;

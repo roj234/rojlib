@@ -31,7 +31,7 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -274,9 +274,10 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
         }
     }
 
-    static abstract class Finder<T, V> {
+    static final class Finder<T, V> {
         List<T>[] tHolder;
         REntry<T, V>[] pending, next;
+        int[] source, source_next;
 
         Finder(int cap) {
             this.pending = Helpers.cast(new REntry<?, ?>[16]);
@@ -285,393 +286,28 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
             for (int i = 0; i < cap; i++) {
                 this.tHolder[i] = new ArrayList<>(10);
             }
-        }
-    }
-
-    static final class IntFinder<T, V> extends Finder<T, V> {
-        int[] source, source_next;
-
-        IntFinder(int cap) {
-            super(cap);
             this.source = new int[16];
             this.source_next = new int[16];
         }
     }
 
-    static final class LongFinder<T, V> extends Finder<T, V> {
-        long[] source, source_next;
-
-        LongFinder(int cap) {
-            super(cap);
-            this.source = new long[16];
-            this.source_next = new long[16];
-        }
-    }
-
-    static final class BitSetFinder<T, V> extends Finder<T, V> {
-        List<T>[] tHolder;
-        REntry<T, V>[] pending, next;
-        LongBitSet[] source, source_next;
-
-        BitSetFinder(int cap) {
-            super(cap);
-            this.source = new LongBitSet[16];
-            this.source_next = new LongBitSet[16];
-        }
-    }
-
-    public static final class LongUMKM<K, T, V> extends UnsortedMultiKeyMap<K, T, V> {
-        LongUMKM(Keys<K, T> comparator, int len) {
-            super(comparator, len);
-        }
-
-        @SuppressWarnings("unchecked")
-        public List<V> getMulti(List<K> s, int limit, List<V> dest) {
-            //assert dest instanceof RandomAccess;
-
-            LongFinder<T, V> f = (LongFinder<T, V>) buffer.getAndSet(null);
-            if(f == null)
-                f = new LongFinder<>(averageLength);
-
-            List<T>[] tss = f.tHolder;
-            for (int i = 0; i < s.size(); i++) {
-                tss[i].clear();
-                tss[i] = comparator.getKeysFor(s.get(i), tss[i]);
-            }
-
-            REntry<T, V>[] pend = f.pending;
-            int pendUsed = 1;
-            REntry<T, V>[] next = f.next;
-            int nextUsed = 0;
-            long[] src = f.source;
-            long[] src_nx = f.source_next;
-
-            pend[0] = root;
-            src[0] = 0;
-
-            int vx = 0, mask;
-            int remain = s.size();
-            long ae = 0, from;
-            REntry<?, ?>[] children;
-            REntry<T, V> eee;
-            List<T> ts;
-            T t;
-            while (remain-- > 0) {
-                for (int i = 0; i < s.size(); i++) {
-                    ts = tss[i];
-                    if((ae & (1L << i)) != 0) continue;
-                    for (int j = 0; j < pendUsed; j++) {
-                        from = src[j];
-                        if((from & (1L << i)) != 0) {
-                            vx++;
-                            continue;
-                        }
-                        from |= (1L << i);
-
-                        children = pend[j].children;
-
-                        mask = children.length - 1;
-
-                        for (int k = 0; k < ts.size(); k++) {
-                            t = ts.get(k);
-                            eee = (REntry<T, V>) children[t.hashCode() & mask];
-                            while (eee != null) {
-                                if (t.equals(eee.k)) {
-                                    if(src_nx.length <= nextUsed) {
-                                        long[] nx_1 = new long[nextUsed + 16];
-                                        if(src_nx.length > 0)
-                                            System.arraycopy(src_nx, 0, nx_1, 0, src_nx.length);
-                                        src_nx = nx_1;
-                                    }
-                                    if(next.length <= nextUsed) {
-                                        REntry<?, ?>[] nx_1 = new REntry<?, ?>[nextUsed + 16];
-                                        System.arraycopy(next, 0, nx_1, 0, next.length);
-                                        next = Helpers.cast(nx_1);
-                                    }
-                                    src_nx[nextUsed] = ((next[nextUsed++] = eee).children.length == 0 ? -1L : from);
-                                    break;
-                                }
-                                eee = eee.next;
-                            }
-                        }
-                    }
-                    if(vx == pendUsed) {
-                        ae |= 1L << i;
-                    }
-                    vx = 0;
-                }
-
-                long[] tmp1 = src;
-                src = src_nx;
-                src_nx = tmp1;
-
-                REntry<T, V>[] tmp2 = next;
-                next = pend;
-                pend = tmp2;
-
-                int tmp = nextUsed;
-                nextUsed = 0;
-                pendUsed = tmp;
-
-                if(tmp == 0) {
-                    break;
-                }
-            }
-
-            f.pending = pend;
-            f.next = next;
-            f.source = src;
-            f.source_next = src_nx;
-
-            int i = 0;
-            for (; i < pendUsed; i++) {
-                REntry<T, V> entry = pend[i];
-                if(entry.v != NOT_USING && dest.size() < limit) {
-                    dest.add(entry.v);
-                }
-            }
-            for (; i < pend.length; i++) {
-                if (pend[i] == null) {
-                    break;
-                }
-                pend[i] = null;
-            }
-            for (i = 0; i < next.length; i++) {
-                if (next[i] == null) {
-                    break;
-                }
-                next[i] = null;
-            }
-
-            buffer.compareAndSet(null, Helpers.cast(f));
-
-            return dest;
-        }
-    }
-
-    public static final class BitSetUMKM<K, T, V> extends UnsortedMultiKeyMap<K, T, V> {
-        BitSetUMKM(Keys<K, T> comparator, int len) {
-            super(comparator, len);
-        }
-
-        @SuppressWarnings("unchecked")
-        public List<V> getMulti(List<K> s, int limit, List<V> dest) {
-            //assert dest instanceof RandomAccess;
-
-            BitSetFinder<T, V> f = (BitSetFinder<T, V>) buffer.getAndSet(null);
-            if(f == null)
-                f = new BitSetFinder<>(averageLength);
-
-            List<T>[] tss = f.tHolder;
-            for (int i = 0; i < s.size(); i++) {
-                tss[i].clear();
-                tss[i] = comparator.getKeysFor(s.get(i), tss[i]);
-            }
-
-            REntry<T, V>[] pend = f.pending;
-            int pendUsed = 1;
-            REntry<T, V>[] next = f.next;
-            int nextUsed = 0;
-            LongBitSet[] src = f.source;
-            LongBitSet[] src_nx = f.source_next;
-
-            pend[0] = root;
-            src[0] = new LongBitSet(1 << 6);
-
-            int mask;
-            int remain = s.size();
-            LongBitSet from;
-            REntry<?, ?>[] children;
-            REntry<T, V> eee;
-            List<T> ts;
-            T t;
-            while (remain-- > 0) {
-                for (int i = 0; i < s.size(); i++) {
-                    ts = tss[i];
-                    for (int j = 0; j < pendUsed; j++) {
-                        from = src[j];
-                        if(!from.add(j)) {
-                            continue;
-                        }
-
-                        children = pend[j].children;
-
-                        mask = children.length - 1;
-
-                        for (int k = 0; k < ts.size(); k++) {
-                            t = ts.get(k);
-                            eee = (REntry<T, V>) children[t.hashCode() & mask];
-                            while (eee != null) {
-                                if (t.equals(eee.k)) {
-                                    if(src_nx.length <= nextUsed) {
-                                        LongBitSet[] nx_1 = new LongBitSet[nextUsed + 16];
-                                        if(src_nx.length > 0)
-                                            System.arraycopy(src_nx, 0, nx_1, 0, src_nx.length);
-                                        src_nx = nx_1;
-                                    }
-                                    if(next.length <= nextUsed) {
-                                        REntry<?, ?>[] nx_1 = new REntry<?, ?>[nextUsed + 16];
-                                        System.arraycopy(next, 0, nx_1, 0, next.length);
-                                        next = Helpers.cast(nx_1);
-                                    }
-                                    if((next[nextUsed] = eee).children.length == 0) {
-                                        (src_nx[nextUsed] = new LongBitSet(from.max)).fill(from.max);
-                                    } else {
-                                        src_nx[nextUsed] = (LongBitSet) from.copy();
-                                    }
-                                    nextUsed++;
-                                    break;
-                                }
-                                eee = eee.next;
-                            }
-                        }
-                    }
-                }
-
-                LongBitSet[] tmp1 = src;
-                src = src_nx;
-                src_nx = tmp1;
-
-                REntry<T, V>[] tmp2 = next;
-                next = pend;
-                pend = tmp2;
-
-                int tmp = nextUsed;
-                nextUsed = 0;
-                pendUsed = tmp;
-
-                if(tmp == 0) {
-                    break;
-                }
-            }
-
-            f.pending = pend;
-            f.next = next;
-            f.source = src;
-            f.source_next = src_nx;
-
-            int i = 0;
-            for (; i < pendUsed; i++) {
-                REntry<T, V> entry = pend[i];
-                if(entry.v != NOT_USING && dest.size() < limit) {
-                    dest.add(entry.v);
-                }
-            }
-            for (; i < pend.length; i++) {
-                if (pend[i] == null) {
-                    break;
-                }
-                pend[i] = null;
-            }
-            for (i = 0; i < next.length; i++) {
-                if (next[i] == null) {
-                    break;
-                }
-                next[i] = null;
-            }
-
-            buffer.compareAndSet(null, Helpers.cast(f));
-
-            return dest;
-        }
-    }
-
     public static <K,T,V> UnsortedMultiKeyMap<K, T, V> create(Keys<K,T> keys, int averageLength) {
-        if(averageLength < 32)
-            return new UnsortedMultiKeyMap<>(keys, averageLength);
-        if(averageLength < 64)
-            return new LongUMKM<>(keys, averageLength);
-        return new BitSetUMKM<>(keys, averageLength);
-    }
-
-    static final class Reaction {
-        String[] in;
-        int out;
-
-        public Reaction(Random rand, int id) {
-            int len = 2 + rand.nextInt(10);
-            in = new String[len];
-            for (int i = 0; i < len; i++) {
-                char c = (char) (48 + rand.nextInt(88 - 48));
-                in[i] = String.valueOf(c);
-            }
-            out = id;
-        }
-
-        @Override
-        public String toString() {
-            return Arrays.toString(in) +
-                    "='" + out + '\'';
-        }
-    }
-
-    public static void main(String[] args) {
-        int count = Integer.parseInt(args[0]);
-        System.out.println("数据量：" + count);
-        Random rand = new Random(System.currentTimeMillis());
-
-        Reaction[] reactions = new Reaction[count];
-        for (int i = 0; i < count; i++) {
-            Reaction r = new Reaction(rand, i);
-            reactions[i] = r;
-        }
-
-        UnsortedMultiKeyMap<String, String, Integer> momvm = new UnsortedMultiKeyMap<>(new Keys<String, String>() {
-            @Override
-            public List<String> getKeysFor(String key, List<String> holder) {
-                holder.add(key);
-                return holder;
-            }
-
-            @Override
-            public String getMostFamous(String s) {
-                return s;
-            }
-        }, 12);
-
-        long t0 = System.currentTimeMillis();
-        for (int i = 0; i < count; i++) {
-            Reaction r = reactions[i];
-            momvm.put(Arrays.asList(r.in), r.out);
-        }
-        Reaction[] reactions1 = new Reaction[count / 50];
-        long t1 = System.currentTimeMillis();
-        System.out.println("Put " + (t1 - t0));
-        for (int i = 0; i < count / 50; i++) {
-            Reaction r = new Reaction(rand, i);
-            reactions1[i] = r;
-        }
-        //List<Integer> list = new ArrayList<>(count / 10);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < count / 50; i++) {
-            Reaction r = reactions1[i];
-            List<String> s = Arrays.asList(r.in);
-            momvm.getMulti(s, 99999999, EmptyList.getInstance());
-            /*if(!list.isEmpty()) {
-                System.out.println("I " + s);
-                for (int j = 0; j < list.size(); j++) {
-                    System.out.println(reactions[list.get(j)]);
-                }
-            }
-            list.clear();*/
-        }
-        t1 = System.currentTimeMillis();
-        System.out.println("Get " + (t1 - t0) / (count / 50d));
-
-        //System.out.println(momvm);
+        return new UnsortedMultiKeyMap<>(keys, averageLength);
     }
 
     final Keys<K, T> comparator;
     final int averageLength;
-    final AtomicReference<Object> buffer;
+
+    @SuppressWarnings("rawtypes")
+    static final AtomicReferenceFieldUpdater<UnsortedMultiKeyMap, Object> BufUpdater = AtomicReferenceFieldUpdater.newUpdater(UnsortedMultiKeyMap.class, Object.class, "buffer");
+    volatile Object  buffer;
 
     REntry<T, V> root = new REntry<>((T)null);
     int size = 0;
 
-    UnsortedMultiKeyMap(Keys<K, T> comparator, int len) {
+    public UnsortedMultiKeyMap(Keys<K, T> comparator, int len) {
         this.comparator = comparator;
         this.averageLength = len;
-        this.buffer = new AtomicReference<>();
     }
 
     public REntry<T, V> getEntry(List<K> s, int i, int len) {
@@ -865,11 +501,9 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
 
     @SuppressWarnings("unchecked")
     public List<V> getMulti(List<K> s, int limit, List<V> dest) {
-        //assert dest instanceof RandomAccess;
-
-        IntFinder<T, V> f = (IntFinder<T, V>) buffer.getAndSet(null);
+        Finder<T, V> f = (Finder<T, V>) BufUpdater.getAndSet(this, null);
         if(f == null)
-            f = new IntFinder<>(averageLength);
+            f = new Finder<>(averageLength);
 
         List<T>[] tss = f.tHolder;
         for (int i = 0; i < s.size(); i++) {
@@ -981,7 +615,7 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
             next[i] = null;
         }
 
-        buffer.compareAndSet(null, Helpers.cast(f));
+        BufUpdater.compareAndSet(this, null, f);
 
         return dest;
     }

@@ -654,6 +654,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         if(entry == null || entry.v == NOT_USING)
             return false;
         if(Objects.equals(oldValue, entry.v)) {
+            afterAccess(entry, newValue);
             entry.v = newValue;
             return true;
         }
@@ -677,8 +678,10 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             entry = getOrCreateEntry(key);
         }
 
-        if(entry.v == NOT_USING)
+        if(entry.v == NOT_USING) {
             size++;
+            afterPut(entry);
+        }
         entry.v = newV;
 
         return newV;
@@ -696,8 +699,10 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
             }
             entry = getOrCreateEntry(key);
         }
-        if(entry.v == NOT_USING)
+        if(entry.v == NOT_USING) {
             size++;
+            afterPut(entry);
+        }
         return entry.v = mappingFunction.apply(key);
     }
 
@@ -735,6 +740,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         }
         Entry<K, V> entry = getOrCreateEntry(key);
         if(entry.v == NOT_USING) {
+            afterPut(entry);
             size++;
             entry.v = v;
             return null;

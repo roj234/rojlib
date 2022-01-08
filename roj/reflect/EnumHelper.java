@@ -44,10 +44,10 @@ import java.util.*;
  * @since 2021/5/2 8:22
  */
 public final class EnumHelper<E extends Enum<E>> {
-    private static final H H = DirectAccessor.builder(H.class).access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null).build();
+    public static final H H = DirectAccessor.builder(H.class).access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null).build();
     private static final FieldAccessor ordinalAcc;
 
-    interface H {
+    public interface H {
         Map<String, ?> getEnumConstantDirectory(Class<? extends Enum<?>> clazz);
     }
 

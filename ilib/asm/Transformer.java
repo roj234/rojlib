@@ -143,7 +143,7 @@ public class Transformer implements ContextClassTransformer {
             switch (node.getOpcode()) {
                 case Opcodes.LDC2_W: {
                     LdcInsnNode node1 = (LdcInsnNode) node;
-                    if (node1.c.type() == CstType.LONG && ((CstLong) node1.c).value == 50000000L) {
+                    if (node1.c.type() == Constant.LONG && ((CstLong) node1.c).value == 50000000L) {
                         insn.set(i, new FieldInsnNode(Opcodes.GETSTATIC, "ilib/Config.maxChunkTimeTick:J"));
                         j++;
                     }
@@ -174,7 +174,7 @@ public class Transformer implements ContextClassTransformer {
             InsnNode node = insn.get(i);
             if (node.getOpcode() == Opcodes.LDC2_W) {
                 LdcInsnNode node1 = (LdcInsnNode) node;
-                if (node1.c.type() == CstType.LONG && ((CstLong) node1.c).value == 50L) {
+                if (node1.c.type() == Constant.LONG && ((CstLong) node1.c).value == 50L) {
                     insn.set(i, new FieldInsnNode(Opcodes.GETSTATIC, "ilib/asm/transformers/Transformer.MSpT:J"));
                     return;
                 }
@@ -215,7 +215,7 @@ public class Transformer implements ContextClassTransformer {
             List<Constant> array = data.cp.array();
             for (int i = 0; i < array.size(); i++) {
                 Constant c = array.get(i);
-                if (c.type() == CstType.UTF) {
+                if (c.type() == Constant.UTF) {
                     CstUTF cstUTF = (CstUTF) c;
                     if ("Minecraft 1.12.2".equals(cstUTF.getString())) {
                         cstUTF.setString(Config.title);

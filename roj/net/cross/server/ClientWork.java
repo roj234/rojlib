@@ -25,9 +25,8 @@
  */
 package roj.net.cross.server;
 
-import roj.net.cross.server.AEServer.PipeGroup;
+import roj.net.WrappedSocket;
 import roj.net.cross.server.AEServer.Worker;
-import roj.net.tcp.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -72,7 +71,7 @@ final class ClientWork extends Stated {
                     break;
                 case P_LOGOUT:
                     rb.clear();
-                    syncPrint(W + ": 断开连接(协议)");
+                    //syncPrint(W + ": 断开连接(协议)");
                     return Logout.LOGOUT;
                 case PS_REQUEST_CHANNEL:
                     if (rb.position() < 34) {
@@ -96,7 +95,7 @@ final class ClientWork extends Stated {
 
                     W.room.master.sync(rb);
                     break;
-                case PS_CHANNEL_CLOSE:
+                case P_CHANNEL_CLOSE:
                     if (rb.position() < 5) {
                         except = 5;
                         continue;
@@ -109,29 +108,6 @@ final class ClientWork extends Stated {
                       .putInt(5, pipeId);
                     Worker w = W.closePipe(pipeId);
                     if (w != null) w.sync(rb);
-                    break;
-                case P_CHANNEL_OP:
-                    if (rb.position() < 6) {
-                        except = 6;
-                        continue;
-                    }
-                    except = 1;
-
-                    pipeId = rb.getInt(1);
-                    PipeGroup group = W.getPipe(pipeId);
-                    if (group == null || group.pairRef == null) {
-                        syncPrint(W + ": 1 无效 #" + pipeId);
-                        write1(ch, (byte) P_FAIL);
-                        break;
-                    }
-                    switch (rb.get() & 0xFF) {
-                        case OP_SET_ACTIVE:
-                            group.pairRef.setActive();
-                            break;
-                        case OP_SET_INACTIVE:
-                            group.pairRef.setInactive();
-                            break;
-                    }
                     break;
                 case P_MSG:
                     if (rb.position() < 6) {

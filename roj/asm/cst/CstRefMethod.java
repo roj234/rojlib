@@ -42,6 +42,6 @@ public final class CstRefMethod extends CstRef {
 
     @Override
     public byte type() {
-        return CstType.METHOD;
+        return Constant.METHOD;
     }
 }

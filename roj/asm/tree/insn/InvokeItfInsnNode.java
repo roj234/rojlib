@@ -49,6 +49,10 @@ public final class InvokeItfInsnNode extends InvokeInsnNode {
         super(Opcodes.INVOKEINTERFACE, str);
     }
 
+    public InvokeItfInsnNode(String owner, String name, String types) {
+        super(Opcodes.INVOKEINTERFACE, owner, name, types);
+    }
+
     public InvokeItfInsnNode(CstRefItf ref, short flag) {
         super(Opcodes.INVOKEINTERFACE, ref);
     }

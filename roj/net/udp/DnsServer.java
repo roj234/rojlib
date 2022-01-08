@@ -34,13 +34,9 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.math.MathUtils;
 import roj.net.NetworkUtil;
-import roj.net.tcp.serv.Reply;
-import roj.net.tcp.serv.Response;
-import roj.net.tcp.serv.Router;
-import roj.net.tcp.serv.response.HeadResponse;
-import roj.net.tcp.serv.response.StringResponse;
-import roj.net.tcp.serv.util.Request;
-import roj.net.tcp.util.Code;
+import roj.net.http.Action;
+import roj.net.http.Code;
+import roj.net.http.serv.*;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
@@ -1230,7 +1226,7 @@ public class DnsServer implements Router, Runnable {
     }
 
     @Override
-    public Response response(Socket socket, Request request) throws IOException {
+    public Reply response(Socket socket, Request request) throws IOException {
         switch (request.path()) {
             case "/favicon.ico":
                 return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
@@ -1272,7 +1268,7 @@ public class DnsServer implements Router, Runnable {
                 return new Reply(Code.FOUND, hp);
             }
             case "/set": {
-                if(request.action() != roj.net.tcp.util.Action.POST) {
+                if(request.action() != Action.POST) {
                     return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.forError(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
                 }
                 Map<String, String> postFields = request.postFields();
@@ -1345,6 +1341,6 @@ public class DnsServer implements Router, Runnable {
 
     @Override
     public boolean checkAction(int action) {
-        return action == roj.net.tcp.util.Action.POST || action == roj.net.tcp.util.Action.GET;
+        return action == Action.POST || action == Action.GET;
     }
 }

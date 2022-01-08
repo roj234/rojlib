@@ -114,7 +114,7 @@ public final class Shared {
 
             MAIN_CONFIG = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding()), 7).asMap();
 
-            MAIN_CONFIG.dotMode(true);
+            MAIN_CONFIG.dot(true);
 
             DEBUG = MAIN_CONFIG.getBool("调试模式");
             if(DEBUG) {

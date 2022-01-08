@@ -42,12 +42,12 @@ public final class CstDouble extends Constant {
 
     @Override
     public void write(ByteList w) {
-        w.put(CstType.DOUBLE).putDouble(value);
+        w.put(Constant.DOUBLE).putDouble(value);
     }
 
     @Override
     public byte type() {
-        return CstType.DOUBLE;
+        return Constant.DOUBLE;
     }
 
     public String toString() {

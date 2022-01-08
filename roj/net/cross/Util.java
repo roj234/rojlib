@@ -26,20 +26,14 @@
 package roj.net.cross;
 
 import roj.io.NIOUtil;
-import roj.net.SecureUtil;
-import roj.net.tcp.WrappedSocket;
-import roj.text.TextUtil;
-import roj.ui.UIUtil;
+import roj.net.WrappedSocket;
+import roj.net.misc.Shutdownable;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
-import java.io.*;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -54,6 +48,10 @@ public class Util {
         try {
             roj.misc.CpFilter.registerShutdownHook();
         } catch (Error ignored) {}
+        Thread infSleeper = new Thread(() -> LockSupport.parkNanos(Long.MAX_VALUE));
+        infSleeper.setDaemon(true);
+        infSleeper.setName("Timer hack thread");
+        infSleeper.start();
     }
 
     public static final int TIMEOUT          = 3000;
@@ -246,23 +244,27 @@ public class Util {
      * DATA_CHANNEL.ordinal data_channel_id;
      * }
      */
-    public static final int PS_CHANNEL_CLOSE    = 14;
+    public static final int P_CHANNEL_CLOSE     = 14;
     /**
-     * client/host对数据频道操作
+     * client/host对告知数据频道目的段已终止，在下次收到数据时通知
      * {
      * u1 id;
      * DATA_CHANNEL.ordinal data_channel_id;
-     * OP op;
-     * }
-     *
-     * enum OP {
-     *     0=SET_INACTIVE, 1=SET_ACTIVE
      * }
      */
-    public static final int P_CHANNEL_OP    = 15;
+    public static final int P_CHANNEL_INACTIVE  = 15;
+    /**
+     * server在收到数据时通知client/host
+     * {
+     * u1 id;
+     * DATA_CHANNEL.ordinal data_channel_id;
+     * }
+     */
+    public static final int PS_CHANNEL_ACTIVE    = 15;
     /**
      * 骚气的聊天功能
      * {
+     * u1 id;
      * ORIGIN to;
      * u1 msgLen;
      * utf[msgLen] msg;
@@ -273,9 +275,12 @@ public class Util {
      * }
      */
     public static final int P_MSG = 16;
+    /**
+     * 上次的操作失败了
+     * { u1 id; }
+     */
     public static final int P_FAIL = 17;
 
-    public static final int OP_SET_INACTIVE = 0, OP_SET_ACTIVE = 1;
     // endregion
 
     public static final String[] ERROR_NAMES = {"IO错误", "登录失败(密码无效/房间不存在/房间已有房主)", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
@@ -295,193 +300,19 @@ public class Util {
     public static final int T_CLIENT_HEARTBEAT_RETRY = 200;
     public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 5000;
 
-    public static class SslDialog extends JDialog {
-        private final JPasswordField inpPass;
-        private final JTextField     inpCert;
-        static boolean x;
-
-        public static void sho1w() {
-            if(!x) {
-                x = true;
-                new SslDialog();
-            }
-        }
-
-        public SslDialog() {
-            JPanel contentPane = new JPanel();
-            contentPane.setLayout(new GridBagLayout());
-            final JPanel panel1 = new JPanel();
-            panel1.setLayout(new GridBagLayout());
-            GridBagConstraints gbc;
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.BOTH;
-            contentPane.add(panel1, gbc);
-            final JPanel panel2 = new JPanel();
-            panel2.setLayout(new GridBagLayout());
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.BOTH;
-            panel1.add(panel2, gbc);
-            JButton buttonOK = new JButton();
-            buttonOK.setText("OK");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel2.add(buttonOK, gbc);
-            JButton buttonCancel = new JButton();
-            buttonCancel.setText("取消");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel2.add(buttonCancel, gbc);
-            final JPanel panel3 = new JPanel();
-            panel3.setLayout(new GridBagLayout());
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.BOTH;
-            contentPane.add(panel3, gbc);
-            JButton btnBrowseCert = new JButton();
-            btnBrowseCert.setText("浏览");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 2;
-            gbc.gridy = 0;
-            gbc.weighty = 1.0;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel3.add(btnBrowseCert, gbc);
-            inpPass = new JPasswordField();
-            if(certPass != null)
-                inpPass.setText(new String(certPass));
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 1;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel3.add(inpPass, gbc);
-            final JLabel label1 = new JLabel();
-            label1.setText("证书");
-            label1.setToolTipText("格式PKCS12");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            panel3.add(label1, gbc);
-            final JLabel label2 = new JLabel();
-            label2.setText("密码");
-            gbc = new GridBagConstraints();
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            panel3.add(label2, gbc);
-            inpCert = new JTextField();
-            if(certFile != null)
-                inpCert.setText(certFile);
-            gbc = new GridBagConstraints();
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weightx = 1.0;
-            gbc.weighty = 1.0;
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            panel3.add(inpCert, gbc);
-
-            setContentPane(contentPane);
-            setModal(true);
-            getRootPane().setDefaultButton(buttonOK);
-
-            buttonOK.addActionListener(e -> onOK());
-
-            ActionListener c = e -> {
-                dispose();
-            };
-            buttonCancel.addActionListener(c);
-
-            // call onCancel() when cross is clicked
-            setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-            addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosed(WindowEvent e) {
-                    x = false;
-                }
-            });
-
-            btnBrowseCert.addActionListener(e -> {
-                JFileChooser fc = new JFileChooser();
-                fc.setDialogTitle("选择证书");
-                fc.setCurrentDirectory(new File("."));
-                fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
-                fc.setMultiSelectionEnabled(false);
-                if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                    inpCert.setText(fc.getSelectedFile().getAbsolutePath());
-                }
-            });
-
-            // call onCancel() on ESCAPE
-            contentPane.registerKeyboardAction(c, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-
-            pack();
-            setBounds(0, 0, 200, 120);
-            UIUtil.center(this);
-            setVisible(true);
-            setResizable(false);
-        }
-
-        private void onOK() {
-            if(inpCert.getText().equals("")) {
-                certFile = null;
-                certPass = null;
-            } else {
-                File f = new File(inpCert.getText());
-                if (!f.isFile()) {
-                    JOptionPane.showMessageDialog(this, "无效的证书");
-                    return;
-                }
-                certFile = inpCert.getText();
-                certPass = inpPass.getPassword();
-
-                try {
-                    KeyStore ks = KeyStore.getInstance(SecureUtil.KEY_FORMAT);
-                    try (InputStream in = new FileInputStream(certFile)) {
-                        ks.load(in, certPass);
-                    }
-                } catch (GeneralSecurityException | IOException e) {
-                    e.printStackTrace();
-                    JOptionPane.showMessageDialog(this, "无效的证书");
-                    return;
-                }
-            }
-
-            dispose();
-        }
-    }
-
     public static PrintStream out;
-    public static String certFile;
-    public static char[] certPass;
 
     public static void syncPrint(String msg) {
         if(out == null) return;
         synchronized (out) {
             out.println(msg);
         }
+    }
+
+    public static void registerShutdownHook(Shutdownable s) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (!s.wasShutdown()) s.shutdown();
+        }));
     }
 
     public static void initSocketPref(Socket client) throws SocketException {
@@ -524,7 +355,7 @@ public class Util {
                 try {
                     throw new IOException("握手失败: " + HS_ERROR_NAMES[read - 1]);
                 } catch (ArrayIndexOutOfBoundsException e) {
-                    throw new IOException("协议错误: " + dumpBuffer(buf));
+                    throw new IOException("协议错误: " + NIOUtil.dumpBuffer(buf));
                 }
             }
         } finally {
@@ -593,13 +424,5 @@ public class Util {
                 return false;
             }
         }
-    }
-
-    public static String dumpBuffer(ByteBuffer rb) {
-        int p = rb.position();
-        rb.position(0);
-        byte[] tmp = new byte[rb.limit()];
-        rb.get(tmp).position(p);
-        return TextUtil.dumpBytes(tmp);
     }
 }

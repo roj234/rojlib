@@ -47,12 +47,12 @@ public final class MathOptimizer implements Opcodes {
         for (int i = 0; i < csts.size(); i++) {
             Constant cst = csts.get(i);
             switch (cst.type()) {
-                case CstType.DOUBLE:
+                case Constant.DOUBLE:
                     CstDouble db = (CstDouble) cst;
                     if (db.value == 65536.0)
                         db.value = 32768.0;
                     break;
-                case CstType.FLOAT:
+                case Constant.FLOAT:
                     CstFloat fl = (CstFloat) cst;
                     if (fl.value == 65536F) {
                         fl.value = 32768F;
@@ -62,7 +62,7 @@ public final class MathOptimizer implements Opcodes {
                         fl.value = 8192.0F;
                     }
                     break;
-                case CstType.INT:
+                case Constant.INT:
                     CstInt in = (CstInt) cst;
                     if (in.value == 65536)
                         in.value = 32768;

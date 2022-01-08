@@ -112,7 +112,7 @@ public class NodeHelper {
         return loadSore(getValue(x, ILOAD), i);
     }
 
-    public static NPInsnNode X_STORE_I(char x, int i) {
+    public static NPInsnNode XSTORE_I(char x, int i) {
         if (i < 0 || i > 3)
             throw new NumberFormatException("i not in [0, 3] : " + i);
         return loadSore(getValue(x, ISTORE), i);

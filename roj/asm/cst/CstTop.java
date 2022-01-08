@@ -56,7 +56,7 @@ public final class CstTop extends Constant {
 
     @Override
     public byte type() {
-        return CstType._TOP_;
+        return Constant._TOP_;
     }
 
     @Override

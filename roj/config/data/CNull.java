@@ -25,6 +25,8 @@
  */
 package roj.config.data;
 
+import roj.util.ByteList;
+
 import javax.annotation.Nonnull;
 
 /**
@@ -104,13 +106,18 @@ public final class CNull extends CEntry {
     }
 
     @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth) {
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append("null");
     }
 
     @Override
-    public Object toNudeObject() {
+    public Object unwrap() {
         return null;
+    }
+
+    @Override
+    public void toBinary(ByteList w) {
+        w.put((byte) Type.NULL.ordinal());
     }
 
     @Override

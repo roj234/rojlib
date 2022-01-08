@@ -151,10 +151,6 @@ public class AttrCode extends Attribute {
 
     @Override
     protected void toByteArray1(ConstantPool cw, ByteList w) {
-        w.putShort(this.stackSize).putShort(this.localSize).putInt(0);
-
-        int lenIdx = w.wIndex();
-
         ToIntMap<InsnNode> pcRev = reIndex(instructions, cw, new ToIntMap<InsnNode>(instructions.size()) {
             @Override
             public int getInt(InsnNode key) {
@@ -167,6 +163,12 @@ public class AttrCode extends Attribute {
                 return v;
             }
         });
+        if (interpretFlags != 0) recalculateFrames(pcRev);
+
+        w.putShort(this.stackSize).putShort(this.localSize).putInt(0);
+
+        int lenIdx = w.wIndex();
+
         InsnList insn = this.instructions;
         for (int i = 0; i < insn.size(); i++) {
             insn.get(i).toByteArray(cw, w);
@@ -207,9 +209,6 @@ public class AttrCode extends Attribute {
             }
         }
 
-        if (interpretFlags != 0)
-            recalculateFrames(pcRev);
-        interpretFlags = 0;
         if (this.frames != null) {
             w.putShort(cw.getUtfId("StackMapTable")).putInt(0);
 
@@ -250,12 +249,16 @@ public class AttrCode extends Attribute {
         w.wIndex(0);
 
         int j = 3;
+        //boolean violation = false;
         o:
         do {
             boolean lciRf = false;
             for (int i = 0; i < insn.size(); i++) {
                 InsnNode node = insn.get(i);
                 pcRev.putInt(node, pos);
+                // noinspection all
+                //if (null != pcRev.putInt(node, pos) && j == 3)
+                //    violation = true;
 
                 switch (node.nodeType()) {
                     case InsnNode.T_LDC:
@@ -278,6 +281,7 @@ public class AttrCode extends Attribute {
             for (int i = 0; i < insn.size(); i++) {
                 InsnNode node = insn.get(i);
                 if (node.nodeType() == InsnNode.T_GOTO_IF) {
+                    //if (violation) throw new IllegalArgumentException("带跳转的代码中不应出现重复对象");
                     GotoInsnNode gin = (GotoInsnNode) node;
                     if (gin.review(pcRev) || lciRf) {
                         pos = 0;

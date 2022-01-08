@@ -25,8 +25,8 @@
  */
 package roj.net.cross.server;
 
+import roj.net.WrappedSocket;
 import roj.net.cross.server.AEServer.Worker;
-import roj.net.tcp.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -72,12 +72,12 @@ final class ClientLogin extends Stated {
             }
             rb.position(3);
 
-            int code = W.server.createRoom(W,
-                                           false,
-                                           getUTF(rb, nameLen),
-                                           getUTF(rb, passLen));
+            int code = W.server.login(W,
+                                      false,
+                                      getUTF(rb, nameLen),
+                                      getUTF(rb, passLen));
             if (code != -1) {
-                syncPrint(W + ": 连接失败(协议): " + ERROR_NAMES[code - 0x20]);
+                syncPrint(W + ": 连接失败: " + ERROR_NAMES[code - 0x20]);
                 write1(ch, (byte) code);
                 return Logout.LOGOUT;
             }
@@ -101,6 +101,8 @@ final class ClientLogin extends Stated {
 
             W.room.master.sync(rb);
             rb.clear();
+
+            syncPrint(W + ": 客户端登陆成功");
             return ClientWork.CLIENT_WORK;
         }
 

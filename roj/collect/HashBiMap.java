@@ -30,10 +30,12 @@ import roj.math.MathUtils;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.*;
 
 import static roj.collect.IntMap.NOT_USING;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -58,7 +60,7 @@ public class HashBiMap<K, V> implements Flippable<K, V>, CItrMap<MyHashMap.Entry
         }
     }
 
-    public static class Inverse<V, K> implements Map<V, K>, Flippable<V, K> {
+    static final class Inverse<V, K> implements Map<V, K>, Flippable<V, K> {
         private final HashBiMap<K, V> parent;
 
         private Inverse(HashBiMap<K, V> parent) {
@@ -122,7 +124,63 @@ public class HashBiMap<K, V> implements Flippable<K, V>, CItrMap<MyHashMap.Entry
 
         @Nonnull
         public Set<Entry<V, K>> entrySet() {
-            throw new UnsupportedOperationException();
+            return new EntrySet<>(this.parent);
+        }
+
+        static class EntrySet<V, K> extends AbstractSet<Map.Entry<V, K>> {
+            private final HashBiMap<K, V> map;
+
+            public EntrySet(HashBiMap<K, V> map) {
+                this.map = map;
+            }
+
+            public final int size() {
+                return map.size();
+            }
+
+            public final void clear() {
+                map.clear();
+            }
+
+            @Nonnull
+            public final Iterator<Map.Entry<V, K>> iterator() {
+                if (isEmpty()) { return Collections.emptyIterator(); }
+                EntryItr<MyHashMap.Entry<K, V>> dlg = new EntryItr<>(map.entries, map);
+                return new AbstractIterator<Entry<V,K>>() {
+
+                    @Override
+                    public boolean computeNext() {
+                        boolean next = dlg.hasNext();
+                        if (next) {
+                            MyHashMap.Entry<K, V> t = dlg.nextT();
+                            result = new SimpleImmutableEntry<>(t.v, t.k);
+                        }
+                        return next;
+                    }
+                };
+            }
+
+            @SuppressWarnings("unchecked")
+            public final boolean contains(Object o) {
+                if (!(o instanceof Map.Entry))
+                    return false;
+                Map.Entry<?, ?> e = (Map.Entry<?, ?>) o;
+                Object key = e.getKey();
+                HashBiMap.Entry<?, ?> comp = map.getValueEntry((V) key);
+                return comp != null && comp.v == e.getValue();
+            }
+
+            public final boolean remove(Object o) {
+                if (o instanceof Map.Entry) {
+                    HashBiMap.Entry<?, ?> e = (HashBiMap.Entry<?, ?>) o;
+                    return map.remove(e.v) != null;
+                }
+                return false;
+            }
+
+            public final Spliterator<Map.Entry<V, K>> spliterator() {
+                return Spliterators.spliterator(iterator(), size(), 0);
+            }
         }
 
         public HashBiMap<K, V> flip() {

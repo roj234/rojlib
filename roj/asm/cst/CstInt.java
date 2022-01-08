@@ -44,12 +44,12 @@ public final class CstInt extends Constant {
 
     @Override
     public final void write(ByteList w) {
-        w.put(CstType.INT).putInt(value);
+        w.put(Constant.INT).putInt(value);
     }
 
     @Override
     public byte type() {
-        return CstType.INT;
+        return Constant.INT;
     }
 
     public final String toString() {

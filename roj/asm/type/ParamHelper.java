@@ -90,7 +90,11 @@ public final class ParamHelper {
                     if(ref) {
                         tmp.append(c);
                     } else {
-                        NativeType.validate(c);
+                        try {
+                            NativeType.validate(c);
+                        } catch (IllegalArgumentException e) {
+                            throw new IllegalArgumentException(desc);
+                        }
                         params.add(arr == 0 ? Type.std(c) : new Type(c, arr));
                         arr = 0;
                     }
@@ -166,7 +170,12 @@ public final class ParamHelper {
     }
 
     private static Type parseOne(char c0, String s) {
-        switch (NativeType.validate(c0)) {
+        try {
+            NativeType.validate(c0);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(s);
+        }
+        switch (c0) {
             case ARRAY:
                 int pos = s.lastIndexOf('[') + 1;
                 String p1 = s.substring(pos);
@@ -267,9 +276,13 @@ public final class ParamHelper {
      * ConstantClass
      */
     public static Type classType(String s) {
-        byte c = NativeType.validate(s.charAt(0));
+        try {
+            NativeType.validate(s.charAt(0));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(s);
+        }
         if (s.length() == 1)
-            return Type.std((char) c);
+            return Type.std(s.charAt(0));
         if (s.startsWith("[")) {
             int pos = s.lastIndexOf('[') + 1;
             String p1 = s.substring(pos);

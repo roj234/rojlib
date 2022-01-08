@@ -2,7 +2,10 @@ package roj.mapper;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.*;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstRef;
+import roj.asm.cst.CstString;
+import roj.asm.cst.CstUTF;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUTF;
@@ -407,7 +410,7 @@ public final class SimpleObfuscator extends Obfuscator {
                         InsnNode node = insn.get(k);
                         if (node.nodeType() == InsnNode.T_LDC) {
                             LdcInsnNode ldc = (LdcInsnNode) node;
-                            if (ldc.c.type() == CstType.STRING) {
+                            if (ldc.c.type() == Constant.STRING) {
                                 InsnNode next = insn.get(k + 1);
                                 if (next.nodeType() == InsnNode.T_INVOKE) {
                                     InvokeInsnNode iin = (InvokeInsnNode) next;
@@ -472,7 +475,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
         @Override
         public void ldc(byte code, Constant c) {
-            if (c.type() == CstType.STRING) {
+            if (c.type() == Constant.STRING) {
                 ldcPos = br.rIndex;
             }
         }

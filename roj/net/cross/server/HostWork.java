@@ -25,9 +25,9 @@
  */
 package roj.net.cross.server;
 
+import roj.net.WrappedSocket;
 import roj.net.cross.server.AEServer.PipeGroup;
 import roj.net.cross.server.AEServer.Worker;
-import roj.net.tcp.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -72,7 +72,7 @@ final class HostWork extends Stated {
                     break;
                 case P_LOGOUT:
                     rb.clear();
-                    syncPrint(W + ": 断开连接(协议)");
+                    //syncPrint(W + ": 断开连接(协议)");
                     return Logout.LOGOUT;
                 case PS_KICK_CLIENT:
                     if (rb.position() < 5) {
@@ -99,7 +99,7 @@ final class HostWork extends Stated {
                         byte[] rnd2 = new byte[32];
                         rb.get(rnd2).clear();
                         rb.put((byte) P_CHANNEL_RESULT)
-                          .put(rnd2).putLong(w.getPendingPipeId())
+                          .put(rnd2).putLong(w.getPendingPipe())
                           .flip();
                         w.sync(rb);
                     } else syncPrint(W + ": 3 无效 " + clientId);
@@ -123,7 +123,7 @@ final class HostWork extends Stated {
                         w.sync(rb.putInt(1, 0));
                     } else syncPrint(W + ": 0 无效 " + clientId);
                     break;
-                case PS_CHANNEL_CLOSE:
+                case P_CHANNEL_CLOSE:
                     if (rb.position() < 5) {
                         except = 5;
                         continue;
@@ -137,9 +137,9 @@ final class HostWork extends Stated {
                     w = W.closePipe(pipeId);
                     if (w != null) w.sync(rb);
                     break;
-                case P_CHANNEL_OP:
-                    if (rb.position() < 6) {
-                        except = 6;
+                case P_CHANNEL_INACTIVE:
+                    if (rb.position() < 5) {
+                        except = 5;
                         continue;
                     }
                     except = 1;
@@ -150,14 +150,8 @@ final class HostWork extends Stated {
                         syncPrint(W + ": 1 无效 #" + pipeId);
                         break;
                     }
-                    switch (rb.get(2) & 0xFF) {
-                        case OP_SET_ACTIVE:
-                            group.pairRef.setActive();
-                            break;
-                        case OP_SET_INACTIVE:
-                            group.pairRef.setInactive();
-                            break;
-                    }
+
+                    group.inactive = true;
                     rb.flip();
                     group.downOwner.sync(rb);
                     break;

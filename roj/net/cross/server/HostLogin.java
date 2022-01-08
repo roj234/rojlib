@@ -25,11 +25,12 @@
  */
 package roj.net.cross.server;
 
+import roj.net.WrappedSocket;
 import roj.net.cross.server.AEServer.Worker;
-import roj.net.tcp.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
@@ -78,10 +79,10 @@ final class HostLogin extends Stated {
                 return Logout.LOGOUT;
             }
 
-            int code = W.server.createRoom(W,
-                                           true,
-                                           getUTF(rb, nameLen),
-                                           getUTF(rb, passLen));
+            int code = W.server.login(W,
+                                      true,
+                                      getUTF(rb, nameLen),
+                                      getUTF(rb, passLen));
             if (code != -1) {
                 syncPrint(W + ": 连接失败(协议): " + ERROR_NAMES[code - 0x20]);
                 write1(ch, (byte) code);
@@ -101,6 +102,7 @@ final class HostLogin extends Stated {
               .put(W.server.info).flip();
             writeAndFlush(ch, rb, 500);
 
+            syncPrint(W + ": 房间建立成功, port bytes: " + Arrays.toString(W.room.portMap) + "");
             return HostWork.HOST_WORK;
         }
 

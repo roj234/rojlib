@@ -31,32 +31,31 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
+import roj.net.NetworkUtil;
+import roj.net.cross.LoggingStream;
 import roj.net.cross.Util;
 import roj.net.cross.server.AEServer.Room;
 import roj.net.cross.server.AEServer.Worker;
-import roj.net.tcp.serv.HttpServer;
-import roj.net.tcp.serv.Reply;
-import roj.net.tcp.serv.response.EmptyResponse;
-import roj.net.tcp.serv.response.StringResponse;
-import roj.net.tcp.util.Code;
-import roj.text.ACalendar;
+import roj.net.http.Code;
+import roj.net.http.HttpServer;
+import roj.net.http.serv.Reply;
+import roj.net.http.serv.StringResponse;
+import roj.net.mss.MSSServerEngineFactory;
+import roj.net.mss.PreSharedPubKey;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.DelegatedPrintStream;
-import roj.ui.UIUtil;
+import roj.util.FastLocalThread;
 
 import javax.swing.*;
-import javax.swing.border.TitledBorder;
-import java.awt.*;
-import java.awt.event.*;
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.KeyPair;
 import java.util.Map;
-
-import static roj.net.cross.Util.PROTOCOL_VERSION;
 
 /**
  * AbyssalEye Server GUI
@@ -65,244 +64,108 @@ import static roj.net.cross.Util.PROTOCOL_VERSION;
  * @version 31
  * @since 2021/9/11 12:49
  */
-public class AEGuiServer extends JFrame {
-    private final JButton   btnToggle, btnSsl;
-    private final JTextField inpAddr;
-    private final JTextField inpMaxUser;
-
+public class AEGuiServer {
     static AEServer server;
-    static Thread serverThread;
-    static RingBuffer<String> logger;
-    static AEGuiServer instance;
 
     public static void main(String[] args) {
         if(!NIOUtil.available()) {
-            JOptionPane.showMessageDialog(null, "请使用Java8!");
+            JOptionPane.showMessageDialog(null, "NIO Native Helper is unavailable!\n请使用Java8!");
             return;
         }
-        int log = 0;
-        boolean nogui = false;
+
+        byte[] keyPass = null;
         String port = null;
         int webPort = -1, maxUsers = 100;
+        boolean log = false;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-                case "-nolog":
-                    log = -1;
+                case "-consolelog":
+                    log = true;
                     break;
-                case "-noweblog":
-                    log = 1;
-                    break;
-                case "-nogui":
-                    nogui = true;
-                    break;
-                case "-maxUsers":
+                case "-maxconn":
                     maxUsers = Integer.parseInt(args[++i]);
                     break;
                 case "-port":
                     port = args[++i];
                     break;
-                case "-web":
+                case "-webport":
                     webPort = Integer.parseInt(args[++i]);
                     break;
-                case "-ssl":
-                    Util.certFile = args[++i];
-                    Util.SslDialog.sho1w();
+                case "-keypass":
+                    keyPass = args[++i].getBytes(StandardCharsets.UTF_8);
                     break;
             }
         }
-        if(!nogui) {
-            instance = new AEGuiServer();
-        } else {
-            String[] text = TextUtil.split(port, ':');
-            if(text.length == 0) {
-                System.out.println("无效的监听端口");
-                return;
-            }
 
-            InetAddress addr;
-            try {
-                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
-            } catch (UnknownHostException e) {
-                System.out.println("未知的主机");
-                return;
-            }
-
-            InetSocketAddress address;
-            try {
-                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
-            } catch (NumberFormatException e) {
-                System.out.println("无效的监听端口");
-                return;
-            }
-
-            if(maxUsers <= 1) {
-                System.out.println("无效的最大连接数");
-                return;
-            }
-
-            try {
-                server = Util.certFile != null ? new AEServer(address, maxUsers, Util.certFile, Util.certPass) : new AEServer(address, maxUsers);
-            } catch (IOException | GeneralSecurityException e) {
-                e.printStackTrace();
-                System.out.println("Invalid certificate / IO Error");
-                return;
-            }
-
-            Thread serverRunner = serverThread = new Thread(server);
-            serverRunner.setName("Server Thread");
-            serverRunner.start();
-
-            if(webPort != -1) {
-                try {
-                    HttpServer server = runServer(webPort);
-                    Thread t = new Thread(server);
-                    t.setDaemon(true);
-                    t.setName("Http Server");
-                    t.start();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+        if (keyPass == null) {
+            JOptionPane.showMessageDialog(null,
+                    "自40版本起不再支持非加密模式,\n" +
+                    "请设定一个密码以生成加密的key");
+            return;
         }
-        if (log == 0) {
-            RingBuffer<String> logger = AEGuiServer.logger = new RingBuffer<>(Integer.parseInt(System.getProperty("ae.logLines", "1000")));
-            ACalendar cl = new ACalendar();
-            Util.out = new DelegatedPrintStream(2000) {
-                @Override
-                protected void newLine() {
-                    logger.addLast(cl.formatDate("[H:i:s] ", System.currentTimeMillis()) + sb);
-                    sb.clear();
-                }
-            };
-            System.setOut(Util.out);
-            System.setErr(Util.out);
-        } else if (log == 1) {
-            Util.out = System.out;
+
+        String[] text = TextUtil.split(port, ':');
+
+        InetAddress host;
+        try {
+            host = text.length == 1 ? null : InetAddress.getByName(text[0]);
+        } catch (UnknownHostException e) {
+            System.out.println("未知的主机");
+            return;
         }
-    }
 
-    public AEGuiServer() {
-        UIUtil.setLogo(this, "logo.png");
-        final JPanel panel1 = new JPanel();
-        panel1.setLayout(new GridBagLayout());
-        panel1.setBorder(
-                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "v" + PROTOCOL_VERSION + " By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null,
-                                                 null));
-        JScrollPane scroll = new JScrollPane();
-        GridBagConstraints gbc;
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
-        gbc.gridheight = 3;
-        gbc.weightx = 1.0;
-        gbc.weighty = 2.0;
-        gbc.fill = GridBagConstraints.BOTH;
-        panel1.add(scroll, gbc);
-        JTextArea text = new JTextArea();
-        text.setLineWrap(true);
-        text.setEditable(false);
-        text.setText("这里本来是放日志的\n现在请使用【后台】按钮");
-        scroll.setViewportView(text);
-        btnToggle = new JButton();
-        btnToggle.setText("启动");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 4;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnToggle, gbc);
-        JButton btnHttp = new JButton();
-        btnHttp.setText("后台");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 3;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnHttp, gbc);
-        btnSsl = new JButton();
-        btnSsl.setText("加密");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(btnSsl, gbc);
-        inpAddr = new JTextField();
-        inpAddr.setText("0.0.0.0:3355");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpAddr, gbc);
-        final JLabel label1 = new JLabel();
-        label1.setText("Addr");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label1, gbc);
-        inpMaxUser = new JTextField();
-        inpMaxUser.setText("50");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpMaxUser, gbc);
-        final JLabel label3 = new JLabel();
-        label3.setText("最大连接");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label3, gbc);
+        InetSocketAddress addr;
+        try {
+            addr = new InetSocketAddress(host, Integer.parseInt(text[text.length - 1]));
+        } catch (NumberFormatException e) {
+            System.out.println("无效的监听端口");
+            return;
+        }
 
-        setContentPane(panel1);
+        if(maxUsers <= 1) {
+            System.out.println("无效的最大连接数");
+            return;
+        }
 
-        setTitle("AbyssalEye服务器");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        KeyPair pair = NetworkUtil.genAndStoreRSAKey(new File("ae_server.key"),
+                                                     new File("ae_client.key"), keyPass);
+        if (pair == null) return;
 
-        btnHttp.addActionListener(e -> {
-            String s = JOptionPane.showInputDialog("Http 管理端口\n配置[manage_port]项\n只能本地访问");
-            if(s == null) return;
-            int port = Integer.parseInt(s);
+        try {
+            MSSServerEngineFactory factory = new MSSServerEngineFactory(new PreSharedPubKey(pair.getPublic()),
+                                                                        pair.getPublic(), pair.getPrivate());
+            server = new AEServer(addr, maxUsers, factory);
+        } catch (IOException | GeneralSecurityException e) {
+            System.out.println("Invalid certificate / IO Error");
+            e.printStackTrace();
+            return;
+        }
 
+        Thread tServer = new FastLocalThread(server);
+        tServer.setName("AEServer Acceptor");
+        tServer.start();
+
+        if(webPort != -1) {
             try {
-                HttpServer server = runServer(port);
-                Thread t = new Thread(server);
+                Thread t = new FastLocalThread(runServer(webPort));
                 t.setDaemon(true);
-                t.setName("Http Server");
+                t.setName("AEServer Http");
                 t.start();
-            } catch (IOException e1) {
-                e1.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            btnHttp.setEnabled(false);
-            btnHttp.setText(":" + port);
-        });
+        }
 
-        btnSsl.addActionListener(e -> {
-            Util.SslDialog.sho1w();
-        });
+        LoggingStream.logger = new RingBuffer<>(1000);
+        Util.out = new LoggingStream(log);
+        System.setOut(Util.out);
+        System.setErr(Util.out);
+        System.out.println("服务器已启动");
 
-        btnToggle.addActionListener(this::toggle);
-
-        setBounds(0, 0, 280, 200);
-        UIUtil.center(this);
-        setVisible(true);
-        setResizable(false);
-        validate();
+        Util.registerShutdownHook(server);
     }
 
-    static MyHashMap<String, String> tmp = new MyHashMap<>();
+    static MyHashMap<String, String> tmp = new MyHashMap<>(4);
     private static String res(String name) throws IOException {
         String v = tmp.get(name);
         if(v == null)
@@ -311,9 +174,7 @@ public class AEGuiServer extends JFrame {
     }
 
     private static HttpServer runServer(int port) throws IOException {
-        Reply NOT_RUNNING = new Reply(Code.OK, new StringResponse("{\"o\":0,\"r\":\"服务器没有启动\"}", "application/json"));
         Reply DONE = new Reply(Code.OK, new StringResponse("{\"o\":1}", "application/json"));
-        Reply UNCHANGED = new Reply(Code.OK, new StringResponse("{\"o\":1,\"r\":\"状态相同未更改\"}", "application/json"));
 
         return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (socket, request) -> {
             switch (request.path()) {
@@ -328,17 +189,12 @@ public class AEGuiServer extends JFrame {
                         case "main":
                             CMapping json = new CMapping();
                             String logs;
-                            if(logger == null) {
-                                logs = "服务器未开启日志缓冲";
-                                logger = new RingBuffer<>(1);
-                            } else {
-                                CharList cl = new CharList();
-                                for (String s : logger) {
-                                    cl.append(s).append("\r\n");
-                                }
-                                logger.clear();
-                                logs = cl.toString();
+                            CharList cl = new CharList();
+                            for (String s : LoggingStream.logger) {
+                                cl.append(s).append("\r\n");
                             }
+                            LoggingStream.logger.clear();
+                            logs = cl.toString();
                             json.put("logs", logs);
                             if(server != null) {
                                 CList rooms = new CList();
@@ -349,8 +205,6 @@ public class AEGuiServer extends JFrame {
                             }
                             return new Reply(Code.OK, new StringResponse(json.toShortJSONb(), "application/json"));
                         case "users":
-                            if(server == null)
-                                return NOT_RUNNING;
                             Room room = server.rooms.get(TextUtil.unescapeBytes(request.getFields().get("r")));
                             if(room == null) {
                                 return new Reply(Code.OK, new StringResponse("\"房间不存在\"", "application/json"));
@@ -365,7 +219,6 @@ public class AEGuiServer extends JFrame {
                         case "cfg":
                             String r = request.getFields().get("r");
                             if(r != null) {
-                                if (server == null) return NOT_RUNNING;
                                 room = server.rooms.get(TextUtil.unescapeBytes(r));
                                 if (room == null) {
                                     r = "\"房间不存在\"";
@@ -387,8 +240,6 @@ public class AEGuiServer extends JFrame {
                 case "/api":
                     Map<String, String> post = request.postFields();
                     if(!"-1".equals(post.get("r"))) {
-                        if(server == null)
-                            return NOT_RUNNING;
                         Room room = server.rooms.get(post.get("r"));
                         if(room == null) {
                             return new Reply(Code.OK, new StringResponse("{\"o\":0,\"r\":\"房间不存在\"}", "application/json"));
@@ -426,98 +277,19 @@ public class AEGuiServer extends JFrame {
                     } else {
                         switch (post.get("i")) {
                             case "power":
-                                if((server == null) == post.get("v").equals("true")) {
-                                    instance.toggle(null);
-                                    return DONE;
-                                }
-                                return UNCHANGED;
+                                server.shutdown();
+                                return DONE;
                             case "join":
-                                if(server == null)
-                                    return NOT_RUNNING;
                                 server.canJoinRoom = post.get("v").equals("true");
                                 return DONE;
                             case "create":
-                                if(server == null)
-                                    return NOT_RUNNING;
                                 server.canCreateRoom = post.get("v").equals("true");
                                 return DONE;
                         }
                     }
                     return new Reply(Code.OK, new StringResponse("未知操作"));
             }
-            return EmptyResponse.INSTANCE;
+            return null;
         });
-    }
-
-    private void toggle(ActionEvent event) {
-        if (btnToggle.getText().equals("停止")) {
-            btnToggle.setEnabled(false);
-
-            btnToggle.setText("启动");
-            btnToggle.setEnabled(true);
-
-            btnSsl.setEnabled(true);
-            inpAddr.setEnabled(true);
-            inpMaxUser.setEnabled(true);
-
-            if(serverThread != null) {
-                server.shutdown();
-            }
-            serverThread = null;
-            server = null;
-        } else {
-            String[] text = TextUtil.split(inpAddr.getText(), ':');
-            if(text.length == 0) {
-                JOptionPane.showMessageDialog(this, "无效的监听端口");
-                return;
-            }
-
-            InetAddress addr;
-            try {
-                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
-            } catch (UnknownHostException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "未知的主机");
-                return;
-            }
-
-            InetSocketAddress address;
-            try {
-                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
-            } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this, "无效的监听端口");
-                return;
-            }
-
-            int maxUsers;
-            try {
-                maxUsers = Integer.parseInt(inpMaxUser.getText());
-                if(maxUsers <= 1) {
-                    JOptionPane.showMessageDialog(this, "无效的最大连接数");
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this, "无效的最大连接数");
-                return;
-            }
-            try {
-                server = Util.certFile != null ? new AEServer(address, maxUsers, Util.certFile, Util.certPass) : new AEServer(address, maxUsers);
-            } catch (IOException | GeneralSecurityException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Invalid certificate / IO Error");
-                return;
-            }
-
-            Thread serverRunner = serverThread = new Thread(server);
-            serverRunner.setName("Server Thread");
-            serverRunner.setDaemon(true);
-            serverRunner.start();
-
-            btnToggle.setText("停止");
-
-            btnSsl.setEnabled(false);
-            inpAddr.setEnabled(false);
-            inpMaxUser.setEnabled(false);
-        }
     }
 }

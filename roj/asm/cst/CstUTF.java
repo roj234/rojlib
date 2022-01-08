@@ -53,7 +53,7 @@ public final class CstUTF extends Constant {
 
     @Override
     public void write(ByteList w) {
-        w.put(CstType.UTF).putJavaUTF(data);
+        w.put(Constant.UTF).putJavaUTF(data);
     }
 
     public String toString() {
@@ -62,7 +62,7 @@ public final class CstUTF extends Constant {
 
     @Override
     public byte type() {
-        return CstType.UTF;
+        return Constant.UTF;
     }
 
     public int hashCode() {

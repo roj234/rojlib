@@ -32,8 +32,8 @@ import ilib.world.structure.cascading.StructureMap.Direction;
 import ilib.world.structure.cascading.Structures;
 import ilib.world.structure.cascading.api.IStructure;
 import ilib.world.structure.schematic.SchematicLoader;
+
 import net.minecraft.util.EnumFacing;
-import roj.config.ObjSerializer;
 
 /**
  * No description provided
@@ -80,15 +80,11 @@ public class Cascading {
                         .group(roof, 0.6)
                         .build()
         );
-
-        ObjSerializer.register(StructureMap.class, new StructureMapDeserializer());
     }
 
     protected static class StructAL extends SizedStructure {
         /**
          * 自动加载
-         *
-         * @param filename the file name
          */
         public StructAL(String filename) {
             super(SchematicLoader.INSTANCE.loadSchematic("assets/ilib/structures/" + filename));

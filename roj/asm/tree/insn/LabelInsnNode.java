@@ -29,10 +29,7 @@ import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/27 13:36
  */
 public final class LabelInsnNode extends InsnNode {

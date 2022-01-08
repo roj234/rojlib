@@ -25,6 +25,8 @@
  */
 package roj.config.data;
 
+import roj.util.ByteList;
+
 import javax.annotation.Nonnull;
 
 /**
@@ -93,12 +95,17 @@ public final class CBoolean extends CEntry {
     }
 
     @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth) {
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append(this == TRUE);
     }
 
     @Override
-    public Object toNudeObject() {
+    public Object unwrap() {
         return this == TRUE;
+    }
+
+    @Override
+    public void toBinary(ByteList w) {
+        w.put((byte) Type.BOOL.ordinal()).putBool(this == TRUE);
     }
 }

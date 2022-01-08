@@ -24,6 +24,8 @@
  * THE SOFTWARE.
  */package roj.reflect;
 
+import roj.asm.util.AccessFlag;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -86,20 +88,23 @@ final class UFA extends FieldAccessor {
     private static final UNSAFE U;
     static {
         Method[] methods = UNSAFE.class.getDeclaredMethods();
-        String[] names = new String[methods.length];
-        for (int i = 0; i < methods.length; i++) {
-            names[i] = methods[i].getName();
+        String[] names = new String[methods.length - 2];
+        int j = 0;
+        for (Method m : methods) {
+            if (m.getName().endsWith("Unsafe")) continue;
+            names[j++] = m.getName();
         }
 
         DirectAccessor<UNSAFE> da = DirectAccessor.builder(UNSAFE.class);
-        Class<?> unsafe;
+        Class<?> unsafe = null;
         try {
             unsafe = sun.misc.Unsafe.class;
         } catch (Throwable e) {
-            try {
-                unsafe = AtomicInteger.class.getDeclaredField("unsafe").getType();
-            } catch (NoSuchFieldException e1) {
-                unsafe = null;
+            for (Field f : AtomicInteger.class.getDeclaredFields()) {
+                if ((f.getModifiers() & AccessFlag.STATIC) != 0 && !f.getType().isPrimitive()) {
+                    unsafe = f.getType();
+                    break;
+                }
             }
         }
 

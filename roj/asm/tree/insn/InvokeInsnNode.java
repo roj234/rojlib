@@ -28,6 +28,8 @@ package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.cst.CstRef;
+import roj.asm.tree.Clazz;
+import roj.asm.tree.Method;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
@@ -63,6 +65,14 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
         this.owner = ref.getClassName();
         this.name = ref.desc().getName().getString();
         this.rawParam = ref.desc().getType().getString();
+    }
+
+    public InvokeInsnNode(byte code, Clazz clazz, int index) {
+        super(code);
+        Method method = clazz.methods.get(index);
+        this.owner = clazz.name;
+        this.name = method.name;
+        this.rawParam = method.rawDesc();
     }
 
     @Override

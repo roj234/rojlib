@@ -35,9 +35,9 @@ import roj.io.down.Downloader;
 import roj.io.down.IProgressHandler;
 import roj.io.down.MTDProgress;
 import roj.io.down.STDProgress;
-import roj.net.tcp.client.HttpClient;
-import roj.net.tcp.client.HttpConnection;
-import roj.net.tcp.client.HttpHeader;
+import roj.net.http.HttpClient;
+import roj.net.http.HttpConnection;
+import roj.net.http.HttpHead;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -388,7 +388,7 @@ public final class FileUtil {
         int max = 10;
         do {
             conn.setURL(url);
-            HttpHeader header = conn.getResponse();
+            HttpHead header = conn.getResponse();
             int code = header.code;
             if (code >= 200 && code < 400) {
                 String location = header.headers.get("Location");

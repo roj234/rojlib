@@ -29,13 +29,13 @@ import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.collect.MyHashMap;
 import roj.config.data.*;
+import roj.config.serial.Serializer;
+import roj.config.serial.Serializers;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.config.word.Word_L;
 import roj.io.IOUtil;
-import roj.math.MathUtils;
-import roj.text.ACalendar;
 import roj.text.CharList;
 
 import java.io.File;
@@ -89,7 +89,6 @@ public class YAMLParser implements Parser {
      * @param flag COMMENT NO_DUPLICATE_KEY LITERAL_KEY
      */
     public static CEntry parse(YAMLLexer wr, int flag) throws ParseException {
-        wr.flag = (byte) (flag & (COMMENT));
         CEntry ce = yamlRead(wr, (byte) (flag & (NO_DUPLICATE_KEY | LITERAL_KEY)));
         if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
@@ -171,9 +170,9 @@ public class YAMLParser implements Parser {
         }
 
         if (map.containsKey("==", Type.STRING)) {
-            ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
-            if (deserializer != null) {
-                return new CObject<>(map, deserializer);
+            Serializer<?> des = Serializers.find(map.getString("=="));
+            if (des != null) {
+                return new CObject<>(map.raw(), des);
             }
         }
 
@@ -297,9 +296,9 @@ public class YAMLParser implements Parser {
         }
 
         if (map.containsKey("==", Type.STRING)) {
-            ObjSerializer<?> ser = ObjSerializer.REGISTRY.get(map.getString("=="));
-            if (ser != null) {
-                return new CObject<>(map, ser);
+            Serializer<?> des = Serializers.find(map.getString("=="));
+            if (des != null) {
+                return new CObject<>(map.raw(), des);
             }
         }
 
@@ -337,8 +336,6 @@ public class YAMLParser implements Parser {
                         throw wr.err("我不知道你要转换成啥, 支持 str float int bool map set: " + cnt);
                 }
             }
-            case WordPresets.COMMENT:
-                return new CComment(cnt);
             case left_m_bracket:
                 return yamlFlowArray(wr, flag);
             case left_l_bracket:
@@ -370,7 +367,7 @@ public class YAMLParser implements Parser {
                 return entry1 != null ? entry1 : CInteger.valueOf(number);
             }
             case WordPresets.LONG:
-                return w.getIndex() == -1 ? new CYamlDate(w.number().asLong()) : w.getIndex() == -2 ? new CYamlTimestamp(w.number().asLong()) : CLong.valueOf(w.number().asLong());
+                return w.getIndex() == -1 ? new CDate(w.number().asLong()) : w.getIndex() == -2 ? new CDatetime(w.number().asLong()) : CLong.valueOf(w.number().asLong());
             case TRUE:
             case FALSE: {
                 boolean b = w.type() == TRUE;
@@ -435,12 +432,9 @@ public class YAMLParser implements Parser {
 
     public static class YAMLLexer extends AbstLexer {
         static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
-                                SPECIAL_0 = LongBitSet.from(YAML_ESCAPE_MULTI),
-                                DATE1 = LongBitSet.from("-Tt\r\n"),
-                                DATE2 = LongBitSet.from(":.\r\n");
+                                SPECIAL_0 = LongBitSet.from(YAML_ESCAPE_MULTI);
 
-        public byte flag;
-        final int[] dateBuffer = new int[3];
+        byte flag;
         protected final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
 
         @Override
@@ -470,32 +464,21 @@ public class YAMLParser implements Parser {
                                     break;
                                 }
                             }
-
-                            if((flag & COMMENT) != 0) {
-                                this.index = i;
-                                return formClip(WordPresets.COMMENT, in.subSequence(s, i - 3));
-                            }
-
                             break;
                         }
                     case '"':
                         this.index = i;
                         return formClip(WordPresets.STRING, readSlashString((char) c, c == '"'));
                     case '#': {
-                        int s = i, e = s;
+                        int s = i/*, e = s*/;
                         while (i < in.length()) { // 单行注释
                             c = in.charAt(i++);
                             if (c == '\r' || c == '\n') {
-                                e = i - 3;
+                                //e = i - 3;
                                 if (c == '\r' && i < in.length() && in.charAt(i) == '\n')
                                     i++;
                                 break;
                             }
-                        }
-
-                        if ((flag & COMMENT) != 0) {
-                            this.index = i;
-                            return formClip(WordPresets.COMMENT, in.subSequence(s, e));
                         }
                     }
                     break;
@@ -746,130 +729,11 @@ public class YAMLParser implements Parser {
 
         @Override
         protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
-            yyyy:
             if(temp.length() == 4) { // yyyyx
-                // check timestamp
-                CharSequence val = input;
-                int[] buf = dateBuffer;
-                int k = 0, j = index - 4, off = j;
-                int end = Math.min(j + 30, val.length()); // "0000-00-00Z\t00:00:00.000+00:00".length()
-                while (j < end) {
-                    char c0 = val.charAt(j++);
-                    if(DATE1.contains(c0)) {
-                        try {
-                            buf[k++] = MathUtils.parseInt(val, off, j - 1, 10);
-                        } catch (NumberFormatException e) {
-                            break yyyy;
-                            //throw err("[YMLTS] not a number: " + val.subSequence(off, j - 1), index = j);
-                        }
-                        if(k == 3) {
-                            if(buf[1] > 12)
-                                throw err("[YMLTS] month > 12: " + buf[1], index = j);
-                            if(buf[2] > 31)
-                                throw err("[YMLTS] day > 31: " + buf[2], index = j);
-
-                            long ts = (ACalendar.daySinceAD(buf[0] - 1969, buf[1], buf[2], null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000;
-                            if (c0 == 'T' || c0 == 't') {
-                                if(val.charAt(++j) != '\t')
-                                    j--;
-                                off = j;
-                                k = 0;
-                                while (j < end) {
-                                    char c1 = val.charAt(j++);
-                                    if(DATE2.contains(c1)) {
-                                        try {
-                                            buf[k++] = MathUtils.parseInt(val, off, j - 1, 10);
-                                        } catch (NumberFormatException e) {
-                                            throw err("[YMLTS] not a number: " + val.subSequence(off, j - 1), index = j);
-                                        }
-                                        if(k == 3) {
-                                            if(buf[0] > 23)
-                                                throw err("[YMLTS] hour > 23: " + buf[0], index = j);
-                                            if(buf[1] > 59)
-                                                throw err("[YMLTS] minute > 59: " + buf[1], index = j);
-                                            if(buf[2] > 59)
-                                                throw err("[YMLTS] second > 59: " + buf[2], index = j);
-                                            ts += buf[0] * 3600000 + buf[1] * 60000 + buf[2] * 1000;
-
-                                            if (c1 == '.') {
-                                                off = j;
-                                                while (NUMBER.contains(val.charAt(j))) {
-                                                    j++;
-                                                }
-
-                                                int ms;
-                                                try {
-                                                    ms = MathUtils.parseInt(val, off, j, 10);
-                                                } catch (NumberFormatException e) {
-                                                    throw err("[YMLTS] not a number: " + val.subSequence(off, j - 1), index = j);
-                                                }
-                                                if(ms > 999)
-                                                    throw err("[YMLTS] millisecond > 999", index = j);
-                                                ts += ms;
-
-                                                c1 = val.charAt(j);
-                                                if(c1 == 'Z' || c1 == 'z') {
-                                                    index = ++j;
-                                                    // 2021-7-8[Tt](\t)1:49:23.111Z
-                                                    return new Word_L(-2, ts, null);
-                                                } else if(c1 == '+' || c1 == '-') {
-                                                    off = ++j;
-                                                    k = 0;
-                                                    while (j < end) {
-                                                        char c2 = val.charAt(j++);
-                                                        if(c2 == ':') {
-                                                            try {
-                                                                buf[k++] = MathUtils.parseInt(val, off, j - 1, 10);
-                                                            } catch (NumberFormatException e) {
-                                                                throw err("[YMLTS] not a number: " + val.subSequence(off, j - 1), index = j);
-                                                            }
-                                                            if(k == 2) {
-                                                                // 2021-7-8[Tt](\t)1:49:23.111[+-]xx
-                                                                index = j;
-                                                                if(buf[0] > 23)
-                                                                    throw err("[YMLTS] dHour > 23: " + buf[0], j);
-                                                                if(buf[1] > 59)
-                                                                    throw err("[YMLTS] dMinute > 59: " + buf[1], j);
-                                                                j = buf[0] * 3600000 + buf[1] * 60000;
-                                                                return new Word_L(-2, c1 == '+' ? ts + j : ts - j, null);
-                                                            }
-                                                            off = j;
-                                                        } else if(WHITESPACE.contains(c2)) {
-                                                            index = j;
-                                                            if(k == 1) {
-                                                                if(buf[0] > 23)
-                                                                    throw err("[YMLTS] dHour > 23: " + buf[0], j);
-                                                                // 2021-7-8[Tt](\t)1:49:23.111[+-]xx:xx
-                                                                return new Word_L(-2, c1 == '+' ? ts + buf[0] * 3600000 : ts - buf[0] * 3600000,
-                                                                                  null);
-                                                            } else {
-                                                                throw err("[YMLTS] unexpected end of YMLTimestamp", j);
-                                                            }
-                                                        }
-                                                    }
-                                                } else {
-                                                    throw err("[YMLTS] missing last 'Z' in YMLTimestamp", index = j);
-                                                }
-                                            } else {
-                                                // 2021-7-8[Tt](\t)1:49:23
-                                                index = j;
-                                                return new Word_L(-2, ts, null);
-                                            }
-                                        }
-                                        off = j;
-                                    }
-                                }
-                            } else {
-                                // 2021-7-8
-                                index = j;
-                                return new Word_L(-1, ts, null);
-                            }
-                        }
-                        off = j;
-                    }
-                }
+                Word_L ts = formRFCTime();
+                if (ts != null) return ts;
             }
-            return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
+            return formClip((short) (WordPresets.INTEGER + flag), temp).number(this, negative);
         }
 
         @Override

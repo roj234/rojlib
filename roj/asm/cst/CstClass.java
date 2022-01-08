@@ -46,6 +46,6 @@ public final class CstClass extends CstRefUTF {
 
     @Override
     public byte type() {
-        return CstType.CLASS;
+        return Constant.CLASS;
     }
 }

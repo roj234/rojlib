@@ -228,8 +228,8 @@ public class JSLexer extends AbstLexer {
     }
 
     @Override
-    protected Word formNumberClip(byte flag, CharList temp, boolean negative) {
-        return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
+    protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number(this, negative);
     }
 
     public ParseException err(String reason, Word word) {

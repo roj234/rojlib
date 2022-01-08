@@ -28,6 +28,7 @@ package roj.io;
 import roj.io.misc.FCNative;
 import roj.io.misc.SCNative;
 import roj.reflect.DirectAccessor;
+import roj.text.TextUtil;
 import roj.util.FastThreadLocal;
 import roj.util.Helpers;
 
@@ -48,33 +49,48 @@ import java.util.function.Consumer;
  * @since  2020/12/6 14:15
  */
 public final class NIOUtil {
-    public static final SCNative SCN;
-    public static final FCNative FCN;
-    public static final H        UTIL;
-    public static final Consumer<Object> CLEAN;
+    public static SCNative SCN;
+    public static FCNative FCN;
+    public static H        UTIL;
+    public static Consumer<Object> CLEAN;
+
+    private static Throwable e;
 
     static {
         try {
-            ByteBuffer b = ByteBuffer.allocateDirect(1);
+            __init();
+        } catch (IOException e1) {
+            if (e == null) e = e1;
+            else e.addSuppressed(e1);
+        }
+    }
 
-            SocketChannel sc = SocketChannel.open();
-            sc.close();
-            File tmp = File.createTempFile("nio", null);
-            FileChannel fc = FileChannel.open(tmp.toPath());
-            fc.close();
-            tmp.delete();
+    private static void __init() throws IOException {
+        ByteBuffer b = ByteBuffer.allocateDirect(1);
 
-            UTIL = DirectAccessor
-                    .builder(H.class)
-                    .access(Socket.class, "impl", "socketImpl", null)
-                    .access(SocketImpl.class, "fd", "socketFd", null)
-                    .access(FileDescriptor.class, "fd", null, "fdFd")
-                    .access(sc.getClass(), new String[]{ "fd", "nd" }, new String[] { "sChFd", "sChNd" }, null)
-                    .access(fc.getClass(), new String[]{ "fd", "nd" }, new String[] { "fChFd", "fChNd" }, null)
-                    .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
-                    .delegate_o(b.getClass(), new String[] { "address", "attachment", "cleaner" })
-                    .build();
+        SocketChannel sc = SocketChannel.open();
+        sc.close();
+        File tmp = File.createTempFile("nio", null);
+        FileChannel fc = FileChannel.open(tmp.toPath());
+        fc.close();
+        tmp.delete();
 
+        try {
+            UTIL = DirectAccessor.builder(H.class)
+                                 .access(Socket.class, "impl", "socketImpl", null)
+                                 .access(SocketImpl.class, "fd", "socketFd", null)
+                                 .access(FileDescriptor.class, "fd", null, "fdFd")
+                                 .access(sc.getClass(), new String[] {"fd", "nd"}, new String[] {"sChFd", "sChNd"}, null)
+                                 .access(fc.getClass(), new String[] {"fd", "nd"}, new String[] {"fChFd", "fChNd"}, null)
+                                 .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
+                                 .delegate_o(b.getClass(), new String[] {"address", "attachment", "cleaner"})
+                                 .build();
+        } catch (Throwable e1) {
+            if (e == null) e = e1;
+            else e.addSuppressed(e1);
+        }
+
+        try {
             String[] ss1 = new String[]{
                     "read", "readv", "write", "writev", "preClose", "close"
             };
@@ -92,15 +108,20 @@ public final class NIOUtil {
             };
             FCN = DirectAccessor.builder(FCNative.class)
                                 .delegate(UTIL.fChNd(fc).getClass(), ss2, ss1).build();
+        } catch (Throwable e1) {
+            if (e == null) e = e1;
+            else e.addSuppressed(e1);
+        }
 
+        try {
             CLEAN = Helpers.cast(
                     DirectAccessor.builder(Consumer.class)
                                   .delegate(UTIL.cleaner(b).getClass(), "clean", "accept")
                                   .build());
-
             clean(b);
-        } catch (Throwable e) {
-            throw new Error("Failed to initialize NIOUtil: Unsupported java version",e );
+        } catch (Throwable e1) {
+            if (e == null) e = e1;
+            else e.addSuppressed(e1);
         }
     }
 
@@ -207,21 +228,17 @@ public final class NIOUtil {
     }
 
     public static void close(FileDescriptor fd) throws IOException {
-        if(!fd.valid())
-            throw new IOException("Invalid FileDescriptor");
+        if(!fd.valid()) return;
         SCN.close(fd);
         UTIL.fdFd(fd, -1);
     }
 
     public static boolean available() {
-        return UTIL != null;
+        return e == null;
     }
 
-    public static void setBlockState(Socket socket, boolean block) throws IOException {
-        FileDescriptor fd = UTIL.socketFd(UTIL.socketImpl(socket));
-        if(!fd.valid())
-            throw new IOException("Invalid FileDescriptor");
-        UTIL.configureBlocking(fd, block);
+    public static Throwable getWhy() {
+        return e;
     }
 
     private interface H {
@@ -257,5 +274,37 @@ public final class NIOUtil {
     public static boolean directBufferEquals(ByteBuffer a, ByteBuffer b) {
         if (!a.isDirect() || !b.isDirect()) { return a.array() == b.array(); }
         return UTIL.address(topMost(a)) == UTIL.address(topMost(b));
+    }
+
+    /**
+     * 0 -> lim
+     */
+    public static String dumpBuffer(ByteBuffer rb) {
+        int p = rb.position();
+        rb.position(0);
+        byte[] tmp = new byte[rb.limit()];
+        rb.get(tmp).position(p);
+        return TextUtil.dumpBytes(tmp);
+    }
+
+    /**
+     * 0 -> pos
+     */
+    public static String dumpDirty(ByteBuffer rb) {
+        int p = rb.position();
+        rb.position(0);
+        byte[] tmp = new byte[p];
+        rb.get(tmp).position(p);
+        return TextUtil.dumpBytes(tmp);
+    }
+
+    /**
+     * pos -> lim
+     */
+    public static String dumpClean(ByteBuffer rb) {
+        int p = rb.position();
+        byte[] tmp = new byte[rb.remaining()];
+        rb.get(tmp).position(p);
+        return TextUtil.dumpBytes(tmp);
     }
 }

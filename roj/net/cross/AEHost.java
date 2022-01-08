@@ -30,16 +30,16 @@ import roj.concurrent.task.ITaskNaCl;
 import roj.config.data.CList;
 import roj.config.word.AbstLexer;
 import roj.io.NIOUtil;
-import roj.net.misc.MSSClientKey;
+import roj.net.MSSSocket;
+import roj.net.NetworkUtil;
+import roj.net.WrappedSocket;
 import roj.net.misc.PacketBuffer;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
-import roj.net.tcp.MSSSocket;
-import roj.net.tcp.PlainSocket;
-import roj.net.tcp.WrappedSocket;
 import roj.util.Helpers;
 
 import java.io.EOFException;
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.*;
@@ -61,9 +61,9 @@ import static roj.net.cross.Util.*;
  * @version 0.3.1
  * @since 2021/9/12 0:57
  */
-public class AEHost extends IAEClient {
+public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
     static {
-        MSSClientKey.loadMSSCert();
+        NetworkUtil.MSSLoadClientRSAKey(new File("ae_client.key"));
     }
 
     IntMap<Client> clients;
@@ -71,8 +71,8 @@ public class AEHost extends IAEClient {
 
     PacketBuffer kick;
 
-    public AEHost(SocketAddress server, boolean ssl, String id, String token) {
-        super(server, ssl, id, token);
+    public AEHost(SocketAddress server, String id, String token) {
+        super(server, id, token);
         this.clients = new IntMap<>();
         this.portMap = new char[1];
         this.kick = new PacketBuffer();
@@ -87,8 +87,10 @@ public class AEHost extends IAEClient {
         kick.offer(tmp);
     }
 
-    public void chat(int clientId, String message) {
+    public void sendMessage(int clientId, String message) {
+        if (clientId == 0) throw new IllegalStateException("你不能对自己说");
         byte[] mb = message.getBytes(StandardCharsets.UTF_8);
+        if (mb.length > 255) throw new IllegalStateException("消息过长");
         ByteBuffer tmp = ByteBuffer.allocate(6 + mb.length);
         tmp.put((byte) P_MSG).putInt(clientId).put((byte) mb.length).put(mb).flip();
         kick.offer(tmp);
@@ -102,9 +104,7 @@ public class AEHost extends IAEClient {
             throw new ConnectException("无法连接至服务器");
         }
 
-        WrappedSocket ch = ssl ?
-                new MSSSocket(c, NIOUtil.fd(c)) :
-                new PlainSocket(c, NIOUtil.fd(c));
+        WrappedSocket ch = new MSSSocket(c, NIOUtil.fd(c));
 
         try {
             if (!hostLogin(ch, "阿伟死了么")) return;
@@ -140,16 +140,21 @@ public class AEHost extends IAEClient {
 
                 switch (rb.get(0) & 0xFF) {
                     case P_HEARTBEAT:
+                    case P_FAIL:
                         break;
                     case P_LOGOUT:
                         syncPrint(" 连接断开");
                         break conn;
-                    case PS_CHANNEL_CLOSE:
+                    case PS_CHANNEL_ACTIVE:
+                        Pipe pair = socketsById.get(rb.getInt(5));
+                        new AsyncConnector(portMap[((SpAttach) pair.att).portId], pair).run();
+                        break;
+                    case P_CHANNEL_CLOSE:
                         if(rb.position() < 9) {
                             except = 9;
                             continue;
                         }
-                        Pipe pair = socketsById.remove(rb.getInt(5));
+                        pair = socketsById.remove(rb.getInt(5));
                         pair.release();
                         syncPrint((rb.getInt(1) < 0 ? "服务端" : "客户端") + "关闭了频道 #" +
                                           Integer.toHexString(rb.getInt(5)));
@@ -168,13 +173,13 @@ public class AEHost extends IAEClient {
                         rb.get(ciphers, 0, 32);
 
                         int clientId = rb.getInt();
-                        syncPrint(" 客户端 #" + clientId + " 尝试开启频道");
 
                         if (socketsById.size() > MAX_CHANNEL_COUNT) {
                             rb.clear();
                             rb.put((byte) P_CHANNEL_OPEN_FAIL).putInt(clientId);
                             byte[] reasonBytes = "这边开启的频道过多".getBytes(StandardCharsets.UTF_8);
                             rb.put((byte) reasonBytes.length).put(reasonBytes).flip();
+                            syncPrint(" 客户端 #" + clientId + " 开启频道被阻止");
 
                             if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
                                 syncPrint(" COF 超时");
@@ -238,7 +243,7 @@ public class AEHost extends IAEClient {
                             except = (rb.get(5) & 0xFF) + 6;
                             continue;
                         }
-                        rb.flip().position(4);
+                        rb.flip().position(5);
                         byte[] tmp = new byte[rb.get() & 0xFF];
                         rb.get(tmp);
 
@@ -251,7 +256,7 @@ public class AEHost extends IAEClient {
                         if(rb.position() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
                             syncPrint(" 错误 " + ERROR_NAMES[bc]);
                         } else {
-                            syncPrint(" 未知数据包: " + dumpBuffer(rb));
+                            syncPrint(" 未知数据包: " + NIOUtil.dumpBuffer(rb));
                         }
                         rb.clear();
                         break conn;
@@ -378,8 +383,8 @@ public class AEHost extends IAEClient {
     }
 
     static final Consumer<Pipe> PIPE_INVALID_CB = pipe -> {
-        System.out.println("管道失效回调: " + pipe);
         if (pipe.isUpstreamEof() || pipe.isReleased()) return;
+        syncPrint("管道失效回调: " + pipe);
         pipe.setClient(null);
     };
 

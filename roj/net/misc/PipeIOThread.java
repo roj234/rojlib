@@ -109,8 +109,8 @@ public final class PipeIOThread extends Thread {
         }
         if (lowest != null) {
             try {
-                fdcA.register(lowest, SelectionKey.OP_READ, att);
-                fdcB.register(lowest, SelectionKey.OP_READ, att);
+                pair.upKey = fdcA.register(lowest, SelectionKey.OP_READ, att);
+                pair.downKey = fdcB.register(lowest, SelectionKey.OP_READ, att);
                 return;
             } catch (ClosedChannelException | ClosedSelectorException ignored) {}
         }
@@ -118,8 +118,8 @@ public final class PipeIOThread extends Thread {
         if (amount < MAX_IO_THREADS) {
             PipeIOThread thread = new PipeIOThread(server, index++);
             try {
-                fdcA.register(thread.selector, SelectionKey.OP_READ, att);
-                fdcB.register(thread.selector, SelectionKey.OP_READ, att);
+                pair.upKey = fdcA.register(thread.selector, SelectionKey.OP_READ, att);
+                pair.downKey = fdcB.register(thread.selector, SelectionKey.OP_READ, att);
             } catch (ClosedChannelException e) {
                 throw new IllegalStateException("Should not happen: closed channel", e);
             }
@@ -160,7 +160,7 @@ public final class PipeIOThread extends Thread {
                 break;
             }
             if (selector.selectedKeys().isEmpty() || Thread.interrupted()) {
-                LockSupport.parkNanos(10);
+                LockSupport.parkNanos(20);
                 idle++;
                 this.idle = true;
                 continue;
@@ -172,8 +172,11 @@ public final class PipeIOThread extends Thread {
                 Pipe pair = att.pair;
                 if (pair.isEof()) {
                     key.cancel();
+                    pair.upKey = pair.downKey = null;
                     if (att.callback != null) {
-                        att.callback.accept(pair);
+                        try {
+                            att.callback.accept(pair);
+                        } catch (Throwable ignored) {}
                         att.callback = null;
                     }
                     continue;
@@ -186,14 +189,20 @@ public final class PipeIOThread extends Thread {
                         pair.release();
                     } catch (IOException ignored) {}
                     key.cancel();
+                    pair.upKey = pair.downKey = null;
                     if (att.callback != null) {
-                        att.callback.accept(pair);
+                        try {
+                            att.callback.accept(pair);
+                        } catch (Throwable ignored) {}
                         att.callback = null;
                     }
                 }
             }
             selector.selectedKeys().clear();
-            LockSupport.parkNanos(1);
+            for (SelectionKey key : selector.keys()) {
+                ((Att) key.attachment()).pair.idleTime++;
+            }
+            LockSupport.parkNanos(5);
         }
         try {
             selector.close();

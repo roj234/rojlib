@@ -133,7 +133,7 @@ public final class FMDMain {
 
             isCLI = true;
             Tokenizer tokenizer = new Tokenizer();
-            Map<String, String> shortcuts = Helpers.cast(MAIN_CONFIG.getOrCreateMap("CLI Shortcuts").toNudeObject());
+            Map<String, String> shortcuts = Helpers.cast(MAIN_CONFIG.getOrCreateMap("CLI Shortcuts").unwrap());
             if(shortcuts.isEmpty())
                 shortcuts = Collections.emptyMap();
 

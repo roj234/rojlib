@@ -886,7 +886,7 @@ public class NiximSystem {
             find:
             for (int i = 0; i < args.size(); i++) {
                 Constant c = args.get(i);
-                if (c.type() != CstType.METHOD_HANDLE) continue;
+                if (c.type() != Constant.METHOD_HANDLE) continue;
                 CstMethodHandle handle = (CstMethodHandle) c;
                 CstRef ref = handle.getRef();
 

@@ -26,6 +26,7 @@
 package roj.mapper;
 
 import roj.asm.cst.CstClass;
+import roj.asm.misc.ReflectClass;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MoFNode;
@@ -50,7 +51,6 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -80,9 +80,9 @@ public final class Util {
 
     public final Desc sharedDC = new Desc("", "", "");
 
-    final MyHashSet<String> notFoundClasses = new MyHashSet<>();
-    final MyHashMap<String, List<Class<?>>> cachedClassRef = new MyHashMap<>();
-    final MyHashMap<String, IClass> cachedClassMof = new MyHashMap<>();
+    final MyHashSet<String>                 notFoundClasses = new MyHashSet<>();
+    final MyHashMap<String, List<Class<?>>> cParents        = new MyHashMap<>();
+    final MyHashMap<String, IClass>         cachedClassMof  = new MyHashMap<>();
 
     private final CharList sharedCL = new CharList();
     private final ArrayList<?> sharedAL = new ArrayList<>();
@@ -233,94 +233,77 @@ public final class Util {
     }
 
     public IClass reflectClassInfo(String name) {
-        if (notFoundClasses.contains(name))
-            return null;
-        if(cachedClassMof.containsKey(name))
-            return cachedClassMof.get(name);
+        if (notFoundClasses.contains(name)) return null;
+        IClass me = cachedClassMof.get(name);
+        if (me != null) return me;
 
-        List<Class<?>> classes = cachedClassRef.get(name);
-        if(classes == null) {
-            try {
-                cachedClassRef.put(name,
-                                   // use boot class loader
-                                   classes = ReflectionUtils.getFathersAndItfOrdered(Class.forName(name.replace('/', '.'), false, null)));
-            } catch (Throwable e) {
-                if (!(e instanceof ClassNotFoundException) && !(e instanceof NoClassDefFoundError)) {
-                    System.err.println("Exception Loading " + name);
-                    e.printStackTrace();
-                }
-                notFoundClasses.add(name);
-                return null;
-            }
-        }
+        List<Class<?>> ref = mkRefs(name);
+        if (ref == null) return null;
 
-        MyHashSet<ReflectMNode> o = new MyHashSet<>();
-        for (Class<?> clz1 : classes) {
-            try {
-                for (Method method : clz1.getDeclaredMethods()) {
-                    o.add(new ReflectMNode(method));
-                }
-            } catch (Throwable e) {
-                if (!(e instanceof NoClassDefFoundError)) {
-                    System.out.println("[Warn]Exception loading " + name);
-                    e.printStackTrace();
-                }
-            }
-        }
-        IClass list = new ReflectClass(classes.get(0), Helpers.cast(Arrays.asList(o.toArray())));
+        IClass list = ReflectClass.from(ref.get(0));
         cachedClassMof.put(name, list);
         return list;
     }
 
-    public static final List<String> OBJECT_INHERIT = Collections.singletonList("java/lang/Object");
-    // 使用反射查找实现类，避免RT太大不好解析
-    public boolean isInherited(Desc k, Map<String, List<String>> selfSupers, boolean unableDefault) {
-        if(notFoundClasses.contains(k.owner))
-            return unableDefault;
+    private List<Class<?>> mkRefs(String name) {
+        List<Class<?>> ref = cParents.get(name);
+        if(ref == null) {
+            try {
+                cParents.put(name,
+                             // use boot class loader
+                             ref = ReflectionUtils.getFathersAndItfOrdered(Class.forName(
+                                     name.replace('/', '.'), false, null)));
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                notFoundClasses.add(name);
+                return null;
+            } catch (Throwable e) {
+                System.err.println("Exception Loading " + name);
+                e.printStackTrace();
+                notFoundClasses.add(name);
+                return null;
+            }
+        }
+        return ref;
+    }
 
-        List<Type> pars = ParamHelper.parseMethod(k.param);
+    public static final List<String> OBJECT_INHERIT = Collections.singletonList("java/lang/Object");
+    private final List<Type> tmpPars = new ArrayList<>(5);
+    // 使用反射查找实现类，避免RT太大不好解析
+    public boolean isInherited(Desc k, Map<String, List<String>> selfSupers, boolean def) {
+        if(notFoundClasses.contains(k.owner)) return def;
+
+        List<Type> pars = tmpPars;
+        pars.clear();
+        ParamHelper.parseMethod(k.param, pars);
         pars.remove(pars.size() - 1);
         Class<?>[] par = new Class<?>[pars.size()];
         for (int i = 0; i < pars.size(); i++) {
             Type type = pars.get(i);
 
-            List<Class<?>> clz = cachedClassRef.get(type.owner);
-            if(clz != null) {
-                par[i] = clz.get(0);
+            List<Class<?>> p = cParents.get(type.owner);
+            if(p != null) {
+                par[i] = p.get(0);
             } else {
-                if (notFoundClasses.contains(type.owner)) {
-                    return unableDefault;
-                }
+                if (notFoundClasses.contains(type.owner)) return def;
                 try {
                     par[i] = type.toJavaClass();
+                } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                    notFoundClasses.add(type.owner);
+                    return def;
                 } catch (Throwable e) {
                     String o = type.owner;
-                    if (!(e instanceof ClassNotFoundException) && !(e instanceof NoClassDefFoundError)) {
-                        System.err.println("Exception loading " + o);
-                        e.printStackTrace();
-                    }
+                    System.err.println("Exception loading " + o);
+                    e.printStackTrace();
                     notFoundClasses.add(o);
-                    return unableDefault;
+                    return def;
                 }
                 if(type.owner != null)
-                    cachedClassRef.put(type.owner, ReflectionUtils.getFathersAndItfOrdered(par[i]));
+                    cParents.put(type.owner, ReflectionUtils.getFathersAndItfOrdered(par[i]));
             }
         }
 
-        String s = k.owner;
-        List<Class<?>> pars2 = cachedClassRef.get(s);
-        if (pars2 == null) {
-            try {
-                cachedClassRef.put(s, pars2 = ReflectionUtils.getFathersAndItfOrdered(Class.forName(s.replace('/', '.'), false, Util.class.getClassLoader())));
-            } catch (Throwable e) {
-                if(!(e instanceof ClassNotFoundException) && ! (e instanceof NoClassDefFoundError)) {
-                    System.err.println("Exception loading " + s);
-                    e.printStackTrace();
-                }
-                notFoundClasses.add(s);
-                return unableDefault;
-            }
-        }
+        List<Class<?>> pars2 = mkRefs(k.owner);
+        if (pars2 == null) return def;
 
         for (int j = 0; j < pars2.size(); j++) {
             Class<?> clz = pars2.get(j);

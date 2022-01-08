@@ -182,7 +182,7 @@ public final class CodeMapper extends Mapping {
                 List<Constant> args = ibm.arguments;
                 for (int j = 0; j < args.size(); j++) {
                     Constant cst = args.get(j);
-                    if (cst.type() == CstType.METHOD_TYPE) {
+                    if (cst.type() == Constant.METHOD_TYPE) {
                         CstMethodType type = (CstMethodType) cst;
 
                         String oldCls = type.getValue().getString();

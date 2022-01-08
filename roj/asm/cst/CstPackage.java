@@ -46,6 +46,6 @@ public final class CstPackage extends CstRefUTF {
 
     @Override
     public byte type() {
-        return CstType.PACKAGE;
+        return Constant.PACKAGE;
     }
 }

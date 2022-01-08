@@ -44,12 +44,12 @@ public final class CstLong extends Constant {
 
     @Override
     public final void write(ByteList w) {
-        w.put(CstType.LONG).putLong(value);
+        w.put(Constant.LONG).putLong(value);
     }
 
     @Override
     public byte type() {
-        return CstType.LONG;
+        return Constant.LONG;
     }
 
     public final String toString() {

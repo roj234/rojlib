@@ -27,20 +27,19 @@
 package ilib.world.structure.cascading;
 
 import ilib.world.structure.cascading.api.*;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.world.World;
 import roj.collect.MyHashMap;
 import roj.math.MathUtils;
 import roj.math.MutableInt;
 import roj.util.Helpers;
 
+import net.minecraft.util.EnumFacing;
+import net.minecraft.world.World;
+
 import javax.annotation.Nonnull;
 import java.util.*;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class Structures implements StructureGroup {

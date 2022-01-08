@@ -25,10 +25,16 @@
  */
 package roj.config.data;
 
+import roj.collect.MyHashMap;
+import roj.config.serial.Serializer;
+import roj.config.serial.Serializers;
 import roj.config.word.AbstLexer;
+import roj.text.CharList;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -117,7 +123,7 @@ public abstract class CEntry {
         return toJSON(new StringBuilder(), -9999999);
     }
 
-    public abstract StringBuilder toINI(StringBuilder sb, int depth);
+    protected abstract StringBuilder toINI(StringBuilder sb, int depth);
 
     public final String toINI() {
         return toINI(new StringBuilder(), 0).toString();
@@ -127,59 +133,132 @@ public abstract class CEntry {
         return toINI(new StringBuilder(), 0);
     }
 
-    public abstract StringBuilder toTOML(StringBuilder sb, int depth);
+    protected abstract StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain);
 
     public final String toTOML() {
-        return toTOML(new StringBuilder(), 0).toString();
+        return toTOML(new StringBuilder(), 0, new CharList()).toString();
     }
 
     public final StringBuilder toTOMLb() {
-        return toTOML(new StringBuilder(), 0);
+        return toTOML(new StringBuilder(), 0, new CharList());
     }
 
-    // Convert util
+    // Converting
 
-    /**
-     * 转换为"裸"对象 <br>
-     *     适配垃圾软件
-     * @return Map, List, String or 基本类型的包装
-     */
-    public abstract Object toNudeObject();
+    public abstract Object unwrap();
 
-    /**
-     * 包装"裸"对象
-     * @param o 裸对象
-     * @return Config对象
-     */
-    public static CEntry wrapNudeObject(Object o) {
-        if(o instanceof Map) {
+    public static CEntry wrap(Object o) {
+        if (o == null) {
+            return CNull.NULL;
+        } else if (o instanceof Object[]) {
+            Object[] arr = (Object[]) o;
+            CList dst = new CList(arr.length);
+            for (Object o1 : arr) {
+                dst.add(wrap(o1));
+            }
+        } if (o.getClass().getComponentType() != null) {
+            switch (o.getClass().getComponentType().getName()) {
+                case "int":
+                    return Serializers.wArray((int[]) o);
+                case "byte":
+                    return Serializers.wArray((byte[]) o);
+                case "boolean":
+                    return Serializers.wArray((boolean[]) o);
+                case "char":
+                    return Serializers.wArray((char[]) o);
+                case "long":
+                    return Serializers.wArray((long[]) o);
+                case "short":
+                    return Serializers.wArray((short[]) o);
+                case "float":
+                    return Serializers.wArray((float[]) o);
+                case "double":
+                    return Serializers.wArray((double[]) o);
+                default:
+                    throw new UnsupportedOperationException("void[] ???");
+            }
+        } if(o instanceof Map) {
             Map<String, Object> map = Helpers.cast(o);
             CMapping dst = new CMapping(map.size());
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                dst.put(entry.getKey(), wrapNudeObject(entry.getValue()));
+            try {
+                for (Map.Entry<String, Object> entry : map.entrySet()) {
+                    dst.put(entry.getKey(), wrap(entry.getValue()));
+                }
+            } catch (ClassCastException e) {
+                return new CObject<>(map);
+                //throw new UnsupportedOperationException("序列化的map必须使用string做key!");
             }
             return dst;
         } else if (o instanceof List) {
             List<Object> list = Helpers.cast(o);
             CList dst = new CList(list.size());
             for (int i = 0; i < list.size(); i++) {
-                dst.add(wrapNudeObject(list.get(i)));
+                dst.add(wrap(list.get(i)));
             }
             return dst;
-        } else if (o instanceof String) {
+        } else if (o instanceof Collection) {
+            Collection<Object> list = Helpers.cast(o);
+            CList dst = new CList(list.size());
+            for (Object o1 : list) {
+                dst.add(wrap(o1));
+            }
+            return dst;
+        } else if (o instanceof CharSequence) {
             return CString.valueOf(o.toString());
         } else if (o instanceof Boolean) {
             return CBoolean.valueOf((Boolean) o);
-        } else if (o instanceof Integer) {
-            return CInteger.valueOf((Integer) o);
-        } else if (o instanceof Long) {
+        }else if (o instanceof Long) {
             return CLong.valueOf((Long) o);
-        } else if (o instanceof Double) {
-            return CDouble.valueOf((Double) o);
-        } else if (o == null) {
-            return CNull.NULL;
+        } else if (o instanceof Double || o instanceof Float) {
+            return CDouble.valueOf(((Number) o).doubleValue());
+        } else if (o instanceof Number) {
+            return CInteger.valueOf(((Number) o).intValue());
+        } else if (o instanceof Character) {
+            return CInteger.valueOf((Character) o);
+        } else if (o instanceof CEntry) {
+            return (CEntry) o;
         } else {
             return new CObject<>(o);
+        }
+    }
+
+    public abstract void toBinary(ByteList w);
+
+    public static CEntry fromBinary(ByteList r) {
+        byte b = r.readByte();
+        switch (Type.VALUES[b & 0xF]) {
+            case BOOL:
+                return CBoolean.valueOf(r.readBoolean());
+            case INTEGER:
+                return CInteger.valueOf(r.readInt());
+            case NULL:
+                return CNull.NULL;
+            case OBJECT:
+            case MAP:
+                int cap = r.readVarInt(false);
+                Map<String, CEntry> map = new MyHashMap<>(cap);
+                while (cap-- > 0) {
+                    map.put(r.readVarIntUTF(), fromBinary(r));
+                }
+
+                CEntry x = map.get("==");
+                if ((b & 0xF) == Type.OBJECT.ordinal() && x != null) {
+                    Serializer<?> deser = Serializers.find(x.asString());
+                    if (deser != null) {
+                        return new CObject<>(map, deser);
+                    }
+                }
+                return new CMapping(map);
+            case LIST:
+                return CList._fromBinary(b >>> 4, r);
+            case LONG:
+                return CLong.valueOf(r.readLong());
+            case DOUBLE:
+                return CDouble.valueOf(r.readDouble());
+            case STRING:
+                return CString.valueOf(r.readVarIntUTF());
+            default:
+                throw new IllegalArgumentException("Unsupported type");
         }
     }
 

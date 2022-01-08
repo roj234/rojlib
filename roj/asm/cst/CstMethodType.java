@@ -40,6 +40,6 @@ public final class CstMethodType extends CstRefUTF {
 
     @Override
     public byte type() {
-        return CstType.METHOD_TYPE;
+        return Constant.METHOD_TYPE;
     }
 }

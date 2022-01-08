@@ -28,8 +28,8 @@ package roj.asm.frame;
 
 import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
+import roj.asm.cst.Constant;
 import roj.asm.cst.CstDynamic;
-import roj.asm.cst.CstType;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
@@ -108,10 +108,6 @@ public final class Interpreter {
     }
 
     // region A
-
-    private void pushRefArray(String name) {
-        stack.add(obj("[L" + name + ';'));
-    }
 
     private void pushPrimArray(int arrayType) {
         stack.add(obj("[" + (char) PrimArrayTypeToNativeType(arrayType)));
@@ -410,34 +406,34 @@ public final class Interpreter {
             case LDC_W:
             case LDC2_W:
                 byte type1 = ((LdcInsnNode) node).c.type();
-                if(type1 == CstType.DYNAMIC)
+                if(type1 == Constant.DYNAMIC)
                     type1 = NativeType.validate(((CstDynamic)((LdcInsnNode) node).c).getDesc().getType().getString().charAt(0));
 
                 switch (type1) {
-                    case CstType.INT:
+                    case Constant.INT:
                         stack.add(Var.INT);
                         break;
-                    case CstType.LONG:
+                    case Constant.LONG:
                         stack.add(Var.LONG);
                         stack.add(Var.TOP);
                         break;
-                    case CstType.FLOAT:
+                    case Constant.FLOAT:
                         stack.add(Var.FLOAT);
                         break;
-                    case CstType.DOUBLE:
+                    case Constant.DOUBLE:
                         stack.add(Var.DOUBLE);
                         stack.add(Var.TOP);
                         break;
-                    case CstType.CLASS:
+                    case Constant.CLASS:
                         stack.add(obj("java/lang/Class"));
                         break;
-                    case CstType.STRING:
+                    case Constant.STRING:
                         stack.add(obj("java/lang/String"));
                         break;
-                    case CstType.METHOD_TYPE:
+                    case Constant.METHOD_TYPE:
                         stack.add(obj("java/lang/invoke/MethodType"));
                         break;
-                    case CstType.METHOD_HANDLE:
+                    case Constant.METHOD_HANDLE:
                         stack.add(obj("java/lang/invoke/MethodHandle"));
                         break;
                     default:
@@ -919,7 +915,7 @@ public final class Interpreter {
                 break;
             case ANEWARRAY:
                 pop(INT);
-                pushRefArray(clazz);
+                stack.add(obj(clazz));
                 break;
             case CHECKCAST:
                 pop(REFERENCE);
@@ -927,7 +923,14 @@ public final class Interpreter {
                 break;
             case MULTIANEWARRAY:
                 pop(INT, arg);
-                stack.add(obj(clazz));
+                sb.clear();
+                sb.ensureCapacity(clazz.length() + arg);
+                char[] tmp = sb.list;
+                for (int i = 0; i < arg; i++) {
+                    tmp[i] = '[';
+                }
+                clazz.getChars(0, clazz.length(), tmp, arg);
+                stack.add(obj(new String(tmp, 0, clazz.length() + arg)));
                 break;
             default:
                 throw new IllegalArgumentException("Unknown opcode " + node);
@@ -946,11 +949,11 @@ public final class Interpreter {
             case NativeType.SHORT:
             case NativeType.INT:
                 if(type != NativeType.INT)
-                    throw new IllegalArgumentException("return type " + type + " did not satisfy method's " + returnType);
+                    throw new IllegalArgumentException("return type " + type + " did not satisfy method's " + (char)returnType);
                 break;
             default:
                 if(returnType != type)
-                    throw new IllegalArgumentException("return type " + type + " did not satisfy method's " + returnType);
+                    throw new IllegalArgumentException("return type " + type + " did not satisfy method's " + (char)returnType);
         }
 
     }
@@ -960,21 +963,15 @@ public final class Interpreter {
         if (arr == 0) {
             final int i = ofType(type);
             switch (i) {
-                case -1:
-                    return null;
-                default:
-                    return Var.std(i);
-                case -2:
-                    return obj(type.owner);
+                case -1: return null;
+                default: return Var.std(i);
+                case -2: return obj(type.owner);
             }
         } else {
             sb.clear();
-            for (int i = 0; i < arr; i++)
-                sb.append('[');
-            if (type.owner == null)
-                sb.append((char) type.type);
-            else
-                sb.append('L').append(type.owner).append(';');
+            for (int i = 0; i < arr; i++) sb.append('[');
+            if (type.owner == null) sb.append((char) type.type);
+            else sb.append('L').append(type.owner).append(';');
             return obj(sb.toString());
         }
     }
@@ -1301,7 +1298,6 @@ public final class Interpreter {
             }
             frames0.set(i, Helpers.cast(build(frames0.get(i))));
         }
-        System.out.println(frames0);
         return Helpers.cast(frames0);
     }
 

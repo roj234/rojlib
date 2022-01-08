@@ -42,7 +42,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.asm.cst.CstType.*;
 
 /**
  * No description provided
@@ -165,22 +164,22 @@ public class ClassDecompiler {
                     String o = "<INTERNAL ERROR: unsupported ldc node>";
 
                     switch (node1.c.type()) {
-                        case STRING:
+                        case Constant.STRING:
                             o = ((CstString) node1.c).getValue().getString();
                             break;
-                        case FLOAT:
+                        case Constant.FLOAT:
                             o = String.valueOf(((CstFloat) node1.c).value);
                             break;
-                        case INT:
+                        case Constant.INT:
                             o = String.valueOf(((CstInt) node1.c).value);
                             break;
-                        case CLASS:
+                        case Constant.CLASS:
                             o = ((CstClass) node1.c).getValue().getString().replace('/', '.').concat(".class");
                             break;
-                        case DOUBLE:
+                        case Constant.DOUBLE:
                             o = String.valueOf(((CstDouble) node1.c).value);
                             break;
-                        case LONG:
+                        case Constant.LONG:
                             o = String.valueOf(((CstLong) node1.c).value);
                             break;
                     }

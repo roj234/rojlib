@@ -27,6 +27,8 @@ package roj.config;
 
 import roj.collect.MyHashSet;
 import roj.config.data.*;
+import roj.config.serial.Serializer;
+import roj.config.serial.Serializers;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
@@ -56,8 +58,7 @@ public final class JSONParser implements Parser {
             LITERAL_KEY            = 2,
             UNESCAPED_SINGLE_QUOTE = 4,
             NO_EOF                 = 8,
-            INTERN                 = 16,
-            COMMENT                = 32;
+            INTERN                 = 16;
 
     public static void main(String[] args) throws ParseException, IOException {
         System.out.println(parse(IOUtil.readUTF(new File(args[0]))));
@@ -97,7 +98,7 @@ public final class JSONParser implements Parser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    static CList jsonArray(AbstLexer wr, byte flag) throws ParseException {
+    private static CList jsonArray(AbstLexer wr, byte flag) throws ParseException {
         CList list = new CList();
 
         boolean more = false;
@@ -130,14 +131,14 @@ public final class JSONParser implements Parser {
      * {xxx: yyy, zzz: uuu}
      */
     @SuppressWarnings("fallthrough")
-    static CMapping jsonObject(AbstLexer wr, byte flag) throws ParseException {
+    private static CMapping jsonObject(AbstLexer wr, byte flag) throws ParseException {
         CMapping map = new CMapping();
 
         boolean more = false;
 
         o:
         while (true) {
-            Word name = wr.nextWord().copy();
+            Word name = wr.nextWord();
             switch (name.type()) {
                 case right_l_bracket:
                     break o;
@@ -156,8 +157,9 @@ public final class JSONParser implements Parser {
                     unexpected(wr, name.val(), "字符串");
             }
 
-            if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name.val()))
-                throw wr.err("重复的key: " + name.val());
+            String v = name.val();
+            if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(v))
+                throw wr.err("重复的key: " + v);
 
             more = false;
 
@@ -165,13 +167,13 @@ public final class JSONParser implements Parser {
             if (w.type() != colon)
                 unexpected(wr, w.val(), ":");
 
-            map.put(name.val(), jsonRead(wr, flag));
+            map.put(v, jsonRead(wr, flag));
         }
 
         if (map.containsKey("==", Type.STRING)) {
-            ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
-            if (deserializer != null) {
-                return new CObject<>(map, deserializer);
+            Serializer<?> des = Serializers.find(map.getString("=="));
+            if (des != null) {
+                return new CObject<>(map.raw(), des);
             }
         }
 
@@ -179,7 +181,7 @@ public final class JSONParser implements Parser {
     }
 
     @SuppressWarnings("fallthrough")
-    static CEntry jsonRead(AbstLexer wr, byte flag) throws ParseException {
+    private static CEntry jsonRead(AbstLexer wr, byte flag) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case left_m_bracket:
@@ -200,6 +202,9 @@ public final class JSONParser implements Parser {
                 return CNull.NULL;
             case left_l_bracket:
                 return jsonObject(wr, flag);
+            case WordPresets.LITERAL:
+                if ((flag & LITERAL_KEY) != 0)
+                    return CString.valueOf(w.val());
             default:
                 unexpected(wr, w.val());
                 return null;
@@ -222,31 +227,31 @@ public final class JSONParser implements Parser {
         @Override
         @SuppressWarnings("fallthrough")
         public Word readWord() throws ParseException {
-            CharSequence input = this.input;
-            int index = this.index;
+            CharSequence in = this.input;
+            int i = this.index;
 
-            while (index < input.length()) {
-                int c = input.charAt(index++);
+            while (i < in.length()) {
+                int c = in.charAt(i++);
                 switch (c) {
                     case '\'':
                     case '"':
-                        this.index = index;
+                        this.index = i;
                         return readConstString((char) c);
                     case '/':
-                        this.index = index;
+                        this.index = i;
                         Word word = ignoreStdNote();
                         if (word != null)
                             return word;
-                        index = this.index;
+                        i = this.index;
                         break;
                     default: {
                         if (!WHITESPACE.contains(c)) {
-                            this.index = index - 1;
+                            this.index = i - 1;
                             if (SPECIAL.contains(c)) {
                                 switch (c) {
                                     case '-':
                                     case '+':
-                                        if(input.length() > index && NUMBER.contains(input.charAt(index))) {
+                                        if(in.length() > i && NUMBER.contains(in.charAt(i))) {
                                             return readDigit(true);
                                         }
                                         break;
@@ -261,7 +266,7 @@ public final class JSONParser implements Parser {
                     }
                 }
             }
-            this.index = index;
+            this.index = i;
             return eof();
         }
 

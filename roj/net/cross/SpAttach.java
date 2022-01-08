@@ -34,4 +34,9 @@ final class SpAttach {
     int  channelId;
     byte portId;
     int clientId;
+
+    @Override
+    public String toString() {
+        return "SpAttach{" + "channelId=" + channelId + ", portId=" + portId + ", clientId=" + clientId + '}';
+    }
 }

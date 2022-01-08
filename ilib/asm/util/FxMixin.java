@@ -27,7 +27,6 @@ package ilib.asm.util;
 
 import roj.asm.Parser;
 import roj.asm.cst.Constant;
-import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
@@ -58,7 +57,7 @@ public class FxMixin {
         List<Constant> array = data.cp.array();
         for (int i = 0; i < array.size(); i++) {
             Constant c = array.get(i);
-            if (c.type() == CstType.UTF) {
+            if (c.type() == Constant.UTF) {
                 CstUTF u = (CstUTF) c;
                 final String s = u.getString();
                 if (s.length() >= 25) {

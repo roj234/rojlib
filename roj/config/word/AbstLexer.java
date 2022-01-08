@@ -29,13 +29,11 @@ import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.config.ParseException;
 import roj.math.MathUtils;
+import roj.text.ACalendar;
 import roj.text.CharList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/31 14:22
  */
 public abstract class AbstLexer {
@@ -447,7 +445,9 @@ public abstract class AbstLexer {
                     continue;
                 case '.':
                     // 1.xE3
-                    if (exp != 0) unexpected(".");
+                    if (exp != 0) {
+                        return onInvalidNumber('.');
+                    }
                     flag = 1; // decimal
                     exp |= 1;
                 default:
@@ -467,7 +467,7 @@ public abstract class AbstLexer {
                         flag = 2; // hex
                     } else {
                         this.index = i;
-                        unexpected(String.valueOf(c));
+                        return onInvalidNumber(c);
                     }
                     break;
                 case 'B':
@@ -484,15 +484,15 @@ public abstract class AbstLexer {
                             }
                         default:
                             this.index = i;
-                            unexpected(String.valueOf(c));
-                            break;
+                            return onInvalidNumber(c);
 
                     }
                     break;
+                case '+':
                 case '-':
                     if((exp & 2) == 0) {
                         this.index = i;
-                        unexpected(String.valueOf(c));
+                        return onInvalidNumber(c);
                     } else {
                         temp.append(c);
                     }
@@ -503,17 +503,17 @@ public abstract class AbstLexer {
                         temp.append(c);
                         break;
                     }
-
-                    if ((flag == 0 || flag == 1) && temp.length() > 0 && (exp & 2) == 0) {
-                        flag = 1;
-                        exp |= 2;
-                        temp.append(c);
-                        break;
+                    if (temp.length() <= 0 || temp.charAt(temp.length() - 1) != '.') {
+                        if ((flag == 0 || flag == 1) && temp.length() > 0 && (exp & 2) == 0) {
+                            flag = 1;
+                            exp |= 2;
+                            temp.append(c);
+                            break;
+                        }
                     }
 
                     this.index = i;
-                    unexpected(String.valueOf(c));
-                    break;
+                    return onInvalidNumber(c);
             }
         }
 
@@ -528,11 +528,16 @@ public abstract class AbstLexer {
         char last = temp.charAt(temp.length() - 1);
 
         if (last == '.') {
-            unexpected(String.valueOf(last));
+            unexpected(".");
         }
 
         if ((exp & 2) != 0 && (last == 'e' || last == 'E'))
-            unexpected("exp后的终止");
+            throw err("数字在指数后被截断");
+
+        if (i < input.length() && !WHITESPACE.contains(input.charAt(i)) && !SPECIAL.contains(input.charAt(i))) {
+            Word word = onInvalidNumber(input.charAt(i));
+            if (word != null) return word;
+        }
 
         try {
             return formNumberClip(flag, temp, negative);
@@ -594,6 +599,15 @@ public abstract class AbstLexer {
                         break o;
                     }
                     break;
+                case '+':
+                case '-':
+                    if((exp & 2) == 0) {
+                        this.index = i;
+                        return onInvalidNumber(c);
+                    } else {
+                        temp.append(c);
+                    }
+                    break;
                 case 'X':
                 case 'x':
                     if (flag == 0 && temp.length() == 1) {
@@ -601,7 +615,7 @@ public abstract class AbstLexer {
                         flag = 2; // hex
                     } else {
                         this.index = i;
-                        unexpected(String.valueOf(c));
+                        return onInvalidNumber(c);
                     }
                     break;
                 case 'B':
@@ -618,8 +632,7 @@ public abstract class AbstLexer {
                             }
                         default:
                             this.index = i;
-                            unexpected(String.valueOf(c));
-                            break;
+                            return onInvalidNumber(c);
 
                     }
                     break;
@@ -637,21 +650,21 @@ public abstract class AbstLexer {
                     boolean ex = c == 'e' || c == 'E';
                     // if and only if => !(exp && ex) throw error
                     // => if(!ex || !exp)
+                    if (temp.length() <= 0 || temp.charAt(temp.length() - 1) != '.') {
+                        if ((flag == 0 || flag == 1) && temp.length() > 0 && (!ex || (exp & 2) == 0)) {
+                            flag = (byte) (c == 'F' || c == 'f' ? 5 : 1);
 
-                    if ((flag == 0 || flag == 1) && temp.length() > 0 && (!ex || (exp & 2) == 0)) {
-                        flag = (byte) (c == 'F' || c == 'f' ? 5 : 1);
-
-                        if(ex) {
-                            exp |= 2;
-                            break;
-                        } else {
-                            break o;
+                            if (ex) {
+                                exp |= 2;
+                                break;
+                            } else {
+                                break o;
+                            }
                         }
                     }
 
                     this.index = i;
-                    unexpected(String.valueOf(c));
-                    break;
+                    return onInvalidNumber(c);
                 case 'L':
                 case 'l':
                     if (flag == 0 && temp.length() > 0) {
@@ -660,8 +673,7 @@ public abstract class AbstLexer {
                     }
 
                     this.index = i;
-                    unexpected(String.valueOf(c));
-                    break;
+                    return onInvalidNumber(c);
             }
         }
 
@@ -676,11 +688,16 @@ public abstract class AbstLexer {
         char last = temp.charAt(temp.length() - 1);
 
         if (last == '.') {
-            unexpected(String.valueOf(last));
+            unexpected(".");
         }
 
         if ((exp & 2) != 0 && (last == 'e' || last == 'E'))
-            unexpected("exp后的终止");
+            throw err("数字在指数后被截断");
+
+        if (i < input.length() && !WHITESPACE.contains(input.charAt(i)) && !SPECIAL.contains(input.charAt(i))) {
+            Word word = onInvalidNumber(input.charAt(i));
+            if (word != null) return word;
+        }
 
         try {
             return formNumberClip(flag, temp, negative);
@@ -690,8 +707,14 @@ public abstract class AbstLexer {
     }
 
     protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
-        return formClip((short) (WordPresets.INTEGER + flag), temp).number(negative);
+        return formClip((short) (WordPresets.INTEGER + flag), temp).number(this, negative);
     }
+
+    protected Word onInvalidNumber(char value) throws ParseException {
+        throw err("无效的数字表示");
+    }
+
+    protected void onNumberFlow(String value, short fromLevel, short toLevel) throws ParseException {}
 
     /**
      * 获取常量字符
@@ -708,6 +731,140 @@ public abstract class AbstLexer {
      */
     protected Word readConstString(char key) throws ParseException {
         return formClip(WordPresets.STRING, readSlashString(key, true));
+    }
+
+    protected Word_L formRFCTime() throws ParseException {
+        CharSequence val = getText();
+        int j = this.index, i = j;
+
+        int end = Math.min(j + 30, val.length()); // "0000-00-00Z\t00:00:00.000+00:00".length()
+        char c;
+        long ts = 0;
+        int y, m, d;
+        do {
+            if (j >= end) return null;
+            c = val.charAt(j);
+            if (!NUMBER.contains(c)) break;
+            j++;
+        } while (true);
+        if (c != '-' && c != '/' && c != ':') throw err("无效分隔符", j);
+        if (c != ':') {
+            y = MathUtils.parseInt(val, i, j, 10);
+            i = ++j;
+
+            do {
+                if (j >= end) return null;
+                c = val.charAt(j);
+                if (!NUMBER.contains(c)) break;
+                j++;
+            } while (true);
+            if (c != '-' && c != '/') throw err("无效分隔符", j);
+            m = MathUtils.parseInt(val, i, j, 10);
+            if (m == 0 || m > 12) throw err("你是哪个星球的？一年" + m + "个月", i);
+            i = ++j;
+
+            do {
+                if (j >= end) break;
+                c = val.charAt(j);
+                if (!NUMBER.contains(c)) break;
+                j++;
+            } while (true);
+            d = MathUtils.parseInt(val, i, j, 10);
+            if (d == 0 || d > 31) throw err("你是哪个星球的？一个月" + d + "天", i);
+
+            ts = (ACalendar.daySinceAD(y, m, d, null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L;
+            if (c != 'T' && c != 't' && c != ' ') {
+                Word_L w = new Word_L(WordPresets.RFCDATE_DATE, ts, val.subSequence(index, j-1).toString());
+                this.index = j;
+                return w;
+            }
+
+            do {
+                if (j >= end) return null;
+                c = val.charAt(j);
+                if (!NUMBER.contains(c)) break;
+                j++;
+            } while (true);
+            i = ++j;
+
+            do {
+                if (j >= end) return null;
+                c = val.charAt(j);
+                if (!NUMBER.contains(c)) break;
+                j++;
+            } while (true);
+            if (c != ':') throw err("无效分隔符", j);
+        }
+        y = MathUtils.parseInt(val, i, j, 10);
+        if (y > 23) throw err("你一天" + y + "小时", i);
+        i = ++j;
+
+        do {
+            if (j >= end) return null;
+            c = val.charAt(j);
+            if (!NUMBER.contains(c)) break;
+            j++;
+        } while (true);
+        if (c != ':') throw err("无效分隔符", j);
+        m = MathUtils.parseInt(val, i, j, 10);
+        if (m > 59) throw err("你一小时" + m + "分钟", i);
+        i = ++j;
+
+        do {
+            if (j >= end) return null;
+            c = val.charAt(j);
+            if (!NUMBER.contains(c)) break;
+            j++;
+        } while (true);
+        d = MathUtils.parseInt(val, i, j, 10);
+        if (d > 59) throw err("你一分钟" + d + "秒", i);
+        i = ++j;
+
+        ts += y * 3600000 + m * 60000 + d * 1000;
+        if (c == '.') {
+            do {
+                if (j >= end) break;
+                c = val.charAt(j);
+                if (!NUMBER.contains(c)) break;
+                j++;
+            } while (true);
+            y = MathUtils.parseInt(val, i, j, 10);
+            if (y < 0 || y > 1000) throw err("无效毫秒", i);
+            i = ++j;
+            ts += y;
+        }
+
+        if (c != '+' && c != '-') {
+            Word_L w = new Word_L(c == 'Z' || c == 'z' ? WordPresets.RFCDATE_DATETIME_TZ : WordPresets.RFCDATE_DATETIME, ts, val.subSequence(index, j-1).toString());
+            this.index = i;
+            return w;
+        }
+        d = c == '+' ? 1 : -1;
+
+        do {
+            if (j >= end) return null;
+            c = val.charAt(j);
+            if (!NUMBER.contains(c)) break;
+            j++;
+        } while (true);
+        if (c != ':') throw err("无效分隔符", j);
+        y = MathUtils.parseInt(val, i, j, 10);
+        if (y > 23) throw err("你一天" + y + "小时", i);
+        i = ++j;
+
+        do {
+            if (j >= end) break;
+            c = val.charAt(j);
+            if (!NUMBER.contains(c)) break;
+            j++;
+        } while (true);
+        m = MathUtils.parseInt(val, i, j, 10);
+        if (m > 59) throw err("你一小时" + m + "分钟", i);
+
+        long timezoneOffset = y * 3600000 + m * 60000;
+        Word_L w = new Word_L(WordPresets.RFCDATE_DATETIME_TZ, ts + d * timezoneOffset, val.subSequence(index, j-1).toString());
+        this.index = j;
+        return w;
     }
 
     /**
@@ -799,11 +956,11 @@ public abstract class AbstLexer {
     // endregion
     // region exception
 
-    protected final void unexpected(String val) throws ParseException {
+    public final void unexpected(String val) throws ParseException {
         throw err("未预料的'" + val + "'");
     }
 
-    protected final ParseException err(String reason, int index) {
+    public final ParseException err(String reason, int index) {
         return new ParseException(input, reason, index, null);
     }
 

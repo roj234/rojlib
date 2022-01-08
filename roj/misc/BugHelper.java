@@ -2,7 +2,6 @@ package roj.misc;
 
 import roj.asm.Parser;
 import roj.asm.cst.Constant;
-import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
@@ -91,7 +90,7 @@ public class BugHelper {
                     ConstantData cd = Parser.parseConstants(bl);
                     List<Constant> cc = cd.cp.array();
                     for (int i = 0; i < cc.size(); i++) {
-                        if(cc.get(i).type() == CstType.UTF) {
+                        if(cc.get(i).type() == Constant.UTF) {
                             String cn = ((CstUTF) cc.get(i)).getString();
                             if(cn.endsWith("readItemStack")) {
                                 System.out.println(">> In " + zf.getName());

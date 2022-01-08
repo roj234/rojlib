@@ -44,7 +44,7 @@ public final class CstFloat extends Constant {
 
     @Override
     public final void write(ByteList w) {
-        w.put(CstType.FLOAT).putFloat(value);
+        w.put(Constant.FLOAT).putFloat(value);
     }
 
     public final String toString() {
@@ -53,7 +53,7 @@ public final class CstFloat extends Constant {
 
     @Override
     public byte type() {
-        return CstType.FLOAT;
+        return Constant.FLOAT;
     }
 
     public final int hashCode() {

@@ -27,14 +27,11 @@
 package ilib.api.registry;
 
 import roj.collect.MyHashMap;
-import roj.config.data.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/6/2 23:45
@@ -52,24 +49,24 @@ public final class RegistryBuilder {
             super(name, id);
         }
 
-        public CEntry getProperty(String name) {
-            return CNull.NULL;
+        public Object prop(String name) {
+            return null;
         }
 
-        public void putProperty(String name, CEntry property) {}
+        public void prop(String name, Object property) {}
     }
 
     public static final class StdProp extends Std {
-        public final MyHashMap<String, CEntry> properties = new MyHashMap<>(1, 1);
+        public final MyHashMap<String, Object> prop = new MyHashMap<>(1, 1);
 
         @Override
-        public CEntry getProperty(String name) {
-            return properties.getOrDefault(name, CNull.NULL);
+        public Object prop(String name) {
+            return prop.get(name);
         }
 
         @Override
-        public void putProperty(String name, CEntry property) {
-            properties.put(name, property);
+        public void prop(String name, Object property) {
+            prop.put(name, property);
         }
 
         StdProp(String name, int index) {
@@ -92,33 +89,13 @@ public final class RegistryBuilder {
         return this;
     }
 
-    public RegistryBuilder prop(String name, CEntry property) {
-        Std currentEnum = list.get(list.size() - 1);
-        if (currentEnum.getClass() != StdProp.class) {
-            list.set(list.size() - 1, currentEnum = new StdProp(currentEnum.name, currentEnum.index));
-        }
-        currentEnum.putProperty(name, property);
-        return this;
-    }
-
-    public RegistryBuilder prop(String name, int property) {
-        return prop(name, CInteger.valueOf(property));
-    }
-
-    public RegistryBuilder prop(String name, double property) {
-        return prop(name, CDouble.valueOf(property));
-    }
-
-    public RegistryBuilder prop(String name, boolean property) {
-        return prop(name, CBoolean.valueOf(property));
-    }
-
-    public RegistryBuilder prop(String name, String property) {
-        return prop(name, CString.valueOf(property));
-    }
-
     public RegistryBuilder prop(String name, Object property) {
-        return prop(name, new CObject<>(property));
+        Std std = list.get(list.size() - 1);
+        if (std.getClass() != StdProp.class) {
+            list.set(list.size() - 1, std = new StdProp(std.name, std.index));
+        }
+        std.prop(name, property);
+        return this;
     }
 
     public RegistryBuilder addAll(String... list) {

@@ -25,9 +25,6 @@
  */
 package roj.net;
 
-import roj.net.ssl.EngineAllocator;
-import roj.net.ssl.SslConfig;
-
 import javax.net.ssl.*;
 import java.io.IOException;
 import java.io.InputStream;
@@ -89,28 +86,12 @@ public final class SecureUtil {
         return kmf.getKeyManagers();
     }
 
-    public static EngineAllocator getSslFactory(SslConfig cfg) throws IOException, GeneralSecurityException {
+    public static JavaSslFactory getSslFactory(SslConfig cfg) throws IOException, GeneralSecurityException {
         SSLContext context = getSslContext(cfg.getPkPath(), cfg.getCaPath(), cfg.getPasswd(), cfg.isServerSide());
-        return new Alloc(context, cfg);
+        return new JavaSslFactory(context, cfg);
     }
 
-    public static EngineAllocator getClientDefault() throws NoSuchAlgorithmException {
-        return new Alloc(SSLContext.getDefault(), null);
-    }
-
-    private static final class Alloc extends EngineAllocator {
-        private final SSLContext context;
-
-        public Alloc(SSLContext context, SslConfig cfg) {
-            super(cfg);
-            this.context = context;
-        }
-
-        @Override
-        public SSLEngine allocate() {
-            SSLEngine engine = context.createSSLEngine();
-            config(engine, config);
-            return engine;
-        }
+    public static JavaSslFactory getClientDefault() throws NoSuchAlgorithmException {
+        return new JavaSslFactory(SSLContext.getDefault(), null);
     }
 }

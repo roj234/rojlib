@@ -41,8 +41,6 @@ import java.io.UTFDataFormatException;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static roj.asm.cst.CstType.*;
-
 /**
  * @author Roj234
  * @version 1.3
@@ -93,15 +91,15 @@ public class ConstantPool {
             cst[i++] = c;
             c.setIndex(i);
             switch (c.type()) {
-                case LONG:
-                case DOUBLE:
+                case Constant.LONG:
+                case Constant.DOUBLE:
                     idx.add(i - 1);
                     idx.add(i);
                     cst[i++] = CstTop.TOP;
                     break;
-                case UTF:
-                case INT:
-                case FLOAT:
+                case Constant.UTF:
+                case Constant.INT:
+                case Constant.FLOAT:
                     idx.add(i - 1);
                     break;
             }
@@ -111,35 +109,35 @@ public class ConstantPool {
             Constant c = cst[it.nextInt()];
             try {
                 switch (c.type()) {
-                    case MODULE:
-                    case PACKAGE:
-                    case METHOD_TYPE:
-                    case STRING:
-                    case CLASS: {
+                    case Constant.MODULE:
+                    case Constant.PACKAGE:
+                    case Constant.METHOD_TYPE:
+                    case Constant.STRING:
+                    case Constant.CLASS: {
                         CstRefUTF cz = (CstRefUTF) c;
                         cz.setValue((CstUTF) cst[cz.getValueIndex() - 1]);
                     }
                     break;
-                    case NAME_AND_TYPE: {
+                    case Constant.NAME_AND_TYPE: {
                         CstNameAndType cz = (CstNameAndType) c;
                         cz.setName((CstUTF) cst[cz.getNameIndex() - 1]);
                         cz.setType((CstUTF) cst[cz.getTypeIndex() - 1]);
                     }
                     break;
-                    case FIELD:
-                    case METHOD:
-                    case INTERFACE: {
+                    case Constant.FIELD:
+                    case Constant.METHOD:
+                    case Constant.INTERFACE: {
                         CstRef cz = (CstRef) c;
                         cz.setClazz((CstClass) cst[cz.getClassIndex() - 1]);
                         cz.desc((CstNameAndType) cst[cz.getDescIndex() - 1]);
                     }
                     break;
-                    case INVOKE_DYNAMIC: {
+                    case Constant.INVOKE_DYNAMIC: {
                         CstDynamic cz = (CstDynamic) c;
                         cz.setDesc((CstNameAndType) cst[cz.getDescIndex() - 1]);
                     }
                     break;
-                    case METHOD_HANDLE: {
+                    case Constant.METHOD_HANDLE: {
                         CstMethodHandle cz = (CstMethodHandle) c;
                         cz.setRef((CstRef) cst[cz.getRefIndex() - 1]);
                     }
@@ -164,13 +162,13 @@ public class ConstantPool {
 
     private Constant getReferTo(Constant c) {
         switch (c.type()) {
-            case METHOD_TYPE:
-            case STRING:
-            case CLASS: {
+            case Constant.METHOD_TYPE:
+            case Constant.STRING:
+            case Constant.CLASS: {
                 CstRefUTF cz = (CstRefUTF) c;
                 return cst[cz.getValueIndex() - 1];
             }
-            case NAME_AND_TYPE: {
+            case Constant.NAME_AND_TYPE: {
                 CstNameAndType cz = (CstNameAndType) c;
                 Constant cst = this.cst[cz.getNameIndex() - 1];
                 if (!(cst instanceof CstUTF)) {
@@ -178,9 +176,9 @@ public class ConstantPool {
                 }
                 return this.cst[cz.getTypeIndex() - 1];
             }
-            case FIELD:
-            case METHOD:
-            case INTERFACE: {
+            case Constant.FIELD:
+            case Constant.METHOD:
+            case Constant.INTERFACE: {
                 CstRefField cz = (CstRefField) c;
                 Constant cst = this.cst[cz.getClassIndex() - 1];
                 if (!(cst instanceof CstClass)) {
@@ -188,11 +186,11 @@ public class ConstantPool {
                 }
                 return this.cst[cz.getDescIndex() - 1];
             }
-            case INVOKE_DYNAMIC: {
+            case Constant.INVOKE_DYNAMIC: {
                 CstDynamic cz = (CstDynamic) c;
                 return cst[cz.getDescIndex() - 1];
             }
-            case METHOD_HANDLE: {
+            case Constant.METHOD_HANDLE: {
                 CstMethodHandle cz = (CstMethodHandle) c;
                 return cst[cz.getRefIndex() - 1];
             }
@@ -202,48 +200,48 @@ public class ConstantPool {
 
     static Constant readConstant(ByteList r) {
         short b = r.readUByte();
-        if (CstType.toString(b) == null)
+        if (Constant.toString(b) == null)
             throw new IllegalArgumentException("Illegal constant type " + b);
         switch (b) {
-            case UTF:
+            case Constant.UTF:
                 try {
                     return new CstUTF(r.readUTF());
                 } catch (UTFDataFormatException e) {
                     throw new RuntimeException(e);
                 }
-            case INT:
+            case Constant.INT:
                 return new CstInt(r.readInt());
-            case FLOAT:
+            case Constant.FLOAT:
                 return new CstFloat(r.readFloat());
-            case LONG:
+            case Constant.LONG:
                 return new CstLong(r.readLong());
-            case DOUBLE:
+            case Constant.DOUBLE:
                 return new CstDouble(r.readDouble());
 
-            case METHOD_TYPE:
+            case Constant.METHOD_TYPE:
                 return new CstMethodType(r.readUnsignedShort());
-            case MODULE:
+            case Constant.MODULE:
                 return new CstModule(r.readUnsignedShort());
-            case PACKAGE:
+            case Constant.PACKAGE:
                 return new CstPackage(r.readUnsignedShort());
-            case CLASS:
+            case Constant.CLASS:
                 return new CstClass(r.readUnsignedShort());
-            case STRING:
+            case Constant.STRING:
                 return new CstString(r.readUnsignedShort());
-            case NAME_AND_TYPE:
+            case Constant.NAME_AND_TYPE:
                 return new CstNameAndType(r.readUnsignedShort(), r.readUnsignedShort());
 
-            case FIELD:
+            case Constant.FIELD:
                 return new CstRefField(r.readUnsignedShort(), r.readUnsignedShort());
-            case METHOD:
+            case Constant.METHOD:
                 return new CstRefMethod(r.readUnsignedShort(), r.readUnsignedShort());
-            case INTERFACE:
+            case Constant.INTERFACE:
                 return new CstRefItf(r.readUnsignedShort(), r.readUnsignedShort());
-            case DYNAMIC:
-            case INVOKE_DYNAMIC:
-                return new CstDynamic(b == INVOKE_DYNAMIC, r.readUnsignedShort(), r.readUnsignedShort());
+            case Constant.DYNAMIC:
+            case Constant.INVOKE_DYNAMIC:
+                return new CstDynamic(b == Constant.INVOKE_DYNAMIC, r.readUnsignedShort(), r.readUnsignedShort());
 
-            case METHOD_HANDLE:
+            case Constant.METHOD_HANDLE:
                 return new CstMethodHandle(r.readByte(), r.readUnsignedShort());
         }
         throw OperationDone.NEVER;
@@ -320,8 +318,8 @@ public class ConstantPool {
         constants.add(c);
 
         switch (c.type()) {
-            case LONG:
-            case DOUBLE:
+            case Constant.LONG:
+            case Constant.DOUBLE:
                 index++;
         }
 
@@ -460,11 +458,11 @@ public class ConstantPool {
 
     private CstRef getRefByType(String className, String name, String desc, byte type) {
         switch (type) {
-            case FIELD:
+            case Constant.FIELD:
                 return getFieldRef(className, name, desc);
-            case METHOD:
+            case Constant.METHOD:
                 return getMethodRef(className, name, desc);
-            case INTERFACE:
+            case Constant.INTERFACE:
                 return getItfRef(className, name, desc);
         }
         throw new IllegalStateException("Illegal type " + type);
@@ -602,43 +600,43 @@ public class ConstantPool {
         if (c == null)
             throw new NullPointerException("Check null before reset()!");
         switch (c.type()) {
-            case DYNAMIC:
-            case INVOKE_DYNAMIC: {
+            case Constant.DYNAMIC:
+            case Constant.INVOKE_DYNAMIC: {
                 CstDynamic dyn = (CstDynamic) c;
                 dyn.setDesc(reset(dyn.getDesc()));
             }
             break;
-            case STRING:
-            case CLASS:
-            case METHOD_TYPE: {
+            case Constant.STRING:
+            case Constant.CLASS:
+            case Constant.METHOD_TYPE: {
                 CstRefUTF ref = (CstRefUTF) c;
                 ref.setValue(reset(ref.getValue()));
             }
             break;
-            case METHOD_HANDLE: {
+            case Constant.METHOD_HANDLE: {
                 CstMethodHandle ref = ((CstMethodHandle) c);
                 ref.setRef(reset(ref.getRef()));
             }
             break;
-            case METHOD:
-            case INTERFACE:
-            case FIELD: {
+            case Constant.METHOD:
+            case Constant.INTERFACE:
+            case Constant.FIELD: {
                 CstRef ref = (CstRef) c;
                 ref.setClazz(reset(ref.getClazz()));
                 ref.desc(reset(ref.desc()));
             }
             break;
-            case NAME_AND_TYPE: {
+            case Constant.NAME_AND_TYPE: {
                 CstNameAndType nat = (CstNameAndType) c;
                 nat.setName(reset(nat.getName()));
                 nat.setType(reset(nat.getType()));
             }
             break;
-            case INT:
-            case DOUBLE:
-            case FLOAT:
-            case LONG:
-            case UTF:
+            case Constant.INT:
+            case Constant.DOUBLE:
+            case Constant.FLOAT:
+            case Constant.LONG:
+            case Constant.UTF:
                 // No need to do anything, just append it
                 break;
             default:
@@ -698,33 +696,33 @@ public class ConstantPool {
         for (int i = 0; i < constants.size(); i++) {
             Constant c = constants.get(i);
             switch (c.type()) {
-                case UTF:
+                case Constant.UTF:
                     length += 3 + ByteList.byteCountUTF8(((CstUTF) c).getString());
                     break;
-                case INT:
-                case INVOKE_DYNAMIC:
-                case FLOAT:
-                case NAME_AND_TYPE:
-                case METHOD:
-                case FIELD:
-                case INTERFACE:
+                case Constant.INT:
+                case Constant.INVOKE_DYNAMIC:
+                case Constant.FLOAT:
+                case Constant.NAME_AND_TYPE:
+                case Constant.METHOD:
+                case Constant.FIELD:
+                case Constant.INTERFACE:
                     length += 5;
                     break;
-                case LONG:
-                case DOUBLE:
+                case Constant.LONG:
+                case Constant.DOUBLE:
                     length += 9;
                     break;
-                case METHOD_TYPE:
-                case STRING:
-                case MODULE:
-                case PACKAGE:
-                case CLASS:
+                case Constant.METHOD_TYPE:
+                case Constant.STRING:
+                case Constant.MODULE:
+                case Constant.PACKAGE:
+                case Constant.CLASS:
                     length += 3;
                     break;
-                case METHOD_HANDLE:
+                case Constant.METHOD_HANDLE:
                     length += 4;
                     break;
-                case _TOP_:
+                case Constant._TOP_:
                     break;
                 default:
                     throw new IllegalStateException("Unknown constant type " + (0xFF & c.type()));

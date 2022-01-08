@@ -28,14 +28,11 @@ package roj.asm.util;
 
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstClass;
-import roj.asm.cst.CstType;
 import roj.asm.cst.CstUTF;
 import roj.collect.CharMap;
 import roj.util.ByteReader;
 
 import java.io.UTFDataFormatException;
-
-import static roj.asm.cst.CstType.*;
 
 /**
  * No description provided
@@ -60,37 +57,37 @@ public final class ConstantNamePool {
         int len = this.len;
         while (i < len) {
             int b = r.readUByte();
-            if (CstType.toString(b) == null)
+            if (Constant.toString(b) == null)
                 throw new IllegalArgumentException("Illegal constant type " + b);
             switch (b) {
-                case UTF:
+                case Constant.UTF:
                     r.rIndex = r.readUnsignedShort() + r.rIndex;
                     break;
-                case INT:
-                case INVOKE_DYNAMIC:
-                case METHOD:
-                case FIELD:
-                case FLOAT:
-                case INTERFACE:
-                case NAME_AND_TYPE:
+                case Constant.INT:
+                case Constant.INVOKE_DYNAMIC:
+                case Constant.METHOD:
+                case Constant.FIELD:
+                case Constant.FLOAT:
+                case Constant.INTERFACE:
+                case Constant.NAME_AND_TYPE:
                     r.rIndex += 4;
                     break;
 
-                case LONG:
-                case DOUBLE:
+                case Constant.LONG:
+                case Constant.DOUBLE:
                     i++;
                     r.rIndex += 8;
                     break;
 
-                case METHOD_TYPE:
-                case STRING:
-                case MODULE:
-                case PACKAGE:
-                case CLASS:
+                case Constant.METHOD_TYPE:
+                case Constant.STRING:
+                case Constant.MODULE:
+                case Constant.PACKAGE:
+                case Constant.CLASS:
                     r.rIndex += 2;
                     break;
 
-                case METHOD_HANDLE:
+                case Constant.METHOD_HANDLE:
                     r.rIndex += 3;
                     break;
             }
@@ -103,7 +100,7 @@ public final class ConstantNamePool {
         int i = 1;
         while (i < len) {
             switch (r.readUByte()) {
-                case UTF:
+                case Constant.UTF:
                     if (map.containsKey((char) i)) {
                         try {
                             map.put((char) i, new CstUTF(r.readUTF()));
@@ -113,30 +110,30 @@ public final class ConstantNamePool {
                     } else
                         r.rIndex = r.readUnsignedShort() + r.rIndex;
                     break;
-                case INT:
-                case INVOKE_DYNAMIC:
-                case METHOD:
-                case FIELD:
-                case FLOAT:
-                case INTERFACE:
-                case NAME_AND_TYPE:
+                case Constant.INT:
+                case Constant.INVOKE_DYNAMIC:
+                case Constant.METHOD:
+                case Constant.FIELD:
+                case Constant.FLOAT:
+                case Constant.INTERFACE:
+                case Constant.NAME_AND_TYPE:
                     r.rIndex += 4;
                     break;
 
-                case LONG:
-                case DOUBLE:
+                case Constant.LONG:
+                case Constant.DOUBLE:
                     i++;
                     r.rIndex += 8;
                     break;
 
-                case METHOD_TYPE:
-                case STRING:
-                case MODULE:
-                case PACKAGE:
+                case Constant.METHOD_TYPE:
+                case Constant.STRING:
+                case Constant.MODULE:
+                case Constant.PACKAGE:
                     r.rIndex += 2;
                     break;
 
-                case CLASS:
+                case Constant.CLASS:
                     if (map.containsKey((char) i)) {
                         int idx = r.readUnsignedShort();
                         if (!map.containsKey((char) idx))
@@ -146,7 +143,7 @@ public final class ConstantNamePool {
                         r.rIndex += 2;
                     break;
 
-                case METHOD_HANDLE:
+                case Constant.METHOD_HANDLE:
                     r.rIndex += 3;
                     break;
             }
@@ -157,7 +154,7 @@ public final class ConstantNamePool {
         i = 1;
         while (i < len) {
             switch (r.readUByte()) {
-                case UTF:
+                case Constant.UTF:
                     if (map.containsKey((char) i) && map.get((char) i) == null) {
                         try {
                             map.put((char) i, new CstUTF(r.readUTF()));
@@ -167,28 +164,28 @@ public final class ConstantNamePool {
                     } else
                         r.rIndex = r.readUnsignedShort() + r.rIndex;
                     break;
-                case INT:
-                case INVOKE_DYNAMIC:
-                case METHOD:
-                case FIELD:
-                case FLOAT:
-                case INTERFACE:
-                case NAME_AND_TYPE:
+                case Constant.INT:
+                case Constant.INVOKE_DYNAMIC:
+                case Constant.METHOD:
+                case Constant.FIELD:
+                case Constant.FLOAT:
+                case Constant.INTERFACE:
+                case Constant.NAME_AND_TYPE:
                     r.rIndex += 4;
                     break;
-                case LONG:
-                case DOUBLE:
+                case Constant.LONG:
+                case Constant.DOUBLE:
                     i++;
                     r.rIndex += 8;
                     break;
-                case METHOD_TYPE:
-                case STRING:
-                case MODULE:
-                case PACKAGE:
-                case CLASS:
+                case Constant.METHOD_TYPE:
+                case Constant.STRING:
+                case Constant.MODULE:
+                case Constant.PACKAGE:
+                case Constant.CLASS:
                     r.rIndex += 2;
                     break;
-                case METHOD_HANDLE:
+                case Constant.METHOD_HANDLE:
                     r.rIndex += 3;
                     break;
             }

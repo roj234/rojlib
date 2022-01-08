@@ -28,8 +28,8 @@ package roj.io.down;
 import roj.concurrent.WaitingIOFuture;
 import roj.concurrent.task.AbstractCalcTask;
 import roj.io.FileUtil;
-import roj.net.tcp.client.HttpClient;
-import roj.net.tcp.client.HttpConnection;
+import roj.net.http.HttpClient;
+import roj.net.http.HttpConnection;
 
 import javax.annotation.Nullable;
 import java.io.File;

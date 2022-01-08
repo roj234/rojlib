@@ -57,6 +57,14 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
         this.monitor = monitor;
     }
 
+    public TaskExecutor(ThreadGroup tg, ThreadStateMonitor monitor, String name, int timeout) {
+        super(tg, name);
+        setName(name);
+        setDaemon(true);
+        this.timeout = timeout;
+        this.monitor = monitor;
+    }
+
     public boolean sleeping() {
         return busy;
     }

@@ -44,8 +44,6 @@ import java.util.function.BiConsumer;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 
-import static roj.asm.cst.CstType.*;
-
 /**
  * Packer 125
  *
@@ -135,7 +133,7 @@ public class Pack125 {
             Object u;
             byte b = r.readByte();
             switch (b) {
-                case _TOP_:
+                case Constant._TOP_:
                     u = CstTop.TOP;
                     break;
                 case TYPES:
@@ -158,25 +156,25 @@ public class Pack125 {
                     }
                     u = type;
                     break;
-                case NAME_AND_TYPE:
+                case Constant.NAME_AND_TYPE:
                     CstNameAndType nat = new CstNameAndType();
                     nat.setName((CstUTF) cp[r.readVarInt(false)]);
                     nat.setType((CstUTF) cp[r.readVarInt(false)]);
                     u = nat;
                     break;
-                case UTF:
+                case Constant.UTF:
                     u = new CstUTF(r.readVarIntUTF());
                     break;
-                case INT:
+                case Constant.INT:
                     u = new CstInt(r.readInt());
                     break;
-                case FLOAT:
+                case Constant.FLOAT:
                     u = new CstFloat(r.readFloat());
                     break;
-                case LONG:
+                case Constant.LONG:
                     u = new CstLong(r.readLong());
                     break;
-                case DOUBLE:
+                case Constant.DOUBLE:
                     u = new CstDouble(r.readDouble());
                     break;
                 default:
@@ -373,20 +371,20 @@ public class Pack125 {
         ByteList w3 = this.w3;
         for (int i = 0; i < array.size(); i++) {
             Constant c = array.get(i);
-            if (c.type() == NAME_AND_TYPE) {
+            if (c.type() == Constant.NAME_AND_TYPE) {
                 CstNameAndType nat = (CstNameAndType) c;
                 f.data = nat.getName().getString() + nat.getType().getString();
                 if (f == (f1 = cw[NAT].intern(f))) {
                     f = LongerCst.one();
 
                     w3.clear();
-                    w3.put(NAME_AND_TYPE);
+                    w3.put(Constant.NAME_AND_TYPE);
 
                     LongerCst f2;
                     String name = nat.getName().getString();
                     f.data = name;
                     if (f == (f2 = cw[STR].intern(f))) {
-                        w1.put(UTF).putVarIntUTF(name);
+                        w1.put(Constant.UTF).putVarIntUTF(name);
                         f.index = ++cpLen;
                         f = LongerCst.one();
                     }
@@ -430,30 +428,30 @@ public class Pack125 {
             Constant c = array.get(i);
             if (map[i] != 0) continue;
             switch (c.type()) {
-                case _TOP_:
+                case Constant._TOP_:
                     f.data = new Object();
                     if (f == (f1 = cw[STR].intern(f))) {
-                        w1.put(_TOP_);
+                        w1.put(Constant._TOP_);
                         f.index = ++cpLen;
                         f = LongerCst.one();
                     }
                     map[i] = f1.index;
                     break;
-                case UTF: {
+                case Constant.UTF: {
                     CstUTF u = (CstUTF) c;
                     f.data = u.getString();
                     if (f == (f1 = cw[STR].intern(f))) {
-                        w1.put(UTF).putVarIntUTF(u.getString());
+                        w1.put(Constant.UTF).putVarIntUTF(u.getString());
                         f.index = ++cpLen;
                         f = LongerCst.one();
                     }
                     map[i] = f1.index;
                 }
                 break;
-                case INT:
-                case FLOAT:
-                case LONG:
-                case DOUBLE:
+                case Constant.INT:
+                case Constant.FLOAT:
+                case Constant.LONG:
+                case Constant.DOUBLE:
                     f.data = c;
                     if (f == (f1 = cw[NUM].intern(f))) {
                         c.write(w1);
@@ -462,17 +460,17 @@ public class Pack125 {
                     }
                     map[i] = f1.index;
                     break;
-                case CLASS:
-                case STRING:
-                case FIELD:
-                case METHOD:
-                case INTERFACE:
-                case METHOD_HANDLE:
-                case METHOD_TYPE:
-                case DYNAMIC:
-                case INVOKE_DYNAMIC:
-                case MODULE:
-                case PACKAGE: // they are 'ref' and there is no need to shrink u2 => u1
+                case Constant.CLASS:
+                case Constant.STRING:
+                case Constant.FIELD:
+                case Constant.METHOD:
+                case Constant.INTERFACE:
+                case Constant.METHOD_HANDLE:
+                case Constant.METHOD_TYPE:
+                case Constant.DYNAMIC:
+                case Constant.INVOKE_DYNAMIC:
+                case Constant.MODULE:
+                case Constant.PACKAGE: // they are 'ref' and there is no need to shrink u2 => u1
                     c.write(w3);
                     break;
             }
@@ -493,7 +491,7 @@ public class Pack125 {
                 f.data = t.owner;
                 LongerCst f2;
                 if (f == (f2 = cw[STR].intern(f))) {
-                    w1.put(UTF).putVarIntUTF(t.owner);
+                    w1.put(Constant.UTF).putVarIntUTF(t.owner);
                     f.index = ++cpLen;
                     f = LongerCst.one();
                 }

@@ -30,8 +30,8 @@ import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.net.tcp.client.HttpConnection;
-import roj.net.tcp.serv.HttpServer;
+import roj.net.http.HttpConnection;
+import roj.net.http.HttpServer;
 import roj.net.udp.DnsServer;
 
 import java.io.*;

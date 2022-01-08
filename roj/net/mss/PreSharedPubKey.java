@@ -31,28 +31,23 @@ import java.security.InvalidKeyException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
  * @version 0.1
  * @since 2021/12/22 12:53
  */
-public final class PreSharedPubKey implements MSSPubKey<X509Certificate> {
-    private final X509Certificate[] certificates;
+public final class PreSharedPubKey implements MSSPubKey<PublicKey> {
+    private final PublicKey[] keys;
 
-    public PreSharedPubKey(X509Certificate... cert) {
-        assert cert.length > 0;
-        this.certificates = cert;
-    }
-
-    public X509Certificate[] getCertificates() {
-        return certificates;
+    public PreSharedPubKey(PublicKey... keys) {
+        assert keys.length > 0;
+        this.keys = keys;
     }
 
     @Override
     public String name() {
-        return "PreShared";
+        return "PreSharedKey";
     }
 
     @Override
@@ -61,20 +56,20 @@ public final class PreSharedPubKey implements MSSPubKey<X509Certificate> {
     }
 
     @Override
-    public byte[] encode(X509Certificate publicKey) throws InvalidKeyException {
-        for (int i = 0; i < certificates.length; i++) {
-            if (publicKey == certificates[i]) {
+    public byte[] encode(PublicKey pk) throws InvalidKeyException {
+        for (int i = 0; i < keys.length; i++) {
+            if (pk == keys[i]) {
                 return new byte[] { (byte) i };
             }
         }
-        throw new InvalidKeyException("This certificate is not supported.");
+        throw new InvalidKeyException("This key is not supported.");
     }
 
     @Override
     public PublicKey decode(byte[] data) throws CertificateException {
         if (data.length != 1)
             throw new CertificateException("无效公钥 " + TextUtil.dumpBytes(data));
-        return certificates[data[0] & 0xFF].getPublicKey();
+        return keys[data[0] & 0xFF];
     }
 
     @Override

@@ -543,6 +543,7 @@ public class MCLauncher extends JFrame {
             mc_conf.put("native_path", mcNative.getAbsolutePath());
             jsonDesc = (CMapping) result[3];
             config.put("mc_version", jsonDesc.getString("id"));
+            mc_conf.put("player_name", cfgGen.getString("玩家名字"));
 
             save();
         } catch (IOException e) {
@@ -550,7 +551,6 @@ public class MCLauncher extends JFrame {
             e.printStackTrace();
             return false;
         }
-        mc_conf.put("player_name", cfgGen.getString("玩家名字"));
 
         waitFor(null);
 
@@ -1133,7 +1133,7 @@ public class MCLauncher extends JFrame {
                 }
 
                 config = JSONParser.parse(IOUtil.readAs(bom, bom.getEncoding())).asMap();
-                config.dotMode(true);
+                config.dot(true);
                 CEntry path = config.getOrNull("mc_conf.native_path");
                 if(path != null) {
                     File native_path = new File(path.asString());

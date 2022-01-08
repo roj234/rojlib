@@ -27,16 +27,14 @@ package roj.net.gay;
 
 import roj.concurrent.task.ITaskNaCl;
 import roj.io.NIOUtil;
-import roj.net.SecureUtil;
+import roj.net.MSSSocket;
+import roj.net.NetworkUtil;
 import roj.net.misc.TaskManager;
 import roj.net.mss.MSSServerEngineFactory;
 import roj.net.mss.PreSharedPubKey;
-import roj.net.tcp.MSSSocket;
 import roj.util.ByteList;
 import roj.util.FastLocalThread;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.X509KeyManager;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -45,9 +43,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
@@ -85,23 +82,13 @@ public class Server extends FastLocalThread {
     TaskManager watcher = new TaskManager();
 
     public Server(InetSocketAddress address, int max) throws IOException, GeneralSecurityException {
-        KeyManager[] kmf = SecureUtil.makeKeyManagers(Server.class.getResourceAsStream("/META-INF/roj234.ks"), "123456".toCharArray());
+        KeyPair pair = NetworkUtil.genAndStoreRSAKey(new File("g_server.key"),
+                                                     new File("g_client.key"), new byte[2]);
+        if (pair == null)
+            throw new NoSuchAlgorithmException("A critical parameter to construct the MSS engine is missing");
 
-        X509Certificate pubKey = null;
-        PrivateKey privateKey = null;
-        for (KeyManager manager : kmf) {
-            if (manager instanceof X509KeyManager) {
-                X509KeyManager km = (X509KeyManager) manager;
-                String alias = km.chooseServerAlias("RSA", null, null);
-                privateKey = km.getPrivateKey(alias);
-                pubKey = km.getCertificateChain(alias)[0];
-                break;
-            }
-        }
-        if (pubKey == null || privateKey == null)
-            throw new NoSuchAlgorithmException("One or more critical parameter to construct the MSS engine is missing");
-
-        this.factory = new MSSServerEngineFactory(new PreSharedPubKey(pubKey), pubKey, privateKey);
+        this.factory = new MSSServerEngineFactory(new PreSharedPubKey(pair.getPublic()),
+                                                  pair.getPublic(), pair.getPrivate());
         this.socket = socket(address, max);
         this.maxConn = max;
     }

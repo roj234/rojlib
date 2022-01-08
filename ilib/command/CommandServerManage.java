@@ -28,17 +28,12 @@ package ilib.command;
 
 import ilib.command.sub.AbstractSubCommand;
 import io.netty.channel.ChannelHandler;
+import roj.net.http.Code;
+import roj.net.http.serv.*;
+
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
-import roj.net.tcp.serv.HttpServer;
-import roj.net.tcp.serv.Reply;
-import roj.net.tcp.serv.Response;
-import roj.net.tcp.serv.Router;
-import roj.net.tcp.serv.response.StringResponse;
-import roj.net.tcp.serv.util.Request;
-import roj.net.tcp.serv.util.StaticZipRouter;
-import roj.net.tcp.util.Code;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -89,7 +84,7 @@ public final class CommandServerManage extends AbstractSubCommand {
                 }
             } else {
                 try {
-                    Router router = args.length > 1 ? new StaticZipRouter(new ZipFile(args[1])) : new ServerManageRouter();
+                    Router router = args.length > 1 ? new ZipRouter(new ZipFile(args[1])) : new ServerManageRouter();
                     int port = Integer.parseInt(args[0]);
                     /*if(port == server.getServerPort()) {
 
@@ -136,11 +131,6 @@ public final class CommandServerManage extends AbstractSubCommand {
                         });
                     }*/
 
-                    HttpServer server1 = new HttpServer(port, 512, router);
-                    Thread thread = new Thread(server1, "ImpLib-HTTPServer");
-                    thread.setDaemon(true);
-                    thread.start();
-
                     sender.sendMessage(new TextComponentString("Started Listening on ::0:" + args[0]));
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -152,7 +142,7 @@ public final class CommandServerManage extends AbstractSubCommand {
 
     private static class ServerManageRouter implements Router {
         @Override
-        public Response response(Socket socket, Request request) {
+        public Reply response(Socket socket, Request request) {
             switch (request.path()) {
                 case "status":
                 case "tps":

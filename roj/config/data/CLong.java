@@ -25,11 +25,11 @@
  */
 package roj.config.data;
 
+import roj.util.ByteList;
+
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/31 21:17
@@ -110,13 +110,18 @@ public class CLong extends CEntry {
     }
 
     @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth) {
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append(value);
     }
 
     @Override
-    public Object toNudeObject() {
+    public Object unwrap() {
         return value;
+    }
+
+    @Override
+    public void toBinary(ByteList w) {
+        w.put((byte) Type.LONG.ordinal()).putLong(value);
     }
 
     @Override

@@ -26,7 +26,10 @@
 package roj.asm.util;
 
 import roj.asm.Parser;
-import roj.asm.cst.*;
+import roj.asm.cst.Constant;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstDynamic;
+import roj.asm.cst.CstRef;
 import roj.asm.tree.ConstantData;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -193,17 +196,17 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
             return;
         }
         switch (cst.type()) {
-            case CstType.INTERFACE:
-            case CstType.METHOD:
+            case Constant.INTERFACE:
+            case Constant.METHOD:
                 cstCache[ID_METHOD].add(cst);
                 break;
-            case CstType.CLASS:
+            case Constant.CLASS:
                 cstCache[ID_CLASS].add(cst);
                 break;
-            case CstType.FIELD:
+            case Constant.FIELD:
                 cstCache[ID_FIELD].add(cst);
                 break;
-            case CstType.INVOKE_DYNAMIC:
+            case Constant.INVOKE_DYNAMIC:
                 cstCache[ID_INVOKE_DYN].add(cst);
                 break;
         }

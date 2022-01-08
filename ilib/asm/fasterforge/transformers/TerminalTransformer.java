@@ -29,7 +29,6 @@ import ilib.api.ContextClassTransformer;
 import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstRef;
-import roj.asm.cst.CstType;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
@@ -69,7 +68,7 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
         List<Constant> csts = data.cp.getConstants();
         for (int i = 0; i < csts.size(); i++) {
             Constant c = csts.get(i);
-            if (c.type() == CstType.METHOD) {
+            if (c.type() == Constant.METHOD) {
                 CstRef ref = (CstRef) c;
                 if (ref.desc().getType().getString().equals("(I)V")) {
                     if (ref.getClassName().equals("java/lang/System") &&

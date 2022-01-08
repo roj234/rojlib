@@ -45,9 +45,11 @@ import roj.collect.IBitSet;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SingleBitSet;
+import roj.concurrent.Ref;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.EmptyArrays;
+import roj.util.Helpers;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
@@ -78,9 +80,9 @@ public final class DirectAccessor<T> {
     static final AtomicInteger NEXT_ID = new AtomicInteger();
     static final FlagList      PUBLIC  = new FlagList(AccessFlag.PUBLIC);
 
-    private static final ThreadLocal<Object> ACCESSOR_TMP = new ThreadLocal<>();
+    private static final Ref<Object> CallbackBuffer = Ref.from();
     private static void syncCallback(Object handle) {
-        ACCESSOR_TMP.set(handle);
+        CallbackBuffer.set(handle);
     }
 
     //
@@ -106,7 +108,7 @@ public final class DirectAccessor<T> {
     static final class CacheMap extends MyHashMap<String, Class<?>> {
         static final class Entry extends MyHashMap.Entry<String, Class<?>> {
             public Entry(String s) {
-                super(s, (Class<?>) IntMap.NOT_USING);
+                super(s, Helpers.cast(IntMap.NOT_USING));
             }
             FieldInsnNode node;
         }
@@ -123,14 +125,14 @@ public final class DirectAccessor<T> {
             }
 
             MyHashMap.Entry<String, Class<?>> entry = getOrCreateEntry(key);
-            Class<?> old = entry.v;
+            Object old = entry.v;
             if (old == NOT_USING) {
                 size++;
                 entry.v = e;
                 ((Entry) entry).node = node;
                 return null;
             }
-            return old;
+            return (Class<?>) old;
         }
     }
 
@@ -185,15 +187,17 @@ public final class DirectAccessor<T> {
         Object obj;
         ByteList list = Parser.toByteArrayShared(var);
         ClassDefiner.INSTANCE.defineClassC(var.name.replace('/', '.'), list.list, 0, list.wIndex());
-        try {
-            Class.forName(var.name.replace('/', '.'), true, ClassDefiner.INSTANCE);
-            if (null == (obj = ACCESSOR_TMP.get())) {
-                throw new IllegalStateException("内部错误: ACCESSOR_TMP.get() == null");
+        synchronized (CallbackBuffer) {
+            try {
+                Class.forName(var.name.replace('/', '.'), true, ClassDefiner.INSTANCE);
+                if (null == (obj = CallbackBuffer.get())) {
+                    throw new IllegalStateException("内部错误: ACCESSOR_TMP.get() == null");
+                }
+            } catch (Throwable e) {
+                throw new IllegalStateException("内部错误: 初始化失败", e);
             }
-        } catch (Throwable e) {
-            throw new IllegalStateException("内部错误: 初始化失败", e);
+            CallbackBuffer.set(null);
         }
-        ACCESSOR_TMP.set(null);
         return obj;
     }
 
@@ -243,8 +247,12 @@ public final class DirectAccessor<T> {
         String name1 = c == name.charAt(0) ? name : c + name.substring(1);
 
         String type = targetClass.getName().replace('.', '/');
-        FieldInsnNode _set = new FieldInsnNode(Opcodes.PUTFIELD, var.name, name, new Type(type));
-        FieldInsnNode _get = new FieldInsnNode(Opcodes.GETFIELD, var.name, name, new Type(type));
+        Type type1 = new Type(type);
+        FieldInsnNode _set = new FieldInsnNode(Opcodes.PUTFIELD, var.name, name, type1);
+        FieldInsnNode _get = new FieldInsnNode(Opcodes.GETFIELD, var.name, name, type1);
+
+        roj.asm.tree.Field f = new roj.asm.tree.Field(PUBLIC, name, type1);
+        var.fields.add(f);
 
         AttrCode code;
         InsnList insn;
@@ -818,7 +826,8 @@ public final class DirectAccessor<T> {
 
             if(found == -1)
                 throw new IllegalArgumentException("无法找到字段 " + target.getName() + '.' + fields[i]);
-            int off = useCache || ((fieldFs[i] = allFields.remove(found)).getModifiers() & AccessFlag.STATIC) != 0 ? 0 : 1;
+            fieldFs[i] = allFields.remove(found);
+            int off = useCache || (fieldFs[i].getModifiers() & AccessFlag.STATIC) != 0 ? 0 : 1;
 
             name = getters == null ? null : getters[i];
             if(name != null) {
@@ -1196,7 +1205,7 @@ public final class DirectAccessor<T> {
      * <init>
      * constructor
      */
-    static void addInit(Clazz clz) {
+    public static void addInit(Clazz clz) {
         AttrCode code;
 
         roj.asm.tree.Method init = new roj.asm.tree.Method(PUBLIC, clz, "<init>", "()V");
@@ -1206,7 +1215,7 @@ public final class DirectAccessor<T> {
         code.localSize = 1;
         InsnList insn = code.instructions;
         insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
-        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
+        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
         insn.add(NodeHelper.npc(Opcodes.RETURN));
 
         clz.methods.add(init);

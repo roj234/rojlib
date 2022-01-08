@@ -141,6 +141,7 @@ public class MyCipher implements CipheR, DeCipher {
         }
     }
 
+    @SuppressWarnings("fallthrough")
     public Object backup() {
         switch (type) {
             default:
@@ -162,6 +163,7 @@ public class MyCipher implements CipheR, DeCipher {
         }
     }
 
+    @SuppressWarnings("fallthrough")
     public void restore(Object data) {
         switch (type) {
             default:
@@ -187,8 +189,9 @@ public class MyCipher implements CipheR, DeCipher {
                 arr = (Object[]) data;
                 System.arraycopy(arr[0], 0, iv.array(), 0, iv.capacity());
                 System.arraycopy(arr[1], 0, t0.array(), 0, t0.capacity());
-                iv.position((Integer) arr[2]);
-                t0.position((Integer) arr[3]);
+                long aLong = (Long) arr[2];
+                iv.position((int) (aLong >> 32));
+                t0.position((int) aLong);
         }
     }
 

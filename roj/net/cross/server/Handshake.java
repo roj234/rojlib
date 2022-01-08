@@ -25,7 +25,7 @@
  */
 package roj.net.cross.server;
 
-import roj.net.tcp.WrappedSocket;
+import roj.net.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -49,7 +49,6 @@ final class Handshake extends Stated {
             LockSupport.parkNanos(20);
             if (worker.server.shutdown) return HS_ERR_POLICY;
             if (wait-- <= 0) {
-                write1Direct(ch, (byte) HS_ERR_TIMEOUT);
                 return HS_ERR_TIMEOUT;
             }
         }
@@ -73,18 +72,20 @@ final class Handshake extends Stated {
     @Override
     public Stated next(AEServer.Worker self) throws IOException {
         byte heart = handshake(self);
-        WrappedSocket channel = self.ch;
-        write1(channel, heart);
+        WrappedSocket ch = self.ch;
+        if (ch.handShake())
+            write1(ch, heart);
+        else
+            write1Direct(ch, (byte) HS_ERR_TIMEOUT);
         if (heart != (byte) HS_OK) {
-            syncPrint(this + ": 握手失败: " + heart);
             return null;
         }
-        ByteBuffer rb = channel.buffer();
+        ByteBuffer rb = ch.buffer();
         int channel_type = rb.get(5) & 0xFF;
         switch (channel_type) {
             case PCN_CONTROL:
                 rb.clear();
-                if (!readSome(channel, 1, TIMEOUT)) return null;
+                if (!readSome(ch, 1, TIMEOUT)) return null;
                 int role = rb.get(0) & 0xFF;
                 switch (role) {
                     case PS_LOGIN_C:
@@ -92,13 +93,13 @@ final class Handshake extends Stated {
                     case PS_LOGIN_H:
                         return HostLogin.HOST_LOGIN;
                     default:
-                        syncPrint(this + ": 握手失败: 无效的角色类型 " + role);
+                        syncPrint(self + ": 无效的角色类型 " + role);
                         return null;
                 }
             case PCN_DATA:
                 return PipeLogin.PIPE_LOGIN;
             default:
-                syncPrint(this + ": 握手失败: 无效的频道类型");
+                syncPrint(self + ": 无效的频道类型");
                 return null;
         }
     }

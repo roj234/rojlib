@@ -25,326 +25,115 @@
  */
 package roj.net.cross;
 
+import roj.collect.RingBuffer;
 import roj.config.JSONParser;
 import roj.config.ParseException;
+import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
-import roj.net.misc.MSSClientKey;
+import roj.net.NetworkUtil;
 import roj.text.TextUtil;
-import roj.ui.UIUtil;
-import roj.util.ByteList;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
-import javax.swing.border.TitledBorder;
-import java.awt.*;
-import java.awt.event.*;
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.UnknownHostException;
-
-import static roj.net.cross.Util.PROTOCOL_VERSION;
 
 /**
  * @author Roj233
  * @version 0.1
  * @since 2021/9/11 2:00
  */
-public class AEGuiClient extends JFrame {
+public class AEGuiClient {
     static {
-        MSSClientKey.loadMSSCert();
+        NetworkUtil.MSSLoadClientRSAKey(new File("ae_client.key"));
     }
-
-    private final JButton        btnConnect;
-    private final JCheckBox      chkSsl;
-    private final JTextField     inpUrl;
-    private final JTextField     inpHouse;
-    private final JTextField     inpPort;
-    private final JPasswordField inpPass;
 
     public static void main(String[] args) throws IOException, ParseException {
         if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "请使用Java8!");
             return;
         }
-        if(args.length == 0 && new File("asc.json").isFile()) {
+
+        if(args.length == 0) {
             args = new String[] { "asc.json" };
-            System.out.println("检测到 asc.json");
         }
-        if(args.length > 0) {
-            CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[0]))).asMap();
 
-            String[] text = TextUtil.split(cfg.getString("url"), ':');
-            if(text.length == 0) {
-                JOptionPane.showMessageDialog(null, "服务器端口有误");
-                return;
-            }
+        CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[0])), JSONParser.LITERAL_KEY).asMap();
 
-            InetAddress addr;
-            try {
-                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
-            } catch (UnknownHostException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(null, "未知的主机");
-                return;
-            }
+        String[] text = TextUtil.split(cfg.getString("url"), ':');
+        if(text.length == 0) {
+            JOptionPane.showMessageDialog(null, "服务器端口有误");
+            return;
+        }
 
-            InetSocketAddress address;
-            try {
-                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
-            } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(null, "服务器端口有误");
-                return;
-            }
-            int port = cfg.getString("port").equals("random") ? Math.abs((int)System.nanoTime() % 60000) + 2000 : cfg.getInteger("port");
-            do {
-                try (ServerSocket local = new ServerSocket(port, 1)) {
-                    local.isBound();
-                    break;
-                } catch (IOException ignored) {}
-                port = (Math.abs((int)System.nanoTime() % 60000)) + 2000;
-                System.out.println("检测到端口重复，自动重新分配了 " + port);
-            } while (true);
-            System.out.println("连接到 " + cfg.getString("url"));
-            System.out.println("本地端口 127.0.0.1:" + port);
-            System.out.println("使用SSL安全加密: " + cfg.getBool("ssl"));
-            System.out.println("启用访问日志: " + !cfg.getBool("no_log"));
-            System.out.println("房间号: " + cfg.getString("room"));
+        InetAddress host;
+        try {
+            host = text.length == 1 ? null : InetAddress.getByName(text[0]);
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "未知的主机");
+            return;
+        }
 
-            if(!cfg.getBool("no_log"))
-                Util.out = System.out;
+        InetSocketAddress addr;
+        try {
+            addr = new InetSocketAddress(host, Integer.parseInt(text[text.length - 1]));
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(null, "服务器端口有误");
+            return;
+        }
+        int port = cfg.getString("port").equals("random") ? Math.abs((int)System.nanoTime() % 60000) + 2000 : cfg.getInteger("port");
+        do {
+            try (ServerSocket local = new ServerSocket(port, 1)) {
+                local.isBound();
+                break;
+            } catch (IOException ignored) {}
+            port = (Math.abs((int)System.nanoTime() % 60000)) + 2000;
+            System.out.println("检测到端口重复，自动重新分配了 " + port);
+        } while (true);
 
-            Thread.currentThread().setName("Waiter");
-            client = new AEClient(address, cfg.getBool("ssl"), cfg.getString("room"), cfg.getString("pass"));
-            client.start();
-            try {
-                client.awaitLogin();
-                for (AEClient.PortMapEntry entry : client.portMap) {
-                    entry.port = (char) cfg.getInteger("port");
-                    entry.enabled = true;
+        System.out.println("登录中......");
+
+        LoggingStream.logger = new RingBuffer<>(1000);
+        Util.out = new LoggingStream(true);
+        System.setOut(Util.out);
+        System.setErr(Util.out);
+
+        Thread.currentThread().setName("Waiter");
+        client = new AEClient(addr, cfg.getString("room"), cfg.getString("pass"));
+        client.start();
+
+        Util.registerShutdownHook(client);
+        new GuiChat("AbyssalEye客户端", client);
+        try {
+            client.awaitLogin();
+            CList list = cfg.getOrCreateList("ports");
+            char[] ports = client.portMap;
+            if (ports.length != list.size()) {
+                CList list2 = new CList(ports.length);
+                for (char p : ports) {
+                    list2.add(p);
                 }
-                client.notifyPortMapModified();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+                client.shutdown();
+                System.out.println("端口映射不匹配: ");
+                System.out.println("您的定义: " + list.toShortJSONb());
+                System.out.println("服务端的定义: " + list2.toShortJSONb());
+                return;
             }
-
-            String title = cfg.containsKey("title") ? cfg.getString("title") : "AE客户端 v" + PROTOCOL_VERSION;
-            InputStream stream = UIUtil.class.getClassLoader().getResourceAsStream("logo.png");
-            Icon logo = new ImageIcon(ImageIO.read(stream));
-            JOptionPane.showOptionDialog(null,
-                                         "本地端口: " + port, title, JOptionPane.DEFAULT_OPTION,
-                                         JOptionPane.INFORMATION_MESSAGE, logo, new String[] { "退出" }, null);
-        } else {
-            new AEGuiClient();
-        }
-    }
-
-    public AEGuiClient() {
-        UIUtil.setLogo(this, "logo.png");
-        final JPanel panel1 = new JPanel();
-        panel1.setLayout(new GridBagLayout());
-        panel1.setBorder(
-                BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "v" + PROTOCOL_VERSION + " By Roj234", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
-        btnConnect = new JButton();
-        btnConnect.setText("连接");
-        GridBagConstraints gbc;
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnConnect, gbc);
-        final JLabel label1 = new JLabel();
-        label1.setText("地址");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label1, gbc);
-        final JLabel label2 = new JLabel();
-        label2.setText("房间");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label2, gbc);
-        inpHouse = new JTextField();
-        inpHouse.setDoubleBuffered(false);
-        inpHouse.setEnabled(true);
-        inpHouse.setOpaque(true);
-        inpHouse.setRequestFocusEnabled(true);
-        inpHouse.setVisible(true);
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpHouse, gbc);
-        final JLabel label3 = new JLabel();
-        label3.setText("端口");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label3, gbc);
-        inpPort = new JTextField();
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 3;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpPort, gbc);
-        final JLabel label4 = new JLabel();
-        label4.setText("密码");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(label4, gbc);
-        inpUrl = new JTextField();
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.gridwidth = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpUrl, gbc);
-        inpPass = new JPasswordField();
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 2;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(inpPass, gbc);
-        JButton btnSave = new JButton();
-        btnSave.setText("保存");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 3;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnSave, gbc);
-        chkSsl = new JCheckBox();
-        chkSsl.setText("SSL");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        gbc.anchor = GridBagConstraints.WEST;
-        panel1.add(chkSsl, gbc);
-        setContentPane(panel1);
-
-        setTitle("AbyssalEye客户端");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-        btnConnect.addActionListener(this::toggle);
-        btnSave.addActionListener(this::save);
-
-        pack();
-        setBounds(0, 0, 360, 160);
-        UIUtil.center(this);
-        setVisible(true);
-        setResizable(true);
-        validate();
-    }
-
-    static AEClient client;
-
-    private void save(ActionEvent event) {
-        CMapping x = new CMapping();
-        x.put("room", inpHouse.getText());
-        x.put("pass", inpPass.getText());
-        x.put("port", Integer.parseInt(inpPort.getText()));
-        x.put("ssl", chkSsl.isSelected());
-        x.put("url", inpUrl.getText());
-        try (FileOutputStream fos = new FileOutputStream("asc.json")) {
-            ByteList.encodeUTF(x.toJSONb()).writeToStream(fos);
-            JOptionPane.showMessageDialog(this, "保存在asc.json");
-        } catch (IOException e) {
+            for (int i = 0; i < ports.length; i++) {
+                ports[i] = (char) Math.max(list.get(i).asInteger(), 0);
+            }
+            client.notifyPortMapModified();
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
 
-    private void toggle(ActionEvent event) {
-        if (btnConnect.getText().equals("断开")) {
-            btnConnect.setEnabled(false);
-
-            btnConnect.setText("连接");
-            btnConnect.setEnabled(true);
-
-            chkSsl.setEnabled(true);
-            inpHouse.setEnabled(true);
-            inpPass.setEnabled(true);
-            inpPort.setEnabled(true);
-            inpUrl.setEnabled(true);
-
-            client.shutdown();
-            client = null;
-        } else {
-            String[] text = TextUtil.split(inpUrl.getText(), ':');
-            if(text.length == 0) {
-                JOptionPane.showMessageDialog(this, "服务器端口有误");
-                return;
-            }
-
-            InetAddress addr;
-            try {
-                addr = text.length == 1 ? null : InetAddress.getByName(text[0]);
-            } catch (UnknownHostException e) {
-                JOptionPane.showMessageDialog(this, "未知的主机");
-                return;
-            }
-
-            InetSocketAddress address;
-            try {
-                address = new InetSocketAddress(addr, Integer.parseInt(text[text.length - 1]));
-            } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this, "服务器端口有误");
-                return;
-            }
-
-            client = new AEClient(address, chkSsl.isSelected(), inpHouse.getText(), inpPass.getText());
-            client.start();
-            try {
-                client.awaitLogin();
-                for (AEClient.PortMapEntry entry : client.portMap) {
-                    entry.port = (char) Integer.parseInt(inpPort.getText());
-                    entry.enabled = true;
-                }
-                client.notifyPortMapModified();
-            } catch (InterruptedException | IOException e) {
-                e.printStackTrace();
-            }
-
-            btnConnect.setText("断开");
-
-            chkSsl.setEnabled(false);
-            inpHouse.setEnabled(false);
-            inpPass.setEnabled(false);
-            inpPort.setEnabled(false);
-            inpUrl.setEnabled(false);
-        }
-    }
+    static AEClient client;
 }

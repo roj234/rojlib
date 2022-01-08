@@ -26,19 +26,25 @@
 package roj.config.data;
 
 import roj.collect.IntList;
+import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.config.serial.Serializer;
+import roj.config.serial.Serializers;
+import roj.config.word.AbstLexer;
+import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
  * @version 0.1
  * @since 2021/5/31 21:17
  */
-public final class CList extends CEntry implements Iterable<CEntry> {
+public class CList extends CEntry implements Iterable<CEntry> {
     final List<CEntry> list;
 
     public CList() {
@@ -56,51 +62,121 @@ public final class CList extends CEntry implements Iterable<CEntry> {
     public static CList of(Object... objects) {
         CList list = new CList(objects.length);
         for (Object o : objects) {
-            list.add(wrapNudeObject(o));
+            list.add(wrap(o));
         }
         return list;
     }
 
-    public int size() {
+    static CList _fromBinary(int type, ByteList r) {
+        int cap = r.readVarInt(false);
+        List<CEntry> list = new ArrayList<>(cap);
+        if (type == 0) {
+            while (cap-- > 0)
+                list.add(fromBinary(r));
+        } else {
+            switch (Type.VALUES[type - 1]) {
+                case BOOL:
+                    while (cap-- > 0)
+                        list.add(CBoolean.valueOf(r.readBit1() != 0));
+                    break;
+                case INTEGER:
+                    while (cap-- > 0)
+                        list.add(CInteger.valueOf(r.readInt()));
+                    break;
+                case NULL:
+                    while (cap-- > 0)
+                        list.add(CNull.NULL);
+                    break;
+                case OBJECT:
+                case MAP:
+                    while (cap-- > 0) {
+                        int cap1 = r.readVarInt(false);
+                        Map<String, CEntry> map = new MyHashMap<>(cap1);
+                        while (cap1-- > 0) {
+                            map.put(r.readVarIntUTF(), fromBinary(r));
+                        }
+
+                        CEntry x = map.get("==");
+                        if (type - 1 == Type.OBJECT.ordinal() && x != null) {
+                            Serializer<?> deser = Serializers.find(x.asString());
+                            if (deser != null) {
+                                list.add(new CObject<>(map, deser));
+                                continue;
+                            }
+                        }
+                        list.add(new CMapping(map));
+                    }
+                    break;
+                case LONG:
+                    while (cap-- > 0)
+                        list.add(CLong.valueOf(r.readLong()));
+                    break;
+                case DOUBLE:
+                    while (cap-- > 0)
+                        list.add(CDouble.valueOf(r.readDouble()));
+                    break;
+                case STRING:
+                    while (cap-- > 0)
+                        list.add(CString.valueOf(r.readVarIntUTF()));
+                    break;
+                case LIST:
+                default:
+                    throw new IllegalArgumentException("Unsupported type");
+            }
+        }
+        return new CList(list);
+    }
+
+    public final int size() {
         return list.size();
     }
 
     @Nonnull
-    public Iterator<CEntry> iterator() {
+    public final Iterator<CEntry> iterator() {
         return list.iterator();
     }
 
-    public CList add(@Nullable CEntry entry) {
+    @Override
+    public final void forEach(Consumer<? super CEntry> action) {
+        list.forEach(action);
+    }
+
+    @Override
+    public final Spliterator<CEntry> spliterator() {
+        return list.spliterator();
+    }
+
+    public final CList add(@Nullable CEntry entry) {
         list.add(entry == null ? CNull.NULL : entry);
         return this;
     }
 
-    public void add(@Nonnull String s) {
+    public final void add(@Nonnull String s) {
         list.add(CString.valueOf(s));
     }
 
-    public void add(int s) {
+    public final void add(int s) {
         list.add(CInteger.valueOf(s));
     }
 
-    public void add(double s) {
+    public final void add(double s) {
         list.add(CDouble.valueOf(s));
     }
 
-    public void add(long s) {
+    public final void add(long s) {
         list.add(CLong.valueOf(s));
     }
 
-    public void add(boolean b) {
+    public final void add(boolean b) {
         list.add(CBoolean.valueOf(b));
     }
 
-    public void set(int index, @Nullable CEntry entry) {
+    public final void set(int index, @Nullable CEntry entry) {
         list.set(index, entry == null ? CNull.NULL : entry);
     }
 
     @Nonnull
-    public CEntry get(int index) {
+    public final CEntry get(int index) {
         return list.get(index);
     }
 
@@ -110,7 +186,7 @@ public final class CList extends CEntry implements Iterable<CEntry> {
         return Type.LIST;
     }
 
-    public MyHashSet<String> asStringSet() {
+    public final MyHashSet<String> asStringSet() {
         MyHashSet<String> stringSet = new MyHashSet<>(list.size());
         for (CEntry entry : list) {
             try {
@@ -122,7 +198,7 @@ public final class CList extends CEntry implements Iterable<CEntry> {
         return stringSet;
     }
 
-    public SimpleList<String> asStringList() {
+    public final SimpleList<String> asStringList() {
         SimpleList<String> stringList = new SimpleList<>(list.size());
         for (CEntry entry : list) {
             try {
@@ -134,7 +210,7 @@ public final class CList extends CEntry implements Iterable<CEntry> {
         return stringList;
     }
 
-    public int[] asIntList() {
+    public final int[] asIntList() {
         IntList numberList = new IntList(list.size());
         for (CEntry entry : list) {
             try {
@@ -148,12 +224,12 @@ public final class CList extends CEntry implements Iterable<CEntry> {
 
     @Nonnull
     @Override
-    public CList asList() {
+    public final CList asList() {
         return this;
     }
 
     @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
+    public final StringBuilder toYAML(StringBuilder sb, int depth) {
         if (!list.isEmpty()) {
             sb.append('\n');
             for (int i = 0; i < list.size(); i++) {
@@ -170,45 +246,149 @@ public final class CList extends CEntry implements Iterable<CEntry> {
     }
 
     @Override
-    public StringBuilder toJSON(StringBuilder sb, int depth) {
+    public final StringBuilder toJSON(StringBuilder sb, int depth) {
         sb.append('[');
         if (!list.isEmpty()) {
-            if (depth > 0) sb.append('\n');
-            for (CEntry entry : list) {
-                for (int i = 0; i < depth + 4; i++) {
-                    sb.append(' ');
+            if (depth < 0) {
+                for (int j = 0; j < list.size(); j++) {
+                    list.get(j).toJSON(sb, -1).append(',');
                 }
-                entry.toJSON(sb, depth + 4).append(',');
-                if (depth > 0) sb.append('\n');
-            }
-            if (depth > 0) {
-                sb.delete(sb.length() - 2, sb.length() - 1);
-                for (int i = 0; i < depth; i++) {
-                    sb.append(' ');
-                }
-            } else {
                 sb.delete(sb.length() - 1, sb.length());
+            } else {
+                if (depth > 0) sb.append('\n');
+                for (int j = 0; j < list.size(); j++) {
+                    CEntry entry = list.get(j);
+                    for (int i = 0; i < depth + 4; i++) {
+                        sb.append(' ');
+                    }
+                    entry.toJSON(sb, depth + 4).append(",\n");
+                }
+                if (depth > 0) {
+                    sb.delete(sb.length() - 2, sb.length() - 1);
+                    for (int i = 0; i < depth; i++) {
+                        sb.append(' ');
+                    }
+                } else {
+                    sb.delete(sb.length() - 1, sb.length());
+                }
             }
         }
         return sb.append(']');
     }
 
     @Override
-    public StringBuilder toINI(StringBuilder sb, int depth) {
-        throw new UnsupportedOperationException("INI file format does not support Type.LIST");
+    public final StringBuilder toINI(StringBuilder sb, int depth) {
+        throw new UnsupportedOperationException("INI file format does not support LIST");
     }
 
     @Override
-    public Object toNudeObject() {
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
+        if (list.isEmpty()) {
+            return sb.append("[]");
+        } else if (depth != 3) {
+            for (int i = 0; i < list.size(); i++) {
+                sb.append("[[");
+                if (!CString.rawSafe(chain)) {
+                    sb.append(AbstLexer.addSlashes(chain));
+                } else {
+                    sb.append(chain);
+                }
+                sb.append("]]\n");
+                list.get(i).toTOML(sb, 2, chain).append("\n");
+            }
+            return sb.delete(sb.length() - 1, sb.length());
+        } else {
+            if (!CString.rawSafe(chain)) {
+                sb.append(AbstLexer.addSlashes(chain));
+            } else {
+                sb.append(chain);
+            }
+            sb.append(" = [");
+            for (int j = 0; j < list.size(); j++) {
+                CEntry entry = list.get(j);
+                entry.toTOML(sb, 3, chain).append(", ");
+            }
+            sb.delete(sb.length() - 2, sb.length());
+            return sb.append(']');
+        }
+    }
+
+    @Override
+    public final Object unwrap() {
         List<Object> caster = Arrays.asList(new Object[list.size()]);
         for (int i = 0; i < list.size(); i++) {
-            caster.set(i, list.get(i).toNudeObject());
+            caster.set(i, list.get(i).unwrap());
         }
         return caster;
     }
 
     @Override
-    public boolean equals(Object o) {
+    @SuppressWarnings("fallthrough")
+    public final void toBinary(ByteList w) {
+        int iType = -1;
+        List<CEntry> list = this.list;
+        for (int i = 0; i < list.size(); i++) {
+            int type1 = list.get(i).getType().ordinal();
+            if (iType == -1) {
+                iType = type1;
+            } else if (iType != type1 || type1 == /*Type.LIST.ordinal()*/0) {
+                iType = -1;
+                break;
+            }
+        }
+        w.put((byte) (((1 + iType) << 4)/* | Type.LIST.ordinal()*/)).putVarInt(list.size(), false);
+        Type type = iType >= 0 ? Type.VALUES[iType] : null;
+        if (type == null) {
+            for (int i = 0; i < list.size(); i++) {
+                list.get(i).toBinary(w);
+            }
+            return;
+        } else if (type == Type.NULL) {
+            return;
+        }
+
+        int bv = 0, bvi = 8;
+        for (int i = 0; i < list.size(); i++) {
+            CEntry el = list.get(i);
+            switch (type) {
+                case BOOL:
+                    bv |= (el.asInteger() << --bvi);
+                    if (bvi == 0) {
+                        w.put((byte) bv);
+                        bv = 0;
+                        bvi = 8;
+                    }
+                    break;
+                case INTEGER:
+                    w.putInt(el.asInteger());
+                    break;
+                case OBJECT:
+                    el.asObject(Object.class).serialize();
+                case MAP:
+                    Map<String, CEntry> map = el.asMap().raw();
+                    w.putVarInt(map.size(), false);
+                    for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                        entry.getValue().toBinary(w.putVarIntUTF(entry.getKey()));
+                    }
+                    break;
+                case LONG:
+                    w.putLong(el.asLong());
+                    break;
+                case DOUBLE:
+                    w.putDouble(el.asDouble());
+                    break;
+                case STRING:
+                    w.putVarIntUTF(el.asString());
+                    break;
+            }
+        }
+        if (bvi != 8) {
+            w.put((byte) bv);
+        }
+    }
+
+    @Override
+    public final boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
@@ -218,19 +398,19 @@ public final class CList extends CEntry implements Iterable<CEntry> {
     }
 
     @Override
-    public int hashCode() {
+    public final int hashCode() {
         return list != null ? list.hashCode() : 0;
     }
 
-    public void addAll(CList list) {
+    public final void addAll(CList list) {
         this.list.addAll(list.list);
     }
 
-    public List<CEntry> raw() {
+    public final List<CEntry> raw() {
         return list;
     }
 
-    public void clear() {
+    public final void clear() {
         list.clear();
     }
 }

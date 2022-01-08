@@ -147,7 +147,7 @@ public final class Config extends JSONConfiguration {
 
     @Override
     protected void readConfig(CMapping map) {
-        map.dotMode(true);
+        map.dot(true);
 
         Loader.logger.debug(
                 "    // DEBUG FLAGS\n" +

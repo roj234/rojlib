@@ -25,19 +25,18 @@
  */
 package roj.net.cross.server;
 
+import roj.net.WrappedSocket;
 import roj.net.cross.server.AEServer.PipeGroup;
 import roj.net.cross.server.AEServer.Worker;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
-import roj.net.tcp.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.net.cross.Util.TIMEOUT_HEART_SERVER;
-import static roj.net.cross.Util.syncPrint;
+import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
@@ -77,8 +76,10 @@ final class PipeLogin extends Stated {
             else {
                 if (group.upConnFD == null && group.upPass == pass) {
                     group.upConnFD = ch.fd();
+                    group.upPass = 0;
                 } else if (group.downConnFD == null && group.downPass == pass) {
                     group.downConnFD = ch.fd();
+                    group.downPass = 0;
                 } else {
                     syncPrint(W + " 密码无效");
                     break;
@@ -87,15 +88,41 @@ final class PipeLogin extends Stated {
                     W.server.pipes.remove(user);
                     group.life = 1;
                     Pipe sp = new Pipe(group.downConnFD, group.upConnFD);
+                    sp.att = group;
                     group.pairRef = sp;
                     group.downOwner.pendingPipeOpen();
 
-                    syncPrint(" 管道 #" + user + " 已开启");
-                    AtomicInteger i = W.server.connected;
+                    //syncPrint(" 管道 #" + user + " 已开启");
+                    AtomicInteger i = W.server.remain;
                     try {
                         PipeIOThread.syncRegister(W.server, sp, pipe -> {
-                            i.decrementAndGet(); i.decrementAndGet();
-                            syncPrint("管道 #" + user + " 已终止");
+                            i.addAndGet(2);
+                            try {
+                                pipe.release();
+                                syncPrint("管道 #" + user + " 已终止");
+                            } catch (IOException e) {
+                                System.err.println("无法释放管道 #" + user);
+                                e.printStackTrace();
+                            }
+                            PipeGroup pg = (PipeGroup) pipe.att;
+
+                            ByteBuffer packet = ByteBuffer.allocate(1 + 4 + 4);
+                            packet.put((byte) P_CHANNEL_CLOSE).putInt(-1).putInt(pg.id).flip();
+
+                            if (pg.downOwner.getPipe(pg.id) != null) {
+                                pg.downOwner.closePipe(pg.id);
+                                pg.downOwner.sync(packet);
+                                packet.position(0);
+                            }
+
+                            Worker upOwner = pg.downOwner.room.master;
+                            if (upOwner.getPipe(pg.id) != null) {
+                                upOwner.closePipe(pg.id);
+                                upOwner.sync(packet);
+                            }
+
+                            pg.pairRef = null;
+                            pg.downConnFD = pg.upConnFD = null;
                         });
                     } catch (Exception e) {
                         e.printStackTrace();

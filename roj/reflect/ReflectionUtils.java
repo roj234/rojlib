@@ -235,6 +235,7 @@ public final class ReflectionUtils {
             } else {
                 acc = new VHFA(field);
             }
+            e.printStackTrace();
             accessors.put(field, acc);
             return acc;
         }
@@ -284,7 +285,7 @@ public final class ReflectionUtils {
             case CLASS:
                 return "Object";
             default:
-                StringBuilder s = new StringBuilder(NativeType.toDesc((byte) c));
+                StringBuilder s = new StringBuilder(NativeType.toString((byte) c));
                 s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
                 return s.toString();
         }

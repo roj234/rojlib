@@ -25,8 +25,16 @@
  */
 package roj.net.mss;
 
+import roj.net.SecureUtil;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.X509KeyManager;
+import java.io.IOException;
+import java.io.InputStream;
 import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
@@ -45,7 +53,34 @@ public final class MSSServerEngineFactory {
         format.checkPrivateKey(key);
     }
 
+     MSSServerEngineFactory(PrivateKey key, byte[] publicKey, int pubKeyFormat) {
+        this.privateKey = key;
+        this.publicKey = publicKey;
+        this.pubKeyFormat = pubKeyFormat;
+    }
+
     public MSSEngineServer newEngine() throws GeneralSecurityException {
         return new MSSEngineServer().__init(pubKeyFormat, publicKey, privateKey);
+    }
+
+    public static MSSServerEngineFactory fromKeystore(InputStream ks, char[] pass) throws IOException, GeneralSecurityException {
+        KeyManager[] kmf = SecureUtil.makeKeyManagers(ks, pass);
+
+        X509Certificate pubKey = null;
+        PrivateKey privateKey = null;
+        for (KeyManager manager : kmf) {
+            if (manager instanceof X509KeyManager) {
+                X509KeyManager km = (X509KeyManager) manager;
+                String alias = km.chooseServerAlias("RSA", null, null);
+                privateKey = km.getPrivateKey(alias);
+                pubKey = km.getCertificateChain(alias)[0];
+                break;
+            }
+        }
+        if (pubKey == null)
+            throw new NoSuchAlgorithmException("No such key");
+
+        PreSharedCertificate pkf = new PreSharedCertificate(pubKey);
+        return new MSSServerEngineFactory(privateKey, new byte[1], pkf.specificationId());
     }
 }

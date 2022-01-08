@@ -49,12 +49,12 @@ public final class CstNameAndType extends Constant {
 
     @Override
     public byte type() {
-        return CstType.NAME_AND_TYPE;
+        return Constant.NAME_AND_TYPE;
     }
 
     @Override
     public final void write(ByteList w) {
-        w.put(CstType.NAME_AND_TYPE)
+        w.put(Constant.NAME_AND_TYPE)
          .putShort(getNameIndex())
          .putShort(getTypeIndex());
     }

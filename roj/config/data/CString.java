@@ -28,6 +28,7 @@ package roj.config.data;
 import roj.config.YAMLParser;
 import roj.config.word.AbstLexer;
 import roj.math.MathUtils;
+import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
 import java.util.Objects;
@@ -100,13 +101,13 @@ public final class CString extends CEntry {
 
     @Override
     public StringBuilder toYAML(StringBuilder sb, int depth) {
-        if(!YAMLADDITIONALCHECK || !yamlAdditionalCheck(value))
+        if(!YAMLADDITIONALCHECK || !rawSafe(value))
             return toJSON(sb, depth);
         return sb.append(value);
     }
 
     static final boolean YAMLADDITIONALCHECK = System.getProperty("roj.config.noYamlAddChk") == null;
-    static boolean yamlAdditionalCheck(CharSequence value) {
+    static boolean rawSafe(CharSequence value) {
         if(value.length() == 0)
             return false;
         if(value.length() >= 4 && value.length() <= 5) {
@@ -156,8 +157,18 @@ public final class CString extends CEntry {
     }
 
     @Override
-    public Object toNudeObject() {
+    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
+        return toJSON(sb, depth);
+    }
+
+    @Override
+    public Object unwrap() {
         return value;
+    }
+
+    @Override
+    public void toBinary(ByteList w) {
+        w.put((byte) Type.STRING.ordinal()).putVarIntUTF(value);
     }
 
 }

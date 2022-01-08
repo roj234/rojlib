@@ -55,7 +55,7 @@ public final class CstDynamic extends Constant {
 
     @Override
     public byte type() {
-        return method ? CstType.INVOKE_DYNAMIC : CstType.DYNAMIC;
+        return method ? Constant.INVOKE_DYNAMIC : Constant.DYNAMIC;
     }
 
     @Override

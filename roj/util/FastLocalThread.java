@@ -39,5 +39,9 @@ public class FastLocalThread extends Thread {
         super(r);
     }
 
+    public FastLocalThread(ThreadGroup tg, String name) {
+        super(tg, name);
+    }
+
     Object[] localDataArray = EmptyArrays.OBJECTS;
 }

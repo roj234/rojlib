@@ -59,7 +59,7 @@ public final class Config extends JSONConfiguration {
 
     @Override
     protected void readConfig(CMapping map) {
-        map.dotMode(true);
+        map.dot(true);
 
         File f = new File(map.putIfAbsent("服务端描述文件", "lac-server.mif"));
         if(!f.isFile())

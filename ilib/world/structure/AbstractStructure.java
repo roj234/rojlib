@@ -29,6 +29,7 @@ package ilib.world.structure;
 import ilib.ImpLib;
 import ilib.util.BlockHelper;
 import ilib.world.structure.schematic.Schematic;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
@@ -36,9 +37,8 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
  * @version 0.1
  * @since 2021/4/21 22:51
