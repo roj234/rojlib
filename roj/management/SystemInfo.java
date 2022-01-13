@@ -83,9 +83,9 @@ public class SystemInfo {
     }
 
     private static StringBuilder appendMemoryData(StringBuilder sb, MemoryUsage usage) {
-        return sb.append("  * ").append("初始值: ").append(TextUtil.getScaledNumber(usage.getInit())).append('B').append('\n')
-                .append("  * ").append("已使用: ").append(TextUtil.getScaledNumber(usage.getUsed())).append('B').append('\n')
-                .append("  * ").append("已提交: ").append(TextUtil.getScaledNumber(usage.getCommitted())).append('B').append('\n')
-                .append("  * ").append("最大值: ").append(TextUtil.getScaledNumber(usage.getMax())).append('B').append('\n');
+        return sb.append("  * ").append("初始值: ").append(TextUtil.scaledNumber(usage.getInit())).append('B').append('\n')
+                 .append("  * ").append("已使用: ").append(TextUtil.scaledNumber(usage.getUsed())).append('B').append('\n')
+                 .append("  * ").append("已提交: ").append(TextUtil.scaledNumber(usage.getCommitted())).append('B').append('\n')
+                 .append("  * ").append("最大值: ").append(TextUtil.scaledNumber(usage.getMax())).append('B').append('\n');
     }
 }

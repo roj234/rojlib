@@ -30,7 +30,7 @@ import ilib.network.ILChannel;
 import ilib.network.IMessage;
 import ilib.network.IMessageHandler;
 import ilib.network.MessageContext;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
 import ilib.util.TimeUtil;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -163,10 +163,10 @@ public class Sync {
             if (!owner.fileMD5.isEmpty()) {
                 for (ToLongMap.Entry<String> entry : owner.fileMD5.selfEntrySet()) {
                     if (!new File(entry.k).delete()) {
-                        TimeUtil.beginText.add(TextHelperM.translate("mi.sync.ioerror") + "无法删除 " + entry.k);
+                        TimeUtil.beginText.add(TextHelper.translate("mi.sync.ioerror") + "无法删除 " + entry.k);
                     }
                 }
-                TimeUtil.beginText.add(TextHelperM.translate("ilib.sync.remove") + owner.fileMD5.keySet().toString());
+                TimeUtil.beginText.add(TextHelper.translate("ilib.sync.remove") + owner.fileMD5.keySet().toString());
             }
             owner.fileMD5 = serverMD5;
 
@@ -239,14 +239,14 @@ public class Sync {
                             try (FileOutputStream fos = new FileOutputStream(file)) {
                                 entry.getValue().writeToStream(fos);
                             } catch (IOException e) {
-                                TimeUtil.beginText.add(TextHelperM.translate("ilib.sync.ioerror") + e.getMessage());
+                                TimeUtil.beginText.add(TextHelper.translate("ilib.sync.ioerror") + e.getMessage());
                                 ImpLib.logger().warn(e);
                             }
                         }
                     }
-                    TimeUtil.beginText.add(TextHelperM.translate("ilib.sync.synced") + files.keySet().toString());
+                    TimeUtil.beginText.add(TextHelper.translate("ilib.sync.synced") + files.keySet().toString());
                 } else {
-                    TimeUtil.beginText.add(TextHelperM.translate("ilib.sync.same"));
+                    TimeUtil.beginText.add(TextHelper.translate("ilib.sync.same"));
                 }
             } else {
                 if(owner.replied.add(ctx.getPlayer())) {

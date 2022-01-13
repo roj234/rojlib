@@ -46,6 +46,7 @@ public final class ParseException extends Exception {
 
     private int line = -2, linePos;
     private CharSequence lineContent;
+    private CharList path;
 
     /**
      * Constructs a ParseException with the specified detail message and
@@ -71,6 +72,16 @@ public final class ParseException extends Exception {
 
     public int getLineOffset() {
         return linePos;
+    }
+
+    public CharSequence getPath() {
+        return path;
+    }
+
+    public ParseException addPath(CharSequence pathSeq) {
+        if (path == null) path = new CharList();
+        path.insert(0, pathSeq);
+        return this;
     }
 
     @Override
@@ -147,7 +158,7 @@ public final class ParseException extends Exception {
 
         String line = getLineContent();
 
-        StringBuilder k = new StringBuilder().append("解析错误:\r\n  Line ").append(this.line).append(": ");
+        CharList k = new CharList().append("解析错误:\r\n  Line ").append(this.line).append(": ");
 
         if (line.length() > 512) {
             k.append("当前行偏移量 ").append(this.linePos);
@@ -168,6 +179,10 @@ public final class ParseException extends Exception {
             k.append('^');
         }
 
-        return k.append("\r\n总偏移量: ").append(this.index).append("\r\n原因: ").append(msg).append("\r\n").toString();
+        k.append("\r\n总偏移量: ").append(this.index);
+        if (path != null) {
+            k.append("\r\n对象位置: ").append(path);
+        }
+        return k.append("\r\n原因: ").append(msg).append("\r\n").toString();
     }
 }

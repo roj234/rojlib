@@ -44,11 +44,11 @@ final class Handshake extends Stated {
     private static byte handshake(AEServer.Worker worker) throws IOException {
         WrappedSocket ch = worker.ch;
 
-        int wait = TIMEOUT;
+        long wait = System.currentTimeMillis() + TIMEOUT;
         while (!ch.handShake()) {
             LockSupport.parkNanos(20);
             if (worker.server.shutdown) return HS_ERR_POLICY;
-            if (wait-- <= 0) {
+            if (System.currentTimeMillis() >= wait) {
                 return HS_ERR_TIMEOUT;
             }
         }
@@ -85,7 +85,7 @@ final class Handshake extends Stated {
         switch (channel_type) {
             case PCN_CONTROL:
                 rb.clear();
-                if (!readSome(ch, 1, TIMEOUT)) return null;
+                if (!readSome(ch, 1, System.currentTimeMillis() + TIMEOUT)) return null;
                 int role = rb.get(0) & 0xFF;
                 switch (role) {
                     case PS_LOGIN_C:

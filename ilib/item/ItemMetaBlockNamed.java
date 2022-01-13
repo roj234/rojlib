@@ -30,7 +30,9 @@ import ilib.ImpLib;
 import ilib.api.registry.BlockPropTyped;
 import ilib.api.registry.Localized;
 import ilib.api.registry.Propertied;
-import ilib.util.TextHelperM;
+import ilib.util.Hook;
+import ilib.util.TextHelper;
+
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemStack;
 
@@ -55,7 +57,7 @@ public class ItemMetaBlockNamed<T extends Propertied<T>> extends ItemMetaBlock<T
 
     public ItemMetaBlockNamed(Block block, BlockPropTyped<T> prop, String name, String propName) {
         super(block, prop, name, propName);
-        ImpLib.HOOK.add(ilib.util.hook.Hook.LANGUAGE_RELOAD, ItemMetaBlockNamed.this::initDisplayName);
+        ImpLib.HOOK.add(Hook.LANGUAGE_RELOAD, ItemMetaBlockNamed.this::initDisplayName);
         this.cache = "tile.mi." + name;
     }
 
@@ -65,7 +67,7 @@ public class ItemMetaBlockNamed<T extends Propertied<T>> extends ItemMetaBlock<T
         if (displayName == null)
             initDisplayName();
         Localized t = (Localized) getTypeByStack(stack);
-        if (t == null) return TextHelperM.translate("mi.invalid");
+        if (t == null) return TextHelper.translate("mi.invalid");
         if (needReplace)
             return this.displayName.replace("{}", t.getLocalizedName());
         else
@@ -73,7 +75,7 @@ public class ItemMetaBlockNamed<T extends Propertied<T>> extends ItemMetaBlock<T
     }
 
     public void initDisplayName() {
-        this.displayName = TextHelperM.translate(cache);
+        this.displayName = TextHelper.translate(cache);
         if (displayName.indexOf("{}") > 0) {
             needReplace = true;
         }

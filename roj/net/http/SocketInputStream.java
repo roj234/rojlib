@@ -38,10 +38,9 @@ import java.util.concurrent.locks.LockSupport;
 /**
  * 如何把非阻塞包装成阻塞？
  * @author solo6975
- * @version 0.1
  * @since 2021/10/23 21:11
  */
-class SocketInputStream extends InputStream {
+public class SocketInputStream extends InputStream {
     final WrappedSocket socket;
 
     final ByteBuffer buf;
@@ -54,13 +53,14 @@ class SocketInputStream extends InputStream {
     public SocketInputStream(WrappedSocket socket, int bufPos) {
         this.socket = socket;
         buf = socket.buffer();
-        buf.position(bufPos);
-        buf.compact();
+        int pos = buf.position();
+        buf.position(bufPos).limit(pos);
+        buf.compact().flip();
         dataRemain = buf.remaining();
     }
 
     public SocketInputStream init(String s, int readTimeout) {
-        this.readTimeout = readTimeout;
+        this.readTimeout = readTimeout <= 0 ? 5000 : readTimeout;
         dataRemain = (s == null ? Integer.MAX_VALUE : (dataRemain + Long.parseLong(s)));
         return this;
     }
@@ -76,11 +76,11 @@ class SocketInputStream extends InputStream {
     }
 
     private boolean fill() throws IOException {
-        int prevPos = buf.position();
-        if (prevPos > markLimit) markLimit = 0;
+        int pos = buf.position();
+        if (pos > markLimit) markLimit = 0;
         if (markLimit == 0) {
             buf.clear();
-            prevPos = 0;
+            pos = 0;
         } else buf.limit(buf.capacity());
 
         int read;
@@ -102,7 +102,7 @@ class SocketInputStream extends InputStream {
         } else {
             dataRemain -= read;
             buf.limit(buf.position());
-            buf.position(prevPos);
+            buf.position(pos);
             return true;
         }
     }
@@ -138,11 +138,10 @@ class SocketInputStream extends InputStream {
     @Override
     public void mark(int limit) {
         if (limit <= 0 || markLimit == -1) return;
-        if (limit > buf.capacity()) {
-            throw new InvalidMarkException();
-            //buf = socket.ensureBufferCapacity(limit);
+        if (limit > buf.capacity()) throw new InvalidMarkException();
+        if (buf.position() > 0) {
+            buf.compact().flip();
         }
-        if (buf.position() > 0) buf.compact();
         buf.mark();
         markLimit = limit;
     }
@@ -160,6 +159,8 @@ class SocketInputStream extends InputStream {
 
     void pass(int bufPos) {
         buf.position(bufPos);
-        if (markLimit == 0) buf.compact();
+        if (markLimit == 0) {
+            buf.compact().flip();
+        }
     }
 }

@@ -27,13 +27,12 @@
 package ilib.util;
 
 import ilib.api.ItemColor;
+
 import net.minecraft.client.renderer.color.IItemColor;
 import net.minecraft.item.ItemStack;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class ItemTinter implements IItemColor {

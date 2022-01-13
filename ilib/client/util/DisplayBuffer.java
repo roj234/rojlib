@@ -27,12 +27,13 @@ package ilib.client.util;
 
 import ilib.ATHandler;
 import ilib.ImpLib;
-import net.minecraft.client.renderer.*;
-import net.minecraft.client.renderer.vertex.VertexFormat;
-import net.minecraft.client.renderer.vertex.VertexFormatElement;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
+
+import net.minecraft.client.renderer.*;
+import net.minecraft.client.renderer.vertex.VertexFormat;
+import net.minecraft.client.renderer.vertex.VertexFormatElement;
 
 import java.util.List;
 import java.util.function.Consumer;

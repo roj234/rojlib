@@ -25,11 +25,12 @@
  */
 package ilib.client.renderer.mirror.render;
 
+import org.lwjgl.opengl.GL11;
+
 import net.minecraft.client.renderer.GLAllocation;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.culling.ClippingHelper;
 import net.minecraft.util.math.MathHelper;
-import org.lwjgl.opengl.GL11;
 
 import java.nio.FloatBuffer;
 

@@ -87,7 +87,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
         if (free == null)
             throw new IOException("Client closed");
 
-        if (!lock.tryTransfer(-2, 100, TimeUnit.MILLISECONDS)) {
+        if (!lock.tryTransfer(-2, 500, TimeUnit.MILLISECONDS)) {
             throw new IOException("异步处理超时");
         }
     }
@@ -95,7 +95,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
     public void sendMessage(int clientId, String message) throws IOException, InterruptedException {
         if (clientId == this.clientId) throw new IllegalStateException("你不能对自己说");
         if (message.length() > 255) throw new IllegalStateException("消息过长");
-        if (!lock.tryTransfer(new Object[] { clientId, message.getBytes(StandardCharsets.UTF_8) }, 400, TimeUnit.MILLISECONDS)) {
+        if (!lock.tryTransfer(new Object[] { clientId, message.getBytes(StandardCharsets.UTF_8) }, 500, TimeUnit.MILLISECONDS)) {
             throw new IOException("异步处理超时");
         }
     }
@@ -105,7 +105,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
             throw new IOException("Client closed");
 
         try {
-            if (!lock.tryTransfer(portMapId, 3000, TimeUnit.MILLISECONDS)) {
+            if (!lock.tryTransfer(portMapId, 30000, TimeUnit.MILLISECONDS)) {
                 throw new IOException("异步处理超时");
             }
         } catch (InterruptedException ignored) {} // should not happen
@@ -123,7 +123,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
 
         thePair.setClient(null);
         try {
-            if (!lock.tryTransfer(thePair, 1000, TimeUnit.MILLISECONDS)) {
+            if (!lock.tryTransfer(thePair, 30000, TimeUnit.MILLISECONDS)) {
                 throw new IOException("异步处理超时");
             }
         } catch (InterruptedException ignored) {} // should not happen
@@ -143,6 +143,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
 
         WrappedSocket ch = new MSSSocket(c, NIOUtil.fd(c));
 
+        block:
         try {
             LoginResult p = clientLogin(ch);
             if (p == null) return;
@@ -256,7 +257,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                         }
 
                         rb.flip();
-                        if (rb.limit() > 0 && writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
+                        if (rb.limit() > 0 && writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
                             msgbox = "操作超时";
                             lock.poll();
                             break;
@@ -283,7 +284,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                         break;
                     case P_LOGOUT:
                         syncPrint("连接断开");
-                        break conn;
+                        break block;
                     case P_CHANNEL_CLOSE:
                         if(rb.position() < 9) {
                             except = 9;
@@ -412,18 +413,18 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
           .put(idBytes)
           .put(tokenBytes)
           .flip();
-        if(writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
+        if(writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
             throw new SocketTimeoutException("登录发送超时");
         }
         rb.clear();
 
-        int heart = TIMEOUT_TRANSFER;
+        long heart = TIMEOUT;
         int except = 1;
 
         while (!shutdown) {
             int read;
             if ((read = ch.read( except - rb.position())) == 0 && rb.position() < except) {
-                LockSupport.parkNanos(50);
+                LockSupport.parkNanos(1000000);
                 if (heart-- < 0) {
                     throw new SocketTimeoutException("等待登录回复超时");
                 }
@@ -521,6 +522,9 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                     PipeIOThread.syncRegister(AEClient.this, pair, this);
                 } catch (Exception e) {
                     e.printStackTrace();
+                    try {
+                        c.close();
+                    } catch (IOException ignored) {}
                 }
             }
 

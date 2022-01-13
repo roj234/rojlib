@@ -31,7 +31,15 @@ import ilib.util.CraftingMap.StackComparator;
 import ilib.util.PinyinUtil;
 import ilib.util.Reflection;
 import ilib.util.Registries;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
+import roj.collect.FilterList;
+import roj.collect.IntSet;
+import roj.collect.MyHashMap;
+import roj.collect.UnsortedMultiKeyMap;
+import roj.concurrent.OperationDone;
+import roj.math.MathUtils;
+import roj.util.Helpers;
+
 import net.minecraft.block.Block;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.enchantment.Enchantment;
@@ -49,17 +57,11 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.text.TextFormatting;
+
 import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.OreIngredient;
 import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
-import roj.collect.FilterList;
-import roj.collect.IntSet;
-import roj.collect.MyHashMap;
-import roj.collect.UnsortedMultiKeyMap;
-import roj.concurrent.OperationDone;
-import roj.math.MathUtils;
-import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -262,7 +264,7 @@ public class MCHooks {
             if (tag.hasKey("display", 10)) {
                 NBTTagCompound tag1 = tag.getCompoundTag("display");
                 if (tag1.hasKey("color", 3)) {
-                    list.add(TextHelperM.translate("item.color", String.format("#%06X", tag1.getInteger("color"))));
+                    list.add(TextHelper.translate("item.color", String.format("#%06X", tag1.getInteger("color"))));
                 }
 
                 if (tag1.hasKey("Lore", 9)) {
@@ -276,13 +278,13 @@ public class MCHooks {
             }
 
             if (tag.getBoolean("Unbreakable")) {
-                list.add(TextHelperM.translate("item.unbreakable"));
+                list.add(TextHelper.translate("item.unbreakable"));
             }
 
             if (tag.hasKey("CanDestroy", 9)) {
                 tagList = tag.getTagList("CanDestroy", 8);
                 if (!tagList.isEmpty()) {
-                    list.add(TextHelperM.translate("item.canBreak"));
+                    list.add(TextHelper.translate("item.canBreak"));
 
                     for (i = 0; i < tagList.tagCount(); ++i) {
                         Block block = Block.getBlockFromName(tagList.getStringTagAt(i));
@@ -298,7 +300,7 @@ public class MCHooks {
             if (tag.hasKey("CanPlaceOn", 9)) {
                 tagList = tag.getTagList("CanPlaceOn", 8);
                 if (!tagList.isEmpty()) {
-                    list.add(TextHelperM.translate("item.canPlace"));
+                    list.add(TextHelper.translate("item.canPlace"));
 
                     for (i = 0; i < tagList.tagCount(); ++i) {
                         Block block = Block.getBlockFromName(tagList.getStringTagAt(i));
@@ -313,7 +315,7 @@ public class MCHooks {
         }
 
         if (stack.isItemDamaged()) {
-            list.add(TextHelperM.translate("item.durability", stack.getMaxDamage() - stack.getItemDamage(), stack.getMaxDamage()));
+            list.add(TextHelper.translate("item.durability", stack.getMaxDamage() - stack.getItemDamage(), stack.getMaxDamage()));
         }
 
         list.add(String.valueOf(Item.REGISTRY.getNameForObject(stack.getItem())));

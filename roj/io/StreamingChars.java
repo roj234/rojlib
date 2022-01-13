@@ -37,17 +37,14 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/6/15 20:30
  */
 public class StreamingChars implements CharSequence {
     InputStream in;
     ByteList buffer;
-    public    CharList cl;
-    protected int      bufOff;
+    public CharList cl;
+    protected int bufOff;
     int max = -1;
 
     public StreamingChars() {
@@ -82,13 +79,13 @@ public class StreamingChars implements CharSequence {
     @Override
     public char charAt(int index) {
         ensureRead(index + 1);
+        if (index >= cl.length()) return '\0';
         return cl.charAt(index);
     }
 
     public void ensureRead(int required) {
         int start = bufOff;
-        if(start < 0)
-            return;
+        if(start < 0) return;
         ByteList buf = this.buffer;
         try {
             int read;
@@ -96,7 +93,11 @@ public class StreamingChars implements CharSequence {
                 read = buffer.readStream(in, MathUtils.clamp(in.available(), 128, 4096));
                 if (read >= 0) {
                     if (read > 0) {
-                        start += ByteList.decodeUTFPartialExternal(start, -1, cl, buf);
+                        start = ByteList.decodeUTFPartialExternal(0, -1, cl, buf);
+                        if (start > 0) {
+                            System.arraycopy(buf.list, start, buf.list, 0, buf.wIndex() - start);
+                            buf.wIndex(buf.wIndex() - start);
+                        }
                     }
 
                     LockSupport.parkNanos(50);

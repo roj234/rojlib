@@ -49,31 +49,27 @@ public class StringResponse implements Response {
         this(c, "text/plain");
     }
 
-    public static StringResponse forError(Code code, Object e) {
-        if(code == null) {
+    public static StringResponse forError(int code, Object e) {
+        if(code == 0) {
             code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : Code.INTERNAL_ERROR;
         }
 
         StringWriter sw = new StringWriter();
         sw.write("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><title>");
-        sw.write(code.toString());
+        sw.write(Code.getDescription(code));
         sw.write("</title></head><body><div><i><h2>出现了错误:</h2></i><p><h3>");
-        sw.write(code.toString());
+        sw.write(Code.getDescription(code));
         sw.write("</h3><h3><font color='red'>");
 
-        String desc = code.description();
-        if (desc == null) {
-            if (e != null) {
-                if(e instanceof Throwable) {
-                    sw.write("以下为错误详细信息: <br/><pre>");
-                    ((Throwable)e).printStackTrace(new PrintWriter(sw));
-                    sw.write("</pre>");
-                } else {
-                    sw.write(e.toString());
-                }
+        if (e != null) {
+            if(e instanceof Throwable) {
+                sw.write("以下为错误详细信息: <br/><pre>");
+                ((Throwable)e).printStackTrace(new PrintWriter(sw));
+                sw.write("</pre>");
+            } else {
+                sw.write(e.toString());
             }
-        } else
-            sw.write(desc);
+        }
 
         sw.write("</font></h3></p><p>您可以点击<a href='javascript:location.reload();'>重试</a>.</p><br/><hr/>" +
                 "<div>Asyncorized_MC's HTTP(S) Server 1.2.0</div></div><!-- padding for ie --><!-- padding for ie -->" +

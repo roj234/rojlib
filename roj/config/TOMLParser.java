@@ -47,8 +47,9 @@ import static roj.config.JSONParser.*;
  * @author Roj234
  * @since 2022/1/6 19:49
  */
-public class TOMLParser implements Parser {
+public class TOMLParser extends Parser {
     public static final int LENIENT = 1, INLINE = 2;
+    static final int NO_NUMBER = 64;
     static final short eq = 18, dot = 19, dlmb = 20, drmb = 21;
 
     public static void main(String[] args) throws ParseException, IOException {
@@ -56,29 +57,19 @@ public class TOMLParser implements Parser {
     }
 
     public static CMapping parse(CharSequence string) throws ParseException {
-        return parse((TOMLLexer) new TOMLLexer().init(string), 0);
+        return parse((TOMLLexer) new TOMLLexer().init(string), 0, Serializers.DEFAULT);
     }
 
     public static CMapping parse(CharSequence string, int flag) throws ParseException {
-        return parse((TOMLLexer) new TOMLLexer().init(string), flag);
-    }
-
-    @Override
-    public CEntry Parse(CharSequence string, int flag) throws ParseException {
-        return parse(string, flag);
-    }
-
-    @Override
-    public String format() {
-        return "TOML";
+        return parse((TOMLLexer) new TOMLLexer().init(string), flag, Serializers.DEFAULT);
     }
 
     /**
      * @param flag LENIENT 允许修改行内表
      */
-    public static CMapping parse(TOMLLexer wr, int flag) throws ParseException {
+    public static CMapping parse(TOMLLexer wr, int flag, Serializers ser) throws ParseException {
         CMapping map = new CMapping(new MyHashMap<>());
-        CMapping root = tomlObject(wr, flag);
+        CMapping root = tomlObject(wr, flag, ser);
         if (root.size() > 0) map.put("<root>", root);
 
         o:
@@ -93,7 +84,7 @@ public class TOMLParser implements Parser {
                     w = wr.nextWord();
                     if (w.type() != right_m_bracket)
                         unexpected(wr, w.val(), "]");
-                    put(wr, flag | INLINE);
+                    put(wr, flag | INLINE, ser);
                     break;
                 case dlmb:
                     w = wr.nextWord();
@@ -103,7 +94,7 @@ public class TOMLParser implements Parser {
                     w = wr.nextWord();
                     if (w.type() != drmb)
                         unexpected(wr, w.val(), "]");
-                    wr.m.getOrCreateList(wr.k).add(tomlObject(wr, flag));
+                    wr.m.getOrCreateList(wr.k).add(tomlObject(wr, flag, ser));
                     break;
                 case WordPresets.EOF:
                     break o;
@@ -112,8 +103,8 @@ public class TOMLParser implements Parser {
             }
         }
 
-        if (map.containsKey("==", Type.STRING)) {
-            Serializer<?> des = Serializers.find(map.getString("=="));
+        if (ser != null && map.containsKey("==", Type.STRING)) {
+            Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
                 return new CObject<>(map.raw(), des);
             }
@@ -126,7 +117,7 @@ public class TOMLParser implements Parser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    private static CList tomlFlowArray(TOMLLexer wr, int flag) throws ParseException {
+    private static CList tomlFlowArray(TOMLLexer wr, int flag, Serializers ser) throws ParseException {
         CTOMLFxList list = new CTOMLFxList();
         list.fixed = true;
 
@@ -147,7 +138,7 @@ public class TOMLParser implements Parser {
                 default:
                     wr.retractWord();
                     more = false;
-                    list.add(tomlRead(wr, flag));
+                    list.add(tomlRead(wr, flag, ser));
                     break;
             }
         }
@@ -160,16 +151,16 @@ public class TOMLParser implements Parser {
      * {xxx = yyy, zzz = uuu}
      */
     @SuppressWarnings("fallthrough")
-    private static CMapping tomlObject(TOMLLexer wr, int flag) throws ParseException {
+    private static CMapping tomlObject(TOMLLexer wr, int flag, Serializers ser) throws ParseException {
         CMapping map = (flag & INLINE) != 0 ? new CTOMLFxMap() : new CMapping(new MyHashMap<>());
 
         boolean more = false;
 
         o:
         while (true) {
-            wr.noNumberCheck = true;
+            wr.flag |= NO_NUMBER;
             Word w = wr.nextWord();
-            wr.noNumberCheck = false;
+            wr.flag -= NO_NUMBER;
             switch (w.type()) {
                 case right_l_bracket:
                     break o;
@@ -204,12 +195,12 @@ public class TOMLParser implements Parser {
             w = wr.nextWord();
             if (w.type() != eq) unexpected(wr, w.val(), "=");
 
-            put(wr, flag & ~INLINE);
+            put(wr, flag & ~INLINE, ser);
             if ((flag & (INLINE | LENIENT)) == 0) wr.ensureLineEnd();
         }
 
-        if (map.containsKey("==", Type.STRING)) {
-            Serializer<?> des = Serializers.find(map.getString("=="));
+        if (ser != null && map.containsKey("==", Type.STRING)) {
+            Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
                 return new CObject<>(map.raw(), des);
             }
@@ -218,9 +209,10 @@ public class TOMLParser implements Parser {
         return map;
     }
 
-    private static void put(TOMLLexer wr, int flag) throws ParseException {
+    private static void put(TOMLLexer wr, int flag, Serializers ser) throws ParseException {
         CEntry entry;
-        CEntry me = wr.m.raw().putIfAbsent(wr.k, entry = ((flag & INLINE) != 0) ? tomlObject(wr, flag & ~INLINE) : tomlRead(wr, flag));
+        CEntry me = wr.m.raw().putIfAbsent(wr.k, entry = ((flag & INLINE) != 0) ?
+                tomlObject(wr, flag & ~INLINE, ser) : tomlRead(wr, flag, ser));
         if (me != null) {
             if (entry.getType() != me.getType())
                 throw wr.err("覆盖已存在的 " + me.toShortJSONb());
@@ -230,19 +222,19 @@ public class TOMLParser implements Parser {
         }
     }
 
-    private static CEntry tomlRead(TOMLLexer wr, int flag) throws ParseException {
+    private static CEntry tomlRead(TOMLLexer wr, int flag, Serializers ser) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case left_l_bracket:
-                return tomlObject(wr, flag | INLINE);
+                return tomlObject(wr, flag | INLINE, ser);
             case left_m_bracket:
-                return tomlFlowArray(wr, flag);
+                return tomlFlowArray(wr, flag, ser);
             case WordPresets.STRING:
             case WordPresets.LITERAL: {
                 int i = wr.lastWord;
                 if(wr.nextWord().type() == eq) {
                     wr.index = i;
-                    return tomlObject(wr, flag);
+                    return tomlObject(wr, flag, ser);
                 } else {
                     wr.retractWord();
                     return CString.valueOf(w.val());
@@ -271,10 +263,39 @@ public class TOMLParser implements Parser {
         }
     }
 
+    public TOMLParser() {}
+
+    public TOMLParser(Serializers ser) {
+        this.ser = ser;
+    }
+
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        TOMLLexer l = new TOMLLexer();
+        l.init(string);
+        l.flag = (byte) flag;
+
+        CEntry ce = tomlRead(l, (byte) flag, ser);
+
+        if ((flag & NO_EOF) == 0 && l.nextWord().type() != WordPresets.EOF) {
+            throw l.err("期待 /EOF");
+        }
+        return ce;
+    }
+
+    @Override
+    public String format() {
+        return "TOML";
+    }
+
+    public static Builder<TOMLParser> builder() {
+        return new Builder<>(new TOMLParser(new Serializers()));
+    }
+
     static class TOMLLexer extends AbstLexer {
         static final IBitSet LITERAL_SPECIAL = LongBitSet.from("+-#.=\"'[]{} \n\r\t");
 
-        boolean noNumberCheck;
+        byte flag;
 
         @Override
         public Word readWord() throws ParseException {
@@ -329,7 +350,7 @@ public class TOMLParser implements Parser {
                                         break;
                                 }
                                 return readSymbol();
-                            } else if (!noNumberCheck && NUMBER.contains(c)) {
+                            } else if ((flag & NO_NUMBER) == 0 && NUMBER.contains(c)) {
                                 if (in.length() - i > 5 && in.charAt(i+3) == '-') {
                                     Word_L w = formRFCTime();
                                     if (w != null) return w;
@@ -358,16 +379,17 @@ public class TOMLParser implements Parser {
             CharList v = this.found;
             v.clear();
 
-            int end3Amount = 0;
-            boolean slash = false;
-            boolean quoted = true;
-            boolean skip = false;
-
             while (i < in.length()) {
                 char c = in.charAt(i);
                 if (c != '\r' && c != '\n') break;
                 i++;
             }
+
+            int end3Amount = 0;
+            boolean slash = false;
+            boolean quoted = true;
+            boolean skip = false;
+
             while (i < in.length()) {
                 char c = in.charAt(i++);
                 if (slash) {
@@ -410,11 +432,6 @@ public class TOMLParser implements Parser {
             }
 
             return v.toString();
-        }
-
-        @Override
-        protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
-            return super.formNumberClip(flag, temp, negative);
         }
 
         @Override
@@ -526,8 +543,7 @@ public class TOMLParser implements Parser {
         String   k;
         CMapping m;
         public void dotName(String v, CMapping map, int flag) throws ParseException {
-            boolean prevNNC = noNumberCheck;
-            noNumberCheck = true;
+            this.flag |= NO_NUMBER;
             CMapping lv = map;
             loop:
             do {
@@ -569,13 +585,22 @@ public class TOMLParser implements Parser {
                     break;
                 }
             } while (true);
-            noNumberCheck = prevNNC;
+            this.flag -= NO_NUMBER;
             this.k = v;
             this.m = lv;
         }
 
-        public void ensureLineEnd() {
-            // todo why require this?
+        public void ensureLineEnd() throws ParseException {
+            CharSequence in = this.input;
+            int i = this.index;
+            while (i < in.length()) {
+                char c = in.charAt(i);
+                if (c == '\r' || c == '\n') {
+                    break;
+                }
+                if (!WHITESPACE.contains(c)) throw err("我们建议你换个行");
+            }
+            index = i;
         }
     }
 }

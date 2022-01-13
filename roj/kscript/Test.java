@@ -78,7 +78,7 @@ public class Test {
         root.define("timer", new KFuncNative() {
             @Override
             public KType invoke(@Nonnull IObject $this, ArgList param) {
-                System.out.println("距离上次调用: " + TextUtil.getScaledNumber(System.currentTimeMillis() - last) + "MS");
+                System.out.println("距离上次调用: " + TextUtil.scaledNumber(System.currentTimeMillis() - last) + "MS");
                 last = System.currentTimeMillis();
                 return KUndefined.UNDEFINED;
             }

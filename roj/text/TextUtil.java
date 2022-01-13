@@ -90,11 +90,11 @@ public class TextUtil {
         return sb;
     }
 
-    public static String scaledDouble(double d) {
-        return scaledDouble(d, 5);
+    public static String toFixed(double d) {
+        return toFixed(d, 5);
     }
 
-    public static String scaledDouble(double d, int accurate) {
+    public static String toFixed(double d, int accurate) {
         String db = Double.toString(d);
         if (db.length() > 5) {
             int dot = db.lastIndexOf('.');
@@ -199,9 +199,9 @@ public class TextUtil {
                 || (c >= 0xFF00 && c <= 0xFFEF); // FF00..FFEF
     }
 
-    public static String getScaledNumber(long number) {
+    public static String scaledNumber(long number) {
         if (number < 0)
-            return "-" + getScaledNumber(-number);
+            return "-" + scaledNumber(-number);
         if (number >= 1000000) {
             if (number >= 1000000000) {
                 return String.valueOf(number / 1000000000) + '.' + number % 1000000000 / 10000000 + 'G';
@@ -237,9 +237,13 @@ public class TextUtil {
 
     public static StringBuilder dumpBytes(StringBuilder sb, byte[] b, int off, int len) {
         if (b.length - off < len) {
-            System.err.println("Index out of bounds: len+" + (len - b.length + off));
             len = b.length - off;
+            if (len <= 0) {
+                off = 0;
+                len = b.length;
+            }
         }
+        if (off >= len) return sb;
         off &= ~31;
         printOff(sb, off);
         while (true) {
@@ -369,7 +373,7 @@ public class TextUtil {
         }
     }
 
-    public static String concat(String[] args, char splitChar) {
+    public static String join(String[] args, char splitChar) {
         if (args.length == 0) return "";
         int i = args.length - 1;
         for (String arg : args) {
@@ -387,7 +391,7 @@ public class TextUtil {
         return new String(tmp);
     }
 
-    public static String concat(String[] args, String splSeq) {
+    public static String join(String[] args, String splSeq) {
         if (args.length == 0) return "";
         int i = splSeq.length() * (args.length - 1);
         for (String arg : args) {

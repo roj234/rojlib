@@ -202,12 +202,13 @@ public class ControllHelper {
         DamageSource source = DamageSource.causeMobDamage(entity);
 
         // find entity on eyes.
-        Entity target = EntityHelper.getNearestEntity(entity.world, entity, EntityHelper.getEntitiesInRange(entity, 3, 2, 3, (entity) -> entity.isEntityInvulnerable(source)));
+        Entity target = EntityHelper.getNearestWatching(entity.world, entity, EntityHelper.getEntitiesInRange(entity, 3, 2, 3, (entity) -> entity.isEntityInvulnerable(source)));
 
         if(target == null) return;
 
         // okay, calculate the blocks.
-        RayTraceResult result = EntityHelper.myRayTrace(entity.world, entity.posX + direction.x, entity.posY + direction.y, entity.posZ + direction.z, entity.posX + direction.x * 4, entity.posY + direction.y * 4, entity.posZ + direction.z * 4);
+        RayTraceResult result = EntityHelper.rayTraceBlock(entity.world, new roj.math.Vec3d(entity.posX + direction.x, entity.posY + direction.y, entity.posZ + direction.z),
+                                                           new roj.math.Vec3d(entity.posX + direction.x * 4, entity.posY + direction.y * 4, entity.posZ + direction.z * 4), 0);
         PlayerUtil.broadcastAll(result == null ? "~null~" : result.toString());
 
         if (result != null && entity.getDistanceSq(result.getBlockPos()) > entity.getDistanceSq(target)) {

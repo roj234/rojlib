@@ -42,6 +42,11 @@ import ilib.util.ItemUtils;
 import ilib.util.NBTType;
 import ilib.util.RecipeUtil;
 import ilib.util.Registries;
+import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import stanhebben.zenscript.annotations.ZenClass;
+import stanhebben.zenscript.annotations.ZenMethod;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -53,6 +58,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagString;
+
 import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
@@ -62,10 +68,6 @@ import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.registries.IForgeRegistry;
 import net.minecraftforge.registries.IForgeRegistryEntry;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import stanhebben.zenscript.annotations.ZenClass;
-import stanhebben.zenscript.annotations.ZenMethod;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -74,7 +76,8 @@ import java.util.Map;
 
 
 @ZenClass("mods.implib.ILUtil")
-@ZenRegister/**
+@ZenRegister
+/**
  * No description provided
  *
  * @author Roj234
@@ -211,7 +214,7 @@ public final class ILCrt {
 
     @ZenMethod
     public static void removeRecipeByModId(String modId) {
-        RecipeUtil.removeRecipe(modId);
+        RecipeUtil.removeRecipeByModId(modId);
     }
 
 
@@ -270,7 +273,7 @@ public final class ILCrt {
     private static ItemStack addNS(ItemStack stack) {
         NBTTagCompound tag = stack.hasTagCompound() ? stack.getTagCompound() : new NBTTagCompound();
         NBTTagCompound names = tag.getCompoundTag("display");
-        NBTTagList lores = names.getTagList("Lore", NBTType.STRING.ordinal());
+        NBTTagList lores = names.getTagList("Lore", NBTType.STRING);
         lores.appendTag(new NBTTagString("\u00a73ERROR!"));
         lores.appendTag(new NBTTagString("\u00a73invalid crafting!"));
 

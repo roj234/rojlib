@@ -27,7 +27,6 @@ package roj.net.cross;
 
 import roj.collect.IntMap;
 import roj.concurrent.task.ITaskNaCl;
-import roj.config.data.CList;
 import roj.config.word.AbstLexer;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
@@ -36,6 +35,7 @@ import roj.net.WrappedSocket;
 import roj.net.misc.PacketBuffer;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
+import roj.net.misc.TaskManager;
 import roj.util.Helpers;
 
 import java.io.EOFException;
@@ -45,7 +45,6 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -66,16 +65,18 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
         NetworkUtil.MSSLoadClientRSAKey(new File("ae_client.key"));
     }
 
-    IntMap<Client> clients;
+    IntMap<InetSocketAddress> clients;
     char[] portMap;
 
     PacketBuffer kick;
+    TaskManager tm;
 
     public AEHost(SocketAddress server, String id, String token) {
         super(server, id, token);
         this.clients = new IntMap<>();
         this.portMap = new char[1];
         this.kick = new PacketBuffer();
+        this.tm = new TaskManager();
     }
 
     public void kickSome(int... clientIds) {
@@ -106,6 +107,7 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
 
         WrappedSocket ch = new MSSSocket(c, NIOUtil.fd(c));
 
+        block:
         try {
             if (!hostLogin(ch, "阿伟死了么")) return;
 
@@ -121,12 +123,12 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
             while (!shutdown) {
                 int read;
                 if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
-                    LockSupport.parkNanos(50);
+                    LockSupport.parkNanos(10000);
                     intr:
                     if (rb.position() == 0) {
                         if (!kick.take(rb)) break intr;
                         rb.flip();
-                        if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
+                        if (writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
                             syncPrint(this + ": PBW超时");
                             break;
                         }
@@ -143,8 +145,8 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                     case P_FAIL:
                         break;
                     case P_LOGOUT:
-                        syncPrint(" 连接断开");
-                        break conn;
+                        syncPrint("连接断开");
+                        break block;
                     case PS_CHANNEL_ACTIVE:
                         Pipe pair = socketsById.get(rb.getInt(5));
                         new AsyncConnector(portMap[((SpAttach) pair.att).portId], pair).run();
@@ -155,9 +157,11 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                             continue;
                         }
                         pair = socketsById.remove(rb.getInt(5));
-                        pair.release();
-                        syncPrint((rb.getInt(1) < 0 ? "服务端" : "客户端") + "关闭了频道 #" +
-                                          Integer.toHexString(rb.getInt(5)));
+                        if (pair != null) {
+                            pair.release();
+                            syncPrint((rb.getInt(1) < 0 ? "服务端" : "客户端") +
+                                     "关闭了频道 #" + Integer.toHexString(rb.getInt(5)));
+                        }
                         break;
                     case P_CHANNEL_RESULT:
                         if(rb.position() < 46) {
@@ -174,35 +178,32 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
 
                         int clientId = rb.getInt();
 
-                        if (socketsById.size() > MAX_CHANNEL_COUNT) {
+                        if (socketsById.size() > MAX_CHANNEL_COUNT || !clients.containsKey(clientId)) {
                             rb.clear();
                             rb.put((byte) P_CHANNEL_OPEN_FAIL).putInt(clientId);
-                            byte[] reasonBytes = "这边开启的频道过多".getBytes(StandardCharsets.UTF_8);
+                            byte[] reasonBytes = (clients.containsKey(clientId) ? "这边开启的频道过多" : "未知的客户端")
+                                    .getBytes(StandardCharsets.UTF_8);
                             rb.put((byte) reasonBytes.length).put(reasonBytes).flip();
                             syncPrint(" 客户端 #" + clientId + " 开启频道被阻止");
-
-                            if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                                syncPrint(" COF 超时");
-                                break conn;
-                            }
                         } else {
                             long pipeId = rb.getLong();
 
                             rb.clear();
                             rb.put((byte) PS_CHANNEL_OPEN).putInt(clientId)
                               .put(ciphers, 32, 32).flip();
-                            if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
-                                syncPrint(" CO 超时");
-                                break conn;
-                            }
 
                             SpAttach att = new SpAttach();
                             socketsById.put(att.channelId = (int) (pipeId >>> 32),
                                             pair = pipeLogin(pipeId, ciphers));
+                            att.clientId = clientId;
                             att.portId = (byte) portId;
                             pair.att = att;
-                            new AsyncConnector(portMap[portId], pair).run();
-                            clients.get(clientId).channels.add(pair);
+                            tm.pushTask(new AsyncConnector(portMap[portId], pair));
+                        }
+
+                        if (writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
+                            syncPrint(" COF 超时");
+                            break conn;
                         }
                         break;
                     case PH_CLIENT_LOGIN:
@@ -215,15 +216,13 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                             continue;
                         }
                         rb.flip().position(1);
-                        Client cli = new Client();
-                        cli.clientId = rb.getInt();
+                        clientId = rb.getInt();
                         char port = rb.getChar();
                         byte[] ip = new byte[rb.get() & 0xFF];
                         rb.get(ip);
-                        cli.address = new InetSocketAddress(InetAddress.getByAddress(ip), port);
-                        cli.channels = new ArrayList<>();
-                        clients.put(cli.clientId, cli);
-                        syncPrint(" 客户端 #" + cli.clientId + " 上线了, 它来自 " + cli.address);
+                        InetSocketAddress address = new InetSocketAddress(InetAddress.getByAddress(ip), port);
+                        clients.put(clientId, address);
+                        syncPrint(" 客户端 #" + clientId + " 上线了, 它来自 " + address);
                         break;
                     case PH_CLIENT_LOGOUT:
                         if(rb.position() < 5) {
@@ -231,8 +230,9 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                             continue;
                         }
                         clientId = rb.getInt(1);
-                        clients.remove(clientId);
-                        syncPrint(" 客户端 #" + clientId + " 下线了.");
+                        if (clients.remove(clientId) != null) {
+                            syncPrint(" 客户端 #" + clientId + " 下线了.");
+                        }
                         break;
                     case P_MSG:
                         if (rb.position() < 6) {
@@ -312,18 +312,18 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
             rb.putChar(c);
         }
         rb.flip();
-        if(writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
+        if(writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
             throw new IOException("登录发送超时");
         }
         rb.clear();
 
-        int heart = TIMEOUT_TRANSFER;
+        int heart = TIMEOUT;
         int except = 1;
 
         while (!shutdown) {
             int read;
             if ((read = ch.read( except - rb.position())) == 0 && rb.position() < except) {
-                LockSupport.parkNanos(50);
+                LockSupport.parkNanos(1000_000);
                 if (heart-- < 0) {
                     throw new IOException("等待登录回复超时");
                 }
@@ -365,21 +365,6 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
             }
         }
         return false;
-    }
-
-    static final class Client {
-        int               clientId;
-        List<Pipe>        channels;
-        InetSocketAddress address;
-
-        @Override
-        public String toString() {
-            return "Client{" + address + '#' + clientId + '}';
-        }
-
-        public void serialize(CList lx) {
-
-        }
     }
 
     static final Consumer<Pipe> PIPE_INVALID_CB = pipe -> {

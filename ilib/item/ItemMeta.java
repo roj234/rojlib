@@ -31,11 +31,14 @@ import ilib.api.registry.IRegistry;
 import ilib.api.registry.Indexable;
 import ilib.api.registry.Propertied;
 import ilib.api.registry.RegistryBuilder;
-import ilib.client.util.model.TypedModelHelper;
+import ilib.misc.model.TypedModelHelper;
+import ilib.util.Hook;
+
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
+
 import net.minecraftforge.client.model.ModelLoader;
 
 import javax.annotation.Nonnull;
@@ -45,7 +48,8 @@ import javax.annotation.Nonnull;
  *
  * @param <T> The MI-Enumeration
  * @see RegistryBuilder
- *//**
+ */
+/**
  * No description provided
  *
  * @author Roj234
@@ -85,7 +89,7 @@ public class ItemMeta<T extends Indexable> extends ItemBase {
      */
     public ItemMeta(String name, String texturePath, IRegistry<T> wrapper) {
         this(name, wrapper);
-        ImpLib.HOOK.add(ilib.util.hook.Hook.MODEL_REGISTER, () -> registerModel(texturePath));
+        ImpLib.HOOK.add(Hook.MODEL_REGISTER, () -> registerModel(texturePath));
     }
 
     /**

@@ -32,6 +32,7 @@ import ilib.api.energy.IMEnergy;
 import ilib.api.tile.ToolTarget;
 import ilib.collect.UUIDList;
 import ilib.tile.TileBase;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityItem;
@@ -47,21 +48,19 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
+
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.oredict.OreDictionary;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/22 19:42
  */
 public final class ItemUtils {
-
     public static Item stringToItem(String data) {
         Item item = null;
         int index = data.indexOf(":");
@@ -122,10 +121,6 @@ public final class ItemUtils {
         return stack;
     }
 
-    public static String itemToString(Item i) {
-        return i.getRegistryName().toString();
-    }
-
     /**
      * String to block like mi:test@0
      *
@@ -159,7 +154,6 @@ public final class ItemUtils {
         return is.getItem().getRegistryName() + "@" + is.getItemDamage() + nbtStr;
 
     }
-
 
     public static void dropStacks(World world, List<ItemStack> stacks, BlockPos pos) {
         stacks.forEach((ItemStack stack) -> dropStack(world, stack, pos));

@@ -29,6 +29,11 @@ import ilib.Config;
 import ilib.client.renderer.mirror.portal.Portal;
 import ilib.client.renderer.mirror.render.world.chunk.MyRenderChunk;
 import ilib.client.util.DisplayListRenderer;
+import org.lwjgl.opengl.GL11;
+import roj.asm.nixim.Copy;
+import roj.collect.MyHashMap;
+import roj.math.MathUtils;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -49,11 +54,8 @@ import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.Chunk;
+
 import net.minecraftforge.client.MinecraftForgeClient;
-import org.lwjgl.opengl.GL11;
-import roj.asm.nixim.Copy;
-import roj.collect.MyHashMap;
-import roj.math.MathUtils;
 
 import javax.annotation.Nullable;
 import java.util.*;

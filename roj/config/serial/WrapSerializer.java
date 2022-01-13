@@ -33,6 +33,8 @@ import roj.config.data.CObject;
  * @since 2022/1/11 17:45
  */
 public class WrapSerializer implements Serializer<Object> {
+    public static final WrapSerializer INSTANCE = new WrapSerializer();
+
     @Override
     public Object deserialize(CObject<?> o) {
         return o.get("").unwrap();

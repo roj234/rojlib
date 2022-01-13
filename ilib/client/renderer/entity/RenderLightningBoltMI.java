@@ -33,6 +33,7 @@
 package ilib.client.renderer.entity;
 
 import ilib.entity.EntityLightningBoltMI;
+
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;

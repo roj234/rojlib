@@ -49,7 +49,6 @@ public class StreamLikeSequence implements CharSequence {
     WrappedSocket socket;
     long time;
     int maxRecv;
-    boolean eof;
 
     public StreamLikeSequence(boolean async) {
         this.async = async;
@@ -61,9 +60,8 @@ public class StreamLikeSequence implements CharSequence {
 
     public StreamLikeSequence init(WrappedSocket socket, int timeout, int maxRecv) {
         if (!async || time == 0)
-            this.time = System.currentTimeMillis() + timeout;
+            this.time = System.currentTimeMillis() + (timeout <= 0 ? 5000 : timeout);
         this.socket = socket;
-        this.eof = false;
         this.maxRecv = maxRecv;
         return this;
     }
@@ -84,7 +82,7 @@ public class StreamLikeSequence implements CharSequence {
     }
 
     private void fill(int want) {
-        if(eof) return;
+        if(maxRecv <= 0) return;
         ByteBuffer buf = socket.buffer();
         try {
             while (buf.position() < want) {
@@ -102,7 +100,7 @@ public class StreamLikeSequence implements CharSequence {
                     LockSupport.parkNanos(20);
                 } else if (read < 0) {
                     if(read == -1) {
-                        eof = true;
+                        maxRecv = -1;
                         return;
                     }
                     throw new SocketException("socket.read() got " + read);

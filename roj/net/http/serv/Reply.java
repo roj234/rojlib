@@ -26,88 +26,94 @@
 package roj.net.http.serv;
 
 import roj.net.WrappedSocket;
-import roj.net.http.Action;
 import roj.net.http.Code;
+import roj.net.http.Headers;
 import roj.net.http.Shared;
 import roj.text.CharList;
 import roj.util.ByteList;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 public class Reply {
     static final String CRLF = "\r\n";
 
-    @Nonnull
-    private final Code     code;
-    @Nonnull
-    private final Response response;
-    private final boolean  headerOnly;
+    private final ByteList hdr;
+    private       Response response;
+    private final Headers  headers;
 
-    public Reply(Code code, Response response) {
-        this(code, response, -1);
+    public Reply(int code) {
+        this.hdr = new ByteList(128);
+        this.hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ')
+                .putAscii(Code.getDescription(code)).putAscii("\r\nServer: Async/2.0\r\n");
+        this.headers = new Headers();
     }
 
-    public Reply(Code code, Response response, int action) {
-        this.code = Objects.requireNonNull(code, "code");
-        this.response = Objects.requireNonNull(response, "response");
-        this.headerOnly = (action == Action.HEAD);
+    public Reply(int code, Response response) {
+        this(code);
+        this.response = response;
+    }
+
+    public Reply(String text) {
+        this.hdr = new ByteList(128);
+        this.hdr.putAscii("HTTP/1.1 200 OK\r\nServer: Async/2.0\r\n");
+        this.response = new StringResponse(text);
+        this.headers = new Headers();
+    }
+
+    public void setResponse(Response response) {
+        this.response = response;
+    }
+
+    public void header(String k, String v) {
+        headers.put(k, v);
+    }
+
+    public Headers getHeaders() {
+        return headers;
+    }
+
+    public ByteList getRawHeaders() {
+        return hdr;
     }
 
     private ByteBuffer buf = null;
 
-    protected ByteBuffer headers() {
-        Object[] data = Shared.SYNC_BUFFER.get();
-
-        CharList header = (CharList) data[2];
-        header.ensureCapacity(100);
-        header.clear();
-
-        try {
-            response.writeHeader(header.append("HTTP/1.1 ").append(code.toString()).append(CRLF)
-                    .append("Server: Async/1.2").append(CRLF));
-
-            ByteList bl = new ByteList(header.append(CRLF).length());
-
-            ByteList.writeUTF(bl, header, -1);
-
-            return ByteBuffer.wrap(bl.list, 0, bl.wIndex());
-        } finally {
-            if (header.arrayLength() > Shared.MAX_CHAR_BUFFER_CAPACITY)
-                data[0] = new CharList(Shared.MAX_CHAR_BUFFER_CAPACITY);
-            else
-                header.clear();
-        }
-    }
-
     public void prepare() throws IOException {
-        response.prepare();
-        if (buf == null)
-            buf = headers();
-        else
-            buf.position(0);
+        if (response != null) response.prepare();
+        if (buf == null) {
+            CharList tmp = (CharList) Shared.SYNC_BUFFER.get()[2];
+            tmp.ensureCapacity(100);
+            tmp.clear();
+
+            if (response != null) {
+                try {
+                    response.writeHeader(tmp);
+                } finally {
+                    tmp.clear();
+                }
+            }
+            headers.encode(tmp);
+            ByteList.writeUTF(hdr, tmp.append("\r\n"), -1);
+            buf = ByteBuffer.wrap(hdr.list, 0, hdr.wIndex());
+        }
+        else buf.position(0);
     }
 
     public boolean send(WrappedSocket channel) throws IOException {
-        if (buf == null)
-            throw new IllegalStateException();
+        if (buf == null) throw new IllegalStateException();
 
         if (buf.remaining() > 0) {
             if (channel.write(buf) <= 0)
                 return true;
         }
 
-        if (!headerOnly) {
-            if (response.send(channel))
-                return true;
-        }
+        if (response != null && response.send(channel)) return true;
 
         return !channel.dataFlush();
     }
 
     public void release() throws IOException {
-        response.release();
+        if (response != null) response.release();
     }
 }

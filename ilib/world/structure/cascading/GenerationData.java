@@ -26,6 +26,7 @@
 package ilib.world.structure.cascading;
 
 import ilib.world.structure.cascading.api.IGenerationData;
+
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 

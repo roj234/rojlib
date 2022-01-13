@@ -107,7 +107,7 @@ public final class SchematicLoader {
             idMap.put(-1, Blocks.AIR);
 
             int i;
-            NBTTagList blockData = nbt.getTagList("BlockData", NBTType.COMPOUND.ordinal());
+            NBTTagList blockData = nbt.getTagList("BlockData", NBTType.COMPOUND);
             for (i = 0; i < blockData.tagCount(); ++i) {
                 NBTTagCompound tag = blockData.getCompoundTagAt(i);
                 idMap.put(tag.getInteger("p"), Registries.block().getValue(new ResourceLocation(tag.getString("m"), tag.getString("b"))));

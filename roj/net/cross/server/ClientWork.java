@@ -121,9 +121,9 @@ final class ClientWork extends Stated {
                     except = 1;
 
                     int target = rb.getInt(1);
+                    if (target == W.clientId) break;
                     Worker to = W.room.clients.get(target);
                     if (null == to) {
-                        syncPrint(W + ": 2 无效 " + target);
                         write1(ch, (byte) P_FAIL);
                         break;
                     }

@@ -26,10 +26,13 @@
 package roj.io;
 
 import roj.collect.MyHashSet;
+import roj.io.source.RandomAccessFileSource;
+import roj.io.source.Source;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
 import java.io.*;
+import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.CRC32;
@@ -56,7 +59,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         return b;
     }
 
-    private final RandomAccessFile file;
+    private final Source file;
     private final Deflater deflater;
     private final List<byte[]> attrList;
     private final ByteList buffer;
@@ -67,15 +70,15 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     private final EEOF eof;
 
     public ZipFileWriter(File file) throws IOException {
-        this(file, Deflater.DEFAULT_COMPRESSION, true);
+        this(new RandomAccessFileSource(file), Deflater.DEFAULT_COMPRESSION, true);
     }
 
     public ZipFileWriter(File file, boolean checkDuplicate) throws IOException {
-        this(file, Deflater.DEFAULT_COMPRESSION, checkDuplicate);
+        this(new RandomAccessFileSource(file), Deflater.DEFAULT_COMPRESSION, checkDuplicate);
     }
 
-    public ZipFileWriter(File file, int compressionLevel, boolean checkDuplicate) throws IOException {
-        this.file = new RandomAccessFile(file, "rw");
+    public ZipFileWriter(Source file, int compressionLevel, boolean checkDuplicate) throws IOException {
+        this.file = file;
         this.file.seek(0);
         this.deflater = new Deflater(compressionLevel, true);
         this.attrList = new ArrayList<>();
@@ -122,10 +125,10 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
           .putShortLE(ByteList.byteCountUTF8(name))
           .putShortLE(0)
           .putUTFData(name);
-        long beginOffset = file.getFilePointer();
+        long beginOffset = file.position();
         file.write(buf.list, 0, buf.wIndex());
         buf.clear();
-        long endOffset = file.getFilePointer();
+        long endOffset = file.position();
 
         int cSize;
         if (method == ZipEntry.DEFLATED) {
@@ -146,9 +149,11 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
             file.write(data.list, data.arrayOffset(), data.limit());
         }
 
-        long curr = file.getFilePointer();
+        long curr = file.position();
         file.seek(beginOffset + 18);
-        file.writeInt(Integer.reverseBytes(cSize));
+        buf.putIntLE(cSize);
+        file.write(buf.list, 0, 4);
+        buf.clear();
         file.seek(curr);
 
         boolean attrZip64 = beginOffset >= U32_MAX;
@@ -178,12 +183,27 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     }
 
     public void write(MutableZipFile owner, MutableZipFile.EFile entry) throws IOException {
-        if (this.entry != null)
-            closeEntry();
-        long entryBeginOffset = file.getFilePointer();
+        if (this.entry != null) closeEntry();
+        long entryBeginOffset = file.position();
         if (duplicate != null && !duplicate.add(entry.name))
             throw new ZipException("Duplicate entry " + entry.name);
-        owner.getFile().getChannel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), file.getChannel());
+        WritableByteChannel channel = file.channel();
+        if (channel != null) {
+            owner.getFile().getChannel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), channel);
+        } else {
+            RandomAccessFile src = owner.getFile();
+            src.seek(entry.startPos());
+            int max = Math.max(4096, buffer.list.length);
+            buffer.ensureCapacity(max);
+
+            byte[] list = buffer.list;
+            int len = (int) (entry.endPos() - entry.startPos());
+            while (len > 0) {
+                src.readFully(list, 0, max);
+                file.write(list, 0, max);
+                len -= max;
+            }
+        }
 
         long delta = entryBeginOffset - entry.startPos();
         // zip64 supporting
@@ -222,7 +242,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
           .putShortLE(ByteList.byteCountUTF8(ze.getName()))
           .putShortLE(extra == null ? 0 : extra.length)
           .putUTFData(ze.getName());
-        entryBeginOffset = file.getFilePointer();
+        entryBeginOffset = file.position();
         file.write(buffer.list, 0, buffer.wIndex());
         if (extra != null)
             file.write(extra);
@@ -231,11 +251,12 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     }
 
     @Override
+    @Deprecated
     public void write(int b) throws IOException {
         if (entry == null) throw new ZipException("Entry closed");
         crc.update(b);
         if (entry.getMethod() == ZipEntry.STORED) {
-            file.write((byte) b);
+            file.write(new byte[] {(byte) b}, 0, 1);
         } else {
             throw new IOException("Are you **?");
         }
@@ -265,7 +286,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
     }
 
     public void closeEntry() throws IOException {
-        RandomAccessFile f = this.file;
+        Source f = this.file;
 
         if (entry.getMethod() != ZipEntry.STORED) {
             f.seek(entryEndOffset);
@@ -286,7 +307,7 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
                 throw new ZipException("Zip64(of LOC header) is required, while ZFW not(want to) support it yet(for space reason)");
         }
 
-        long curr = f.getFilePointer();
+        long curr = f.position();
         int cSize = (int) (curr - entryEndOffset);
         if (curr - entryEndOffset > U32_MAX)
             throw new ZipException("Zip64(of LOC header) is required, while ZFW not(want to) support it yet(for space reason)");
@@ -329,22 +350,22 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         if (finish) return;
         if (entry != null)
             closeEntry();
-        RandomAccessFile f = this.file;
-        long cDirOffset = f.getFilePointer();
+        Source f = this.file;
+        long cDirOffset = f.position();
         List<byte[]> attrs = this.attrList;
         for (int i = 0; i < attrs.size(); i++) {
             f.write(attrs.get(i));
         }
 
         eof.cDirOffset = cDirOffset;
-        eof.cDirLen = f.getFilePointer() - cDirOffset;
-        MutableZipFile.writeEOF(buffer, eof, attrs.size(), f.getFilePointer());
+        eof.cDirLen = f.position() - cDirOffset;
+        MutableZipFile.writeEOF(buffer, eof, attrs.size(), f.position());
         f.write(buffer.list, 0, buffer.wIndex());
 
         attrList.clear();
         deflater.end();
-        if (f.length() != f.getFilePointer()) // truncate too much
-            f.setLength(f.getFilePointer());
+        if (f.length() != f.position()) // truncate too much
+            f.setLength(f.position());
         f.close();
 
         finish = true;

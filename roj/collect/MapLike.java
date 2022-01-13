@@ -1,9 +1,9 @@
 /*
- * This file is a part of MoreItems
+ * This file is a part of MI
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2022 Roj234
+ * Copyright (c) 2021 Roj234
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,35 +23,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.config.serial;
+package roj.collect;
 
-import roj.config.data.CEntry;
-import roj.config.data.CObject;
-
-import java.util.List;
+import java.util.Iterator;
 
 /**
- * @author Roj233
- * @since 2022/1/11 17:45
+ * @author Roj234
+ * @since  2020/8/14 17:07
  */
-class ListSerializer implements Serializer<List<?>> {
-    @Override
-    public List<?> deserialize(CObject<?> object) {
-        return (List<?>) object.get("").unwrap();
+interface MapLike<T extends MapLikeEntry<T>> {
+    default void removeEntry0(T t) {
+        throw new UnsupportedOperationException();
     }
 
-    @Override
-    public void serialize(CObject<?> base, List<?> object) {
-        base.put("", CEntry.wrap(object));
-    }
-
-    @Override
-    public List<?> deserializeRc(CEntry o) {
-        return (List<?>) o.unwrap();
-    }
-
-    @Override
-    public CEntry serializeRc(List<?> t) {
-        return CEntry.wrap(t);
+    default Iterator<T> entryIterator() {
+        return null;
     }
 }

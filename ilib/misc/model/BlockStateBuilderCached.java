@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package ilib.client.util.model;
+package ilib.misc.model;
 
 import ilib.ImpLib;
 import roj.io.BoxFile;
@@ -34,10 +34,7 @@ import java.io.File;
 import java.io.IOException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/2 2:19
  */
 public final class BlockStateBuilderCached extends BlockStateBuilder {
@@ -88,14 +85,13 @@ public final class BlockStateBuilderCached extends BlockStateBuilder {
 
     public static BlockStateBuilderCached from(String cacheId, String json, boolean isItem) {
         if(cache == null) {
-            File cacheFile = new File(cacheFl, "bsb.tmp");
+            File cacheFile = new File(cacheFl, "ILBlockState.bin");
             try {
                 cache = new BoxFile(cacheFile);
                 cache.load();
                 String v = cache.getUTF("version");
                 if(!ImpLib.MODEL_HASH.equals(v)) {
-                    if(v != null)
-                        cache.clear();
+                    if(v != null) cache.clear();
                     cache.append("version", ByteList.encodeUTF(ImpLib.MODEL_HASH));
                 }
             } catch (IOException e) {

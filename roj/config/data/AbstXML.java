@@ -332,7 +332,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return result;
     }
 
-    public void iterate(Consumer<AbstXML> x) {
+    public final void iterate(Consumer<AbstXML> x) {
         x.accept(this);
         for (int i = 0; i < children.size(); i++) {
             children.get(i).iterate(x);
@@ -371,7 +371,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         }
     }
 
-    public XElement getByTagName(String tag) {
+    public final XElement getByTagName(String tag) {
         for (int i = 0; i < children.size(); i++) {
             AbstXML xml = children.get(i);
             if (!xml.isString() && xml.asElement().tag.equals(tag)) {
@@ -381,7 +381,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return null;
     }
 
-    public List<XElement> getsByTagName(String tag) {
+    public final List<XElement> getsByTagName(String tag) {
         List<XElement> result = new ArrayList<>();
 
         for (int i = 0; i < children.size(); i++) {
@@ -392,6 +392,23 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         }
 
         return result;
+    }
+
+    public final List<XElement> getAllByTagName(String tag) {
+        List<XElement> result = new ArrayList<>();
+        getAllByTagName(tag, result);
+        return result;
+    }
+
+    public final void getAllByTagName(String tag, List<XElement> collector) {
+        for (int i = 0; i < children.size(); i++) {
+            AbstXML xml = children.get(i);
+            if (!xml.isString()) {
+                XElement elem = xml.asElement();
+                if (elem.tag.equals(tag)) collector.add(elem);
+                elem.getAllByTagName(tag, collector);
+            }
+        }
     }
 
     protected Map<String, CEntry> attributes;

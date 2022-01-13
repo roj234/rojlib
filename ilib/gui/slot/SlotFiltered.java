@@ -26,6 +26,7 @@
 package ilib.gui.slot;
 
 import ilib.api.IItemFilter;
+
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 

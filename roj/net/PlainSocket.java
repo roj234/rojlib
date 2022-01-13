@@ -68,11 +68,22 @@ public class PlainSocket implements WrappedSocket {
     public int read() throws IOException {
         return read(rBuf.remaining() + 1);
     }
+//
+//    @Override
+//    public int read(ByteBuffer dst) throws IOException {
+//        if(socket.isClosed()) return -1;
+//
+//        int read;
+//        do {
+//            read = NIOUtil.readToNativeBuffer(fd, dst,
+//                                              NIOUtil.SOCKET_FD);
+//        } while (read == -3 && !socket.isClosed());
+//        return read;
+//    }
 
     @Override
     public int read(int max) throws IOException {
-        if(socket.isClosed())
-            return -1;
+        if(socket.isClosed()) return -1;
 
         ByteBuffer buf = this.rBuf;
         if (buf.position() == buf.capacity()) {
@@ -132,14 +143,12 @@ public class PlainSocket implements WrappedSocket {
         int w;
         do {
             if (tmp != null) {
-                w = NIOUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(),
-                                   NIOUtil.SOCKET_FD);
+                w = NIOUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(), NIOUtil.SOCKET_FD);
                 if (w > 0) {
                     tmp.position(tmp.position() + w);
                 }
             } else {
-                w = NIOUtil.writeFromNativeBuffer(fd, src,
-                                                  NIOUtil.SOCKET_FD);
+                w = NIOUtil.writeFromNativeBuffer(fd, src, NIOUtil.SOCKET_FD);
             }
         } while (w == -3 && !socket.isClosed());
 
@@ -189,6 +198,11 @@ public class PlainSocket implements WrappedSocket {
     @Override
     public boolean shutdown() throws IOException {
         return dataFlush();
+    }
+
+    @Override
+    public boolean isOpen() {
+        return !socket.isClosed();
     }
 
     @Override

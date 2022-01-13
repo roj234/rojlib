@@ -31,10 +31,7 @@ import roj.text.JPinyin;
 import java.io.IOException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/1 23:19
  */
 public final class PinyinUtil {

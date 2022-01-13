@@ -32,7 +32,7 @@ import roj.util.Int2IntFunction;
 import javax.annotation.Nonnull;
 import java.util.*;
 
-public class Int2IntBiMap implements CItrMap<Int2IntMap.Entry> {
+public class Int2IntBiMap implements MapLike<Int2IntMap.Entry> {
     public void setNullId(int nullId) {
         this.nullId = nullId;
     }

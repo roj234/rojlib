@@ -39,8 +39,8 @@ public final class Shared extends ThreadLocal<Object[]> {
     public static final String _SHOULD_EOF = new String();
     public static final String _ERROR = new String();
 
-    public static final int MAX_CHAR_BUFFER_CAPACITY    = 262144;
-    public static final int WRITE_MAX                   = 131072;
+    public static final int MAX_CHAR_BUFFER_CAPACITY    = 65536;
+    public static final int WRITE_MAX                   = 32768;
 
     public static final ThreadLocal<Object[]> SYNC_BUFFER = new Shared();
 

@@ -423,6 +423,13 @@ public class ByteList implements DataInput {
         return this;
     }
 
+    public ByteList putAscii(String s) {
+        ensureCapacity(wIndex + s.length());
+        s.getBytes(0, s.length(), list, wIndex);
+        wIndex += s.length();
+        return this;
+    }
+
     public ByteList put(ByteBuffer buf) {
         int rem = buf.remaining();
         ensureCapacity(wIndex + rem);
@@ -804,6 +811,7 @@ public class ByteList implements DataInput {
         if (length == 0)
             return new WriteOnly();
         ByteList list = slice(rIndex, length);
+        list.rIndex = rIndex;
         rIndex += length;
         return list;
     }

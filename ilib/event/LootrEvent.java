@@ -27,6 +27,8 @@ package ilib.event;
 
 import ilib.block.BlockLootrChest;
 import ilib.tile.TileEntityLootrChest;
+import roj.collect.MyHashSet;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityMinecartContainer;
 import net.minecraft.entity.player.EntityPlayer;
@@ -36,12 +38,12 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
+
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import roj.collect.MyHashSet;
 
 /**
  * No description provided

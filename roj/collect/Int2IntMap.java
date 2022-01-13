@@ -32,7 +32,7 @@ import java.util.*;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
 
-public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
+public class Int2IntMap implements MapLike<Int2IntMap.Entry> {
     public int getOrDefault(int key, int def) {
         Entry entry = getEntry(key);
         return entry == null ? def : entry.v;
@@ -42,7 +42,7 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
         return size == 0;
     }
 
-    public static class Entry implements EntryIterable<Entry> {
+    public static class Entry implements MapLikeEntry<Entry> {
         protected int k;
         public int v;
 
@@ -384,7 +384,7 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
     }
 
     static class KeyItr extends MapItr<Entry> implements PrimitiveIterator.OfInt {
-        KeyItr(Entry[] entries, CItrMap<Entry> map) {
+        KeyItr(Entry[] entries, MapLike<Entry> map) {
             super(entries, map);
         }
 
@@ -400,7 +400,7 @@ public class Int2IntMap implements CItrMap<Int2IntMap.Entry> {
     }
 
     static class ValItr extends MapItr<Entry> implements PrimitiveIterator.OfInt {
-        ValItr(Entry[] entries, CItrMap<Entry> map) {
+        ValItr(Entry[] entries, MapLike<Entry> map) {
             super(entries, map);
         }
 

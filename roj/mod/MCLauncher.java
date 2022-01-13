@@ -963,7 +963,7 @@ public class MCLauncher extends JFrame {
             }
 
             try (FileOutputStream fos = new FileOutputStream(new File(installDir, ver + ".json"))) {
-                ByteList.writeUTF(bl, instConf.get("versionInfo").toShortJSON(), -1);
+                ByteList.writeUTF(bl, instConf.get("versionInfo").toShortJSONb(), -1);
                 bl.writeToStream(fos);
                 bl.clear();
             }

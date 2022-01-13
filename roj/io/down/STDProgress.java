@@ -51,7 +51,7 @@ public class STDProgress implements IProgressHandler {
         CharList finish = TextUtil.repeat(tx, '█');
         CharList unFinish = TextUtil.repeat(PROGRESS_SIZE - tx, '─');
 
-        sb.append(TextUtil.scaledDouble(percent)).append("%├").append(finish);
+        sb.append(TextUtil.toFixed(percent)).append("%├").append(finish);
         sb.append(unFinish);
         return sb.append('┤').toString();
     }
@@ -105,7 +105,7 @@ public class STDProgress implements IProgressHandler {
                 CmdUtil.clearLine();
                 CmdUtil.fg(CmdUtil.Color.GREEN, false);
 
-                System.out.print("Avg: " + TextUtil.getScaledNumber(speedByByte).toUpperCase() + "B/S");
+                System.out.print("Avg: " + TextUtil.scaledNumber(speedByByte).toUpperCase() + "B/S");
             }
 
             CmdUtil.reset();

@@ -29,12 +29,14 @@ package ilib.gui.comp.display;
 import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
+
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
 
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -102,7 +104,7 @@ public class ComFluidTank extends BaseComponent {
     public void getDynamicToolTip(List<String> toolTip, int mouseX, int mouseY) {
         FluidStack stack = tank.getFluid();
         if (stack == null || stack.amount == 0) {
-            toolTip.add(TextHelperM.translate("tooltip.empty"));
+            toolTip.add(TextHelper.translate("tooltip.empty"));
         } else {
             toolTip.add(stack.getFluid().getLocalizedName(stack));
             toolTip.add(tank.getFluidAmount() + " / " + tank.getCapacity() + "mb");

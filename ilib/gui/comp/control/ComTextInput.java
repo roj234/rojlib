@@ -28,13 +28,15 @@ package ilib.gui.comp.control;
 
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
-import ilib.util.TextHelperM;
-import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.renderer.GlStateManager;
+import ilib.util.TextHelper;
 import org.lwjgl.opengl.GL11;
 
+import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.renderer.GlStateManager;
+
 import javax.annotation.Nullable;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -63,7 +65,7 @@ public abstract class ComTextInput extends BaseComponent {
     public void onInit() {
         textField = new GuiTextField(0, owner.getFontRenderer(), xPos, yPos, width, height);
         if (label != null)
-            textField.setText(TextHelperM.translate(label));
+            textField.setText(TextHelper.translate(label));
 
         textField.setTextColor(0xFFFFFF);
         textField.setMaxStringLength(width);

@@ -42,7 +42,7 @@ import static roj.collect.IntMap.NOT_USING;
  * @version 0.1
  * @since 2021/6/18 10:35
  */
-public class HashBiMap<K, V> implements Flippable<K, V>, CItrMap<MyHashMap.Entry<K, V>> {
+public class HashBiMap<K, V> implements Flippable<K, V>, MapLike<MyHashMap.Entry<K, V>> {
     public static class Entry<K, V> extends MyHashMap.Entry<K, V> {
         protected Entry(K k, V v) {
             super(k, v);

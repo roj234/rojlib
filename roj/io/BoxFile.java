@@ -27,7 +27,7 @@ package roj.io;
 
 import roj.collect.LinkedMyHashMap;
 import roj.collect.Unioner.Range;
-import roj.text.CharList;
+import roj.text.UTFCoder;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
@@ -73,27 +73,7 @@ public class BoxFile implements Closeable {
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        File file = new File("t.bf");
-        BoxFile bf = new BoxFile(file);
-        bf.append("ETag", ByteList.encodeUTF("11111"));
-        bf.append("Last-Modified", ByteList.encodeUTF("ddddddddddddddd"));
-        System.out.println(bf.getUTF("Last-Modified"));
-        System.out.println(bf.getUTF("ETag"));
-        System.out.println("===========");
-        bf.load();
-        bf.append("ETag", ByteList.encodeUTF("222"));
-        bf.append("Last-Modified", ByteList.encodeUTF("dddddddddddddddddddddddddddddddddddddddd"));
-        System.out.println(bf.getUTF("Last-Modified"));
-        System.out.println(bf.getUTF("ETag"));
-        System.out.println("===========");
-        bf.load();
-        bf.remove("ETag");
-        System.out.println(bf.getUTF("Last-Modified"));
-        System.out.println(bf.getUTF("ETag"));
-        System.out.println("===========");
-    }
-
+    private final UTFCoder uc = new UTFCoder();
     private final LinkedMyHashMap<String, F> infoMap = new LinkedMyHashMap<>();
     private final RandomAccessFile rf;
     private long freeBytes;
@@ -157,8 +137,7 @@ public class BoxFile implements Closeable {
         long end = rf.length() - (freeBytes = rf.readLong());
         long pos = 12;
 
-        CharList tmp = new CharList(100);
-        ByteList bl = new ByteList(0);
+        ByteList bl = uc.byteBuf;
         while (pos < end) {
             int slen = rf.readChar();
             bl.ensureCapacity(slen);
@@ -166,14 +145,11 @@ public class BoxFile implements Closeable {
                 throw new EOFException("Truncated data #" + pos + " prev " + infoMap.lastEntry() + ", sl " + slen);
             }
             bl.wIndex(slen);
-            ByteList.decodeUTF(-1, tmp, bl);
-            String key = tmp.toString();
-            tmp.clear();
 
             pos += 2 + slen;
             slen = rf.readInt();
             F fe = new F(pos + 4, slen);
-            infoMap.put(key, fe);
+            infoMap.put(uc.decode(), fe);
 
             pos += 4 + slen;
             rf.seek(pos);
@@ -196,17 +172,17 @@ public class BoxFile implements Closeable {
     }
 
     public byte[] getBytes(String name) throws IOException {
-        ByteList bl = get(name, new ByteList());
-        if(bl == null)
-            return null;
+        uc.byteBuf.clear();
+        ByteList bl = get(name, uc.byteBuf);
+        if(bl == null) return null;
         return bl.getByteArray();
     }
 
     public String getUTF(String name) throws IOException {
-        ByteList bl = get(name, new ByteList());
-        if(bl == null)
-            return null;
-        return ByteList.readUTF(bl);
+        uc.byteBuf.clear();
+        ByteList bl = get(name, uc.byteBuf);
+        if(bl == null) return null;
+        return uc.decode(bl);
     }
 
     public long getOffset(String key) {
@@ -275,8 +251,8 @@ public class BoxFile implements Closeable {
             infoMap.put(name, new F(off + dataLen - list.wIndex(), list.wIndex()));
             rf.seek(off);
 
-            rf.writeShort(name.length());
-            ByteList li = ByteList.encodeUTF(name);
+            ByteList li = uc.encodeR(name);
+            rf.writeShort(li.wIndex());
             rf.write(li.list, 0, li.wIndex());
             rf.writeInt(list.wIndex());
         } else { // replace
@@ -326,14 +302,15 @@ public class BoxFile implements Closeable {
         F fe = infoMap.get(name);
         if(fe == null) { // append
             long off = rf.length() - freeBytes;
-            int dataLen = ByteList.byteCountUTF8(name) + 6;
-            infoMap.put(name, new F(off + dataLen, dataLen));
             rf.seek(off);
 
-            rf.writeShort(name.length());
-            ByteList li = ByteList.encodeUTF(name);
+            ByteList li = uc.encodeR(name);
+            rf.writeShort(li.wIndex());
             rf.write(li.list, 0, li.wIndex());
             rf.writeInt(0);
+
+            int dataLen = li.wIndex() + 6;
+            infoMap.put(name, new F(off + dataLen, dataLen));
 
             return stream = new RandomAccessOutputStream(name);
         } else { // replace

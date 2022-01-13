@@ -26,70 +26,77 @@
 package roj.net.http;
 
 import roj.config.ParseException;
-import roj.math.MathUtils;
 import roj.math.Version;
 import roj.net.Notify;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 15:30
  */
 public class HttpHead {
-    public final int code;
-    public final String version;
-    public final String codeString;
+    public final String[] abc;
+    public final boolean isRequest;
     public final Headers headers;
 
-    public HttpHead(String version, int code, String codeString, Headers headers) {
-        this.version = version;
-        this.code = code;
-        this.codeString = codeString;
+    public HttpHead(Headers headers, boolean request, String... abc) {
+        assert abc.length == 3;
+        this.abc = abc;
+        this.isRequest = request;
         this.headers = headers;
     }
 
+    public int getCode() {
+        if (isRequest) throw new IllegalStateException();
+        return Integer.parseInt(abc[1]);
+    }
+
+    public String getCodeString() {
+        if (isRequest) throw new IllegalStateException();
+        return abc[2];
+    }
+
+    public String getPath() {
+        if (!isRequest) throw new IllegalStateException();
+        return abc[1];
+    }
+
+    public String getMethod() {
+        if (!isRequest) throw new IllegalStateException();
+        return abc[0];
+    }
+
+    public String versionStr() {
+        return isRequest ? abc[2] : abc[0];
+    }
+
     public Version version() {
-        return new Version(version);
+        return new Version(isRequest ? abc[2] : abc[0]);
     }
 
     @Override
     public String toString() {
-        return "HttpHead{v='" + version + '\'' + ", code=" + code + ' ' + codeString + ", headers=" + headers + '}';
+        StringBuilder sb = new StringBuilder()
+                .append(abc[0]).append(' ').append(abc[1]).append(' ').append(abc[2])
+                .append("\r\n");
+        headers.encode(sb);
+        return sb.append("\r\n").toString();
     }
 
-    public static HttpHead parse(HttpLexer lexer, CharSequence action) throws ParseException {
+    public static HttpHead parse(HttpLexer lexer) throws ParseException {
         try {
-            String version = lexer.readHttpWord();
-            if (version == null || !version.startsWith("HTTP/")) {
-                throw lexer.err("Illegal header " + version);
-            }
+            String version_method = lexer.readHttpWord();
 
-            String code = lexer.readHttpWord();
-            int codeInt;
-            try {
-                codeInt = MathUtils.parseInt(code);
-            } catch (NumberFormatException e) {
-                throw lexer.err("Illegal code " + code);
-            }
-
+            String code_url = lexer.readHttpWord();
             lexer.index++;
-            String codeString = lexer.readLine();
+            String codeDesc_version = lexer.readLine();
 
-            Headers headers = new Headers();
-            while (true) {
-                String t = lexer.readHttpWord();
-                if (t == Shared._ERROR) {
-                    throw lexer.err("Unexpected " + t);
-                } else if (t == Shared._SHOULD_EOF) {
-                    break;
-                } else if (t == null) {
-                    break;
-                } else {
-                    headers.add(t, lexer.readHttpWord());
-                }
+            boolean request = false;
+            if (version_method == null || !version_method.startsWith("HTTP/")) {
+                if (!codeDesc_version.startsWith("HTTP/")) throw lexer.err("Illegal header " + version_method);
+                request = true;
             }
 
-            return new HttpHead(version.substring(version.indexOf(' ') + 1), codeInt, codeString, headers);
+            return new HttpHead(parseHeadFields(lexer), request, version_method.substring(version_method.indexOf(' ') + 1), code_url, codeDesc_version);
         } catch (Notify notify) {
             String code;
             switch (notify.code) {
@@ -105,5 +112,22 @@ public class HttpHead {
             }
             throw lexer.err(code, notify);
         }
+    }
+
+    public static Headers parseHeadFields(HttpLexer lexer) throws ParseException {
+        Headers headers = new Headers();
+        while (true) {
+            String t = lexer.readHttpWord();
+            if (t == Shared._ERROR) {
+                throw lexer.err("Unexpected " + t);
+            } else if (t == Shared._SHOULD_EOF) {
+                break;
+            } else if (t == null) {
+                break;
+            } else {
+                headers.add(t, lexer.readHttpWord());
+            }
+        }
+        return headers;
     }
 }

@@ -32,35 +32,11 @@ import net.minecraft.nbt.*;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
-public enum NBTType {
-    END(NBTTagEnd.class),
-    BYTE(NBTTagByte.class),
-    SHORT(NBTTagShort.class),
-    INT(NBTTagInt.class),
-    LONG(NBTTagLong.class),
-    FLOAT(NBTTagFloat.class),
-    DOUBLE(NBTTagDouble.class),
-    BYTE_ARRAY(NBTTagByteArray.class),
-    STRING(NBTTagString.class),
-    LIST(NBTTagList.class),
-    COMPOUND(NBTTagCompound.class),
-    INT_ARRAY(NBTTagIntArray.class);
-
-    private final Class<? extends NBTBase> clazz;
-
-    NBTType(NBTBase nbtBase) {
-        this(nbtBase.getClass());
-    }
-
-    NBTType(Class<? extends NBTBase> clazz) {
-        this.clazz = clazz;
-    }
+public class NBTType {
+    public static final int END = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, BYTE_ARRAY = 7, STRING = 8, LIST = 9, COMPOUND = 10, INT_ARRAY = 11;
 
     public static String betterRender(NBTBase tag) {
         StringBuilder sb;
@@ -70,23 +46,22 @@ public enum NBTType {
 
     public static void betterRender(NBTBase tag, StringBuilder sb) {
         switch (tag.getId()) {
-            case 1: // b
-            case 2: // s
-            case 3: // i
-            case 4: // l
-            case 5: // f
-            case 6: // d
+            case BYTE:
+            case SHORT:
+            case INT:
+            case LONG:
+            case FLOAT:
+            case DOUBLE:
                 sb.append("\u00a7b").append(tag);
                 break;
-            case 8: // s
+            case STRING:
                 sb.append("\u00a7a").append(tag);
                 break;
-
-            case 7: {// ba
-                byte[] byteArray = ((NBTTagByteArray) tag).getByteArray();
+            case BYTE_ARRAY: {
+                byte[] arr = ((NBTTagByteArray) tag).getByteArray();
                 sb.append("\u00a7c[");
-                if (byteArray.length != 0) {
-                    for (int i : byteArray) {
+                if (arr.length != 0) {
+                    for (int i : arr) {
                         sb.append("\u00a7d").append(i).append("\u00a7f,");
                     }
                     sb.delete(sb.length() - 3, sb.length());
@@ -94,7 +69,7 @@ public enum NBTType {
                 sb.append("\u00a7c]");
             }
             break;
-            case 9: { // list
+            case LIST: { // list
                 NBTTagList list = (NBTTagList) tag;
                 sb.append("\u00a7f[");
                 if (list.tagCount() != 0) {
@@ -107,7 +82,7 @@ public enum NBTType {
                 sb.append("\u00a7f]");
             }
             break;
-            case 10: { // compound
+            case COMPOUND: { // compound
                 NBTTagCompound compound = (NBTTagCompound) tag;
                 sb.append("\u00a7f{");
                 if (!compound.isEmpty()) {
@@ -122,11 +97,11 @@ public enum NBTType {
                 sb.append("\u00a7f}");
             }
             break;
-            case 11: { // ia
-                int[] intArray = ((NBTTagIntArray) tag).getIntArray();
+            case INT_ARRAY: { // ia
+                int[] arr = ((NBTTagIntArray) tag).getIntArray();
                 sb.append("\u00a7d[");
-                if (intArray.length != 0) {
-                    for (int i : intArray) {
+                if (arr.length != 0) {
+                    for (int i : arr) {
                         sb.append("\u00a7e").append(i).append("\u00a7f,");
                     }
                     sb.delete(sb.length() - 3, sb.length());
@@ -136,22 +111,6 @@ public enum NBTType {
             break;
             default:
                 throw new IllegalStateException("Unexpected value: " + tag.getId());
-        }
-    }
-
-    public Class<? extends NBTBase> getClazz() {
-        return this.clazz;
-    }
-
-    public boolean equals(int i) {
-        return i == this.ordinal();
-    }
-
-    public static Class<? extends NBTBase> getClass(int ord) {
-        try {
-            return values()[ord].getClazz();
-        } catch (ArrayIndexOutOfBoundsException e) {
-            throw new IllegalArgumentException("No NBTType for " + ord);
         }
     }
 }

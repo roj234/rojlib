@@ -27,6 +27,8 @@
 package ilib.util;
 
 import ilib.ImpLib;
+import roj.util.Helpers;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
@@ -42,20 +44,18 @@ import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.FMLCommonHandler;
-import roj.util.Helpers;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/22 19:45
  */
 public class PlayerUtil {

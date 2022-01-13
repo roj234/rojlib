@@ -33,10 +33,10 @@ import roj.text.CharList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2021/10/23 21:20
  */
 public final class Headers extends MyHashMap<CharSequence, String> {
@@ -145,5 +145,36 @@ public final class Headers extends MyHashMap<CharSequence, String> {
             if (c == '-') dlm = true;
         }
         return this.tmp;
+    }
+
+    public void encode(StringBuilder sb) {
+        for (Map.Entry<CharSequence, String> entry : entrySet()) {
+            sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
+            if (entry instanceof E) {
+                E e = (E) entry;
+                for (String add : e.all) {
+                    sb.append(entry.getKey()).append(": ").append(add).append("\r\n");
+                }
+            }
+        }
+    }
+
+    public void encode(CharList sb) {
+        for (Map.Entry<CharSequence, String> entry : entrySet()) {
+            sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
+            if (entry instanceof E) {
+                E e = (E) entry;
+                for (String add : e.all) {
+                    sb.append(entry.getKey()).append(": ").append(add).append("\r\n");
+                }
+            }
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        encode(sb);
+        return sb.toString();
     }
 }

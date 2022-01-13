@@ -165,7 +165,7 @@ public final class Shared {
             CMapping map = new CMapping();
             map.put("config", path);
             map.put("forgeMapping", isForgeMap);
-            ByteList.encodeUTF(map.toJSON()).writeToStream(fos);
+            ByteList.encodeUTF(map.toJSONb()).writeToStream(fos);
         } catch (IOException e) {
             CmdUtil.error("配置保存", e);
         }
@@ -264,7 +264,7 @@ public final class Shared {
             if(currentProject != null)
                 map.put("config", currentProject.name);
             map.put("forgeMapping", isForgeMap);
-            ByteList.encodeUTF(map.toJSON()).writeToStream(fos);
+            ByteList.encodeUTF(map.toJSONb()).writeToStream(fos);
         } catch (IOException e) {
             CmdUtil.error("配置保存", e);
         }

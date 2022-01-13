@@ -48,18 +48,10 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TextHelperM {
-    private static final char[] rainbowTooltip = new char[]{
-            'c', '6', 'e', 'a', 'b', '9', 'd'
-    };
-    private static final char[] sanic = new char[]{
-            '9', '9', '9', '9', 'f', '9', 'f', 'f', '9', 'f',
-            'f', '9', 'b', 'f', '7', '7', '7', '7', '7', '7',
-            '7', '7', '7', '7', '7', '7', '7', '7', '7', '7'};
-
+public class TextHelper {
     public static String translate(String text, Object... param) {
         if (ImpLib.isClient)
-            return _trCli(text, param).replace("\\n", "\n");
+            return _t(text, param).replace("\\n", "\n");
         return text.replace(".name", "");
     }
 
@@ -71,14 +63,8 @@ public class TextHelperM {
         return translate(flag ? "tooltip.true" : "tooltip.false", EmptyArrays.OBJECTS);
     }
 
-
     @SideOnly(Side.CLIENT)
-    public static String translateMc(String key, Object... par) {
-        return I18n.format(key, par);
-    }
-
-    @SideOnly(Side.CLIENT)
-    private static String _trCli(String text, Object[] obj) {
+    private static String _t(String text, Object[] obj) {
         text = I18n.format(text);
         for (int i = 0; i < obj.length; i++) {
             text = text.replace("$" + i + "$s", String.valueOf(obj[i]));
@@ -86,23 +72,23 @@ public class TextHelperM {
         return text;
     }
 
-    public static List<String> splitString(final FontRenderer fr, final String string, final int width) {
+    public static List<String> splitString(FontRenderer fr, CharSequence s, int maxWidth) {
         List<String> list = new ArrayList<>();
 
         StringBuilder sb = new StringBuilder();
 
-        int sumWidth = 0;
+        int width = 0;
 
         boolean isXJ = false;
         boolean isLarge = false;
 
-        for (int l = 0; l < string.length(); l++) {
-            char ch = string.charAt(l);
-            int charWidth = fr.getCharWidth(ch);
+        for (int l = 0; l < s.length(); l++) {
+            char c = s.charAt(l);
+            int charWidth = fr.getCharWidth(c);
             if (isXJ) {
                 isXJ = false;
-                if (ch != 'l' && ch != 'L') {
-                    if (ch == 'r' || ch == 'R') {
+                if (c != 'l' && c != 'L') {
+                    if (c == 'r' || c == 'R') {
                         isLarge = false;
                     }
                 } else {
@@ -110,27 +96,26 @@ public class TextHelperM {
                 }
             } else if (charWidth < 0) {
                 isXJ = true;
-            } else if (ch == '\n') {
-                sumWidth = width;
+            } else if (c == '\n') {
+                width = maxWidth + 1;
             } else {
-                sumWidth += charWidth;
+                width += charWidth;
                 if (isLarge) {
-                    ++sumWidth;
+                    ++width;
                 }
 
-                if (ch < 128 && !fr.getUnicodeFlag()) { // english char a-z
-                    sumWidth += charWidth;
+                if (c < 128 && !fr.getUnicodeFlag()) { // english char a-z
+                    width += charWidth;
                 }
             }
 
-            if (sumWidth > width) {
+            if (width > maxWidth) {
                 list.add(sb.toString());
                 sb.delete(0, sb.length());
-                sumWidth = 0;
-                if (ch != '\r' && ch != '\n')
-                    l--;
+                width = 0;
+                if (c != '\r' && c != '\n') l--;
             } else {
-                sb.append(ch);
+                sb.append(c);
             }
         }
 
@@ -140,6 +125,13 @@ public class TextHelperM {
     public static String getLangId() {
         return FMLCommonHandler.instance().getCurrentLanguage().toLowerCase();
     }
+
+    private static final char[] rainbowTooltip = new char[]{
+            'c', '6', 'e', 'a', 'b', '9', 'd'};
+    private static final char[] sonic          = new char[]{
+            '9', '9', '9', '9', 'f', '9', 'f', 'f', '9', 'f',
+            'f', '9', 'b', 'f', '7', '7', '7', '7', '7', '7',
+            '7', '7', '7', '7', '7', '7', '7', '7', '7', '7'};
 
     protected static String colorTooltip(char[] chars, String tip, long tick, float speed) {
         StringBuilder sb = new StringBuilder((int) (tip.length() * 3.2f));
@@ -153,7 +145,7 @@ public class TextHelperM {
     }
 
     public static String sonicTooltip(String tip, long tick) {
-        return colorTooltip(sanic, tip, tick, 1.5f);
+        return colorTooltip(sonic, tip, tick, 1.5f);
     }
 
     public static String sonicTooltip(String tip) {

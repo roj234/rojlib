@@ -32,8 +32,9 @@ import ilib.api.item.IShiftTooltip;
 import ilib.api.item.ITooltip;
 import ilib.util.Colors;
 import ilib.util.ItemNBT;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
 import ilib.util.energy.EnergyHelper;
+
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
@@ -45,6 +46,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.NonNullList;
 import net.minecraft.world.World;
+
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
@@ -53,7 +55,8 @@ import java.util.List;
 
 import static ilib.item.ItemBase.color;
 import static ilib.item.ItemBase.tips;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -83,7 +86,7 @@ public class ItemBlockMI extends ItemBlock {
 
             if (i instanceof IShiftTooltip) {
                 String z = I18n.format(tips.get(0));
-                TextHelperM.shiftLore(list, color.size() > 0 ? I18n.format(color.get(0)) + z : z);
+                TextHelper.shiftLore(list, color.size() > 0 ? I18n.format(color.get(0)) + z : z);
             } else {
                 String s, s2;
                 for (int j = 0; j < tips.size(); j++) {
@@ -137,7 +140,7 @@ public class ItemBlockMI extends ItemBlock {
     }
 
     public String getItemStackDisplayName(ItemStack stack) {
-        return TextHelperM.translate(this.getTranslationKey(stack)).trim();
+        return TextHelper.translate(this.getTranslationKey(stack)).trim();
     }
 
     @Override

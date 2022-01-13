@@ -38,8 +38,8 @@ import roj.text.CharList;
 public final class Tokenizer extends AbstLexer {
     public static final short SYMBOL = 15;
 
-    public Tokenizer init(CharSequence s) {
-        super.init(s);
+    public Tokenizer init(CharSequence seq) {
+        super.init(seq);
         return this;
     }
 

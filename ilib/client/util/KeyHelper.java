@@ -25,8 +25,9 @@
  */
 package ilib.client.util;
 
-import net.minecraft.client.Minecraft;
 import org.lwjgl.input.Keyboard;
+
+import net.minecraft.client.Minecraft;
 
 /**
  * No description provided

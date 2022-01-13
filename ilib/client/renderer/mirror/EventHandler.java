@@ -26,15 +26,17 @@
 package ilib.client.renderer.mirror;
 
 import ilib.client.renderer.mirror.portal.Portal;
+import roj.collect.MyHashSet;
+import roj.util.Helpers;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.math.AxisAlignedBB;
+
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.world.GetCollisionBoxesEvent;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import roj.collect.MyHashSet;
-import roj.util.Helpers;
 
 import java.util.Iterator;
 import java.util.Map;

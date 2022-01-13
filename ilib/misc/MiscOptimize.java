@@ -25,6 +25,8 @@
  */
 package ilib.misc;
 
+import roj.config.data.CMapping;
+
 import net.minecraft.block.Block;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -33,8 +35,8 @@ import net.minecraft.entity.ai.attributes.RangedAttribute;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.ResourceLocation;
+
 import net.minecraftforge.fml.common.registry.EntityRegistry;
-import roj.config.data.CMapping;
 
 import java.util.Arrays;
 

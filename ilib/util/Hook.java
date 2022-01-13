@@ -24,57 +24,51 @@
  * THE SOFTWARE.
  */
 
-package ilib.util.hook;
+package ilib.util;
 
 import roj.collect.MyHashMap;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class Hook {
     public static final String MODEL_REGISTER = "itemModelReg";
     public static final String LANGUAGE_RELOAD = "langReload";
 
-    private final Map<String, FunctionList> hooks = new MyHashMap<>();
+    private final Map<String, List<Runnable>> hooks = new MyHashMap<>();
 
-    public Hook() {
-    }
+    public Hook() {}
 
     public void add(String name, Runnable func) {
-        FunctionList list = this.hooks.get(name);
+        List<Runnable> list = hooks.get(name);
         if (list == null) {
-            list = new FunctionList(-1);
+            hooks.put(name, list = new ArrayList<>());
         }
         list.add(func);
-        this.hooks.put(name, list);
     }
 
     public void remove(String name) {
         this.hooks.remove(name);
     }
 
-    public boolean trigger(String name) {
-        FunctionList list = this.hooks.get(name);
-        if (list == null) {
-            return false;
+    public void trigger(String name) {
+        List<Runnable> list = this.hooks.get(name);
+        if (list == null) return;
+        for (int i = 0; i < list.size(); i++) {
+            list.get(i).run();
         }
-        if (list.call())
-            remove(name);
-        return true;
     }
 
     public void triggerOnce(String name) {
-        FunctionList list = this.hooks.get(name);
-        if (list == null) {
-            return;
+        List<Runnable> list = this.hooks.remove(name);
+        if (list == null) return;
+        for (int i = 0; i < list.size(); i++) {
+            list.get(i).run();
         }
-        list.call();
-        remove(name);
     }
 }

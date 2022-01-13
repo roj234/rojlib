@@ -34,17 +34,18 @@ import javax.annotation.Nonnull;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
  * @version 0.1
  * @since 2021/5/27 0:8
  */
-public class WeakMyHashMap<K,V> implements Map<K,V>, CItrMap<WeakMyHashMap.Entry<V>> {
+public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry<V>> {
     private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
-    protected static class Entry<V> extends WeakReference<Object> implements EntryIterable<Entry<V>> {
+    protected static class Entry<V> extends WeakReference<Object> implements MapLikeEntry<Entry<V>> {
         public Entry(ReferenceQueue<Object> queue, Object referent) {
             super(referent, queue);
         }

@@ -28,7 +28,6 @@ package roj.net.misc;
 import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 import roj.io.NIOUtil;
-import roj.util.Helpers;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -41,7 +40,7 @@ import java.util.Arrays;
  * @author Roj233
  * @since 2021/12/24 23:27
  */
-public class Pipe implements Runnable {
+public class Pipe {
     public Object att;
     protected SelectionKey upKey, downKey;
 
@@ -92,6 +91,10 @@ public class Pipe implements Runnable {
         this.toh.limit(0);
         this.toc = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
         this.toc.limit(0);
+    }
+
+    public final int transfer() throws IOException {
+        return transfer(false);
     }
 
     public final int transfer(boolean bufferOnly) throws IOException {
@@ -235,15 +238,6 @@ public class Pipe implements Runnable {
     }
 
     @Override
-    public final void run() {
-        try {
-            transfer(false);
-        } catch (Throwable e) {
-            Helpers.athrow(e);
-        }
-    }
-
-    @Override
     public String toString() {
         return "Pipe{" + "att=" + att + ", idle=" + idleTime + ", U=" + uploaded + ", D=" + downloaded + ", eof=" + eof + '}';
     }
@@ -279,6 +273,7 @@ public class Pipe implements Runnable {
 
         @Override
         final void doCipher() throws GeneralSecurityException {
+            System.out.println("DoCipher " + toc.limit() + " | " + toh.limit());
             ByteBuffer target = toh;
             ByteBuffer tmp = this.tmp;
             if (target.hasRemaining()) {

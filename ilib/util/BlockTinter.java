@@ -27,15 +27,14 @@
 package ilib.util;
 
 import ilib.api.BlockColor;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.color.IBlockColor;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class BlockTinter implements IBlockColor {

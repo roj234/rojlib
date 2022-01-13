@@ -32,11 +32,9 @@ import net.minecraft.item.ItemEnchantedBook;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class EnchantmentHelper extends net.minecraft.enchantment.EnchantmentHelper {
@@ -52,13 +50,10 @@ public class EnchantmentHelper extends net.minecraft.enchantment.EnchantmentHelp
     }
 
     public static boolean canStackEnchant(ItemStack stack, Enchantment ench) {
-        if (Items.ENCHANTED_BOOK == stack.getItem())
-            return true;
-        if (!ench.canApply(stack))
-            return false;
-        for (Enchantment enchCompare : net.minecraft.enchantment.EnchantmentHelper.getEnchantments(stack).keySet()) {
-            if (enchCompare != null && enchCompare != ench && !enchCompare.isCompatibleWith(ench))
-                return false;
+        if (Items.ENCHANTED_BOOK == stack.getItem()) return true;
+        if (!ench.canApply(stack)) return false;
+        for (Enchantment ench1 : net.minecraft.enchantment.EnchantmentHelper.getEnchantments(stack).keySet()) {
+            if (ench1 != null && ench1 != ench && !ench1.isCompatibleWith(ench)) return false;
         }
         return true;
     }

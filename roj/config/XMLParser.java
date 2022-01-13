@@ -30,6 +30,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
 import roj.config.data.*;
+import roj.config.serial.Serializers;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
@@ -38,24 +39,21 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Set;
 
+import static roj.config.JSONParser.NO_EOF;
 import static roj.config.JSONParser.unexpected;
 
 /**
  * XML - 可扩展标记语言（EXtensible Markup Language）
- * <BR>
- * 元数据（有关数据的数据）应当存储为属性，而数据本身应当存储为元素。
- * <p>
  * @author Roj234
  */
-public class XMLParser implements Parser {
-    public static final short
+public class XMLParser extends Parser {
+    static final short
             left_curly_bracket = 10,
             right_curly_bracket = 11,
             slash = 12, equ = 13, ask = 14,
@@ -66,37 +64,42 @@ public class XMLParser implements Parser {
     static {
         HTML_CLOSE_TAGS = new MyHashSet<>("meta", "link", "input", "img");
     }
+    public static final int KEEP_ENTITY = 1, LENIENT = 2;
 
     public static void main(String[] args) throws ParseException, IOException {
         System.out.print("XML = " + parse(IOUtil.readUTF(new File(args[0]))).toString());
     }
 
-    @Override
-    public CEntry Parse(CharSequence string, int flag) throws ParseException {
-        return parse(string).toJSON();
-    }
-
-    @Override
-    public String format() {
-        return "XML";
-    }
-
     public static XHeader parse(CharSequence string) throws ParseException {
-        return parse((XMLexer) new XMLexer().init(string));
+        return parse((XMLexer) new XMLexer().init(string), 0);
     }
 
-    public static XHeader parse(XMLexer wr) throws ParseException {
+    public static XHeader parse(CharSequence string, int flag) throws ParseException {
+        return parse((XMLexer) new XMLexer().init(string), flag);
+    }
+
+    public static XHeader parse(XMLexer wr, int flag) throws ParseException {
+        wr.flag = (byte) flag;
         XHeader ce = xmlHeader(wr);
-        if (wr.hasNext()) {
+        if ((flag & NO_EOF) == 0 && wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
         return ce;
     }
 
     public static XHeader xmlHeader(XMLexer wr) throws ParseException {
+        int begin = wr.index;
         Word w = wr.nextWord();
         if (w.type() == left_curly_bracket) {
-            except(wr, ask, "?");
+            w = wr.nextWord();
+            if (w.type() != ask) {
+                if ((wr.flag & LENIENT) == 0)
+                    unexpected(wr, w.val(), "?");
+                wr.index = begin;
+                XHeader h = new XHeader();
+                h.appendChild(xmlElement(wr));
+                return h;
+            }
             w = wr.nextWord();
             if (w.type() != WordPresets.LITERAL || !w.val().equals("xml")) {
                 unexpected(wr, w.val(), "xml");
@@ -216,7 +219,7 @@ public class XMLParser implements Parser {
                                     case namespace:
                                         if (!w.val().equals(name)) {
                                             ParseException e = wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
-                                            if(wr.lenient) {
+                                            if((wr.flag & LENIENT) != 0) {
                                                 System.out.println(e.toString());
                                                 wr.errorTag = w.val();
                                                 break o;
@@ -276,7 +279,7 @@ public class XMLParser implements Parser {
                     //}
                 }
 
-                if(!wr.lenient || wr.hasNext())
+                if((wr.flag & LENIENT) == 0 || wr.hasNext())
                     except(wr, right_curly_bracket, ">");
             }
 
@@ -316,25 +319,36 @@ public class XMLParser implements Parser {
         throw new IllegalArgumentException(String.valueOf(word));
     }
 
+    public XMLParser() {}
+
+    public XMLParser(Serializers ser) {
+        this.ser = ser;
+    }
+
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        return parse((XMLexer) new XMLexer().init(string), flag).toJSON();
+    }
+
+    @Override
+    public String format() {
+        return "XML";
+    }
+
+    public static Builder<XMLParser> builder() {
+        return new Builder<>(new XMLParser(new Serializers()));
+    }
+
     public static final class XMLexer extends AbstLexer {
         static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
+        static final LongBitSet XML_LITERAL = LongBitSet.from("+<>/=?;!\r\n \t");
 
         public Set<String> noCloseTags = Collections.emptySet();
-        public boolean     keepAmp, lenient;
+        public byte flag;
         String errorTag;
 
-        public XMLexer noCloseTags(@Nonnull Set<String> noCloseTags) {
-            this.noCloseTags = noCloseTags;
-            return this;
-        }
-
-        public XMLexer keepAmp(boolean keepAmp) {
-            this.keepAmp = keepAmp;
-            return this;
-        }
-
-        public XMLexer lenient(boolean lenient) {
-            this.lenient = lenient;
+        public XMLexer noCloseTags(Set<String> noCloseTags) {
+            this.noCloseTags = noCloseTags == null ? Collections.emptySet() : noCloseTags;
             return this;
         }
 
@@ -350,7 +364,7 @@ public class XMLParser implements Parser {
 
             while (index < input.length()) {
                 char c = input.charAt(index++);
-                if ((!XML_SPECIAL.contains(c) || c == '-') && !WHITESPACE.contains(c)) {
+                if (!XML_LITERAL.contains(c)) {
                     if (c == ':') {
                         ns = true;
                     }
@@ -440,7 +454,7 @@ public class XMLParser implements Parser {
                                 index--;
                                 break o;
                             case '&':
-                                if(!keepAmp) {
+                                if((flag & KEEP_ENTITY) != 0) {
                                     temp.append(decodeEntity());
                                     break;
                                 }
@@ -509,6 +523,11 @@ public class XMLParser implements Parser {
             //    throw err("未预料的 EOF");
 
             return temp.length() > 0 ? new XText(temp.toString()) : null;
+        }
+
+        @Override
+        protected Word onInvalidNumber(char value, int i) {
+            return readLiteral();
         }
 
         private char decodeEntity() throws ParseException {

@@ -397,6 +397,7 @@ public class AEServer implements Runnable, Shutdownable {
                         } else if (group.pairRef != null) {
                             if (group.pairRef.idleTime < group.lastIdleTime) {
                                 if (group.inactive) {
+                                    System.out.println("reset inactive state");
                                     group.inactive = false;
                                     ByteBuffer src = ByteBuffer.allocate(5);
                                     src.put((byte) PS_CHANNEL_ACTIVE).putInt(group.id).flip();

@@ -46,7 +46,7 @@ import static roj.collect.IntMap.NOT_USING;
  * @since 2021/6/18 11:5
  * 基于Hash-like机制实现的较高速Map
  */
-public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K, V>> {
+public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K, V>> {
     public void _int_plus_size() {
         size++;
     }
@@ -131,7 +131,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
         }
     }
 
-    public static class Entry<K, V> implements Map.Entry<K, V>, EntryIterable<Entry<K, V>> {
+    public static class Entry<K, V> implements Map.Entry<K, V>, MapLikeEntry<Entry<K, V>> {
         public K k;
         public V v;
 
@@ -497,7 +497,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
     }
 
     static class KeyItr<K, V> extends MapItr<Entry<K, V>> implements Iterator<K> {
-        public KeyItr(EntryIterable<?>[] entries, CItrMap<Entry<K, V>> map) {
+        public KeyItr(MapLikeEntry<?>[] entries, MapLike<Entry<K, V>> map) {
             super(entries, map);
         }
 
@@ -508,7 +508,7 @@ public class MyHashMap<K, V> implements FindMap<K, V>, CItrMap<MyHashMap.Entry<K
     }
 
     static class ValItr<K, V> extends MapItr<Entry<K, V>> implements Iterator<V> {
-        public ValItr(EntryIterable<?>[] entries, CItrMap<Entry<K, V>> map) {
+        public ValItr(MapLikeEntry<?>[] entries, MapLike<Entry<K, V>> map) {
             super(entries, map);
         }
 

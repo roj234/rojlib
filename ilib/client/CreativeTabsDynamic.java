@@ -32,7 +32,10 @@ import ilib.gui.comp.BaseComponent;
 import ilib.gui.comp.control.ComButton;
 import ilib.gui.comp.control.ComButtonOver;
 import ilib.gui.comp.control.ComScrollBar;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
+import roj.collect.MyHashSet;
+import roj.math.MathUtils;
+
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.gui.inventory.GuiContainerCreative;
 import net.minecraft.client.renderer.RenderHelper;
@@ -41,8 +44,6 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
-import roj.collect.MyHashSet;
-import roj.math.MathUtils;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -95,7 +96,7 @@ public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHand
 
         @Override
         public void getDynamicToolTip(List<String> toolTip, int mouseX, int mouseY) {
-            toolTip.add(TextHelperM.translate(tab.getTranslationKey()));
+            toolTip.add(TextHelper.translate(tab.getTranslationKey()));
         }
 
         @Override

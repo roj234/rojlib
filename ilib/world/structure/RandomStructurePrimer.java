@@ -26,6 +26,7 @@
 package ilib.world.structure;
 
 import ilib.api.world.IPrimeGenerator;
+
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.IChunkGenerator;

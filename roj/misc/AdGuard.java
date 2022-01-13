@@ -33,6 +33,7 @@ import roj.io.IOUtil;
 import roj.net.http.HttpConnection;
 import roj.net.http.HttpServer;
 import roj.net.udp.DnsServer;
+import roj.net.udp.DnsServer.Record;
 
 import java.io.*;
 import java.net.InetAddress;
@@ -52,7 +53,7 @@ public class AdGuard {
         } else {
             configFile = "config.json";
         }
-        CMapping cfg = JSONParser.parse(IOUtil.readUTF(new File(configFile))).asMap();
+        CMapping cfg = JSONParser.parse(IOUtil.readUTF(new File(configFile)), JSONParser.LITERAL_KEY).asMap();
 
         /**
          * Init DNS Server
@@ -93,7 +94,7 @@ public class AdGuard {
          * Run HTTP Server
          */
         int httpPort = cfg.getInteger("managePort");
-        if(httpPort != -1) {
+        if(httpPort > 0) {
             InetSocketAddress ha = new InetSocketAddress(InetAddress.getLoopbackAddress(), httpPort);
             Thread http = new Thread(new HttpServer(ha, 256, dns));
             http.setDaemon(true);
@@ -102,11 +103,15 @@ public class AdGuard {
             System.out.println("Http listening on " + ha);
         }
 
+        if (cfg.containsKey("TTLFactor"))
+            Record.ttlUpdateMultiplier = (float) cfg.getDouble("TTLFactor");
         /**
          * Use main thread as DNS Server
          */
         System.out.println("Welcome, to a cleaner world, " + System.getProperty("user.name", "user") + " !\n");
-        roj.misc.CpFilter.registerShutdownHook();
+        try {
+            roj.misc.CpFilter.registerShutdownHook();
+        } catch (Error ignored) {}
 
         Thread.currentThread().setName("Dns Server");
         dns.run();

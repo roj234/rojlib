@@ -30,12 +30,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 
 /**
  * @author solo6975
  * @since 2020/11/29 15:33
  */
-public interface WrappedSocket extends AutoCloseable {
+public interface WrappedSocket extends AutoCloseable, WritableByteChannel/*, ReadableByteChannel*/ {
     Socket socket();
 
     /**

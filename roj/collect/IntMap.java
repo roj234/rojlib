@@ -40,7 +40,7 @@ import java.util.function.Supplier;
  * @version 0.1
  * @since 2021/4/21 22:51
  */
-public class IntMap<V> implements CItrMap<IntMap.Entry<V>>, IIntMap<V> {
+public class IntMap<V> implements MapLike<IntMap.Entry<V>>, IIntMap<V> {
     public static final Object NOT_USING = new Object() {
         @Override
         public String toString() {
@@ -78,7 +78,7 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>>, IIntMap<V> {
         return entry == null ? def : entry.v;
     }
 
-    public static class Entry<V> implements EntryIterable<Entry<V>> {
+    public static class Entry<V> implements MapLikeEntry<Entry<V>> {
         protected int k;
         protected V v;
 
@@ -433,7 +433,7 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>>, IIntMap<V> {
     }
 
     static class KeyItr<V> extends MapItr<Entry<V>> implements PrimitiveIterator.OfInt {
-        KeyItr(Entry<?>[] entries, CItrMap<Entry<V>> map) {
+        KeyItr(Entry<?>[] entries, MapLike<Entry<V>> map) {
             super(entries, map);
         }
 
@@ -453,7 +453,7 @@ public class IntMap<V> implements CItrMap<IntMap.Entry<V>>, IIntMap<V> {
     }
 
     static class ValItr<V> extends MapItr<Entry<V>> implements Iterator<V> {
-        ValItr(Entry<?>[] entries, CItrMap<Entry<V>> map) {
+        ValItr(Entry<?>[] entries, MapLike<Entry<V>> map) {
             super(entries, map);
         }
 

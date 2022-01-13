@@ -28,11 +28,8 @@ package roj.net.http;
 import roj.collect.IBitSet;
 import roj.crypt.Base64;
 import roj.io.FileUtil;
-import roj.net.WrappedSocket;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.Request;
-import roj.net.http.serv.Response;
-import roj.text.CharList;
 import roj.util.ByteList;
 
 import java.nio.ByteBuffer;
@@ -118,7 +115,7 @@ public class WebSocketUtil {
         return fin == 0;
     }
 
-    public static byte[] calcKey(String key, CharList out) {
+    public static void calcKey(String key, ByteList out) {
         FileUtil.SHA1.reset();
         String sec = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -130,34 +127,20 @@ public class WebSocketUtil {
         }
         byte[] digest = FileUtil.SHA1.digest(bl.list);
         ByteList bl1 = new ByteList(digest);
-        bl.clear();
-        return Base64.encode(bl1, bl).toByteArray();
+        Base64.encode(bl1, out);
     }
 
     public static Reply handShake(Request request, Set<String> validProtocol) {
-        String key = request.headers("Sec-WebSocket-Key");
-        String protocol = request.headers("Sec-WebSocket-Protocol");
+        String key = request.header("Sec-WebSocket-Key");
+        String protocol = request.header("Sec-WebSocket-Protocol");
         if(!validProtocol.contains(protocol))
             return null;
 
-        return new Reply(Code.SWITCHING_PROTOCOL, new Response() {
-            @Override
-            public void writeHeader(CharList list) {
-                list.append("Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
-                calcKey(key, list);
-                list.append(CRLF).append(CRLF);
-            }
-
-            @Override
-            public void prepare() {}
-
-            @Override
-            public boolean send(WrappedSocket channel) {
-                return false;
-            }
-
-            @Override
-            public void release() {}
-        }, Action.HEAD);
+        Reply reply = new Reply(Code.SWITCHING_PROTOCOL);
+        ByteList b = reply.getRawHeaders()
+                          .putAscii("Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
+        calcKey(key, b);
+        b.putAscii("\r\n\r\n");
+        return reply;
     }
 }

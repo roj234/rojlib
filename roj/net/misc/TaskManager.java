@@ -36,7 +36,7 @@ import roj.concurrent.task.ITask;
  */
 public final class TaskManager extends TaskPool {
     public TaskManager() {
-        super(0, Integer.parseInt(System.getProperty("tm.pooled", "6")), 1, 1, pool -> new TaskExecutor(pool, "执行者线程 - 空闲", 120000));
+        super(0, Integer.parseInt(System.getProperty("tm.pooled", "6")), 1, 1, pool -> new TaskExecutor(pool, "任务执行者", 120000));
     }
 
     @Override

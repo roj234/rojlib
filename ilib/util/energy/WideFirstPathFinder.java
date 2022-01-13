@@ -29,13 +29,14 @@ import ilib.api.energy.IMEnergy;
 import ilib.api.energy.IMEnergyTube;
 import ilib.capabilities.Capabilities;
 import ilib.util.PlayerUtil;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 
 import java.util.Collections;
 import java.util.Map;

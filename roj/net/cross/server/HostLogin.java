@@ -49,12 +49,12 @@ final class HostLogin extends Stated {
 
         ByteBuffer rb = ch.buffer();
 
-        int t = TIMEOUT_TRANSFER;
+        int t = TIMEOUT;
         int except = 5;
         while (!W.server.shutdown) {
             int read;
             if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
-                LockSupport.parkNanos(20);
+                LockSupport.parkNanos(1000_000);
                 if (t-- < 0) {
                     syncPrint(W + ": 登录超时");
                     write1(ch, (byte) PS_ERROR_TIMEOUT);

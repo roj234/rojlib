@@ -87,7 +87,7 @@ public enum EnumIO {
      * @return The display name
      */
     public String getDisplayName() {
-        return TextHelperM.translate("gui.mi.tabs.io." + lowerCase);
+        return TextHelper.translate("gui.mi.tabs.io." + lowerCase);
     }
 
     public Tube toTubeInfo() {

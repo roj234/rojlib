@@ -76,7 +76,7 @@ public final class ExprParser {
         ExprParser epr = new ExprParser(0);
 
         if(args.length > 0) {
-            String expression = TextUtil.concat(args, ' ');
+            String expression = TextUtil.join(args, ' ');
 
             System.out.print("Output = ");
 

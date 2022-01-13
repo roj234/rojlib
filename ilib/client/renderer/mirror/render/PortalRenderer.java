@@ -32,6 +32,10 @@ import ilib.client.renderer.mirror.portal.Portal;
 import ilib.client.renderer.mirror.render.world.RenderGlobalProxy;
 import ilib.client.util.RenderUtils;
 import ilib.util.ItemUtils;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.util.glu.Project;
+import roj.math.MathUtils;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
@@ -53,12 +57,10 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.util.glu.Project;
-import roj.math.MathUtils;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;

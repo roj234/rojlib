@@ -33,8 +33,9 @@
  */
 package ilib.item.handler.inv;
 
-import net.minecraft.item.ItemStack;
 import roj.collect.ArrayIterator;
+
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;

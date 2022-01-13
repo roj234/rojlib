@@ -32,11 +32,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 
 import java.util.Objects;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class BlockInfo {
@@ -44,7 +42,7 @@ public class BlockInfo {
 
     public IBlockState state;
     public NBTTagCompound tag;
-    private boolean anyMeta; // todo
+    private boolean anyMeta;
 
     public BlockInfo(IBlockState state, NBTTagCompound tag) {
         this(state);

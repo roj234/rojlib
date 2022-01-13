@@ -33,6 +33,7 @@ import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,7 +42,7 @@ import java.io.IOException;
  * JSON解析器
  * @author Roj234
  */
-public final class JSONParser implements Parser {
+public final class JSONParser extends Parser {
     static final short
             TRUE = 10,
             FALSE = 11,
@@ -58,7 +59,8 @@ public final class JSONParser implements Parser {
             LITERAL_KEY            = 2,
             UNESCAPED_SINGLE_QUOTE = 4,
             NO_EOF                 = 8,
-            INTERN                 = 16;
+            INTERN                 = 16,
+            LENINT_COMMA           = 32;
 
     public static void main(String[] args) throws ParseException, IOException {
         System.out.println(parse(IOUtil.readUTF(new File(args[0]))));
@@ -72,21 +74,16 @@ public final class JSONParser implements Parser {
         return parse(new JSONLexer().init(string), flag);
     }
 
-    @Override
-    public CEntry Parse(CharSequence string, int flag) throws ParseException {
-        return parse(string, flag);
-    }
-
-    @Override
-    public String format() {
-        return "JSON";
-    }
-
     public static CEntry parse(AbstLexer wr, int flag) throws ParseException {
         JSONLexer l = (JSONLexer) wr;
         l.flag = (byte) flag;
 
-        CEntry ce = jsonRead(l, (byte) flag);
+        CEntry ce;
+        try {
+            ce = jsonRead(l, (byte) flag, null);
+        } catch (ParseException e) {
+            throw e.addPath("$.");
+        }
 
         if ((flag & NO_EOF) == 0 && wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
@@ -98,10 +95,10 @@ public final class JSONParser implements Parser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    private static CList jsonArray(AbstLexer wr, byte flag) throws ParseException {
+    private static CList jsonArray(AbstLexer wr, byte flag, Serializers ser) throws ParseException {
         CList list = new CList();
 
-        boolean more = false;
+        boolean more = true;
 
         o:
         while (true) {
@@ -117,8 +114,17 @@ public final class JSONParser implements Parser {
                     break;
                 default:
                     wr.retractWord();
+
+                    if (!more && (flag & LENINT_COMMA) == 0) {
+                        unexpected(wr, w.val(), "逗号");
+                    }
                     more = false;
-                    list.add(jsonRead(wr, flag));
+
+                    try {
+                        list.add(jsonRead(wr, flag, ser));
+                    } catch (ParseException e) {
+                        throw e.addPath("[" + list.size() + "]");
+                    }
                     break;
             }
         }
@@ -131,10 +137,10 @@ public final class JSONParser implements Parser {
      * {xxx: yyy, zzz: uuu}
      */
     @SuppressWarnings("fallthrough")
-    private static CMapping jsonObject(AbstLexer wr, byte flag) throws ParseException {
+    private static CMapping jsonObject(AbstLexer wr, byte flag, Serializers ser) throws ParseException {
         CMapping map = new CMapping();
 
-        boolean more = false;
+        boolean more = true;
 
         o:
         while (true) {
@@ -157,21 +163,28 @@ public final class JSONParser implements Parser {
                     unexpected(wr, name.val(), "字符串");
             }
 
+            if (!more && (flag & LENINT_COMMA) == 0) {
+                unexpected(wr, name.val(), "逗号");
+            }
+            more = false;
+
             String v = name.val();
             if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(v))
                 throw wr.err("重复的key: " + v);
-
-            more = false;
 
             Word w = wr.nextWord();
             if (w.type() != colon)
                 unexpected(wr, w.val(), ":");
 
-            map.put(v, jsonRead(wr, flag));
+            try {
+                map.put(v, jsonRead(wr, flag, ser));
+            } catch (ParseException e) {
+                throw e.addPath(v + '.');
+            }
         }
 
-        if (map.containsKey("==", Type.STRING)) {
-            Serializer<?> des = Serializers.find(map.getString("=="));
+        if (ser != null && map.containsKey("==", Type.STRING)) {
+            Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
                 return new CObject<>(map.raw(), des);
             }
@@ -181,11 +194,11 @@ public final class JSONParser implements Parser {
     }
 
     @SuppressWarnings("fallthrough")
-    private static CEntry jsonRead(AbstLexer wr, byte flag) throws ParseException {
+    private static CEntry jsonRead(AbstLexer wr, byte flag, Serializers ser) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case left_m_bracket:
-                return jsonArray(wr, flag);
+                return jsonArray(wr, flag, ser);
             case WordPresets.STRING:
                 return CString.valueOf(w.val());
             case WordPresets.DECIMAL_D:
@@ -201,7 +214,7 @@ public final class JSONParser implements Parser {
             case NULL:
                 return CNull.NULL;
             case left_l_bracket:
-                return jsonObject(wr, flag);
+                return jsonObject(wr, flag, ser);
             case WordPresets.LITERAL:
                 if ((flag & LITERAL_KEY) != 0)
                     return CString.valueOf(w.val());
@@ -217,6 +230,35 @@ public final class JSONParser implements Parser {
 
     static void unexpected(AbstLexer wr, String got) throws ParseException {
         throw wr.err("未预料的: " + got);
+    }
+
+    public JSONParser() {}
+
+    public JSONParser(Serializers ser) {
+        this.ser = ser;
+    }
+
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        JSONLexer l = new JSONLexer();
+        l.init(string);
+        l.flag = (byte) flag;
+
+        CEntry ce = jsonRead(l, (byte) flag, ser);
+
+        if ((flag & NO_EOF) == 0 && l.nextWord().type() != WordPresets.EOF) {
+            throw l.err("期待 /EOF");
+        }
+        return ce;
+    }
+
+    @Override
+    public String format() {
+        return "JSON";
+    }
+
+    public static Builder<JSONParser> builder() {
+        return new Builder<>(new JSONParser(new Serializers()));
     }
 
     public static class JSONLexer extends AbstLexer {
@@ -302,8 +344,15 @@ public final class JSONParser implements Parser {
             if(cached == null) {
                 cached = new Word();
             }
-            String word = s.toString();
-            if ((flag & INTERN) != 0) word = ipool.intern(word);
+            String word;
+            if ((flag & INTERN) != 0) {
+                word = ipool.find(Helpers.cast(s));
+                if (word == s) {
+                    ipool.add(word = s.toString());
+                }
+            } else {
+                word = s.toString();
+            }
             return cached.reset(id, index, word);
         }
 

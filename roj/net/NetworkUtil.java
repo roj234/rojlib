@@ -25,21 +25,27 @@
  */
 package roj.net;
 
+import roj.asm.type.Type;
+import roj.collect.IBitSet;
+import roj.collect.LongBitSet;
 import roj.crypt.MyCipher;
 import roj.crypt.SM4;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.PreSharedPubKey;
+import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
+import sun.net.InetAddressCachePolicy;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.*;
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.*;
 import java.security.cert.X509Certificate;
@@ -47,6 +53,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+import java.util.LinkedHashMap;
 
 /**
  * @author Roj234
@@ -100,32 +107,50 @@ public final class NetworkUtil {
         return arr;
     }
 
-    //todo support ::
+    static final IBitSet HEX = LongBitSet.from("0123456789ABCDEFabcdef");
     public static byte[] IPv62int(CharSequence ip) {
+        int len = TextUtil.limitedIndexOf(ip, '%', ip.length());
         byte[] arr = new byte[16];
 
-        int found = 0;
+        int j = 0, colon = -1;
         CharList fl = new CharList(5);
-        for (int i = 0; i < ip.length(); i++) {
+        for (int i = 0; i < len; i++) {
             char c = ip.charAt(i);
             if(c == ':') {
-                int st = MathUtils.parseInt(fl);
-                arr[found++] = (byte) (st >> 8);
-                arr[found++] = (byte) st;
+                if (fl.length() == 0) {
+                    if (i == 0) throw new IllegalArgumentException("Not support :: at first");
+                    if (ip.charAt(i-1) != ':') throw new IllegalArgumentException("Single ':': " + ip);
+                    if (colon >= 0) throw new IllegalArgumentException("More than one ::");
+                    colon = j;
+                    continue;
+                }
+                int st = MathUtils.parseInt(fl, 16);
+                arr[j++] = (byte) (st >> 8);
+                arr[j++] = (byte) st;
 
-                if(found == 16)
-                    throw new RuntimeException("IP format error " + ip);
+                if(j == 16) throw new IllegalArgumentException("Address overflow: " + ip);
                 fl.clear();
-            } else {
+            } else if (HEX.contains(c)) {
                 fl.append(c);
+            } else {
+                throw new IllegalArgumentException("Invalid character at " + i + ": " + ip);
             }
         }
 
-        if(fl.length() == 0 || found != 14)
-            throw new RuntimeException("IP format error " + ip);
-        int st = MathUtils.parseInt(fl);
-        arr[14] = (byte) (st >> 8);
-        arr[15] = (byte) st;
+        if((colon == -1 && (fl.length() == 0 || j != 14)) || j > 14)
+            throw new IllegalArgumentException("Address overflow: " + ip);
+        int st = MathUtils.parseInt(fl, 16);
+        arr[j++] = (byte) (st >> 8);
+        arr[j  ] = (byte) st;
+
+        if (colon >= 0) {
+            len = j - colon + 1;
+            for (int i = 1; i <= len; i++) {
+                arr[16 - i] = arr[j - i + 1];
+                arr[j - i + 1] = 0;
+            }
+        }
+
         return arr;
     }
 
@@ -281,6 +306,94 @@ public final class NetworkUtil {
         } catch (IOException | GeneralSecurityException e) {
             e.printStackTrace();
             System.err.println("MSS引擎预共享密钥初始化失败");
+        }
+    }
+
+    public static void putHostCache(boolean negative, String host, long expire, InetAddress... addresses) {
+        initUtil();
+        synchronized (CacheUtil.getHostCache()) {
+            Object cache = CacheUtil.newCacheEntry(addresses, expire);
+            CacheUtil.getInternalMap(negative ? CacheUtil.getNegativeHostCache() : CacheUtil.getHostCache()).put(host, cache);
+        }
+    }
+
+    public static void setHostCachePolicy(boolean negative, int seconds) {
+        if (seconds < 0) seconds = -1;
+        if (negative) {
+            PolicyUtil.setNegCachePolicy(seconds);
+            PolicyUtil.setNegCacheSet(true);
+        } else {
+            PolicyUtil.setPosCachePolicy(seconds);
+            PolicyUtil.setPosCacheSet(true);
+        }
+    }
+
+    static void initUtil() {
+        if (CacheUtil == null) {
+            synchronized (NetworkUtil.class) {
+                if (CacheUtil == null) {
+                    try {
+                        CacheUtil = DirectAccessor
+                            .builder(H.class)
+                            .i_construct("java.net.InetAddress$CacheEntry",
+                                         "([Ljava/net/InetAddress;J)V", "newCacheEntry")
+                            .access(InetAddress.class, new String[] {"addressCache", "negativeCache"},
+                                    new String[] {"getHostCache", "getNegativeCache"}, null)
+                            .i_access("java.net.InetAddress$Cache", "cache",
+                                      new Type("java/util/LinkedHashMap"), "getInternalMap", null)
+                            .build();
+                    } catch (Throwable e) {
+                        CacheUtil = (a, b) -> null;
+                    }
+                    try {
+                        Class<?> pl = InetAddressCachePolicy.class;
+                        String[] fieldName = new String[] {
+                                "cachePolicy", "negativeCachePolicy",
+                                "propertySet", "propertyNegativeSet"
+                        };
+                        try {
+                            pl.getDeclaredField("propertySet");
+                        } catch (NoSuchFieldException e) {
+                            fieldName[2] = "set";
+                            fieldName[3] = "negativeSet";
+                        }
+                        PolicyUtil = DirectAccessor
+                                .builder(H.class)
+                                .access(pl, fieldName, null,
+                                        new String[] {"setPosCachePolicy", "setNegCachePolicy",
+                                                      "setPosCacheSet", "setNegCacheSet"})
+                                .build();
+                    } catch (Throwable e) {
+                        PolicyUtil = (a, b) -> null;
+                    }
+                }
+            }
+        }
+    }
+    static H CacheUtil, PolicyUtil;
+    private interface H {
+        Object newCacheEntry(InetAddress[] addresses, long expire);
+        default Object getHostCache() {
+            throw new UnsupportedOperationException("Failed to get the field");
+        }
+        default Object getNegativeHostCache() {
+            throw new UnsupportedOperationException("Failed to get the field");
+        }
+        default LinkedHashMap<String, Object> getInternalMap(Object cache) {
+            throw new UnsupportedOperationException("Failed to get the field");
+        }
+
+        default void setPosCachePolicy(int seconds) {
+            throw new UnsupportedOperationException("Failed to get the field");
+        }
+        default void setNegCachePolicy(int seconds) {
+            throw new UnsupportedOperationException("Failed to get the field");
+        }
+        default void setPosCacheSet(boolean set) {
+            throw new UnsupportedOperationException("Failed to get the field");
+        }
+        default void setNegCacheSet(boolean set) {
+            throw new UnsupportedOperationException("Failed to get the field");
         }
     }
 }

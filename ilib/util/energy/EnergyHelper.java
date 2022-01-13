@@ -31,18 +31,20 @@ import ilib.api.energy.IMEnergyCap;
 import ilib.api.mark.MInIntractable;
 import ilib.capabilities.Capabilities;
 import ilib.util.ItemNBT;
+import roj.collect.SimpleList;
+import roj.text.TextUtil;
+
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
-import roj.collect.SimpleList;
-import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -126,14 +128,14 @@ public class EnergyHelper {
         IMEnergyCap cap = stack.getCapability(Capabilities.MENERGY, null);
         if (cap != null) {
             list.add(I18n.format("tooltip.mi.energy") +
-                    TextUtil.getScaledNumber(getEnergyStored(stack)) +
+                    TextUtil.scaledNumber(getEnergyStored(stack)) +
                     " / " +
-                    TextUtil.getScaledNumber(cap.maxME()) + " ME");
+                    TextUtil.scaledNumber(cap.maxME()) + " ME");
         } else if (ItemNBT.getDataMap(stack).hasKey("Power")) {
             list.add(I18n.format("tooltip.mi.energy") +
-                    TextUtil.getScaledNumber(ItemNBT.getInt(stack, "Power")) +
+                    TextUtil.scaledNumber(ItemNBT.getInt(stack, "Power")) +
                     " / " +
-                    TextUtil.getScaledNumber(ItemNBT.getInt(stack, "MaxME")) + " ME");
+                    TextUtil.scaledNumber(ItemNBT.getInt(stack, "MaxME")) + " ME");
         } else
             list.add("NaN/NaN ME");
     }
@@ -143,8 +145,8 @@ public class EnergyHelper {
         IMEnergy cap = te.getCapability(Capabilities.MENERGY_TILE, null);
         if (cap != null) {
             return I18n.format("tooltip.mi.energy") +
-                    TextUtil.getScaledNumber(cap.currentME()) + " / " +
-                    TextUtil.getScaledNumber(cap.maxME()) + " ME";
+                    TextUtil.scaledNumber(cap.currentME()) + " / " +
+                    TextUtil.scaledNumber(cap.maxME()) + " ME";
         }
         return "NaN/NaN ME";
     }

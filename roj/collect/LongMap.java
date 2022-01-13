@@ -35,7 +35,7 @@ import java.util.function.Supplier;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
-public class LongMap<V> implements CItrMap<LongMap.Entry<V>> {
+public class LongMap<V> implements MapLike<LongMap.Entry<V>> {
     @SuppressWarnings("unchecked")
     public void putAll(LongMap<V> map) {
         if (map.entries == null) return;
@@ -55,7 +55,7 @@ public class LongMap<V> implements CItrMap<LongMap.Entry<V>> {
         return entry == null ? def : entry.v;
     }
 
-    public static class Entry<V> implements EntryIterable<Entry<V>> {
+    public static class Entry<V> implements MapLikeEntry<Entry<V>> {
         protected long k;
         protected V v;
 

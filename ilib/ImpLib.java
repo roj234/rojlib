@@ -51,9 +51,9 @@ import ilib.network.ProxyPacket;
 import ilib.network.SPacketSetPlayerId;
 import ilib.util.BlockHelper;
 import ilib.util.FakeAdvancementList;
+import ilib.util.Hook;
 import ilib.util.PlayerUtil;
 import ilib.util.freeze.FreezeRegistryInjector;
-import ilib.util.hook.Hook;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import roj.collect.SimpleList;
@@ -302,7 +302,7 @@ public class ImpLib {
                                         switch (args.length) {
                                             case 0: {
                                                 long bytes = ModificationCache.getMemoryBytes();
-                                                PlayerUtil.sendTo(sender, "当前重做+撤销缓存已使用内存: " + TextUtil.getScaledNumber(bytes) + "B");
+                                                PlayerUtil.sendTo(sender, "当前重做+撤销缓存已使用内存: " + TextUtil.scaledNumber(bytes) + "B");
                                                 PlayerUtil.sendTo(sender, "当前重做缓存已使用数量: " + ModificationCache.redo.size() + '/' + ModificationCache.maxRedoCount);
                                                 PlayerUtil.sendTo(sender, "当前撤销缓存已使用数量: " + ModificationCache.undo.size() + '/' + ModificationCache.maxUndoCount);
                                                 return;

@@ -33,6 +33,10 @@
  */
 package ilib.util;
 
+import roj.collect.IBitSet;
+import roj.collect.LongBitSet;
+import roj.math.MathUtils;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.IInventory;
@@ -41,55 +45,49 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
+
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.wrapper.InvWrapper;
 import net.minecraftforge.items.wrapper.SidedInvWrapper;
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
-import roj.math.MathUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.PrimitiveIterator;
 
-//@OpenAny("net.minecraft.item:ItemStack")
 public class InventoryUtil {
-
     /**
      * 从给定的Inventory计算比较器输出
      */
-    public static int calcRedstoneFromInventory(IInventory inventory) {
-        if (inventory == null)
-            return 0;
+    public static int calcRedstoneFromInventory(IInventory inv) {
+        if (inv == null) return 0;
 
         float f = 0;
-        for (int i = 0; i < inventory.getSizeInventory(); i++) {
-            ItemStack stack = inventory.getStackInSlot(i);
+        for (int i = 0; i < inv.getSizeInventory(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
             if (!stack.isEmpty()) {
-                f += (float) stack.getCount() / (float) Math.min(stack.getMaxStackSize(), inventory.getInventoryStackLimit());
+                f += (float) stack.getCount() / (float) Math.min(stack.getMaxStackSize(), inv.getInventoryStackLimit());
             }
         }
-        return (int) MathUtils.interpolate(f / inventory.getSizeInventory(), 0, 1, 0, 15);
+        return (int) MathUtils.interpolate(f / inv.getSizeInventory(), 0, 1, 0, 15);
     }
 
     /**
      * 从给定的Inventory计算比较器输出
      */
-    public static int calcRedstoneFromInventory(IItemHandler inventory) {
-        if (inventory == null)
-            return 0;
+    public static int calcRedstoneFromInventory(IItemHandler inv) {
+        if (inv == null) return 0;
 
         float f = 0;
-        for (int i = 0; i < inventory.getSlots(); i++) {
-            ItemStack stack = inventory.getStackInSlot(i);
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
             if (!stack.isEmpty()) {
-                f += (float) stack.getCount() / (float) Math.min(stack.getMaxStackSize(), inventory.getSlotLimit(i));
+                f += (float) stack.getCount() / (float) Math.min(stack.getMaxStackSize(), inv.getSlotLimit(i));
             }
         }
-        return (int) MathUtils.interpolate(f / inventory.getSlots(), 0, 1, 0, 15);
+        return (int) MathUtils.interpolate(f / inv.getSlots(), 0, 1, 0, 15);
     }
 
     /**

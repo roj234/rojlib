@@ -48,15 +48,9 @@ public class Util {
         try {
             roj.misc.CpFilter.registerShutdownHook();
         } catch (Error ignored) {}
-        Thread infSleeper = new Thread(() -> LockSupport.parkNanos(Long.MAX_VALUE));
-        infSleeper.setDaemon(true);
-        infSleeper.setName("Timer hack thread");
-        infSleeper.start();
     }
 
-    public static final int TIMEOUT          = 3000;
-    public static final int TIMEOUT_TRANSFER = 6000;
-
+    public static final int TIMEOUT = 3000;
 
     /**
      * client/host握手
@@ -321,10 +315,10 @@ public class Util {
     }
 
     public static void handshakeClient(WrappedSocket ch, Long pipeId) throws IOException {
-        int wait = TIMEOUT;
+        long wait = System.currentTimeMillis() + 10000;
         while (!ch.handShake()) {
-            LockSupport.parkNanos(50);
-            if(wait-- <= 0) {
+            LockSupport.parkNanos(10000);
+            if(System.currentTimeMillis() >= wait) {
                 throw new IOException("握手超时");
             }
         }
@@ -338,13 +332,13 @@ public class Util {
             buf.put((byte) PCN_CONTROL);
         }
         buf.flip();
-        wait = writeAndFlush(ch, buf, wait);
+        writeAndFlush(ch, buf, wait);
         buf.clear();
 
         int read;
         while ((read = ch.read(1)) == 0) {
-            LockSupport.parkNanos(50);
-            if(wait-- <= 0) {
+            LockSupport.parkNanos(10000);
+            if(System.currentTimeMillis() >= wait) {
                 throw new IOException("读取超时");
             }
         }
@@ -363,25 +357,19 @@ public class Util {
         }
     }
 
-    public static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, int T) throws IOException {
+    public static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, long deadline) throws IOException {
         do {
             int w = channel.write(buf);
-            if(w < 0)
-                return w;
-            if (!buf.hasRemaining())
-                break;
-            LockSupport.parkNanos(20);
-            if (T-- <= 0) {
-                return -7;
-            }
+            if(w < 0) return w;
+            if (!buf.hasRemaining()) break;
+            LockSupport.parkNanos(1000);
+            if (System.currentTimeMillis() >= deadline) return -7;
         } while (true);
         while (!channel.dataFlush()) {
-            LockSupport.parkNanos(20);
-            if (T-- <= 0) {
-                return -7;
-            }
+            LockSupport.parkNanos(1000);
+            if (deadline-- <= 0) return -7;
         }
-        return T;
+        return 0;
     }
 
     public static int write1(WrappedSocket channel, byte buf) throws IOException {
@@ -389,13 +377,13 @@ public class Util {
         nx.position(0).limit(1);
         nx.put(0, buf);
 
-        int T = 100;
+        int T = 200;
         int wrote;
         while ((wrote = channel.write(nx)) == 0 && T-- > 0) {
-            LockSupport.parkNanos(20);
+            LockSupport.parkNanos(100000);
         }
         while (!channel.dataFlush() && T-- > 0) {
-            LockSupport.parkNanos(20);
+            LockSupport.parkNanos(100000);
         }
         nx.clear();
         return wrote < 0 ? wrote : T <= 0 ? -7 : 0;
@@ -413,14 +401,14 @@ public class Util {
         return w;
     }
 
-    public static boolean readSome(WrappedSocket channel, int count, int time) throws IOException {
+    public static boolean readSome(WrappedSocket channel, int count, long deadline) throws IOException {
         while (true) {
             int r = channel.read(count);
             if (r < 0) return false;
             count -= r;
             if (count <= 0) return true;
-            LockSupport.parkNanos(20);
-            if (time-- <= 0) {
+            LockSupport.parkNanos(20000);
+            if (System.currentTimeMillis() >= deadline) {
                 return false;
             }
         }

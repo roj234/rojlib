@@ -25,7 +25,8 @@
  */
 package roj.reflect;
 
-public final class TraceUtil {
+public final class TraceUtil extends SecurityManager {
+    static final TraceUtil INSTANCE = new TraceUtil();
     static final boolean ok;
 
     static {
@@ -37,6 +38,21 @@ public final class TraceUtil {
             a = false;
         }
         ok = a;
+    }
+
+    public Class<?> getCallerClass() {
+        Class<?>[] ctx = super.getClassContext();
+        return ctx.length < 3 ? null : ctx[2];
+    }
+
+    @Override
+    public Class<?>[] getClassContext() {
+        return super.getClassContext();
+    }
+
+    @Override
+    public int classDepth(String name) {
+        return super.classDepth(name);
     }
 
     public static StackTraceElement[] getTraces(Throwable t) {

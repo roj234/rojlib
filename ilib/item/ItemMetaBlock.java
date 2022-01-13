@@ -29,6 +29,8 @@ package ilib.item;
 import ilib.ImpLib;
 import ilib.api.registry.BlockPropTyped;
 import ilib.api.registry.Propertied;
+import ilib.util.Hook;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
@@ -39,6 +41,7 @@ import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+
 import net.minecraftforge.client.model.ModelLoader;
 
 import javax.annotation.Nonnull;
@@ -47,7 +50,8 @@ import javax.annotation.Nonnull;
  * 基于MI-Enumeration ({@link Propertied})创建Meta方块
  *
  * @param <T> The MI-Enumeration
- *//**
+ */
+/**
  * No description provided
  *
  * @author Roj234
@@ -63,7 +67,7 @@ public class ItemMetaBlock<T extends Propertied<T>> extends ItemBlockMI {
         setHasSubtypes(true);
         setMaxDamage(0);
         setNoRepair();
-        ImpLib.HOOK.add(ilib.util.hook.Hook.MODEL_REGISTER, () -> registerModel(propName, name));
+        ImpLib.HOOK.add(Hook.MODEL_REGISTER, () -> registerModel(propName, name));
         this.prop = prop;
         this.name = name;
     }

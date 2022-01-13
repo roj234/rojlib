@@ -45,11 +45,9 @@ public class IntList implements Iterable<Integer> {
 
     protected int[] list;
     protected int size = 0;
-    protected int length;
 
     public IntList() {
         list = EmptyArrays.INTS;
-        length = -1;
     }
 
     public IntList(IntMap.KeySet<?> set) {
@@ -58,22 +56,19 @@ public class IntList implements Iterable<Integer> {
         for (PrimitiveIterator.OfInt itr = set.iterator(); itr.hasNext(); ) {
             list[j++] = itr.nextInt();
         }
-        this.length = size - 1;
     }
 
     public IntList(int size) {
         list = new int[size];
         Arrays.fill(list, DEFAULT_VALUE);
-        this.length = size - 1;
     }
 
     public void ensureCap(int cap) {
-        if (length < cap) {
-            int[] newList = new int[((cap * 3) >> 1) + 1];
-            if (size > 0)
-                System.arraycopy(list, 0, newList, 0, size);
+        if (list.length < cap) {
+            int length = ((cap * 3) >> 1) + 1;
+            int[] newList = new int[length];
+            if (size > 0) System.arraycopy(list, 0, newList, 0, size);
             list = newList;
-            length = ((cap * 3) >> 1) + 1;
             Arrays.fill(list, size, length, DEFAULT_VALUE);
         }
     }
@@ -121,30 +116,34 @@ public class IntList implements Iterable<Integer> {
         return true; //[3]
     }
 
-    public boolean addAll(int[] collection) {
-        ensureCap(size + collection.length);
-        System.arraycopy(collection, 0, list, size, collection.length);
-        size += collection.length;
+    public boolean addAll(int[] ints) {
+        ensureCap(size + ints.length);
+        System.arraycopy(ints, 0, list, size, ints.length);
+        size += ints.length;
         return true;
     }
 
-    public boolean addAll(int[] collection, int len) {
+    public void addAll(IntList il) {
+        addAll(il.list, il.size);
+    }
+
+    public boolean addAll(int[] ints, int len) {
         if (len < 0)
             throw new NegativeArraySizeException();
         if (len == 0) return false;
         ensureCap(size + len);
-        System.arraycopy(collection, 0, list, size, len);
+        System.arraycopy(ints, 0, list, size, len);
         size += len;
         return true;
     }
 
-    public boolean addAll(int i, int[] collection) {
+    public boolean addAll(int i, int[] ints) {
         if (i > size)
             throw new ArrayIndexOutOfBoundsException(i);
-        ensureCap(size + collection.length);
-        System.arraycopy(list, i, list, i + collection.length, size - i);
-        System.arraycopy(collection, 0, list, i, collection.length);
-        size += collection.length;
+        ensureCap(size + ints.length);
+        System.arraycopy(list, i, list, i + ints.length, size - i);
+        System.arraycopy(ints, 0, list, i, ints.length);
+        size += ints.length;
         return true;
     }
 

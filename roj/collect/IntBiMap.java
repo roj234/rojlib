@@ -35,7 +35,7 @@ import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.NOT_USING;
 
-public class IntBiMap<V> implements CItrMap<IntMap.Entry<V>>, ToIntFunction<V>, IIntMap<V> {
+public class IntBiMap<V> implements MapLike<IntMap.Entry<V>>, ToIntFunction<V>, IIntMap<V> {
     public void setNullId(int nullId) {
         this.nullId = nullId;
     }

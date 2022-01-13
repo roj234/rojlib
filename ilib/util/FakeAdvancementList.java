@@ -35,21 +35,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/14 14:55
  */
 public class FakeAdvancementList extends AdvancementList {
-    public void removeAll(Set<ResourceLocation> ids) {
-    }
+    public void removeAll(Set<ResourceLocation> ids) {}
 
-    public void loadAdvancements(Map<ResourceLocation, Advancement.Builder> map) {
-    }
+    public void loadAdvancements(Map<ResourceLocation, Advancement.Builder> map) {}
 
-    public void clear() {
-    }
+    public void clear() {}
 
     public Iterable<Advancement> getRoots() {
         return Collections.emptyList();
@@ -64,6 +58,5 @@ public class FakeAdvancementList extends AdvancementList {
         return null;
     }
 
-    public void setListener(@Nullable AdvancementList.Listener listener) {
-    }
+    public void setListener(@Nullable AdvancementList.Listener listener) {}
 }

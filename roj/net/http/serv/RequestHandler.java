@@ -26,6 +26,7 @@
 package roj.net.http.serv;
 
 import roj.collect.TimedHashMap;
+import roj.concurrent.task.ITaskNaCl;
 import roj.net.Notify;
 import roj.net.WrappedSocket;
 import roj.net.http.Code;
@@ -36,16 +37,22 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 
-public class RequestHandler extends RequestHandlerSync {
-    protected byte stage;
-    protected Request request;
-    protected Reply reply;
-    protected long time;
-    protected final Object[] lexerHolder = new Object[1];
+public class RequestHandler implements ITaskNaCl {
+    WrappedSocket channel;
+    final Router router;
+    byte stage;
+    Request request;
+    Reply reply;
+    long time;
+    final Object[] lexerHolder = new Object[1];
+
+    static final Logger L = Logger.getLogger("RequestHandler");
 
     public RequestHandler(WrappedSocket channel, Router router) {
-        super(channel, router);
+        this.channel = channel;
+        this.router = router;
     }
 
     @Override
@@ -81,7 +88,7 @@ public class RequestHandler extends RequestHandlerSync {
                                 // 连接挂起
                                 stage = 5;
                                 if (visited % 128 == 0)
-                                    logger.warning(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
+                                    L.warning(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
                                 return;
                             } else {
                                 reply = new Reply(Code.UNAVAILABLE, new StringResponse("DDoS detected"));
@@ -116,13 +123,13 @@ public class RequestHandler extends RequestHandlerSync {
                         try {
                             reply = router.response(socket, request);
                         } catch (Throwable e) {
-                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(null, e));
+                            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
                         }
                     } catch (IllegalRequestException e) {
                         final Throwable cause = e.getCause();
                         reply = new Reply(e.code, cause instanceof Notify ?
                                 StringResponse.forError(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
-                                StringResponse.forError(null, e)
+                                StringResponse.forError(0, e)
                         );
                     }
                 }
@@ -161,7 +168,7 @@ public class RequestHandler extends RequestHandlerSync {
                 reply.release();
             }
 
-            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(null, e));
+            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
             try {
                 long time = System.currentTimeMillis();
                 long timeout = router.writeTimeout(request);
@@ -193,5 +200,10 @@ public class RequestHandler extends RequestHandlerSync {
             stage = 6;
         }
         channel = null;
+    }
+
+    @Override
+    public final boolean isDone() {
+        return channel == null;
     }
 }

@@ -37,7 +37,7 @@ import java.util.NoSuchElementException;
  * @version 0.1
  * @since  2020/8/14 17:06
  */
-class MapItr<T extends EntryIterable<T>> {
+class MapItr<T extends MapLikeEntry<T>> {
     public T obj;
     int stage = INITIAL;
 
@@ -81,8 +81,8 @@ class MapItr<T extends EntryIterable<T>> {
         stage = INITIAL;
     }
 
-    private final T[] entries;
-    private final CItrMap<T> remover;
+    private final T[]         entries;
+    private final MapLike<T>  remover;
     private final Iterator<T> customItr;
     private T entry;
     private int i;
@@ -97,7 +97,7 @@ class MapItr<T extends EntryIterable<T>> {
         }
     }
 
-    public MapItr(EntryIterable<?>[] entries, CItrMap<T> remover) {
+    public MapItr(MapLikeEntry<?>[] entries, MapLike<T> remover) {
         this.entries = Helpers.cast(entries);
         this.customItr = remover.entryIterator();
         this.remover = remover;

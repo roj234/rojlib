@@ -98,6 +98,13 @@ public final class Request {
         return Helpers.cast(postFields);
     }
 
+    public String postFieldsRaw() {
+        if (postFields instanceof String) {
+            return (String) postFields;
+        }
+        throw new IllegalStateException("Parsed");
+    }
+
     public Map<String, String> getFields() {
         if (getFields == null) {
             int qo = path.indexOf('?');
@@ -138,7 +145,7 @@ public final class Request {
         try {
             return getRequest(lexer, router, socket);
         } catch (Notify notifyException) {
-            Code code = Code.INTERNAL_ERROR;
+            int code = Code.INTERNAL_ERROR;
             switch (notifyException.code) {
                 case -127:
                     code = Code.ENTITY_TOO_LARGE;
@@ -223,7 +230,7 @@ public final class Request {
             lexer.index = 0;
             return null;
         } catch (Notify notifyException) {
-            Code code = Code.INTERNAL_ERROR;
+            int code = Code.INTERNAL_ERROR;
             switch (notifyException.code) {
                 case -127:
                     code = Code.ENTITY_TOO_LARGE;
@@ -236,7 +243,7 @@ public final class Request {
         }
     }
 
-    public String headers(String s) {
+    public String header(String s) {
         return headers.get(s.toLowerCase());
     }
 }

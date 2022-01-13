@@ -35,13 +35,14 @@ package ilib.gui;
 
 import ilib.client.util.RenderUtils;
 import ilib.gui.comp.BaseComponent;
+import org.lwjgl.input.Mouse;
+
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.input.Mouse;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;

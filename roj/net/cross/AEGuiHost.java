@@ -33,7 +33,6 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
-import roj.net.cross.AEHost.Client;
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.Reply;
@@ -145,8 +144,8 @@ public class AEGuiHost {
                     return new Reply(Code.OK, new StringResponse(res("client_owner.html"), "text/html"));
                 case "/user_list":
                     CList lx = new CList();
-                    for (Client w : client.clients.values()) {
-                        w.serialize(lx);
+                    for (InetSocketAddress w : client.clients.values()) {
+                        lx.add(w.toString());
                     }
                     return new Reply(Code.OK, new StringResponse(lx.toJSON(), "application/json"));
                 case "/kick_user":

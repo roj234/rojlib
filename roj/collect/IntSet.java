@@ -43,8 +43,8 @@ import static roj.collect.IntMap.MAX_NOT_USING;
  * @version 0.1
  * @since 2021/4/21 22:51
  */
-public class IntSet implements CItrMap<IntSet.Entry>, Iterable<Integer> {
-    public static class Entry implements EntryIterable<Entry> {
+public class IntSet implements MapLike<IntSet.Entry>, Iterable<Integer> {
+    public static class Entry implements MapLikeEntry<Entry> {
         protected int k;
 
         protected Entry(int k) {

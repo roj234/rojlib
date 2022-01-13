@@ -63,36 +63,36 @@ public class ByteListSource implements Source {
     }
 
     @Override
-    public int read(byte[] array, int offset, int length) {
-        if (length < 0 || array.length - offset < length || offset < 0) throw new ArrayIndexOutOfBoundsException();
+    public int read(byte[] b, int off, int len) {
+        if (len < 0 || b.length - off < len || off < 0) throw new ArrayIndexOutOfBoundsException();
         if (index > this.offset + this.length)
             return -1;
-        length = Math.min(length, this.length - index - this.offset);
-        if (length == 0) return 0;
-        System.arraycopy(this.array, index + this.offset, array, offset, length);
-        index += length;
-        return length;
+        len = Math.min(len, this.length - index - this.offset);
+        if (len == 0) return 0;
+        System.arraycopy(this.array, index + this.offset, b, off, len);
+        index += len;
+        return len;
     }
 
     @Override
-    public void write(byte[] array, int offset, int length) throws IOException {
-        if (length < 0 || array.length - offset < length || offset < 0) throw new ArrayIndexOutOfBoundsException();
-        if (length == 0) return;
+    public void write(byte[] b, int off, int len) throws IOException {
+        if (len < 0 || b.length - off < len || off < 0) throw new ArrayIndexOutOfBoundsException();
+        if (len == 0) return;
 
         if (!dedicated) {
-            byte[] newArray = new byte[length + this.length];
+            byte[] newArray = new byte[len + this.length];
             System.arraycopy(this.array, this.offset, newArray, 0, this.length);
             this.offset = 0;
             this.array = newArray;
             this.dedicated = true;
-        } else if (this.array.length - index < length) {
-            byte[] newArray = new byte[this.array.length + length + 512];
+        } else if (this.array.length - index < len) {
+            byte[] newArray = new byte[this.array.length + len + 512];
             System.arraycopy(this.array, 0, newArray, 0, this.length);
             this.array = newArray;
         }
-        System.arraycopy(array, offset, this.array, index, length);
-        this.index += length;
-        this.length += length;
+        System.arraycopy(b, off, this.array, index, len);
+        this.index += len;
+        this.length += len;
     }
 
     @Override

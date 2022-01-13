@@ -203,7 +203,6 @@ public class Rect3i {
     }
 
     public Vec3i[] minMax() {
-        fix();
         return new Vec3i[]{
                 new Vec3i(xmin, ymin, zmin), // 000
                 new Vec3i(xmax, ymax, zmax) // 001
@@ -218,20 +217,79 @@ public class Rect3i {
         return xmin <= p.x && p.x <= xmax && ymin <= p.x && p.x <= ymax && zmin <= p.x && p.x <= zmax;
     }
 
-    public boolean intersects(Rect3i other) {
-        return !(xmax < other.xmin || xmin > other.xmax || ymax < other.ymin || ymin > other.ymax || zmax < other.zmin || zmin > other.zmax);
+    public boolean contains(Rect3i o) {
+        return xmax >= o.xmax && xmin <= o.xmin && ymax >= o.ymax && ymin <= o.ymin && zmax >= o.zmax && zmin <= o.zmin;
+    }
+
+    public boolean intersects(Rect3i o) {
+        return !(xmax < o.xmin || xmin > o.xmax || ymax < o.ymin || ymin > o.ymax || zmax < o.zmin || zmin > o.zmax);
     }
 
     /**
      * 注意，边界也计算在内
      */
-    public Rect3i intersectsWith(Rect3i other) {
-        if (intersects(other)) {
-            return new Rect3i(Math.max(this.xmin, other.xmin), Math.max(this.ymin, other.ymin), Math.max(this.zmin, other.zmin),
-                    Math.min(this.xmax, other.xmax), Math.min(this.ymax, other.ymax), Math.min(this.zmax, other.zmax));
+    public Rect3i intersectsWith(Rect3i o) {
+        if (intersects(o)) {
+            return new Rect3i(Math.max(xmin, o.xmin), Math.max(ymin, o.ymin), Math.max(zmin, o.zmin),
+                    Math.min(xmax, o.xmax), Math.min(ymax, o.ymax), Math.min(zmax, o.zmax));
         } else {
             return null;
         }
+    }
+
+    public Rect3i expandIf(Vec3i... points) {
+        for (Vec3i v : points) {
+            if (xmin > v.x) xmin = v.x;
+            if (xmax < v.x) xmax = v.x;
+
+            if (ymin > v.y) ymin = v.y;
+            if (ymax < v.y) ymax = v.y;
+
+            if (zmin > v.z) zmin = v.z;
+            if (zmax < v.z) zmax = v.z;
+        }
+
+        return this;
+    }
+
+    public void expandIf(int x, int y, int z) {
+        if (x < xmin) {
+            xmin = x;
+        } else if (x > xmax) {
+            xmax = x;
+        }
+        if (y < ymin) {
+            ymin = y;
+        } else if (y > ymax) {
+            ymax = y;
+        }
+        if (z < zmin) {
+            zmin = z;
+        } else if (z > zmax) {
+            zmax = z;
+        }
+    }
+
+    public Rect3i grow(int i) {
+        xmin -= i;
+        ymin -= i;
+        zmin -= i;
+        xmax += i;
+        ymax += i;
+        zmax += i;
+        return this;
+    }
+
+    public static Rect3i from(Vec3i... points) {
+        return new Rect3i(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, -Integer.MAX_VALUE, -Integer.MAX_VALUE, -Integer.MAX_VALUE).expandIf(points);
+    }
+
+    public int volume() {
+        return (xmax - xmin + 1) * (ymax - ymin + 1) * (zmax - zmin + 1);
+    }
+
+    public Rect3i copy() {
+        return new Rect3i(this);
     }
 
     @Override
@@ -263,64 +321,5 @@ public class Rect3i {
     @Override
     public String toString() {
         return this.getClass().getSimpleName() + " {" + xmin + ", " + ymin + ", " + zmin + ", " + xmax + ", " + ymax + ", " + zmax + "}";
-    }
-
-    public Rect3i expandIf(Vec3i... points) {
-        for (Vec3i v : points) {
-            if (xmin > v.x) xmin = v.x;
-            if (xmax < v.x) xmax = v.x;
-
-            if (ymin > v.y) ymin = v.y;
-            if (ymax < v.y) ymax = v.y;
-
-            if (zmin > v.z) zmin = v.z;
-            if (zmax < v.z) zmax = v.z;
-        }
-
-        return this;
-    }
-
-    public static Rect3i from(Vec3i... points) {
-        return new Rect3i(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, -Integer.MAX_VALUE, -Integer.MAX_VALUE, -Integer.MAX_VALUE).expandIf(points);
-    }
-
-    public boolean contains(Rect3i other) {
-        return xmax >= other.xmax && xmin <= other.xmin && ymax >= other.ymax && ymin <= other.ymin && zmax >= other.zmax && zmin <= other.zmin;
-    }
-
-    public Rect3i grow(int i) {
-        xmin -= i;
-        ymin -= i;
-        zmin -= i;
-        xmax += i;
-        ymax += i;
-        zmax += i;
-        return this;
-    }
-
-    public void expandIf(int x, int y, int z) {
-        if (x < xmin) {
-            xmin = x;
-        } else if (x > xmax) {
-            xmax = x;
-        }
-        if (y < ymin) {
-            ymin = y;
-        } else if (y > ymax) {
-            ymax = y;
-        }
-        if (z < zmin) {
-            zmin = z;
-        } else if (z > zmax) {
-            zmax = z;
-        }
-    }
-
-    public int size() {
-        return (xmax - xmin + 1) * (ymax - ymin + 1) * (zmax - zmin + 1);
-    }
-
-    public Rect3i copy() {
-        return new Rect3i(this);
     }
 }

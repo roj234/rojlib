@@ -112,20 +112,28 @@ public class TimedHashMap<K, V> extends MyHashMap<K, V> {
         return entry;
     }
 
+    boolean clear;
     public void clearOutdatedEntry() {
-        long curr = System.currentTimeMillis();
+        if (clear) return;
+        clear = true;
+        try {
+            long curr = System.currentTimeMillis();
 
-        if (!this.list.isEmpty())
-            for (ListIterator<TimedEntry<K, V>> iterator = this.list.listIterator(this.list.size() - 1); iterator.hasPrevious(); ) {
-                TimedEntry<K, V> entry = iterator.previous();
-                if (curr - entry.timestamp >= timeout) {
-                    remove(entry.k);
-                    iterator.remove();
-                } else if(!update) {
-                    break;
+            if (!this.list.isEmpty()) {
+                for (ListIterator<TimedEntry<K, V>> iterator = this.list.listIterator(this.list.size() - 1); iterator.hasPrevious(); ) {
+                    TimedEntry<K, V> entry = iterator.previous();
+                    if (curr - entry.timestamp >= timeout) {
+                        remove(entry.k);
+                        iterator.remove();
+                    } else if (!update) {
+                        break;
+                    }
                 }
             }
 
-        lastCheck = curr;
+            lastCheck = curr;
+        } finally {
+            clear = false;
+        }
     }
 }

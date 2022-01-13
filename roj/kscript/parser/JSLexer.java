@@ -51,16 +51,16 @@ public class JSLexer extends AbstLexer {
     public boolean acceptsNumber;
 
     @SuppressWarnings("fallthrough")
-    public JSLexer init(CharSequence keys) {
+    public JSLexer init(CharSequence seq) {
         lastLine = 0;
         IntList lineIndexes = new IntList(100);
         lineIndexes.add(0);
 
-        for (int i = 0; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
+        for (int i = 0; i < seq.length(); i++) {
+            char c1 = seq.charAt(i);
             switch (c1) {
                 case '\r':
-                    if (i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+                    if (i + 1 < seq.length() && seq.charAt(i + 1) == '\n') // \r\n
                         i++;
                 case '\n':
                     lineIndexes.add(i);
@@ -71,7 +71,7 @@ public class JSLexer extends AbstLexer {
         this.lineIndexes = lineIndexes.getRawArray();
         this.lineLen = lineIndexes.size();
 
-        super.init(keys);
+        super.init(seq);
         return this;
     }
 

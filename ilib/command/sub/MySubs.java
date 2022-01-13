@@ -34,6 +34,11 @@ import ilib.util.DimensionHelper;
 import ilib.util.ItemUtils;
 import ilib.util.PlayerUtil;
 import ilib.util.internal.ItemSpecialRenderer;
+import roj.collect.LongMap;
+import roj.collect.MyHashSet;
+import roj.opengl.util.OpenGLDebug;
+import roj.text.TextUtil;
+
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
@@ -46,15 +51,12 @@ import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.gen.ChunkProviderServer;
 import net.minecraft.world.gen.IChunkGenerator;
+
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
-import roj.collect.LongMap;
-import roj.collect.MyHashSet;
-import roj.opengl.util.OpenGLDebug;
-import roj.text.TextUtil;
 
 import java.util.Iterator;
 import java.util.List;
@@ -106,7 +108,7 @@ public abstract class MySubs extends AbstractSubCommand {
             long before = r.totalMemory() - r.freeMemory();
             System.gc();
             long after = r.totalMemory() - r.freeMemory();
-            PlayerUtil.sendTo(sender, Colors.GREY + "成功释放了 " + Colors.ORANGE + TextUtil.getScaledNumber(before - after) + 'B' + Colors.GREY + " 内存");
+            PlayerUtil.sendTo(sender, Colors.GREY + "成功释放了 " + Colors.ORANGE + TextUtil.scaledNumber(before - after) + 'B' + Colors.GREY + " 内存");
         }
     };
 

@@ -26,7 +26,9 @@
 package ilib.fluid;
 
 import com.google.common.collect.BiMap;
+
 import net.minecraft.item.ItemStack;
+
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;

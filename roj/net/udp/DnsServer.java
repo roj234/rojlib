@@ -36,7 +36,10 @@ import roj.math.MathUtils;
 import roj.net.NetworkUtil;
 import roj.net.http.Action;
 import roj.net.http.Code;
-import roj.net.http.serv.*;
+import roj.net.http.serv.Reply;
+import roj.net.http.serv.Request;
+import roj.net.http.serv.Router;
+import roj.net.http.serv.StringResponse;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
@@ -54,7 +57,6 @@ import java.util.function.Function;
  * Simple DNS Server
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/23 20:49
  */
 public class DnsServer implements Router, Runnable {
@@ -436,9 +438,9 @@ public class DnsServer implements Router, Runnable {
             return target;
         }
 
-        static final float TTL_UPDATE_MULTIPLIER = 1 / Float.parseFloat(System.getProperty("TTL_UPDATE_MULTIPLIER", "1"));
+        public static float ttlUpdateMultiplier = 1;
         public boolean shouldUpdate(int ts) {
-            return (TTL_UPDATE_MULTIPLIER * (float)(ts - timestamp)) >= TTL;
+            return (ts - timestamp) >= TTL * ttlUpdateMultiplier;
         }
 
         @Override
@@ -1167,11 +1169,11 @@ public class DnsServer implements Router, Runnable {
             len = r.readUnsignedByte();
             if((len & 0xC0) != 0) {
                 if((len & 0xC0) != 0xC0)
-                    throw new RuntimeException("Illegal label length " + len);
-                int ri = rx.rIndex;
-                rx.rIndex = ((len & ~0xC0) << 8) | r.readUByte();
+                    throw new RuntimeException("Illegal label length " + Integer.toHexString(len));
+                int ri = rx.rIndex();
+                rx.rIndex(((len & ~0xC0) << 8) | r.readUByte());
                 readDomainEx(rx, rx, sb);
-                rx.rIndex = ri + (r == rx ? 1:0);
+                rx.rIndex(ri + (r == rx ? 1:0));
                 return;
             }
             sb.append(r.readUTF(len)).append(".");
@@ -1232,7 +1234,7 @@ public class DnsServer implements Router, Runnable {
                 return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
             case "/":
             case "": {
-                StringBuilder sb = new StringBuilder().append("<title>AsyncDns 1.2</title><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.2</h1>");
+                StringBuilder sb = new StringBuilder().append("<head><meta charset='UTF-8' /><title>AsyncDns 1.2</title></head><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.2</h1>");
 
                 String msg = request.getFields().get("msg");
                 if (msg != null) {
@@ -1250,10 +1252,10 @@ public class DnsServer implements Router, Runnable {
                           "Type: <input type='number' name='type' /><br/>" +
                           "Content: <input type='text' name='cnt' /><input type='submit' value='提交' /></form>")
                   .append("<pre>Type: -2 屏蔽\n, -1 删除, \nA(IPV4): " + Q_A + ", \nAAAA(IPV6): " + Q_AAAA + " \nCNAME: " + Q_CNAME + ", \n其他看rfc" + "</pre>")
-                  .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by Asyncorized_MC's HTTPServer v1.2.0</h2>Allocated Memory: ")
-                  .append(TextUtil.getScaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
+                  .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by Async/v2.0</h2>Memory: ")
+                  .append(TextUtil.scaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
-                return new Reply(Code.OK, new StringResponse(sb, "text/html"), request.action());
+                return new Reply(Code.OK, new StringResponse(sb, "text/html"));
             }
             case "/stop": {
                 System.exit(0);
@@ -1262,10 +1264,10 @@ public class DnsServer implements Router, Runnable {
             case "/stat":
                 return new Reply(Code.OK, new StringResponse(dumpIpAddress(), "text/plain"));
             case "/save": {
-                HeadResponse hp = new HeadResponse();
-                hp.headers().put("Location", dirty.get() ? "/?msg=保存成功" : "/?msg=数据没更改");
                 save();
-                return new Reply(Code.FOUND, hp);
+                Reply reply = new Reply(Code.FOUND);
+                reply.header("Location", dirty.get() ? "/?msg=保存成功" : "/?msg=数据没更改");
+                return reply;
             }
             case "/set": {
                 if(request.action() != Action.POST) {
@@ -1325,9 +1327,9 @@ public class DnsServer implements Router, Runnable {
                     }
                 }
 
-                HeadResponse hp = new HeadResponse();
-                hp.headers().put("Location", "/?msg=" + msg);
-                return new Reply(Code.FOUND, hp);
+                Reply reply = new Reply(Code.FOUND);
+                reply.header("Location", "/?msg=" + msg);
+                return reply;
             }
             default:
                 return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, "未定义的路由"));

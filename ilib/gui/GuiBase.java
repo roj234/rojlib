@@ -39,7 +39,9 @@ import ilib.gui.comp.BaseComponent;
 import ilib.gui.comp.display.ComTabs;
 import ilib.gui.comp.display.ComText;
 import ilib.util.PlayerUtil;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
+import org.lwjgl.input.Mouse;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -52,7 +54,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
-import org.lwjgl.input.Mouse;
 
 import javax.annotation.Nonnull;
 import java.awt.*;
@@ -116,7 +117,7 @@ public abstract class GuiBase<T extends ContainerEmpty> extends GuiContainer imp
         leftTabs = new ComTabs(this, -1);
 
         titleComponent = new ComText(this,
-                xSize / 2 - (getFontRenderer().getStringWidth(TextHelperM.translate(name)) / 2),
+                xSize / 2 - (getFontRenderer().getStringWidth(TextHelper.translate(name)) / 2),
                 3, name, null);
         components.add(titleComponent);
 

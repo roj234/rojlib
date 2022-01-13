@@ -41,7 +41,6 @@ public abstract class AbstLexer {
             NUMBER = LongBitSet.from("0123456789"),
             WHITESPACE = LongBitSet.from(" \r\n\t"),
             SPECIAL = LongBitSet.from("+-\\/*()!~`@#$%^&_=,<>.?\"':;|[]{}"),
-            HEX = LongBitSet.from("ABCDEFabcdef"),
             SPECIAL_CHARS = LongBitSet.from(
                     32, 33,
                     // "
@@ -50,8 +49,8 @@ public abstract class AbstLexer {
                     40, 41, 42, 43, 44, 45, 46, 47,
                     58, 59, 60, 61, 62, 63,
                     91, 93, 94, 95, 96,
-                    123, 124, 125, 126
-                                           );
+                    123, 124, 125, 126);
+    public static final IBitSet HEX_Alphabet = LongBitSet.from("ABCDEFabcdef");
 
     /**
      * 暂存
@@ -66,9 +65,9 @@ public abstract class AbstLexer {
 
     public AbstLexer() {}
 
-    public AbstLexer init(CharSequence charList) {
+    public AbstLexer init(CharSequence seq) {
         this.index = 0;
-        this.input = charList;
+        this.input = seq;
         return this;
     }
 
@@ -446,12 +445,12 @@ public abstract class AbstLexer {
                 case '.':
                     // 1.xE3
                     if (exp != 0) {
-                        return onInvalidNumber('.');
+                        return onInvalidNumber('.', i);
                     }
                     flag = 1; // decimal
                     exp |= 1;
                 default:
-                    if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX.contains(c))) {
+                    if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX_Alphabet.contains(c))) {
                         temp.append(c);
                         if (flag == 0 && temp.length() == 2 // 075463754
                                 && temp.charAt(0) == '0' && temp.charAt(1) != '.') flag = 4;
@@ -466,8 +465,7 @@ public abstract class AbstLexer {
                         temp.delete(0);
                         flag = 2; // hex
                     } else {
-                        this.index = i;
-                        return onInvalidNumber(c);
+                        return onInvalidNumber(c, i);
                     }
                     break;
                 case 'B':
@@ -483,16 +481,14 @@ public abstract class AbstLexer {
                                 break;
                             }
                         default:
-                            this.index = i;
-                            return onInvalidNumber(c);
+                            return onInvalidNumber(c, i);
 
                     }
                     break;
                 case '+':
                 case '-':
                     if((exp & 2) == 0) {
-                        this.index = i;
-                        return onInvalidNumber(c);
+                        return onInvalidNumber(c, i);
                     } else {
                         temp.append(c);
                     }
@@ -512,8 +508,7 @@ public abstract class AbstLexer {
                         }
                     }
 
-                    this.index = i;
-                    return onInvalidNumber(c);
+                    return onInvalidNumber(c, i);
             }
         }
 
@@ -535,7 +530,7 @@ public abstract class AbstLexer {
             throw err("数字在指数后被截断");
 
         if (i < input.length() && !WHITESPACE.contains(input.charAt(i)) && !SPECIAL.contains(input.charAt(i))) {
-            Word word = onInvalidNumber(input.charAt(i));
+            Word word = onInvalidNumber(input.charAt(i), i);
             if (word != null) return word;
         }
 
@@ -586,11 +581,11 @@ public abstract class AbstLexer {
                     continue;
                 case '.':
                     // 1.xE3
-                    if (exp != 0) unexpected(".");
+                    if (exp != 0) return onInvalidNumber(c, i);
                     flag = 1; // decimal
                     exp |= 1;
                 default:
-                    if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX.contains(c))) {
+                    if (NUMBER.contains(c) || c == '.' || (flag == 2 && HEX_Alphabet.contains(c))) {
                         temp.append(c);
                         if (flag == 0 && temp.length() == 2 // 075463754
                             && temp.charAt(0) == '0' && temp.charAt(1) != '.') flag = 4;
@@ -602,8 +597,7 @@ public abstract class AbstLexer {
                 case '+':
                 case '-':
                     if((exp & 2) == 0) {
-                        this.index = i;
-                        return onInvalidNumber(c);
+                        return onInvalidNumber(c, i);
                     } else {
                         temp.append(c);
                     }
@@ -614,8 +608,7 @@ public abstract class AbstLexer {
                         temp.delete(0);
                         flag = 2; // hex
                     } else {
-                        this.index = i;
-                        return onInvalidNumber(c);
+                        return onInvalidNumber(c, i);
                     }
                     break;
                 case 'B':
@@ -631,8 +624,7 @@ public abstract class AbstLexer {
                                 break;
                             }
                         default:
-                            this.index = i;
-                            return onInvalidNumber(c);
+                            return onInvalidNumber(c, i);
 
                     }
                     break;
@@ -663,8 +655,7 @@ public abstract class AbstLexer {
                         }
                     }
 
-                    this.index = i;
-                    return onInvalidNumber(c);
+                    return onInvalidNumber(c, i);
                 case 'L':
                 case 'l':
                     if (flag == 0 && temp.length() > 0) {
@@ -672,8 +663,7 @@ public abstract class AbstLexer {
                         break o;
                     }
 
-                    this.index = i;
-                    return onInvalidNumber(c);
+                    return onInvalidNumber(c, i);
             }
         }
 
@@ -695,7 +685,7 @@ public abstract class AbstLexer {
             throw err("数字在指数后被截断");
 
         if (i < input.length() && !WHITESPACE.contains(input.charAt(i)) && !SPECIAL.contains(input.charAt(i))) {
-            Word word = onInvalidNumber(input.charAt(i));
+            Word word = onInvalidNumber(input.charAt(i), i);
             if (word != null) return word;
         }
 
@@ -710,7 +700,8 @@ public abstract class AbstLexer {
         return formClip((short) (WordPresets.INTEGER + flag), temp).number(this, negative);
     }
 
-    protected Word onInvalidNumber(char value) throws ParseException {
+    protected Word onInvalidNumber(char value, int i) throws ParseException {
+        this.index = i;
         throw err("无效的数字表示");
     }
 

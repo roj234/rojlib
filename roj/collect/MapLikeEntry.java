@@ -23,38 +23,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-package ilib.util.hook;
-
-import roj.collect.SimpleList;
-
-import java.util.List;
+package roj.collect;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since 2021/4/21 22:51
+ * @since  2020/8/14 17:08
  */
-public final class FunctionList {
-    private final List<Runnable> functions = new SimpleList<>();
-    private final int max;
-    private int curr = 0;
-
-    public FunctionList(int max) {
-        this.max = max;
-    }
-
-    public void add(Runnable fun) {
-        this.functions.add(fun);
-    }
-
-    public boolean call() {
-        for (int i = 0; i < functions.size(); i++) {
-            functions.get(i).run();
-        }
-        curr++;
-        return max > 0 && curr > max;
-    }
+interface MapLikeEntry<T> {
+    T nextEntry();
 }

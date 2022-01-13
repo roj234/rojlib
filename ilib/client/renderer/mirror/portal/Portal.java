@@ -29,6 +29,10 @@ import ilib.client.renderer.mirror.ClientEventHandler;
 import ilib.client.renderer.mirror.EventHandler;
 import ilib.client.renderer.mirror.MirrorSubSystem;
 import ilib.client.renderer.mirror.PktEntityData;
+import roj.collect.MyHashSet;
+import roj.collect.ToIntMap;
+import roj.util.Helpers;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleRain;
@@ -44,9 +48,6 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import roj.collect.MyHashSet;
-import roj.collect.ToIntMap;
-import roj.util.Helpers;
 
 import java.util.Iterator;
 import java.util.List;

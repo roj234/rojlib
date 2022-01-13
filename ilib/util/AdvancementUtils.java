@@ -33,10 +33,11 @@
  */
 package ilib.util;
 
+import roj.reflect.ReflectionUtils;
+
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementList;
 import net.minecraft.advancements.AdvancementManager;
-import roj.reflect.ReflectionUtils;
 
 import java.lang.reflect.Field;
 

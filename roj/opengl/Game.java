@@ -377,8 +377,8 @@ public abstract class Game {
     protected void renderSky() {}
 
     protected void renderUI() {
-        textRenderer.renderStringWithShadow("FPS: " + TextUtil.scaledDouble(1000 / avgFrameTime, 1) + '/' + fps, 4, 0);
-        textRenderer.renderStringWithShadow("XYZ " + TextUtil.scaledDouble(x, 3) + ' ' + TextUtil.scaledDouble(y, 3) + ' ' + TextUtil.scaledDouble(z, 3), 4, -24);
+        textRenderer.renderStringWithShadow("FPS: " + TextUtil.toFixed(1000 / avgFrameTime, 1) + '/' + fps, 4, 0);
+        textRenderer.renderStringWithShadow("XYZ " + TextUtil.toFixed(x, 3) + ' ' + TextUtil.toFixed(y, 3) + ' ' + TextUtil.toFixed(z, 3), 4, -24);
         if(!glErrors.isEmpty()) {
             textRenderer.renderStringWithShadow("OpenGL Errors: ", 4, -48);
             int off = -64;

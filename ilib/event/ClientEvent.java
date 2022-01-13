@@ -40,7 +40,7 @@ import ilib.client.util.MyDebugOverlay;
 import ilib.util.NBTType;
 import ilib.util.PlayerUtil;
 import ilib.util.Reflection;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
 import ilib.world.saver.WorldSaver;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
@@ -335,7 +335,7 @@ public final class ClientEvent {
             if ((f & 16) != 0 && item instanceof ItemFood) {
                 list.add("\u00a7a" + I18n.format("tooltip.ilib.debug.food"));
                 ItemFood food = (ItemFood) item;
-                list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.meat") + TextHelperM.translate(food.isWolfsFavoriteMeat()));
+                list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.meat") + TextHelper.translate(food.isWolfsFavoriteMeat()));
                 list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.sat") + food.getSaturationModifier(stack));
                 list.add("\u00a77 - " + I18n.format("tooltip.ilib.debug.food.heal") + food.getHealAmount(stack));
             }
@@ -375,7 +375,7 @@ public final class ClientEvent {
             if (damage.size() == 1) {
                 Collection<AttributeModifier> speed = map.get(SharedMonsterAttributes.ATTACK_SPEED.getName());
                 if (speed.size() == 1) {
-                    int i = list.indexOf(TextHelperM.translate("item.modifiers." + EntityEquipmentSlot.MAINHAND.getName()));
+                    int i = list.indexOf(TextHelper.translate("item.modifiers." + EntityEquipmentSlot.MAINHAND.getName()));
                     if (i == -1) {
                         return;
                     }

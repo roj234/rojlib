@@ -28,6 +28,7 @@ package roj.config;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
 import roj.config.data.*;
+import roj.config.serial.Serializers;
 import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
@@ -43,7 +44,7 @@ import static roj.config.JSONParser.*;
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public class IniParser implements Parser {
+public class IniParser extends Parser {
     public static final int UNESCAPE = 4;
     static final short eq = 14;
     static final IBitSet LB = LongBitSet.from(']'), LN = LongBitSet.from("\r\n");
@@ -58,16 +59,6 @@ public class IniParser implements Parser {
 
     public static CMapping parse(CharSequence string, int flag) throws ParseException {
         return parse(new IniLexer().init(string), flag);
-    }
-
-    @Override
-    public CMapping Parse(CharSequence string, int flag) throws ParseException {
-        return parse(new IniLexer().init(string), flag);
-    }
-
-    @Override
-    public String format() {
-        return "INI";
     }
 
     /**
@@ -156,6 +147,26 @@ public class IniParser implements Parser {
                 unexpected(wr, w.val());
                 return null;
         }
+    }
+
+    public IniParser() {}
+
+    public IniParser(Serializers ser) {
+        this.ser = ser;
+    }
+
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        return parse(new IniLexer().init(string), flag);
+    }
+
+    @Override
+    public String format() {
+        return "INI";
+    }
+
+    public static Builder<IniParser> builder() {
+        return new Builder<>(new IniParser(new Serializers()));
     }
 
     public static class IniLexer extends AbstLexer {

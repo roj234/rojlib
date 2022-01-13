@@ -35,8 +35,10 @@ package ilib.item.handler;
 
 import ilib.item.handler.inv.MIInventory;
 import ilib.util.InventoryUtil;
+
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
+
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.items.CapabilityItemHandler;

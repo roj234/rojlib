@@ -60,7 +60,7 @@ public class PerformanceLogger implements Runnable {
             } catch (InterruptedException e) {
                 break;
             }
-            System.out.println("Mem: " + TextUtil.getScaledNumber(SystemInfo.getMemoryUsed()));
+            System.out.println("Mem: " + TextUtil.scaledNumber(SystemInfo.getMemoryUsed()));
         }
     }
 }

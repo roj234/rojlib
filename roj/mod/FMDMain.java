@@ -1627,7 +1627,7 @@ public final class FMDMain {
         }
 
         CmdUtil.info("    " + url);
-        CmdUtil.info("        文件大小: " + TextUtil.getScaledNumber(tmp.getInteger("size")).toUpperCase() + 'B');
+        CmdUtil.info("        文件大小: " + TextUtil.scaledNumber(tmp.getInteger("size")).toUpperCase() + 'B');
         CmdUtil.info("        文件SHA1效验码: " + tmp.getString("sha1"));
         CmdUtil.warning("         注意：这个文件名字要改成 '" + tmp.getString("sha1") + '.' + id +'\'');
     }

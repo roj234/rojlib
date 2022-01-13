@@ -30,6 +30,8 @@ import ilib.api.world.IPrimeGenerator;
 import ilib.math.Section;
 import ilib.util.BlockHelper;
 import ilib.world.structure.schematic.Schematic;
+import roj.math.Rect3i;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
@@ -38,7 +40,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkPrimer;
-import roj.math.Rect3i;
 
 /**
  * No description provided
@@ -71,7 +72,7 @@ public final class PrimerStructure implements IPrimeGenerator {
 
         Rect3i sect = box.intersectsWith(chunkBox.set(cxs, 0, czs, cxs + 16, 255, czs + 16));
 
-        if (sect != null && sect.size() > 1) {
+        if (sect != null && sect.volume() > 1) {
             int sx = sect.xmin;
             final int syStr = sect.ymin;
             final int szStr = sect.zmin;

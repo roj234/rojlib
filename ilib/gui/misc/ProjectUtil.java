@@ -33,10 +33,11 @@
  */
 package ilib.gui.misc;
 
-import net.minecraft.client.renderer.GLAllocation;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.Project;
 import roj.math.Vec3d;
+
+import net.minecraft.client.renderer.GLAllocation;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;

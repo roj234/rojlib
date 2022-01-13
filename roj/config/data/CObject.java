@@ -76,13 +76,13 @@ public final class CObject<T> extends CMapping {
         map.clear();
         if (null != value) {
             map.put("==", new CString(value.getClass().getName()));
-            Serializers.find(value.getClass().getName()).serialize(this, value);
+            Serializers.DEFAULT.find(value.getClass().getName()).serialize(this, value);
         }
     }
 
     @SuppressWarnings("unchecked")
     public void deserialize() {
-        value = (T) Serializers.find(getString("==")).deserialize(this);
+        value = (T) Serializers.DEFAULT.find(getString("==")).deserialize(this);
     }
 
     @Override

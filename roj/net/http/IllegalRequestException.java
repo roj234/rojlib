@@ -26,19 +26,19 @@
 package roj.net.http;
 
 public final class IllegalRequestException extends Exception {
-    public final Code code;
+    public final char code;
 
-    public IllegalRequestException(Code code) {
-        this.code = code;
+    public IllegalRequestException(int code) {
+        this.code = (char) code;
     }
 
-    public IllegalRequestException(Code code, String msg) {
+    public IllegalRequestException(int code, String msg) {
         super(msg);
-        this.code = code;
+        this.code = (char) code;
     }
 
-    public IllegalRequestException(Code code, Throwable x) {
+    public IllegalRequestException(int code, Throwable x) {
         super(x);
-        this.code = code;
+        this.code = (char) code;
     }
 }

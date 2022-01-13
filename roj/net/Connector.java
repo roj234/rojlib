@@ -28,10 +28,7 @@ package roj.net;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.net.SocketTimeoutException;
-import java.net.StandardSocketOptions;
-import java.nio.channels.SocketChannel;
-import java.util.concurrent.locks.LockSupport;
+import java.net.Socket;
 
 /**
  * @author Roj234
@@ -39,8 +36,9 @@ import java.util.concurrent.locks.LockSupport;
  * @since  2020/10/9 22:48
  */
 public abstract class Connector {
-    protected SocketChannel server;
+    protected Socket        server;
     protected WrappedSocket channel;
+    protected SocketFactory factory = SocketFactory.PLAIN_FACTORY;
 
     protected int connectTimeout = -1, readTimeout = -1;
     protected InetSocketAddress endpoint;
@@ -55,7 +53,7 @@ public abstract class Connector {
     }
 
     public boolean connected() {
-        return server != null && (server.isConnected() || server.isConnectionPending());
+        return server != null && server.isConnected();
     }
 
     public Connector proxy(Proxy proxy) {
@@ -68,32 +66,20 @@ public abstract class Connector {
      */
     public Connector createSocket(String address, int port, boolean instant) throws IOException {
         disconnect();
-        server = createSocket(address, port);
+        this.endpoint = new InetSocketAddress(address, port);
+        server = new Socket();
+        server.setSoTimeout(connectTimeout <= 0 ? 5000 : connectTimeout);
+        server.setReuseAddress(true);
         if (instant) {
             connect();
         }
         return this;
     }
 
-    protected SocketChannel createSocket(String server, int port) throws IOException {
-        this.endpoint = new InetSocketAddress(server, port);
-        return (SocketChannel) SocketChannel.open()
-                                            .setOption(StandardSocketOptions.SO_REUSEADDR, true)
-                                            .setOption(StandardSocketOptions.TCP_NODELAY, true)
-                                            .configureBlocking(false);
-    }
-
     protected void connect() throws IOException {
         if (!connected()) {
             server.connect(endpoint);
-            long to = System.currentTimeMillis() + connectTimeout;
-            while (!server.finishConnect()) {
-                LockSupport.parkNanos(100);
-                if (connectTimeout > 0 && System.currentTimeMillis() > to)
-                    throw new SocketTimeoutException();
-            }
-            server.finishConnect();
-            channel = createChannel();
+            channel = factory.wrap(server);
         }
     }
 
@@ -134,6 +120,4 @@ public abstract class Connector {
     public int connectTimeout() {
         return connectTimeout;
     }
-
-    protected abstract WrappedSocket createChannel() throws IOException;
 }

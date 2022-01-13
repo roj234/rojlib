@@ -27,6 +27,7 @@ package roj.config.data;
 
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.config.word.AbstLexer;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -34,10 +35,7 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * @author Roj234
@@ -294,17 +292,22 @@ public class CMapping extends CEntry {
         return get(key).isSimilar(entry);
     }
 
-    public void merge(CMapping anotherMapping, boolean selfBetter, boolean deep) {
+
+    /**
+     * 与o合并 警告，可能会导致list有重复对象
+     * @param selfBetter 优先从自身的map/list合并
+     */
+    public void merge(CMapping o, boolean selfBetter, boolean deep) {
         if (!deep) {
             if (!selfBetter) {
-                this.map.putAll(anotherMapping.map);
+                this.map.putAll(o.map);
             } else {
                 Map<String, CEntry> map1 = new MyHashMap<>(this.map);
-                this.map.putAll(anotherMapping.map);
+                this.map.putAll(o.map);
                 this.map.putAll(map1);
             }
         } else {
-            Map<String, CEntry> map = new MyHashMap<>(anotherMapping.map);
+            Map<String, CEntry> map = new MyHashMap<>(o.map);
             for (Map.Entry<String, CEntry> entry : this.map.entrySet()) {
                 CEntry s_val = entry.getValue();
                 CEntry t_val = map.remove(entry.getKey());
@@ -328,6 +331,40 @@ public class CMapping extends CEntry {
         }
     }
 
+    /**
+     * 把不符合o定义的规则（类型，字段）的替换为o，多出的则删除
+     * o : defaults
+     */
+    public void unmerge(CMapping o, boolean deep) {
+        MyHashSet<String> names = new MyHashSet<>(this.map.keySet());
+        if (!deep) {
+            for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+                if (!names.remove(entry.getKey())) {
+                    map.put(entry.getKey(), entry.getValue());
+                }
+            }
+        } else {
+            Map<String, CEntry> map = this.map;
+            for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+                String k = entry.getKey();
+                if (names.remove(k)) {
+                    CEntry s_val = map.get(k);
+                    CEntry t_val = entry.getValue();
+                    if (!s_val.getType().fits(t_val.getType())) {
+                        map.put(k, t_val);
+                    } else if (s_val.getType() == Type.MAP) {
+                        s_val.asMap().unmerge(t_val.asMap(), true);
+                    }
+                } else {
+                    map.put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        for(String key : names) {
+            map.remove(key);
+        }
+    }
+
     public final void clear() {
         map.clear();
     }
@@ -338,6 +375,17 @@ public class CMapping extends CEntry {
         return this;
     }
 
+    protected String getCommentInternal(String key) { return null; }
+
+    public boolean isCommentSupported() { return false; }
+
+    public Map<String, String> getComments() { return Collections.emptyMap(); }
+
+    public CMapping withComments() {
+        if (getType() != Type.MAP) throw new UnsupportedOperationException();
+        return new CMappingCommented(map);
+    }
+
     @Override
     public StringBuilder toYAML(StringBuilder sb, int depth) {
         if (!map.isEmpty()) {
@@ -346,6 +394,13 @@ public class CMapping extends CEntry {
                 for (int i = 0; i < depth; i++) {
                     sb.append(' ');
                 }
+
+                String comment = getCommentInternal(entry.getKey());
+                if (comment != null && comment.length() > 0) {
+                    addComments(sb.append('#'), depth, comment, "\n# ");
+                    sb.delete(sb.length() - 2, sb.length());
+                }
+
                 sb.append((CString.YAMLADDITIONALCHECK && CString.rawSafe(entry.getKey())) ? entry.getKey() : addSlash(entry.getKey())).append(':').append(' ');
                 entry.getValue().toYAML(sb, depth + 2).append('\n');
             }
@@ -369,6 +424,12 @@ public class CMapping extends CEntry {
                 for (Map.Entry<String, CEntry> entry : map.entrySet()) {
                     for (int i = 0; i < depth + 4; i++) {
                         sb.append(' ');
+                    }
+
+                    String comment = getCommentInternal(entry.getKey());
+                    if (comment != null && comment.length() > 0) {
+                        addComments(sb.append("//"), depth, comment, "\n");
+                        sb.delete(sb.length() - 3, sb.length());
                     }
 
                     sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':').append(' ');
@@ -395,7 +456,14 @@ public class CMapping extends CEntry {
                 }
                 for (Map.Entry<String, CEntry> entry : map.entrySet()) {
                     String key = entry.getKey();
-                    if (key.equals("")) continue;
+                    if (key.equals("<root>")) continue;
+
+                    String comment = getCommentInternal(entry.getKey());
+                    if (comment != null && comment.length() > 0) {
+                        addComments(sb.append(";"), depth, comment, "\n; ");
+                        sb.delete(sb.length() - 2, sb.length());
+                    }
+
                     sb.append('[');
                     if (key.indexOf(']') >= 0) {
                         sb.append('"').append(AbstLexer.addSlashes(key)).append('"');
@@ -436,9 +504,7 @@ public class CMapping extends CEntry {
 
     @Override
     public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
-        if (map.isEmpty()) {
-            return sb;
-        } else {
+        if (!map.isEmpty()) {
             if (chain.length() > 0 && depth < 2) {
                 if (!CString.rawSafe(chain)) {
                     sb.append('[').append(AbstLexer.addSlashes(chain)).append("]\n");
@@ -446,17 +512,21 @@ public class CMapping extends CEntry {
                     sb.append('[').append(chain).append("]\n");
                 }
             }
-            if (depth == 0 && map.containsKey("<root>"))
-                map.get("<root>").toTOML(sb, 0, chain).append('\n');
+            if (depth == 0 && map.containsKey("<root>")) map.get("<root>").toTOML(sb, 0, chain).append('\n');
 
             if (depth == 3) sb.append('{');
             for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                String comment = getCommentInternal(entry.getKey());
+                if (comment != null && comment.length() > 0) {
+                    addComments(sb.append('#'), 0, comment, "\n# ");
+                    sb.delete(sb.length() - 2, sb.length());
+                }
+
                 CEntry v = entry.getValue();
                 switch (v.getType()) {
                     case MAP:
                     case OBJECT:
-                        if (entry.getKey().equals("<root>") && depth == 0)
-                            continue;
+                        if (entry.getKey().equals("<root>") && depth == 0) continue;
                         v.toTOML(sb, depth == 3 ? 3 : 1, entry.getKey()).append('\n');
                         break;
                     case LIST:
@@ -478,8 +548,35 @@ public class CMapping extends CEntry {
             }
             sb.delete(sb.length() - (depth == 3 ? 2 : 0), sb.length());
             if (depth == 3) sb.append('}');
-            return sb;
         }
+        return sb;
+    }
+
+    protected static void addComments(StringBuilder sb, int depth, CharSequence comment, CharSequence end) {
+        int r = 0, i = 0, prev = 0;
+        while (i < comment.length()) {
+            switch (comment.charAt(i)) {
+                case '\r':
+                    if (i + 1 >= comment.length() || comment.charAt(i + 1) != '\n') {
+                        break;
+                    } else {
+                        r = 1;
+                        i++;
+                    }
+                case '\n':
+                    for (int j = 0; j < depth; j++) sb.append(' ');
+                    if (prev != i) sb.append(comment, prev, i - r);
+                    sb.append(end);
+                    prev = i + 1;
+                    r = 0;
+                    break;
+            }
+            i++;
+        }
+
+        for (int j = 0; j < depth; j++) sb.append(' ');
+        if (prev != i) sb.append(comment, prev, i);
+        sb.append(end);
     }
 
     @Override

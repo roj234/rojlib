@@ -27,12 +27,13 @@ package ilib.client.util;
 
 import ilib.ClientProxy;
 import ilib.Config;
+import org.lwjgl.opengl.GL11;
+import roj.math.MathUtils;
+
 import net.minecraft.client.renderer.GLAllocation;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.text.TextComponentString;
-import org.lwjgl.opengl.GL11;
-import roj.math.MathUtils;
 
 /**
  * No description provided

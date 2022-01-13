@@ -30,10 +30,7 @@ import net.minecraft.item.ItemStack;
 import java.util.function.Supplier;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/2 14:23
  */
 @FunctionalInterface

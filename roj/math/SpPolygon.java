@@ -29,10 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/15 8:36
  */
 public class SpPolygon implements IPolygon {

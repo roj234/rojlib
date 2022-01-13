@@ -28,12 +28,14 @@ package ilib.gui.comp.display;
 
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
-import ilib.util.TextHelperM;
-import net.minecraft.client.renderer.GlStateManager;
+import ilib.util.TextHelper;
 import roj.util.Color;
 
+import net.minecraft.client.renderer.GlStateManager;
+
 import javax.annotation.Nullable;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -57,7 +59,7 @@ public class ComText extends BaseComponent {
      */
     public ComText(IGui parent, int x, int y, String text, @Nullable Color color) {
         super(parent, x, y);
-        this.text = TextHelperM.translate(text);
+        this.text = TextHelper.translate(text);
         this.color = color;
     }
 

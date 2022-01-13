@@ -34,7 +34,8 @@ import java.util.*;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -42,7 +43,7 @@ import static roj.collect.IntMap.NOT_USING;
  * @since 2021/6/18 11:6
  * 基于Hash-like机制实现的较高速Map
  */
-public class ToLongMap<K> implements CItrMap<ToLongMap.Entry<K>>, Map<K, Long> {
+public class ToLongMap<K> implements MapLike<ToLongMap.Entry<K>>, Map<K, Long> {
     public long getLong(K key) {
         return getOrDefault(key, 0L);
     }
@@ -56,7 +57,7 @@ public class ToLongMap<K> implements CItrMap<ToLongMap.Entry<K>>, Map<K, Long> {
         return new EntrySet<>(this);
     }
 
-    public static class Entry<K> implements EntryIterable<Entry<K>>, Map.Entry<K, Long> {
+    public static class Entry<K> implements MapLikeEntry<Entry<K>>, Map.Entry<K, Long> {
         public K k;
         public long v;
 

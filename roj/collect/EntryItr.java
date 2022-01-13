@@ -34,8 +34,8 @@ import java.util.Iterator;
  * @version 0.1
  * @since  2020/8/14 17:16
  */
-public class EntryItr<E extends EntryIterable<E>> extends MapItr<E> implements Iterator<E> {
-    public EntryItr(EntryIterable<?>[] entries, CItrMap<E> map) {
+public class EntryItr<E extends MapLikeEntry<E>> extends MapItr<E> implements Iterator<E> {
+    public EntryItr(MapLikeEntry<?>[] entries, MapLike<E> map) {
         super(entries, map);
     }
 

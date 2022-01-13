@@ -33,11 +33,12 @@
  */
 package ilib.util;
 
+import roj.reflect.ReflectionUtils;
+
 import net.minecraft.item.Item;
 import net.minecraft.world.storage.loot.*;
 import net.minecraft.world.storage.loot.conditions.LootCondition;
 import net.minecraft.world.storage.loot.functions.LootFunction;
-import roj.reflect.ReflectionUtils;
 
 import java.util.Iterator;
 import java.util.List;

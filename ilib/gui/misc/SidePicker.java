@@ -33,9 +33,10 @@
  */
 package ilib.gui.misc;
 
-import net.minecraft.util.EnumFacing;
 import org.lwjgl.input.Mouse;
 import roj.math.Vec3d;
+
+import net.minecraft.util.EnumFacing;
 
 public class SidePicker {
     public static class Hit {

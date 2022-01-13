@@ -98,7 +98,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
                         CEntry x = map.get("==");
                         if (type - 1 == Type.OBJECT.ordinal() && x != null) {
-                            Serializer<?> deser = Serializers.find(x.asString());
+                            Serializer<?> deser = Serializers.DEFAULT.find(x.asString());
                             if (deser != null) {
                                 list.add(new CObject<>(map, deser));
                                 continue;

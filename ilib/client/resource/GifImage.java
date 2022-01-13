@@ -58,8 +58,6 @@ public class GifImage {
     private int[] frameTicks;
 
     static {
-        GIFDecoder.COLOR_TYPE = GIFDecoder.ARGB;
-
         File cachePath = new File("logs/.mi_gif_cache");
         if (!cachePath.exists() && !cachePath.mkdirs()) {
             throw new RuntimeException("Unable to create cache path");

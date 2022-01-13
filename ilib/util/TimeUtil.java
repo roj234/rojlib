@@ -33,9 +33,9 @@
  */
 package ilib.util;
 
-import ilib.ClientProxy;
-import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.util.ITickable;
+
+import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
@@ -46,31 +46,31 @@ import java.util.ArrayList;
 
 public class TimeUtil {
     public static long tick = 0;
-    public static final ArrayList<String> beginText = new ArrayList<>();
-    public static final ArrayList<ITickable> tickables = new ArrayList<>();
+    public static final ArrayList<String>    beginText = new ArrayList<>();
+    public static final ArrayList<ITickable> handlers  = new ArrayList<>();
 
     public static int seconds() {
-        return (int) Math.floor(tick / 20);
+        return (int) (tick / 20);
     }
 
     public static int minutes() {
-        return (int) Math.floor(seconds() / 60);
+        return (int) (tick / 1200);
     }
 
     public static int hours() {
-        return (int) Math.floor(minutes() / 60);
+        return (int) (tick / 72000);
     }
 
     public static int second() {
-        return (int) Math.floor(tick / 20) % 60;
+        return (int) ((tick / 20) % 60);
     }
 
     public static int minute() {
-        return (int) Math.floor(seconds() / 60) % 60;
+        return (int) ((tick / 1200) % 60);
     }
 
     public static int hour() {
-        return (int) Math.floor(minutes() / 60) % 24;
+        return (int) ((tick / 72000) % 60);
     }
 
     public static boolean isSecond(int second) {
@@ -87,32 +87,29 @@ public class TimeUtil {
 
     @SubscribeEvent
     @SideOnly(Side.CLIENT)
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
+    public static void onClientTick(TickEvent.WorldTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            WorldClient world = ClientProxy.mc.world;
-            if (world != null) {
-                tick = world.getTotalWorldTime();
+            tick = event.world.getTotalWorldTime();
 
-                if (!beginText.isEmpty()) {
-                    for (String s : beginText)
-                        PlayerUtil.sendTo(null, s);
-                    beginText.clear();
-                }
+            if (!beginText.isEmpty()) {
+                for (String s : beginText)
+                    PlayerUtil.sendTo(null, s);
+                beginText.clear();
+            }
 
-                for (int i = 0, size = tickables.size(); i < size; i++) {
-                    tickables.get(i).update();
-                }
+            for (int i = 0; i < handlers.size(); i++) {
+                handlers.get(i).update();
             }
         }
     }
 
     @SubscribeEvent
     @SideOnly(Side.SERVER)
-    public static void onWorldTick(TickEvent.WorldTickEvent event) {
-        if (event.phase == TickEvent.Phase.END && DimensionHelper.idFor(event.world) == 0) {
-            tick = event.world.getTotalWorldTime();
-            for (int i = 0, size = tickables.size(); i < size; i++) {
-                tickables.get(i).update();
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            tick = DimensionManager.getWorld(0).getTotalWorldTime();
+            for (int i = 0; i < handlers.size(); i++) {
+                handlers.get(i).update();
             }
         }
     }
@@ -122,6 +119,6 @@ public class TimeUtil {
     }
 
     public static void registerTickHandler(ITickable t) {
-        tickables.add(t);
+        handlers.add(t);
     }
 }

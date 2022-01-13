@@ -46,7 +46,6 @@ import roj.collect.MyHashMap;
 import roj.collect.ToIntMap;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
-import roj.config.data.CObject;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
@@ -70,15 +69,21 @@ import static roj.asm.type.NativeType.CLASS;
  * @since 2022/1/11 17:49
  */
 public final class Serializers {
-    static final Map<String, Serializer<?>> REGISTRY = new MyHashMap<>();
-    static final ConcurrentLinkedQueue<Runnable> PENDING = new ConcurrentLinkedQueue<>();
+    interface Init {
+        void init(Serializers instance);
+    }
+
+    public static final Serializers DEFAULT = new Serializers(0);
+
+    final Map<String, Serializer<?>> registry = new MyHashMap<>();
+    final ConcurrentLinkedQueue<Init> pending = new ConcurrentLinkedQueue<>();
 
     public static final int LENIENT = 1, NONSTATIC = 2, AUTOGEN = 4, NOINHERIT = 8;
-    public static int defaultFlag = AUTOGEN;
+    public int defaultFlag;
 
     @SuppressWarnings("unchecked")
-    public static <T> Serializer<T> find(String name) {
-        Serializer<?> ser = REGISTRY.get(name);
+    public <T> Serializer<T> find(String name) {
+        Serializer<?> ser = registry.get(name);
         if (ser == null) {
             if ((defaultFlag & AUTOGEN) == 0) {
                 return null;
@@ -90,7 +95,7 @@ public final class Serializers {
                 return null;
             }
             register(cls, defaultFlag);
-            ser = REGISTRY.get(cls.getName());
+            ser = registry.get(cls.getName());
             if (ser == null)
                 throw new IllegalStateException("Recursive finding " + cls.getName());
         }
@@ -98,28 +103,28 @@ public final class Serializers {
         return (Serializer<T>) ser;
     }
 
-    public static void register(Class<?> cls, int flag) {
-        if (REGISTRY.containsKey(cls.getName())) return;
-        synchronized (REGISTRY) {
-            if (REGISTRY.containsKey(cls.getName())) return;
+    public void register(Class<?> cls, int flag) {
+        if (registry.containsKey(cls.getName())) return;
+        synchronized (registry) {
+            if (registry.containsKey(cls.getName())) return;
         }
 
         Serializer<?> ser;
         if ((defaultFlag & NOINHERIT) == 0) {
             List<Class<?>> clz = ReflectionUtils.getFathersAndItfOrdered(cls);
             for (int i = 1; i < clz.size(); i++) {
-                ser = REGISTRY.get(clz.get(i).getName());
+                ser = registry.get(clz.get(i).getName());
                 if (ser != null) {
-                    synchronized (REGISTRY) {
-                        REGISTRY.putIfAbsent(cls.getName(), ser);
+                    synchronized (registry) {
+                        registry.putIfAbsent(cls.getName(), ser);
                     }
                     return;
                 }
             }
         }
 
-        synchronized (REGISTRY) {
-            if (null != REGISTRY.putIfAbsent(cls.getName(), null)) return;
+        synchronized (registry) {
+            if (null != registry.putIfAbsent(cls.getName(), null)) return;
         }
         if (cls.isEnum()) {
             ser = new EnumSerializer(cls);
@@ -128,43 +133,43 @@ public final class Serializers {
         } else {
             ser = serializer(cls, flag);
         }
-        synchronized (REGISTRY) {
-            REGISTRY.put(cls.getName(), ser);
+        synchronized (registry) {
+            registry.put(cls.getName(), ser);
         }
-        if (!PENDING.isEmpty()) {
-            Runnable r;
+        if (!pending.isEmpty()) {
             try {
+                Init r;
                 do {
-                    r = PENDING.peek();
+                    r = pending.peek();
                     if (r != null) {
-                        r.run();
-                        PENDING.poll();
+                        r.init(this);
+                        pending.poll();
                     }
                 } while (r != null);
             } catch (IllegalStateException ignored) {}
         }
-        if (ser instanceof Runnable) {
+        if (ser instanceof Init) {
             try {
-                ((Runnable) ser).run();
+                ((Init) ser).init(this);
             } catch (IllegalStateException e) {
-                PENDING.add((Runnable) ser);
+                pending.add((Init) ser);
             }
         }
     }
 
-    public static void register(Class<?> cls, Serializer<?> ser) {
-        synchronized (REGISTRY) {
-            REGISTRY.put(cls.getName(), ser);
+    public void register(Class<?> cls, Serializer<?> ser) {
+        synchronized (registry) {
+            registry.put(cls.getName(), ser);
         }
     }
 
-    static {
-        register(Map.class, new MapSerializer());
-        register(List.class, new ListSerializer());
-        register(Set.class, new SetSerializer());
-        register(Collection.class, new ListSerializer());
+    public Serializers(int flag) {
+        this();
+        this.defaultFlag = flag;
+    }
 
-        WrapSerializer s = new WrapSerializer();
+    public Serializers() {
+        WrapSerializer s = WrapSerializer.INSTANCE;
         register(Object.class, s);
         register(Integer.class, s);
         register(Long.class, s);
@@ -175,6 +180,11 @@ public final class Serializers {
         register(Character.class, new CharSerializer());
         register(Byte.class, new ByteSerializer());
         register(Short.class, new ShortSerializer());
+        register(Map.class, new MapSerializer());
+
+        register(List.class, s);
+        register(Collection.class, s);
+        register(Set.class, new SetSerializer());
     }
 
     static final FlagList PUBLIC = new FlagList(AccessFlag.PUBLIC);
@@ -230,9 +240,8 @@ public final class Serializers {
         }
     }
 
-    private static Serializer<?> serializer(Class<?> owner, int flag) {
+    private Serializer<?> serializer(Class<?> owner, int flag) {
         assert !owner.isEnum() && !owner.isPrimitive() && owner.getComponentType() == null;
-        ToIntMap<Type> storedSer = new ToIntMap<>(4);
 
         if (owner.isInterface()) {
             if ((flag & LENIENT) != 0) return UnableSerializer.INSTANCE;
@@ -245,11 +254,11 @@ public final class Serializers {
         DirectAccessor.makeHeader("roj/config/serial/GenSer$" + ordinal.getAndIncrement(),
                                   "roj/config/serial/Serializer",
                                   cz);
-        cz.interfaces.add("java/lang/Runnable");
+        cz.interfaces.add("java/lang/Init");
         cz.parent = "roj/config/serial/GenSer";
         DirectAccessor.addInit(cz);
 
-        Method m0 = new Method(PUBLIC, cz, "run", "()V");
+        Method m0 = new Method(PUBLIC, cz, "init", "(Lroj/config/serial/Serializers;)V");
         cz.methods.add(m0);
         AttrCode c0 = m0.code = new AttrCode(m0);
         c0.interpretFlags = AttrCode.COMPUTE_SIZES;
@@ -300,6 +309,7 @@ public final class Serializers {
         rcDes.add(new InvokeInsnNode(INVOKESPECIAL, className, "<init>", "()V"));
         rcDes.add(NodeHelper.npc(ASTORE_2));
 
+        ToIntMap<Type> storedSer = new ToIntMap<>(4);
         for (Field field : (flag & NOINHERIT) == 0 ?
                         Arrays.asList(owner.getDeclaredFields()) :
                         ReflectionUtils.getFields(owner)) {
@@ -311,13 +321,13 @@ public final class Serializers {
                 cz.fields.add(acc);
                 int accId;
 
-                InsnList run = cz.methods.get(2).code.instructions;
-                InsnNode ret = run.remove(run.size() - 1);
-                run.add(new LdcInsnNode(new CstClass(className)));
-                run.add(new LdcInsnNode(new CstString(field.getName())));
-                run.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/serial/GenSer", "acc", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/reflect/FieldAccessor;"));
-                run.add(new FieldInsnNode(PUTSTATIC, cz, accId = cz.fields.size() - 1));
-                run.add(ret);
+                InsnList init = cz.methods.get(2).code.instructions;
+                InsnNode ret = init.remove(init.size() - 1);
+                init.add(new LdcInsnNode(new CstClass(className)));
+                init.add(new LdcInsnNode(new CstString(field.getName())));
+                init.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/serial/GenSer", "acc", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/reflect/FieldAccessor;"));
+                init.add(new FieldInsnNode(PUTSTATIC, cz, accId = cz.fields.size() - 1));
+                init.add(ret);
                 getFA = new FieldInsnNode(GETSTATIC, cz, accId);
             } else getFA = null;
 
@@ -408,9 +418,8 @@ public final class Serializers {
                         pf.append("Object");
                         break;
                     default:
-                        int i = 0;
                         pf.append(NativeType.toString(type.type));
-                        pf.setCharAt(i, Character.toUpperCase(pf.charAt(i)));
+                        pf.setCharAt(0, Character.toUpperCase(pf.charAt(0)));
                 }
                 StringBuilder tp = new StringBuilder().append("(");
                 if (type.owner == null && type.array == 0) {
@@ -437,7 +446,7 @@ public final class Serializers {
         return (Serializer<?>) DirectAccessor.i_build(cz);
     }
 
-    private static void findBestSerializer(int flag, ToIntMap<Type> storedSer, Clazz cz, InsnList rcSer, InsnList rcDes, Type type) {
+    private void findBestSerializer(int flag, ToIntMap<Type> storedSer, Clazz cz, InsnList rcSer, InsnList rcDes, Type type) {
         if (type.array == 0) {
             switch (type.owner) {
                 case "java/lang/String":
@@ -470,13 +479,14 @@ public final class Serializers {
                 roj.asm.tree.Field field1 = new roj.asm.tree.Field(new FlagList(AccessFlag.STATIC), "s" + id, new Type("roj/config/serial/Serializer"));
                 cz.fields.add(field1);
 
-                // run(), 这是为了支持递归
-                InsnList run = cz.methods.get(2).code.instructions;
-                InsnNode ret = run.remove(run.size() - 1);
-                run.add(new LdcInsnNode(new CstString(cType.getName())));
-                run.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/serial/Serializers", "find", "(Ljava/lang/String;)Lroj/config/serial/Serializer;"));
-                run.add(new FieldInsnNode(PUTSTATIC, cz, id));
-                run.add(ret);
+                // init(), 这是为了支持递归
+                InsnList init = cz.methods.get(2).code.instructions;
+                InsnNode ret = init.remove(init.size() - 1);
+                init.add(NodeHelper.npc(ALOAD_1));
+                init.add(new LdcInsnNode(new CstString(cType.getName())));
+                init.add(new InvokeInsnNode(INVOKESPECIAL, "roj/config/serial/Serializers", "find", "(Ljava/lang/String;)Lroj/config/serial/Serializer;"));
+                init.add(new FieldInsnNode(PUTSTATIC, cz, id));
+                init.add(ret);
             }
             FieldInsnNode GET = new FieldInsnNode(GETSTATIC, cz, id);
             rcSer.add(rcSer.size() - ((flag >> 24) & 0xFF), GET);
@@ -492,20 +502,16 @@ public final class Serializers {
         rcDes.add(new ClassInsnNode(CHECKCAST, type.owner));
     }
 
-    public static void main(String[] args) {
-        new CObject<>(new Object[0]).serialize();;
-    }
-
-    private static Serializer<?> arraySerializer(Class<?> owner, int flag) {
+    private Serializer<?> arraySerializer(Class<?> owner, int flag) {
         Clazz cz = new Clazz();
         DirectAccessor.makeHeader("roj/config/serial/GenArraySer$" + ordinal.getAndIncrement(),
                                   "roj/config/serial/Serializer",
                                   cz);
-        cz.interfaces.add("java/lang/Runnable");
+        cz.interfaces.add("java/lang/Init");
         cz.parent = "roj/config/serial/GenArraySer";
         DirectAccessor.addInit(cz);
 
-        Method m0 = new Method(PUBLIC, cz, "run", "()V");
+        Method m0 = new Method(PUBLIC, cz, "init", "(Lroj/config/serial/Serializers;)V");
         cz.methods.add(m0);
         AttrCode c0 = m0.code = new AttrCode(m0);
         c0.interpretFlags = AttrCode.COMPUTE_SIZES;

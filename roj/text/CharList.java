@@ -119,6 +119,13 @@ public class CharList implements CharSequence {
         return append(cs, 0, cs.length());
     }
 
+    public CharList append(String s) {
+        ensureCapacity(ptr + s.length());
+        s.getChars(0, s.length(), list, ptr);
+        ptr += s.length();
+        return this;
+    }
+
     public CharList append(CharSequence cs, int start, int length) {
         if (cs instanceof CharList) {
             append(((CharList) cs).list, start, length);

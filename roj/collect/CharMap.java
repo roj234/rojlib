@@ -35,7 +35,7 @@ import java.util.function.IntFunction;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
-public final class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Character, V> {
+public final class CharMap<V> implements MapLike<CharMap.Entry<V>>, Map<Character, V> {
     @SuppressWarnings("unchecked")
     public void putAll(CharMap<V> map) {
         if (map.entries == null) return;
@@ -62,7 +62,7 @@ public final class CharMap<V> implements CItrMap<CharMap.Entry<V>>, Map<Characte
         }
     }
 
-    public static class Entry<V> implements EntryIterable<Entry<V>>, Map.Entry<Character, V> {
+    public static class Entry<V> implements MapLikeEntry<Entry<V>>, Map.Entry<Character, V> {
         char k;
         Object v;
 

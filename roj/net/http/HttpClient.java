@@ -25,16 +25,19 @@
  */
 package roj.net.http;
 
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
 import roj.config.ParseException;
+import roj.io.ChannelOutputStream;
 import roj.io.EmptyInputStream;
-import roj.net.*;
+import roj.net.Connector;
+import roj.net.SecureUtil;
+import roj.net.SocketFactory;
+import roj.net.StreamLikeSequence;
 import roj.text.CharList;
 import roj.util.ByteList;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -49,7 +52,7 @@ import java.util.concurrent.locks.LockSupport;
  */
 public class HttpClient extends Connector {
     private CharSequence action, path, body;
-    private final MyHashMap<CharSequence, CharSequence> header = new LinkedMyHashMap<>();
+    private final Headers header = new Headers();
     private final CharList utf8Buf = new CharList();
     private int maxReceive;
 
@@ -75,11 +78,11 @@ public class HttpClient extends Connector {
         return action.toString();
     }
 
-    public Map<CharSequence, CharSequence> headers() {
+    public Headers headers() {
         return header;
     }
 
-    public HttpClient header(CharSequence k, CharSequence v) {
+    public HttpClient header(CharSequence k, String v) {
         this.header.put(k, v);
         return this;
     }
@@ -99,13 +102,6 @@ public class HttpClient extends Connector {
         return this;
     }
 
-    @Override
-    protected WrappedSocket createChannel() throws IOException {
-        return factory.wrap(server.socket());
-    }
-
-    SocketFactory factory;
-
     public HttpClient ssl(SocketFactory f) {
         this.factory = f == null ? SocketFactory.PLAIN_FACTORY : f;
         return this;
@@ -114,7 +110,7 @@ public class HttpClient extends Connector {
     public void send() throws IOException {
         connect();
 
-        long timeout = readTimeout <= 0 ? Long.MAX_VALUE : readTimeout + System.currentTimeMillis();
+        long timeout = (readTimeout <= 0 ? 5000 : readTimeout) + System.currentTimeMillis();
 
         while (!channel.handShake()) {
             LockSupport.parkNanos(100);
@@ -127,6 +123,7 @@ public class HttpClient extends Connector {
         buf.clear();
 
         prepare(buf);
+        buf.flip();
 
         while (channel.write(buf) > 0) {
             LockSupport.parkNanos(100);
@@ -156,10 +153,7 @@ public class HttpClient extends Connector {
         }
 
         text.append(action).append(" ").append(path).append(" HTTP/1.1").append(CRLF);
-
-        for (Map.Entry<CharSequence, CharSequence> entry : header.entrySet()) {
-            text.append(entry.getKey()).append(": ").append(entry.getValue()).append(CRLF);
-        }
+        header.encode(text);
 
         if (body == null) {
             text.append(CRLF);
@@ -200,7 +194,7 @@ public class HttpClient extends Connector {
         HttpLexer lexer = ((HttpLexer)data[1]).init(plain.init(channel, readTimeout, maxReceive <= 0 ? Integer.MAX_VALUE : maxReceive));
 
         try {
-            HttpHead hdr = HttpHead.parse(lexer, action);
+            HttpHead hdr = HttpHead.parse(lexer);
             if (!"HEAD".contentEquals(action)) {
                 in = HttpInputStream.create(hdr, new SocketInputStream(channel, lexer.index).init(hdr.headers.get("Content-Length"), readTimeout));
             } else {
@@ -226,7 +220,12 @@ public class HttpClient extends Connector {
     }
 
     public InputStream getInputStream() {
+        if (in == null) in = new SocketInputStream(channel, 0).init(null, readTimeout);
         return in;
+    }
+
+    public OutputStream getOutputStream() {
+        return new ChannelOutputStream(channel);
     }
 
     public HttpClient url(URL url) throws IOException {
@@ -236,8 +235,10 @@ public class HttpClient extends Connector {
             } catch (GeneralSecurityException ignored) {}
         }
         path = url.getPath();
-        header.put("Host", url.getHost());
-        createSocket(url.getHost(), url.getPort() == -1 ? url.getDefaultPort() : url.getPort(), false);
+        String host = url.getHost();
+        if (url.getPort() >= 0) host += ":" + url.getPort();
+        header.put("Host", host);
+        createSocket(url.getHost(), url.getPort() < 0 ? url.getDefaultPort() : url.getPort(), false);
         return this;
     }
 }

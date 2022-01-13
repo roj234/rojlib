@@ -389,7 +389,7 @@ public final class FileUtil {
         do {
             conn.setURL(url);
             HttpHead header = conn.getResponse();
-            int code = header.code;
+            int code = header.getCode();
             if (code >= 200 && code < 400) {
                 String location = header.headers.get("Location");
                 if (location != null) {

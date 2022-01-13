@@ -26,18 +26,17 @@
 package ilib.util;
 
 import ilib.ImpLib;
+
 import net.minecraft.world.MinecraftException;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class DimensionHelper {
@@ -45,9 +44,7 @@ public class DimensionHelper {
         WorldServer w = DimensionManager.getWorld(id);
 
         if (w != null) {
-            if (!w.playerEntities.isEmpty()) {
-                return false;
-            }
+            if (!w.playerEntities.isEmpty()) return false;
 
             try {
                 w.saveAllChunks(true, null);
@@ -61,10 +58,7 @@ public class DimensionHelper {
 
             if (DimensionManager.isDimensionRegistered(id)) {
                 DimensionManager.unregisterDimension(id);
-                //return true;
-            }// else {
-            //   return false;
-            //}
+            }
 
             return true;
         }

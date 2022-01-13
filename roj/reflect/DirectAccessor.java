@@ -1036,7 +1036,7 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> i_access(String target, String field, Type fieldType, String setter, String getter) {
+    public DirectAccessor<T> i_access(String target, String field, Type fieldType, String getter, String setter) {
         target = target.replace('.', '/');
 
         if(getter != null) {

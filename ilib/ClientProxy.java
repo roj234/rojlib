@@ -36,15 +36,14 @@ import ilib.client.renderer.entity.RenderLightningBoltMI;
 import ilib.client.renderer.entity.RenderTNTMy;
 import ilib.client.renderer.mirror.MirrorSubSystem;
 import ilib.client.resource.GeneratedModelRepo;
-import ilib.client.util.model.BlockStateBuilder;
-import ilib.client.util.model.BlockStateBuilderCached;
 import ilib.command.MasterCommand;
 import ilib.command.sub.CommandPixelPainting;
 import ilib.command.sub.MySubs;
 import ilib.entity.EntityLightningBoltMI;
 import ilib.event.ClientEvent;
+import ilib.misc.model.BlockStateBuilder;
+import ilib.misc.model.BlockStateBuilderCached;
 import ilib.util.*;
-import ilib.util.hook.Hook;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 

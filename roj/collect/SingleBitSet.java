@@ -45,7 +45,7 @@ public class SingleBitSet implements IBitSet {
         max = -1;
     }
 
-    private SingleBitSet(long set, int max) {
+    public SingleBitSet(long set, int max) {
         this.set = set;
         this.max = (byte) max;
     }

@@ -143,7 +143,7 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
 
                 if (rb.position() > 0) {
                     rb.flip();
-                    if (writeAndFlush(ch, rb, TIMEOUT_TRANSFER) < 0) {
+                    if (writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
                         syncPrint(this + ": 传输失败");
                         return false;
                     }

@@ -115,6 +115,8 @@ public final class BlockHelper {
                 }
             }
         }
+
+        pos.release();
     }
 
     public static void fillWall(World w, IBlockState state, BlockPos v0, BlockPos v1, int flag) {
@@ -201,6 +203,7 @@ public final class BlockHelper {
         pos1.release();
     }
 
+    @Deprecated
     public static class MutableBlockPos extends BlockPos.MutableBlockPos {
         public MutableBlockPos() {
             this(0, 0, 0);
@@ -245,31 +248,31 @@ public final class BlockHelper {
      * @return 点集Iterator
      */
     public static Iterable<BlockPos> bresenham(double x1, double y1, double z1, double x2, double y2, double z2) {
-        return () -> new BresenhamIterator(x1, y1, z1, x2, y2, z2);
+        return () -> new BresenhamLine(x1, y1, z1, x2, y2, z2);
     }
 
-    public static final class BresenhamIterator implements Iterator<BlockPos> {
-        public double p_x, p_y, p_z;
-        public final double s_x, s_y, s_z;
+    public static final class BresenhamLine implements Iterator<BlockPos> {
+        public double x, y, z;
+        public final double stepX, stepY, stepZ;
         public final int len;
         int i;
 
         final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-        public BresenhamIterator(double x1, double y1, double z1, double x2, double y2, double z2) {
-            p_x = x1;
-            p_y = y1;
-            p_z = z1;
+        public BresenhamLine(double x1, double y1, double z1, double x2, double y2, double z2) {
+            x = x1;
+            y = y1;
+            z = z1;
 
-            double d_x = x2 - x1;
-            double d_y = y2 - y1;
-            double d_z = z2 - z1;
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double dz = z2 - z1;
 
-            len = (int) Math.ceil(Math.max(Math.abs(d_x), Math.max(Math.abs(d_y), Math.abs(d_z))));
+            len = (int) Math.ceil(Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz))));
 
-            s_x = d_x / len;
-            s_y = d_y / len;
-            s_z = d_z / len;
+            stepX = dx / len;
+            stepY = dy / len;
+            stepZ = dz / len;
         }
 
         @Override
@@ -279,10 +282,10 @@ public final class BlockHelper {
 
         @Override
         public BlockPos next() {
-            pos.setPos(p_x, p_y, p_z);
-            p_x += s_x;
-            p_y += s_y;
-            p_z += s_z;
+            pos.setPos(x, y, z);
+            x += stepX;
+            y += stepY;
+            z += stepZ;
             i++;
             return pos;
         }
@@ -420,27 +423,10 @@ public final class BlockHelper {
             for (int j = str.getY(); j <= endY; j++) {
                 for (int k = str.getZ(); k <= endZ; k++) {
                     world.setBlockState(pos.setPos(i, j, k), state, type);
-                    //markBlockForUpdate(world, pos);
                 }
             }
         }
         pos.release();
-    }
-
-    public static IBlockState getAdjacentBlock(World world, BlockPos pos, EnumFacing dir) {
-        pos = pos.offset(dir);
-        return world == null || !world.isBlockLoaded(pos) ? AIR_STATE : world.getBlockState(pos);
-    }
-
-
-    /* TILE ENTITY RETRIEVAL */
-    public static TileEntity getAdjacentTileEntity(World world, BlockPos pos, EnumFacing dir) {
-        pos = pos.offset(dir);
-        return world == null || !world.isBlockLoaded(pos) ? null : world.getTileEntity(pos);
-    }
-
-    public static TileEntity getAdjacentTileEntity(TileEntity refTile, EnumFacing dir) {
-        return refTile == null ? null : getAdjacentTileEntity(refTile.getWorld(), refTile.getPos(), dir);
     }
 
     /* BLOCK UPDATES */

@@ -26,6 +26,7 @@
 package ilib.world.structure.cascading.api;
 
 import ilib.world.structure.cascading.GenerateContext;
+
 import net.minecraft.world.World;
 
 import javax.annotation.Nonnull;

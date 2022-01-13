@@ -44,6 +44,7 @@ public class HttpServer implements Runnable {
     final ServerSocket   socket;
     final SocketFactory factory;
     final Router        router;
+    final TaskPool pool;
 
     public HttpServer(InetSocketAddress address, int conn, Router router) throws IOException {
         this(address, conn, router, SocketFactory.PLAIN_FACTORY);
@@ -55,6 +56,8 @@ public class HttpServer implements Runnable {
         socket.setReuseAddress(true);
         socket.bind(address, conn);
         this.router = router;
+        final int cpus = Runtime.getRuntime().availableProcessors();
+        this.pool = new TaskPool(cpus >> 1, cpus << 1, 32);
     }
 
     public final ServerSocket getSocket() {
@@ -63,8 +66,7 @@ public class HttpServer implements Runnable {
 
     @Override
     public void run() {
-        final int cpus = Runtime.getRuntime().availableProcessors();
-        TaskPool pool = new TaskPool(cpus >> 1, cpus << 1, 128);
+        TaskPool pool = this.pool;
         while (true) {
             Socket c;
             try {
@@ -79,5 +81,10 @@ public class HttpServer implements Runnable {
                 e.printStackTrace();
             }
         }
+    }
+
+    public void stop() throws IOException {
+        socket.close();
+        pool.shutdown();
     }
 }

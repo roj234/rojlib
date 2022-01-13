@@ -28,6 +28,9 @@ package ilib.client.renderer;
 import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.client.util.RenderUtils;
+import org.lwjgl.opengl.GL11;
+import roj.collect.MyHashMap;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.GlStateManager;
@@ -36,8 +39,6 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import org.lwjgl.opengl.GL11;
-import roj.collect.MyHashMap;
 
 public final class WaypointRenderer {
     static final ResourceLocation BEAM = new ResourceLocation("textures/entity/beacon_beam.png");

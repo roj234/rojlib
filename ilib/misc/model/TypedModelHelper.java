@@ -31,15 +31,17 @@
  * Author: R__
  * Filename: BatteryPower.java
  */
-package ilib.client.util.model;
+package ilib.misc.model;
 
 import ilib.api.registry.IRegistry;
 import ilib.api.registry.Indexable;
 import ilib.api.registry.Propertied;
 import ilib.client.resource.GeneratedModelRepo;
+
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
+
 import net.minecraftforge.client.model.ModelLoader;
 
 import java.util.Arrays;

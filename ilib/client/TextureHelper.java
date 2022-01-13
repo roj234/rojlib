@@ -30,11 +30,14 @@ import ilib.ATHandler;
 import ilib.ClientProxy;
 import ilib.Config;
 import ilib.ImpLib;
+import ilib.util.Hook;
 import ilib.util.Reflection;
+import roj.collect.SimpleList;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.*;
+
 import net.minecraftforge.fml.client.FMLClientHandler;
-import roj.collect.SimpleList;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
@@ -111,7 +114,7 @@ public final class TextureHelper implements IResourceManagerReloadListener {
 
     @Override
     public void onResourceManagerReload(@Nonnull IResourceManager man) {
-        ImpLib.HOOK.trigger(ilib.util.hook.Hook.LANGUAGE_RELOAD);
+        ImpLib.HOOK.trigger(Hook.LANGUAGE_RELOAD);
         if (Config.fixFont) {
             ClientProxy.mc.fontRenderer.setUnicodeFlag(false);
             ClientProxy.mc.fontRenderer.setBidiFlag(false);

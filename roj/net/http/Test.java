@@ -27,8 +27,6 @@ package roj.net.http;
 
 import roj.collect.MyHashMap;
 import roj.management.PerformanceLogger;
-import roj.net.SecureUtil;
-import roj.net.ServerSslConf;
 import roj.net.http.serv.GZipFileResponse;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.Response;
@@ -109,17 +107,15 @@ public class Test {
                     return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
                 case "/":
                 case "":
-                    StringBuilder sb = new StringBuilder().append("<h1>Welcome! <br> Asyncorized_MC's HTTP(S) Server</h1>");
-
-                    sb.append("欢迎您,来自").append(socket.getRemoteSocketAddress()).append("的客人! <br/><font color='red'>第二次更新后已支持流式处理请求！</font>" +
-                            "您访问的路径是:").append(request.host()).append(request.path()).append("<br/ >")
+                    StringBuilder sb = new StringBuilder().append("<h1>Server: Async/2.0</h1>");
+                    sb.append("欢迎您,您访问的路径是:").append(request.host()).append(request.path()).append("<br/ >")
                             .append(request.path())
-                            .append("<br/>HEADER:").append(request.headers()).append("<br/ >")
+                            .append("<br/>HEADER:<pre>").append(request.headers()).append("</pre><br/ >")
                             .append("<br/>GET:").append(request.getFields()).append("<br/ >")
                             .append("<br/>POST:").append(request.postFields()).append("<br/ >")
-                            .append("<br/><h2 style='color:#eecc44'>Server version 1.2.0</h2><form method=post><input type=text name=myname /><input type=text name=myname22 /><input type=submit /></form>");
+                            .append("<br/><h2 style='color:#eecc44'>Server: Async/2.0</h2><form method=post><input type=text name=myname /><input type=text name=myname22 /><input type=submit /></form>");
 
-                    return new Reply(Code.OK, new StringResponse(sb, "text/html"), action);
+                    return new Reply(Code.OK, new StringResponse(sb, "text/html"));
                 case "/file":
                     return new Reply(Code.OK, gzc);
                 case "/mem":
@@ -127,12 +123,8 @@ public class Test {
                 default:
                     return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, "未定义的路由"));
             }
-        }, SecureUtil.getSslFactory(new ServerSslConf("server.ks", "123456".toCharArray())));
-        System.out.println("Max connection: " + 2048);
-        System.out.println("Write buffer: " + Shared.WRITE_MAX);
-        System.out.println("UTF-8 decode buffer: " + Shared.MAX_CHAR_BUFFER_CAPACITY);
+        });
         System.out.println("Listening on " + server.getSocket().getLocalSocketAddress());
-
         server.run();
     }
 

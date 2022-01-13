@@ -40,8 +40,8 @@ import roj.math.MutableBoolean;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
+import roj.text.UTFCoder;
 import roj.ui.CmdUtil;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -293,15 +293,7 @@ public class MappingHelper {
 
     private void writeOb(File result) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(result)) {
-            ByteList output = new ByteList(66666);
-            int pos = 0;
-            while (pos < ob.length()) {
-                int len = Math.min(44444, ob.length() - pos);
-                ByteList.writeUTF(output, ob.subSequence(pos, pos + len), -1);
-                output.writeToStream(fos);
-                output.clear();
-                pos += len;
-            }
+            new UTFCoder().encodeTo(ob, fos);
         } finally {
             ob.clear();
         }

@@ -280,7 +280,7 @@ public class ModificationCache implements ThreadStateMonitor {
                 }
             }
 
-            PlayerUtil.broadcastAll("操作耗时: " + TextUtil.getScaledNumber(System.currentTimeMillis() - time) + "ms");
+            PlayerUtil.broadcastAll("操作耗时: " + TextUtil.scaledNumber(System.currentTimeMillis() - time) + "ms");
         }
 
         public ModificationInfo operate(ModificationInfo result) {
@@ -313,7 +313,7 @@ public class ModificationCache implements ThreadStateMonitor {
                 }
             }
 
-            PlayerUtil.broadcastAll("操作耗时: " + TextUtil.getScaledNumber(System.currentTimeMillis() - time) + "ms");
+            PlayerUtil.broadcastAll("操作耗时: " + TextUtil.scaledNumber(System.currentTimeMillis() - time) + "ms");
 
             affectedBlocks += affected;
 

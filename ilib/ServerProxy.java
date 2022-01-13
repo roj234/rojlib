@@ -31,8 +31,9 @@ import ilib.client.CreativeTabsMy;
 import ilib.client.renderer.mirror.MirrorSubSystem;
 import ilib.event.CommonEvent;
 import ilib.misc.MiscOptimize;
+import ilib.util.Hook;
 import ilib.util.PlayerUtil;
-import ilib.util.hook.Hook;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fluids.BlockFluidBase;
 

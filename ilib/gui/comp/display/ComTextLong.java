@@ -31,15 +31,17 @@ import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
 import ilib.util.Colors;
-import ilib.util.TextHelperM;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.renderer.GlStateManager;
+import ilib.util.TextHelper;
 import roj.math.MathUtils;
 import roj.util.Color;
 
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.GlStateManager;
+
 import java.util.List;
 
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -88,7 +90,7 @@ public class ComTextLong extends BaseComponent {
         lineWidth = (int) ((100f / (float) textScale) * (float) Math.max(18, width - 14));
 
         // Setup Lines
-        lines = TextHelperM.splitString(parent.getFontRenderer(), TextHelperM.translate(text), lineWidth);
+        lines = TextHelper.splitString(parent.getFontRenderer(), TextHelper.translate(text), lineWidth);
     }
 
     /**

@@ -102,7 +102,7 @@ public class MTDProgress extends STDProgress {
                     }
                     long lastAvg = (long) (sum * 1000d / diff);
 
-                    System.out.print(s = "Avg: " + TextUtil.getScaledNumber(lastAvg).toUpperCase() + "B/S");
+                    System.out.print(s = "Avg: " + TextUtil.scaledNumber(lastAvg).toUpperCase() + "B/S");
 
                     lastTime2 = curr;
                 } else {

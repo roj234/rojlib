@@ -48,7 +48,7 @@ import static roj.config.JSONParser.*;
  * @author Roj234
  * @since 2021/7/7 2:03
  */
-public class YAMLParser implements Parser {
+public class YAMLParser extends Parser {
     public static final String YAML_SPEC_CHARS    = "~+-[]{},;?<>&*:|!";
     // 是否需要escape (CString)
     public static final String YAML_ESCAPE_MULTI  = "[]{},>&*|!'\"\r\n\t";
@@ -75,21 +75,11 @@ public class YAMLParser implements Parser {
         return parse(new YAMLLexer().init(string), 0);
     }
 
-    @Override
-    public CEntry Parse(CharSequence string, int flag) throws ParseException {
-        return parse(new YAMLLexer().init(string), 0);
-    }
-
-    @Override
-    public String format() {
-        return "YAML";
-    }
-
     /**
      * @param flag COMMENT NO_DUPLICATE_KEY LITERAL_KEY
      */
     public static CEntry parse(YAMLLexer wr, int flag) throws ParseException {
-        CEntry ce = yamlRead(wr, (byte) (flag & (NO_DUPLICATE_KEY | LITERAL_KEY)));
+        CEntry ce = yamlRead(wr, (byte) (flag & (NO_DUPLICATE_KEY | LITERAL_KEY)), Serializers.DEFAULT);
         if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
@@ -99,7 +89,7 @@ public class YAMLParser implements Parser {
     /**
      * 解析流式数组定义
      */
-    static CList yamlFlowArray(YAMLLexer wr, byte flag) throws ParseException {
+    static CList yamlFlowArray(YAMLLexer wr, byte flag, Serializers ser) throws ParseException {
         CList list = new CList();
 
         boolean more = false;
@@ -119,7 +109,7 @@ public class YAMLParser implements Parser {
                 default:
                     wr.retractWord();
                     more = false;
-                    list.add(yamlRead(wr, flag));
+                    list.add(yamlRead(wr, flag, ser));
                     break;
             }
         }
@@ -131,7 +121,7 @@ public class YAMLParser implements Parser {
      * 解析流式对象定义
      */
     @SuppressWarnings("fallthrough")
-    static CMapping yamlFlowObject(YAMLLexer wr, byte flag) throws ParseException {
+    static CMapping yamlFlowObject(YAMLLexer wr, byte flag, Serializers ser) throws ParseException {
         CMapping map = new CMapping();
 
         boolean more = false;
@@ -166,11 +156,11 @@ public class YAMLParser implements Parser {
             if (w.type() != colon)
                 unexpected(wr, w.val(), ":");
 
-            map.put(name.val(), yamlRead(wr, flag));
+            map.put(name.val(), yamlRead(wr, flag, ser));
         }
 
-        if (map.containsKey("==", Type.STRING)) {
-            Serializer<?> des = Serializers.find(map.getString("=="));
+        if (ser != null && map.containsKey("==", Type.STRING)) {
+            Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
                 return new CObject<>(map.raw(), des);
             }
@@ -185,7 +175,7 @@ public class YAMLParser implements Parser {
      *    - cmw :
      *       - xyz
      */
-    static CList yamlLineArray(YAMLLexer wr, byte flag) throws ParseException {
+    static CList yamlLineArray(YAMLLexer wr, byte flag, Serializers ser) throws ParseException {
         CList list = new CList();
 
         int selfOff = wr.getLineOffset();
@@ -211,7 +201,7 @@ public class YAMLParser implements Parser {
                 list.add(CNull.NULL);
             } else {
                 wr.flag |= TEXT_MODE;
-                list.add(yamlRead(wr, flag));
+                list.add(yamlRead(wr, flag, ser));
             }
 
             off = wr.getLineOffset();
@@ -235,7 +225,7 @@ public class YAMLParser implements Parser {
      * c : x
      */
     @SuppressWarnings("fallthrough")
-    static CEntry yamlObject(YAMLLexer wr, byte flag) throws ParseException {
+    static CEntry yamlObject(YAMLLexer wr, byte flag, Serializers ser) throws ParseException {
         CMapping map = new CMapping();
 
         int selfOff = wr.getLineOffset();
@@ -275,7 +265,7 @@ public class YAMLParser implements Parser {
                         unexpected(wr, w.val(), ":");
 
                     wr.flag |= TEXT_MODE;
-                    map.put(name.val(), yamlRead(wr, flag));
+                    map.put(name.val(), yamlRead(wr, flag, ser));
                     break;
                 case WordPresets.EOF:
                     return map;
@@ -295,8 +285,8 @@ public class YAMLParser implements Parser {
             }
         }
 
-        if (map.containsKey("==", Type.STRING)) {
-            Serializer<?> des = Serializers.find(map.getString("=="));
+        if (ser != null && map.containsKey("==", Type.STRING)) {
+            Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
                 return new CObject<>(map.raw(), des);
             }
@@ -305,14 +295,14 @@ public class YAMLParser implements Parser {
         return map;
     }
 
-    private static CEntry yamlRead(YAMLLexer wr, byte flag) throws ParseException {
+    private static CEntry yamlRead(YAMLLexer wr, byte flag, Serializers ser) throws ParseException {
         Word w = wr.nextWord();
         String cnt = w.val();
         switch (w.type()) {
             case force_cast: {
                 if(cnt == null)
                     throw wr.err("!![null] 怎么会呢?");
-                CEntry entry = yamlRead(wr, flag);
+                CEntry entry = yamlRead(wr, flag, ser);
                 assert entry != null;
                 switch (cnt) {
                     case "str":
@@ -337,14 +327,14 @@ public class YAMLParser implements Parser {
                 }
             }
             case left_m_bracket:
-                return yamlFlowArray(wr, flag);
+                return yamlFlowArray(wr, flag, ser);
             case left_l_bracket:
-                return yamlFlowObject(wr, flag);
+                return yamlFlowObject(wr, flag, ser);
             case WordPresets.STRING:
             case WordPresets.LITERAL: {
                 boolean k = w.type() == WordPresets.LITERAL;
                 int i = wr.lastWord;
-                CEntry entry1 = isMappingKey(wr, flag);
+                CEntry entry1 = isMappingKey(wr, flag, ser);
                 if(entry1 != null) return entry1;
                 if(k) {
                     int i1 = cnt.indexOf(':');
@@ -358,12 +348,12 @@ public class YAMLParser implements Parser {
             case WordPresets.DECIMAL_D:
             case WordPresets.DECIMAL_F: {
                 double number = w.number().asDouble();
-                CEntry entry1 = isMappingKey(wr, flag);
+                CEntry entry1 = isMappingKey(wr, flag, ser);
                 return entry1 != null ? entry1 : CDouble.valueOf(number);
             }
             case WordPresets.INTEGER: {
                 int number = w.number().asInt();
-                CEntry entry1 = isMappingKey(wr, flag);
+                CEntry entry1 = isMappingKey(wr, flag, ser);
                 return entry1 != null ? entry1 : CInteger.valueOf(number);
             }
             case WordPresets.LONG:
@@ -371,11 +361,11 @@ public class YAMLParser implements Parser {
             case TRUE:
             case FALSE: {
                 boolean b = w.type() == TRUE;
-                CEntry entry1 = isMappingKey(wr, flag);
+                CEntry entry1 = isMappingKey(wr, flag, ser);
                 return entry1 != null ? entry1 : CBoolean.valueOf(b);
             }
             case NULL:{
-                CEntry entry1 = isMappingKey(wr, flag);
+                CEntry entry1 = isMappingKey(wr, flag, ser);
                 return entry1 != null ? entry1 : CNull.NULL;
             }
             case delim: {
@@ -388,10 +378,10 @@ public class YAMLParser implements Parser {
                     return CNull.NULL;
                 }
                 wr.index = i;
-                return yamlLineArray(wr, flag);
+                return yamlLineArray(wr, flag, ser);
             }
             case anchor: {
-                CEntry val = yamlRead(wr, flag);
+                CEntry val = yamlRead(wr, flag, ser);
                 wr.anchors.put(cnt, val);
                 return val;
             }
@@ -412,7 +402,7 @@ public class YAMLParser implements Parser {
         }
     }
 
-    private static CEntry isMappingKey(YAMLLexer wr, byte flag) throws ParseException {
+    private static CEntry isMappingKey(YAMLLexer wr, byte flag, Serializers ser) throws ParseException {
         int i = wr.lastWord;
         if(wr.nextWord().type() == colon) {
             if(wr.getLineOffset(i) == wr.getLineOffset(wr.index) && i != 0 && wr.charAt(i - 1) == ':' && wr.lineNonEmpty(i)) {
@@ -423,26 +413,55 @@ public class YAMLParser implements Parser {
                 return CNull.NULL;
             }
 
-            return yamlObject(wr, flag);
+            return yamlObject(wr, flag, ser);
         } else {
             wr.retractWord();
             return null;
         }
     }
 
+    public YAMLParser() {}
+
+    public YAMLParser(Serializers ser) {
+        this.ser = ser;
+    }
+
+    @Override
+    public CEntry Parse(CharSequence string, int flag) throws ParseException {
+        YAMLLexer l = new YAMLLexer();
+        l.init(string);
+        l.flag = (byte) flag;
+
+        CEntry ce = yamlRead(l, (byte) flag, ser);
+
+        if ((flag & NO_EOF) == 0 && l.nextWord().type() != WordPresets.EOF) {
+            throw l.err("期待 /EOF");
+        }
+        return ce;
+    }
+
+    @Override
+    public String format() {
+        return "YAML";
+    }
+
+    public static Builder<YAMLParser> builder() {
+        return new Builder<>(new YAMLParser(new Serializers()));
+    }
+
     public static class YAMLLexer extends AbstLexer {
         static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
-                                SPECIAL_0 = LongBitSet.from(YAML_ESCAPE_MULTI);
+                             SPECIAL_0 = LongBitSet.from(YAML_ESCAPE_MULTI);
 
         byte flag;
         protected final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
 
         @Override
-        public YAMLLexer init(CharSequence s) {
+        public YAMLLexer init(CharSequence seq) {
             anchors.clear();
             flag = 0;
             index = 0;
-            input = s;
+            input = seq;
             return this;
         }
 

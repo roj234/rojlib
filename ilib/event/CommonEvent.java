@@ -39,6 +39,8 @@ import ilib.misc.SelectionCache;
 import ilib.util.EntityHelper;
 import ilib.util.InventoryUtil;
 import ilib.util.PlayerUtil;
+import roj.math.MathUtils;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.enchantment.Enchantment;
@@ -65,6 +67,7 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.AnvilUpdateEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -81,7 +84,6 @@ import net.minecraftforge.fml.common.gameevent.PlayerEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import roj.math.MathUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -209,7 +211,7 @@ public class CommonEvent {
         if(Config.fixNaNHealth) {
             final float health = entity.getHealth();
             if(health != health || health == Float.POSITIVE_INFINITY || health == Float.NEGATIVE_INFINITY) {
-                EntityHelper.killIt(entity, null, false, true, true);
+                EntityHelper.remove(entity, null, EntityHelper.REMOVE_NOTIFY | EntityHelper.REMOVE_FORCE);
                 return;
             }
         }
@@ -235,7 +237,7 @@ public class CommonEvent {
             AxisAlignedBB tpAABB = new AxisAlignedBB(event.player.posX - 16, event.player.posY - 16, event.player.posZ - 16,event.player.posX + 16, event.player.posY + 16, event.player.posZ + 16);
             List<EntityMinecartContainer> carts = event.player.world.getEntitiesWithinAABB(EntityMinecartContainer.class, tpAABB);
             for (EntityMinecartContainer cart : carts) {
-                EntityHelper.killIt(cart, cart.world); // no drop logic
+                EntityHelper.remove(cart, cart.world); // no drop logic
                 PlayerUtil.broadcastAll("[TEST-BUGFIX] Minecart Bug Fix... Kill a cart!");
             }
         }

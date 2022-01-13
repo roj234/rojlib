@@ -79,7 +79,8 @@ public class ADownloader {
             public int size() {
                 return XMLParser.HTML_CLOSE_TAGS.size();
             }
-        }).keepAmp(true).lenient(true);
+        });
+        init.flag = XMLParser.KEEP_ENTITY | XMLParser.LENIENT;
         XElement elm = XMLParser.xmlElement(init);
 
         ArrayList<XElement> threads = new ArrayList<>();

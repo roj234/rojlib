@@ -25,21 +25,46 @@
  */
 package roj.io.source;
 
+import roj.util.ByteList;
+
 import java.io.Closeable;
+import java.io.EOFException;
 import java.io.IOException;
+import java.nio.channels.WritableByteChannel;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/18 13:36
  */
 public interface Source extends Closeable, AutoCloseable {
     void seek(long pos) throws IOException;
-    int read(byte[] array, int offset, int length) throws IOException;
-    void write(byte[] array, int offset, int length) throws IOException;
+    default int read(byte[] b) throws IOException {
+        return read(b, 0, b.length);
+    }
+    int read(byte[] b, int off, int len) throws IOException;
+    default void write(byte[] b) throws IOException {
+        write(b, 0, b.length);
+    }
+    void write(byte[] b, int off, int len) throws IOException;
     long position() throws IOException;
     void setLength(long length) throws IOException;
     long length() throws IOException;
+
+    default void readFully(byte[] b, int off, int len) throws IOException {
+        do {
+            int n = read(b, off, len);
+            if (n < 0) throw new EOFException();
+            off += n;
+            len -= n;
+        } while (len > 0);
+    }
+
+    default void read(ByteList buf, int length) throws IOException {
+        buf.ensureCapacity(length);
+        readFully(buf.list, 0, length);
+    }
+
+    default WritableByteChannel channel() {
+        return null;
+    }
 }

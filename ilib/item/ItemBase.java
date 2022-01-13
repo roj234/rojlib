@@ -33,8 +33,9 @@ import ilib.api.item.ITooltip;
 import ilib.util.Colors;
 import ilib.util.ForgeUtil;
 import ilib.util.ItemNBT;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
 import ilib.util.energy.EnergyHelper;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
@@ -46,13 +47,15 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
+
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -83,7 +86,7 @@ public class ItemBase extends Item {
 
             if (i instanceof IShiftTooltip) {
                 String z = I18n.format(tips.get(0));
-                TextHelperM.shiftLore(list, color.size() > 0 ? I18n.format(color.get(0)) + z : z);
+                TextHelper.shiftLore(list, color.size() > 0 ? I18n.format(color.get(0)) + z : z);
             } else {
                 String s, s2;
                 for (int j = 0; j < tips.size(); j++) {
@@ -137,7 +140,7 @@ public class ItemBase extends Item {
     }
 
     public String getItemStackDisplayName(ItemStack stack) {
-        return TextHelperM.translate(this.getTranslationKey(stack)).trim();
+        return TextHelper.translate(this.getTranslationKey(stack)).trim();
     }
 
     @Override
@@ -159,13 +162,13 @@ public class ItemBase extends Item {
     public static String getOwnerTypeName(int type) {
         switch (type) {
             case 0:
-                return TextHelperM.translate("gui.mi.tabs.perm.public");
+                return TextHelper.translate("gui.mi.tabs.perm.public");
             case 1:
-                return TextHelperM.translate("gui.mi.tabs.perm.private");
+                return TextHelper.translate("gui.mi.tabs.perm.private");
             case 2:
-                return TextHelperM.translate("gui.mi.tabs.perm.protected");
+                return TextHelper.translate("gui.mi.tabs.perm.protected");
             default:
-                return TextHelperM.translate("gui.mi.tabs.redstone.error");
+                return TextHelper.translate("gui.mi.tabs.redstone.error");
         }
     }
 }

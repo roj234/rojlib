@@ -50,7 +50,7 @@ public class Arena {
 
     public int getSelectionSize() {
         if (isOK())
-            return toSection().size();
+            return toSection().volume();
         return -1;
     }
 

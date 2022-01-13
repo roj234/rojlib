@@ -42,11 +42,11 @@ import java.util.*;
  * @version 0.1
  * @since 2021/5/16 14:34
  */
-public class WeakHashSet<K> implements Set<K>, CItrMap<WeakHashSet.Entry> {
+public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
 
     private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
-    protected static class Entry extends WeakReference<Object> implements EntryIterable<Entry> {
+    protected static class Entry extends WeakReference<Object> implements MapLikeEntry<Entry> {
         public Entry(ReferenceQueue<Object> queue, Object referent) {
             super(referent, queue);
         }

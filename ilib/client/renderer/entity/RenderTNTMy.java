@@ -27,6 +27,8 @@ package ilib.client.renderer.entity;
 
 import ilib.ClientProxy;
 import ilib.client.util.RenderUtils;
+import org.lwjgl.opengl.GL11;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -34,7 +36,6 @@ import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.entity.RenderTNTPrimed;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.item.EntityTNTPrimed;
-import org.lwjgl.opengl.GL11;
 
 /**
  * No description provided

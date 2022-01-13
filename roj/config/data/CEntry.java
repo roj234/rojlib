@@ -243,7 +243,7 @@ public abstract class CEntry {
 
                 CEntry x = map.get("==");
                 if ((b & 0xF) == Type.OBJECT.ordinal() && x != null) {
-                    Serializer<?> deser = Serializers.find(x.asString());
+                    Serializer<?> deser = Serializers.DEFAULT.find(x.asString());
                     if (deser != null) {
                         return new CObject<>(map, deser);
                     }

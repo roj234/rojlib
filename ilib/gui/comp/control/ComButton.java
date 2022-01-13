@@ -30,12 +30,14 @@ import ilib.client.GuiHelper;
 import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
-import ilib.util.TextHelperM;
+import ilib.util.TextHelper;
+
 import net.minecraft.client.gui.FontRenderer;
 
 import javax.annotation.Nullable;
 import java.awt.*;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -59,7 +61,7 @@ public abstract class ComButton extends BaseComponent {
         width = w;
         height = h;
         if (text != null)
-            label = TextHelperM.translate(text);
+            label = TextHelper.translate(text);
         else
             label = null;
     }
@@ -72,7 +74,7 @@ public abstract class ComButton extends BaseComponent {
     public ComButton(IGui parent, int xPos, int yPos, int uPos, int vPos, int w, int h, @Nullable String text) {
         this(parent, xPos, yPos, uPos, vPos, w, h);
         if (text != null)
-            label = TextHelperM.translate(text);
+            label = TextHelper.translate(text);
         else
             label = null;
     }
@@ -148,7 +150,7 @@ public abstract class ComButton extends BaseComponent {
     }
 
     public void setLabel(String label) {
-        this.label = TextHelperM.translate(label);
+        this.label = TextHelper.translate(label);
     }
 
     public static class DisplayOnly extends ComButton {

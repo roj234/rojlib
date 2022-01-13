@@ -25,6 +25,8 @@
  */
 package roj.net.misc;
 
+import roj.collect.SimpleList;
+import roj.reflect.DirectAccessor;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -32,7 +34,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
@@ -41,6 +43,15 @@ import java.util.function.Consumer;
  * @author Roj233
  * @since 2021/12/24 23:27
  */
+class MyKeySet extends SimpleList<SelectionKey> implements Set<SelectionKey> {
+    MyKeySet() {
+        super(100);
+    }
+}
+interface SetSet {
+    void setSelectedSet(Selector selector, Set<SelectionKey> selectedSet);
+    void setPublicSelectedSet(Selector selector, Set<SelectionKey> totalSet);
+}
 public final class PipeIOThread extends Thread {
     private static final ThreadGroup PIPE_IO = new ThreadGroup("Pipe IO");
     private static PipeIOThread[] tmp = new PipeIOThread[0];
@@ -101,7 +112,7 @@ public final class PipeIOThread extends Thread {
         for (int i = 0; i < amount; i++) {
             PipeIOThread thread = tmp[i];
             Selector s = thread.selector;
-            if (s.isOpen() && s.keys().size() < 128) {
+            if (s.isOpen() && s.keys().size() < 100) {
                 if (lowest == null || s.keys().size() < lowest.keys().size()) {
                     lowest = s;
                 }
@@ -125,9 +136,24 @@ public final class PipeIOThread extends Thread {
             }
             thread.start();
         } else {
-            throw new RejectedExecutionException("Thread pool is full");
+            lowest = null;
+            for (int i = 0; i < amount; i++) {
+                PipeIOThread thread = tmp[i];
+                Selector s = thread.selector;
+                if (s.isOpen()) {
+                    if (lowest == null || s.keys().size() < lowest.keys().size()) {
+                        lowest = s;
+                    }
+                }
+            }
+            try {
+                pair.upKey = fdcA.register(lowest, SelectionKey.OP_READ, att);
+                pair.downKey = fdcB.register(lowest, SelectionKey.OP_READ, att);
+            } catch (ClosedChannelException | ClosedSelectorException ignored) {}
         }
     }
+
+    static SetSet setter;
 
     private final Shutdownable server;
     private final Selector selector;
@@ -143,6 +169,18 @@ public final class PipeIOThread extends Thread {
             Helpers.athrow(e);
             t = null;
         }
+        if (setter == null) {
+            synchronized (PipeIOThread.class) {
+                if (setter == null)
+                    setter = DirectAccessor.builder(SetSet.class).unchecked()
+                                           .access(t.getClass(), "selectedKeys", null, "setSelectedSet")
+                                           .access(t.getClass(), "publicSelectedKeys", null, "setPublicSelectedSet")
+                                           .build();
+            }
+        }
+        MyKeySet set = new MyKeySet();
+        setter.setSelectedSet(t, set);
+        setter.setPublicSelectedSet(t, set);
         this.selector = t;
         setDaemon(true);
     }
@@ -167,7 +205,9 @@ public final class PipeIOThread extends Thread {
             }
             this.idle = false;
             idle = 0;
-            for (SelectionKey key : selector.selectedKeys()) {
+            MyKeySet keys = (MyKeySet) selector.selectedKeys();
+            for (int i = 0; i < keys.size(); i++) {
+                SelectionKey key = keys.get(i);
                 Att att = (Att) key.attachment();
                 Pipe pair = att.pair;
                 if (pair.isEof()) {
@@ -182,7 +222,7 @@ public final class PipeIOThread extends Thread {
                     continue;
                 }
                 try {
-                    pair.transfer(false);
+                    pair.transfer();
                 } catch (Throwable e) {
                     e.printStackTrace();
                     try {
@@ -198,11 +238,13 @@ public final class PipeIOThread extends Thread {
                     }
                 }
             }
-            selector.selectedKeys().clear();
-            for (SelectionKey key : selector.keys()) {
-                ((Att) key.attachment()).pair.idleTime++;
-            }
-            LockSupport.parkNanos(5);
+            keys.clear();
+            try {
+                for (SelectionKey key : selector.keys()) {
+                    ((Att) key.attachment()).pair.idleTime++;
+                }
+            } catch (Throwable ignored) {}
+            LockSupport.parkNanos(1000);
         }
         try {
             selector.close();

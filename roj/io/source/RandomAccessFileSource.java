@@ -30,10 +30,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/18 13:38
  */
 public class RandomAccessFileSource implements Source {
@@ -65,13 +62,13 @@ public class RandomAccessFileSource implements Source {
     }
 
     @Override
-    public int read(byte[] array, int offset, int length) throws IOException {
-        return file.read(array, offset, length);
+    public int read(byte[] b, int off, int len) throws IOException {
+        return file.read(b, off, len);
     }
 
     @Override
-    public void write(byte[] array, int offset, int length) throws IOException {
-        file.write(array, offset, length);
+    public void write(byte[] b, int off, int len) throws IOException {
+        file.write(b, off, len);
     }
 
     @Override

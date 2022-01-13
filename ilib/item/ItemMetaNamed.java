@@ -29,8 +29,9 @@ package ilib.item;
 import ilib.ImpLib;
 import ilib.api.registry.IRegistry;
 import ilib.api.registry.Localized;
-import ilib.api.registry.Propertied;
-import ilib.util.TextHelperM;
+import ilib.util.Hook;
+import ilib.util.TextHelper;
+
 import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
@@ -39,7 +40,8 @@ import javax.annotation.Nonnull;
  * 基于MI-Enumeration ({@link Propertied})创建自定翻译的Meta物品
  *
  * @param <T> The MI-Enumeration
- *//**
+ */
+/**
  * No description provided
  *
  * @author Roj234
@@ -64,7 +66,7 @@ public class ItemMetaNamed<T extends Localized> extends ItemMeta<T> {
     }
 
     private void addReload() {
-        ImpLib.HOOK.add(ilib.util.hook.Hook.LANGUAGE_RELOAD, ItemMetaNamed.this::initDisplayName);
+        ImpLib.HOOK.add(Hook.LANGUAGE_RELOAD, ItemMetaNamed.this::initDisplayName);
     }
 
     @Nonnull
@@ -73,7 +75,7 @@ public class ItemMetaNamed<T extends Localized> extends ItemMeta<T> {
         if (displayName == null)
             initDisplayName();
         T t = getTypeByStack(stack);
-        if (t == null) return TextHelperM.translate("mi.invalid");
+        if (t == null) return TextHelper.translate("mi.invalid");
         if (needReplace)
             return this.displayName.replace("{}", t.getLocalizedName());
         else
@@ -81,7 +83,7 @@ public class ItemMetaNamed<T extends Localized> extends ItemMeta<T> {
     }
 
     void initDisplayName() {
-        this.displayName = TextHelperM.translate(cache);
+        this.displayName = TextHelper.translate(cache);
         if (displayName.indexOf("{}") > 0) {
             needReplace = true;
         }

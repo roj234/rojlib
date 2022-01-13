@@ -27,6 +27,7 @@
 package ilib.util;
 
 import com.google.common.collect.BiMap;
+
 import net.minecraft.block.Block;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.item.Item;
@@ -36,6 +37,7 @@ import net.minecraft.potion.PotionType;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.world.biome.Biome;
+
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.fml.common.registry.VillagerRegistry.VillagerProfession;
@@ -44,20 +46,18 @@ import net.minecraftforge.registries.IForgeRegistry;
 import net.minecraftforge.registries.IForgeRegistry.AddCallback;
 import net.minecraftforge.registries.IForgeRegistryEntry;
 import net.minecraftforge.registries.RegistryBuilder;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class Registries {
-    public static <E extends IForgeRegistryEntry<E>> IForgeRegistry<E> create(ResourceLocation registryName, Class<E> registryType, AddCallback<E> callback) {
-        return create(registryName, registryType, 0, 127, callback);
+    public static <E extends IForgeRegistryEntry<E>> IForgeRegistry<E> create(ResourceLocation name, Class<E> type, AddCallback<E> callback) {
+        return create(name, type, 0, 127, callback);
     }
 
-    public static <E extends IForgeRegistryEntry<E>> IForgeRegistry<E> create(ResourceLocation registryName, Class<E> registryType, int minId, int maxId, AddCallback<E> callback) {
-        return (new RegistryBuilder<E>()).setName(registryName).addCallback(callback).setType(registryType).setIDRange(minId, maxId).create();
+    public static <E extends IForgeRegistryEntry<E>> IForgeRegistry<E> create(ResourceLocation name, Class<E> type, int minId, int maxId, AddCallback<E> callback) {
+        return new RegistryBuilder<E>().setName(name).addCallback(callback).setType(type).setIDRange(minId, maxId).create();
     }
 
     public static IForgeRegistry<Block> block() {
