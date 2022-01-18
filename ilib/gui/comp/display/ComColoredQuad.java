@@ -29,12 +29,14 @@ package ilib.gui.comp.display;
 import ilib.client.util.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
-import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
-import roj.util.Color;
+
+import net.minecraft.client.renderer.GlStateManager;
 
 import javax.annotation.Nullable;
-/**
+import java.awt.*;
+
+/**
  * No description provided
  *
  * @author Roj234

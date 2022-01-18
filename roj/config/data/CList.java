@@ -258,8 +258,10 @@ public class CList extends CEntry implements Iterable<CEntry> {
                 if (depth > 0) sb.append('\n');
                 for (int j = 0; j < list.size(); j++) {
                     CEntry entry = list.get(j);
-                    for (int i = 0; i < depth + 4; i++) {
-                        sb.append(' ');
+                    if (depth > 0) {
+                        for (int i = 0; i < depth + 4; i++) {
+                            sb.append(' ');
+                        }
                     }
                     entry.toJSON(sb, depth + 4).append(",\n");
                 }
@@ -269,7 +271,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
                         sb.append(' ');
                     }
                 } else {
-                    sb.delete(sb.length() - 1, sb.length());
+                    sb.delete(sb.length() - 2, sb.length());
                 }
             }
         }

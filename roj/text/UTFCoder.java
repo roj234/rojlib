@@ -96,8 +96,8 @@ public class UTFCoder {
         int i = 0, wrote = 0;
         while (i < str.length()) {
             int len = i + Math.min(ONCE, str.length() - i);
-            for (int j = 0; j < len; j++) {
-                int c = str.charAt(j);
+            while (i < len) {
+                int c = str.charAt(i++);
                 if ((c >= 0x0001) && (c <= 0x007F)) {
                     ob.put((byte) c);
                 } else if (c > 0x07FF) {
@@ -112,7 +112,6 @@ public class UTFCoder {
             wrote += ob.wIndex();
             ob.writeToStream(out);
             ob.clear();
-            i += len;
         }
         return wrote;
     }

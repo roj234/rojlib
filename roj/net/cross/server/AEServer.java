@@ -31,26 +31,25 @@ import roj.config.data.CMapping;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.WrappedSocket;
-import roj.net.misc.PacketBuffer;
-import roj.net.misc.Pipe;
-import roj.net.misc.Shutdownable;
-import roj.net.misc.TaskManager;
+import roj.net.cross.AEClient;
+import roj.net.misc.*;
 import roj.net.mss.MSSServerEngineFactory;
+import roj.util.EmptyArrays;
 import roj.util.FastLocalThread;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Function;
 
 import static roj.net.cross.Util.*;
 
@@ -58,22 +57,28 @@ import static roj.net.cross.Util.*;
  * AbyssalEye Server
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/17 22:17
  */
 public class AEServer implements Runnable, Shutdownable {
-    byte[] info = "欢迎使用AbyssalEyeServer Version35".getBytes(StandardCharsets.UTF_8);
+    // 20分钟
+    static final int PIPE_TIMEOUT = 1200_000;
 
-    ConcurrentHashMap<String, Room>   rooms   = new ConcurrentHashMap<>();
+    byte[] info = EmptyArrays.BYTES;
+
+    public void setMOTD(String motd) {
+        info = motd.getBytes(StandardCharsets.UTF_8);
+    }
+
+    ConcurrentHashMap<String, Room> rooms = new ConcurrentHashMap<>();
 
     int pipeId;
     ConcurrentHashMap<Integer, PipeGroup> pipes = new ConcurrentHashMap<>();
+    Random rnd;
+
     protected final ServerSocket socket;
     private final MSSServerEngineFactory factory;
 
     AtomicInteger remain;
-    int           maxConnPerIp = 128;
-    static final Function<InetAddress, AtomicInteger> COUNTER = (x) -> new AtomicInteger();
 
     TaskManager watcher = new TaskManager();
 
@@ -83,6 +88,7 @@ public class AEServer implements Runnable, Shutdownable {
         s.bind(addr, conn);
         this.remain = new AtomicInteger(conn);
         this.factory = factory;
+        this.rnd = new SecureRandom();
     }
 
     @Override
@@ -111,19 +117,6 @@ public class AEServer implements Runnable, Shutdownable {
 
     public boolean canCreateRoom = true, canJoinRoom = true;
 
-    public void m_KickRoom(Room room) throws IOException {
-        if(room.master == null) return;
-        rooms.remove(room.id);
-        room.close();
-        try (WrappedSocket m = room.master.ch) {
-            room.master = null;
-            write1(m, (byte) PS_ERROR_SYSTEM_LIMIT);
-            while (!m.shutdown()) {
-                LockSupport.parkNanos(100);
-            }
-        }
-    }
-
     protected int login(Worker worker, boolean owner, String id, String token) {
         Room room = rooms.get(id);
         if(owner != (room == null)) return PS_ERROR_AUTH;
@@ -151,7 +144,6 @@ public class AEServer implements Runnable, Shutdownable {
         try {
             socket.close();
         } catch (IOException ignored) {}
-        shutdown = true;
 
         for (Room room : rooms.values()) {
             room.token = null;
@@ -173,6 +165,9 @@ public class AEServer implements Runnable, Shutdownable {
             room.close();
         }
 
+        LockSupport.parkNanos(1000_000);
+        shutdown = true;
+
         watcher.waitUntilFinish();
         watcher = null;
 
@@ -186,11 +181,15 @@ public class AEServer implements Runnable, Shutdownable {
         String motdString;
         byte[] motd, portMap;
 
+        // 房主的直连地址
+        byte[] upnpAddress;
+
         final IntMap<Worker> clients = new IntMap<>();
         int index;
 
         // 配置项
         public boolean locked;
+        Waiters resetLock;
 
         // 统计数据
         long creation;
@@ -202,6 +201,7 @@ public class AEServer implements Runnable, Shutdownable {
             this.clients.put(0, owner);
             this.index = 1;
             this.creation = System.currentTimeMillis() / 1000;
+            this.resetLock = new Waiters();
             owner.room = this;
         }
 
@@ -225,8 +225,8 @@ public class AEServer implements Runnable, Shutdownable {
                     for (PipeGroup group : master.pipes.values()) {
                         Pipe ref = group.pairRef;
                         if (ref != null) {
-                            up += ref.getDownloaded();
-                            down += ref.getUploaded();
+                            up += ref.downloaded;
+                            down += ref.uploaded;
                         }
                     }
                 }
@@ -255,7 +255,7 @@ public class AEServer implements Runnable, Shutdownable {
     boolean shutdown;
 
     static final class Worker extends FastLocalThread implements ITaskNaCl {
-        AEServer      server;
+        AEServer server;
         WrappedSocket ch;
 
         Room   room;
@@ -269,8 +269,13 @@ public class AEServer implements Runnable, Shutdownable {
 
         @Override
         public String toString() {
+            StringBuilder sb = new StringBuilder();
             String s = ch.socket().getRemoteSocketAddress().toString();
-            return "[" + (s.startsWith("/") ? s.substring(1) : s)/* + "/" + state.getClass().getSimpleName()*/ + "] " + (room == null ? "null" : room.id) + "#" + clientId;
+            sb.append("[").append(s.startsWith("/") ? s.substring(1) : s).append("]");
+            if (room != null) {
+                sb.append(" \"").append(room.id).append("\"#").append(clientId);
+            }
+            return sb.toString();
         }
 
         public Worker(AEServer aeServer, WrappedSocket ch) {
@@ -361,6 +366,7 @@ public class AEServer implements Runnable, Shutdownable {
             json.put("up", clientId == 0 ? down : up);
             json.put("down", clientId == 0 ? up : down);
             json.put("heart", lastHeart / 1000);
+            json.put("pipe", pipes.size());
             return json;
         }
 
@@ -379,42 +385,25 @@ public class AEServer implements Runnable, Shutdownable {
             byte[] data = packets.poll();
             if (data != null) {
                 ByteBuffer src = ByteBuffer.wrap(data);
-                int time = 10000;
-                while (time-- > 0) {
+                int time = 1000;
+                while (time-- > 0 && !server.shutdown) {
                     ch.write(src);
-                    if (src.hasRemaining()) LockSupport.parkNanos(50);
+                    if (src.hasRemaining()) LockSupport.parkNanos(1000);
                     else break;
                 }
                 if (time <= 0) throw new IOException("超时");
             }
 
             if (!pipes.isEmpty()) {
+                long time = System.currentTimeMillis();
+                // 嗯...差不多可以，只要脸不太黑...
+                if ((time & 127) != 0) return;
                 synchronized (pipes) {
                     for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
-                        PipeGroup group = itr.next();
-                        if (--group.life < 0 || (group.pairRef != null && group.pairRef.isReleased())) {
+                        PipeGroup pair = itr.next();
+                        if (pair.pairRef.idleTime > PIPE_TIMEOUT) {
                             itr.remove();
-                        } else if (group.pairRef != null) {
-                            if (group.pairRef.idleTime < group.lastIdleTime) {
-                                if (group.inactive) {
-                                    System.out.println("reset inactive state");
-                                    group.inactive = false;
-                                    ByteBuffer src = ByteBuffer.allocate(5);
-                                    src.put((byte) PS_CHANNEL_ACTIVE).putInt(group.id).flip();
-
-                                    int time = 10000;
-                                    while (time-- > 0) {
-                                        ch.write(src);
-                                        if (src.hasRemaining()) LockSupport.parkNanos(50);
-                                        else break;
-                                    }
-                                    src.rewind();
-                                    if (clientId > 0) room.master.sync(src);
-                                    else group.downOwner.sync(src);
-                                    if (time <= 0) throw new IOException("超时");
-                                }
-                            }
-                            group.lastIdleTime = group.pairRef.idleTime;
+                            pair.close(-2);
                         }
                     }
                 }
@@ -432,14 +421,21 @@ public class AEServer implements Runnable, Shutdownable {
             if (pending != null) return "管道 #" + pending.id + " 处于等待状态";
             if (clientId == 0) return "只有客户端才能请求管道";
             if (server.pipes.size() > 100) return "服务器等待打开的管道过多";
-            if (pipes.size() > 16) return "你打开的管道过多";
+            if (pipes.size() > AEClient.MAX_CHANNEL_COUNT) return "你打开的管道过多";
+            server.pipeTimeoutHandler();
 
             PipeGroup group = pending = new PipeGroup();
             group.downOwner = this;
             group.id = server.pipeId++;
-            group.upPass = (int) (new Object().hashCode() ^ hashCode() ^ System.currentTimeMillis()) + 1;
-            group.downPass = (int) (new Object().hashCode() ^ hashCode() ^ System.currentTimeMillis()) + 2;
-            group.life = 600;
+            do {
+                group.upPass = server.rnd.nextInt();
+            } while (group.upPass == 0);
+            do {
+                group.downPass = server.rnd.nextInt();
+            } while (group.downPass == 0 || group.downPass == group.upPass);
+            group.pairRef = new Pipe(null, null);
+            group.pairRef.att = group;
+            group.timeout = System.currentTimeMillis() + 5000;
 
             tmp[0] = group.id;
             tmp[1] = group.upPass;
@@ -456,25 +452,19 @@ public class AEServer implements Runnable, Shutdownable {
         }
 
         public long getPendingPipe() {
-            return ((long)pending.id << 32) | pending.downPass;
+            return ((long)pending.id << 32) | (pending.downPass & 0xFFFF_FFFFL);
         }
 
-        public Worker closePipe(int pipeId) {
+        public void closePipe(int pipeId) {
             PipeGroup group;
             synchronized (pipes) {
                 group = pipes.remove(pipeId);
             }
-            if (group == null) {
-                syncPrint(this + ": PCC 无效的管道: " + pipeId);
-                return null;
-            }
-            if (group.pairRef != null) {
+            if (group != null) {
                 try {
-                    group.pairRef.release();
+                    group.close(clientId == 0 ? 0 : 1);
                 } catch (IOException ignored) {}
             }
-            group.life = -1;
-            return clientId != 0 ? room.master : group.downOwner;
         }
 
         public PipeGroup getPipe(int pipeId) {
@@ -486,13 +476,51 @@ public class AEServer implements Runnable, Shutdownable {
         }
     }
 
+    long lastCheckTime;
+    void pipeTimeoutHandler() {
+        long time = System.currentTimeMillis();
+        if (time - lastCheckTime < 1000) return;
+        lastCheckTime = time;
+        // noinspection all
+        for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
+            PipeGroup group = itr.next();
+            if (group.timeout > time) {
+                itr.remove();
+            }
+        }
+    }
+
     static final class PipeGroup {
-        int lastIdleTime;
-        boolean inactive;
-        int life;
+        long timeout;
         int id, upPass, downPass;
-        FileDescriptor upConnFD, downConnFD;
         Worker downOwner;
         Pipe pairRef;
+
+        // -2超时 -1连接断开 0房主关闭 1客户端关闭
+        public void close(int from) throws IOException {
+            if (pairRef == null) return;
+            Pipe pipe = pairRef;
+            // noinspection all
+            if (pipe == null) return;
+            pairRef = null;
+            syncPrint("管道 #" + id + " 终止 " + from);
+
+            ByteBuffer packet = ByteBuffer.allocate(9);
+            packet.put((byte) P_CHANNEL_CLOSE).putInt(-1).putInt(id).flip();
+
+            if (from != 1 && downOwner.getPipe(id) != null) {
+                downOwner.closePipe(id);
+                downOwner.sync(packet);
+                packet.position(0);
+            }
+
+            Worker upOwner = downOwner.room.master;
+            if (from != 0 && upOwner.getPipe(id) != null) {
+                upOwner.closePipe(id);
+                upOwner.sync(packet);
+            }
+
+            pipe.close();
+        }
     }
 }

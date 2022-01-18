@@ -42,7 +42,7 @@ import static roj.net.cross.Util.PROTOCOL_VERSION;
  */
 public class GuiChat extends JFrame {
     public interface ChatDispatcher {
-        void sendMessage(int id, String message) throws Exception;
+        String sendMessage(int id, String message) throws Exception;
     }
 
     private class MyActionListener extends Thread implements ActionListener {
@@ -55,13 +55,18 @@ public class GuiChat extends JFrame {
         @Override
         public void actionPerformed(ActionEvent e) {
             String text1 = cnt.getText();
-            if (text1.isEmpty()) {
+            String targ = to.getText();
+            if (text1.isEmpty() || targ.isEmpty()) {
                 JOptionPane.showMessageDialog(GuiChat.this, "请输入内容!", "提示", JOptionPane.WARNING_MESSAGE);
                 return;
             }
             try {
-                ((ChatDispatcher) s).sendMessage(Integer.parseInt(to.getText()), text1);
-                cnt.setText("");
+                String err = ((ChatDispatcher) s).sendMessage(Integer.parseInt(targ), text1);
+                if (err != null) {
+                    JOptionPane.showMessageDialog(GuiChat.this, err, "提示", JOptionPane.ERROR_MESSAGE);
+                } else {
+                    cnt.setText("");
+                }
             } catch (Exception e1) {
                 JOptionPane.showMessageDialog(GuiChat.this, "消息发送失败了 " + e1.getMessage(), "提示", JOptionPane.ERROR_MESSAGE);
             }
@@ -115,19 +120,31 @@ public class GuiChat extends JFrame {
         panel1.add(scroll, gbc);
         JTextArea text = cnt = new JTextArea();
         text.setLineWrap(true);
-        text.setText("在这里你甚至可以聊天\n在上方输入对方的ID就可以了\n房主的ID是0\n消息经过UTF8编码后的长度不能超过255\n否则会被服务器踢出\n房主可以全员禁言");
+        text.setText("在这里你甚至可以聊天\n在上方输入对方的ID就可以了\n房主的ID是0");
         text.setEditable(true);
         scroll.setViewportView(text);
+
         JButton btnClear = new JButton();
         btnClear.setText("清空");
         btnClear.addActionListener(new CloseHandler());
+        gbc = new GridBagConstraints();
+        gbc.gridx = 3;
+        gbc.gridy = 4;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel1.add(btnClear, gbc);
+
+        JButton benMute = new JButton();
+        benMute.setText("禁言");
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 5;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        panel1.add(btnClear, gbc);
+        panel1.add(benMute, gbc);
+
         JButton btnSend = new JButton();
         btnSend.setText("发送");
         gbc = new GridBagConstraints();
@@ -137,6 +154,7 @@ public class GuiChat extends JFrame {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel1.add(btnSend, gbc);
+
         to = new JTextField();
         gbc = new GridBagConstraints();
         gbc.gridx = 1;

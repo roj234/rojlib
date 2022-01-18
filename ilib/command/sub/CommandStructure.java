@@ -35,6 +35,7 @@ import ilib.world.structure.ReplacementType;
 import ilib.world.structure.StructureAdvanced;
 import ilib.world.structure.schematic.Schematic;
 import ilib.world.structure.schematic.SchematicLoader;
+
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
@@ -169,6 +170,6 @@ public final class CommandStructure extends AbstractSubCommand {
             case 7:
                 return CommandBase.getTabCompletionCoordinate(args, 3, pos);
         }
-        return empty_list;
+        return EMPTY;
     }
 }

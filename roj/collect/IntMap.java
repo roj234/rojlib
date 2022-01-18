@@ -528,10 +528,6 @@ public class IntMap<V> implements MapLike<IntMap.Entry<V>>, IIntMap<V> {
             Entry<V> entry = map.getEntry((V) o);
             return entry != null && map.remove(entry.k) != null;
         }
-
-        public final Spliterator<V> spliterator() {
-            return Spliterators.spliterator(iterator(), size(), 0);
-        }
     }
 
     static class EntrySet<V> extends AbstractSet<Entry<V>> {
@@ -568,10 +564,6 @@ public class IntMap<V> implements MapLike<IntMap.Entry<V>>, IIntMap<V> {
                 return map.remove(e.k) != null;
             }
             return false;
-        }
-
-        public final Spliterator<IntMap.Entry<V>> spliterator() {
-            return Spliterators.spliterator(map.entries, 0);
         }
     }
 }

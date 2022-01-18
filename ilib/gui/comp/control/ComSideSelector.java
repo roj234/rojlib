@@ -33,17 +33,19 @@ import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
 import ilib.gui.misc.SidePicker;
 import ilib.gui.misc.TrackballMC;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.GL11;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
-import org.lwjgl.input.Mouse;
-import org.lwjgl.opengl.GL11;
-import roj.util.Color;
 
 import javax.annotation.Nullable;
-/**
+import java.awt.*;
+
+/**
  * No description provided
  *
  * @author Roj234

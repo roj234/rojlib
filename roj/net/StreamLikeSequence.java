@@ -87,7 +87,7 @@ public class StreamLikeSequence implements CharSequence {
         try {
             while (buf.position() < want) {
                 if (System.currentTimeMillis() > time) {
-                    throw new SocketTimeoutException(time + " ms");
+                    throw new SocketTimeoutException();
                 }
 
                 if(buf.position() > maxRecv) {
@@ -97,7 +97,7 @@ public class StreamLikeSequence implements CharSequence {
                 int read = socket.read();
                 if (read == 0) {
                     if(async) throw OperationDone.INSTANCE;
-                    LockSupport.parkNanos(20);
+                    LockSupport.parkNanos(10000);
                 } else if (read < 0) {
                     if(read == -1) {
                         maxRecv = -1;

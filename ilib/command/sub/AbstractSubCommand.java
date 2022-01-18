@@ -28,7 +28,6 @@ package ilib.command.sub;
 
 import com.google.common.collect.ImmutableList;
 import ilib.command.MasterCommand;
-import roj.collect.EmptyList;
 import roj.util.EmptyArrays;
 
 import net.minecraft.command.CommandBase;
@@ -40,6 +39,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -51,8 +51,7 @@ import java.util.List;
  */
 public abstract class AbstractSubCommand implements ISubCommand {
     private ICommand parent;
-    static final Object[] NULL = EmptyArrays.OBJECTS;
-    public static final List<String> empty_list = EmptyList.getInstance();
+    public static final List<String> EMPTY = Collections.emptyList();
 
     public List<String> getTabCompletionOptions(MinecraftServer server, ICommandSender sender, String[] args, @Nullable BlockPos pos) {
         return ImmutableList.of();
@@ -80,7 +79,7 @@ public abstract class AbstractSubCommand implements ISubCommand {
     }
 
     public void notifyCommandListener(ICommandSender sender, String text) {
-        notifyCommandListener(sender, text, NULL);
+        notifyCommandListener(sender, text, EmptyArrays.OBJECTS);
     }
 
     public void notifyCommandListener(ICommandSender sender, String text, Object... params) {

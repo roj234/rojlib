@@ -26,20 +26,22 @@
 
 package ilib.command;
 
+import ilib.command.sub.AbstractSubCommand;
 import ilib.command.sub.ISubCommand;
+import roj.collect.MyHashMap;
+
 import net.minecraft.command.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
-import roj.collect.EmptyList;
-import roj.collect.MyHashMap;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -55,8 +57,6 @@ public final class MasterCommand extends CommandBase {
     private List<String> aliases;
     private TextComponentString helpComponent;
     private String canUseCommands;
-
-    static List<String> empty_list = EmptyList.getInstance();
 
     public static ICommandListener listener;
 
@@ -77,7 +77,7 @@ public final class MasterCommand extends CommandBase {
 
     @Nonnull
     public List<String> getAliases() {
-        return this.aliases == null ? empty_list : this.aliases;
+        return this.aliases == null ? AbstractSubCommand.EMPTY : this.aliases;
     }
 
     public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, @Nonnull String[] args) throws CommandException {
@@ -135,9 +135,9 @@ public final class MasterCommand extends CommandBase {
         } else if (args.length > 1) {
             String s = args[0];
             ISubCommand command = subCommands.get(s);
-            return command == null ? ("help".equals(s) ? getListOfStringsMatchingLastWord(args, subCommands.keySet()) : empty_list) : command.getTabCompletionOptions(server, sender, removeFirst(args), pos);
+            return command == null ? ("help".equals(s) ? getListOfStringsMatchingLastWord(args, subCommands.keySet()) : AbstractSubCommand.EMPTY) : command.getTabCompletionOptions(server, sender, removeFirst(args), pos);
         } else {
-            return empty_list;
+            return AbstractSubCommand.EMPTY;
         }
     }
 

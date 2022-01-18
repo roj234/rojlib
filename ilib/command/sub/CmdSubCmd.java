@@ -27,17 +27,19 @@
 package ilib.command.sub;
 
 import ilib.command.MasterCommand;
+import roj.collect.MyHashMap;
+
 import net.minecraft.command.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
-import roj.collect.MyHashMap;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -122,9 +124,9 @@ public class CmdSubCmd extends AbstractSubCommand {
         } else if (args.length > 1) {
             String s = args[0];
             ISubCommand command = subCommands.get(s);
-            return command == null ? ("help".equals(s) ? CommandBase.getListOfStringsMatchingLastWord(args, subCommands.keySet()) : empty_list) : command.getTabCompletionOptions(server, sender, MasterCommand.removeFirst(args), pos);
+            return command == null ? ("help".equals(s) ? CommandBase.getListOfStringsMatchingLastWord(args, subCommands.keySet()) : EMPTY) : command.getTabCompletionOptions(server, sender, MasterCommand.removeFirst(args), pos);
         } else {
-            return empty_list;
+            return EMPTY;
         }
     }
 

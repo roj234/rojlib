@@ -87,11 +87,7 @@ public class Reply {
             tmp.clear();
 
             if (response != null) {
-                try {
-                    response.writeHeader(tmp);
-                } finally {
-                    tmp.clear();
-                }
+                response.writeHeader(tmp);
             }
             headers.encode(tmp);
             ByteList.writeUTF(hdr, tmp.append("\r\n"), -1);

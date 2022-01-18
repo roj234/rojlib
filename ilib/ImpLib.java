@@ -49,8 +49,8 @@ import ilib.item.ItemBlockMI;
 import ilib.misc.MiscOptimize;
 import ilib.network.ProxyPacket;
 import ilib.network.SPacketSetPlayerId;
+import ilib.util.AdvancementUtils.FakeAdvs;
 import ilib.util.BlockHelper;
-import ilib.util.FakeAdvancementList;
 import ilib.util.Hook;
 import ilib.util.PlayerUtil;
 import ilib.util.freeze.FreezeRegistryInjector;
@@ -202,7 +202,7 @@ public class ImpLib {
                         .registerTypeHierarchyAdapter(Style.class, new Style.Serializer())
                         .registerTypeAdapterFactory(new EnumTypeAdapterFactory()).create());
 
-                ReflectionUtils.setFinal(AdvancementManager.class, "field_192784_c", new FakeAdvancementList());
+                ReflectionUtils.setFinal(AdvancementManager.class, "field_192784_c", new FakeAdvs());
             } catch (NoSuchFieldException e) {
                 throw new RuntimeException("不支持的功能: noAdvancement", e);
             }

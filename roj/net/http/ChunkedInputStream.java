@@ -103,6 +103,7 @@ class ChunkedInputStream extends InputStream {
         HttpLexer lexer = ((HttpLexer)data[1]).init(plain.init(in.socket, in.readTimeout, (int) in.dataRemain));
 
         lexer.index = in.buf.position();
+        in.buf.position(in.buf.limit());
         try {
             switch (stage) {
                 case CHUNK_END:

@@ -109,6 +109,10 @@ public final class Interpreter {
 
     // region A
 
+    private void pushRefArray(String name) {
+        stack.add(obj("[L" + name + ';'));
+    }
+
     private void pushPrimArray(int arrayType) {
         stack.add(obj("[" + (char) PrimArrayTypeToNativeType(arrayType)));
     }
@@ -915,7 +919,7 @@ public final class Interpreter {
                 break;
             case ANEWARRAY:
                 pop(INT);
-                stack.add(obj(clazz));
+                pushRefArray(clazz);
                 break;
             case CHECKCAST:
                 pop(REFERENCE);
@@ -923,14 +927,7 @@ public final class Interpreter {
                 break;
             case MULTIANEWARRAY:
                 pop(INT, arg);
-                sb.clear();
-                sb.ensureCapacity(clazz.length() + arg);
-                char[] tmp = sb.list;
-                for (int i = 0; i < arg; i++) {
-                    tmp[i] = '[';
-                }
-                clazz.getChars(0, clazz.length(), tmp, arg);
-                stack.add(obj(new String(tmp, 0, clazz.length() + arg)));
+                stack.add(obj(clazz));
                 break;
             default:
                 throw new IllegalArgumentException("Unknown opcode " + node);

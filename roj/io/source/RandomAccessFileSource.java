@@ -28,19 +28,16 @@ package roj.io.source;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
 
 /**
  * @author Roj233
  * @since 2021/8/18 13:38
  */
 public class RandomAccessFileSource implements Source {
-    private final RandomAccessFile file;
+    private final File source;
+    private RandomAccessFile file;
     private final long offset;
-
-    public RandomAccessFileSource(RandomAccessFile file) {
-        this.file = file;
-        this.offset = 0;
-    }
 
     public RandomAccessFileSource(String path) throws IOException {
         this(new File(path), 0);
@@ -51,9 +48,15 @@ public class RandomAccessFileSource implements Source {
     }
 
     public RandomAccessFileSource(File file, long offset) throws IOException {
-        this.file = new RandomAccessFile(file, "r");
+        this.file = new RandomAccessFile(file, "rw");
+        this.source = file;
         this.offset = offset;
         this.file.seek(offset);
+    }
+
+    @Override
+    public FileChannel channel() {
+        return file.getChannel();
     }
 
     @Override
@@ -90,5 +93,12 @@ public class RandomAccessFileSource implements Source {
     @Override
     public void close() throws IOException {
         file.close();
+        file = null;
+    }
+
+    @Override
+    public void reopen() throws IOException {
+        if (file != null) file.close();
+        file = new RandomAccessFile(source, "rw");
     }
 }

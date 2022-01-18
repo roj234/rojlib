@@ -36,6 +36,12 @@ package ilib.client.util;
 import ilib.ClientProxy;
 import ilib.util.ForgeUtil;
 import ilib.util.TimeUtil;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL11;
+import roj.math.Mat4f;
+import roj.math.Mat4x3f;
+import roj.math.Vec3f;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.*;
@@ -49,16 +55,12 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fml.common.LoaderState;
-import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.GL11;
-import roj.math.Mat4f;
-import roj.math.Mat4x3f;
-import roj.math.Vec3f;
-import roj.util.Color;
 
+import java.awt.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -242,7 +244,11 @@ public class RenderUtils {
     }
 
     public static void setColor(Color color) {
-        GlStateManager.color(color.getRedP(), color.getGreenP(), color.getBlueP(), color.getAlphaP());
+        int rgb = color.getRGB();
+        GlStateManager.color(((rgb >> 16) & 0xFF) / 255f,
+                             ((rgb >> 8) & 0xFF) / 255f,
+                             (rgb & 0xFF) / 255f,
+                             ((rgb >> 24) & 0xFF) / 255f);
     }
 
     public static void colorWhite() {

@@ -26,13 +26,9 @@
 
 package roj.util;
 
-import roj.io.IOUtil;
+import roj.collect.IntList;
 
-import javax.imageio.ImageIO;
-import java.awt.image.*;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UTFDataFormatException;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,38 +37,14 @@ import java.util.List;
  * GIF Image decoder
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class GIFDecoder {
-    public static final byte ARGB = 0, RGB = 1, RGBA = 2;
-
-    public static byte COLOR_TYPE = ARGB;
-
-    public static void decodeAndSave(InputStream in, String cacheFolder) {
-        try (InputStream s = in) {
-            Gif gif = decode(IOUtil.read(s));
-
-            File file = new File(cacheFolder);
-            if (!file.exists()) {
-                file.mkdirs();
-            }
-            List<BufferedImage> list = gif.toImageList(false);
-
-            int i = 0;
-            for (BufferedImage img : list) {
-                ImageIO.write(img, "png", new File(file, i++ + ".png"));
-            }
-        } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static Gif decode(final byte[] out) throws IOException {
-        ByteList r = new ByteList(out);
+    public static Gif decode(byte[] in) throws IOException {
+        ByteList r = new ByteList(in);
         Gif gif = new Gif();
 
-        String cl = r.readUTF(6);
+        String cl = r.readAscii(6);
         if (!cl.equals("GIF87a") && !cl.equals("GIF89a"))
             throw new IOException("Illegal header " + cl);
 
@@ -122,27 +94,13 @@ public class GIFDecoder {
 
     public static void parseColorTable(int[] colorTable, ByteList rd) {
         int size = colorTable.length;
-        if (size == 0)
-            return;
+        if (size == 0) return;
         for (int i = 0; i < size; i++) {
             int r = rd.readUByte();
             int g = rd.readUByte();
             int b = rd.readUByte();
-            int a = 0xFF;
-            colorTable[i] = mergeARGB(r, g, b, a);
+            colorTable[i] = 0xFF000000 | r << 16 | g << 8 | b;
         }
-    }
-
-    public static int mergeARGB(int r, int g, int b, int a) {
-        switch (COLOR_TYPE) {
-            case ARGB:
-                return a << 24 | r << 16 | g << 8 | b;
-            case RGB:
-                return r << 16 | g << 8 | b;
-            case RGBA:
-                return r << 24 | g << 16 | b << 8 | a;
-        }
-        return 0;
     }
 
     public static void readExtension(Gif gif, ByteList r) throws IOException {
@@ -256,7 +214,7 @@ public class GIFDecoder {
     }
 
     static final class LZWInflater {
-        public final int[][] dict = new int[4096][1];
+        public final IntList[] dict = new IntList[4096];
         public int length;
 
         public int minCodeSize;
@@ -265,12 +223,12 @@ public class GIFDecoder {
         public int codeSize;
 
         public final void add(int last, int code) {
-            int[] lastVal = dict[last];
-            int nowVal = dict[code][0];
-            int[] newArr = new int[lastVal.length + 1];
-            System.arraycopy(lastVal, 0, newArr, 0, lastVal.length);
-            newArr[newArr.length - 1] = nowVal;
-            dict[length++] = newArr;
+            IntList lastVal = dict[last];
+            int nowVal = dict[code].get(0);
+            IntList plus = dict[length++];
+            plus.clear();
+            plus.addAll(lastVal);
+            plus.add(nowVal);
         }
 
         public int bitPos = 0;
@@ -291,25 +249,28 @@ public class GIFDecoder {
             this.codeSize = minCodeSize + 1;
             this.length = clearCode + 2;
             for (int i = 0; i < clearCode; i++) {
-                this.dict[i] = new int[]{i};
+                IntList d = dict[i];
+                d.clear();
+                d.add(i);
             }
-            this.dict[clearCode] = new int[0];
-            this.dict[endOfInfoCode] = null;
+            dict[clearCode].clear();
+            dict[clearCode].add(0);
+            dict[endOfInfoCode] = null;
         }
 
-        public final void init(Frame frame, int[] color, byte[] byteData) {
-            int numColors = color.length;
-
-            this.minCodeSize = frame.minCodeSize;
+        public final void init(int minCodeSize, byte[] data) {
+            this.minCodeSize = minCodeSize;
             this.clearCode = 1 << minCodeSize;
             this.endOfInfoCode = clearCode + 1;
             this.codeSize = minCodeSize + 1;
-            this.byteData = byteData;
+            this.byteData = data;
             this.bitPos = 0;
             this.length = 0;
 
-            if (frame.transparent && frame.transpantColorIndex < numColors) {
-                this.dict[frame.transpantColorIndex][0] = 0;
+            for (int i = 0; i < clearCode; i++) {
+                IntList d = dict[i];
+                if (d == null) dict[i] = new IntList(4);
+                else d.clear();
             }
         }
 
@@ -325,7 +286,7 @@ public class GIFDecoder {
         boolean sorted;
         boolean noPrevFrame = true;
         short bgColorIndex;
-        int[] globalColorTable = _EMPTY;
+        int[] globalColorTable = EmptyArrays.INTS;
         double whPercent = 1.0d;
 
         public String appName;
@@ -367,23 +328,10 @@ public class GIFDecoder {
             return frameAlignedData;
         }
 
-        public List<BufferedImage> toImageList(boolean transparent) {
-            List<BufferedImage> imageList = new ArrayList<>((int) (frames.size() / 0.7) + 1);
-            LZWInflater inf = new LZWInflater();
-            BufferedImage prevFrame = null;
-            for (Frame frame : frames) {
-                decodeGif(frame, inf);
-                prevFrame = expandFrame(frame, prevFrame, imageList, transparent ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
-            }
-            this.globalColorTable = _EMPTY;
-            return imageList;
-        }
-
-
         final void decodeGif(Frame frame, LZWInflater inf) {
             if (frame.pixels == null) {
-                int[] color = frame.localColorTable == _EMPTY ? globalColorTable : frame.localColorTable;
-                inf.init(frame, color, frame.imgData);
+                inf.init(frame.minCodeSize, frame.imgData);
+                int[] color = frame.localColorTable == EmptyArrays.INTS ? globalColorTable : frame.localColorTable;
                 int[] pixels = imageDecode(frame, color, inf);
                 if (frame.interlace) {
                     pixels = deinterlace(pixels, frame);
@@ -415,58 +363,33 @@ public class GIFDecoder {
         }
 
 
-        final int[] expandFrame(Frame frame, int[] prevFrame, List<int[]> list) {
-            int[] currPrevFrame = new int[wh];
-            if (frame.disposalMethod == 3) {
-                System.arraycopy(prevFrame, 0, currPrevFrame, 0, this.wh);
+        final int[] expandFrame(Frame f, int[] prev, List<int[]> list) {
+            int[] next = new int[wh];
+            if (f.disposalMethod == 3) {
+                System.arraycopy(prev, 0, next, 0, this.wh);
             }
 
-            int[] argbArray = (prevFrame == null) ? new int[wh] : prevFrame;
-            drawImage(argbArray, frame.pixels, frame.offsetX, frame.offsetY, frame.width, frame.height, frame.transparent);
-            list.add(argbArray);
+            if (prev == null) prev = new int[wh];
+            drawImage(prev, f.pixels, f.offsetX, f.offsetY, f.width, f.height, f.transparent);
+            list.add(prev);
 
-            if (frame.disposalMethod != 3) {
-                System.arraycopy(argbArray, 0, currPrevFrame, 0, this.wh);
+            if (f.disposalMethod != 3) {
+                System.arraycopy(prev, 0, next, 0, this.wh);
             }
-            if (frame.disposalMethod == 2) {
-                clearRect(currPrevFrame, frame.offsetX, frame.offsetY, frame.width, frame.height);
+            if (f.disposalMethod == 2) {
+                clearRect(next, f.offsetX, f.offsetY, f.width, f.height);
             }
-            return argbArray;
-        }
-
-        final BufferedImage expandFrame(Frame frame, BufferedImage prevFrame, List<BufferedImage> list, int type) {
-            BufferedImage currPrevFrameImg = new BufferedImage(this.width, this.height, type);
-            int[] currPrevFrame = ((DataBufferInt) currPrevFrameImg.getRaster().getDataBuffer()).getData();
-
-            BufferedImage output = prevFrame == null ? new BufferedImage(this.width, this.height, type) : prevFrame;
-            int[] argbArray = ((DataBufferInt) output.getRaster().getDataBuffer()).getData();
-
-            if (frame.disposalMethod == 3) {
-                System.arraycopy(argbArray, 0, currPrevFrame, 0, this.wh);
-            }
-
-            drawImage(argbArray, frame.pixels, frame.offsetX, frame.offsetY, frame.width, frame.height, frame.transparent);
-            output.flush();
-            list.add(output);
-
-            if (frame.disposalMethod != 3) {
-                System.arraycopy(argbArray, 0, currPrevFrame, 0, this.wh);
-            }
-            if (frame.disposalMethod == 2) {
-                clearRect(currPrevFrame, frame.offsetX, frame.offsetY, frame.width, frame.height);
-            }
-            return currPrevFrameImg;
+            return next;
         }
 
         final int[] imageDecode(Frame frame, int[] color, LZWInflater codes) {
             int clearCode = codes.clearCode;
             int endOfInfoCode = codes.endOfInfoCode;
             int transparent = frame.transparent ? frame.transpantColorIndex : -1;
-            IntBuffer output = new IntBuffer(clearCode);
-            int code = 0, prevCode;
-            //System.out.println(codes);
+            IntList output = new IntList(clearCode);
+            int code = 0;
             while (true) {
-                prevCode = code;
+                int prevCode = code;
                 code = codes.next();
 
                 if (code == clearCode) {
@@ -486,12 +409,9 @@ public class GIFDecoder {
                     codes.add(prevCode, prevCode);
                 }
                 for (int i : codes.dict[code]) {
-                    if (i == transparent)
-                        output.add(0);
-                    else
-                        output.add(color[i]);
+                    if (i == transparent) output.add(0);
+                    else output.add(color[i]);
                 }
-                //System.out.println("233");
 
                 if (codes.length == (1 << codes.codeSize) && codes.codeSize < 12) {
                     // If we're at the last code and codeSize is 12, the next code will be a clearCode, and it'll be 12 bits long.
@@ -502,7 +422,7 @@ public class GIFDecoder {
             // I don't know if this is technically an error, but some GIFs do it.
             //if (Math.ceil(pos / 8) !== data.length) throw new Error('Extraneous LZW bytes.');
             //System.out.println(output.size);
-            return output.toIntArray();
+            return output.toArray();
         }
 
         final int[] deinterlace(int[] src, Frame frame) {
@@ -553,53 +473,6 @@ public class GIFDecoder {
                 sb.append(frame).append('\n');
             }
             return sb.toString();
-        }
-    }
-
-    public static class IntBuffer {
-        public int[] buffer;
-        public int cap;
-        public int size;
-
-        public IntBuffer(int initialSize) {
-            this.buffer = new int[initialSize];
-            this.cap = initialSize;
-            this.size = 0;
-        }
-
-        public IntBuffer() {
-            this(8192);
-        }
-
-        public IntBuffer append(int[] arr) {
-            checkSize(size + arr.length);
-            System.arraycopy(arr, 0, buffer, size, arr.length);
-            size += arr.length;
-            return this;
-        }
-
-        public IntBuffer add(int i) {
-            checkSize(size + 1);
-            buffer[size++] = i;
-            return this;
-        }
-
-        public void checkSize(int size) {
-            if (size > cap) {
-                int oldCap = cap;
-                cap += (int) Math.max(this.size * 1.5d, size - cap + 1);
-                int[] newBuffer = new int[cap];
-                System.arraycopy(buffer, 0, newBuffer, 0, oldCap);
-                buffer = null;
-                System.gc();
-                buffer = newBuffer;
-            }
-        }
-
-        public int[] toIntArray() {
-            int[] result = new int[size];
-            System.arraycopy(buffer, 0, result, 0, size);
-            return result;
         }
     }
 

@@ -33,11 +33,11 @@ import ilib.gui.comp.BaseComponent;
 import ilib.util.Colors;
 import ilib.util.TextHelper;
 import roj.math.MathUtils;
-import roj.util.Color;
 
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.GlStateManager;
 
+import java.awt.*;
 import java.util.List;
 
 
@@ -53,7 +53,7 @@ public class ComTextLong extends BaseComponent {
     protected int width, height, u, v, textScale;
     protected boolean upSelected, downSelected = false;
     protected Color color = Colors.WHITE.getColor();
-    protected int lineWidth, currentLine;
+    protected int   lineWidth, currentLine;
     protected List<String> lines;
 
     /**

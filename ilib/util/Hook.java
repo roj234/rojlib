@@ -27,10 +27,9 @@
 package ilib.util;
 
 import roj.collect.MyHashMap;
+import roj.util.Helpers;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author Roj234
@@ -40,16 +39,10 @@ public final class Hook {
     public static final String MODEL_REGISTER = "itemModelReg";
     public static final String LANGUAGE_RELOAD = "langReload";
 
-    private final Map<String, List<Runnable>> hooks = new MyHashMap<>();
-
-    public Hook() {}
+    private final MyHashMap<String, List<Runnable>> hooks = new MyHashMap<>();
 
     public void add(String name, Runnable func) {
-        List<Runnable> list = hooks.get(name);
-        if (list == null) {
-            hooks.put(name, list = new ArrayList<>());
-        }
-        list.add(func);
+        hooks.computeIfAbsent(name, Helpers.fnArrayList()).add(func);
     }
 
     public void remove(String name) {

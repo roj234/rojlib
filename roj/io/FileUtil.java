@@ -441,30 +441,30 @@ public final class FileUtil {
         return i;
     }
 
-    public static long transferFileSelf(FileChannel cf, long fOffset, long tOffset, long length) throws IOException {
+    public static long transferFileSelf(FileChannel cf, long from, long to, long len) throws IOException {
         // noinspection all
         Thread.interrupted();
-        if (fOffset == tOffset || length == 0) return length;
-        if (fOffset > tOffset ?
-                tOffset + length <= fOffset :
-                fOffset + length <= tOffset) { // 区间不交叉
-            return cf.transferTo(fOffset, length, cf.position(tOffset));
+        if (from == to || len == 0) return len;
+        if (from > to ?
+                to + len <= from :
+                from + len <= to) { // 区间不交叉
+            return cf.transferTo(from, len, cf.position(to));
         }
         long pos = cf.position();
         try {
-            if (length <= 1048576) {
-                ByteBuffer direct = ByteBuffer.allocateDirect((int) length);
-                direct.position(0).limit((int) length);
-                cf.read(direct, fOffset);
+            if (len <= 1048576) {
+                ByteBuffer direct = ByteBuffer.allocateDirect((int) len);
+                direct.position(0).limit((int) len);
+                cf.read(direct, from);
                 direct.position(0);
-                int amount = cf.position(tOffset).write(direct);
+                int amount = cf.position(to).write(direct);
                 NIOUtil.clean(direct);
                 return amount;
             } else {
                 File tmpFile = new File("FUT~" + (System.nanoTime() % 1000000) + ".tmp");
                 FileChannel ct = FileChannel.open(tmpFile.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE);
-                cf.transferTo(fOffset, length, ct.position(0));
-                long amount = ct.transferTo(0, length, cf.position(tOffset));
+                cf.transferTo(from, len, ct.position(0));
+                long amount = ct.transferTo(0, len, cf.position(to));
                 ct.close();
                 return amount;
             }

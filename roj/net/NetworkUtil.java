@@ -291,6 +291,7 @@ public final class NetworkUtil {
     }
 
     public static void MSSLoadClientRSAKey(File file) {
+        if (!file.isFile()) return;
         try (DataInputStream di = new DataInputStream(new FileInputStream(file))) {
             byte[] t = new byte[di.readInt()];
             di.read(t);

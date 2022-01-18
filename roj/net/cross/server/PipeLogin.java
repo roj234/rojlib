@@ -54,11 +54,11 @@ final class PipeLogin extends Stated {
         ByteBuffer rb = ch.buffer();
         rb.clear();
 
-        int heart = TIMEOUT_HEART_SERVER;
+        int heart = TIMEOUT;
         while (!W.server.shutdown) {
             int read;
             if ((read = ch.read(8 - rb.position())) == 0 && rb.position() < 8) {
-                LockSupport.parkNanos(20);
+                LockSupport.parkNanos(10000);
                 if (heart-- < 0) {
                     syncPrint(W + ": 登录超时");
                     break;
@@ -68,62 +68,39 @@ final class PipeLogin extends Stated {
 
             if (read < 0) break;
             Integer user = rb.getInt(0);
-            W.clientId = user;
             int pass = rb.getInt(4);
 
             PipeGroup group = W.server.pipes.get(user);
-            if (group == null) syncPrint(W + ": 无效的管道 @" + pass);
+            if (group == null || pass == 0) syncPrint(W + ": 无效的管道 " + user + "@" + pass);
             else {
-                if (group.upConnFD == null && group.upPass == pass) {
-                    group.upConnFD = ch.fd();
+                Pipe pipe = group.pairRef;
+                if (group.upPass == pass) {
+                    pipe.setUpstream(ch.fd());
                     group.upPass = 0;
-                } else if (group.downConnFD == null && group.downPass == pass) {
-                    group.downConnFD = ch.fd();
+                    if (DEBUG) syncPrint(W + ": " + user + " up logon");
+                } else if (group.downPass == pass) {
+                    pipe.setClient(ch.fd());
                     group.downPass = 0;
+                    if (DEBUG) syncPrint(W + ": " + user + " down logon");
                 } else {
-                    syncPrint(W + " 密码无效");
+                    syncPrint(W + ": " + user + " 密码无效");
                     break;
                 }
-                if (group.upConnFD != null && group.downConnFD != null) {
+                if (group.upPass == group.downPass) {
                     W.server.pipes.remove(user);
-                    group.life = 1;
-                    Pipe sp = new Pipe(group.downConnFD, group.upConnFD);
-                    sp.att = group;
-                    group.pairRef = sp;
                     group.downOwner.pendingPipeOpen();
 
-                    //syncPrint(" 管道 #" + user + " 已开启");
                     AtomicInteger i = W.server.remain;
                     try {
-                        PipeIOThread.syncRegister(W.server, sp, pipe -> {
+                        PipeIOThread.syncRegister(W.server, pipe, p -> {
                             i.addAndGet(2);
+                            PipeGroup group1 = (PipeGroup) p.att;
                             try {
-                                pipe.release();
-                                syncPrint("管道 #" + user + " 已终止");
-                            } catch (IOException e) {
-                                System.err.println("无法释放管道 #" + user);
-                                e.printStackTrace();
-                            }
-                            PipeGroup pg = (PipeGroup) pipe.att;
-
-                            ByteBuffer packet = ByteBuffer.allocate(1 + 4 + 4);
-                            packet.put((byte) P_CHANNEL_CLOSE).putInt(-1).putInt(pg.id).flip();
-
-                            if (pg.downOwner.getPipe(pg.id) != null) {
-                                pg.downOwner.closePipe(pg.id);
-                                pg.downOwner.sync(packet);
-                                packet.position(0);
-                            }
-
-                            Worker upOwner = pg.downOwner.room.master;
-                            if (upOwner.getPipe(pg.id) != null) {
-                                upOwner.closePipe(pg.id);
-                                upOwner.sync(packet);
-                            }
-
-                            pg.pairRef = null;
-                            pg.downConnFD = pg.upConnFD = null;
+                                group1.close(-1);
+                            } catch (IOException ignored) {}
                         });
+                    } catch (IOException e) {
+                        throw e;
                     } catch (Exception e) {
                         e.printStackTrace();
                     }

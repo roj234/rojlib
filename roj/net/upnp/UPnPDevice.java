@@ -377,7 +377,6 @@ public final class UPnPDevice {
                 XElement xKey = child.get(i).asElement();
                 ret.put(xKey.tag, xKey.childElementCount() == 0 ? "" : xKey.children(0).asText().trim());
             }
-            System.out.println("Success: " + ret);
             return ret;
         }
 

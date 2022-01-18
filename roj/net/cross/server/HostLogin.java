@@ -30,7 +30,6 @@ import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
@@ -74,8 +73,8 @@ final class HostLogin extends Stated {
             }
             rb.position(5);
 
-            if (portLen > 64) {
-                syncPrint(W + ": PortMap协议有误");
+            if (portLen < 1 || portLen > 64) {
+                syncPrint(W + ": 端口映射表有误");
                 return Logout.LOGOUT;
             }
 
@@ -84,7 +83,7 @@ final class HostLogin extends Stated {
                                       getUTF(rb, nameLen),
                                       getUTF(rb, passLen));
             if (code != -1) {
-                syncPrint(W + ": 连接失败(协议): " + ERROR_NAMES[code - 0x20]);
+                syncPrint(W + ": 登录失败: " + ERROR_NAMES[code - 0x20]);
                 write1(ch, (byte) code);
                 return Logout.LOGOUT;
             }
@@ -102,7 +101,13 @@ final class HostLogin extends Stated {
               .put(W.server.info).flip();
             writeAndFlush(ch, rb, 500);
 
-            syncPrint(W + ": 房间建立成功, port bytes: " + Arrays.toString(W.room.portMap) + "");
+            StringBuilder pb = new StringBuilder();
+            pb.append(W).append(": 登录成功, 端口映射表: ");
+            for (int i = 0; i < port.length; i++) {
+                pb.append(((port[i++] & 0xFF) << 8) | (port[i] & 0xFF)).append(", ");
+            }
+            pb.delete(pb.length() - 2, pb.length());
+            syncPrint(pb.toString());
             return HostWork.HOST_WORK;
         }
 

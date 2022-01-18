@@ -38,9 +38,7 @@ import roj.util.ByteList;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.AbstractSet;
 import java.util.ArrayList;
-import java.util.Iterator;
 
 /**
  * Adnmb HTML Parser
@@ -64,22 +62,7 @@ public class ADownloader {
         FileOutputStream fos = new FileOutputStream(args[0], true);
         XMLexer init = new XMLexer();
         init.init(IOUtil.readUTF(new FileInputStream(args[1])));
-        init.noCloseTags(new AbstractSet<String>() {
-            @Override
-            public boolean contains(Object o) {
-                return XMLParser.HTML_CLOSE_TAGS.contains(o.toString().toLowerCase());
-            }
-
-            @Override
-            public Iterator<String> iterator() {
-                return XMLParser.HTML_CLOSE_TAGS.iterator();
-            }
-
-            @Override
-            public int size() {
-                return XMLParser.HTML_CLOSE_TAGS.size();
-            }
-        });
+        init.hasCloseTags(s -> !XMLParser.HTML_CLOSE_TAGS.contains(s.toLowerCase()));
         init.flag = XMLParser.KEEP_ENTITY | XMLParser.LENIENT;
         XElement elm = XMLParser.xmlElement(init);
 
@@ -96,7 +79,7 @@ public class ADownloader {
         CharList tmp = new CharList();
         for (XElement e : threads) {
             String title = e.children(0).asElement().children(0).asText();
-            if(e.children(1).asElement().childElementCount() == 0)  {
+            if(e.children(1).childElementCount() == 0)  {
                 System.out.println("跳广告: " + e);
                 continue;
             }

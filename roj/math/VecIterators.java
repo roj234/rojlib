@@ -38,12 +38,12 @@ import java.util.function.Consumer;
  * @version 0.1
  * @since 2021/9/16 19:36
  */
-public final class MhPosition {
-    public static final class MhItr2 extends AbstractIterator<Vec2i> implements Iterable<Vec2i> {
+public final class VecIterators {
+    public static final class MH2 extends AbstractIterator<Vec2i> implements Iterable<Vec2i> {
         private final Vec2i hp = new Vec2i();
         public final int x, y, r;
         private final boolean immutable;
-        public MhItr2(int x, int z, int radius, boolean immutable) {
+        public MH2(int x, int z, int radius, boolean immutable) {
             result = hp;
             this.x = x;
             this.y = z;
@@ -179,11 +179,11 @@ public final class MhPosition {
         }
     }
 
-    public static final class MhItr3 extends AbstractIterator<Vec3i> implements Iterable<Vec3i> {
+    public static final class MH3 extends AbstractIterator<Vec3i> implements Iterable<Vec3i> {
         private final Vec3i hp = new Vec3i();
         public final int x, y, z, r;
         private final boolean immutable;
-        public MhItr3(int x, int y, int z, int r, boolean immutable) {
+        public MH3(int x, int y, int z, int r, boolean immutable) {
             result = hp;
             this.x = x;
             this.y = y;
@@ -390,6 +390,58 @@ public final class MhPosition {
         }
     }
 
+    public static final class BORDER extends Rect3i implements Iterable<Vec3i>, Iterator<Vec3i> {
+        private final Vec3i hp = new Vec3i();
+        private int x, y, z;
+        private final boolean immutable;
+
+        public BORDER(Rect3i rect, boolean immutable) {
+            super(rect);
+            this.immutable = immutable;
+        }
+
+        public BORDER(int x1, int y1, int z1, int x2, int y2, int z2, boolean immutable) {
+            super(x1, y1, z1, x2, y2, z2);
+            this.immutable = immutable;
+        }
+
+        @Nonnull
+        @Override
+        public Iterator<Vec3i> iterator() {
+            reset();
+            return this;
+        }
+
+        private void reset() {
+            x = xmin - 1;
+            y = ymin;
+            z = zmin;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return x < xmax || y < ymax || z < zmax;
+        }
+
+        @Override
+        public Vec3i next() {
+            if (z == zmin || z == zmax || y == ymin || y == ymax) x++;
+            else x += xmax - xmin;
+            if (x > xmax) {
+                x = xmin;
+                if (z == zmin || z == zmax) y++;
+                else y += ymax - ymin;
+
+                if (y > ymax) {
+                    y = ymin;
+                    z++;
+                }
+            }
+            hp.set(x, y, z);
+            return immutable ? new Vec3i(hp) : hp;
+        }
+    }
+
     /**<pre>
      *  路径迭代？
      *  ====================>
@@ -401,11 +453,15 @@ public final class MhPosition {
      *  |                  \|/
      *  <====================
      */
-    public static MhItr2 mh2d(int x, int z, int radius) {
-        return new MhItr2(x, z, radius, false);
+    public static MH2 mhIterator2D(int x, int z, int radius) {
+        return new MH2(x, z, radius, false);
     }
 
-    public static MhItr3 mh3d(int x, int y, int z, int radius) {
-        return new MhItr3(x, y, z, radius, false);
+    public static MH3 mhIterator3D(int x, int y, int z, int radius) {
+        return new MH3(x, y, z, radius, false);
+    }
+
+    public static BORDER borderIterator3D(Rect3i rect) {
+        return new BORDER(rect, false);
     }
 }

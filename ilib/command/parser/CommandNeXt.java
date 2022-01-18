@@ -27,7 +27,6 @@
 package ilib.command.parser;
 
 import ilib.command.sub.ISubCommand;
-import roj.collect.EmptyList;
 import roj.collect.MyHashMap;
 
 import net.minecraft.command.*;
@@ -39,6 +38,7 @@ import net.minecraft.util.text.TextComponentTranslation;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -59,7 +59,7 @@ public final class CommandNeXt extends CommandBase {
     private TextComponentString helpComponent;
     private String canUseCommands;
 
-    static List<String> empty_list = EmptyList.getInstance();
+    static List<String> empty_list = Collections.emptyList();
 
     public static ICommandListener listener;
 

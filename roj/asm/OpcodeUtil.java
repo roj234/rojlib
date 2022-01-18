@@ -278,7 +278,7 @@ public final class OpcodeUtil {
         a(0xba, "调用动态方法");
         a(0xbb, "创建$0的对象");
         a(0xbc, "创建基本类型数组");
-        a(0xbd, "创建引用类型数组");
+        a(0xbd, "创建$0的数组");
         a(0xbe, "获得数组长度");
         a(0xbf, "抛出异常");
         a(0xc0, "强制转换为$0");
@@ -286,7 +286,7 @@ public final class OpcodeUtil {
         a(0xc2, "获得锁");
         a(0xc3, "释放锁");
         a(0xc4, "扩展局部变量索引");
-        a(0xc5, "创建指定类型和维度的多维数组,返回其引用");
+        a(0xc5, "创建$0");
         a(0xc6, "为null时跳转");
         a(0xc7, "不为null时跳转");
         a(0xc8, "跳转");

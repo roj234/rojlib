@@ -32,11 +32,10 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
-import roj.net.NetworkUtil;
+import roj.text.LoggingStream;
 import roj.text.TextUtil;
 
 import javax.swing.*;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -46,14 +45,9 @@ import java.net.UnknownHostException;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/9/11 2:00
  */
 public class AEGuiClient {
-    static {
-        NetworkUtil.MSSLoadClientRSAKey(new File("ae_client.key"));
-    }
-
     public static void main(String[] args) throws IOException, ParseException {
         if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "请使用Java8!");

@@ -23,77 +23,31 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.http;
+package roj.misc;
 
-import roj.collect.MyHashMap;
 import roj.management.PerformanceLogger;
+import roj.net.http.Code;
+import roj.net.http.HttpServer;
 import roj.net.http.serv.GZipFileResponse;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.Response;
 import roj.net.http.serv.StringResponse;
-import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URL;
 import java.security.GeneralSecurityException;
-import java.util.Map;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Roj234
  * @version 0.1
  * @since  2020/11/29 0:51
  */
-public class Test {
+public class HttpExample {
     public static void main(String[] args) throws IOException, GeneralSecurityException {
         Thread thread = new Thread(new PerformanceLogger());
         thread.setDaemon(true);
         thread.start();
-
-        if (args.length > 1) {
-            Map<String, String> headers = new MyHashMap<>();
-            headers.put("Host", "127.0.0.1");
-            headers.put("Connection", "keep-alive");
-            headers.put("Pragma", "no-cache");
-            headers.put("Cache-Control", "no-cache");
-            headers.put("Upgrade-Insecure-Requests", "1");
-            headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36");
-            headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8");
-            headers.put("Accept-Encoding", "gzip, deflate");//, br);
-            headers.put("Accept-Language", "zh-CN,zh;q=0.9");
-
-            HttpClient client = new HttpClient();
-            client.readTimeout(5000);
-            client.method("GET").headers(headers);
-
-            int i = 0;
-
-            //while (true) {
-                try {
-                    client.url(new URL("http://127.0.0.1:89/music/index.html"));
-                    client.send();
-                    HttpHead header = client.response();
-                    System.out.println(header);
-                    ByteList list = new ByteList().readStreamFully(client.getInputStream());
-                    System.out.println("DL " + list.wIndex());
-                    System.out.println("Keep-Alive: " + header.headers.get("connection"));
-                    LockSupport.parkNanos(2_000_000_000L);
-                    client.send();
-                    header = client.response();
-                    System.out.println(header);
-
-                    if (++i == 1000) {
-                        System.out.println("1000!");
-                        i = 0;
-                    }
-                } catch (Throwable e) {
-                    e.printStackTrace();
-                }
-            //}
-            return;
-        }
 
         Response gzc = new GZipFileResponse(new File("E:/章节修复.txt"));
 

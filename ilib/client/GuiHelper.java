@@ -27,12 +27,13 @@ package ilib.client;
 
 import ilib.ClientProxy;
 import ilib.ImpLib;
-import roj.util.Color;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.init.SoundEvents;
+
+import java.awt.*;
 
 /**
  * No description provided

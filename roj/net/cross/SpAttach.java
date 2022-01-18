@@ -27,16 +27,20 @@ package roj.net.cross;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/25 17:24
  */
 final class SpAttach {
-    int  channelId;
+    // 管道ID
+    int channelId;
+    // 端射ID
     byte portId;
+
+    // 客户端ID （Host only）
+    // 此字段只用作统计
     int clientId;
 
     @Override
     public String toString() {
-        return "SpAttach{" + "channelId=" + channelId + ", portId=" + portId + ", clientId=" + clientId + '}';
+        return "管道描述{" + "ID=" + channelId + ", 端口ID=" + portId + ", 客户端ID=" + clientId + '}';
     }
 }

@@ -30,7 +30,8 @@ import roj.util.ByteList;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.channels.WritableByteChannel;
+import java.io.UnsupportedEncodingException;
+import java.nio.channels.FileChannel;
 
 /**
  * @author Roj233
@@ -38,6 +39,12 @@ import java.nio.channels.WritableByteChannel;
  */
 public interface Source extends Closeable, AutoCloseable {
     void seek(long pos) throws IOException;
+    default long skip(long amount) throws IOException {
+        long position = position();
+        long pos = Math.min(position + amount, length());
+        seek(pos);
+        return pos - position;
+    }
     default int read(byte[] b) throws IOException {
         return read(b, 0, b.length);
     }
@@ -64,7 +71,11 @@ public interface Source extends Closeable, AutoCloseable {
         readFully(buf.list, 0, length);
     }
 
-    default WritableByteChannel channel() {
+    default FileChannel channel() {
         return null;
+    }
+
+    default void reopen() throws IOException, UnsupportedOperationException {
+        throw new UnsupportedEncodingException();
     }
 }

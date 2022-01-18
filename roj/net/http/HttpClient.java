@@ -187,7 +187,7 @@ public class HttpClient extends Connector {
 
     private InputStream in;
 
-    public HttpHead response() throws ParseException {
+    public HttpHead response() throws ParseException, IOException {
         Object[] data = Shared.SYNC_BUFFER.get();
 
         StreamLikeSequence plain = (StreamLikeSequence)data[0];
@@ -202,8 +202,6 @@ public class HttpClient extends Connector {
                 channel.buffer().clear();
             }
             return hdr;
-        } catch (IOException e) {
-            throw lexer.err("IO Exception", e);
         } finally {
             lexer.init(null);
             plain.release();

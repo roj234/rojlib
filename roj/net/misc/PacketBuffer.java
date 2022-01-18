@@ -30,6 +30,7 @@ import roj.util.EmptyArrays;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -38,7 +39,8 @@ import java.util.concurrent.locks.LockSupport;
  * @since 2021/12/30 12:31
  */
 public final class PacketBuffer {
-    static final AtomicIntegerFieldUpdater<PacketBuffer> CAS = AtomicIntegerFieldUpdater.newUpdater(PacketBuffer.class, "barrier");
+    static final AtomicIntegerFieldUpdater<PacketBuffer> BAR = AtomicIntegerFieldUpdater.newUpdater(PacketBuffer.class, "barrier");
+    static final AtomicReferenceFieldUpdater<Buf, Thread> OWN  = AtomicReferenceFieldUpdater.newUpdater(Buf.class, Thread.class, "owner");
 
     public PacketBuffer() {
         this(10);
@@ -58,7 +60,7 @@ public final class PacketBuffer {
         for(;;) {
             int bar = barrier;
             if (bar == 0) return false;
-            if (bar > 0 && CAS.compareAndSet(this, bar--, -1)) {
+            if (bar > 0 && BAR.compareAndSet(this, bar--, -1)) {
                 Buf h = buffers[bar];
                 if (b.remaining() < h.len) {
                     bar++;
@@ -66,13 +68,15 @@ public final class PacketBuffer {
                     b.put(h.data, 0, h.len);
                     h.len = 0;
                 }
-                if (!CAS.compareAndSet(this, -1, bar)) {
+                Thread waiting = OWN.getAndSet(h, null);
+                if (null != waiting) LockSupport.unpark(waiting);
+                if (!BAR.compareAndSet(this, -1, bar)) {
                     barrier = 0;
                     throw new IllegalStateException();
                 }
                 return h.len == 0;
             }
-            LockSupport.parkNanos(5);
+            LockSupport.parkNanos(1000);
         }
     }
 
@@ -80,36 +84,43 @@ public final class PacketBuffer {
         for(;;) {
             int bar = barrier;
             if (bar == 0) return null;
-            if (bar > 0 && CAS.compareAndSet(this, bar--, -1)) {
+            if (bar > 0 && BAR.compareAndSet(this, bar--, -1)) {
                 Buf h = buffers[bar];
                 byte[] b = Arrays.copyOf(h.data, h.len);
-                if (!CAS.compareAndSet(this, -1, bar)) {
+                if (null != h.owner) LockSupport.unpark(h.owner);
+                if (!BAR.compareAndSet(this, -1, bar)) {
                     barrier = 0;
                     throw new IllegalStateException();
                 }
                 return b;
             }
-            LockSupport.parkNanos(5);
+            LockSupport.parkNanos(1000);
         }
     }
 
     public void offer(ByteBuffer b) {
-        while (!offerOnce(b)) {
-            LockSupport.parkNanos(5);
+        while (!offerOnce(b, false)) {
+            LockSupport.parkNanos(1000);
         }
     }
 
-    public boolean offerOnce(ByteBuffer b) {
+    public void offerAndAwait(ByteBuffer b) {
+        while (!offerOnce(b, true)) {
+            LockSupport.parkNanos(1000);
+        }
+    }
+
+    public boolean offerOnce(ByteBuffer b, boolean await) {
         int bar = barrier;
         if (bar == buffers.length) {
             Buf[] buf = buffers;
-            if (CAS.compareAndSet(this, bar, -3)) {
+            if (BAR.compareAndSet(this, bar, -3)) {
                 if (buf == buffers) {
                     Buf[] newBuffers = new Buf[buffers.length + 10];
                     System.arraycopy(buffers, 0, newBuffers, 0, buffers.length);
                     buffers = newBuffers;
                 }
-                if (!CAS.compareAndSet(this, -3, bar)) {
+                if (!BAR.compareAndSet(this, -3, bar)) {
                     barrier = bar;
                     throw new IllegalStateException();
                 }
@@ -117,14 +128,20 @@ public final class PacketBuffer {
                 return false;
             }
         }
-        if (bar >= 0 && CAS.compareAndSet(this, bar, -2)) {
+        if (bar >= 0 && BAR.compareAndSet(this, bar, -2)) {
             Buf h = buffers[bar];
             if (h.data.length < (h.len = b.remaining()))
                 h.data = new byte[h.len];
             b.get(h.data, 0, h.len);
-            if (!CAS.compareAndSet(this, -2, bar + 1)) {
+            h.owner = await ? Thread.currentThread() : null;
+            if (!BAR.compareAndSet(this, -2, bar + 1)) {
                 barrier = bar;
                 throw new IllegalStateException();
+            }
+            if (await) {
+                if (OWN.getAndSet(h, Thread.currentThread()) == Thread.currentThread()) {
+                    LockSupport.park(this);
+                }
             }
             return true;
         }
@@ -134,5 +151,6 @@ public final class PacketBuffer {
     static final class Buf {
         byte[] data = EmptyArrays.BYTES;
         int len;
+        volatile Thread owner;
     }
 }

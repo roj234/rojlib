@@ -30,6 +30,7 @@ import ilib.command.sub.AbstractSubCommand;
 import ilib.math.Arena;
 import ilib.math.Section;
 import ilib.misc.SelectionCache;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.*;
@@ -219,8 +220,8 @@ public final class CommandSet extends AbstractSubCommand {
             case 3:
                 return CommandBase.getListOfStringsMatchingLastWord(args, "replace", "destroy", "keep");
             case 4:
-                return "replace".equals(args[1]) ? CommandBase.getListOfStringsMatchingLastWord(args, Block.REGISTRY.getKeys()) : empty_list;
+                return "replace".equals(args[1]) ? CommandBase.getListOfStringsMatchingLastWord(args, Block.REGISTRY.getKeys()) : EMPTY;
         }
-        return empty_list;
+        return EMPTY;
     }
 }

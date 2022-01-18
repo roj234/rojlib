@@ -129,10 +129,11 @@ public class SocketInputStream extends InputStream {
 
     @Override
     public void close() throws IOException {
-        while (!socket.shutdown())
+        /*while (!socket.shutdown())
             LockSupport.parkNanos(20L);
 
-        socket.close();
+        socket.close();*/
+        buf.clear();
     }
 
     @Override

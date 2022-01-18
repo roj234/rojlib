@@ -35,11 +35,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class HttpServer implements Runnable {
     public static final boolean THROTTLING_CHECK_ENABLED = false;
-    public static final TimedHashMap<String, AtomicInteger> CONNECTING_ADDRESSES  = new TimedHashMap<>(1000);
+    public static final Map<String, AtomicInteger> CONNECTING_ADDRESSES = new TimedHashMap<>(1000);
 
     final ServerSocket   socket;
     final SocketFactory factory;

@@ -31,12 +31,17 @@ import roj.concurrent.task.ITask;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/13 0:16
  */
 public final class TaskManager extends TaskPool {
     public TaskManager() {
-        super(0, Integer.parseInt(System.getProperty("tm.pooled", "6")), 1, 1, pool -> new TaskExecutor(pool, "任务执行者", 120000));
+        super(0, Integer.parseInt(System.getProperty("tm.pooled", "6")), 1, 1, new MyThreadFactory() {
+            int i = 1;
+            @Override
+            public TaskExecutor get(TaskPool pool) {
+                return new TaskExecutor(pool, "Executor #" + i++, 120000);
+            }
+        });
     }
 
     @Override

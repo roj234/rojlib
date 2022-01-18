@@ -77,7 +77,7 @@ final class ClientLogin extends Stated {
                                       getUTF(rb, nameLen),
                                       getUTF(rb, passLen));
             if (code != -1) {
-                syncPrint(W + ": 连接失败: " + ERROR_NAMES[code - 0x20]);
+                syncPrint(W + ": 登录失败: " + ERROR_NAMES[code - 0x20]);
                 write1(ch, (byte) code);
                 return Logout.LOGOUT;
             }
@@ -90,6 +90,11 @@ final class ClientLogin extends Stated {
               .putInt(W.clientId).put(W.server.info)
               .put(W.room.motd).put(W.room.portMap).flip();
             writeAndFlush(ch, rb, 500);
+            if (W.room.upnpAddress != null) {
+                rb.clear();
+                rb.put(W.room.upnpAddress).flip();
+                writeAndFlush(ch, rb, 500);
+            }
 
             byte[] addr = ch.socket().getInetAddress().getAddress();
             rb.clear();
@@ -102,7 +107,7 @@ final class ClientLogin extends Stated {
             W.room.master.sync(rb);
             rb.clear();
 
-            syncPrint(W + ": 客户端登陆成功");
+            syncPrint(W + ": 登录成功");
             return ClientWork.CLIENT_WORK;
         }
 

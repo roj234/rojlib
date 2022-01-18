@@ -194,8 +194,8 @@ public final class CommandFill extends AbstractSubCommand {
             case 9:
                 return CommandBase.getListOfStringsMatchingLastWord(args, "replace", "destroy", "keep");
             case 10:
-                return "replace".equals(args[8]) ? CommandBase.getListOfStringsMatchingLastWord(args, Block.REGISTRY.getKeys()) : empty_list;
+                return "replace".equals(args[8]) ? CommandBase.getListOfStringsMatchingLastWord(args, Block.REGISTRY.getKeys()) : EMPTY;
         }
-        return empty_list;
+        return EMPTY;
     }
 }

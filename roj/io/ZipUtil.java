@@ -26,6 +26,8 @@
 
 package roj.io;
 
+import roj.util.Helpers;
+
 import java.io.*;
 import java.util.Enumeration;
 import java.util.Map;
@@ -100,19 +102,6 @@ public final class ZipUtil {
         }
     }
 
-    public static void writeZipIntoZip(ZipOutputStream zos, ZipFile zip, Predicate<ZipEntry> predicate) throws IOException {
-        Enumeration<? extends ZipEntry> enumeration;
-        enumeration = zip.entries();
-        while (enumeration.hasMoreElements()) {
-            ZipEntry ze = enumeration.nextElement();
-            if (!ze.isDirectory() && predicate.test(ze)) {
-                zos.putNextEntry(new ZipEntry(ze.getName()));
-                zos.write(IOUtil.read(zip.getInputStream(ze)));
-                zos.closeEntry();
-            }
-        }
-    }
-
     public static void close(ZipOutputStream zos) throws IOException {
         zos.flush();
         zos.finish();
@@ -145,26 +134,7 @@ public final class ZipUtil {
     }
 
     public static void unzip(File file, ICallback callback) {
-        if (file.length() == 0) return;
-        ZipFile zf;
-        try {
-            zf = new ZipFile(file);
-        } catch (IOException e) {
-            System.err.println("文件 " + file.getAbsolutePath() + " 无法正常读取!");
-            return;
-        }
-        Enumeration<? extends ZipEntry> en = zf.entries();
-        while (en.hasMoreElements()) {
-            ZipEntry zn = en.nextElement();
-            if (!zn.isDirectory()) {
-                try (InputStream is = zf.getInputStream(zn)) {
-                    callback.onRead(zn.getName(), is);
-                } catch (IOException e) {
-                    System.err.println("文件 " + file.getAbsolutePath() + " 中的 " + zn.getName() + " 无法正常读取!");
-                    e.printStackTrace();
-                }
-            }
-        }
+        unzip(file, callback, Helpers.alwaysTrue());
     }
 
     public static void unzip(String fileName, String path) {

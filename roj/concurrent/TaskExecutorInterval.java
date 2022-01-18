@@ -55,7 +55,7 @@ public class TaskExecutorInterval {
 
             long time = System.currentTimeMillis();
             while (!lock.compareAndSet(0, 1))
-                LockSupport.parkNanos(100);
+                LockSupport.parkNanos(9999);
             BSLowHeap<IntervalTask> tt = this.tasks;
             int i;
             for (i = 0; i < tt.size(); i++) {
@@ -89,8 +89,8 @@ public class TaskExecutorInterval {
 
     public void add(ITask task, long interval, long delay, int maxRun) {
         IntervalTask t = new IntervalTask(task, interval, delay, maxRun);
-        while (!lock.compareAndSet(1, 2))
-            LockSupport.parkNanos(75);
+        while (!lock.compareAndSet(0, 2))
+            LockSupport.parkNanos(9999);
         tasks.add(t);
         lock.set(0);
     }

@@ -25,7 +25,6 @@
  */
 package roj.net.http.serv;
 
-import roj.collect.TimedHashMap;
 import roj.concurrent.task.ITaskNaCl;
 import roj.net.Notify;
 import roj.net.WrappedSocket;
@@ -36,6 +35,7 @@ import roj.net.http.IllegalRequestException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
@@ -71,7 +71,7 @@ public class RequestHandler implements ITaskNaCl {
                     socket.setSoTimeout(router.readTimeout());
 
                     if(HttpServer.THROTTLING_CHECK_ENABLED) {
-                        final TimedHashMap<String, AtomicInteger> addresses = HttpServer.CONNECTING_ADDRESSES;
+                        final Map<String, AtomicInteger> addresses = HttpServer.CONNECTING_ADDRESSES;
                         AtomicInteger integer = addresses.get(remote.getHostString());
                         if (integer == null) {
                             synchronized (addresses) {

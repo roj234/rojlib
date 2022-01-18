@@ -423,6 +423,7 @@ public class ByteList implements DataInput {
         return this;
     }
 
+    @SuppressWarnings("deprecation")
     public ByteList putAscii(String s) {
         ensureCapacity(wIndex + s.length());
         s.getBytes(0, s.length(), list, wIndex);
@@ -521,25 +522,25 @@ public class ByteList implements DataInput {
     public int rIndex;
 
     public final int rIndex() {
-        return rIndex - arrayOffset();
+        return rIndex;
     }
 
     public final ByteList rIndex(int rIndex) {
-        this.rIndex = rIndex + arrayOffset();
+        this.rIndex = rIndex;
         return this;
     }
 
     public final boolean hasRemaining() {
-        return rIndex >= wIndex;
+        return rIndex < wIndex;
     }
 
     public final int remaining() {
-        return wIndex - rIndex;
+        return wIndex - rIndex - arrayOffset();
     }
 
     // check rIndex
     private void ci(int v) {
-        if (rIndex + v > wIndex) throw new ArrayIndexOutOfBoundsException();
+        if (rIndex + arrayOffset() + v > wIndex) throw new ArrayIndexOutOfBoundsException();
     }
 
     @Override
@@ -567,7 +568,7 @@ public class ByteList implements DataInput {
             throw new ArrayIndexOutOfBoundsException();
         if (len > 0) {
             ci(len);
-            System.arraycopy(list, rIndex, b, off, len);
+            System.arraycopy(list, rIndex + arrayOffset(), b, off, len);
             rIndex += len;
         }
     }
@@ -575,30 +576,30 @@ public class ByteList implements DataInput {
     @Override
     public final boolean readBoolean() {
         ci(1);
-        return list[rIndex++] == 1;
+        return list[arrayOffset() + rIndex++] == 1;
     }
 
     @Override
     public final byte readByte() {
         ci(1);
-        return list[rIndex++];
+        return list[arrayOffset() + rIndex++];
     }
 
     @Override
     public final int readUnsignedByte() {
         ci(1);
-        return list[rIndex++] & 0xFF;
+        return list[arrayOffset() + rIndex++] & 0xFF;
     }
 
     public final short readUByte() {
         ci(1);
-        return (short) (list[rIndex++] & 0xFF);
+        return (short) (list[arrayOffset() + rIndex++] & 0xFF);
     }
 
     @Override
     public final int readUnsignedShort() {
         ci(2);
-        int i = rIndex;
+        int i = rIndex + arrayOffset();
         rIndex += 2;
         byte[] l = this.list;
         return (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
@@ -606,7 +607,7 @@ public class ByteList implements DataInput {
 
     public final int readUShortLE() {
         ci(2);
-        int i = rIndex;
+        int i = rIndex + arrayOffset();
         rIndex += 2;
         byte[] l = this.list;
         return (l[i++] & 0xFF) | (l[i] & 0xFF) << 8;
@@ -665,8 +666,8 @@ public class ByteList implements DataInput {
     @Override
     public final int readInt() {
         ci(4);
-        int i = rIndex;
-        rIndex = i + 4;
+        int i = rIndex + arrayOffset();
+        rIndex += 4;
         byte[] l = this.list;
         return (l[i++] & 0xFF) << 24 | (l[i++] & 0xFF) << 16 |
                 (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
@@ -674,8 +675,8 @@ public class ByteList implements DataInput {
 
     public final int readIntLE() {
         ci(4);
-        int i = rIndex;
-        rIndex = i + 4;
+        int i = rIndex + arrayOffset();
+        rIndex += 4;
         byte[] l = this.list;
         return (l[i++] & 0xFF) | (l[i++] & 0xFF) << 8 |
                 (l[i++] & 0xFF) << 16 | (l[i] & 0xFF) << 24;
@@ -683,8 +684,8 @@ public class ByteList implements DataInput {
 
     public final long readUInt() {
         //checkLength(4);
-        int i = rIndex;
-        rIndex = i + 4;
+        int i = rIndex + arrayOffset();
+        rIndex += 4;
         byte[] l = this.list;
         return  (l[i++] & 0xFFL) << 24 |
                 (l[i++] & 0xFFL) << 16 |
@@ -694,8 +695,8 @@ public class ByteList implements DataInput {
 
     public final long readUIntLE() {
         ci(4);
-        int i = rIndex;
-        rIndex = i + 4;
+        int i = rIndex + arrayOffset();
+        rIndex += 4;
         byte[] l = this.list;
         return  (l[i++] & 0xFF) |
                 (l[i++] & 0xFF) << 8 |
@@ -705,8 +706,8 @@ public class ByteList implements DataInput {
 
     public final long readLongLE() {
         ci(8);
-        int i = rIndex;
-        rIndex = i + 8;
+        int i = rIndex + arrayOffset();
+        rIndex += 8;
         byte[] l = this.list;
         return  (l[i++] & 0xFFL) | (l[i++] & 0xFFL) << 8 |
                 (l[i++] & 0xFFL) << 16 | (l[i++] & 0xFFL) << 24 |
@@ -716,8 +717,8 @@ public class ByteList implements DataInput {
 
     public final long readLong() {
         ci(8);
-        int i = rIndex;
-        rIndex = i + 8;
+        int i = rIndex + arrayOffset();
+        rIndex += 8;
         byte[] l = this.list;
         return  (l[i++] & 0xFFL) << 56 | (l[i++] & 0xFFL) << 48 |
                 (l[i++] & 0xFFL) << 40 | (l[i++] & 0xFFL) << 32 |
@@ -737,7 +738,7 @@ public class ByteList implements DataInput {
 
     @Override
     public final int skipBytes(int i) {
-        int skipped = Math.min(wIndex - rIndex, i);
+        int skipped = Math.min(wIndex - rIndex - arrayOffset(), i);
         rIndex += skipped;
         return skipped;
     }
@@ -780,7 +781,7 @@ public class ByteList implements DataInput {
     @Override
     @SuppressWarnings("deprecation")
     public final String readLine() {
-        int i = rIndex;
+        int i = rIndex + arrayOffset();
         byte[] l = list;
         while (true) {
             if (i >= wIndex)
@@ -792,16 +793,23 @@ public class ByteList implements DataInput {
             }
         }
         String s = new String(l, 0, rIndex, i - rIndex);
-        rIndex = i;
+        rIndex = i - arrayOffset();
+        return s;
+    }
+
+    @SuppressWarnings("deprecation")
+    public final String readAscii(int len) {
+        String s = new String(list, 0, rIndex + arrayOffset(), len);
+        rIndex += len;
         return s;
     }
 
     public final ByteList readZeroEnd(int max) {
-        int i = rIndex;
+        int i = rIndex + arrayOffset();
         byte[] l = list;
         while (max-- > 0) {
             if(l[i++] == 0) {
-                return slice(i - rIndex);
+                return slice(i - rIndex - arrayOffset());
             }
         }
         return null;
@@ -811,7 +819,6 @@ public class ByteList implements DataInput {
         if (length == 0)
             return new WriteOnly();
         ByteList list = slice(rIndex, length);
-        list.rIndex = rIndex;
         rIndex += length;
         return list;
     }
@@ -1024,6 +1031,7 @@ public class ByteList implements DataInput {
 
     public final int readBit(int numBits) {
         int d;
+        int rIndex = this.rIndex + arrayOffset();
         switch (numBits) {
             case 1:
                 return readBit1();
@@ -1035,8 +1043,8 @@ public class ByteList implements DataInput {
             case 7:
             case 8:
             case 9:
-                d = (((((list[rIndex] & 0xFF) << 8) |
-                        (get0(rIndex + 1) & 0xFF)) << bitIndex)
+                d = (((((list[rIndex++] & 0xFF) << 8) |
+                        (get0(rIndex) & 0xFF)) << bitIndex)
                         & 0xFFFF) >> 16 - numBits;
             break;
             case 10:
@@ -1047,15 +1055,15 @@ public class ByteList implements DataInput {
             case 15:
             case 16:
             case 17:
-                d = (((((get(rIndex) & 0xFF) << 16) |
-                        ((get0(rIndex + 1) & 0xFF) << 8) |
-                        (get0(rIndex + 2) & 0xFF)) << bitIndex)
+                d = (((((get(rIndex++) & 0xFF) << 16) |
+                        ((get0(rIndex++) & 0xFF) << 8) |
+                        (get0(rIndex) & 0xFF)) << bitIndex)
                         & 0xFFFFFF) >> 24 - numBits;
             break;
             default:
                 throw new IllegalArgumentException("get bit count must in [1,17]");
         }
-        rIndex += (bitIndex += numBits) >> 3;
+        this.rIndex += (bitIndex += numBits) >> 3;
         bitIndex &= 0x7;
         return d;
     }

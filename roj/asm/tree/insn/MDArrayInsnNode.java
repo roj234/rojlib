@@ -26,8 +26,10 @@
 
 package roj.asm.tree.insn;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstClass;
+import roj.asm.type.ParamHelper;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 
@@ -94,10 +96,6 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
     }
 
     public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(owner);
-        for (int i = 0; i < dimension; i++) {
-            sb.append("[]");
-        }
-        return sb.toString();
+        return OpcodeUtil.toString0(code, ParamHelper.parseField(owner).toString());
     }
 }

@@ -153,9 +153,6 @@ public class MyCipher implements CipheR, DeCipher {
             case MODE_OFB:
                 return new Object[] { iv.array().clone(), iv.position() };
             case MODE_CFB:
-                if ((mode & DECRYPT) != 0) {
-                    return new Object[] { iv.array().clone(), iv.position() };
-                }
             case MODE_CTR:
                 byte[] b0 = iv.array().clone();
                 byte[] b1 = t0.array().clone();
@@ -179,12 +176,6 @@ public class MyCipher implements CipheR, DeCipher {
                 iv.position((Integer) arr[1]);
                 break;
             case MODE_CFB:
-                if ((mode & DECRYPT) != 0) {
-                    arr = (Object[]) data;
-                    System.arraycopy(arr[0], 0, iv.array(), 0, iv.capacity());
-                    iv.position((Integer) arr[1]);
-                    break;
-                }
             case MODE_CTR:
                 arr = (Object[]) data;
                 System.arraycopy(arr[0], 0, iv.array(), 0, iv.capacity());

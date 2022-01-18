@@ -28,29 +28,39 @@ package roj.net.cross;
 import roj.collect.IntMap;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
+import roj.net.NetworkUtil;
 import roj.net.WrappedSocket;
 import roj.net.misc.Pipe;
 import roj.net.misc.Pipe.CipherPipe;
 import roj.net.misc.Shutdownable;
 import roj.util.FastLocalThread;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
-import java.util.*;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
 
 import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/26 2:55
  */
 abstract class IAEClient extends FastLocalThread implements Shutdownable {
-    static final int MAX_CHANNEL_COUNT = 32;
+    static {
+        NetworkUtil.MSSLoadClientRSAKey(new File(System.getProperty("ae.keyPath", "ae_client.key")));
+    }
+
+    // 客户端最低保留频道
+    static final int MIN_CHANNEL_COUNT = 2;
+    // 5分钟
+    static final int CHANNEL_IDLE_TIMEOUT = 300_000;
 
     final SocketAddress server;
     final String id, token;
@@ -68,7 +78,6 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
         this.rnd = new SecureRandom();
         this.socketsById = new IntMap<>();
         setDaemon(true);
-        setName("AE - 控制连接");
     }
 
     @Override
@@ -89,10 +98,10 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
         try {
             shutdown = false;
             call();
-            shutdown = true;
-        } catch (IOException e) {
+        } catch (Throwable e) {
             e.printStackTrace();
         }
+        shutdown = true;
     }
 
     @Override
@@ -103,55 +112,48 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
     protected abstract void call() throws IOException;
 
     final boolean heartbeat(WrappedSocket ch, int heart, boolean host) throws IOException {
-        if(heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
-            if (write1(ch, (byte) P_HEARTBEAT) < 0) {
-                syncPrint(this + ": 传输失败");
-            }
-            ByteBuffer rb = ch.buffer();
-            if (rb.position() == 0 && !socketsById.isEmpty()) {
-                for (Iterator<Pipe> itr = socketsById.values().iterator(); itr.hasNext(); ) {
-                    Pipe pair = itr.next();
-                    SpAttach att = (SpAttach) pair.att;
-                    List<Pipe> pairs = free[att.portId];
-                    if (pair.isUpstreamEof() || pair.isReleased()) {
-                        itr.remove();
-
-                        if (!pairs.isEmpty()) pairs.remove(pair);
-
-                        rb.put((byte) P_CHANNEL_CLOSE)
-                          .putInt(att.channelId);
-                    } else if (host && pair.isDownstreamEof()) {
-                        // client手动回收
-                        if (pairs == Collections.EMPTY_LIST)
-                            pairs = free[att.portId] = new ArrayList<>(3);
-                        pairs.add(pair);
-
-                        rb.put((byte) P_CHANNEL_INACTIVE)
-                          .putInt(att.channelId);
-                        syncPrint("管道 #" + att.channelId + " 系统回收");
-                    } else if (pair.idleTime++ > 100000) {
-                        itr.remove();
-
-                        rb.put((byte) P_CHANNEL_CLOSE)
-                          .putLong(att.channelId);
-                        syncPrint("管道 #" + att.channelId + " 超时关闭");
-
-                        pair.release();
-                        if (!pairs.isEmpty()) pairs.remove(pair);
-                    }
+        if (heart <= 0) {
+            if (heart % T_HEART_RETRY == 0) {
+                if (write1(ch, (byte) P_HEARTBEAT) < 0) {
+                    syncPrint(this + ": 传输失败");
                 }
+            } else if (heart < -T_HEART_TIMEOUT) {
+                syncPrint(this + ": 心跳超时");
+                return false;
+            }
+        }
 
-                if (rb.position() > 0) {
-                    rb.flip();
-                    if (writeAndFlush(ch, rb, System.currentTimeMillis() + TIMEOUT) < 0) {
-                        syncPrint(this + ": 传输失败");
-                        return false;
-                    }
+        // 1200 * 0.2 ~= 240s
+        if (heart % T_HEART_RETRY != 0) return true;
+
+        ByteBuffer rb = ch.buffer();
+        if (rb.position() == 0 && !socketsById.isEmpty()) {
+            for (Iterator<Pipe> itr = socketsById.values().iterator(); itr.hasNext(); ) {
+                Pipe pair = itr.next();
+                SpAttach att = (SpAttach) pair.att;
+                List<Pipe> pairs = free[att.portId];
+                if ((pair.idleTime > CHANNEL_IDLE_TIMEOUT &&
+                        (socketsById.size() > MIN_CHANNEL_COUNT || host)) ||
+                        pair.isUpstreamEof()) {
+                    itr.remove();
+
+                    pair.close();
+                    if (!pairs.isEmpty()) pairs.remove(pair);
+
+                    rb.put((byte) P_CHANNEL_CLOSE).putInt(att.channelId);
+
+                    syncPrint("关闭了频道 #" + att.channelId);
                 }
             }
-        } else if(heart < -T_CLIENT_HEARTBEAT_TIMEOUT) {
-            syncPrint(this + ": 没收到服务端心跳");
-            return false;
+
+            if (rb.position() > 0) {
+                rb.flip();
+                if (writeAndFlush(ch, rb, TIMEOUT) < 0) {
+                    syncPrint("传输失败");
+                    return false;
+                }
+            }
+            rb.clear();
         }
         return true;
     }
@@ -180,14 +182,12 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
 
         try {
             handshakeClient(ch, pipeId);
-            CipherPipe SCP = new CipherPipe(ch.fd(), null, ciphers);
-            SCP.setInactive();
-            return SCP;
+            return new CipherPipe(ch.fd(), null, ciphers);
         } catch (IOException e) {
             ch.close();
             throw e;
         }
     }
 
-    static final Object CheckServerAlive = new Object(), 无事发生 = new Object();
+    static final Object CheckServerAlive = new Object();
 }

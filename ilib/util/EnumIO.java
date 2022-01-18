@@ -33,7 +33,7 @@
  */
 package ilib.util;
 
-import roj.util.Color;
+import java.awt.*;
 
 public enum EnumIO {
     DEFAULT(255, 255, 255, 0),
@@ -47,19 +47,20 @@ public enum EnumIO {
     public static final byte OUTPUT_ID = 2;
     public static final byte ALL_ID = 3;
     public static final byte DISABLED_ID = 4;
-    // Define of [getActualState FOUR_WAY patchClient] end;
-    // Define of [ItemIO / EnergyIO / FluidIO] begin;
+
     public static final int TYPE_ITEM = 0;
     public static final int TYPE_ENERGY = 1;
     public static final int TYPE_FLUID = 2;
 
+    public static final EnumIO[] VALUES = values();
+
     // Color
-    private final Color cachedColor;
-    private final String lowerCase;
+    private final Color  color;
+    private final String name;
 
     EnumIO(int r, int g, int b, int a) {
-        cachedColor = new Color(r, g, b, a);
-        lowerCase = name().toLowerCase();
+        color = new Color(r, g, b, a);
+        name = name().toLowerCase();
     }
 
     public enum Tube implements net.minecraft.util.IStringSerializable {
@@ -74,61 +75,22 @@ public enum EnumIO {
         }
     }
 
-    /**
-     * The unlocalized name
-     */
     public String getName() {
-        return lowerCase;
+        return name;
     }
 
-    /**
-     * Used to get the name that should be displayed in GUI
-     *
-     * @return The display name
-     */
-    public String getDisplayName() {
-        return TextHelper.translate("gui.mi.tabs.io." + lowerCase);
-    }
-
-    public Tube toTubeInfo() {
-        return Tube.byIOMode(this);
-    }
-
-    /**
-     * Used to get the correct mode from an integer
-     *
-     * @param id The value to convert
-     * @return The mode for that value
-     */
     public static EnumIO byId(int id) {
-        if (id > -1 && id < values().length) {
-            return values()[id];
+        return byId(id, DEFAULT);
+    }
+
+    public static EnumIO byId(int id, EnumIO def) {
+        if (id > -1 && id < VALUES.length) {
+            return VALUES[id];
         }
-        return DEFAULT;
+        return def;
     }
 
-    public static EnumIO byId(int id, EnumIO fallback) {
-        if (id > -1 && id < values().length) {
-            return values()[id];
-        }
-        return fallback;
-    }
-
-    /**
-     * Used to get the integer value
-     *
-     * @return The value
-     */
-    public int getIndex() {
-        return ordinal();
-    }
-
-    /**
-     * Used to get the color to render on the Side Selector
-     *
-     * @return The color, with alpha attached
-     */
-    public Color getHighlightColor() {
-        return cachedColor;
+    public Color getColor() {
+        return color;
     }
 }

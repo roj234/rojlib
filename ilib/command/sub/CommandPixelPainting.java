@@ -32,6 +32,9 @@ import ilib.math.Arena;
 import ilib.math.Section;
 import ilib.misc.SelectionCache;
 import ilib.util.BlockHelper;
+import org.lwjgl.opengl.GL11;
+import roj.collect.ToIntMap;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.BlockRendererDispatcher;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -49,13 +52,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
-import org.lwjgl.opengl.GL11;
-import roj.collect.ToIntMap;
 
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
+import java.awt.image.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -236,6 +236,6 @@ public class CommandPixelPainting extends AbstractSubCommand {
             case 6:
                 return CommandBase.getTabCompletionCoordinate(args.length == 6 ? Arrays.copyOf(args, 7) : args, 3, pos);
         }
-        return empty_list;
+        return EMPTY;
     }
 }

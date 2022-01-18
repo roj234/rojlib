@@ -44,6 +44,8 @@ import java.util.concurrent.locks.LockSupport;
  * @since 2021/9/12 5:25
  */
 public class Util {
+    public static final boolean DEBUG = System.getProperty("AE.debug") != null;
+
     static {
         try {
             roj.misc.CpFilter.registerShutdownHook();
@@ -124,7 +126,7 @@ public class Util {
      * u2[<N>] ports;
      * }
      */
-    public static final int PC_LOGON_C = 3;
+    public static final int PC_LOGON_C = 2;
     /**
      * 房主登录
      * {
@@ -139,7 +141,7 @@ public class Util {
      * u2[<N>] ports;
      * }
      */
-    public static final int PS_LOGIN_H = 4;
+    public static final int PS_LOGIN_H = 3;
     /**
      * 房主登录完毕
      * {
@@ -148,12 +150,12 @@ public class Util {
      * utf[infoLen] info;
      * }
      */
-    public static final int PC_LOGON_H = 5;
+    public static final int PC_LOGON_H = 2;
     /**
      * 退出登录（断开连接）
      * {u1 id}
      */
-    public static final int P_LOGOUT = 6;
+    public static final int P_LOGOUT = 4;
     /**
      * 服务器告知客户端加入
      * {
@@ -164,7 +166,7 @@ public class Util {
      * u1[ipLen] ip;
      * }
      */
-    public static final int PH_CLIENT_LOGIN = 7;
+    public static final int PH_CLIENT_LOGIN = 3;
     /**
      * 服务器告知客户端退出
      * {
@@ -172,7 +174,7 @@ public class Util {
      * u4 ordinal;
      * }
      */
-    public static final int PH_CLIENT_LOGOUT = 8;
+    public static final int PH_CLIENT_LOGOUT = 5;
     /**
      * 房主踢出客户端
      * {
@@ -180,7 +182,7 @@ public class Util {
      * u4 ordinal;
      * }
      */
-    public static final int PS_KICK_CLIENT = 9;
+    public static final int PS_KICK_CLIENT = 5;
     /**
      * 客户端想开启一个数据频道，并提供加密密码第一部分
      * {
@@ -189,7 +191,7 @@ public class Util {
      * u1[32] rnd1;
      * }
      */
-    public static final int PS_REQUEST_CHANNEL = 10;
+    public static final int PS_REQUEST_CHANNEL = 6;
     /**
      * A. 客户端想开启一个数据频道，并提供加密密码第一部分后，服务端创建SocketPair并发给host
      * B. 房主同意开启，提供密码第二部分，服务端返回client
@@ -206,7 +208,7 @@ public class Util {
      *     u4 login_pass; // 之后不传
      * }
      */
-    public static final int P_CHANNEL_RESULT  = 11;
+    public static final int P_CHANNEL_RESULT = 7;
     /**
      * 房主同意开启，并返回加密密码第二部分
      * {
@@ -219,7 +221,7 @@ public class Util {
      *     -1=SERVER, 0=HOST, else = CLIENT
      * }
      */
-    public static final int PS_CHANNEL_OPEN     = 12;
+    public static final int PS_CHANNEL_OPEN = 8;
     /**
      * 房主或服务端不同意开启数据频道
      * {
@@ -229,7 +231,7 @@ public class Util {
      * utf[reasonLen] reason;
      * }
      */
-    public static final int P_CHANNEL_OPEN_FAIL = 13;
+    public static final int P_CHANNEL_OPEN_FAIL = 9;
     /**
      * 任意一方关闭数据频道
      * {
@@ -238,23 +240,15 @@ public class Util {
      * DATA_CHANNEL.ordinal data_channel_id;
      * }
      */
-    public static final int P_CHANNEL_CLOSE     = 14;
+    public static final int P_CHANNEL_CLOSE = 10;
     /**
-     * client/host对告知数据频道目的段已终止，在下次收到数据时通知
+     * 重置管道状态
      * {
      * u1 id;
      * DATA_CHANNEL.ordinal data_channel_id;
      * }
      */
-    public static final int P_CHANNEL_INACTIVE  = 15;
-    /**
-     * server在收到数据时通知client/host
-     * {
-     * u1 id;
-     * DATA_CHANNEL.ordinal data_channel_id;
-     * }
-     */
-    public static final int PS_CHANNEL_ACTIVE    = 15;
+    public static final int P_CHANNEL_RESET = 11;
     /**
      * 骚气的聊天功能
      * {
@@ -268,12 +262,39 @@ public class Util {
      *     0=SET_INACTIVE, 1=SET_ACTIVE
      * }
      */
-    public static final int P_MSG = 16;
+    public static final int P_MSG = 12;
     /**
      * 上次的操作失败了
      * { u1 id; }
      */
-    public static final int P_FAIL = 17;
+    public static final int P_FAIL = 13;
+    /**
+     * UPnP ping
+     * from HOST/CLIENT: {
+     * u1 id;
+     * u8 secret;
+     * u2 port;
+     * u1 ipLen;
+     * u1[ipLen] ip;
+     * }
+     * from SERVER: {
+     * u1 id;
+     * u1 status;
+     * }
+     * to UPnP: { u1 id; }
+     */
+    public static final int P_UPNP_PING = 14;
+    /**
+     * UPnP pong
+     * from UPnP: { u1 id; u8 secret; }
+     * from HOST/CLIENT/SERVER: { (Notifies [it] to use this address)
+     * u1 id;
+     * u2 port;
+     * u1 ipLen;
+     * u1[ipLen] ip;
+     * }
+     */
+    public static final int P_UPNP_PONG = 15;
 
     // endregion
 
@@ -288,11 +309,9 @@ public class Util {
     public static final int PS_ERROR_SYSTEM_LIMIT = 0x27;
     public static final int PS_ERROR_TIMEOUT = 0x28;
 
-    public static final int TIMEOUT_HEART_SERVER = 15000;
-
-    public static final int T_CLIENT_HEARTBEAT_TIME  = 6000;
-    public static final int T_CLIENT_HEARTBEAT_RETRY = 200;
-    public static final int T_CLIENT_HEARTBEAT_TIMEOUT = 5000;
+    public static final int T_HEART_TIMEOUT = 3000;
+    public static final int T_HEART = 1000;
+    public static final int T_HEART_RETRY = 200;
 
     public static PrintStream out;
 
@@ -358,6 +377,7 @@ public class Util {
     }
 
     public static int writeAndFlush(WrappedSocket channel, ByteBuffer buf, long deadline) throws IOException {
+        deadline += System.currentTimeMillis();
         do {
             int w = channel.write(buf);
             if(w < 0) return w;

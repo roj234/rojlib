@@ -120,6 +120,9 @@ public class ByteListSource implements Source {
     @Override
     public void close() {}
 
+    @Override
+    public void reopen() {}
+
     public int getOffset() {
         return offset;
     }

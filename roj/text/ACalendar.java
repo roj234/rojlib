@@ -299,7 +299,7 @@ public class ACalendar {
         sb.append(number);
     }
 
-    public String formatDate(String format, long stamp) {
+    public StringBuilder formatDate(String format, long stamp) {
         int[] date = get(stamp);
         StringBuilder sb = new StringBuilder(format.length());
         char c;
@@ -392,7 +392,7 @@ public class ACalendar {
                     break;
             }
         }
-        return sb.toString();
+        return sb;
     }
 
     private int tzoff(long stamp, StringBuilder sb) {
@@ -432,6 +432,6 @@ public class ACalendar {
             }
 
         }
-        return formatDate("Y-m-d H:i:s", unix);
+        return formatDate("Y-m-d H:i:s", unix).toString();
     }
 }

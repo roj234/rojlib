@@ -45,39 +45,23 @@ public class Pipe {
     protected SelectionKey upKey, downKey;
 
     protected FileDescriptor upstream, downstream;
-    protected final ByteBuffer toh, toc;
+    protected ByteBuffer toh, toc;
     public int idleTime;
 
     // state / flag
     public long uploaded, downloaded;
-    private byte eof;
-
-    public final boolean isEof() {
-        return eof != 0;
-    }
 
     public boolean isUpstreamEof() {
-        return (eof & 1) != 0;
+        return upstream == null;
     }
 
     public boolean isDownstreamEof() {
-        return (eof & 2) != 0;
+        return downstream == null;
     }
 
-    public FileDescriptor getUpstreamFD() {
-        return upstream;
-    }
-
-    public FileDescriptor getDownstreamFD() {
-        return downstream;
-    }
-
-    public long getDownloaded() {
-        return downloaded;
-    }
-
-    public long getUploaded() {
-        return uploaded;
+    public void setUpstream(FileDescriptor upstream) {
+        if (toh == null) throw new IllegalStateException();
+        this.upstream = upstream;
     }
 
     static final int S_BUFFER = -1, S_NET = 0, S_NOTHING = 1, S_CLOSED = 2;
@@ -94,12 +78,11 @@ public class Pipe {
     }
 
     public final int transfer() throws IOException {
+        if (upstream == null || downstream == null) return S_CLOSED;
         return transfer(false);
     }
 
-    public final int transfer(boolean bufferOnly) throws IOException {
-        if (eof != 0) return S_CLOSED;
-
+    final int transfer(boolean bufferOnly) throws IOException {
         int c;
         if (toh.hasRemaining()) {
             try {
@@ -108,14 +91,15 @@ public class Pipe {
                 c = -1;
             }
             if (c < 0) {
-                release();
+                close();
                 return S_CLOSED;
             }
             if (c > 0) {
                 idleTime = 0;
                 uploaded += c;
             } else {
-                if (upKey.interestOps() != SelectionKey.OP_WRITE)
+                SelectionKey upKey = this.upKey;
+                if (upKey != null && upKey.interestOps() != SelectionKey.OP_WRITE)
                     upKey.interestOps(SelectionKey.OP_WRITE);
             }
         }
@@ -127,14 +111,15 @@ public class Pipe {
                 c = -1;
             }
             if (c < 0) {
-                this.eof = 2;
+                closeDown();
                 return S_CLOSED;
             }
             if (c > 0) {
                 idleTime = 0;
                 downloaded += c;
             } else {
-                if (downKey.interestOps() != SelectionKey.OP_WRITE)
+                SelectionKey downKey = this.downKey;
+                if (downKey != null && downKey.interestOps() != SelectionKey.OP_WRITE)
                     downKey.interestOps(SelectionKey.OP_WRITE);
             }
         }
@@ -153,10 +138,11 @@ public class Pipe {
         if (c > 0) {
             flag = true;
         } else if (c < 0) {
-            release();
+            close();
             return S_CLOSED;
         } else {
-            if (upKey.interestOps() != SelectionKey.OP_READ)
+            SelectionKey upKey = this.upKey;
+            if (upKey != null && upKey.interestOps() != SelectionKey.OP_READ)
                 upKey.interestOps(SelectionKey.OP_READ);
         }
 
@@ -170,10 +156,11 @@ public class Pipe {
         if (c > 0) {
             flag = true;
         } else if (c < 0) {
-            this.eof = 2;
+            closeDown();
             return S_CLOSED;
         } else {
-            if (downKey.interestOps() != SelectionKey.OP_READ)
+            SelectionKey downKey = this.downKey;
+            if (downKey != null && downKey.interestOps() != SelectionKey.OP_READ)
                 downKey.interestOps(SelectionKey.OP_READ);
         }
 
@@ -182,7 +169,7 @@ public class Pipe {
             try {
                 doCipher();
             } catch (GeneralSecurityException e) {
-                this.eof = 2;
+                closeDown();
                 throw new IOException(e);
             }
             transfer(true);
@@ -191,36 +178,25 @@ public class Pipe {
         return S_NOTHING;
     }
 
+    private void closeDown() {
+        try {
+            NIOUtil.close(downstream);
+        } catch (IOException ignored) {}
+        downstream = null;
+    }
+
     public void setClient(FileDescriptor client) {
-        if (client == null)
-            setInactive();
-        else
-            setActive();
+        this.toc.position(0).limit(0);
+        this.toh.position(0).limit(0);
+        this.downloaded = this.uploaded = 0;
         idleTime = 0;
         this.downstream = client;
     }
 
-    public void setActive() {
-        if (this.upstream == null)
-            throw new IllegalStateException("Pipe Closed.");
-        this.eof = 0;
-        this.toc.position(0).limit(0);
-        this.toh.position(0).limit(0);
-        this.downloaded = this.uploaded = 0;
-    }
-
     void doCipher() throws GeneralSecurityException {}
 
-    public final void setInactive() {
-        if (upstream == null)
-            throw new IllegalStateException("Pipe Closed.");
-        this.eof = 4;
-        this.downloaded = this.uploaded = 0;
-    }
-
-    public final void release() throws IOException {
+    public final void close() throws IOException {
         if (upstream == null) return;
-        eof = 3;
         NIOUtil.clean(toh);
         NIOUtil.clean(toc);
         try {
@@ -228,18 +204,14 @@ public class Pipe {
             if (downstream != null)
                 NIOUtil.close(downstream);
         } finally {
-            upstream = null;
-            downstream = null;
+            upstream = downstream = null;
+            toc = toh = null;
         }
-    }
-
-    public final boolean isReleased() {
-        return upstream == null;
     }
 
     @Override
     public String toString() {
-        return "Pipe{" + "att=" + att + ", idle=" + idleTime + ", U=" + uploaded + ", D=" + downloaded + ", eof=" + eof + '}';
+        return "Pipe{" + "att=" + att + ", idle=" + idleTime + ", U=" + uploaded + ", D=" + downloaded + '}';
     }
 
     public static class CipherPipe extends Pipe {
@@ -265,15 +237,16 @@ public class Pipe {
         }
 
         @Override
-        public void setActive() {
-            super.setActive();
-            sm4_h.restore(bak0);
-            sm4_c.restore(bak1);
+        public void setClient(FileDescriptor client) {
+            super.setClient(client);
+            if (client != null) {
+                sm4_h.restore(bak0);
+                sm4_c.restore(bak1);
+            }
         }
 
         @Override
         final void doCipher() throws GeneralSecurityException {
-            System.out.println("DoCipher " + toc.limit() + " | " + toh.limit());
             ByteBuffer target = toh;
             ByteBuffer tmp = this.tmp;
             if (target.hasRemaining()) {

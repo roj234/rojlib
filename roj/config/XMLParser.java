@@ -43,7 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Set;
+import java.util.function.Predicate;
 
 import static roj.config.JSONParser.NO_EOF;
 import static roj.config.JSONParser.unexpected;
@@ -202,7 +202,7 @@ public class XMLParser extends Parser {
                 }
             }
 
-            if (needCloseTag && !wr.noCloseTags.contains(name)) {
+            if (needCloseTag && wr.hasCloseTags.test(name)) {
                 AbstLexer.Snapshot lcb = wr.snapshot();
                 w = wr.nextWord();
 
@@ -343,12 +343,12 @@ public class XMLParser extends Parser {
         static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
         static final LongBitSet XML_LITERAL = LongBitSet.from("+<>/=?;!\r\n \t");
 
-        public Set<String> noCloseTags = Collections.emptySet();
+        public Predicate<String> hasCloseTags = Helpers.alwaysTrue();
         public byte flag;
         String errorTag;
 
-        public XMLexer noCloseTags(Set<String> noCloseTags) {
-            this.noCloseTags = noCloseTags == null ? Collections.emptySet() : noCloseTags;
+        public XMLexer hasCloseTags(Predicate<String> p) {
+            this.hasCloseTags = p == null ? Helpers.alwaysTrue() : p;
             return this;
         }
 

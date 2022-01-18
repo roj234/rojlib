@@ -29,11 +29,11 @@ package ilib.gui.comp.display;
 import ilib.gui.IGui;
 import ilib.gui.comp.BaseComponent;
 import ilib.util.TextHelper;
-import roj.util.Color;
 
 import net.minecraft.client.renderer.GlStateManager;
 
 import javax.annotation.Nullable;
+import java.awt.*;
 
 /**
  * No description provided
@@ -46,7 +46,7 @@ public class ComText extends BaseComponent {
     protected static final int COLOR_DEFAULT = 4210752;
     // Variables
     protected String text;
-    protected Color color;
+    protected Color  color;
 
     /**
      * Creates the text component
@@ -85,7 +85,7 @@ public class ComText extends BaseComponent {
         //GlStateManager.translate(xPos, yPos, 0);
         //RenderUtils.prepareRenderState();
 
-        owner.getFontRenderer().drawString(text, xPos, yPos, color == null ? COLOR_DEFAULT : color.getARGB());
+        owner.getFontRenderer().drawString(text, xPos, yPos, color == null ? COLOR_DEFAULT : color.getRGB());
 
         //RenderUtils.restoreColor();
         //RenderUtils.restoreRenderState();

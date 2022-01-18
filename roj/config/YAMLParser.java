@@ -108,8 +108,16 @@ public class YAMLParser extends Parser {
                     break;
                 default:
                     wr.retractWord();
+                    if (!more && (flag & LENINT_COMMA) == 0) {
+                        unexpected(wr, w.val(), "逗号");
+                    }
                     more = false;
-                    list.add(yamlRead(wr, flag, ser));
+
+                    try {
+                        list.add(yamlRead(wr, flag, ser));
+                    } catch (ParseException e) {
+                        throw e.addPath("[" + list.size() + "]");
+                    }
                     break;
             }
         }
@@ -128,7 +136,7 @@ public class YAMLParser extends Parser {
 
         o:
         while (true) {
-            Word name = wr.nextWord().copy();
+            Word name = wr.nextWord();
             switch (name.type()) {
                 case right_l_bracket:
                     break o;
@@ -147,16 +155,23 @@ public class YAMLParser extends Parser {
                     unexpected(wr, name.val(), "字符串");
             }
 
-            if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name.val()))
-                throw wr.err("重复的key: " + name.val());
+            String v = name.val();
+            if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(v))
+                throw wr.err("重复的key: " + v);
 
+            if (!more && (flag & LENINT_COMMA) == 0)
+                unexpected(wr, name.val(), "逗号");
             more = false;
 
             Word w = wr.nextWord();
             if (w.type() != colon)
                 unexpected(wr, w.val(), ":");
 
-            map.put(name.val(), yamlRead(wr, flag, ser));
+            try {
+                map.put(v, yamlRead(wr, flag, ser));
+            } catch (ParseException e) {
+                throw e.addPath(v + '.');
+            }
         }
 
         if (ser != null && map.containsKey("==", Type.STRING)) {
@@ -201,7 +216,11 @@ public class YAMLParser extends Parser {
                 list.add(CNull.NULL);
             } else {
                 wr.flag |= TEXT_MODE;
-                list.add(yamlRead(wr, flag, ser));
+                try {
+                    list.add(yamlRead(wr, flag, ser));
+                } catch (ParseException e) {
+                    throw e.addPath("[" + list.size() + "]");
+                }
             }
 
             off = wr.getLineOffset();
@@ -231,7 +250,8 @@ public class YAMLParser extends Parser {
         int selfOff = wr.getLineOffset();
 
         while (true) {
-            Word name = wr.nextWord().copy();
+            Word name = wr.nextWord();
+            String v = name.val();
             switch (name.type()) {
                 case ask:
                     throw wr.err("并不支持非字符串的key, 也不打算支持");
@@ -257,15 +277,19 @@ public class YAMLParser extends Parser {
                 case WordPresets.LONG:
                 case WordPresets.DECIMAL_D:
                 case NULL:
-                    if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name.val()))
-                        throw wr.err("重复的key: " + name.val());
+                    if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(v))
+                        throw wr.err("重复的key: " + v);
 
                     Word w = wr.nextWord();
                     if (w.type() != colon)
                         unexpected(wr, w.val(), ":");
 
                     wr.flag |= TEXT_MODE;
-                    map.put(name.val(), yamlRead(wr, flag, ser));
+                    try {
+                        map.put(v, yamlRead(wr, flag, ser));
+                    } catch (ParseException e) {
+                        throw e.addPath(v + '.');
+                    }
                     break;
                 case WordPresets.EOF:
                     return map;

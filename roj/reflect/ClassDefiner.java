@@ -116,7 +116,7 @@ public final class ClassDefiner extends ClassLoader {
         try {
             // 使用同样的加载器加载，保证Access
             return def == null ?
-                    (Class<?>) getDefineClassMethod().invoke(getParent(), name, bytes, off, len, getClass().getProtectionDomain())
+                    (Class<?>) slowDef.invoke(getParent(), name, bytes, off, len, getClass().getProtectionDomain())
                     : def.defineClass(getParent(), name, bytes, off, len, getClass().getProtectionDomain());
         } catch (Exception ignored) {
             // 使用自己加载（这样会没有protected的权限!）

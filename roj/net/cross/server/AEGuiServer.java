@@ -32,7 +32,6 @@ import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.NetworkUtil;
-import roj.net.cross.LoggingStream;
 import roj.net.cross.Util;
 import roj.net.cross.server.AEServer.Room;
 import roj.net.cross.server.AEServer.Worker;
@@ -40,15 +39,18 @@ import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.StringResponse;
+import roj.net.mss.JPubKey;
 import roj.net.mss.MSSServerEngineFactory;
 import roj.net.mss.PreSharedPubKey;
 import roj.text.CharList;
+import roj.text.LoggingStream;
 import roj.text.TextUtil;
 import roj.util.FastLocalThread;
 
 import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -61,7 +63,7 @@ import java.util.Map;
  * AbyssalEye Server GUI
  *
  * @author Roj233
- * @version 31
+ * @version 40
  * @since 2021/9/11 12:49
  */
 public class AEGuiServer {
@@ -74,9 +76,9 @@ public class AEGuiServer {
         }
 
         byte[] keyPass = null;
-        String port = null;
+        String port = null, motd = "任务：拯救世界(1/1)";
         int webPort = -1, maxUsers = 100;
-        boolean log = false;
+        boolean log = false, unshared = false;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "-consolelog":
@@ -94,6 +96,11 @@ public class AEGuiServer {
                 case "-keypass":
                     keyPass = args[++i].getBytes(StandardCharsets.UTF_8);
                     break;
+                case "-unshared":
+                    unshared = true;
+                    break;
+                case "-motd":
+                    motd = args[++i];
             }
         }
 
@@ -132,14 +139,16 @@ public class AEGuiServer {
         if (pair == null) return;
 
         try {
-            MSSServerEngineFactory factory = new MSSServerEngineFactory(new PreSharedPubKey(pair.getPublic()),
-                                                                        pair.getPublic(), pair.getPrivate());
+            MSSServerEngineFactory factory = new MSSServerEngineFactory(unshared ?
+                       JPubKey.JAVARSA : new PreSharedPubKey(pair.getPublic()),
+                       pair.getPublic(), pair.getPrivate());
             server = new AEServer(addr, maxUsers, factory);
         } catch (IOException | GeneralSecurityException e) {
             System.out.println("Invalid certificate / IO Error");
             e.printStackTrace();
             return;
         }
+        server.setMOTD(motd);
 
         Thread tServer = new FastLocalThread(server);
         tServer.setName("AEServer Acceptor");
@@ -157,10 +166,18 @@ public class AEGuiServer {
         }
 
         LoggingStream.logger = new RingBuffer<>(1000);
-        Util.out = new LoggingStream(log);
+        PrintStream out = Util.out = new LoggingStream(log);
         System.setOut(Util.out);
         System.setErr(Util.out);
-        System.out.println("服务器已启动");
+        out.println("    ___    __                          ________         ");
+        out.println("   /   |  / /_  __  ________________ _/ / ____/_  _____ ");
+        out.println("  / /| | / __ \\/ / / / ___/ ___/ __ `/ / __/ / / / / _ \\");
+        out.println(" / ___ |/ /_/ / /_/ (__  |__  ) /_/ / / /___/ /_/ /  __/");
+        out.println("/_/  |_/_.___/\\__, /____/____/\\__,_/_/_____/\\__, /\\___/ ");
+        out.println("             /____/                        /____/      ");
+        out.println(" —— Version " + Util.PROTOCOL_VERSION);
+        out.println();
+        out.println("服务器已启动");
 
         Util.registerShutdownHook(server);
     }
@@ -247,13 +264,6 @@ public class AEGuiServer {
                         switch (post.get("i")) {
                             case "r_lock":
                                 room.locked = post.get("v").equals("true");
-                                return DONE;
-                            case "r_close":
-                                try {
-                                    server.m_KickRoom(room);
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
                                 return DONE;
                             case "r_kick_all":
                                 synchronized (room.clients) {

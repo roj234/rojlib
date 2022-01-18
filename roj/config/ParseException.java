@@ -146,8 +146,8 @@ public final class ParseException extends Exception {
 
     public void noDetail() {
         this.line = 0;
-        this.linePos = 8;
-        this.lineContent = "<UNKNOWN ERROR>";
+        this.linePos = 0;
+        this.lineContent = "<无数据>";
     }
 
     @Override

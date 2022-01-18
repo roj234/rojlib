@@ -26,7 +26,6 @@
 
 package roj.asm.nixim;
 
-import roj.asm.OpcodesInt;
 import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.tree.*;
@@ -41,7 +40,6 @@ import roj.collect.*;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
-import roj.io.IOUtil;
 import roj.mapper.Util;
 import roj.util.ByteList;
 import roj.util.ByteList.WriteOnly;
@@ -64,15 +62,6 @@ import static roj.asm.Opcodes.*;
  * @since 2021/10/3 13:49
  */
 public class NiximSystem {
-    public static void main(String[] args) throws IOException, NiximException {
-        NiximSystem nt2 = new NiximSystem();
-        nt2.load(IOUtil.read("roj/asm/nixim/Example.class"));
-        ByteList sharedOutput = nt2.nixim("roj/asm/nixim/TestTarget", new ByteList(IOUtil.read("roj/asm/nixim/TestTarget.class")));
-        try (FileOutputStream fos = new FileOutputStream("Example.class")) {
-            sharedOutput.writeToStream(fos);
-        }
-    }
-
     protected final Map<String, NiximData> registry = new MyHashMap<>();
 
     public static boolean debug = false;
@@ -448,7 +437,7 @@ public class NiximSystem {
                     int i2 = NodeHelper.getVarId(node);
                     if (i2 >= 0) {
                         int code = node.getOpcodeInt();
-                        if (code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
+                        if (code >= ISTORE && code <= ASTORE_3) {
                             Int2IntMap.Entry entry = assignedLV.getEntry(i2);
                             if (entry != null) {
                                 if (code >= ISTORE_0)
@@ -973,7 +962,7 @@ public class NiximSystem {
                     int index = NodeHelper.getVarId(node);
                     if (index >= 0) {
                         int code = node.getOpcodeInt();
-                        if (code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
+                        if (code >= ISTORE && code <= ASTORE_3) {
                             Int2IntMap.Entry entry = assignedLV.getEntry(index);
                             if (entry != null) {
                                 if (code >= ISTORE_0)
@@ -1033,7 +1022,7 @@ public class NiximSystem {
                     int index = NodeHelper.getVarId(node);
                     if (index >= 0) {
                         int code = node.getOpcodeInt();
-                        if (code >= OpcodesInt.ILOAD && code <= OpcodesInt.ALOAD_3) {
+                        if (code >= ILOAD && code <= ALOAD_3) {
                             // 计算tail用到的参数id，若目标方法修改过value则暂存到新的变量id中然后再恢复
                             Int2IntMap.Entry entry = assignedLV.getEntry(index);
                             if (entry != null) {
@@ -1042,7 +1031,7 @@ public class NiximSystem {
                                 entry.v = code;
                             }/* else if (index < paramLength)
                                 throw new NiximException("无效的assign " + method + "# " + insn.get(i));*/
-                        } else if (i > 0 && code >= OpcodesInt.ISTORE && code <= OpcodesInt.ASTORE_3) {
+                        } else if (i > 0 && code >= ISTORE && code <= ASTORE_3) {
                             node = insn.get(i - 1);
                             if (node.code == INVOKESTATIC) {
                                 InvokeInsnNode iin = (InvokeInsnNode) node;

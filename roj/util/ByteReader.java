@@ -69,7 +69,7 @@ public final class ByteReader {
     }
 
     public final boolean hasRemaining() {
-        return rIndex >= bytes.limit();
+        return rIndex < bytes.limit();
     }
 
     public final int readInt() {

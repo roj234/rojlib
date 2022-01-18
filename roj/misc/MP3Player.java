@@ -23,7 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.sound;
+package roj.misc;
 
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
@@ -44,10 +44,7 @@ import java.util.Random;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/18 13:35
  */
 public class MP3Player {
@@ -158,7 +155,7 @@ public class MP3Player {
         if (args.length != 2 || !args[1].equals("-notip")) {
             System.out.println("Command: ");
             System.out.println("  mode: single <on/off> repeat <on/off>");
-            System.out.println("        shuffle <on/off> volume <vol>");
+            System.out.println("        shuffle <on/off> vol <vol>");
             System.out.println("        mute");
             System.out.println("  control: cut <index> goto <time>");
             System.out.println("           speed <speed> pause play stop");

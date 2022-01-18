@@ -25,6 +25,7 @@
  */
 package roj.net.cross;
 
+import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.config.JSONParser;
@@ -33,10 +34,13 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
+import roj.net.cross.AEHost.Client;
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.StringResponse;
+import roj.net.misc.Pipe;
+import roj.text.LoggingStream;
 import roj.text.TextUtil;
 import roj.util.FastLocalThread;
 
@@ -49,7 +53,6 @@ import java.net.UnknownHostException;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/9/11 2:00
  */
 public class AEGuiHost {
@@ -101,6 +104,7 @@ public class AEGuiHost {
             chars[i] = (char) ports.get(i).asInteger();
         }
         client.setPortMap(chars);
+        client.motd = cfg.getString("motd");
         client.setDaemon(false);
         client.start();
 
@@ -144,10 +148,27 @@ public class AEGuiHost {
                     return new Reply(Code.OK, new StringResponse(res("client_owner.html"), "text/html"));
                 case "/user_list":
                     CList lx = new CList();
-                    for (InetSocketAddress w : client.clients.values()) {
-                        lx.add(w.toString());
+                    for (IntMap.Entry<Client> entry : client.clients.entrySet()) {
+                        CMapping map = new CMapping();
+                        map.put("id", entry.getKey());
+                        map.put("ip", entry.getValue().addr);
+                        map.put("time", entry.getValue().connect);
+                        CList pipes = map.getOrCreateList("pipes");
+                        for (Pipe pipe : client.socketsById.values()) {
+                            SpAttach att = (SpAttach) pipe.att;
+                            if (att.clientId == entry.getKey()) {
+                                CMapping map1 = new CMapping();
+                                map1.put("up", pipe.downloaded);
+                                map1.put("down", pipe.uploaded);
+                                map1.put("idle", pipe.idleTime);
+                                map1.put("id", att.channelId);
+                                map1.put("port", client.portMap[att.portId]);
+                                pipes.add(map1);
+                            }
+                        }
+                        lx.add(map);
                     }
-                    return new Reply(Code.OK, new StringResponse(lx.toJSON(), "application/json"));
+                    return new Reply(Code.OK, new StringResponse(lx.toShortJSONb(), "application/json"));
                 case "/kick_user":
                     int count = 0;
                     String[] arr = request.postFields().get("users").split(",");

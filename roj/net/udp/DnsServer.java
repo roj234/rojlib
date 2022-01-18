@@ -25,11 +25,9 @@
  */
 package roj.net.udp;
 
-
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.SimpleSpinLock;
-import roj.concurrent.collect.ConcurrentTimedHashMap;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.math.MathUtils;
@@ -64,7 +62,8 @@ public class DnsServer implements Router, Runnable {
 
     MyHashSet<String> blocked = new MyHashSet<>();
 
-    ConcurrentTimedHashMap<XAddr, ForwardQuery> waiting;
+    ConcurrentHashMap<XAddr, ForwardQuery> waiting;
+    static int requestTimeout;
 
     DatagramSocket forwardRcv, local;
 
@@ -74,7 +73,8 @@ public class DnsServer implements Router, Runnable {
     public DnsServer(CMapping cfg, InetSocketAddress address) throws SocketException {
         forwardRcv = new DatagramSocket(new InetSocketAddress(cfg.getInteger("forwarderReceive")));
         local = new DatagramSocket(address);
-        waiting = new ConcurrentTimedHashMap<>(cfg.getInteger("requestTimeout"));
+        waiting = new ConcurrentHashMap<>();
+        requestTimeout = cfg.getInteger("requestTimeout");
         forwardDns = new ArrayList<>();
         CList list = cfg.getOrCreateList("trustedDnsServers");
         for (int i = 0; i < list.size(); i++) {
@@ -292,11 +292,13 @@ public class DnsServer implements Router, Runnable {
         int remain;
         Map<InetSocketAddress, DnsResponse> truncated;
         DnsResponse[] responses;
+        long timeout;
 
         public ForwardQuery(DnsQuery q, int remain) {
             this.remain = remain;
             responses = new DnsResponse[remain];
             truncated = Collections.emptyMap();
+            timeout = System.currentTimeMillis() + requestTimeout;
 
             sessionId = q.sessionId;
             senderIp = q.senderIp;
@@ -901,7 +903,7 @@ public class DnsServer implements Router, Runnable {
         int sum = 0, sumA = 0, sumEx = 0;
         for (DnsRecord dReq : query.records) {
             if(blocked.contains(dReq.url)) {
-                System.out.println("[Dbg]Skip blocked " + dReq.url);
+                System.out.println("[Dbg]Blocked " + dReq.url);
                 continue;
             }
 
@@ -914,7 +916,7 @@ public class DnsServer implements Router, Runnable {
                     forwardDnsRequest(query, w);
                     return false;
                 } else {
-                    System.out.println("[Warn]Unresolved host after resolve attempts: " + key);
+                    System.out.println("[Warn]Unresolved resolved: " + key);
                     setRCode(query, w, RCODE_SERVER_ERROR);
                     continue;
                 }
@@ -1018,6 +1020,16 @@ public class DnsServer implements Router, Runnable {
         }
 
         ForwardQuery request = new ForwardQuery(query, target.size());
+        if (!waiting.isEmpty()) {
+            long t = System.currentTimeMillis();
+            for (Iterator<ForwardQuery> itr = waiting.values().iterator(); itr.hasNext(); ) {
+                ForwardQuery fq = itr.next();
+                if (t > fq.timeout) {
+                    System.out.println("[Warn]Timeout: " + fq);
+                    itr.remove();
+                }
+            }
+        }
         try {
             for (int i = 0; i < target.size(); i++) {
                 pkt.setSocketAddress(target.get(i));
@@ -1170,10 +1182,10 @@ public class DnsServer implements Router, Runnable {
             if((len & 0xC0) != 0) {
                 if((len & 0xC0) != 0xC0)
                     throw new RuntimeException("Illegal label length " + Integer.toHexString(len));
-                int ri = rx.rIndex();
-                rx.rIndex(((len & ~0xC0) << 8) | r.readUByte());
+                int ri = rx.rIndex;
+                rx.rIndex = ((len & ~0xC0) << 8) | r.readUByte();
                 readDomainEx(rx, rx, sb);
-                rx.rIndex(ri + (r == rx ? 1:0));
+                rx.rIndex = ri + (r == rx ? 1:0);
                 return;
             }
             sb.append(r.readUTF(len)).append(".");

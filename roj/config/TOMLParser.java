@@ -84,7 +84,11 @@ public class TOMLParser extends Parser {
                     w = wr.nextWord();
                     if (w.type() != right_m_bracket)
                         unexpected(wr, w.val(), "]");
-                    put(wr, flag | INLINE, ser);
+                    try {
+                        put(wr, flag | INLINE, ser);
+                    } catch (ParseException e) {
+                        throw e.addPath(wr.k + '.');
+                    }
                     break;
                 case dlmb:
                     w = wr.nextWord();
@@ -137,8 +141,15 @@ public class TOMLParser extends Parser {
                     break;
                 default:
                     wr.retractWord();
+                    if (!more && (flag & LENINT_COMMA) == 0) {
+                        unexpected(wr, w.val(), "逗号");
+                    }
                     more = false;
-                    list.add(tomlRead(wr, flag, ser));
+                    try {
+                        list.add(tomlRead(wr, flag, ser));
+                    } catch (ParseException e) {
+                        throw e.addPath("[" + list.size() + "]");
+                    }
                     break;
             }
         }
@@ -190,12 +201,18 @@ public class TOMLParser extends Parser {
 
             wr.dotName(w.val(), map, flag);
 
+            if (!more && (flag & LENINT_COMMA) == 0)
+                unexpected(wr, w.val(), "逗号");
             more = false;
 
             w = wr.nextWord();
             if (w.type() != eq) unexpected(wr, w.val(), "=");
 
-            put(wr, flag & ~INLINE, ser);
+            try {
+                put(wr, flag & ~INLINE, ser);
+            } catch (ParseException e) {
+                throw e.addPath(wr.k + '.');
+            }
             if ((flag & (INLINE | LENIENT)) == 0) wr.ensureLineEnd();
         }
 

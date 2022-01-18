@@ -109,7 +109,11 @@ public class IniParser extends Parser {
             if (w.type() != eq) {
                 unexpected(wr, w.val());
             }
-            map.put(name, iniRead(wr, flag));
+            try {
+                map.put(name, iniRead(wr, flag));
+            } catch (ParseException e) {
+                throw e.addPath(name + '.');
+            }
         }
         return map;
     }

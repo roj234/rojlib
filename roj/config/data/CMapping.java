@@ -201,8 +201,7 @@ public class CMapping extends CEntry {
                 char c = keys.charAt(i++);
                 if (c == '.') break;
                 tmp.append(c);
-                continue;
-            } while (false);
+            } while (i < keys.length());
 
             if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
                 Map<String, CEntry> map = entry.asMap().map;
@@ -230,8 +229,7 @@ public class CMapping extends CEntry {
                 char c = keys.charAt(i++);
                 if (c == '.') break;
                 tmp.append(c);
-                continue;
-            } while (false);
+            } while (i < keys.length());
 
             if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
                 Map<String, CEntry> map = entry.asMap().map;
@@ -552,6 +550,7 @@ public class CMapping extends CEntry {
         return sb;
     }
 
+    @SuppressWarnings("fallthrough")
     protected static void addComments(StringBuilder sb, int depth, CharSequence comment, CharSequence end) {
         int r = 0, i = 0, prev = 0;
         while (i < comment.length()) {

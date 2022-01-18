@@ -27,11 +27,14 @@
 package ilib.gui.comp;
 
 import ilib.client.util.RenderUtils;
+import org.lwjgl.opengl.GL11;
+
 import net.minecraft.client.gui.Gui;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
-import roj.util.Color;
-/**
+
+import java.awt.*;
+
+/**
  * No description provided
  *
  * @author Roj234

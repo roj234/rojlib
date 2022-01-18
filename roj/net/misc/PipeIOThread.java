@@ -100,8 +100,13 @@ public final class PipeIOThread extends Thread {
             tmp = new PipeIOThread[PIPE_IO.activeCount()];
         }
 
-        FileDescriptorChannel fdcA = new FileDescriptorChannel(pair.getUpstreamFD());
-        FileDescriptorChannel fdcB = new FileDescriptorChannel(pair.getDownstreamFD());
+        if (pair.upKey != null) pair.upKey.cancel();
+        if (pair.downKey != null) pair.downKey.cancel();
+
+        FileDescriptorChannel fdcA = pair.upstream == null ? null :
+                new FileDescriptorChannel(pair.upstream);
+        FileDescriptorChannel fdcB = pair.downstream == null ? null :
+                new FileDescriptorChannel(pair.downstream);
 
         Att att = new Att();
         att.pair = pair;
@@ -120,7 +125,9 @@ public final class PipeIOThread extends Thread {
         }
         if (lowest != null) {
             try {
+                if (fdcA != null)
                 pair.upKey = fdcA.register(lowest, SelectionKey.OP_READ, att);
+                if (fdcB != null)
                 pair.downKey = fdcB.register(lowest, SelectionKey.OP_READ, att);
                 return;
             } catch (ClosedChannelException | ClosedSelectorException ignored) {}
@@ -129,7 +136,9 @@ public final class PipeIOThread extends Thread {
         if (amount < MAX_IO_THREADS) {
             PipeIOThread thread = new PipeIOThread(server, index++);
             try {
+                if (fdcA != null)
                 pair.upKey = fdcA.register(thread.selector, SelectionKey.OP_READ, att);
+                if (fdcB != null)
                 pair.downKey = fdcB.register(thread.selector, SelectionKey.OP_READ, att);
             } catch (ClosedChannelException e) {
                 throw new IllegalStateException("Should not happen: closed channel", e);
@@ -147,7 +156,9 @@ public final class PipeIOThread extends Thread {
                 }
             }
             try {
+                if (fdcA != null)
                 pair.upKey = fdcA.register(lowest, SelectionKey.OP_READ, att);
+                if (fdcB != null)
                 pair.downKey = fdcB.register(lowest, SelectionKey.OP_READ, att);
             } catch (ClosedChannelException | ClosedSelectorException ignored) {}
         }
@@ -198,7 +209,12 @@ public final class PipeIOThread extends Thread {
                 break;
             }
             if (selector.selectedKeys().isEmpty() || Thread.interrupted()) {
-                LockSupport.parkNanos(20);
+                try {
+                    for (SelectionKey key : selector.keys()) {
+                        ((Att) key.attachment()).pair.idleTime++;
+                    }
+                } catch (Throwable ignored) {}
+                LockSupport.parkNanos(1000);
                 idle++;
                 this.idle = true;
                 continue;
@@ -210,15 +226,16 @@ public final class PipeIOThread extends Thread {
                 SelectionKey key = keys.get(i);
                 Att att = (Att) key.attachment();
                 Pipe pair = att.pair;
-                if (pair.isEof()) {
+                if (pair.isDownstreamEof() && key == pair.downKey) {
                     key.cancel();
-                    pair.upKey = pair.downKey = null;
-                    if (att.callback != null) {
-                        try {
-                            att.callback.accept(pair);
-                        } catch (Throwable ignored) {}
-                        att.callback = null;
-                    }
+                    pair.downKey = null;
+                    call(att);
+                    continue;
+                }
+                if (pair.isUpstreamEof() && key == pair.upKey) {
+                    key.cancel();
+                    pair.upKey = null;
+                    call(att);
                     continue;
                 }
                 try {
@@ -226,29 +243,31 @@ public final class PipeIOThread extends Thread {
                 } catch (Throwable e) {
                     e.printStackTrace();
                     try {
-                        pair.release();
+                        pair.close();
                     } catch (IOException ignored) {}
-                    key.cancel();
+                    if (pair.upKey != null)
+                        pair.upKey.cancel();
+                    if (pair.downKey != null)
+                        pair.downKey.cancel();
                     pair.upKey = pair.downKey = null;
-                    if (att.callback != null) {
-                        try {
-                            att.callback.accept(pair);
-                        } catch (Throwable ignored) {}
-                        att.callback = null;
-                    }
+                    call(att);
                 }
             }
             keys.clear();
-            try {
-                for (SelectionKey key : selector.keys()) {
-                    ((Att) key.attachment()).pair.idleTime++;
-                }
-            } catch (Throwable ignored) {}
-            LockSupport.parkNanos(1000);
+            //LockSupport.parkNanos(1000);
         }
         try {
             selector.close();
         } catch (IOException ignored) {}
+    }
+
+    private void call(Att att) {
+        if (att.callback != null) {
+            try {
+                att.callback.accept(att.pair);
+            } catch (Throwable ignored) {}
+            att.callback = null;
+        }
     }
 
     static final class Att {

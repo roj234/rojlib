@@ -36,10 +36,15 @@ package ilib.util;
 import roj.reflect.ReflectionUtils;
 
 import net.minecraft.advancements.Advancement;
+import net.minecraft.advancements.Advancement.Builder;
 import net.minecraft.advancements.AdvancementList;
 import net.minecraft.advancements.AdvancementManager;
+import net.minecraft.util.ResourceLocation;
 
 import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 
 public class AdvancementUtils {
     private static Field listField;
@@ -58,7 +63,25 @@ public class AdvancementUtils {
         }
     }
 
+    public static final class FakeAdvs extends AdvancementList {
+        public void removeAll(Set<ResourceLocation> ids) {}
 
-    public static void WIP() {
+        public void loadAdvancements(Map<ResourceLocation, Builder> map) {}
+
+        public void clear() {}
+
+        public Iterable<Advancement> getRoots() {
+            return Collections.emptyList();
+        }
+
+        public Iterable<Advancement> getAdvancements() {
+            return Collections.emptyList();
+        }
+
+        public Advancement getAdvancement(ResourceLocation id) {
+            return null;
+        }
+
+        public void setListener(Listener listener) {}
     }
 }

@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.Socket;
+import java.net.SocketException;
 
 /**
  * @author Roj234
@@ -78,7 +79,18 @@ public abstract class Connector {
 
     protected void connect() throws IOException {
         if (!connected()) {
-            server.connect(endpoint);
+            try {
+                server.connect(endpoint);
+            } catch (SocketException e) {
+                if ("Socket closed".equals(e.getMessage())) {
+                    server = new Socket();
+                    server.setSoTimeout(connectTimeout <= 0 ? 5000 : connectTimeout);
+                    server.setReuseAddress(true);
+                    connect();
+                } else {
+                    throw e;
+                }
+            }
             channel = factory.wrap(server);
         }
     }
