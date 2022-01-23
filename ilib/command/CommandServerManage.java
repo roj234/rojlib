@@ -42,10 +42,7 @@ import java.util.ArrayList;
 import java.util.zip.ZipFile;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 20:48
  */
 public final class CommandServerManage extends AbstractSubCommand {

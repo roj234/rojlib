@@ -33,7 +33,6 @@ import java.util.List;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 23:25
  */
 final class LambdaInfo {

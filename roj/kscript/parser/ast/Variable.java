@@ -36,10 +36,7 @@ import javax.annotation.Nonnull;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/30 19:14
  */
 public final class Variable extends Field {

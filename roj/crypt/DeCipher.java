@@ -30,7 +30,6 @@ import java.security.GeneralSecurityException;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/28 0:05
  */
 public interface DeCipher {

@@ -31,10 +31,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/14 17:06
  */
 class MapItr<T extends MapLikeEntry<T>> {

@@ -65,7 +65,6 @@ import static roj.mod.Shared.*;
  * 1.13 or upper File Processor
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/30 11:31
  */
 public final class Proc1_16 extends Processor {

@@ -31,7 +31,6 @@ import java.net.Socket;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/11/28 20:54
  */
 @FunctionalInterface

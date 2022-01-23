@@ -31,10 +31,7 @@ import roj.asm.util.InsnList;
 import java.util.List;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/24 13:22
  */
 public final class CodeBlock {

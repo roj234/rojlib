@@ -32,7 +32,6 @@ import java.security.GeneralSecurityException;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/29 16:02
  */
 public interface MSSHash {

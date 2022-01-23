@@ -28,10 +28,7 @@ package roj.math;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/15 9:04
  */
 public interface IPolygon {

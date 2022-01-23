@@ -45,10 +45,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 12:41
  */
 public class Frame extends IContext {

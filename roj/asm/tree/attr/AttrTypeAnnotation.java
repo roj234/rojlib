@@ -46,7 +46,6 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/3/7 13:36
  */
 public final class AttrTypeAnnotation extends Attribute {

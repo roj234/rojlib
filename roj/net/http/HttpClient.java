@@ -47,7 +47,6 @@ import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 14:34
  */
 public class HttpClient extends Connector {

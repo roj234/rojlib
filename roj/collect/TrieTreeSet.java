@@ -41,7 +41,6 @@ import static roj.collect.TrieTree.COMPRESS_START_DEPTH;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/30 19:27
  */
 public final class TrieTreeSet implements Set<CharSequence> {

@@ -48,10 +48,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import java.io.File;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/31 21:56
  */
 public final class WorldSaver {

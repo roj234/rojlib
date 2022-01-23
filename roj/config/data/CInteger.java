@@ -32,7 +32,6 @@ import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public final class CInteger extends CEntry {

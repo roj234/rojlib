@@ -38,7 +38,6 @@ import java.util.Arrays;
  * Java Reflection Method.MoFNode
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/27 13:49
  */
 public final class ReflectMNode implements MoFNode {

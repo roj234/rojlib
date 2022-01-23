@@ -33,7 +33,6 @@ import java.util.zip.Adler32;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/29 16:03
  */
 public class Adler32Hash extends Adler32 implements MSSHash {

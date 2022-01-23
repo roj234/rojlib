@@ -45,7 +45,6 @@ import roj.util.ByteList;
 import roj.util.ByteReader;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -54,7 +53,6 @@ import java.util.function.UnaryOperator;
  * 修改class名字
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public final class CodeMapper extends Mapping {
@@ -92,7 +90,7 @@ public final class CodeMapper extends Mapping {
         this.validVarChars = valid == null ? HUMAN_READABLE_TOKENS : valid;
     }
 
-    public final void remap(boolean singleThread, Collection<Context> arr) {
+    public final void remap(boolean singleThread, List<Context> arr) {
         if(singleThread || arr.size() < 50 * Util.CPU) {
             Context cur = null;
 
@@ -105,24 +103,17 @@ public final class CodeMapper extends Mapping {
                 throw new RuntimeException("At parsing " + cur, e);
             }
         } else {
-            List<List<Context>> splitedContexts = new ArrayList<>();
-            List<Context> tmp = new ArrayList<>();
-
-            int splitThreshold = (arr.size() / Runtime.getRuntime().availableProcessors()) + 1;
+            int threshold = (arr.size() / Util.CPU) + 1;
+            List<List<Context>> splatted = new ArrayList<>(Util.CPU + 1);
 
             int i = 0;
-            for (Context entry : arr) {
-                if(i >= splitThreshold) {
-                    splitedContexts.add(tmp);
-                    tmp = new ArrayList<>(splitThreshold);
-                    i = 0;
-                }
-                tmp.add(entry);
-                i++;
+            while (i < arr.size()) {
+                int delta = Math.min(arr.size() - i, threshold);
+                splatted.add(arr.subList(i, i + delta));
+                i += delta;
             }
-            splitedContexts.add(tmp);
 
-            Util.concurrent("NRWorker", this::processOne, splitedContexts);
+            Util.async(this::processOne, splatted);
         }
     }
 

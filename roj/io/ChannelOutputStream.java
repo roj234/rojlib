@@ -32,10 +32,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/2 15:33
  */
 public final class ChannelOutputStream extends OutputStream {

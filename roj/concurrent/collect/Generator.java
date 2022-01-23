@@ -32,10 +32,7 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/1 15:40
  */
 public final class Generator<K> implements Iterator<K>, Consumer<K>, Runnable {

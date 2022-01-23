@@ -40,7 +40,6 @@ import java.util.Set;
  * Delegation of StdJFM
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/2 14:01
  */
 public class DelegatedSFM implements StandardJavaFileManager {

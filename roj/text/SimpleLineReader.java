@@ -30,37 +30,36 @@ import roj.io.IOUtil;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/27 0:12
  */
 public class SimpleLineReader implements Iterable<String>, AutoCloseable, Iterator<String> {
-    private final List<String> lines;
-    private int index;
+    private final CharSequence keys;
+    private final boolean cleanEmpty;
+    private int index, size = -1, lineNumber;
+    private String[] lines;
 
     public SimpleLineReader(InputStream stream) throws IOException {
         this(IOUtil.readUTF(stream), true);
     }
 
-    public SimpleLineReader(InputStream stream, boolean cleanEmptyLines) throws IOException {
-        this(IOUtil.readUTF(stream), cleanEmptyLines);
+    public SimpleLineReader(InputStream stream, boolean cleanEmpty) throws IOException {
+        this(IOUtil.readUTF(stream), cleanEmpty);
     }
 
-    /**
-     * 简单的LineReader
-     *
-     * @param string String
-     */
     public SimpleLineReader(CharSequence string) {
         this(string, true);
     }
 
-    public SimpleLineReader(CharSequence string, boolean cleanEmptyLines) {
-        this.lines = (string == null || string.length() == 0) ? Collections.emptyList() : slrParserV2(string, cleanEmptyLines);
+    public SimpleLineReader(CharSequence string, boolean cleanEmpty) {
+        this.keys = string;
+        this.cleanEmpty = cleanEmpty;
     }
 
     @SuppressWarnings("fallthrough")
@@ -125,65 +124,164 @@ public class SimpleLineReader implements Iterable<String>, AutoCloseable, Iterat
         return this.index;
     }
 
+    @SuppressWarnings("fallthrough")
     public int size() {
-        return this.lines.size();
-    }
+        if (size == -1) {
+            int r = 0, size = 0, i = 0, prev = 0;
+            CharSequence keys = this.keys;
+            while (i < keys.length()) {
+                switch (keys.charAt(i)) {
+                    case '\r':
+                        if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
+                            break;
+                        } else {
+                            r = 1;
+                            i++;
+                        }
+                    case '\n':
+                        if (prev+r < i || !cleanEmpty) {
+                            size++;
+                        }
+                        prev = i + 1;
+                        r = 0;
+                        break;
+                }
+                i++;
+            }
 
-    public String get(int index) {
-        return this.lines.get(index);
+            this.size = prev < i || !cleanEmpty ? size + 1 : size;
+        }
+        return size;
     }
 
     public String[] toArray() {
-        return this.lines.toArray(new String[this.lines.size()]);
+        if (lines != null) return lines;
+        List<String> lines = slrParserV2(keys, cleanEmpty);
+        return this.lines = lines.toArray(new String[lines.size()]);
     }
 
     @Nonnull
     @Override
     public Iterator<String> iterator() {
         this.index = 0;
+        this.lineNumber = 0;
+        this.cur = null;
         return this;
-    }
-
-    @Override
-    public void forEach(Consumer<? super String> consumer) {
-        forEachRemaining(consumer);
-    }
-
-    @Override
-    public Spliterator<String> spliterator() {
-        return Spliterators.spliterator(lines, 0);
     }
 
     @Override
     @Deprecated
     public void close() {}
 
+    static final String EOF = new String();
+    String cur;
+
     @Override
+    @SuppressWarnings("fallthrough")
     public boolean hasNext() {
-        return index < lines.size();
+        if (cur != null) {
+            return cur != EOF;
+        } else if (index > keys.length()) {
+            if (!cleanEmpty) lineNumber++;
+            size = lineNumber;
+            cur = EOF;
+            return false;
+        }
+
+        int r = 0, i = index;
+        CharSequence keys = this.keys;
+        while (i < keys.length()) {
+            switch (keys.charAt(i)) {
+                case '\r':
+                    if (i >= keys.length() || keys.charAt(i + 1) != '\n') {
+                        break;
+                    } else {
+                        r = 1;
+                        i++;
+                    }
+                case '\n':
+                    if (i > index+r || !cleanEmpty) {
+                        CharSequence seq = index == i ? "" : keys.subSequence(index, i - r);
+                        index = i+1;
+                        lineNumber++;
+                        cur = seq.toString();
+                        return true;
+                    }
+                    index = i+1;
+                    r = 0;
+                    break;
+            }
+            i++;
+        }
+
+        if (i > index || !cleanEmpty) {
+            CharSequence seq = index == i ? "" : keys.subSequence(index, i);
+            index = i+1;
+            cur = seq.toString();
+            return true;
+        } else {
+            index = i;
+            cur = EOF;
+            return false;
+        }
     }
 
     @Override
     public String next() {
-        return lines.get(index++);
-    }
-
-    public String prev() {
-        return lines.get(--index);
-    }
-
-    @Override
-    public void forEachRemaining(Consumer<? super String> consumer) {
-        while (index < lines.size()) {
-            consumer.accept(lines.get(index++));
+        hasNext();
+        if (cur == EOF) {
+            throw new NoSuchElementException();
+        } else {
+            String c = cur;
+            cur = null;
+            return c;
         }
     }
 
-    public void index(int index) {
-        this.index = index;
+    @SuppressWarnings("fallthrough")
+    public int skipLines(int oLines) {
+        int lines = oLines;
+        int r = 0, prev = index, i = index;
+        CharSequence keys = this.keys;
+        while (i < keys.length()) {
+            switch (keys.charAt(i)) {
+                case '\r':
+                    if (i >= keys.length() || keys.charAt(i + 1) != '\n') {
+                        break;
+                    } else {
+                        r = 1;
+                        i++;
+                    }
+                case '\n':
+                    if (i > prev+r || !cleanEmpty) {
+                        lineNumber++;
+                        if (lines-- == 0) {
+                            CharSequence seq = prev == i ? "" : keys.subSequence(prev, i - r);
+                            index = i+1;
+                            cur = seq.toString();
+                            return oLines;
+                        }
+                    }
+                    prev = i+1;
+                    break;
+            }
+            i++;
+        }
+
+        if (i > prev || !cleanEmpty) {
+            lineNumber++;
+            if (lines-- == 0) {
+                CharSequence seq = prev == i ? "" : keys.subSequence(prev, i);
+                index = i+1;
+                cur = seq.toString();
+                return oLines;
+            }
+        }
+        cur = EOF;
+        return oLines - lines;
     }
 
-    public List<String> getList() {
-        return lines;
+    public int lineNumber() {
+        return lineNumber;
     }
 }

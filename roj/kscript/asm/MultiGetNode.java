@@ -28,10 +28,7 @@ package roj.kscript.asm;
 import roj.kscript.api.IObject;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/28 0:21
  */
 public class MultiGetNode extends Node {

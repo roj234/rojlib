@@ -37,7 +37,6 @@ import java.security.GeneralSecurityException;
  *     简而言之，省的以后弄<br>
  *     此外，你会发现它可以套娃
  * @author Roj233
- * @version 0.1
  * @since 2021/12/27 21:35
  */
 public class MyCipher implements CipheR, DeCipher {

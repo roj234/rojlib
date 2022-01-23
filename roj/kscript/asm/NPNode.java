@@ -29,10 +29,7 @@ import roj.kscript.api.IArray;
 import roj.kscript.type.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 13:23
  */
 public final class NPNode extends Node {

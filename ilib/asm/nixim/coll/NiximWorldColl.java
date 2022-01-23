@@ -44,7 +44,6 @@ import java.util.List;
  * Remap Collision
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/14 14:04
  */
 @Nixim("net.minecraft.world.World")

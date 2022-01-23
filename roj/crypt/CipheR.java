@@ -32,7 +32,6 @@ import java.security.GeneralSecurityException;
  * 【包含】状态的密码算法
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/7 13:07
  */
 public interface CipheR {

@@ -36,7 +36,6 @@ import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 12:53
  */
 public class X509PubKey implements MSSPubKey<X509Certificate> {

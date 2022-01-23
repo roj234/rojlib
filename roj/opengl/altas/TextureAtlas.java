@@ -47,7 +47,6 @@ import java.util.List;
  * TextureAltasSpritet
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/18 15:46
  */
 public class TextureAtlas {

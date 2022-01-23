@@ -31,10 +31,7 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GLContext;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/18 15:12
  */
 public class MultiTexUtil {

@@ -27,7 +27,6 @@ package roj.sound.record;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/19 22:56
  */
 public interface VoiceHandler {

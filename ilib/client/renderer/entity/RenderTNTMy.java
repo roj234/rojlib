@@ -38,10 +38,7 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.item.EntityTNTPrimed;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/21 23:21
  */
 public class RenderTNTMy extends RenderTNTPrimed {

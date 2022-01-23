@@ -36,7 +36,6 @@ import static roj.opengl.vertex.VertexFormat.*;
  * Vertex Builder
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/18 13:15
  */
 public class VertexBuilder {

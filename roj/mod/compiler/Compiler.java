@@ -44,10 +44,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/1 1:54
  */
 public class Compiler implements DiagnosticListener<JavaFileObject> {

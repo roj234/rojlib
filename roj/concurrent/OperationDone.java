@@ -29,7 +29,6 @@ import roj.util.Helpers;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/8/23 0:54
  */
 public final class OperationDone extends RuntimeException {

@@ -42,7 +42,6 @@ import javax.annotation.Nullable;
  * 冻结的实体
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/26 19:36
  */
 public final class FreezedEntity extends Entity {

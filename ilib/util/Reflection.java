@@ -25,11 +25,13 @@
  */
 package ilib.util;
 
+import roj.reflect.DirectAccessor;
+
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.resources.IResourcePack;
 import net.minecraft.util.math.Vec3d;
+
 import net.minecraftforge.fml.client.FMLClientHandler;
-import roj.reflect.DirectAccessor;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -39,7 +41,6 @@ import java.util.List;
  *     那就不写好了
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/25 1:06
  */
 public interface Reflection {

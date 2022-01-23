@@ -26,12 +26,12 @@
 package ilib.client.register;
 
 import ilib.ImpLib;
+
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class ItemModelInfo extends ModelInfo {

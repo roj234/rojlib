@@ -39,7 +39,6 @@ import java.nio.FloatBuffer;
  * Rendering Util
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/18 15:42
  */
 public class Util {

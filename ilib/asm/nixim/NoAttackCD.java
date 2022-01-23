@@ -33,10 +33,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/21 17:40
  */
 @Nixim("net.minecraft.entity.player.EntityPlayer")

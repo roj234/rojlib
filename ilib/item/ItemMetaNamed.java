@@ -42,10 +42,7 @@ import javax.annotation.Nonnull;
  * @param <T> The MI-Enumeration
  */
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/2 23:42
  */
 public class ItemMetaNamed<T extends Localized> extends ItemMeta<T> {

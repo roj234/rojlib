@@ -33,7 +33,6 @@ import java.util.Iterator;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/11/9 23:10
  */
 public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable {

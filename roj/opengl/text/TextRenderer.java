@@ -42,7 +42,6 @@ import java.util.Random;
  * Text Renderer
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/3 19:40
  */
 public class TextRenderer {

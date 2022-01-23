@@ -29,7 +29,6 @@ import net.minecraftforge.fml.common.eventhandler.Event;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/9/25 23:55
  */
 public class ClientChangeWorldEvent extends Event {

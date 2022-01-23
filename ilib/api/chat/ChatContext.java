@@ -25,18 +25,16 @@
  */
 package ilib.api.chat;
 
-import net.minecraft.entity.player.EntityPlayerMP;
 import roj.collect.MyHashMap;
+
+import net.minecraft.entity.player.EntityPlayerMP;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/19 20:39
  */
 public class ChatContext {

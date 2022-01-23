@@ -25,18 +25,15 @@
  */
 package roj.net.cross.server;
 
-import roj.net.cross.server.AEServer.Worker;
-
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/23 22:30
  */
 final class Closed extends Stated {
     public static final Closed CLOSED = new Closed();
 
     @Override
-    Stated next(Worker self) {
+    Stated next(Client self) {
         return null;
     }
 }

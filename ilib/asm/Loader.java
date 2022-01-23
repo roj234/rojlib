@@ -70,7 +70,6 @@ import java.util.zip.ZipInputStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 16:43
  */
 @Name("ILASM")

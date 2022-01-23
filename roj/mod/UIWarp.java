@@ -33,7 +33,6 @@ import java.io.IOException;
  * UI Operation Wrap between Cmd and Window
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/19 19:59
  */
 class UIWarp {

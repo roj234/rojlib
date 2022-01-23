@@ -37,10 +37,7 @@ import roj.kscript.util.opm.SWEntry;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/28 18:47
  */
 public class SwitchMap extends MyHashMap<KType, Node> {

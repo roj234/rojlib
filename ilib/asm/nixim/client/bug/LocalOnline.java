@@ -39,10 +39,7 @@ import net.minecraft.world.WorldSettings;
 import java.io.IOException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/1 22:14
  */
 @Nixim("net.minecraft.server.integrated.IntegratedServer")

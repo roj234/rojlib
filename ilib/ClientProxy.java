@@ -72,10 +72,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/23 14:10
  */
 public final class ClientProxy extends ServerProxy {

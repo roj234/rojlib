@@ -33,10 +33,7 @@ import javax.annotation.Nonnull;
 import java.util.Objects;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/28 23:38
  */
 public final class KString extends KBase {

@@ -47,10 +47,7 @@ import net.minecraftforge.fml.common.FMLLog;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/20 17:56
  */
 @Nixim("net.minecraft.tileentity.TileEntity")

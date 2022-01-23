@@ -33,7 +33,6 @@ import java.util.List;
 /**
  * 与Center相反,这是block的点和三角形的中心
  * @author Roj233
- * @version 0.1
  * @since 2021/9/11 23:18
  */
 public class Corner {

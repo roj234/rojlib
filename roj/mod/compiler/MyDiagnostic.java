@@ -30,10 +30,7 @@ import javax.tools.JavaFileObject;
 import java.util.Locale;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/2 14:15
  */
 public class MyDiagnostic implements Diagnostic<JavaFileObject> {

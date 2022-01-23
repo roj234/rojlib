@@ -29,7 +29,6 @@ package roj.math;
  * 各种排序算法
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/1 23:14
  */
 public class Sort {

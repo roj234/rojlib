@@ -34,10 +34,7 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.item.Item;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/18 0:21
  */
 @Nixim("net.minecraft.item.ItemPickaxe")

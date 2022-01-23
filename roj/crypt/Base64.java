@@ -31,10 +31,7 @@ import roj.util.ByteList;
 import java.util.Arrays;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/14 19:38
  */
 public final class Base64 {

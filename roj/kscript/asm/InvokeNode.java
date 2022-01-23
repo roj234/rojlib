@@ -38,7 +38,6 @@ import java.util.List;
  * Invocation
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 23:27
  */
 class InvokeNode extends Node {

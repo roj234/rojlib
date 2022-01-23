@@ -28,10 +28,7 @@ package roj.management;
 import roj.text.TextUtil;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/28 23:07
  */
 public class PerformanceLogger implements Runnable {

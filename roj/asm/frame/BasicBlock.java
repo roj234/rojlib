@@ -28,10 +28,7 @@ package roj.asm.frame;
 import java.util.Arrays;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/24 13:22
  */
 final class BasicBlock {

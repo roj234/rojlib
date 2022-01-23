@@ -26,10 +26,7 @@
 package roj.asm.util;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/11 0:59
  */
 public class AccessFlag {

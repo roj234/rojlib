@@ -27,15 +27,15 @@
 package ilib.asm;
 
 import ilib.Config;
-import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
 
+import net.minecraft.launchwrapper.IClassTransformer;
+
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public class ClassReplacer implements IClassTransformer {

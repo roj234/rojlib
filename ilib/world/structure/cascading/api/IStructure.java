@@ -35,7 +35,6 @@ import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/9/19 21:08
  */
 public interface IStructure {

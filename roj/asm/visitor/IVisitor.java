@@ -32,7 +32,6 @@ import roj.util.Helpers;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/8/16 18:12
  */
 public class IVisitor extends Holder {

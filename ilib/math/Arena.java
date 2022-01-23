@@ -29,10 +29,7 @@ package ilib.math;
 import net.minecraft.util.math.BlockPos;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/2 15:22
  */
 public class Arena {

@@ -33,7 +33,6 @@ import java.util.Random;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/12 17:16
  */
 public abstract class Noised implements HeightMap {

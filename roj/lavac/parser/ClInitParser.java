@@ -28,10 +28,7 @@ package roj.lavac.parser;
 import roj.asm.tree.Clazz;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/11/6 23:25
  */
 public class ClInitParser implements Runnable {

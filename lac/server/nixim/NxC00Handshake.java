@@ -40,10 +40,7 @@ import net.minecraft.network.handshake.client.C00Handshake;
 import java.util.Map;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 20:21
  */
 @Nixim(value = "net.minecraft.network.handshake.client.C00Handshake")

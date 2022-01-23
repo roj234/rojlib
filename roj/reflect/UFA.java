@@ -34,7 +34,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 使用Unsafe的字段访问
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/17 18:31
  */
 final class UFA extends FieldAccessor {

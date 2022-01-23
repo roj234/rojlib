@@ -31,7 +31,6 @@ import roj.asm.tree.MoFNode;
  * N/D Descriptor
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 20:59
  */
 class DescEntry {

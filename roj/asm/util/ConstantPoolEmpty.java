@@ -32,7 +32,6 @@ import roj.asm.cst.CstUTF;
  * 空着的ConstWriterr
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 23:02
  */
 public final class ConstantPoolEmpty extends ConstantPool {

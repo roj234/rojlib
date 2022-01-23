@@ -31,10 +31,7 @@ import roj.collect.MyHashMap;
 import java.util.function.IntFunction;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/22 13:40
  */
 public class Registry<T extends Indexable> implements IRegistry<T> {

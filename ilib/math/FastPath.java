@@ -25,20 +25,18 @@
  */
 package ilib.math;
 
-import net.minecraft.util.math.BlockPos;
 import roj.collect.IntMap;
 import roj.collect.LongMap;
 import roj.collect.MyHashSet;
+
+import net.minecraft.util.math.BlockPos;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class FastPath<V extends PositionProvider>/* implements Iterable<V>*/ {

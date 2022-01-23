@@ -59,10 +59,7 @@ import java.util.List;
 import java.util.WeakHashMap;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/24 13:05
  */
 @Nixim("net.minecraft.client.renderer.RenderGlobal")

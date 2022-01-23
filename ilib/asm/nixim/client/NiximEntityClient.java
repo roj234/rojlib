@@ -33,10 +33,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/20 22:42
  */
 @Nixim("net.minecraft.entity.Entity")

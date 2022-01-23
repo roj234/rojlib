@@ -33,7 +33,6 @@ import roj.kscript.util.Variable;
  * JS Op Nodes
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 12:30
  */
 public abstract class Node {

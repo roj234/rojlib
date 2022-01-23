@@ -28,10 +28,7 @@ package roj.kscript.vm;
 import roj.kscript.asm.TryEnterNode;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/13 22:36
  */
 public final class ErrorInfo {

@@ -25,6 +25,23 @@ public class Waiters {
         LockSupport.park(this);
     }
 
+    public boolean await(int id, int timeout) {
+        Entry ent = new Entry();
+        ent.id = id;
+        ent.owner = Thread.currentThread();
+
+        Entry head = CASHEAD.getAndSet(this, ent);
+        if (head != null) {
+            head.next = ent;
+        }
+        LockSupport.parkNanos(this, timeout * 1000000L);
+        if (ent.owner != null) {
+            ent.owner = null;
+            return false;
+        }
+        return true;
+    }
+
     public boolean signal(int id) {
         Entry prev = null, ent = head;
         while (ent != null) {
@@ -37,7 +54,9 @@ public class Waiters {
                 } else {
                     CASNEXT.compareAndSet(prev, ent, ent.next);
                 }
-                LockSupport.unpark(ent.owner);
+                Thread t = ent.owner;
+                ent.owner = null;
+                LockSupport.unpark(t);
                 return true;
             }
             prev = ent;

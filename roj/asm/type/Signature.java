@@ -40,7 +40,6 @@ import java.util.function.UnaryOperator;
  * 泛型签名
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public class Signature implements IType {

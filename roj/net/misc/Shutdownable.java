@@ -27,7 +27,6 @@ package roj.net.misc;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/25 0:27
  */
 public interface Shutdownable {

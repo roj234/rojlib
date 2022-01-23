@@ -37,7 +37,6 @@ import java.util.List;
  * JIT Argument list
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/6/27 14:38
  */
 final class VM_JIT_ArgList extends ArgList {

@@ -37,10 +37,7 @@ import net.minecraft.stats.RecipeBookServer;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/16 16:03
  */
 @Nixim("net.minecraft.stats.RecipeBookServer")

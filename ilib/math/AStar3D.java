@@ -35,10 +35,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/2 18:44
  */
 public abstract class AStar3D {

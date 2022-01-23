@@ -33,7 +33,6 @@ import java.net.URL;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2021/10/23 21:36
  */
 public class HttpConnection {

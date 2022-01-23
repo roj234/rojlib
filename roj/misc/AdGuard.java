@@ -25,6 +25,7 @@
  */
 package roj.misc;
 
+import roj.collect.TrieTreeSet;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
@@ -34,6 +35,8 @@ import roj.net.http.HttpConnection;
 import roj.net.http.HttpServer;
 import roj.net.udp.DnsServer;
 import roj.net.udp.DnsServer.Record;
+import roj.text.CharList;
+import roj.text.SimpleLineReader;
 
 import java.io.*;
 import java.net.InetAddress;
@@ -42,7 +45,6 @@ import java.net.URL;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2022/1/1 19:20
  */
 public class AdGuard {
@@ -67,6 +69,7 @@ public class AdGuard {
             dns.loadHosts(new FileInputStream(list.get(i).asString()));
         }
 
+        TrieTreeSet tree = new TrieTreeSet();
         list = cfg.getOrCreateList("adblock");
         for (int i = 0; i < list.size(); i++) {
             CMapping map = list.get(i).asMap();
@@ -77,16 +80,44 @@ public class AdGuard {
                     HttpConnection hc = new HttpConnection(new URL(url));
                     hc.connect();
                     InputStream in = hc.getInputStream();
-                    FileOutputStream out = new FileOutputStream(file);
-                    try {
-                        // process
+                    try (FileOutputStream out = new FileOutputStream(file)) {
+                        int read;
+                        do {
+                            byte[] buf = new byte[4096];
+                            read = in.read(buf);
+                            out.write(buf, 0, read);
+                        } while (read > 0);
                     } finally {
-                        out.close();
                         hc.disconnect();
                     }
                 }
             }
-            dns.loadBlocked(new FileInputStream(file));
+
+            CharList tmp = new CharList();
+            try (SimpleLineReader scan = new SimpleLineReader(new FileInputStream(file))) {
+                for (String ln : scan) {
+                    if(ln.isEmpty() || ln.startsWith("!"))
+                        continue;
+
+                    tmp.clear();
+                    tmp.append(ln)
+                       .replace("@@", "")
+                       .replace("|", "")
+                       .replace("^", "");
+                    tree.add(tmp.toString());
+                }
+            }
+        }
+        if (!tree.isEmpty()) {
+            dns.blocked = s -> {
+                for (int i = 0; i < s.length(); i++) {
+                    if (tree.contains(s, i, s.length())) {
+                        if (i != 0) System.out.println("Matched partial at " + i + " of " + s);
+                        return true;
+                    }
+                }
+                return false;
+            };
         }
         dns.launch();
 

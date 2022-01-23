@@ -42,7 +42,6 @@ import java.net.URL;
 /**
  * Har file exporter
  * @author solo6975
- * @version 0.1
  * @since 2022/1/1 19:20
  */
 public class HarExporter {

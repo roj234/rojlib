@@ -31,7 +31,6 @@ import java.nio.ByteBuffer;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/29 16:10
  */
 public final class NullHash implements MSSHash {

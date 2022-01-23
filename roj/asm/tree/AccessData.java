@@ -37,7 +37,6 @@ import java.util.List;
  * Class LOD 1
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/12 0:23
  */
 public final class AccessData implements IClass {

@@ -63,10 +63,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/23 14:10
  */
 public abstract class MySubs extends AbstractSubCommand {

@@ -31,7 +31,6 @@ import java.util.zip.Checksum;
  * CRC32 not in c++ (Read only)
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 19:53
  */
 public class CRC32 implements Checksum {

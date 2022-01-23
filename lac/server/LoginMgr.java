@@ -45,7 +45,6 @@ import java.io.*;
  * Login Manager
  *
  * @author Roj234
- * @version 0.1
  * @since 2020/12/6 16:16
  */
 public final class LoginMgr {

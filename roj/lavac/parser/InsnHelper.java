@@ -29,10 +29,7 @@ import roj.asm.util.InsnList;
 import roj.config.word.LineHandler;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/22 19:16
  */
 public class InsnHelper implements LineHandler {

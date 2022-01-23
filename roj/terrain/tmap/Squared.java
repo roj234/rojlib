@@ -40,7 +40,6 @@ import java.util.function.Function;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/9/12 13:19
  */
 public class Squared implements PolyMap {

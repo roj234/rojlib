@@ -36,7 +36,6 @@ import java.nio.charset.StandardCharsets;
  * LAC Configuration
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/7/8 18:53
  */
 public final class Config extends JSONConfiguration {

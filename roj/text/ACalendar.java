@@ -34,7 +34,6 @@ import java.util.TimeZone;
  * Replacement? of {@link java.util.Calendar}
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/16 2:48
  */
 public class ACalendar {

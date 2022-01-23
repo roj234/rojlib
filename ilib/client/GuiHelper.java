@@ -36,10 +36,7 @@ import net.minecraft.init.SoundEvents;
 import java.awt.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 23:56
  */
 public class GuiHelper {

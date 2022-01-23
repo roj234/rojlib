@@ -43,7 +43,6 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/19 0:14
  */
 public class TextUtil {

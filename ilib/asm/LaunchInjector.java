@@ -42,7 +42,6 @@ import java.util.List;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/21 9:45
  */
 class LaunchInjector implements Acceptor {

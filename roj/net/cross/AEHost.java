@@ -34,7 +34,6 @@ import roj.net.WrappedSocket;
 import roj.net.misc.PacketBuffer;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
-import roj.net.misc.TaskManager;
 import roj.util.Helpers;
 
 import java.io.EOFException;
@@ -42,6 +41,7 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -53,25 +53,82 @@ import static roj.net.cross.Util.*;
  * AbyssalEye Host
  *
  * @author Roj233
- * @version 0.3.1
+ * @version 0.4.0
  * @since 2021/9/12 0:57
  */
 public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
-    static final int MAX_CHANNEL_COUNT = 32;
+    static final int MAX_CHANNEL_COUNT = 100;
+
+    static final class ResetTimer extends Thread {
+        static final int TIMER = 3000;
+        static final class Entry {
+            Pipe pipe;
+            long time;
+        }
+
+        final ArrayList<Entry> entries = new ArrayList<>();
+        volatile boolean park;
+
+        ResetTimer() {
+            setName("Channel reset timer");
+            setDaemon(true);
+        }
+
+        @Override
+        public void run() {
+            while (!Thread.interrupted()) {
+                ArrayList<Entry> es = this.entries;
+                for (int i = 0; i < es.size(); i++) {
+                    long now = System.currentTimeMillis();
+                    Entry e = es.get(i);
+                    // ms => ns
+                    LockSupport.parkNanos(this, (now - e.time) * 1000000L);
+                    if (e.pipe.idleTime > TIMER) {
+                        try {
+                            e.pipe.close();
+                        } catch (Throwable ignored) {}
+                    }
+                    synchronized (es) {
+                        es.remove(i--);
+                    }
+                }
+                park = true;
+                LockSupport.park();
+            }
+        }
+
+        public void add(Pipe pipe) {
+            if (entries.size() > 100) {
+                pipe.idleTime = CHANNEL_IDLE_TIMEOUT - TIMER;
+                return;
+            }
+            Entry e = new Entry();
+            e.pipe = pipe;
+            e.time = System.currentTimeMillis() + TIMER;
+            synchronized (entries) {
+                entries.add(e);
+            }
+            if (park) {
+                park = false;
+                LockSupport.unpark(this);
+            }
+        }
+    }
 
     IntMap<Client> clients;
     char[] portMap;
     public String motd;
 
     PacketBuffer pb;
-    TaskManager  tm;
+    ResetTimer   tm;
 
     public AEHost(SocketAddress server, String id, String token) {
         super(server, id, token);
         this.clients = new IntMap<>();
         this.portMap = new char[1];
         this.pb = new PacketBuffer();
-        this.tm = new TaskManager();
+        this.tm = new ResetTimer();
+        this.tm.start();
     }
 
     public void kickSome(int... clientIds) {
@@ -113,7 +170,7 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
             ByteBuffer rb = ch.buffer();
             rb.clear();
 
-            int heart = 0;
+            int heart = 1;
             int except = 1;
             conn:
             while (!shutdown) {
@@ -128,7 +185,7 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                         }
                         rb.clear();
                     }
-                    if (heartbeat(ch, --heart, false)) continue;
+                    if (heartbeat(ch, --heart)) continue;
                     break;
                 }
 
@@ -149,8 +206,10 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                             continue;
                         }
                         Pipe pair = socketsById.get(rb.getInt(1));
-                        if (pair != null) reset(pair);
-                        else if (DEBUG) syncPrint("Invalid reset #" + rb.getInt(1));
+                        if (pair != null) {
+                            reset(pair);
+                            tm.add(pair);
+                        } else if (DEBUG) syncPrint("Invalid reset #" + rb.getInt(1));
 
                         rb.flip();
                         if (writeAndFlush(ch, rb, TIMEOUT) < 0) {
@@ -185,10 +244,10 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
 
                         int clientId = rb.getInt();
 
-                        if (socketsById.size() > MAX_CHANNEL_COUNT || !clients.containsKey(clientId)) {
+                        if (socketsById.size() >= MAX_CHANNEL_COUNT || !clients.containsKey(clientId)) {
                             rb.clear();
                             rb.put((byte) P_CHANNEL_OPEN_FAIL).putInt(clientId);
-                            byte[] reasonBytes = (clients.containsKey(clientId) ? "这边开启的频道过多" : "未知的客户端")
+                            byte[] reasonBytes = (clients.containsKey(clientId) ? "这边开启的频道过多(" + MAX_CHANNEL_COUNT + ")" : "未知的客户端")
                                     .getBytes(StandardCharsets.UTF_8);
                             rb.put((byte) reasonBytes.length).put(reasonBytes).flip();
                             syncPrint("客户端 #" + clientId + " 开启频道被阻止");
@@ -297,12 +356,13 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
             }
             socketsById.clear();
             ch.close();
+            tm.interrupt();
         }
     }
 
     private void reset(Pipe pipe) throws Exception {
         SpAttach att = (SpAttach) pipe.att;
-        if (DEBUG) System.out.println(att + " reset.");
+        if (DEBUG) syncPrint(att + " reset.");
         Socket c = new Socket();
         try {
             c.setReuseAddress(true);
@@ -314,7 +374,11 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
             try {
                 c.close();
             } catch (IOException ignored) {}
-            Helpers.athrow(e);
+            try {
+                pipe.close();
+            } catch (IOException ignored) {}
+            syncPrint("管道错误 #" + att.channelId + " of " + att.clientId);
+            e.printStackTrace();
         }
     }
 

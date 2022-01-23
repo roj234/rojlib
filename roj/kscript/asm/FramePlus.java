@@ -42,10 +42,7 @@ import java.util.Collections;
 import java.util.function.Consumer;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 12:41
  */
 public final class FramePlus extends Frame {

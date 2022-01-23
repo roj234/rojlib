@@ -2,7 +2,6 @@ package roj.net.cross.server;
 
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
-import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -13,6 +12,7 @@ import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.P_UPNP_PING;
 import static roj.net.cross.Util.P_UPNP_PONG;
+import static roj.net.cross.server.AEServer.server;
 
 /**
  * @author Roj233
@@ -21,9 +21,7 @@ import static roj.net.cross.Util.P_UPNP_PONG;
 public class UPnPinger {
     long lastPing;
 
-    int ping(Worker w, char port, byte[] ip, long sec) {
-        AEServer server = w.server;
-
+    int ping(Client w, char port, byte[] ip, long sec) {
         if (System.currentTimeMillis() - lastPing < 10000) return -3;
 
         lastPing = System.currentTimeMillis();

@@ -32,7 +32,6 @@ import java.util.zip.InflaterInputStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 15:30
  */
 final class DeflateInputStream extends InflaterInputStream {

@@ -33,7 +33,6 @@ import java.io.InputStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/2/16 11:21
  */
 public abstract class StreamResponse implements Response {

@@ -29,10 +29,7 @@ import roj.config.ParseException;
 import roj.text.CharList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/6/15 20:43
  */
 public final class Tokenizer extends AbstLexer {

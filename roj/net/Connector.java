@@ -33,7 +33,6 @@ import java.net.SocketException;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/10/9 22:48
  */
 public abstract class Connector {

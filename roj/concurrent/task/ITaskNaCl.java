@@ -26,10 +26,7 @@
 package roj.concurrent.task;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/12/19 23:03
  */
 public interface ITaskNaCl extends ITask {

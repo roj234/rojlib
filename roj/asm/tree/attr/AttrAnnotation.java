@@ -35,10 +35,7 @@ import roj.util.ByteReader;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/1 23:12
  */
 public final class AttrAnnotation extends Attribute {

@@ -26,6 +26,7 @@
 package ilib.api.chat;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -33,10 +34,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import java.util.WeakHashMap;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/19 20:38
  */
 public final class PlayerChatApi {

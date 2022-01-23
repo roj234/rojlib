@@ -48,7 +48,6 @@ import static roj.asm.util.AccessFlag.*;
  * 计算SerialVersionUID
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/29 1:58
  */
 public class SerialVersion {

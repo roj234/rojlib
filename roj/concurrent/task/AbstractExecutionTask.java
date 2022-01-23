@@ -29,10 +29,7 @@ import javax.annotation.Nonnull;
 import java.util.concurrent.*;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/24 10:25
  */
 public abstract class AbstractExecutionTask implements ITask, Future<Void>, Runnable {

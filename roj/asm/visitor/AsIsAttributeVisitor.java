@@ -29,7 +29,6 @@ package roj.asm.visitor;
  * As-is Attribute Visitor !! Require NOT clearConstant mode
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/4 12:35
  */
 public class AsIsAttributeVisitor extends AttributeVisitor {

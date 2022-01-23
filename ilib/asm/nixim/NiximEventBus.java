@@ -48,10 +48,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/14 15:49
  */
 @Nixim("net.minecraftforge.fml.common.eventhandler.EventBus")

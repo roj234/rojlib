@@ -46,10 +46,7 @@ import javax.annotation.Nullable;
 import java.awt.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 20:23
  */
 public abstract class ComSideSelector extends BaseComponent {

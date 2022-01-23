@@ -40,10 +40,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/16 23:19
  */
 public final class KArray extends KBase implements roj.kscript.api.IArray {

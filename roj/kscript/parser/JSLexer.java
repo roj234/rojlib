@@ -42,7 +42,6 @@ import java.util.Arrays;
  * JavaScript Lexer : string => tokens
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/3 19:20
  */
 public class JSLexer extends AbstLexer {

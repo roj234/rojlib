@@ -33,7 +33,6 @@ import java.io.InputStream;
  * 支持各种BOM的输入流
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/3/7 11:58
  */
 public class BOMInputStream extends PushbackInputStream {

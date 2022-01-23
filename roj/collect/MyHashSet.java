@@ -37,7 +37,6 @@ import static roj.collect.IntMap.NOT_USING;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/15 21:33
  */
 public class MyHashSet<K> implements Set<K>, FindSet<K> {

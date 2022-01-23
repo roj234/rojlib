@@ -34,10 +34,7 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.world.World;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/3 0:28
  */
 @Nixim("net.minecraft.entity.EntityLivingBase")

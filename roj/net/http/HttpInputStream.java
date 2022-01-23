@@ -35,7 +35,6 @@ import java.util.zip.Inflater;
  * 处理不同传输方式
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 15:30
  */
 class HttpInputStream {

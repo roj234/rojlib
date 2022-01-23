@@ -87,7 +87,6 @@ import static roj.mod.Shared.MAIN_CONFIG;
  * LAC Main Gui
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/7/8 18:42
  */
 public class Main extends JFrame {

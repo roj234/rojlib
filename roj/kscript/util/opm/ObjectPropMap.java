@@ -37,10 +37,7 @@ import java.util.Objects;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/25 23:26
  */
 public class ObjectPropMap extends MyHashMap<String, KType> {

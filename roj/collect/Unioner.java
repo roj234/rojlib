@@ -35,7 +35,6 @@ import java.util.*;
  * Union Finder
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/27 18:20
  */
 public class Unioner<T extends Range> implements Iterable<Unioner.Region> {

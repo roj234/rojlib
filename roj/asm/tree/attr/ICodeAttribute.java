@@ -32,7 +32,6 @@ import roj.util.ByteList;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/1/16 22:33
  */
 public interface ICodeAttribute {

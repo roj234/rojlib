@@ -29,10 +29,7 @@ import roj.kscript.parser.Symbol;
 import roj.kscript.type.KBool;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 18:50
  */
 public final class IfLoadNode extends Node {

@@ -39,7 +39,6 @@ import java.util.Vector;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/16 1:31
  */
 public final class ClassDefiner extends ClassLoader {

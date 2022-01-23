@@ -28,10 +28,7 @@ package roj.kscript.asm;
 import roj.kscript.type.KType;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 18:45
  */
 public class LoadDataNode extends Node {

@@ -54,7 +54,6 @@ import static ilib.asm.Loader.logger;
  * 标准(ASM)class转换器
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public class Transformer implements ContextClassTransformer {

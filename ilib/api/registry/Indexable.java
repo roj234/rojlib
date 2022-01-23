@@ -26,10 +26,7 @@
 package ilib.api.registry;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/21 14:15
  */
 public interface Indexable {

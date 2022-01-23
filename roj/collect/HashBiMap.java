@@ -36,10 +36,7 @@ import java.util.*;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 10:35
  */
 public class HashBiMap<K, V> implements Flippable<K, V>, MapLike<MyHashMap.Entry<K, V>> {

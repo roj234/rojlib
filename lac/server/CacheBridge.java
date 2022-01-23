@@ -31,7 +31,6 @@ import java.util.Map;
  * Access to NetworkManager
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 19:23
  */
 public interface CacheBridge {

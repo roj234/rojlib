@@ -30,10 +30,7 @@ import roj.kscript.type.KType;
 import java.util.Arrays;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/22 12:36
  */
 public final class Closure extends IContext {

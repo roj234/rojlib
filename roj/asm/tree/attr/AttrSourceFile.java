@@ -30,10 +30,7 @@ import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/1 19:29
  */
 public final class AttrSourceFile extends Attribute {

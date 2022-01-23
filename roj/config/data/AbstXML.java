@@ -41,7 +41,6 @@ import java.util.function.Consumer;
  * XML Parser Value Base
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/31 15:28
  */
 public abstract class AbstXML implements Iterable<AbstXML> {

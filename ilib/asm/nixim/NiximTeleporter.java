@@ -44,10 +44,7 @@ import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/20 1:54
  */
 @Nixim("net.minecraft.world.Teleporter")

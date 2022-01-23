@@ -46,10 +46,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/30 22:17
  */
 public class ObfUtil {

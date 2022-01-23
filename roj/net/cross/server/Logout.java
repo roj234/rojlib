@@ -25,8 +25,6 @@
  */
 package roj.net.cross.server;
 
-import roj.net.cross.server.AEServer.Worker;
-
 import java.io.IOException;
 import java.util.concurrent.locks.LockSupport;
 
@@ -34,14 +32,13 @@ import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/21 13:43
  */
 final class Logout extends Stated {
     static final Logout LOGOUT = new Logout();
 
     @Override
-    Stated next(Worker self) throws IOException {
+    Stated next(Client self) throws IOException {
         self.ch.buffer().clear();
         try {
             write1(self.ch, (byte) P_LOGOUT);

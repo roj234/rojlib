@@ -26,7 +26,6 @@
 package roj.net.cross.server;
 
 import roj.io.NIOUtil;
-import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -36,13 +35,12 @@ import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/21 13:18
  */
 abstract class Stated {
-    abstract Stated next(Worker self) throws IOException;
+    abstract Stated next(Client self) throws IOException;
 
-    static void unknownPacket(Worker self, ByteBuffer rb) throws IOException {
+    static void unknownPacket(Client self, ByteBuffer rb) throws IOException {
         int bc = (rb.get(0) & 0xFF) - 0x20;
         if(rb.position() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
             syncPrint(self + ": 错误 " + ERROR_NAMES[bc]);
@@ -52,7 +50,7 @@ abstract class Stated {
         }
     }
 
-    static boolean isInRoom(Worker t) throws IOException {
+    static boolean isInRoom(Client t) throws IOException {
         if (t.room != null) {
             if (t.room.master == null || !t.room.clients.containsKey(t.clientId)) {
                 write1(t.ch, (byte) PS_ERROR_MASTER_DIE);

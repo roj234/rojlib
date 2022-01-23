@@ -28,10 +28,7 @@ package roj.asm.cst;
 import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/24 22:50
  */
 public final class CstTop extends Constant {

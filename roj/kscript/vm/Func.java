@@ -39,10 +39,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 12:28
  */
 public class Func extends KFunction {

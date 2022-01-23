@@ -42,7 +42,6 @@ import java.util.List;
  * Merge client and server classes
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/30 13:23
  */
 public class ClassMerger {

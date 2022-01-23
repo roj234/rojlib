@@ -44,7 +44,6 @@ import java.util.ArrayList;
  * Adnmb HTML Parser
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/12 23:16
  */
 public class ADownloader {

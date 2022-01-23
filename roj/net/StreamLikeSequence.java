@@ -40,7 +40,6 @@ import java.util.stream.IntStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/2/4 15:43
  */
 public class StreamLikeSequence implements CharSequence {

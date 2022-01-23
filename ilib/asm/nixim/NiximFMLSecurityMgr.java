@@ -25,15 +25,13 @@
  */
 package ilib.asm.nixim;
 
-import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Nixim;
 
+import net.minecraftforge.fml.relauncher.FMLSecurityManager;
+
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/24 19:42
  */
 @Nixim("net.minecraftforge.fml.relauncher.FMLSecurityManager")

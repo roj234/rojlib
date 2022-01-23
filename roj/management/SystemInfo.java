@@ -31,10 +31,7 @@ import java.lang.management.*;
 import java.util.Arrays;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/10 22:59
  */
 public class SystemInfo {

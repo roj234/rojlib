@@ -30,10 +30,7 @@ import roj.asm.tree.Method;
 import roj.asm.util.InsnList;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/27 13:19
  */
 public class CompileContext {

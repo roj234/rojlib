@@ -38,7 +38,6 @@ import java.util.concurrent.locks.LockSupport;
  * Process hangup watchdog * require file updater to do so
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/7/9 11:45
  */
 public final class HangupWatchdog extends Thread {

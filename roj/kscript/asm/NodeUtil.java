@@ -33,10 +33,7 @@ import roj.kscript.util.Variable;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/28 18:32
  */
 public class NodeUtil {

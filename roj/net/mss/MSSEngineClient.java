@@ -38,7 +38,6 @@ import java.util.Random;
 /**
  * MSS引擎客户端模式
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 12:21
  */
 public final class MSSEngineClient extends MSSEngine {

@@ -52,10 +52,7 @@ import javax.annotation.Nonnull;
  * @param <T> The MI-Enumeration
  */
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/2 23:56
  */
 public class ItemMetaBlock<T extends Propertied<T>> extends ItemBlockMI {

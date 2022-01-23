@@ -35,10 +35,7 @@ import net.minecraft.item.Item;
 import javax.annotation.Nullable;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class BlockModelInfo extends ModelInfo {

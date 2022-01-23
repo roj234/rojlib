@@ -41,7 +41,6 @@ import java.util.zip.DeflaterOutputStream;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 19:51
  */
 public class PacketScreenshot implements Packet<INetHandler> {

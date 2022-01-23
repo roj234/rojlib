@@ -31,7 +31,6 @@ import javax.swing.text.Document;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 20:45
  */
 public final class TextAreaPrintStream extends DelegatedPrintStream {

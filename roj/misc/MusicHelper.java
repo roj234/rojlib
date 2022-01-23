@@ -36,7 +36,6 @@ import java.util.function.Predicate;
  * Music File Helper
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/13 17:43
  */
 public class MusicHelper {

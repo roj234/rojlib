@@ -26,14 +26,12 @@
 
 package ilib.math;
 
-import net.minecraft.util.math.BlockPos;
 import roj.math.Rect3i;
 
+import net.minecraft.util.math.BlockPos;
+
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2020/9/20 1:15
  */
 public class Section extends Rect3i implements PositionProvider {

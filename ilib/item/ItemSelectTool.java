@@ -28,6 +28,7 @@ package ilib.item;
 
 import ilib.misc.SelectionCache;
 import ilib.util.PlayerUtil;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
@@ -42,7 +43,6 @@ import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class ItemSelectTool extends ItemRightClickBlock {

@@ -30,10 +30,7 @@ import roj.math.MathUtils;
 import roj.text.TextUtil;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/3 19:20
  */
 public class Word {

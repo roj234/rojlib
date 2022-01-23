@@ -38,10 +38,7 @@ import roj.kscript.util.opm.ObjectPropMap;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/16 20:28
  */
 public abstract class KFunction extends KObject {

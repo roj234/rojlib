@@ -33,7 +33,6 @@ import java.io.IOException;
  * Abstract Project Watcher
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/28 20:34
  */
 public class IProjectWatcher {

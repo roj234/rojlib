@@ -30,7 +30,6 @@ package roj.asm;
  * @see //my.oschina.net/xionghui/blog/325563
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/3 15:59
  */
 public interface Opcodes {

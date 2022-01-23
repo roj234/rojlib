@@ -34,7 +34,6 @@ import java.lang.annotation.Target;
  * 应该是一个常量: provided, static final or PreCompile
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/2 21:57
  */
 @Retention(RetentionPolicy.SOURCE)

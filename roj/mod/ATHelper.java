@@ -43,7 +43,6 @@ import static roj.mod.Shared.TMP_DIR;
  * Text AT Processor
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 19:59
  */
 public final class ATHelper {

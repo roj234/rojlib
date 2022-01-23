@@ -35,12 +35,12 @@ final class SpAttach {
     // 端射ID
     byte portId;
 
-    // 客户端ID （Host only）
+    // 客户端ID
     // 此字段只用作统计
     int clientId;
 
     @Override
     public String toString() {
-        return "管道描述{" + "ID=" + channelId + ", 端口ID=" + portId + ", 客户端ID=" + clientId + '}';
+        return "管道描述{ID=" + channelId + ", 端口ID=" + portId + ", 客户端=" + clientId + '}';
     }
 }

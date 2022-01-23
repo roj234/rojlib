@@ -35,10 +35,7 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/30 15:45
  */
 public class FxMixin {

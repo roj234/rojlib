@@ -85,7 +85,6 @@ import static roj.mod.Shared.*;
  * FMD Main class
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 10:51
  */
 public final class FMDMain {

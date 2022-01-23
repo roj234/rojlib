@@ -30,10 +30,7 @@ import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/20 22:55
  */
 @Nixim("net.minecraft.client.ClientBrandRetriever")

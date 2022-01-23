@@ -35,10 +35,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/21 21:36
  */
 @Nixim("net.minecraft.entity.player.EntityPlayer")

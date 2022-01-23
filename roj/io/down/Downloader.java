@@ -41,7 +41,6 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/9/13 12:28
  */
 public class Downloader extends AbstractCalcTask<Void> implements Runnable, WaitingIOFuture {

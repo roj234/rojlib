@@ -28,10 +28,7 @@ package ilib.asm.util;
 import roj.opengl.text.FontTex;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/3 21:14
  */
 public interface IFontRenderer {

@@ -38,7 +38,6 @@ import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/24 22:44
  */
 public final class MSSServerEngineFactory {

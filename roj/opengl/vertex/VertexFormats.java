@@ -26,10 +26,7 @@
 package roj.opengl.vertex;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/19 18:46
  */
 public class VertexFormats {

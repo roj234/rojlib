@@ -34,10 +34,7 @@ import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/19 1:28
  */
 public class CharList implements CharSequence {
@@ -274,7 +271,7 @@ public class CharList implements CharSequence {
         int pos = 0;
         while ((pos = indexOf(source, pos)) != -1) {
             replace(pos, pos + source.length(), target);
-            pos += source.length();
+            pos += target.length();
         }
         return this;
     }

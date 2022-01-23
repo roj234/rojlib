@@ -47,10 +47,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/17 10:30
  */
 public class Mover {

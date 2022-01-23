@@ -47,6 +47,7 @@ import roj.util.FastLocalThread;
 import javax.swing.*;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -62,13 +63,13 @@ public class AEGuiHost {
             return;
         }
 
-        String serv = null;
-        CMapping cfg = null;
+        String serv = null, cfgFile = "host.json";
         int webPort = -1;
+        boolean ui = true;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "-cfg":
-                    cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[++i])), JSONParser.LITERAL_KEY).asMap();
+                    cfgFile = args[++i];
                     break;
                 case "-server":
                     serv = args[++i];
@@ -76,8 +77,12 @@ public class AEGuiHost {
                 case "-webport":
                     webPort = Integer.parseInt(args[++i]);
                     break;
+                case "-nogui":
+                    ui = false;
+                    break;
             }
         }
+        CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(cfgFile)), JSONParser.LITERAL_KEY).asMap();
 
         String[] text = TextUtil.split(serv, ':');
 
@@ -112,8 +117,10 @@ public class AEGuiHost {
             try {
                 Thread t = new FastLocalThread(runServer(webPort));
                 t.setDaemon(true);
-                t.setName("AEServer Http");
+                t.setName("AEHost Http");
                 t.start();
+            } catch (BindException e) {
+                System.err.println("HTTP端口(" + webPort + ")已被占用: " + e.getMessage());
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -126,7 +133,7 @@ public class AEGuiHost {
         System.setErr(Util.out);
 
         Util.registerShutdownHook(client);
-        new GuiChat("AbyssalEye客户端服务器", client);
+        if (ui) new GuiChat("AbyssalEye房主", client);
     }
 
     static MyHashMap<String, String> tmp = new MyHashMap<>();

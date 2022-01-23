@@ -32,7 +32,6 @@ import java.nio.ByteBuffer;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/11/29 22:33
  */
 public class ByteBufferOutputStream extends OutputStream {

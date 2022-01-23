@@ -25,6 +25,7 @@
  */
 package roj.net.cross;
 
+import roj.collect.Int2IntMap;
 import roj.collect.IntMap;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
@@ -111,30 +112,33 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
 
     protected abstract void call() throws IOException;
 
-    final boolean heartbeat(WrappedSocket ch, int heart, boolean host) throws IOException {
+    final boolean heartbeat(WrappedSocket ch, int heart) throws IOException {
         if (heart <= 0) {
             if (heart % T_HEART_RETRY == 0) {
                 if (write1(ch, (byte) P_HEARTBEAT) < 0) {
-                    syncPrint(this + ": 传输失败");
+                    syncPrint("传输失败");
                 }
+                if (DEBUG) syncPrint("发送心跳");
             } else if (heart < -T_HEART_TIMEOUT) {
-                syncPrint(this + ": 心跳超时");
+                syncPrint("心跳超时");
                 return false;
             }
         }
 
-        // 1200 * 0.2 ~= 240s
         if (heart % T_HEART_RETRY != 0) return true;
 
+        Int2IntMap i2i = new Int2IntMap();
         ByteBuffer rb = ch.buffer();
         if (rb.position() == 0 && !socketsById.isEmpty()) {
             for (Iterator<Pipe> itr = socketsById.values().iterator(); itr.hasNext(); ) {
                 Pipe pair = itr.next();
                 SpAttach att = (SpAttach) pair.att;
                 List<Pipe> pairs = free[att.portId];
-                if ((pair.idleTime > CHANNEL_IDLE_TIMEOUT &&
-                        (socketsById.size() > MIN_CHANNEL_COUNT || host)) ||
-                        pair.isUpstreamEof()) {
+                boolean clean = pair.isUpstreamEof();
+                if (!clean && pair.idleTime > CHANNEL_IDLE_TIMEOUT) {
+                    clean = i2i.getEntryOrCreate(att.clientId, 1).v++ > MIN_CHANNEL_COUNT;
+                }
+                if (clean) {
                     itr.remove();
 
                     pair.close();

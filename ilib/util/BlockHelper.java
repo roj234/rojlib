@@ -56,10 +56,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/1 1:51
  */
 public final class BlockHelper {

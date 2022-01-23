@@ -32,10 +32,7 @@ import net.minecraft.client.gui.GuiErrorScreen;
 import net.minecraftforge.fml.client.CustomModLoadingErrorDisplayException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/2 0:47
  */
 final class MoreIdMissingException extends CustomModLoadingErrorDisplayException {

@@ -33,8 +33,6 @@ import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.NetworkUtil;
 import roj.net.cross.Util;
-import roj.net.cross.server.AEServer.Room;
-import roj.net.cross.server.AEServer.Worker;
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.Reply;
@@ -228,7 +226,7 @@ public class AEGuiServer {
                             }
                             CList rooms = new CList();
                             synchronized (room.clients) {
-                                for (Worker w : room.clients.values()) {
+                                for (Client w : room.clients.values()) {
                                     rooms.add(w.serialize());
                                 }
                             }

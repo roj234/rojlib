@@ -30,10 +30,7 @@ import roj.text.StringPool;
 import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/6/13 13:26
  */
 public interface IModel {

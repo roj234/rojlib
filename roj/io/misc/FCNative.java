@@ -30,7 +30,6 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/19 22:35
  */
 public interface FCNative {

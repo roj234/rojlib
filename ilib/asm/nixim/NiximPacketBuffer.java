@@ -44,10 +44,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/16 15:06
  */
 @Nixim("net.minecraft.network.PacketBuffer")

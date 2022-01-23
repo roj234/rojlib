@@ -33,7 +33,6 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/6 15:04
  */
 public final class Instantiator {

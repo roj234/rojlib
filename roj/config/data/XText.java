@@ -28,10 +28,7 @@ package roj.config.data;
 import java.util.Collections;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/22 15:53
  */
 public final class XText extends AbstXML {

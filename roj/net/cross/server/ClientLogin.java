@@ -26,7 +26,6 @@
 package roj.net.cross.server;
 
 import roj.net.WrappedSocket;
-import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -36,21 +35,20 @@ import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/21 13:28
  */
 final class ClientLogin extends Stated {
     static final ClientLogin CLIENT_LOGIN = new ClientLogin();
 
     @Override
-    Stated next(Worker W) throws IOException {
+    Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
 
         ByteBuffer rb = ch.buffer();
 
         int t = TIMEOUT;
         int except = 3;
-        while (!W.server.shutdown) {
+        while (!AEServer.server.shutdown) {
             int read;
             if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(1000_000);
@@ -72,7 +70,7 @@ final class ClientLogin extends Stated {
             }
             rb.position(3);
 
-            int code = W.server.login(W,
+            int code = AEServer.server.login(W,
                                       false,
                                       getUTF(rb, nameLen),
                                       getUTF(rb, passLen));
@@ -84,10 +82,10 @@ final class ClientLogin extends Stated {
 
             rb.clear();
             rb.put((byte) PC_LOGON_C)
-              .put((byte) W.server.info.length)
+              .put((byte) AEServer.server.info.length)
               .put((byte) W.room.motd.length)
               .put((byte) (W.room.portMap.length / 2))
-              .putInt(W.clientId).put(W.server.info)
+              .putInt(W.clientId).put(AEServer.server.info)
               .put(W.room.motd).put(W.room.portMap).flip();
             writeAndFlush(ch, rb, 500);
             if (W.room.upnpAddress != null) {

@@ -28,10 +28,7 @@ package roj.concurrent;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/17 23:08
  */
 public class PrefixFactory implements TaskPool.MyThreadFactory {

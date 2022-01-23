@@ -35,19 +35,18 @@ import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/21 13:17
  */
 final class Handshake extends Stated {
     static final Stated HANDSHAKE = new Handshake();
 
-    private static byte handshake(AEServer.Worker worker) throws IOException {
+    private static byte handshake(Client worker) throws IOException {
         WrappedSocket ch = worker.ch;
 
         long wait = System.currentTimeMillis() + TIMEOUT;
         while (!ch.handShake()) {
             LockSupport.parkNanos(20);
-            if (worker.server.shutdown) return HS_ERR_POLICY;
+            if (AEServer.server.shutdown) return HS_ERR_POLICY;
             if (System.currentTimeMillis() >= wait) {
                 return HS_ERR_TIMEOUT;
             }
@@ -70,7 +69,7 @@ final class Handshake extends Stated {
     }
 
     @Override
-    public Stated next(AEServer.Worker self) throws IOException {
+    public Stated next(Client self) throws IOException {
         byte heart = handshake(self);
         WrappedSocket ch = self.ch;
         if (ch.handShake())

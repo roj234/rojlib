@@ -36,7 +36,7 @@ import roj.asm.type.Type;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.SharedThreads;
+import roj.concurrent.TaskPool;
 import roj.io.ZipFileWriter;
 import roj.mapper.util.*;
 import roj.reflect.ReflectionUtils;
@@ -63,7 +63,6 @@ import java.util.zip.ZipFile;
  * Mapper Util
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/19 21:32
  */
 public final class Util {
@@ -329,23 +328,23 @@ public final class Util {
         return writer;
     }
 
-    static void concurrent(String name, Consumer<Context> consumer, List<List<Context>> ctxs) {
-        ArrayList<Worker> wait = new ArrayList<>();
-
-        wait.ensureCapacity(ctxs.size());
+    static final TaskPool POOL = new TaskPool(0, CPU, 1, 600000, "Async Mapper");
+    static void async(Consumer<Context> action, List<List<Context>> ctxs) {
+        ArrayList<Worker> wait = new ArrayList<>(ctxs.size());
         for(int i = 0, e = ctxs.size(); i < e; i++) {
-            Worker worker = new Worker(ctxs.get(i), consumer, name + i);
-            SharedThreads.CPU_POOL.pushTask(worker);
-            wait.add(worker);
+            Worker w = new Worker(ctxs.get(i), null);
+            w.action = action;
+            POOL.pushTask(w);
+            wait.add(w);
         }
 
-        try {
-            for(Worker t2 : wait) {
-                t2.get();
+        for (int i = 0; i < wait.size(); i++) {
+            try {
+                wait.get(i).get();
+            } catch (InterruptedException ignored) {
+            } catch (ExecutionException e) {
+                Helpers.athrow(e.getCause());
             }
-        } catch (InterruptedException ignored) {
-        } catch (ExecutionException e) {
-            throw (RuntimeException) e.getCause();
         }
     }
 

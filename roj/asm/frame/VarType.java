@@ -30,11 +30,8 @@ import roj.asm.type.Type;
 import roj.concurrent.OperationDone;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since 2021/6/18 9:51java
+ * @since 2021/6/18 9:51
  */
 public final class VarType {
     public static final byte TOP = 0,
@@ -84,5 +81,9 @@ public final class VarType {
             throw new IllegalArgumentException("Unsupported verification type " + b);
         }
         return (b & 0xFF);
+    }
+
+    public static boolean isPrimitive(byte type) {
+        return type <= 4;
     }
 }

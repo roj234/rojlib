@@ -57,10 +57,7 @@ import static ilib.item.ItemBase.color;
 import static ilib.item.ItemBase.tips;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class ItemBlockMI extends ItemBlock {

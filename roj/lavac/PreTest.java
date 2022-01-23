@@ -36,7 +36,6 @@ import java.io.IOException;
  * Lavac Preworking TEST!
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/11/6 23:09
  */
 public class PreTest {

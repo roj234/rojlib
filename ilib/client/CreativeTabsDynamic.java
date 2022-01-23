@@ -51,10 +51,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/13 12:42
  */
 public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHandler*/ {

@@ -45,7 +45,6 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/6 14:15
  */
 public final class NIOUtil {

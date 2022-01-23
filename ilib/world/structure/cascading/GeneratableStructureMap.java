@@ -28,6 +28,7 @@ package ilib.world.structure.cascading;
 import ilib.math.Section;
 import ilib.world.structure.cascading.api.IStructure;
 import ilib.world.structure.cascading.api.StructureGroup;
+
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -35,10 +36,7 @@ import javax.annotation.Nonnull;
 import java.util.Collection;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/19 22:11
  */
 public class GeneratableStructureMap extends StructureMap implements IStructure {

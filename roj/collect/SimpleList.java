@@ -36,10 +36,7 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/24 23:26索引不变)
  */
 public class SimpleList<E> implements List<E>, RandomAccess {

@@ -27,8 +27,9 @@ package ilib.api.registry;
 
 import ilib.ImpLib;
 import ilib.util.ForgeUtil;
-import net.minecraftforge.fml.common.LoaderState;
 import roj.util.Helpers;
+
+import net.minecraftforge.fml.common.LoaderState;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,10 +38,7 @@ import java.util.List;
 import java.util.function.IntFunction;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/21 0:12
  */
 public class RegistrySimple<T extends Indexable> implements IRegistry<T> {

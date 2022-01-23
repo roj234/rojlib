@@ -37,7 +37,6 @@ import java.util.function.Predicate;
  * 小工具
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/17 1:43
  */
 public class Helpers {
@@ -107,6 +106,7 @@ public class Helpers {
     }
 
     public static final Predicate<?> alwaystrue = (a) -> true;
+    public static final Predicate<?> alwaysfalse = (a) -> false;
     public static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
     public static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
     public static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();
@@ -114,6 +114,9 @@ public class Helpers {
 
     public static <T> Predicate<T> alwaysTrue() {
         return cast(alwaystrue);
+    }
+    public static <T> Predicate<T> alwaysFalse() {
+        return cast(alwaysfalse);
     }
     public static <T,R> Function<T, List<R>> fnArrayList() {
         return cast(arraylistfn);

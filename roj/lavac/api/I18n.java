@@ -40,7 +40,6 @@ import java.util.Map;
  * Localization Util
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/17 23:43
  */
 public class I18n {

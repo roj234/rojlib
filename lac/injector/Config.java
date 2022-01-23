@@ -35,7 +35,6 @@ import java.io.File;
  * Config
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/18 1:22
  */
 public final class Config extends JSONConfiguration {

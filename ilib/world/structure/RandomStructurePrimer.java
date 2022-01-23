@@ -32,10 +32,7 @@ import net.minecraft.world.chunk.ChunkPrimer;
 import net.minecraft.world.gen.IChunkGenerator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/9 16:13
  */
 public class RandomStructurePrimer implements IPrimeGenerator {

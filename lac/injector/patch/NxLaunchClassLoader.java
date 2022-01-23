@@ -51,7 +51,6 @@ import java.util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 19:00
  */
 @Nixim(value = "net.minecraft.launchwrapper.LaunchClassLoader", copyItf = true)

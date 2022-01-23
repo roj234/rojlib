@@ -35,7 +35,6 @@ import java.util.Iterator;
  * Mapper List
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/11 14:59
  */
 public final class MapperList extends SimpleList<String> {

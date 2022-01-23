@@ -32,10 +32,7 @@ import roj.kscript.type.KType;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/14 22:46
  */
 public abstract class MethodsAPI {

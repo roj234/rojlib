@@ -44,10 +44,7 @@ import java.util.List;
 import static roj.asm.Opcodes.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public class ClassDecompiler {

@@ -45,10 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/3 16:50
  */
 public final class MultiFileDownloader {
@@ -170,7 +167,7 @@ public final class MultiFileDownloader {
                 s = s.trim();
                 if (!s.isEmpty() && !s.startsWith("#")) {
                     if (!s.startsWith("http")) {
-                        throw new IllegalArgumentException(name + "第" + slr.index() + "行不是有效的链接!");
+                        throw new IllegalArgumentException(name + "第" + slr.lineNumber() + "行不是有效的链接!");
                     }
                     urls.add(s);
                 }

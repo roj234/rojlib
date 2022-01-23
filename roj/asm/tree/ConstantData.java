@@ -48,7 +48,6 @@ import static roj.asm.util.AccessFlag.*;
  * Class LOD 2
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 19:59
  */
 public final class ConstantData implements IClass {

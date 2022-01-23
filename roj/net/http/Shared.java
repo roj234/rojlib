@@ -30,7 +30,6 @@ import roj.text.CharList;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/11/28 21:13
  */
 public final class Shared extends ThreadLocal<Object[]> {

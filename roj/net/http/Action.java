@@ -29,7 +29,6 @@ import roj.collect.ToIntMap;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/11/28 20:17
  */
 public final class Action {

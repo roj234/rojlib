@@ -28,10 +28,7 @@ package ilib.asm.fasterforge;
 import roj.mapper.ConstMapper;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/5 22:42
  */
 public interface IFDAccessPort {

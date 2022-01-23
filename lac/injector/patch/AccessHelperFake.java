@@ -36,7 +36,6 @@ import java.util.Vector;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/18 3:15
  */
 abstract class AccessHelperFake extends ClassLoader implements AccessHelper {

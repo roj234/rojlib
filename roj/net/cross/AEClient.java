@@ -58,7 +58,7 @@ import static roj.net.cross.Util.*;
  * @since 2021/8/18 0:09
  */
 public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDispatcher {
-    public static final int MAX_CHANNEL_COUNT = 16;
+    public static final int MAX_CHANNEL_COUNT = 6;
 
     public char[] portMap;
     public int clientId;
@@ -160,7 +160,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
             rb.clear();
 
             Object state = null;
-            int heart = 0;
+            int heart = 1;
             int except = 1;
             conn:
             while (!shutdown) {
@@ -195,7 +195,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                             state = CheckServerAlive;
                         } else {
                             if (socketsById.size() > MAX_CHANNEL_COUNT) {
-                                msgbox = "频道过多";
+                                msgbox = "频道过多(" + MAX_CHANNEL_COUNT + ")";
                                 lock.poll();
                                 break checkInterrupt;
                             }
@@ -260,7 +260,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                         rb.clear();
                     }
 
-                    if (heartbeat(ch, --heart, false)) continue;
+                    if (heartbeat(ch, --heart)) continue;
                     break;
                 }
 

@@ -54,10 +54,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 22:1
  */
 public final class FileUtil {
@@ -179,14 +176,16 @@ public final class FileUtil {
         return !file.exists() || file.delete();
     }
 
-    public static byte[] downloadFileToMemory(String url) throws IOException {
+    public static ByteList downloadFileToMemory(String url) throws IOException {
         HttpConnection con = process302(new URL(url), false);
         try (InputStream in = con.getInputStream()) {
             int length = con.getContentLength();
             ByteList buf = IOUtil.getSharedByteBuf();
             buf.clear();
             buf.ensureCapacity(length);
-            return buf.readStreamFully(in).toByteArray();
+            return buf.readStreamFully(in);
+        } finally {
+            con.disconnect();
         }
     }
 

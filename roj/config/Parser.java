@@ -32,7 +32,6 @@ import roj.config.serial.Serializers;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2022/1/6 13:46
  */
 public abstract class Parser {

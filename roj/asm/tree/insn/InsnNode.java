@@ -37,10 +37,7 @@ import roj.util.Helpers;
  * QUESTION: native.hashCode好慢？
  */
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/27 1:12
  */
 public abstract class InsnNode implements Helpers.Node {

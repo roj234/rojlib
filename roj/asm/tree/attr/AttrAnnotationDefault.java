@@ -32,10 +32,7 @@ import roj.util.ByteList;
 import roj.util.ByteReader;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/1 23:12
  */
 public final class AttrAnnotationDefault extends Attribute {

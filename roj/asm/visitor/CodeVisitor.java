@@ -39,7 +39,6 @@ import static roj.asm.Opcodes.*;
  * 默认实现都是As-is的，你需要自己修改
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/16 19:07
  */
 public class CodeVisitor extends Holder {

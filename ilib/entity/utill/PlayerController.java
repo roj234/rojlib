@@ -26,10 +26,7 @@
 package ilib.entity.utill;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/23 12:26
  */
 public class PlayerController {

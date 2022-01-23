@@ -37,7 +37,6 @@ import java.util.Set;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/2/14 18:26
  */
 public class WebSocketUtil {

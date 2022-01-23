@@ -37,10 +37,7 @@ import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/16 1:8
  */
 public class KObject extends KBase implements IObject {

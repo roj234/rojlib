@@ -33,7 +33,6 @@ import roj.kscript.func.KFunction;
  * Tail Call Optimization
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/17 0:59
  */
 public final class TCOException extends RuntimeException {

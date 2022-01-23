@@ -29,10 +29,7 @@ import roj.kscript.type.KInt;
 import roj.kscript.type.KType;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/17 17:41
  */
 public final class VM_Int extends KInt {

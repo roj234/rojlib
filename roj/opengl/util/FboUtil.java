@@ -11,7 +11,6 @@ import org.lwjgl.opengl.*;
  * Frame buffer util
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/9/17 23:15
  */
 public class FboUtil {

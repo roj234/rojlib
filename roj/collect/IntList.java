@@ -34,10 +34,7 @@ import java.util.ListIterator;
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/27 13:37索引不变)
  */
 public class IntList implements Iterable<Integer> {

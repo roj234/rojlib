@@ -31,10 +31,7 @@ import roj.config.word.WordPresets;
 import roj.text.TextUtil;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 12:31
  */
 public final class Keyword {

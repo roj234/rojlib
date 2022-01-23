@@ -30,10 +30,7 @@ import roj.asm.type.Type;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public interface MethodNode extends MoFNode {

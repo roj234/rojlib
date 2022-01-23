@@ -29,7 +29,6 @@ import roj.util.ByteList;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/9/25 13:25
  */
 public class NetworkHelper {

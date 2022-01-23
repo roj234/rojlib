@@ -43,7 +43,6 @@ import java.util.List;
  * Dump class bytes
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/16 0:36
  */
 public final class EWDump {

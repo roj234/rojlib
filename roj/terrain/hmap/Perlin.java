@@ -32,7 +32,6 @@ import java.util.Random;
  * <a href="http://devmag.org.za/2009/04/25/perlin-noise/">How to Use Perlin Noise in Your, GamesHerman Tulleken</a>.
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/12 13:22
  */
 public class Perlin extends Noised {

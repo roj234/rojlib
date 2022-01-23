@@ -34,7 +34,6 @@ import roj.util.ByteList;
  * bipush / newarray / etc
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/24 23:21
  */
 public final class U1InsnNode extends InsnNode implements IIndexInsnNode {

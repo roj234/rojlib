@@ -31,10 +31,7 @@ import roj.asm.util.NodeHelper;
 import roj.util.ByteList;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/2 15:21
  */
 public final class NPInsnNode extends InsnNode {

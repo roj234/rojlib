@@ -34,7 +34,6 @@ import java.lang.annotation.Target;
  * 预编译
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/2 21:52
  */
 @Retention(RetentionPolicy.SOURCE)

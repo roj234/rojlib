@@ -34,7 +34,6 @@ import java.security.cert.CertificateException;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 12:53
  */
 public final class PreSharedPubKey implements MSSPubKey<PublicKey> {

@@ -41,7 +41,6 @@ import net.minecraft.server.MinecraftServer;
  * Login Commands
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/23 14:15
  */
 public class LoginCmd extends AbstractSubCommand {

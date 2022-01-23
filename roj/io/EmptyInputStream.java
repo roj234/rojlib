@@ -29,7 +29,6 @@ import java.io.InputStream;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2021/10/23 23:16
  */
 public final class EmptyInputStream extends InputStream {

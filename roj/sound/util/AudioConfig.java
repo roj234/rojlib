@@ -26,10 +26,7 @@
 package roj.sound.util;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/2 20:38
  */
 public interface AudioConfig {

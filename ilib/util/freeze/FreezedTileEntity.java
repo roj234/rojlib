@@ -32,7 +32,6 @@ import net.minecraft.tileentity.TileEntity;
  * 冻结的方块实体
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/26 19:36
  */
 public final class FreezedTileEntity extends TileEntity {

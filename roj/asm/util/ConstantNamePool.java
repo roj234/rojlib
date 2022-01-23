@@ -35,10 +35,7 @@ import roj.util.ByteReader;
 import java.io.UTFDataFormatException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public final class ConstantNamePool {

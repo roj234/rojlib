@@ -33,7 +33,6 @@ import java.util.ArrayList;
  * Vertex Format
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/18 13:23
  */
 public final class VertexFormat {

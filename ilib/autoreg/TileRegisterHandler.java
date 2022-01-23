@@ -31,14 +31,15 @@ import ilib.asm.Loader;
 import ilib.client.register.ItemModelInfo;
 import ilib.item.ItemSelectTool;
 import ilib.util.ForgeUtil;
+
 import net.minecraft.item.Item;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.tileentity.TileEntity;
+
 import net.minecraftforge.fml.common.discovery.ASMDataTable.ASMData;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public class TileRegisterHandler {

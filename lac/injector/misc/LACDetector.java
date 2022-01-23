@@ -43,7 +43,6 @@ import java.util.List;
  * Classes load detector
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/16 12:50
  */
 @Mod(modid = "lac_helper", name = "LaoAntiCheat Helper", version = "1.0.0")

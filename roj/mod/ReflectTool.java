@@ -46,7 +46,6 @@ import java.util.*;
  * Make reading srg mapping easier
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public class ReflectTool extends JFrame implements KeyListener, WindowListener {

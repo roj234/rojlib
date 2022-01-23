@@ -48,10 +48,7 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/18 13:41
  */
 @TileRegister("ilib:loot_chest")

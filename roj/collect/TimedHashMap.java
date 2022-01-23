@@ -31,10 +31,7 @@ import java.util.ListIterator;
 import java.util.function.Predicate;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/4 14:32
  */
 public class TimedHashMap<K, V> extends MyHashMap<K, V> {

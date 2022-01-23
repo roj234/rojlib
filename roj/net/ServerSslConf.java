@@ -31,7 +31,6 @@ import java.io.InputStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/2/6 22:11
  */
 public class ServerSslConf implements SslConfig {

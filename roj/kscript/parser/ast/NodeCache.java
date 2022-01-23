@@ -31,10 +31,7 @@ import roj.asm.tree.insn.InvokeInsnNode;
 import roj.collect.CharMap;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/27 13:31
  */
 public class NodeCache {

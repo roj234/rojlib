@@ -35,7 +35,6 @@ import java.util.zip.DeflaterOutputStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 23:34
  */
 public final class ReusableGZOutput extends DeflaterOutputStream {

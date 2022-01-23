@@ -32,10 +32,7 @@ import roj.collect.SimpleList;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/25 16:50
  */
 public final class AttributeList extends SimpleList<Attribute> {

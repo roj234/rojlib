@@ -48,7 +48,6 @@ import java.util.zip.DeflaterOutputStream;
  * Packer 125
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/17 0:07
  */
 public class Pack125 {

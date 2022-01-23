@@ -39,7 +39,6 @@ import java.util.zip.ZipException;
  * xyz.exe which can be opened with a zip tool, however, read only
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/6 19:31
  */
 public class ExecutableHelperZ {

@@ -33,10 +33,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/2 14:00
  */
 public class ByteListOutput extends SimpleJavaFileObject {

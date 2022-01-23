@@ -36,10 +36,7 @@ import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 1:21
  * 基于Hash-like机制实现的较高速Map
  */

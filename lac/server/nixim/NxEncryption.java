@@ -42,7 +42,6 @@ import java.security.PublicKey;
  * S2C encrypt packet
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 20:31
  */
 @Nixim("net.minecraft.network.login.server.SPacketEncryptionRequest")

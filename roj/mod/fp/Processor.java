@@ -39,7 +39,6 @@ import java.util.function.IntSupplier;
  * Abstraction of FMD File Processor
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/30 11:32
  */
 public abstract class Processor implements Runnable, IntSupplier, BiConsumer<Integer, File> {

@@ -68,10 +68,7 @@ import java.util.*;
 import java.util.PrimitiveIterator.OfInt;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/23 0:55
  */
 public class MCHooks {

@@ -36,7 +36,6 @@ import java.util.function.Function;
  *     不管怎么样，比 "platform-dependent" 要好, 不是么
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/25 16:20
  */
 public final class Placeholder {

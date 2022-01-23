@@ -35,7 +35,6 @@ import java.util.Map;
  * Use NetworkManager as CacheBridge
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 21:16
  */
 @Nixim(value = "net.minecraft.network.NetworkManager", copyItf = true)

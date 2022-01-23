@@ -1,5 +1,5 @@
 /*
- * This file is a part of MI
+ * This file is a part of MoreItems
  *
  * The MIT License (MIT)
  *
@@ -23,15 +23,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.concurrent;
+package roj.mapper.util;
+
+import roj.asm.util.FlagList;
+import roj.collect.CharMap;
+
+import java.util.Map;
 
 /**
- * No description provided
+ * Access flag handler
  *
- * @author Roj234
- * @version 0.1
- * @since  2021/1/1 18:37
+ * @author solo6975
+ * @since 2021/10/1 19:30
  */
-public final class SharedThreads {
-    public static final TaskPool CPU_POOL = new TaskPool(2, Runtime.getRuntime().availableProcessors(), 32, 30000, "worker");
+public interface AccessFallback {
+    boolean setFlag(Desc desc, CharMap<FlagList> interner);
+
+    void handleUnmatched(Map<String, Map<String, Desc>> rest, CharMap<FlagList> interner);
 }

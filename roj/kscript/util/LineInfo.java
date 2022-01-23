@@ -28,10 +28,7 @@ package roj.kscript.util;
 import roj.kscript.asm.Node;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/17 22:03
  */
 public final class LineInfo {

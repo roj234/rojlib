@@ -42,10 +42,8 @@ import roj.concurrent.collect.ConcurrentFindHashSet;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
-import roj.mapper.util.AccessFallbackHandler;
-import roj.mapper.util.Desc;
-import roj.mapper.util.MapperList;
-import roj.mapper.util.SubImpl;
+import roj.mapper.misc.WarningHandler;
+import roj.mapper.util.*;
 import roj.text.DottedStringPool;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
@@ -56,6 +54,9 @@ import java.io.*;
 import java.nio.file.NotDirectoryException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
@@ -239,7 +240,7 @@ public class ConstMapper extends Mapping {
 
         return true;
     }
-    static final IntFunction<FlagList> fl = FlagList::new;
+    public static final IntFunction<FlagList> fl = FlagList::new;
 
     // endregion
     // region 映射
@@ -277,31 +278,35 @@ public class ConstMapper extends Mapping {
             selfSupers = new ConcurrentHashMap<>(arr.size());
             selfMethods = new ConcurrentFindHashMap<>();
 
-            List<List<Context>> splatted = new ArrayList<>();
-            List<Context> tmp = new ArrayList<>();
-
-            int splitThreshold = (arr.size() / Util.CPU) + 1;
+            int threshold = (arr.size() / Util.CPU) + 1;
+            List<List<Context>> splatted = new ArrayList<>(Util.CPU + 1);
 
             int i = 0;
             while (i < arr.size()) {
-                tmp.add(arr.get(i++));
-                if ((i % splitThreshold) == 0) {
-                    splatted.add(tmp);
-                    tmp = new ArrayList<>(splitThreshold);
+                int delta = Math.min(arr.size() - i, threshold);
+                splatted.add(arr.subList(i, i + delta));
+                i += delta;
+            }
+
+            List<Worker> clone = Helpers.cast(splatted);
+            CMSync action = new CMSync(arr);
+            CyclicBarrier barrier = new CyclicBarrier(splatted.size(), action);
+            for (int j = 0; j < splatted.size(); j++) {
+                Worker w = new Worker(splatted.get(i), barrier);
+                clone.set(j, Helpers.cast(w));
+                w.action = action;
+                Util.POOL.pushTask(w);
+            }
+
+            for (int j = 0; j < clone.size(); j++) {
+                Worker w = clone.get(j);
+                try {
+                    w.get();
+                } catch (InterruptedException ignored) {
+                } catch (ExecutionException e) {
+                    Helpers.athrow(e);
                 }
             }
-            if(!tmp.isEmpty())
-                splatted.add(tmp);
-
-            Util.concurrent("RV2WorkerP", this::S1_parse, splatted);
-
-            initSelfSuperMap();
-            if((flag & FLAG_CHECK_SUB_IMPL) != 0)
-                S15_ignoreSubImpl(arr);
-
-            Util.concurrent("RV2WorkerR", this::S2_mapSelf, splatted);
-
-            Util.concurrent("RV2WorkerW", this::S3_mapConstant, splatted);
         }
     }
 
@@ -665,7 +670,7 @@ public class ConstMapper extends Mapping {
         loadLibraries(files, null);
     }
 
-    public void loadLibraries(List<?> files, AccessFallbackHandler fallback) {
+    public void loadLibraries(List<?> files, AccessFallback fallback) {
         libSupers.clear();
         libSkipped.clear();
 
@@ -975,54 +980,14 @@ public class ConstMapper extends Mapping {
         private final MyHashMap<String, List<String>> map = new MyHashMap<>();
     }
 
-    private static final class WarningHandler implements AccessFallbackHandler {
-        public WarningHandler() {}
-
-        @Override
-        public boolean fillAccessFlags(Desc desc, CharMap<FlagList> interner) {
-            return false;
-        }
-
-        @Override
-        public void handleUnmatched(Map<String, Map<String, Desc>> rest, CharMap<FlagList> interner) {
-            if(!rest.isEmpty()) {
-                System.out.println("[CM-Warn] 缺少元素: ");
-                for (Map.Entry<String, Map<String, Desc>> entry : rest.entrySet()) {
-                    System.out.print(entry.getKey());
-                    System.out.print(": ");
-                    Iterator<Desc> itr = entry.getValue().values().iterator();
-                    while (true) {
-                        Desc desc = itr.next();
-                        System.out.print(desc.name);
-                        if(!desc.param.isEmpty()) {
-                            System.out.print(' ');
-                            System.out.print(desc.param);
-                        }
-                        if(!itr.hasNext()) {
-                            System.out.println();
-                            break;
-                        }
-                        System.out.print("  ");
-                    }
-                }
-                FlagList PUBLIC = interner.computeIfAbsent(AccessFlag.PUBLIC, fl);
-                for (Map<String, Desc> map : rest.values()) {
-                    for (Desc desc : map.values()) { // 将没有flag的全部填充为public
-                        desc.flags = PUBLIC;
-                    }
-                }
-            }
-        }
-    }
-
     private final class FileReader implements ZipUtil.ICallback {
         private final MyHashSet<IClass>              classes;
         private final Map<String, Map<String, Desc>> flags;
-        private final AccessFallbackHandler          fallback;
+        private final AccessFallback                 fallback;
         final         MyHashSet<String>              emptyClasses = new MyHashSet<>();
         final CharMap<FlagList> flagCache = new CharMap<>();
 
-        public FileReader(MyHashSet<IClass> classes, Map<String, Map<String, Desc>> flags, AccessFallbackHandler fallback) {
+        public FileReader(MyHashSet<IClass> classes, Map<String, Map<String, Desc>> flags, AccessFallback fallback) {
             this.classes = classes;
             this.flags = flags;
             this.fallback = fallback;
@@ -1030,13 +995,14 @@ public class ConstMapper extends Mapping {
 
         @Override
         public void onRead(String fileName, InputStream s) throws IOException {
-            byte[] bytes = IOUtil.read(s);
-            if (bytes.length < 32)
-                return;
+            if (s.available() < 32) return;
+            ByteList buf = IOUtil.getSharedByteBuf();
+            buf.clear();
+            buf.readStreamFully(s);
 
             AccessData data;
             try {
-                data = Parser.parseAccessDirect(bytes);
+                data = Parser.parseAcc0(null, buf);
             } catch (Throwable e) {
                 CmdUtil.warning(fileName + " 无法读取", e);
                 return;
@@ -1082,7 +1048,7 @@ public class ConstMapper extends Mapping {
                 // noinspection all
                 for (Iterator<Map.Entry<String, Desc>> itr = mds.entrySet().iterator(); itr.hasNext(); ) {
                     Map.Entry<String, Desc> entry = itr.next();
-                    if (fallback.fillAccessFlags(entry.getValue(), flagCache)) {
+                    if (fallback.setFlag(entry.getValue(), flagCache)) {
                         itr.remove();
                     }
                 }
@@ -1113,4 +1079,37 @@ public class ConstMapper extends Mapping {
     }
 
     // endregion
+
+    private class CMSync implements Runnable, Consumer<Context> {
+        List<Context> arr;
+        int i = 0;
+
+        public CMSync(List<Context> arr) {
+            this.arr = arr;
+        }
+
+        @Override
+        public void run() {
+            if (i++ == 0) {
+                initSelfSuperMap();
+                if ((flag & FLAG_CHECK_SUB_IMPL) != 0)
+                    S15_ignoreSubImpl(arr);
+            }
+        }
+
+        @Override
+        public void accept(Context c) {
+            switch (i) {
+                case 0:
+                    ConstMapper.this.S1_parse(c);
+                    break;
+                case 1:
+                    ConstMapper.this.S2_mapSelf(c);
+                    break;
+                case 2:
+                    ConstMapper.this.S3_mapConstant(c);
+                    break;
+            }
+        }
+    }
 }

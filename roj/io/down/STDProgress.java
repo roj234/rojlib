@@ -30,10 +30,7 @@ import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/13 12:33
  */
 public class STDProgress implements IProgressHandler {

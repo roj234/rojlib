@@ -40,10 +40,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import java.util.function.IntFunction;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/27 23:25
  */
 public class RegistryStored<T extends Indexable> extends Registry<T> {

@@ -29,7 +29,6 @@ package roj.asm.nixim;
  * Indices that your Nixim config is wrong or target class not suitable for your Nixim
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 20:54
  */
 public final class NiximException extends Exception {

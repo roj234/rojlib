@@ -36,7 +36,6 @@ import java.util.NoSuchElementException;
  * A simple ring buffer
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/13 23:25
  */
 public final class RingBuffer<T> implements Iterable<T> {

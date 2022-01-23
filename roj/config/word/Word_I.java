@@ -26,10 +26,7 @@
 package roj.config.word;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/3 22:35
  */
 public class Word_I extends NumberWord {

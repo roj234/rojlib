@@ -29,11 +29,8 @@ import roj.asm.tree.insn.InsnNode;
 import roj.asm.type.ParamHelper;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since 2021/6/2 23:28java
+ * @since 2021/6/2 23:28
  */
 public final class Var {
     public byte type;
@@ -90,7 +87,7 @@ public final class Var {
         if(v == null)
             return false;
         if (v.type != this.type) {
-            return v.type == VarType.NULL || this.type == VarType.NULL;
+            return !VarType.isPrimitive(v.type) & !VarType.isPrimitive(type);
         } else {
             if (this.owner != null) {
                 return this.owner.equals(v.owner);

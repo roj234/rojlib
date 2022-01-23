@@ -52,10 +52,7 @@ import java.util.ArrayList;
 import static org.lwjgl.opengl.GL11.*;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/17 23:15
  */
 public abstract class Game {

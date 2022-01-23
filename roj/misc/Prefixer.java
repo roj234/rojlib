@@ -39,7 +39,6 @@ import java.io.IOException;
  * Auto append License and Prefix before class and fix older prefixes
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/16 2:39
  */
 public class Prefixer {

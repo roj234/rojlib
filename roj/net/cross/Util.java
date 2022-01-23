@@ -28,6 +28,7 @@ package roj.net.cross;
 import roj.io.NIOUtil;
 import roj.net.WrappedSocket;
 import roj.net.misc.Shutdownable;
+import roj.util.SleepingBeauty;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -37,19 +38,18 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/12 5:25
  */
 public class Util {
     public static final boolean DEBUG = System.getProperty("AE.debug") != null;
+    public static final boolean CHATSPY = System.getProperty("AE.chatSpy") != null;
 
     static {
         try {
             roj.misc.CpFilter.registerShutdownHook();
         } catch (Error ignored) {}
+        SleepingBeauty.sleep();
     }
 
     public static final int TIMEOUT = 3000;
@@ -77,7 +77,7 @@ public class Util {
      * }
      */
     public static final int MAGIC = 0xAEAEAEAE;
-    public static final int PROTOCOL_VERSION = 40;
+    public static final int PROTOCOL_VERSION = 41;
 
     public static final int PCN_CONTROL   = 0;
     public static final int PCN_DATA      = 1;
@@ -295,6 +295,11 @@ public class Util {
      * }
      */
     public static final int P_UPNP_PONG = 15;
+    /**
+     * 同P_MSG只是
+     * msgLen长度为2bytes
+     */
+    public static final int P_MSG_LONG = 13;
 
     // endregion
 
@@ -309,8 +314,8 @@ public class Util {
     public static final int PS_ERROR_SYSTEM_LIMIT = 0x27;
     public static final int PS_ERROR_TIMEOUT = 0x28;
 
-    public static final int T_HEART_TIMEOUT = 3000;
-    public static final int T_HEART = 1000;
+    public static final int T_HEART_TIMEOUT = 10000;
+    public static final int T_HEART = 1500;
     public static final int T_HEART_RETRY = 200;
 
     public static PrintStream out;

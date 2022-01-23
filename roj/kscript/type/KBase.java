@@ -28,10 +28,7 @@ package roj.kscript.type;
 import roj.config.word.AbstLexer;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 1:28
  */
 public abstract class KBase implements KType {

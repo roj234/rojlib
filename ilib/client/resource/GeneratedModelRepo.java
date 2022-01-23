@@ -28,11 +28,12 @@ package ilib.client.resource;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.client.TextureHelper;
-import net.minecraft.client.resources.AbstractResourcePack;
-import net.minecraft.client.resources.ResourcePackFileNotFoundException;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
+
+import net.minecraft.client.resources.AbstractResourcePack;
+import net.minecraft.client.resources.ResourcePackFileNotFoundException;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -42,10 +43,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class GeneratedModelRepo extends AbstractResourcePack {

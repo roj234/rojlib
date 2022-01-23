@@ -38,7 +38,6 @@ import java.util.Random;
 /**
  * MSS协议处理器：My Secure Socket
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 12:21
  */
 public abstract class MSSEngine implements Pipeline {

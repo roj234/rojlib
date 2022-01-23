@@ -33,10 +33,7 @@ import javax.annotation.Nonnull;
 import java.util.Iterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/2 23:28
  */
 public final class VarList implements Iterable<Var> {

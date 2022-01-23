@@ -25,17 +25,53 @@
  */
 package roj.collect;
 
+import roj.text.CharList;
+import roj.text.SimpleLineReader;
+
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * 后缀树，TT是前缀树
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/13 14:02
  */
 public final class SuffixTree<V> extends TrieTree<V> {
+    public static void main(String[] args) throws IOException {
+        SuffixTree<Boolean> suffixTree = new SuffixTree<>();
+        CharList tmp = new CharList();
+        try (SimpleLineReader scan = new SimpleLineReader(new FileInputStream(args[0]))) {
+            for (String ln : scan) {
+                if(ln.isEmpty() || ln.startsWith("!"))
+                    continue;
+
+                tmp.clear();
+                tmp.append(ln)
+                   .replace("@@", "")
+                   .replace("|", "")
+                   .replace("^", "");
+                suffixTree.put(tmp, true);
+            }
+        }
+        if (!suffixTree.isEmpty()) {
+            Predicate<String> predicate = s -> {
+                for (int i = 0; i < s.length(); i++) {
+                    if (suffixTree.containsKey(s, i, s.length())) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            System.out.println(predicate.test("www.ok.com"));
+            System.out.println(predicate.test("r.sascdn.com"));
+            System.out.println(predicate.test("asdsar.sascdn.com"));
+        }
+    }
+
     public SuffixTree() {}
 
     public SuffixTree(Map<CharSequence, V> map) {
@@ -93,32 +129,32 @@ public final class SuffixTree<V> extends TrieTree<V> {
 
         @Override
         public int length() {
-            return e;
+            return e - s;
         }
 
         // abcdef
         //   |  |   2 -> 5
         // fedcba
-        //   |  |   2 -> 5 (should be 0 -> 3)
+        // |  |     0 -> 3 == 5 -> 2
         @Override
         public char charAt(int index) {
-            return origin.charAt(e - index - s);
+            return origin.charAt((e - s - 1) - index);
         }
 
-        // abcdef
-        //   |  |   2 -> 5
         // fedcba
-        // |  |   0 -> 3 (should be 2 -> 5)
+        //  | |   1 -> 3 == 4 -> 2
         @Override
         public CharSequence subSequence(int start, int end) {
-            return new ReverseOf(origin, start + s, end + s);
+            CharSequence v = origin.subSequence((e - s - 1) - end, (e - s - 1) - start);
+            return new ReverseOf(v, 0, v.length());
         }
 
         @Override
         public String toString() {
             char[] reverse = new char[e - s];
+            int j = s + reverse.length;
             for (int i = 0; i < reverse.length; i++) {
-                reverse[i] = origin.charAt(reverse.length - i);
+                reverse[i] = origin.charAt(--j);
             }
             return new String(reverse);
         }

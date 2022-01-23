@@ -30,7 +30,6 @@ import roj.util.ByteList;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/10/21 22:45
  */
 public final class AttrUnknown extends Attribute {

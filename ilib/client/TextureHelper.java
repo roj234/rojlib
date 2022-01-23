@@ -47,10 +47,7 @@ import java.util.Queue;
 
 //!!AT [["net.minecraft.client.resources.SimpleReloadableResourceManager", ["field_110548_a"]], ["net.minecraft.client.resources.FallbackResourceManager", ["field_110540_a"]]]
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class TextureHelper implements IResourceManagerReloadListener {

@@ -49,10 +49,7 @@ import net.minecraftforge.event.ForgeEventFactory;
 import javax.annotation.Nullable;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/16 13:23
  */
 @Nixim("net.minecraft.world.World")

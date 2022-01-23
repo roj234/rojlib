@@ -45,10 +45,7 @@ import java.io.IOException;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 16:43
  */
 public class AccessTransformer {

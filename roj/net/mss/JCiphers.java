@@ -38,7 +38,6 @@ import java.security.InvalidKeyException;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 19:18
  */
 public final class JCiphers implements MSSCiphers {

@@ -35,10 +35,7 @@ import java.util.ArrayList;
 import static roj.asm.tree.insn.EndOfInsn.MARKER;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/24 23:21
  */
 public final class InsnList extends ArrayList<InsnNode> {

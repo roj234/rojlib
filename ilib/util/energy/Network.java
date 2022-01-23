@@ -48,10 +48,7 @@ import net.minecraft.world.chunk.Chunk;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/17 0:49
  */
 public class Network implements PositionProvider {

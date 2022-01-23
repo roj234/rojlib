@@ -28,11 +28,12 @@ package ilib.asm.nixim;
 import ilib.Config;
 import ilib.util.PinyinUtil;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
-import net.minecraft.client.util.SearchTree;
-import net.minecraft.util.ResourceLocation;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.concurrent.OperationDone;
+
+import net.minecraft.client.util.SearchTree;
+import net.minecraft.util.ResourceLocation;
 
 import java.util.Collections;
 import java.util.List;
@@ -40,10 +41,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/1 1:17
  */
 public class FastSearchTree<T> extends SearchTree<T> {

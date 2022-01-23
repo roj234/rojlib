@@ -30,7 +30,6 @@ package roj.asm.cst;
  * Cst Module
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public final class CstModule extends CstRefUTF {

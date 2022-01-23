@@ -32,7 +32,6 @@ import java.security.spec.X509EncodedKeySpec;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 12:53
  */
 public final class JPubKey implements MSSPubKey<PublicKey> {

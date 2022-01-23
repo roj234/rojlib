@@ -54,7 +54,6 @@ import java.util.zip.ZipFile;
  * Mapping helper
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/29 22:25
  */
 public class MappingHelper {
@@ -111,7 +110,7 @@ public class MappingHelper {
         SimpleLineReader slr = new SimpleLineReader(csv);
         String[] currentClass = null;
 
-        slr.index(1);
+        slr.skipLines(1);
         CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
         int i = 2;
@@ -141,7 +140,7 @@ public class MappingHelper {
         SimpleLineReader slr = new SimpleLineReader(csv);
         String[] currentClass = null;
 
-        slr.index(1);
+        slr.skipLines(1);
         CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
         int i = 2;
@@ -171,7 +170,7 @@ public class MappingHelper {
         SimpleLineReader slr = new SimpleLineReader(csv);
         String[] currentClass = null;
 
-        slr.index(1);
+        slr.skipLines(1);
         CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
         int i = 2;

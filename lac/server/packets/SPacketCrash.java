@@ -31,7 +31,6 @@ import net.minecraft.network.play.INetHandlerPlayClient;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 19:51
  */
 public class SPacketCrash implements Packet<INetHandlerPlayClient> {

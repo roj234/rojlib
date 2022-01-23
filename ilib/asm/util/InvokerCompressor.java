@@ -41,10 +41,7 @@ import java.util.ListIterator;
 import java.util.function.Supplier;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/14 21:33
  */
 public final class InvokerCompressor implements IEventListener {

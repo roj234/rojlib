@@ -33,10 +33,7 @@ import roj.util.ByteList;
 import static roj.asm.Opcodes.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/2/19 14:33
  */
 public final class IfInsnNode extends GotoInsnNode {

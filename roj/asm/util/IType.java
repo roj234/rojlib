@@ -26,10 +26,7 @@
 package roj.asm.util;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/11 23:46
  */
 public interface IType {

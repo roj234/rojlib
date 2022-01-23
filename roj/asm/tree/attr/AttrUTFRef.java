@@ -33,10 +33,7 @@ import roj.util.ByteList;
 import roj.util.ByteReader;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public final class AttrUTFRef extends Attribute {

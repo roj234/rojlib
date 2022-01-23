@@ -37,7 +37,6 @@ import java.util.List;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 19:18
  */
 public class PacketClassCheck implements Packet<INetHandler> {

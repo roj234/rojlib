@@ -53,8 +53,7 @@ public final class StdDiagnostic implements DiagnosticListener<ClassContext> {
     private static String getNearCode(ClassContext source, long lineNumber) {
         if(lineNumber == -1)
             return "";
-        SimpleLineReader is = new SimpleLineReader(source.getContext(), false);
-        return is.get((int) lineNumber - 1);
+        return SimpleLineReader.readSingleLine(source.getContext(), (int) lineNumber - 1);
     }
 
     static final Function<Diagnostic.Kind, MutableInt> k2i = (kind1) -> new MutableInt(0);

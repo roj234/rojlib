@@ -37,6 +37,11 @@ import ilib.math.Section;
 import ilib.util.DimensionHelper;
 import ilib.util.ItemUtils;
 import ilib.util.PlayerUtil;
+import org.apache.logging.log4j.Level;
+import roj.collect.IntMap;
+import roj.collect.MyHashSet;
+import roj.math.MathUtils;
+
 import net.minecraft.nbt.NBTTagByteArray;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -44,6 +49,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.IChunkProvider;
+
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.ChunkDataEvent;
@@ -51,19 +57,12 @@ import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.apache.logging.log4j.Level;
-import roj.collect.IntMap;
-import roj.collect.MyHashSet;
-import roj.math.MathUtils;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class EnergyTransferProcessor implements Runnable {

@@ -28,10 +28,7 @@ package roj.collect;
 import java.util.Iterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/14 17:16
  */
 public class EntryItr<E extends MapLikeEntry<E>> extends MapItr<E> implements Iterator<E> {

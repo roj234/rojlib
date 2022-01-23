@@ -31,10 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/1 21:39
  */
 public class PushbackInputStream extends FilterInputStream {

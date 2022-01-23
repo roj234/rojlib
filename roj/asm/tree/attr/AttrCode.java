@@ -293,7 +293,8 @@ public class AttrCode extends Attribute {
                     }
                 }
             }
-        } while (false);
+            break;
+        } while (true);
 
         if (j != 3) {
             System.err.println("Recursion " + (3 - j));
@@ -528,7 +529,7 @@ public class AttrCode extends Attribute {
         if(count <= 0 || count > 100000)
             throw new IllegalArgumentException("length err " + count);
 
-        LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count + 5);
+        LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count);
         int i = 0;
         while (count > i) {
             mapping.put(i++ + low, r.readInt());
@@ -564,7 +565,7 @@ public class AttrCode extends Attribute {
         if(count < 0 || count > 100000)
             throw new IllegalArgumentException("length err " + count);
 
-        LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count + 5);
+        LinkedIntMap<Integer> mapping = new LinkedIntMap<>(count);
         while (count > 0) {
             mapping.put(r.readInt(), r.readInt());
             count--;

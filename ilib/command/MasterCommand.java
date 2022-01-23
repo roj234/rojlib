@@ -42,10 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/2 23:54
  */
 public final class MasterCommand extends CommandBase {

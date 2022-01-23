@@ -43,10 +43,7 @@ import net.minecraft.world.World;
 import java.util.Random;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/22 15:50
  */
 @Nixim("net.minecraft.block.BlockSlab")

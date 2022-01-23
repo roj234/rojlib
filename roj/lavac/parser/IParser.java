@@ -26,10 +26,7 @@
 package roj.lavac.parser;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/22 19:17
  */
 public interface IParser {

@@ -30,10 +30,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/25 23:1
  */
 public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {

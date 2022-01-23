@@ -62,7 +62,6 @@ import static roj.mod.Shared.*;
  * FMD Gui frontend
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 22:49
  */
 public class FMDGui extends JFrame {

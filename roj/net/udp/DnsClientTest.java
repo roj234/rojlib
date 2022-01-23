@@ -33,10 +33,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/24 17:28
  */
 public class DnsClientTest {

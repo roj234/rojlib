@@ -45,10 +45,7 @@ import net.minecraftforge.registries.IForgeRegistry.MissingFactory;
 import net.minecraftforge.registries.IForgeRegistryEntry;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/26 20:03
  */
 public class FreezeRegistryInjector {

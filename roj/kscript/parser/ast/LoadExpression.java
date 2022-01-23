@@ -31,10 +31,7 @@ import roj.kscript.type.KType;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/1 14:14
  */
 public interface LoadExpression extends Expression {

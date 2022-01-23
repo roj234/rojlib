@@ -35,10 +35,7 @@ import net.minecraft.util.ResourceLocation;
 import java.awt.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/1/13 12:37
  */
 public class NinePatchRenderer {

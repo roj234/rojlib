@@ -31,7 +31,6 @@ import roj.util.ByteList;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/2/7 20:39
  */
 public final class AnnValLong extends AnnVal {

@@ -35,7 +35,6 @@ import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/30 12:31
  */
 public final class PacketBuffer {
@@ -67,9 +66,8 @@ public final class PacketBuffer {
                 } else {
                     b.put(h.data, 0, h.len);
                     h.len = 0;
+                    LockSupport.unpark(OWN.getAndSet(h, null));
                 }
-                Thread waiting = OWN.getAndSet(h, null);
-                if (null != waiting) LockSupport.unpark(waiting);
                 if (!BAR.compareAndSet(this, -1, bar)) {
                     barrier = 0;
                     throw new IllegalStateException();
@@ -87,7 +85,7 @@ public final class PacketBuffer {
             if (bar > 0 && BAR.compareAndSet(this, bar--, -1)) {
                 Buf h = buffers[bar];
                 byte[] b = Arrays.copyOf(h.data, h.len);
-                if (null != h.owner) LockSupport.unpark(h.owner);
+                LockSupport.unpark(OWN.getAndSet(h, null));
                 if (!BAR.compareAndSet(this, -1, bar)) {
                     barrier = 0;
                     throw new IllegalStateException();
@@ -139,7 +137,7 @@ public final class PacketBuffer {
                 throw new IllegalStateException();
             }
             if (await) {
-                if (OWN.getAndSet(h, Thread.currentThread()) == Thread.currentThread()) {
+                if (h.owner == Thread.currentThread()) {
                     LockSupport.park(this);
                 }
             }

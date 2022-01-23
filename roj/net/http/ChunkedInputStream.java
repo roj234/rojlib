@@ -34,7 +34,6 @@ import java.io.InputStream;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/10/23 21:30
  */
 class ChunkedInputStream extends InputStream {

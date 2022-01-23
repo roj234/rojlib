@@ -26,7 +26,6 @@
 package roj.net.udp;
 
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.concurrent.SimpleSpinLock;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
@@ -50,6 +49,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Simple DNS Server
@@ -60,7 +60,7 @@ import java.util.function.Function;
 public class DnsServer implements Router, Runnable {
     static final ConcurrentHashMap<RecordKey, List<Record>> resolved = new ConcurrentHashMap<>();
 
-    MyHashSet<String> blocked = new MyHashSet<>();
+    public Predicate<String> blocked = Helpers.alwaysFalse();
 
     ConcurrentHashMap<XAddr, ForwardQuery> waiting;
     static int requestTimeout;
@@ -175,17 +175,6 @@ public class DnsServer implements Router, Runnable {
                 record.TTL = Integer.MAX_VALUE;
 
                 resolved.computeIfAbsent(key, Helpers.fnArrayList()).add(record);
-            }
-        }
-    }
-
-    public void loadBlocked(InputStream in) throws IOException {
-        try (SimpleLineReader scan = new SimpleLineReader(in)) {
-            for (String ln : scan) {
-                if(ln.isEmpty() || ln.startsWith("!"))
-                    continue;
-
-                blocked.add(ln);
             }
         }
     }
@@ -894,7 +883,7 @@ public class DnsServer implements Router, Runnable {
     private boolean processQuery(ByteList w, DnsQuery query, boolean isResolved) {
         RecordKey key = new RecordKey();
         Function<String, List<Record>> fn = s -> {
-            if(blocked.contains(s))
+            if(blocked.test(s))
                 return Collections.emptyList();
             key.url = s;
             return resolved.getOrDefault(key, Collections.emptyList());
@@ -902,7 +891,7 @@ public class DnsServer implements Router, Runnable {
 
         int sum = 0, sumA = 0, sumEx = 0;
         for (DnsRecord dReq : query.records) {
-            if(blocked.contains(dReq.url)) {
+            if(blocked.test(dReq.url)) {
                 System.out.println("[Dbg]Blocked " + dReq.url);
                 continue;
             }
@@ -1263,7 +1252,7 @@ public class DnsServer implements Router, Runnable {
                   .append("<form action='/set' method='post' >Url: <input type='text' name='url' /><br/>" +
                           "Type: <input type='number' name='type' /><br/>" +
                           "Content: <input type='text' name='cnt' /><input type='submit' value='提交' /></form>")
-                  .append("<pre>Type: -2 屏蔽\n, -1 删除, \nA(IPV4): " + Q_A + ", \nAAAA(IPV6): " + Q_AAAA + " \nCNAME: " + Q_CNAME + ", \n其他看rfc" + "</pre>")
+                  .append("<pre>Type: 1 删除, \nA(IPV4): " + Q_A + ", \nAAAA(IPV6): " + Q_AAAA + " \nCNAME: " + Q_CNAME + ", \n其他看rfc" + "</pre>")
                   .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by Async/v2.0</h2>Memory: ")
                   .append(TextUtil.scaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
@@ -1297,11 +1286,8 @@ public class DnsServer implements Router, Runnable {
                     key.url = url;
                     key.qClass = C_IN;
 
-                    if (type.startsWith("-")) {
-                        if(type.equals("-1"))
-                            msg = (resolved.remove(key) == null) ? "不存在" : "已清除";
-                        else
-                            msg = blocked.add(url) ? "屏蔽完成" : "已存在";
+                    if(type.equals("-1")) {
+                        msg = (resolved.remove(key) == null) ? "不存在" : "已清除";
                     } else {
                         Record e = new Record();
                         e.TTL = Integer.MAX_VALUE;

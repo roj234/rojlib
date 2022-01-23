@@ -25,14 +25,14 @@
  */
 package ilib.asm;
 
-import net.minecraft.launchwrapper.IClassTransformer;
 import roj.collect.SimpleList;
+
+import net.minecraft.launchwrapper.IClassTransformer;
 
 import java.util.List;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class WrappedTransformers extends SimpleList<IClassTransformer> {

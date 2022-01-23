@@ -53,10 +53,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/31 1:05
  */
 public class PowershotEvent {

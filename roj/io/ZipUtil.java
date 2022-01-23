@@ -37,10 +37,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/2/24 14:46
  */
 public final class ZipUtil {

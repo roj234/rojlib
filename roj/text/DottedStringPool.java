@@ -33,7 +33,6 @@ import java.util.List;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2021/9/30 22:42
  */
 public class DottedStringPool extends StringPool {

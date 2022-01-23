@@ -34,10 +34,7 @@ import roj.kscript.parser.ast.Expression;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/27 13:13
  */
 public interface KType {

@@ -25,16 +25,14 @@
  */
 package ilib.asm.util;
 
-import net.minecraft.world.chunk.Chunk;
 import roj.collect.AbstractIterator;
+
+import net.minecraft.world.chunk.Chunk;
 
 import java.util.Iterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/23 0:15
  */
 public class MergedItr extends AbstractIterator<Chunk> {

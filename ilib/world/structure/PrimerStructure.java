@@ -42,10 +42,7 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkPrimer;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/24 12:06
  */
 public final class PrimerStructure implements IPrimeGenerator {

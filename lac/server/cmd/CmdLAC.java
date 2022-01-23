@@ -36,10 +36,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 20:10
  */
 public class CmdLAC extends CommandBase {

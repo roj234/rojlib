@@ -39,7 +39,6 @@ import java.nio.channels.spi.SelectorProvider;
 /**
  * What is PD? Platform dependent
  * @author Roj233
- * @version 0.1
  * @since 2021/12/25 0:10
  */
 public class FileDescriptorChannel extends AbstractSelectableChannel implements SelChImpl {

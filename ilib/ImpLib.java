@@ -121,10 +121,7 @@ import java.util.jar.Manifest;
 @Mod(modid = ImpLib.MODID, name = ImpLib.NAME, version = ImpLib.VERSION, acceptedMinecraftVersions = "[1.12, 1.13)", dependencies = "required:forge@[14.23.4.2768,);", acceptableRemoteVersions = "*")
 @Mod.EventBusSubscriber
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 23:28
  */
 public class ImpLib {

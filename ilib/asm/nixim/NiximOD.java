@@ -50,10 +50,7 @@ import java.util.List;
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/14 15:09
  */
 @Nixim("net.minecraftforge.oredict.OreDictionary")

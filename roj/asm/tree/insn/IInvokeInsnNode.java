@@ -35,7 +35,6 @@ import java.util.List;
  * 抽象，方法执行
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public abstract class IInvokeInsnNode extends InsnNode {

@@ -38,10 +38,7 @@ import static org.lwjgl.opengl.GL11.GL_BLEND;
 import static org.lwjgl.opengl.GL11.glDisable;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/19 13:50
  */
 public class Test extends Game {

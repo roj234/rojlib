@@ -40,7 +40,6 @@ import roj.util.ByteList;
  * invokevirtual invokespecial invokestatic
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {

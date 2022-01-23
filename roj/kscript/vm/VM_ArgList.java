@@ -36,10 +36,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/21 22:37
  */
 final class VM_ArgList extends ArgList {

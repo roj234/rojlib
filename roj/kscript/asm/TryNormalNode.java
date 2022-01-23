@@ -28,10 +28,7 @@ package roj.kscript.asm;
 import roj.kscript.vm.ScriptException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/6/15 18:29
  */
 public class TryNormalNode extends GotoNode {

@@ -26,10 +26,7 @@
 package roj.config.word;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/29 22:10
  */
 public class NotStatementException extends RuntimeException {

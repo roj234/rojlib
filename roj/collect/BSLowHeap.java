@@ -33,10 +33,7 @@ import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/2 19:59
  */
 public class BSLowHeap<T> implements Collection<T> {

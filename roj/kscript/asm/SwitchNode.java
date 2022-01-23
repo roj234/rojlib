@@ -35,10 +35,7 @@ import roj.util.Helpers;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/27 23:02
  */
 public final class SwitchNode extends Node {

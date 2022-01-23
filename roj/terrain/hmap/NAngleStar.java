@@ -33,7 +33,6 @@ import java.util.Random;
 /**
  * N角星
  * @author Roj233
- * @version 0.1
  * @since 2021/9/11 23:18
  */
 public class NAngleStar implements HeightMap {

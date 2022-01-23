@@ -87,7 +87,6 @@ import static roj.mod.Shared.*;
  * Roj234's Minecraft Launcher
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public class MCLauncher extends JFrame {
@@ -424,7 +423,7 @@ public class MCLauncher extends JFrame {
             CList versions;
             try {
                 CharList out = new CharList(10000);
-                ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
+                ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
 
                 versions = JSONParser.parse(out, JSONParser.INTERN).asList();
             } catch (ParseException | IOException e) {
@@ -443,7 +442,7 @@ public class MCLauncher extends JFrame {
         if(versions == null) {
             try {
                 CharList out = new CharList(100000);
-                ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址"))));
+                ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址")));
 
                 cache_mc_versions = versions = JSONParser.parse(out, JSONParser.INTERN).asMap().get("versions").asList();
             } catch (ParseException | IOException e) {
@@ -2087,7 +2086,7 @@ public class MCLauncher extends JFrame {
 
     public static void downloadAndVerifyMD5(String url, File targetFile, boolean async) throws IOException {
         if (!targetFile.exists()) {
-            downloadAndVerifyMD5(url, new String(FileUtil.downloadFileToMemory(url + ".md5"), StandardCharsets.UTF_8), targetFile, async);
+            downloadAndVerifyMD5(url, ByteList.readUTF(FileUtil.downloadFileToMemory(url + ".md5")), targetFile, async);
         }
     }
 

@@ -43,10 +43,7 @@ import java.awt.*;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/14 18:05
  */
 public abstract class NiximSelectionBox extends RenderGlobal {

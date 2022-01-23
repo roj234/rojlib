@@ -36,7 +36,6 @@ import java.io.InputStream;
  * Native library loader
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 12:57
  */
 public class NativeLibrary {

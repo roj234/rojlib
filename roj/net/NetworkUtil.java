@@ -57,7 +57,6 @@ import java.util.LinkedHashMap;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/10/30 23:05
  */
 public final class NetworkUtil {

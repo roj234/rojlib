@@ -29,29 +29,40 @@ import roj.asm.util.Context;
 import roj.concurrent.task.AbstractExecutionTask;
 
 import java.util.List;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 import java.util.function.Consumer;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 19:59
  */
 public final class Worker extends AbstractExecutionTask {
-    private final List<Context>     files;
-    private final Consumer<Context> consumer;
+    private final List<Context> files;
+    private final CyclicBarrier barrier;
 
-    public Worker(List<Context> files, Consumer<Context> consumer, String name) {
+    public Consumer<Context> action;
+
+    public Worker(List<Context> files, CyclicBarrier barrier) {
         this.files = files;
-        this.consumer = consumer;
+        this.barrier = barrier;
     }
 
     public void run() {
         List<Context> f = this.files;
-        Consumer<Context> c = this.consumer;
+        Consumer<Context> c = this.action;
+        if (c == null) return;
+
         for (int i = 0; i < f.size(); i++) {
             c.accept(f.get(i));
+        }
+
+        if (barrier == null) return;
+        action = null;
+        try {
+            barrier.await();
+        } catch (InterruptedException | BrokenBarrierException e) {
+            e.printStackTrace();
         }
     }
 }

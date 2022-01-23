@@ -35,10 +35,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/22 20:10
  */
 public abstract class FileNBTStorage {

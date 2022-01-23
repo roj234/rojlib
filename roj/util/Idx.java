@@ -35,7 +35,6 @@ import roj.collect.SingleBitSet;
  * Idx 槽位筛选器
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class Idx {

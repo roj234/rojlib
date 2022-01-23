@@ -31,7 +31,6 @@ import net.minecraft.util.math.Vec3d;
  * 然而自从FMD支持AT起，它唯一的命运就只是测试DirectAccessor了...
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/22 19:45
  */
 //!!AT [ "net.minecraft.util.math.Vec3d", ["field_72450_a", "field_72448_b", "field_72449_c"]]

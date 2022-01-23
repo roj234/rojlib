@@ -45,10 +45,7 @@ import java.util.function.IntFunction;
 import static org.lwjgl.opengl.GL11.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/3 21:47
  */
 public class FontTex {

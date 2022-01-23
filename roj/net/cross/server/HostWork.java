@@ -27,11 +27,9 @@ package roj.net.cross.server;
 
 import roj.net.WrappedSocket;
 import roj.net.cross.Util;
-import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
@@ -44,7 +42,7 @@ final class HostWork extends Stated {
     static final HostWork HOST_WORK = new HostWork();
 
     @Override
-    Stated next(Worker W) throws IOException {
+    Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
 
         ByteBuffer rb = ch.buffer();
@@ -53,13 +51,13 @@ final class HostWork extends Stated {
         UPnPinger pinger = null;
         int heart = T_HEART_TIMEOUT;
         int except = 1;
-        while (!W.server.shutdown && isInRoom(W)) {
+        while (!AEServer.server.shutdown && isInRoom(W)) {
             int read;
             if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 W.pollPackets();
                 LockSupport.parkNanos(10000);
                 if (heart-- < 0) {
-                    syncPrint(this + ": 心跳超时");
+                    syncPrint(W + ": 心跳超时");
                     write1(ch, (byte) PS_ERROR_TIMEOUT);
                     break;
                 }
@@ -70,6 +68,7 @@ final class HostWork extends Stated {
             switch (rb.get(0) & 0xFF) {
                 case P_HEARTBEAT:
                     W.lastHeart = System.currentTimeMillis();
+                    if (DEBUG) syncPrint(W + ": 房主心跳");
                     break;
                 case P_LOGOUT:
                     rb.clear();
@@ -82,7 +81,7 @@ final class HostWork extends Stated {
                     except = 1;
 
                     int clientId = rb.getInt(1);
-                    Worker w = W.room.clients.remove(clientId);
+                    Client w = W.room.clients.remove(clientId);
                     if (w == null)
                         if (Util.DEBUG) syncPrint(W + ": 踢出客户端: 无效客户端 #" + clientId);
                     break;
@@ -99,8 +98,9 @@ final class HostWork extends Stated {
                         rb.position(5);
                         byte[] rnd2 = new byte[32];
                         rb.get(rnd2).clear();
+                        PipeGroup pending = w.pending;
                         rb.put((byte) P_CHANNEL_RESULT)
-                          .put(rnd2).putLong(w.getPendingPipe())
+                          .put(rnd2).putLong(((long)pending.id << 32) | (pending.downPass & 0xFFFF_FFFFL))
                           .flip();
                         w.sync(rb);
                     } else
@@ -144,23 +144,25 @@ final class HostWork extends Stated {
                         continue;
                     }
                     except = 1;
-
-                    int target = rb.getInt(1);
-                    if (target == W.clientId) break;
-                    Worker to = W.room.clients.get(target);
-                    if (null == to) {
-                        write1(ch, (byte) P_FAIL);
-                        break;
+                    ChatUtil.chat(W, ch, rb);
+                    break;
+                case P_MSG_LONG:
+                    if (rb.position() < 7) {
+                        except = 7;
+                        continue;
                     }
-                    if (Util.DEBUG) {
-                        byte[] b = new byte[rb.get(5) & 0xFF];
-                        int pos = rb.position();
-                        rb.position(5);
-                        rb.get(b).position(pos);
-                        syncPrint(W + ": msg to #" + target + ": " + new String(b, StandardCharsets.UTF_8));
+                    char len = rb.getChar(6);
+                    if (len > 9999) {
+                        syncPrint(W + ": 发送的消息过长(9999 bytes)");
+                        write1(ch, (byte) PS_ERROR_SYSTEM_LIMIT);
+                        return Logout.LOGOUT;
                     }
-                    rb.putInt(1, W.clientId).flip();
-                    to.sync(rb);
+                    if (rb.position() < len + 7) {
+                        except = len + 7;
+                        continue;
+                    }
+                    except = 1;
+                    ChatUtil.chat(W, ch, rb);
                     break;
                 case P_UPNP_PING:
                     if (rb.position() < 12) {
@@ -201,7 +203,7 @@ final class HostWork extends Stated {
                     W.room.upnpAddress = buf;
                     // 同步到客户端
                     synchronized (W.room.clients) {
-                        for (Worker wk : W.room.clients.values()) {
+                        for (Client wk : W.room.clients.values()) {
                             rb.position(0);
                             if (wk != W) wk.sync(rb);
                         }
@@ -213,13 +215,14 @@ final class HostWork extends Stated {
                         continue;
                     }
                     except = 1;
-                    if (Util.DEBUG) syncPrint(W + ": Singal #" + rb.getInt(1));
+                    if (Util.DEBUG) syncPrint(W + ": Signal #" + rb.getInt(1));
                     W.room.resetLock.signal(rb.getInt(1));
                     break;
                 default:
                     unknownPacket(W, rb);
                     return Logout.LOGOUT;
             }
+            if (DEBUG) syncPrint(W + ": PP Done");
             write1(ch, (byte) P_HEARTBEAT);
             heart = T_HEART_TIMEOUT;
             rb.clear();

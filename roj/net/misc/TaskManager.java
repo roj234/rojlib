@@ -28,24 +28,48 @@ package roj.net.misc;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
+import roj.util.FastLocalThread;
+import roj.util.Helpers;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj233
  * @since 2021/10/13 0:16
  */
 public final class TaskManager extends TaskPool {
+    static AtomicInteger i = new AtomicInteger();
+
     public TaskManager() {
-        super(0, Integer.parseInt(System.getProperty("tm.pooled", "6")), 1, 1, new MyThreadFactory() {
-            int i = 1;
-            @Override
-            public TaskExecutor get(TaskPool pool) {
-                return new TaskExecutor(pool, "Executor #" + i++, 120000);
-            }
-        });
+        super(0, Integer.parseInt(System.getProperty("tm.pooled", "6")), 1, 1, pool -> new TaskExecutor(pool, "Executor #" + i.getAndIncrement(), 120000));
     }
 
     @Override
     protected void onReject(ITask task, int minPending) {
-        ((Thread) task).start();
+        OnceExecutor oe = new OnceExecutor(task);
+        oe.start();
+    }
+
+    static final class OnceExecutor extends FastLocalThread {
+        final ITask task;
+
+        OnceExecutor(ITask task) {
+            this.task = task;
+            setDaemon(true);
+            setName("OnceExecutor #" + i.getAndIncrement());
+        }
+
+        @Override
+        public void run() {
+            if (task instanceof Runnable) {
+                ((Runnable) task).run();
+            } else {
+                try {
+                    task.calculate(this);
+                } catch (Exception e) {
+                    Helpers.athrow(e);
+                }
+            }
+        }
     }
 }

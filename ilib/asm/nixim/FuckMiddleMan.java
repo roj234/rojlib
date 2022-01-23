@@ -41,10 +41,7 @@ import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/15 20:31
  */
 @Nixim("net.minecraft.network.login.server.SPacketEncryptionRequest")

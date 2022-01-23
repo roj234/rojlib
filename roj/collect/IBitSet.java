@@ -32,7 +32,6 @@ import java.util.PrimitiveIterator;
  * Binary set
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/11 22:53
  */
 public interface IBitSet extends Iterable<Integer> {

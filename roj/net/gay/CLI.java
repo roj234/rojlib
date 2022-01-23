@@ -41,7 +41,6 @@ import java.util.ArrayList;
  * 你猜猜这名字是怎么回事？
  * Gayhub
  * @author Roj233
- * @version 0.1
  * @since 2022/1/4 0:20
  */
 public class CLI {

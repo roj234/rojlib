@@ -36,10 +36,7 @@ import net.minecraft.world.World;
 import java.util.function.Function;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/21 21:34
  */
 @Nixim("net.minecraftforge.fml.common.registry.EntityEntry")

@@ -36,7 +36,6 @@ import roj.util.ByteList;
  * new / checkcast / instanceof / anewarray
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public final class ClassInsnNode extends InsnNode implements IClassInsnNode {

@@ -25,17 +25,15 @@
  */
 package ilib.asm.util.mixin;
 
-import net.minecraft.launchwrapper.IClassTransformer;
 import org.spongepowered.asm.service.ILegacyClassTransformer;
+
+import net.minecraft.launchwrapper.IClassTransformer;
 
 import java.util.Collections;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/30 15:19
  */
 public final class Proxy implements IClassTransformer, ILegacyClassTransformer {

@@ -40,7 +40,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.UnknownHostException;
 
 /**
@@ -82,15 +81,6 @@ public class AEGuiClient {
             JOptionPane.showMessageDialog(null, "服务器端口有误");
             return;
         }
-        int port = cfg.getString("port").equals("random") ? Math.abs((int)System.nanoTime() % 60000) + 2000 : cfg.getInteger("port");
-        do {
-            try (ServerSocket local = new ServerSocket(port, 1)) {
-                local.isBound();
-                break;
-            } catch (IOException ignored) {}
-            port = (Math.abs((int)System.nanoTime() % 60000)) + 2000;
-            System.out.println("检测到端口重复，自动重新分配了 " + port);
-        } while (true);
 
         System.out.println("登录中......");
 
@@ -99,12 +89,13 @@ public class AEGuiClient {
         System.setOut(Util.out);
         System.setErr(Util.out);
 
-        Thread.currentThread().setName("Waiter");
         client = new AEClient(addr, cfg.getString("room"), cfg.getString("pass"));
         client.start();
 
         Util.registerShutdownHook(client);
-        new GuiChat("AbyssalEye客户端", client);
+        if (!cfg.getBool("nogui")) new GuiChat("AbyssalEye客户端", client);
+
+        Thread.currentThread().setName("Set PortMap");
         try {
             client.awaitLogin();
             CList list = cfg.getOrCreateList("ports");

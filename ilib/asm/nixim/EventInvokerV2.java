@@ -26,10 +26,7 @@
 package ilib.asm.nixim;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/14 16:15
  */
 

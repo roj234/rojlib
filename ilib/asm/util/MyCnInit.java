@@ -31,13 +31,11 @@ import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+
 import net.minecraft.network.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/6 1:46
  */
 public class MyCnInit extends ChannelInitializer<Channel> {

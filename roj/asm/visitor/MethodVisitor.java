@@ -30,7 +30,6 @@ package roj.asm.visitor;
  * 默认实现都是As-is的，你需要自己修改
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/16 19:15
  */
 public class MethodVisitor extends IVisitor {

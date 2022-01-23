@@ -30,16 +30,14 @@ import ilib.math.Section;
 import ilib.world.structure.AbstractStructure;
 import ilib.world.structure.cascading.api.IStructure;
 import ilib.world.structure.schematic.Schematic;
+
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class SizedStructure extends AbstractStructure implements IStructure {

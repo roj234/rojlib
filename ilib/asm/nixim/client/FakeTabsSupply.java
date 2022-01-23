@@ -36,10 +36,7 @@ import net.minecraft.enchantment.EnumEnchantmentType;
 import net.minecraft.item.ItemStack;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/12 22:46
  */
 @Nixim("net.minecraft.creativetab.CreativeTabs")

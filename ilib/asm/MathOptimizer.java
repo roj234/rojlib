@@ -38,7 +38,6 @@ import java.util.Set;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/10/19 20:38
  */
 public final class MathOptimizer implements Opcodes {

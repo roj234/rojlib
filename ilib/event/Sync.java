@@ -56,10 +56,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/30 22:59
  */
 public class Sync {

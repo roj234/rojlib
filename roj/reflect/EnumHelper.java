@@ -40,7 +40,6 @@ import java.util.*;
  *     推荐preload
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/2 8:22
  */
 public final class EnumHelper<E extends Enum<E>> {

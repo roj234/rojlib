@@ -59,10 +59,7 @@ import java.util.zip.ZipFile;
 import static roj.mod.Shared.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/30 11:31
  */
 public final class Proc1_12 extends Processor {

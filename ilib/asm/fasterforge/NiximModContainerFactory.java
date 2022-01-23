@@ -26,15 +26,16 @@
 package ilib.asm.fasterforge;
 
 import ilib.asm.fasterforge.anc.FastParser;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import org.objectweb.asm.Type;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
 import roj.asm.tree.anno.Annotation;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -44,7 +45,6 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 @Nixim("net.minecraftforge.fml.common.ModContainerFactory")

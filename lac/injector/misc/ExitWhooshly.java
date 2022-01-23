@@ -33,7 +33,6 @@ import java.util.concurrent.locks.LockSupport;
  * Only use compiled bytes to exit JVM 'smoothly'
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/16 0:22
  */
 final class ExitWhooshly extends Thread implements Runnable {

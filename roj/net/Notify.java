@@ -27,7 +27,6 @@ package roj.net;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/2/4 15:40
  */
 public final class Notify extends RuntimeException {

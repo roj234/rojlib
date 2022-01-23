@@ -44,7 +44,6 @@ import java.util.zip.ZipOutputStream;
  * Split-out processor
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/25 6:02
  */
 class Helper1_16 {

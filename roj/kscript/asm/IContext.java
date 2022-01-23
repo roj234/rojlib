@@ -31,10 +31,7 @@ import roj.kscript.util.JavaException;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/28 22:45
  */
 public abstract class IContext {

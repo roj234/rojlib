@@ -41,10 +41,7 @@ import net.minecraftforge.fml.common.registry.EntityRegistry;
 import java.util.Arrays;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/18 0:20
  */
 public class MiscOptimize {

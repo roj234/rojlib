@@ -36,10 +36,7 @@ import java.util.PrimitiveIterator;
 import static roj.collect.IntList.DEFAULT_VALUE;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/27 23:23索引不变)
  */
 public class DoubleList implements Iterable<Double> {

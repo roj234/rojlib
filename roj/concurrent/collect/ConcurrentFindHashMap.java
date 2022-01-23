@@ -36,10 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/20 14:03
  */
 public class ConcurrentFindHashMap<K, V> implements FindMap<K, V> {

@@ -32,7 +32,6 @@ import java.util.function.Function;
  * Tail Call Optimization
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/27 7:25
  */
 public abstract class TCO<T,R> implements Function<T, R> {

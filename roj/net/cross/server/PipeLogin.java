@@ -26,8 +26,6 @@
 package roj.net.cross.server;
 
 import roj.net.WrappedSocket;
-import roj.net.cross.server.AEServer.PipeGroup;
-import roj.net.cross.server.AEServer.Worker;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
 
@@ -37,10 +35,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
+import static roj.net.cross.server.AEServer.server;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/23 22:14
  */
 final class PipeLogin extends Stated {
@@ -48,14 +46,14 @@ final class PipeLogin extends Stated {
     public static final Stated PIPE_OK = new PipeLogin();
 
     @Override
-    Stated next(Worker W) throws IOException {
+    Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
 
         ByteBuffer rb = ch.buffer();
         rb.clear();
 
         int heart = TIMEOUT;
-        while (!W.server.shutdown) {
+        while (!server.shutdown) {
             int read;
             if ((read = ch.read(8 - rb.position())) == 0 && rb.position() < 8) {
                 LockSupport.parkNanos(10000);
@@ -70,7 +68,7 @@ final class PipeLogin extends Stated {
             Integer user = rb.getInt(0);
             int pass = rb.getInt(4);
 
-            PipeGroup group = W.server.pipes.get(user);
+            PipeGroup group = server.pipes.get(user);
             if (group == null || pass == 0) syncPrint(W + ": 无效的管道 " + user + "@" + pass);
             else {
                 Pipe pipe = group.pairRef;
@@ -87,12 +85,13 @@ final class PipeLogin extends Stated {
                     break;
                 }
                 if (group.upPass == group.downPass) {
-                    W.server.pipes.remove(user);
-                    group.downOwner.pendingPipeOpen();
+                    server.pipes.remove(user);
+                    group.downOwner.pending = null;
 
-                    AtomicInteger i = W.server.remain;
+                    syncPrint("管道 #" + user + " 开启");
+                    AtomicInteger i = server.remain;
                     try {
-                        PipeIOThread.syncRegister(W.server, pipe, p -> {
+                        PipeIOThread.syncRegister(server, pipe, p -> {
                             i.addAndGet(2);
                             PipeGroup group1 = (PipeGroup) p.att;
                             try {

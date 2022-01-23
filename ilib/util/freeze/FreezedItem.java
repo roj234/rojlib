@@ -32,7 +32,6 @@ import net.minecraft.item.ItemStack;
  * 冻结的物品
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/26 19:36
  */
 public final class FreezedItem extends Item {

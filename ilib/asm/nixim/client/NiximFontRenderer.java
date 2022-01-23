@@ -47,7 +47,6 @@ import java.util.List;
  * Roj234 Font Renderer
  *
  * @author Roj234
- * @version 0.1
  * @since  2021/2/3 19:40
  */
 @Nixim(value = "net.minecraft.client.gui.FontRenderer", copyItf = true)

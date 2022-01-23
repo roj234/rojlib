@@ -52,10 +52,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/1 12:16
  */
 @Nixim("net.minecraft.client.Minecraft")

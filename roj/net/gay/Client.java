@@ -42,7 +42,6 @@ import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2022/1/3 17:25
  */
 public class Client {

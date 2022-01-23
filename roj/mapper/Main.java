@@ -39,7 +39,6 @@ import java.util.Map;
  * Mapper 'main' entry
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 18:3
  */
 public class Main {

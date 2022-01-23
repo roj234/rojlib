@@ -41,7 +41,6 @@ import java.nio.IntBuffer;
  * 简易材质管理器
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/19 17:34
  */
 public abstract class TextureManager {

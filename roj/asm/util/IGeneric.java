@@ -30,10 +30,7 @@ import roj.asm.type.Signature;
 import roj.text.CharList;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/9/4 19:03
  */
 @Internal

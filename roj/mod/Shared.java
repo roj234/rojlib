@@ -52,7 +52,6 @@ import java.util.Map;
  * FMD Shared Data / Utility Methods
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/29 11:38
  */
 public final class Shared {

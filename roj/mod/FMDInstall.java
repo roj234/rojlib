@@ -53,7 +53,6 @@ import static roj.mod.Shared.*;
  * FMD Install window
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public class FMDInstall extends JFrame {
@@ -162,7 +161,7 @@ public class FMDInstall extends JFrame {
         CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
         try {
             CharList out = new CharList(10000);
-            ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
+            ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
 
             versions = JSONParser.parse(out).asList();
         } catch (ParseException | IOException e) {
@@ -284,7 +283,7 @@ public class FMDInstall extends JFrame {
 
         try {
             CharList out = new CharList(10000);
-            ByteList.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
+            ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
 
             vList = JSONParser.parse(out, JSONParser.INTERN).asList();
         } catch (ParseException | IOException e) {

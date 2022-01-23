@@ -31,7 +31,6 @@ import roj.crypt.SM4;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/22 19:18
  */
 public final class SM4CFB implements MSSCiphers {

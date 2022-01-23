@@ -26,10 +26,7 @@
 package roj.math;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/22 14:46
  */
 public interface Vector {

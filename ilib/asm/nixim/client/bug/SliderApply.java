@@ -38,10 +38,7 @@ import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.math.MathHelper;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/18 11:59
  */
 @Nixim("net.minecraft.client.gui.GuiOptionSlider")

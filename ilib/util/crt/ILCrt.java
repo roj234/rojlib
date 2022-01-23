@@ -78,10 +78,7 @@ import java.util.Map;
 @ZenClass("mods.implib.ILUtil")
 @ZenRegister
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class ILCrt {

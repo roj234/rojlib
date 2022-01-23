@@ -34,10 +34,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 16:43
  */
 public class ResWriter implements Runnable, Callable<Void> {

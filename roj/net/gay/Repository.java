@@ -40,7 +40,6 @@ import java.util.zip.InflaterInputStream;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2022/1/3 17:25
  */
 public final class Repository {

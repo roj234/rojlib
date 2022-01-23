@@ -43,10 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
 public final class AttrBootstrapMethods extends Attribute {

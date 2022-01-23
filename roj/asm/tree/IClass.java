@@ -34,7 +34,6 @@ import java.util.List;
  * Abstract Class
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/22 18:20
  */
 public interface IClass {

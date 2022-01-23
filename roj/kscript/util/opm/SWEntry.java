@@ -31,10 +31,7 @@ import roj.kscript.type.KType;
 import roj.kscript.util.VInfo;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/25 23:13
  */
 public class SWEntry extends MyHashMap.Entry<KType, Node> {

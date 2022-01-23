@@ -31,7 +31,6 @@ import roj.util.ByteList;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/26 23:26
  */
 public abstract class Attribute {

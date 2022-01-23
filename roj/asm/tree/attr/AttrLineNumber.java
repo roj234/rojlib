@@ -36,10 +36,7 @@ import roj.util.ByteReader;
 import static roj.asm.tree.insn.InsnNode.validate;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/30 19:27
  */
 public final class AttrLineNumber extends Attribute implements ICodeAttribute {

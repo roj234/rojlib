@@ -34,7 +34,6 @@ import roj.asm.util.ConstantPool;
  * 默认实现都是As-is的，你需要自己修改
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/4 11:37
  */
 public abstract class AttributeVisitor extends Holder {

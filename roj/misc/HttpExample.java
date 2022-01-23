@@ -40,7 +40,6 @@ import java.security.GeneralSecurityException;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/11/29 0:51
  */
 public class HttpExample {

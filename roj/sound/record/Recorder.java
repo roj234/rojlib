@@ -29,7 +29,6 @@ import javax.sound.sampled.*;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/19 22:36
  */
 public class Recorder implements Runnable {

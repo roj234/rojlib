@@ -30,7 +30,6 @@ import java.util.Random;
 /**
  * Simplex Noise
  * @author Roj233
- * @version 0.1
  * @since 2021/12/12 15:32
  */
 public class SimpleX extends Noised {

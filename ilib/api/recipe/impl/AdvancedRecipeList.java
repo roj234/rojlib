@@ -32,11 +32,12 @@ import ilib.api.recipe.IRecipe;
 import ilib.api.recipe.MultiInputRecipe;
 import ilib.fluid.handler.IFluidProvider;
 import ilib.util.CraftingMap;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
 import roj.collect.UnsortedMultiKeyMap;
 import roj.math.MathUtils;
 import roj.math.MutableBoolean;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -44,10 +45,7 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/23 18:0
  */
 public class AdvancedRecipeList implements IDisplayableRecipeList, IModifiableRecipeList {

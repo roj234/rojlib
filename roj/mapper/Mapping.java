@@ -40,7 +40,6 @@ import java.util.*;
  * Class Mapping
  *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/28 19:18
  */
 public class Mapping {
@@ -135,7 +134,7 @@ public class Mapping {
                         // CL aaa bbb
                         // FL b c
                         if(last0 == null)
-                            throw new IllegalArgumentException("last[0] == null at line " + slr.index());
+                            throw new IllegalArgumentException("last[0] == null at line " + slr.lineNumber());
 
                         if(reverse) {
                             fieldMap.put(new Desc(last1, q.get(1)), q.get(0));
@@ -145,7 +144,7 @@ public class Mapping {
                         break;
                     case "ML":
                         if(last0 == null)
-                            throw new IllegalArgumentException("last[0] == null at line " + slr.index());
+                            throw new IllegalArgumentException("last[0] == null at line " + slr.lineNumber());
 
                         if(reverse) {
                             // net/minecraft/client/renderer/entity/layers/LayerHeldItem[1] func_177141_a (Lnet/minecraft/entity/EntityLivingBase;FFFFFFF)V => doRenderLayer

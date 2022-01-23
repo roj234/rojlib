@@ -32,7 +32,6 @@ import java.awt.*;
  * Image panel
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/30 20:40
  */
 public class JImagePanel extends JComponent {

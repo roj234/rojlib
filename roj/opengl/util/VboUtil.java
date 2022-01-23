@@ -17,7 +17,6 @@ import static roj.opengl.vertex.VertexFormat.*;
  * Vertex buffer util
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/9/18 13:06
  */
 public class VboUtil {

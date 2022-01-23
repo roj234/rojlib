@@ -42,7 +42,6 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/10/1 17:53
  */
 public class ProxyPacket implements Packet<INetHandler> {

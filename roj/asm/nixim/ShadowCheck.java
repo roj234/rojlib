@@ -29,7 +29,6 @@ import roj.asm.tree.MoFNode;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 20:59
  */
 final class ShadowCheck extends RemapEntry {

@@ -32,7 +32,6 @@ import net.minecraft.launchwrapper.IClassTransformer;
 /**
  * 更高效的transform方案
  * @author Roj234
- * @version 0.1
  * @since  2021/10/19 23:21
  */
 public interface ContextClassTransformer extends IClassTransformer {

@@ -26,10 +26,7 @@
 package roj.kscript.asm;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/4/28 22:19
  */
 public final class TryEndNode extends GotoNode {

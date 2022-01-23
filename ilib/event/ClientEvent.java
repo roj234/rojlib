@@ -104,10 +104,7 @@ import java.util.List;
 import static ilib.ClientProxy.mc;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 0:25
  */
 public final class ClientEvent {

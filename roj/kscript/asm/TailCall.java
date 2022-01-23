@@ -37,7 +37,6 @@ import java.util.List;
  * Tail Call Optimization Part 2
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/6/16 23:14
  */
 public class TailCall extends Node {

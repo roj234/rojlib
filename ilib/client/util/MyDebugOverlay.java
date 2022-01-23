@@ -28,6 +28,11 @@ package ilib.client.util;
 import ilib.ClientProxy;
 import ilib.util.DimensionHelper;
 import ilib.util.PlayerUtil;
+import org.lwjgl.opengl.Display;
+import org.lwjgl.opengl.GL11;
+import roj.reflect.DirectAccessor;
+import roj.util.Helpers;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
@@ -66,12 +71,9 @@ import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
+
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.FMLCommonHandler;
-import org.lwjgl.opengl.Display;
-import org.lwjgl.opengl.GL11;
-import roj.reflect.DirectAccessor;
-import roj.util.Helpers;
 
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
@@ -79,7 +81,6 @@ import java.util.concurrent.PriorityBlockingQueue;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/20 0:57
  */
 public class MyDebugOverlay {

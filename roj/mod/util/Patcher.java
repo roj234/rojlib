@@ -51,7 +51,6 @@ import java.util.zip.ZipInputStream;
  * GDiff file patcher
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 19:59
  */
 public final class Patcher {

@@ -37,10 +37,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:50
  */
 @Nixim("net.minecraft.server.management.PlayerInteractionManager")

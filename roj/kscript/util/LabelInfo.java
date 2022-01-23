@@ -28,10 +28,7 @@ package roj.kscript.util;
 import roj.kscript.asm.LabelNode;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/17 1:41
  */
 public final class LabelInfo {

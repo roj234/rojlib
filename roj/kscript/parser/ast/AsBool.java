@@ -35,10 +35,7 @@ import roj.kscript.type.KType;
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/5/3 20:14
  */
 public final class AsBool implements Expression {

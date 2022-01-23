@@ -38,7 +38,6 @@ import java.util.PrimitiveIterator;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/9/30 20:51
  */
 public class JPinyin {

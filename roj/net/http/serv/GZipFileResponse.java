@@ -39,7 +39,6 @@ import java.util.zip.Deflater;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2020/12/5 18:31
  */
 public class GZipFileResponse extends FileResponse {

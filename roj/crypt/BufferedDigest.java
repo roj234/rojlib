@@ -29,10 +29,7 @@ import java.security.DigestException;
 import java.security.MessageDigest;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 15:06
  */
 public abstract class BufferedDigest extends MessageDigest {

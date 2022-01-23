@@ -42,7 +42,6 @@ import java.util.Map;
  * Config Entry
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public abstract class CEntry {

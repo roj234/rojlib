@@ -36,7 +36,6 @@ import roj.util.ByteList.WriteOnly;
  * 默认实现都是As-is的，你需要自己修改
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/4 12:03
  */
 public class ClassAttributeVisitor extends AttributeVisitor {

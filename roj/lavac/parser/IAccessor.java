@@ -29,10 +29,7 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.FlagList;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/7/22 19:05
  */
 public class IAccessor {

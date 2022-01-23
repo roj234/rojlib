@@ -35,7 +35,6 @@ import java.util.function.Consumer;
  * 路径迭代算法？
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/9/16 19:36
  */
 public final class VecIterators {

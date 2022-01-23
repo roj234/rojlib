@@ -40,10 +40,7 @@ import java.util.function.Function;
 import static roj.collect.IntMap.NOT_USING;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/2/21 10:39
  */
 public class TrieTree<V> implements Map<CharSequence, V> {

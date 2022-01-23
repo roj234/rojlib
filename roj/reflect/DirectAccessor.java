@@ -69,7 +69,6 @@ import static roj.collect.IntMap.NOT_USING;
  * PackagePrivateProxy已被Nixim替代，能用到它的都是【在应用启动前加载的class】那还不如boot class替换
  *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/13 20:16
  */
 public final class DirectAccessor<T> {

@@ -29,7 +29,6 @@ import roj.text.TextUtil;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/19 19:05
  */
 public final class OpcodeUtil {

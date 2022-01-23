@@ -33,7 +33,6 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/2 23:45
  */
 public final class RegistryBuilder {

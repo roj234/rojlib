@@ -36,10 +36,7 @@ import java.lang.ref.WeakReference;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/16 14:34
  */
 public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {

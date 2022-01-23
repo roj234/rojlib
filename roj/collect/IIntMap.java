@@ -26,10 +26,7 @@
 package roj.collect;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/10/14 18:41
  */
 public interface IIntMap<V> {

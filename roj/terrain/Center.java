@@ -34,7 +34,6 @@ import java.util.List;
  * 三角形的点，同时也是block的中心
  * //todo 支持任意多边形
  * @author Roj233
- * @version 0.1
  * @since 2021/9/11 23:18
  */
 public class Center {

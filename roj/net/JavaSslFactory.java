@@ -35,7 +35,6 @@ import java.util.function.Supplier;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since  2021/2/5 0:33
  */
 public class JavaSslFactory implements SocketFactory, Supplier<SSLEngine> {

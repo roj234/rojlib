@@ -33,10 +33,7 @@ import java.io.File;
 import java.io.IOException;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/3 16:50
  */
 public final class FileDownloader {

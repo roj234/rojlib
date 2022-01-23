@@ -33,7 +33,6 @@ import roj.util.ByteReader;
  * 公共数据容器
  *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/4 11:57
  */
 public abstract class Holder {

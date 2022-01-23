@@ -34,7 +34,6 @@ import java.io.UTFDataFormatException;
 /**
  * 这东西还能有点P用，相当于独立的ReaderIndex
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 23:3
  */
 public final class ByteReader {

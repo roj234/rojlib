@@ -26,7 +26,6 @@
 package roj.net.cross.server;
 
 import roj.net.WrappedSocket;
-import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -36,21 +35,20 @@ import static roj.net.cross.Util.*;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/12/21 13:28
  */
 final class HostLogin extends Stated {
     static final HostLogin HOST_LOGIN = new HostLogin();
 
     @Override
-    Stated next(Worker W) throws IOException {
+    Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
 
         ByteBuffer rb = ch.buffer();
 
         int t = TIMEOUT;
         int except = 5;
-        while (!W.server.shutdown) {
+        while (!AEServer.server.shutdown) {
             int read;
             if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 LockSupport.parkNanos(1000_000);
@@ -78,7 +76,7 @@ final class HostLogin extends Stated {
                 return Logout.LOGOUT;
             }
 
-            int code = W.server.login(W,
+            int code = AEServer.server.login(W,
                                       true,
                                       getUTF(rb, nameLen),
                                       getUTF(rb, passLen));
@@ -97,8 +95,8 @@ final class HostLogin extends Stated {
 
             rb.clear();
             rb.put((byte) PC_LOGON_H)
-              .put((byte) W.server.info.length)
-              .put(W.server.info).flip();
+              .put((byte) AEServer.server.info.length)
+              .put(AEServer.server.info).flip();
             writeAndFlush(ch, rb, 500);
 
             StringBuilder pb = new StringBuilder();

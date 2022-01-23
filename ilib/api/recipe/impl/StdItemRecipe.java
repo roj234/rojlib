@@ -26,18 +26,16 @@
 package ilib.api.recipe.impl;
 
 import ilib.api.recipe.IRecipe;
-import net.minecraft.item.ItemStack;
 import roj.collect.LongBitSet;
 import roj.util.Helpers;
+
+import net.minecraft.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class StdItemRecipe extends AbstractItemRecipe implements IRecipe {

@@ -37,7 +37,6 @@ import java.awt.event.*;
  * Native functions to register combo keys
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/10/14 22:35
  */
 public final class ComboKeys {

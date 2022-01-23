@@ -35,7 +35,6 @@ import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/16 0:14
  */
 @Nixim("net.minecraftforge.fml.relauncher.FMLSecurityManager")

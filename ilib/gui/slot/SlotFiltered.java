@@ -33,10 +33,7 @@ import net.minecraft.item.ItemStack;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/13 13:03
  */
 public class SlotFiltered extends SlotNIL {

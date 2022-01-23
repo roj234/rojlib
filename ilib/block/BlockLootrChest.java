@@ -49,10 +49,7 @@ import net.minecraft.world.World;
 import javax.annotation.Nullable;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/18 13:38
  */
 public class BlockLootrChest extends BlockChest {

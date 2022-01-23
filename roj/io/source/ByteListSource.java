@@ -30,10 +30,7 @@ import roj.util.ByteList;
 import java.io.IOException;
 
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/18 13:36
  */
 public class ByteListSource implements Source {

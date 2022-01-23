@@ -28,10 +28,7 @@ package roj.crypt;
 import roj.text.TextUtil;
 
 /**
- * Your description here
- *
  * @author solo6975
- * @version 0.1
  * @since 2021/10/3 11:12
  */
 public final class Conv {

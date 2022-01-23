@@ -27,7 +27,6 @@ package lac.client;
 
 /**
  * @author Roj233
- * @version 0.1
  * @since 2021/10/18 18:15
  */
 public class Pa55w0rd {

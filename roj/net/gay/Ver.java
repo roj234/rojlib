@@ -41,7 +41,6 @@ import java.util.zip.InflaterInputStream;
 
 /**
  * @author solo6975
- * @version 0.1
  * @since 2022/1/2 23:04
  */
 public final class Ver {

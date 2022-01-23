@@ -25,13 +25,12 @@
  */
 package roj.net.cross.server;
 
+import roj.collect.IntMap;
 import roj.net.WrappedSocket;
 import roj.net.cross.Util;
-import roj.net.cross.server.AEServer.Worker;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
@@ -44,7 +43,7 @@ final class ClientWork extends Stated {
     static final ClientWork CLIENT_WORK = new ClientWork();
 
     @Override
-    Stated next(Worker W) throws IOException {
+    Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
 
         ByteBuffer rb = ch.buffer();
@@ -53,13 +52,13 @@ final class ClientWork extends Stated {
         UPnPinger pinger = null;
         int heart = T_HEART_TIMEOUT;
         int except = 1;
-        while (!W.server.shutdown && isInRoom(W)) {
+        while (!AEServer.server.shutdown && isInRoom(W)) {
             int read;
             if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
                 W.pollPackets();
                 LockSupport.parkNanos(10000);
                 if (heart-- < 0) {
-                    syncPrint(this + ": 心跳超时");
+                    syncPrint(W + ": 心跳超时");
                     write1(ch, (byte) PS_ERROR_TIMEOUT);
                     break;
                 }
@@ -70,6 +69,7 @@ final class ClientWork extends Stated {
             switch (rb.get(0) & 0xFF) {
                 case P_HEARTBEAT:
                     W.lastHeart = System.currentTimeMillis();
+                    if (DEBUG) syncPrint(W + ": 客户端心跳");
                     break;
                 case P_LOGOUT:
                     rb.clear();
@@ -114,23 +114,25 @@ final class ClientWork extends Stated {
                         continue;
                     }
                     except = 1;
-
-                    int target = rb.getInt(1);
-                    if (target == W.clientId) break;
-                    Worker to = W.room.clients.get(target);
-                    if (null == to) {
-                        write1(ch, (byte) P_FAIL);
-                        break;
+                    ChatUtil.chat(W, ch, rb);
+                    break;
+                case P_MSG_LONG:
+                    if (rb.position() < 7) {
+                        except = 7;
+                        continue;
                     }
-                    if (Util.DEBUG) {
-                        byte[] b = new byte[rb.get(5) & 0xFF];
-                        int pos = rb.position();
-                        rb.position(5);
-                        rb.get(b).position(pos);
-                        syncPrint(W + ": msg to #" + target + ": " + new String(b, StandardCharsets.UTF_8));
+                    char len = rb.getChar(6);
+                    if (len > 9999) {
+                        syncPrint(W + ": 发送的消息过长(9999 bytes)");
+                        write1(ch, (byte) PS_ERROR_SYSTEM_LIMIT);
+                        return Logout.LOGOUT;
                     }
-                    rb.putInt(1, W.clientId).flip();
-                    to.sync(rb);
+                    if (rb.position() < len + 7) {
+                        except = len + 7;
+                        continue;
+                    }
+                    except = 1;
+                    ChatUtil.chat(W, ch, rb);
                     break;
                 case P_UPNP_PING:
                     if (rb.position() < 12) {
@@ -174,16 +176,33 @@ final class ClientWork extends Stated {
                         continue;
                     }
                     except = 1;
+                    if (null == W.getPipe(rb.getInt(1))) {
+                        if (DEBUG) {
+                            syncPrint("不存在的管道 " + rb.getInt(1));
+                        }
+                        write1(ch, (byte) P_FAIL);
+                        break;
+                    }
                     rb.flip();
                     W.room.master.sync(rb);
                     if (Util.DEBUG) syncPrint(W + ": Await reset #" + rb.getInt(1));
-                    W.room.resetLock.await(rb.getInt(1));
-                    if (Util.DEBUG) syncPrint(W + ": Await reset done");
+                    if (W.room.resetLock.await(rb.getInt(1), T_HEART_TIMEOUT)) {
+                        if (Util.DEBUG) syncPrint(W + ": Await reset done");
+                    } else {
+                        // timed out
+                        syncPrint("警告, Reset回调超时, 正在清理门户...");
+                        IntMap<Client> clients = W.room.clients;
+                        synchronized (clients) {
+                            clients.clear();
+                        }
+                        return Logout.LOGOUT;
+                    }
                     break;
                 default:
                     unknownPacket(W, rb);
                     return Logout.LOGOUT;
             }
+            if (DEBUG) syncPrint(W + ": PktProcDone");
             write1(ch, (byte) P_HEARTBEAT);
             heart = T_HEART_TIMEOUT;
             rb.clear();

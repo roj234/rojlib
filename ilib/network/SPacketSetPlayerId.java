@@ -40,10 +40,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import javax.annotation.Nonnull;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/1 17:53
  */
 public class SPacketSetPlayerId implements Packet<INetHandler> {

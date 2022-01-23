@@ -33,10 +33,7 @@ import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/20 14:03
  */
 public class ConcurrentFindHashSet<T> implements FindSet<T> {

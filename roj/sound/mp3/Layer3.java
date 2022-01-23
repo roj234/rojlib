@@ -29,7 +29,7 @@
  */
 package roj.sound.mp3;
 
-import roj.concurrent.SharedThreads;
+import roj.concurrent.TaskPool;
 import roj.sound.util.AudioBuffer;
 
 /**
@@ -46,6 +46,8 @@ final class Layer3 extends Layer {
     private final int[] sfbIndexLong, sfbIndexShort;
     private final boolean isMPEG1;
     private SynthesisTask filterCh0, filterCh1;
+
+    static final TaskPool DECODER = new TaskPool(0, 2, 1, 120000, "L3 Dec");
 
     public Layer3(Header header, AudioBuffer audio) {
         super(header, audio, new BitStream(0));
@@ -1281,10 +1283,10 @@ final class Layer3 extends Layer {
 
         // 异步多相合成滤波
         xrch0 = filterCh0.swapBuf();
-        SharedThreads.CPU_POOL.pushTask(filterCh0);
+        DECODER.pushTask(filterCh0);
         if (channels == 2) {
             xrch1 = filterCh1.swapBuf();
-            SharedThreads.CPU_POOL.pushTask(filterCh1);
+            DECODER.pushTask(filterCh1);
         }
 
         return off;
