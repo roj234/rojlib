@@ -78,15 +78,16 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable {
         this.token = token;
         this.rnd = new SecureRandom();
         this.socketsById = new IntMap<>();
-        setDaemon(true);
     }
 
     @Override
     public final void shutdown() {
         shutdown = true;
+        syncPrint("进入关闭进程, 请耐心等待数秒...");
         try {
             join();
         } catch (InterruptedException ignored) {}
+        syncPrint("已关闭");
     }
 
     @Override

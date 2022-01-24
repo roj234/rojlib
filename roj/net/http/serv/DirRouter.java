@@ -1,5 +1,5 @@
 /*
- * This file is a part of MoreItems
+ * This file is a part of MI
  *
  * The MIT License (MIT)
  *
@@ -23,17 +23,46 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.cross.server;
+package roj.net.http.serv;
+
+import roj.net.WrappedSocket;
+import roj.net.http.Code;
+
+import javax.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
 
 /**
- * @author Roj233
- * @since 2021/12/23 22:30
+ * @author Roj234
+ * @since  2021/2/16 11:17
  */
-final class Closed extends Stated {
-    public static final Closed CLOSED = new Closed();
+public class DirRouter implements Router {
+    public final File dir;
+
+    public DirRouter(File dir) {
+        this.dir = dir;
+    }
 
     @Override
-    Stated next(Client self) {
-        return null;
+    public int readTimeout() {
+        return 3000;
+    }
+
+    @Override
+    public int writeTimeout(@Nullable Request request) {
+        return 5000;
+    }
+
+    @Override
+    public Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException {
+        String url = req.path();
+        File f = new File(dir, url.endsWith("/") ? url + "index.html" : url);
+        if(!f.isFile()) {
+            if(url.endsWith("/")) {
+                return new Reply(Code.FORBIDDEN, StringResponse.forError(Code.FORBIDDEN, null));
+            }
+            return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
+        }
+        return new Reply(Code.OK, new FileResponse(f));
     }
 }

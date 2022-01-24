@@ -32,6 +32,7 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.Consumer;
 
 import static roj.collect.IntMap.NOT_USING;
 
@@ -376,6 +377,20 @@ public class MyHashSet<K> implements Set<K>, FindSet<K> {
         size = 0;
         if (entries != null)
             Arrays.fill(entries, null);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void forEach(Consumer<? super K> action) {
+        if (size == 0) return;
+        for (Object obj : entries) {
+            while (obj instanceof Entry) {
+                Entry prev = (Entry) obj;
+                action.accept((K) prev.k);
+                obj = prev.next;
+            }
+            if (obj != null) action.accept((K) obj);
+        }
     }
 
     static final class SetItr<K> extends AbstractIterator<K> {

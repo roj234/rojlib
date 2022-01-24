@@ -1,5 +1,6 @@
 package roj.net.cross.server;
 
+import roj.concurrent.task.AbstractCalcTask;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 
@@ -8,6 +9,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.P_UPNP_PING;
@@ -16,15 +18,35 @@ import static roj.net.cross.server.AEServer.server;
 
 /**
  * @author Roj233
- * @since 2022/1/22 3:34
+ * @since 2022/1/24 14:12
  */
-public class UPnPinger {
-    long lastPing;
+public class UPnPPingTask extends AbstractCalcTask<Byte> {
+    final byte[] ip;
+    final char port;
+    final long sec;
 
-    int ping(Client w, char port, byte[] ip, long sec) {
-        if (System.currentTimeMillis() - lastPing < 10000) return -3;
+    public UPnPPingTask(byte[] ip, char port, long sec) {
+        this.ip = ip;
+        this.port = port;
+        this.sec = sec;
+    }
 
-        lastPing = System.currentTimeMillis();
+    @Override
+    public void calculate(Thread thread) throws Exception {
+        executing = true;
+        try {
+            this.out = (byte) asyncPing(ip, port, sec);
+        } catch (Throwable e) {
+            exception = new ExecutionException(e);
+        }
+        executing = false;
+
+        synchronized (this) {
+            notifyAll();
+        }
+    }
+
+    static int asyncPing(byte[] ip, char port, long sec) {
         try (Socket soc = new Socket()) {
             soc.setSoTimeout(200);
             soc.setReuseAddress(true);

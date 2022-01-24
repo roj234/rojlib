@@ -68,11 +68,14 @@ public class HarExporter {
             } catch (MalformedURLException e) {
                 e.printStackTrace();
             }
+            if (!entry.containsKey("response.content")) continue;
+            int size = entry.getInteger("response.content.size");
+            if (size == 0) continue;
             String content = entry.getString("response.content.text");
             String encoding = entry.getString("response.content.encoding");
 
             tmp.clear();
-            if (encoding.equalsIgnoreCase("base64")) {
+            if (!content.isEmpty() && encoding.equalsIgnoreCase("base64")) {
                 Base64.decode(content, tmp);
             } else if (encoding.isEmpty()) {
                 ByteList.writeUTF(tmp, content, 2);

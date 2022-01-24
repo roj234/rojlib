@@ -25,11 +25,11 @@
  */
 package roj.net.gay;
 
+import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITaskNaCl;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.NetworkUtil;
-import roj.net.misc.TaskManager;
 import roj.net.mss.MSSServerEngineFactory;
 import roj.net.mss.PreSharedPubKey;
 import roj.util.ByteList;
@@ -64,7 +64,7 @@ public class Server extends FastLocalThread {
         Server s = new Server(new InetSocketAddress(InetAddress.getLocalHost(), port), 40);
         s.repo = Repository.init(new File(args[1]));
         s.repo.load();
-        s.setName("Gay Server");
+        s.setName("Gay Server Acceptor");
         s.start();
     }
 
@@ -78,7 +78,7 @@ public class Server extends FastLocalThread {
     int maxConn;
     static final Function<InetAddress, AtomicInteger> COUNTER = (x) -> new AtomicInteger();
 
-    TaskManager watcher = new TaskManager();
+    TaskPool watcher = new TaskPool(1, 10, 1);
 
     public Server(InetSocketAddress address, int max) throws IOException, GeneralSecurityException {
         KeyPair pair = NetworkUtil.genAndStoreRSAKey(new File("g_server.key"),

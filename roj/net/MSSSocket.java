@@ -172,16 +172,21 @@ public class MSSSocket extends PlainSocket {
         if (hsOut != null) throw new MSSException("Not handshake");
         if (!dataFlush()) return 0;
 
-        if (wBuf.capacity() < src.remaining()) wBuf = ByteBuffer.allocate(src.remaining());
+        int cap = Math.min(Shared.WRITE_MAX, src.remaining());
+        if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
         else wBuf.clear();
 
         int pos = src.position();
+        int lim = src.limit();
+        src.limit(src.position() + cap);
         try {
             e.crypt(src, wBuf);
         } catch (Throwable e) {
             src.position(pos);
             wBuf.position(0).limit(0);
             throw new MSSException("Cipher fault", e);
+        } finally {
+            src.limit(lim);
         }
         wBuf.flip();
 

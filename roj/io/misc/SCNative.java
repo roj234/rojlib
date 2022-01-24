@@ -41,7 +41,9 @@ public interface SCNative {
 
     long writev(FileDescriptor fd, long addr, int len) throws IOException;
 
-    void preClose(FileDescriptor fd) throws IOException;
+    default void preClose(FileDescriptor fd) throws IOException {}
 
-    void close(FileDescriptor fd) throws IOException;
+    default void close(FileDescriptor fd) throws IOException {
+        throw new IllegalStateException("Use SCN.close() instead");
+    }
 }

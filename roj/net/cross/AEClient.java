@@ -105,7 +105,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
             throw new IOException("Client closed");
 
         try {
-            if (!lock.tryTransfer(portMapId, 1000, TimeUnit.MILLISECONDS)) {
+            if (!lock.tryTransfer(portMapId, 2000, TimeUnit.MILLISECONDS)) {
                 throw new IOException("异步处理超时");
             }
         } catch (InterruptedException ignored) {} // should not happen
@@ -357,7 +357,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                             syncPrint("未知数据包: " + NIOUtil.dumpDirty(rb));
                         }
                         rb.clear();
-                        break conn;
+                        break block;
                 }
                 rb.clear();
                 heart = T_HEART;

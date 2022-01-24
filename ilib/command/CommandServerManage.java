@@ -28,16 +28,15 @@ package ilib.command;
 
 import ilib.command.sub.AbstractSubCommand;
 import io.netty.channel.ChannelHandler;
-import roj.net.http.Code;
-import roj.net.http.serv.*;
-
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
+import roj.net.WrappedSocket;
+import roj.net.http.Code;
+import roj.net.http.serv.*;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.zip.ZipFile;
 
@@ -139,8 +138,8 @@ public final class CommandServerManage extends AbstractSubCommand {
 
     private static class ServerManageRouter implements Router {
         @Override
-        public Reply response(Socket socket, Request request) {
-            switch (request.path()) {
+        public Reply response(WrappedSocket ch, Request req, RequestHandler handle) {
+            switch (req.path()) {
                 case "status":
                 case "tps":
                 case "mem":

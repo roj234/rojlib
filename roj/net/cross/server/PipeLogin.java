@@ -32,7 +32,6 @@ import roj.net.misc.PipeIOThread;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
 import static roj.net.cross.server.AEServer.server;
@@ -48,65 +47,61 @@ final class PipeLogin extends Stated {
     @Override
     Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
+        if (System.currentTimeMillis() > W.timer) {
+            syncPrint(W + ": 登录超时");
+            write1(ch, (byte) PS_ERROR_TIMEOUT);
+            return null;
+        }
 
         ByteBuffer rb = ch.buffer();
-        rb.clear();
+        if (rb.position() < 8) {
+            int read = ch.read(8 - rb.position());
+            if (read < 0) return null;
+        }
+        if (rb.position() < 8) {
+            return this;
+        }
 
-        int heart = TIMEOUT;
-        while (!server.shutdown) {
-            int read;
-            if ((read = ch.read(8 - rb.position())) == 0 && rb.position() < 8) {
-                LockSupport.parkNanos(10000);
-                if (heart-- < 0) {
-                    syncPrint(W + ": 登录超时");
-                    break;
-                }
-                continue;
+        Integer user = rb.getInt(0);
+        int pass = rb.getInt(4);
+
+        PipeGroup group = server.pipes.get(user);
+        if (group == null || pass == 0) syncPrint(W + ": 无效的管道 " + user + "@" + pass);
+        else {
+            Pipe pipe = group.pairRef;
+            if (group.upPass == pass) {
+                pipe.setUpstream(ch.fd());
+                group.upPass = 0;
+                if (DEBUG) syncPrint(W + ": " + user + " up logon");
+            } else if (group.downPass == pass) {
+                pipe.setClient(ch.fd());
+                group.downPass = 0;
+                if (DEBUG) syncPrint(W + ": " + user + " down logon");
+            } else {
+                syncPrint(W + ": " + user + " 密码无效");
+                return null;
             }
+            if (group.upPass == group.downPass) {
+                server.pipes.remove(user);
+                group.downOwner.pending = null;
 
-            if (read < 0) break;
-            Integer user = rb.getInt(0);
-            int pass = rb.getInt(4);
-
-            PipeGroup group = server.pipes.get(user);
-            if (group == null || pass == 0) syncPrint(W + ": 无效的管道 " + user + "@" + pass);
-            else {
-                Pipe pipe = group.pairRef;
-                if (group.upPass == pass) {
-                    pipe.setUpstream(ch.fd());
-                    group.upPass = 0;
-                    if (DEBUG) syncPrint(W + ": " + user + " up logon");
-                } else if (group.downPass == pass) {
-                    pipe.setClient(ch.fd());
-                    group.downPass = 0;
-                    if (DEBUG) syncPrint(W + ": " + user + " down logon");
-                } else {
-                    syncPrint(W + ": " + user + " 密码无效");
-                    break;
+                syncPrint("管道 #" + user + " 开启");
+                AtomicInteger i = server.remain;
+                try {
+                    PipeIOThread.syncRegister(server, pipe, p -> {
+                        i.addAndGet(2);
+                        PipeGroup group1 = (PipeGroup) p.att;
+                        try {
+                            group1.close(-1);
+                        } catch (IOException ignored) {}
+                    });
+                } catch (IOException e) {
+                    throw e;
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-                if (group.upPass == group.downPass) {
-                    server.pipes.remove(user);
-                    group.downOwner.pending = null;
-
-                    syncPrint("管道 #" + user + " 开启");
-                    AtomicInteger i = server.remain;
-                    try {
-                        PipeIOThread.syncRegister(server, pipe, p -> {
-                            i.addAndGet(2);
-                            PipeGroup group1 = (PipeGroup) p.att;
-                            try {
-                                group1.close(-1);
-                            } catch (IOException ignored) {}
-                        });
-                    } catch (IOException e) {
-                        throw e;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-                return PIPE_OK;
             }
-            break;
+            return PIPE_OK;
         }
         return null;
     }

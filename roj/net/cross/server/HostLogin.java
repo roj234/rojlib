@@ -29,7 +29,7 @@ import roj.net.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.locks.LockSupport;
+import java.nio.charset.StandardCharsets;
 
 import static roj.net.cross.Util.*;
 
@@ -43,72 +43,85 @@ final class HostLogin extends Stated {
     @Override
     Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
-
-        ByteBuffer rb = ch.buffer();
-
-        int t = TIMEOUT;
-        int except = 5;
-        while (!AEServer.server.shutdown) {
-            int read;
-            if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
-                LockSupport.parkNanos(1000_000);
-                if (t-- < 0) {
-                    syncPrint(W + ": 登录超时");
-                    write1(ch, (byte) PS_ERROR_TIMEOUT);
-                    break;
-                }
-                continue;
-            }
-
-            if (read < 0) break;
-
-            int nameLen = rb.get(1) & 0xFF;
-            int passLen = rb.get(2) & 0xFF;
-            int motdLen = rb.get(3) & 0xFF;
-            int portLen = rb.get(4) & 0xFF;
-            if (rb.position() < (except = nameLen + passLen + motdLen + (portLen << 1) + 5)) {
-                continue;
-            }
-            rb.position(5);
-
-            if (portLen < 1 || portLen > 64) {
-                syncPrint(W + ": 端口映射表有误");
-                return Logout.LOGOUT;
-            }
-
-            int code = AEServer.server.login(W,
-                                      true,
-                                      getUTF(rb, nameLen),
-                                      getUTF(rb, passLen));
-            if (code != -1) {
-                syncPrint(W + ": 登录失败: " + ERROR_NAMES[code - 0x20]);
-                write1(ch, (byte) code);
-                return Logout.LOGOUT;
-            }
-
-            byte[] motd = new byte[motdLen];
-            rb.get(motd);
-
-            byte[] port = new byte[portLen << 1];
-            rb.get(port);
-            W.room.hostInit(W, motd, port);
-
-            rb.clear();
-            rb.put((byte) PC_LOGON_H)
-              .put((byte) AEServer.server.info.length)
-              .put(AEServer.server.info).flip();
-            writeAndFlush(ch, rb, 500);
-
-            StringBuilder pb = new StringBuilder();
-            pb.append(W).append(": 登录成功, 端口映射表: ");
-            for (int i = 0; i < port.length; i++) {
-                pb.append(((port[i++] & 0xFF) << 8) | (port[i] & 0xFF)).append(", ");
-            }
-            pb.delete(pb.length() - 2, pb.length());
-            syncPrint(pb.toString());
-            return HostWork.HOST_WORK;
+        if (System.currentTimeMillis() > W.timer) {
+            syncPrint(W + ": 登录超时");
+            write1(ch, (byte) PS_ERROR_TIMEOUT);
+            return Logout.LOGOUT;
         }
 
-        return Logout.LOGOUT;
+        ByteBuffer rb = ch.buffer();
+        int except;
+        switch (W.st1) {
+            case 0:
+                except = 5;
+                break;
+            case 1:
+                except = (rb.get(1) & 0xFF) + (rb.get(2) & 0xFF) +
+                        (rb.get(3) & 0xFF) + ((rb.get(4) & 0xFF) << 1) + 5;
+                break;
+            default:
+                // should not got here
+                throw new IllegalStateException();
+        }
+
+        if (rb.position() < except) {
+            int read = ch.read(except - rb.position());
+            if (read < 0) return Logout.LOGOUT;
+        }
+        if (rb.position() < except) {
+            return null;
+        }
+
+        int nameLen = rb.get(1) & 0xFF;
+        int passLen = rb.get(2) & 0xFF;
+        int motdLen = rb.get(3) & 0xFF;
+        int portLen = rb.get(4) & 0xFF;
+        if (rb.position() < (nameLen + passLen + motdLen + (portLen << 1) + 5)) {
+            W.st1 = 1;
+            return this;
+        }
+        rb.position(5);
+
+        if (portLen < 1 || portLen > 64) {
+            syncPrint(W + ": 端口映射表有误");
+            return Logout.LOGOUT;
+        }
+
+        int code = AEServer.server.login(W,
+                                         true,
+                                         getUTF(rb, nameLen),
+                                         getUTF(rb, passLen));
+        if (code != -1) {
+            syncPrint(W + ": 登录失败: " + ERROR_NAMES[code - 0x20]);
+            write1(ch, (byte) code);
+            return Logout.LOGOUT;
+        }
+
+        byte[] motd = new byte[motdLen];
+        rb.get(motd);
+
+        byte[] port = new byte[portLen << 1];
+        rb.get(port);
+
+        Room room = W.room;
+        room.motd = motd;
+        room.motdString = new String(motd, StandardCharsets.UTF_8);
+        room.portMap = port;
+
+        rb.clear();
+        rb.put((byte) PC_LOGON_H)
+          .put((byte) AEServer.server.info.length)
+          .put(AEServer.server.info).flip();
+        writeAndFlush(ch, rb, 500);
+
+        StringBuilder pb = new StringBuilder();
+        pb.append(W).append(": 登录成功, 端口映射表: ");
+        for (int i = 0; i < port.length; i++) {
+            pb.append(((port[i++] & 0xFF) << 8) | (port[i] & 0xFF)).append(", ");
+        }
+        pb.delete(pb.length() - 2, pb.length());
+        syncPrint(pb.toString());
+        rb.clear();
+        return HostWork.HOST_WORK;
     }
 }

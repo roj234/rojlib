@@ -25,13 +25,14 @@
  */
 package roj.misc;
 
-import roj.management.PerformanceLogger;
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
+import roj.net.http.WebSocketManager;
 import roj.net.http.serv.GZipFileResponse;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.Response;
 import roj.net.http.serv.StringResponse;
+import roj.util.SleepingBeauty;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,14 +45,16 @@ import java.security.GeneralSecurityException;
  */
 public class HttpExample {
     public static void main(String[] args) throws IOException, GeneralSecurityException {
-        Thread thread = new Thread(new PerformanceLogger());
-        thread.setDaemon(true);
-        thread.start();
-
         Response gzc = new GZipFileResponse(new File("E:/章节修复.txt"));
 
+        SleepingBeauty.sleep();
+        WebSocketManager man = new WebSocketManager(null, 4);
         HttpServer server = new HttpServer(new InetSocketAddress(2333), 2048,
-                                           (socket, request) -> {
+                                           (ch, request, handle) -> {
+            if ("websocket".equals(request.header("Upgrade"))) {
+                return man.switchToWebsocket(request, handle);
+            }
+
             Reply reply;
             int action = request.action();
 
@@ -66,7 +69,7 @@ public class HttpExample {
                             .append("<br/>HEADER:<pre>").append(request.headers()).append("</pre><br/ >")
                             .append("<br/>GET:").append(request.getFields()).append("<br/ >")
                             .append("<br/>POST:").append(request.postFields()).append("<br/ >")
-                            .append("<br/><h2 style='color:#eecc44'>Server: Async/2.0</h2><form method=post><input type=text name=myname /><input type=text name=myname22 /><input type=submit /></form>");
+                            .append("<br/><h2 style='color:#eecc44'>Server: Async/2.1</h2>现已支持keep-alive和WebSocket!<form method=post><input type=text name=myname /><input type=text name=myname22 /><input type=submit /></form>");
 
                     return new Reply(Code.OK, new StringResponse(sb, "text/html"));
                 case "/file":

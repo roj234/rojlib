@@ -191,7 +191,8 @@ public class AEGuiServer {
     private static HttpServer runServer(int port) throws IOException {
         Reply DONE = new Reply(Code.OK, new StringResponse("{\"o\":1}", "application/json"));
 
-        return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (socket, request) -> {
+        return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64,
+                              (socket, request, requestHandler) -> {
             switch (request.path()) {
                 case "/bundle.min.css":
                     return new Reply(Code.OK, new StringResponse(res("bundle.min.css"), "text/css"));

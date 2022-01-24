@@ -1,4 +1,4 @@
-package roj.net.misc;
+package roj.concurrent;
 
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.LockSupport;
@@ -10,10 +10,10 @@ import java.util.concurrent.locks.LockSupport;
 public class Waiters {
     private volatile Entry head;
 
-    static final AtomicReferenceFieldUpdater<Waiters, Entry> CASHEAD = AtomicReferenceFieldUpdater.newUpdater(Waiters.class, Entry.class, "head");
-    static final AtomicReferenceFieldUpdater<Entry, Entry>   CASNEXT = AtomicReferenceFieldUpdater.newUpdater(Entry.class, Entry.class, "next");
+    private static final AtomicReferenceFieldUpdater<Waiters, Entry> CASHEAD = AtomicReferenceFieldUpdater.newUpdater(Waiters.class, Entry.class, "head");
+    private static final AtomicReferenceFieldUpdater<Entry, Entry>   CASNEXT = AtomicReferenceFieldUpdater.newUpdater(Entry.class, Entry.class, "next");
 
-    public void await(int id) {
+    public Object await(int id) {
         Entry ent = new Entry();
         ent.id = id;
         ent.owner = Thread.currentThread();
@@ -23,9 +23,10 @@ public class Waiters {
             head.next = ent;
         }
         LockSupport.park(this);
+        return ent.payload;
     }
 
-    public boolean await(int id, int timeout) {
+    public Object await(int id, int timeout) {
         Entry ent = new Entry();
         ent.id = id;
         ent.owner = Thread.currentThread();
@@ -34,15 +35,20 @@ public class Waiters {
         if (head != null) {
             head.next = ent;
         }
-        LockSupport.parkNanos(this, timeout * 1000000L);
+        if (timeout > 0) LockSupport.parkNanos(this, timeout * 1000000L);
+        else LockSupport.park(this);
         if (ent.owner != null) {
             ent.owner = null;
-            return false;
+            return null;
         }
-        return true;
+        return ent.payload;
     }
 
     public boolean signal(int id) {
+        return signal(id, this);
+    }
+
+    private boolean signal(int id, Object payload) {
         Entry prev = null, ent = head;
         while (ent != null) {
             if (ent.id == id) {
@@ -54,6 +60,7 @@ public class Waiters {
                 } else {
                     CASNEXT.compareAndSet(prev, ent, ent.next);
                 }
+                ent.payload = payload;
                 Thread t = ent.owner;
                 ent.owner = null;
                 LockSupport.unpark(t);
@@ -68,6 +75,7 @@ public class Waiters {
     static final class Entry {
         int id;
         Thread owner;
+        Object payload;
 
         volatile Entry next;
     }

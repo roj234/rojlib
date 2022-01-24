@@ -25,13 +25,14 @@
  */
 package roj.net.cross.server;
 
-import roj.collect.IntMap;
 import roj.net.WrappedSocket;
-import roj.net.cross.Util;
+import roj.text.UTFCoder;
+import roj.util.ByteList;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.locks.LockSupport;
+import java.nio.channels.SelectionKey;
+import java.util.concurrent.ExecutionException;
 
 import static roj.net.cross.Util.*;
 
@@ -39,47 +40,52 @@ import static roj.net.cross.Util.*;
  * @author Roj233
  * @since 2021/12/21 13:28
  */
-final class ClientWork extends Stated {
+class ClientWork extends Stated {
     static final ClientWork CLIENT_WORK = new ClientWork();
 
     @Override
+    final void enter(Client W) {
+        W.timer = 0;
+        W.lastPacket = System.currentTimeMillis();
+        W.st1 = 1;
+        W.waiting = -1;
+    }
+
+    @Override
     Stated next(Client W) throws IOException {
+        if (!isInRoom(W)) return Logout.LOGOUT;
+
         WrappedSocket ch = W.ch;
-
         ByteBuffer rb = ch.buffer();
-        rb.clear();
 
-        UPnPinger pinger = null;
-        int heart = T_HEART_TIMEOUT;
-        int except = 1;
-        while (!AEServer.server.shutdown && isInRoom(W)) {
-            int read;
-            if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
-                W.pollPackets();
-                LockSupport.parkNanos(10000);
-                if (heart-- < 0) {
-                    syncPrint(W + ": 心跳超时");
-                    write1(ch, (byte) PS_ERROR_TIMEOUT);
-                    break;
-                }
-                continue;
+        if (System.currentTimeMillis() - W.lastPacket > T_HEART_TIMEOUT) {
+            syncPrint(W + ": 心跳超时");
+            write1(ch, (byte) PS_ERROR_TIMEOUT);
+            return Logout.LOGOUT;
+        }
+
+        int except = W.st1;
+        do {
+            switch (readOrAwait(ch, except)) {
+                case -1:
+                    return null;
+                case 0:
+                    W.st1 = except;
+                    return this;
             }
 
-            if (read < 0) break;
+            W.lastPacket = System.currentTimeMillis();
             switch (rb.get(0) & 0xFF) {
                 case P_HEARTBEAT:
-                    W.lastHeart = System.currentTimeMillis();
-                    if (DEBUG) syncPrint(W + ": 客户端心跳");
                     break;
                 case P_LOGOUT:
                     rb.clear();
-                    return Logout.LOGOUT;
+                    return Logout.REQUESTED;
                 case PS_REQUEST_CHANNEL:
                     if (rb.position() < 34) {
                         except = 34;
                         continue;
                     }
-                    except = 1;
 
                     int[] tmp = new int[2];
                     String refused = W.generatePipe(tmp);
@@ -101,7 +107,6 @@ final class ClientWork extends Stated {
                         except = 5;
                         continue;
                     }
-                    except = 1;
                     W.closePipe(rb.getInt(1));
                     break;
                 case P_MSG:
@@ -109,12 +114,10 @@ final class ClientWork extends Stated {
                         except = 6;
                         continue;
                     }
-                    if (rb.position() < (rb.get(5) & 0xFF) + 6) {
-                        except = (rb.get(5) & 0xFF) + 6;
+                    if (rb.position() < (except = (rb.get(5) & 0xFF) + 6)) {
                         continue;
                     }
-                    except = 1;
-                    ChatUtil.chat(W, ch, rb);
+                    chat(W, ch, rb);
                     break;
                 case P_MSG_LONG:
                     if (rb.position() < 7) {
@@ -131,31 +134,63 @@ final class ClientWork extends Stated {
                         except = len + 7;
                         continue;
                     }
-                    except = 1;
-                    ChatUtil.chat(W, ch, rb);
+                    chat(W, ch, rb);
+                    break;
+                case P_MSG_OP:
+                    if (rb.position() < 6) {
+                        except = 6;
+                        continue;
+                    }
+                    switch (rb.get(1) & 0xFF) {
+                        case SPEC_OP_ENABLE_CHAT:
+                            W.room.chatEnabled.add(W.clientId);
+                            break;
+                        case SPEC_OP_DISABLE_CHAT:
+                            W.room.chatEnabled.remove(W.clientId);
+                            break;
+                        case SPEC_OP_BAN:
+                            W.room.chatBanned.add(rb.getInt(2));
+                            break;
+                        case SPEC_OP_UNBAN:
+                            W.room.chatBanned.remove(rb.getInt(2));
+                            break;
+                        case SPEC_OP_BAN_ALL:
+                            W.room.muted = true;
+                            break;
+                        case SPEC_OP_UNBAN_ALL:
+                            W.room.muted = false;
+                            break;
+                        case SPEC_OP_GET_ONLINES:
+                            // todo generate online packet
+                            break;
+                        case SPEC_OP_GET_RECENT_MESSAGE:
+                            break;
+                        default:
+                            write1(ch, (byte) P_FAIL);
+                            break;
+                    }
                     break;
                 case P_UPNP_PING:
                     if (rb.position() < 12) {
                         except = 12;
                         continue;
                     }
-                    if (rb.position() < (rb.get(11) & 0xFF) + 12) {
-                        except = (rb.get(11) & 0xFF) + 12;
+                    if (rb.position() < (except = (rb.get(11) & 0xFF) + 12)) {
                         continue;
                     }
-                    except = 1;
                     rb.position(1).flip();
                     long sec = rb.getLong();
                     char port = rb.getChar();
                     byte[] ip = new byte[rb.get() & 0xFF];
                     rb.get(ip);
 
-                    if (pinger == null) pinger = new UPnPinger();
-                    int result = pinger.ping(W, port, ip, sec);
-                    rb.put(1, (byte) result).limit(2);
-                    W.sync(rb);
-                    writeAndFlush(ch, rb, 500);
-
+                    UPnPPingTask task;
+                    if (W.task != null || (task = W.ping(ip, port, sec)) == null) {
+                        rb.put(1, (byte) -3).limit(2);
+                        writeAndFlush(ch, rb, 500);
+                    } else {
+                        W.task = task;
+                    }
                     break;
                 case P_UPNP_PONG:
                     if (rb.position() < 4) {
@@ -166,7 +201,6 @@ final class ClientWork extends Stated {
                         except = (rb.get(3) & 0xFF) + 4;
                         continue;
                     }
-                    except = 1;
                     rb.putInt(W.clientId).flip();
                     W.room.master.sync(rb);
                     break;
@@ -175,39 +209,131 @@ final class ClientWork extends Stated {
                         except = 5;
                         continue;
                     }
-                    except = 1;
-                    if (null == W.getPipe(rb.getInt(1))) {
+
+                    int pipeId = rb.getInt(1);
+                    if (null == W.getPipe(pipeId)) {
                         if (DEBUG) {
-                            syncPrint("不存在的管道 " + rb.getInt(1));
+                            syncPrint("不存在的管道 " + pipeId);
                         }
                         write1(ch, (byte) P_FAIL);
                         break;
                     }
+
                     rb.flip();
+                    W.timer = System.currentTimeMillis() + TIMEOUT;
+                    W.waiting = pipeId;
+                    W.room.addPending(pipeId);
                     W.room.master.sync(rb);
-                    if (Util.DEBUG) syncPrint(W + ": Await reset #" + rb.getInt(1));
-                    if (W.room.resetLock.await(rb.getInt(1), T_HEART_TIMEOUT)) {
-                        if (Util.DEBUG) syncPrint(W + ": Await reset done");
-                    } else {
-                        // timed out
-                        syncPrint("警告, Reset回调超时, 正在清理门户...");
-                        IntMap<Client> clients = W.room.clients;
-                        synchronized (clients) {
-                            clients.clear();
-                        }
-                        return Logout.LOGOUT;
-                    }
-                    break;
+                    rb.clear();
+                    // do not process more IO
+                    W.key.interestOps(0);
+                    return this;
                 default:
                     unknownPacket(W, rb);
                     return Logout.LOGOUT;
             }
-            if (DEBUG) syncPrint(W + ": PktProcDone");
-            write1(ch, (byte) P_HEARTBEAT);
-            heart = T_HEART_TIMEOUT;
+        } while (rb.position() < except);
+        if (DEBUG) syncPrint(W + ": PP Done");
+        write1(ch, (byte) P_HEARTBEAT);
+        rb.clear();
+        return this;
+    }
+
+    static int readOrAwait(WrappedSocket ch, int exc) throws IOException {
+        ByteBuffer rb = ch.buffer();
+        if (rb.position() < exc) {
+            int read = ch.read(exc - rb.position());
+            if (read < 0) return -1;
+        }
+        return rb.position() >= exc ? 1 : 0;
+    }
+
+    static void checkUPnPPing(Client W) throws IOException {
+        UPnPPingTask task = W.task;
+        if (task.isDone()) {
+            WrappedSocket ch = W.ch;
+            ByteBuffer rb = ch.buffer();
+            try {
+                rb.put(1, task.get()).limit(2);
+            } catch (InterruptedException | ExecutionException e) {
+                syncPrint("理论上，这是不可能发生的...");
+            }
+            W.sync(rb);
+            writeAndFlush(ch, rb, 500);
             rb.clear();
+
+            W.task = null;
+        }
+    }
+
+    static UTFCoder uc;
+    static void chat(Client W, WrappedSocket ch, ByteBuffer rb) throws IOException {
+        int target = rb.getInt(1);
+        if (target == W.clientId) return;
+
+        Room room = W.room;
+        if (target == -1) {
+            boolean isLong = rb.get(0) == P_MSG_LONG;
+
+            int pos = rb.position();
+            rb.position(isLong ? 6 : 5);
+            room.sendMessage(W, isLong ? rb.getChar(6) : (rb.get(5) & 0xFF), rb);
+            rb.position(pos);
+            return;
         }
 
-        return Logout.LOGOUT;
+        Client to = room.clients.get(target);
+        if (null == to || !room.chatEnabled.contains(target) || room.chatBanned.contains(W.clientId)) {
+            write1(ch, (byte) P_FAIL);
+            return;
+        }
+
+        if (CHATSPY) {
+            if (uc == null) {
+                uc = new UTFCoder();
+            }
+            synchronized (uc) {
+                boolean isLong = rb.get(0) == P_MSG_LONG;
+                int len = isLong ? rb.getChar(6) : (rb.get(5) & 0xFF);
+                ByteList buf = uc.byteBuf;
+                buf.ensureCapacity(len);
+
+                int pos = rb.position();
+                rb.position(isLong ? 6 : 5);
+                rb.get(buf.list).position(pos);
+
+                buf.wIndex(len);
+                syncPrint(W + ": msg => " + to + ": " + uc.decode());
+            }
+        }
+
+        rb.putInt(1, W.clientId).flip();
+        to.sync(rb);
+    }
+
+    @Override
+    public void tick(Client W) throws IOException {
+        if (!isInRoom(W)) {
+            W.toState(Logout.LOGOUT);
+            return;
+        }
+
+        if (W.task != null) {
+            checkUPnPPing(W);
+        }
+
+        if (W.waiting >= 0) {
+            if (System.currentTimeMillis() > W.timer) {
+                // 超时了，怎么办
+                syncPrint("ERROR reset超时！");
+                write1(W.ch, (byte) PS_ERROR_IO);
+                W.room.removePending(W.waiting);
+                W.toState(Logout.LOGOUT);
+            } else if (!W.room.isPending(W.waiting)) {
+                W.key.interestOps(SelectionKey.OP_READ);
+                W.waiting = -1;
+                write1(W.ch, (byte) P_HEARTBEAT);
+            }
+        }
     }
 }

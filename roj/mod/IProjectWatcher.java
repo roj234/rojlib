@@ -35,7 +35,7 @@ import java.io.IOException;
  * @author solo6975
  * @since 2021/7/28 20:34
  */
-public class IProjectWatcher {
+class IProjectWatcher {
     public void reset() {}
 
     public static final int ID_RES = 0, ID_SRC = 1;

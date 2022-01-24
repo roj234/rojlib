@@ -25,6 +25,7 @@
  */
 package roj.net.http.serv;
 
+import roj.math.MathUtils;
 import roj.net.WrappedSocket;
 import roj.net.http.Code;
 import roj.net.http.Headers;
@@ -40,12 +41,13 @@ public class Reply {
 
     private final ByteList hdr;
     private       Response response;
-    private final Headers  headers;
+    private final Headers headers;
+    private       boolean noKeepAlive;
 
     public Reply(int code) {
         this.hdr = new ByteList(128);
         this.hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ')
-                .putAscii(Code.getDescription(code)).putAscii("\r\nServer: Async/2.0\r\n");
+                .putAscii(Code.getDescription(code)).putAscii("\r\nServer: Async/2.0\r\nConnection: keep-alive" + "\r\n");
         this.headers = new Headers();
     }
 
@@ -56,9 +58,23 @@ public class Reply {
 
     public Reply(String text) {
         this.hdr = new ByteList(128);
-        this.hdr.putAscii("HTTP/1.1 200 OK\r\nServer: Async/2.0\r\n");
+        this.hdr.putAscii("HTTP/1.1 200 OK\r\nServer: Async/2.0\r\nConnection: keep-alive\r\n");
         this.response = new StringResponse(text);
         this.headers = new Headers();
+    }
+
+    public boolean keepAlive() {
+        return !noKeepAlive;
+    }
+
+    public Reply connectionClose() {
+        if (buf != null) throw new IllegalStateException();
+        if (noKeepAlive) return this;
+        noKeepAlive = true;
+        int len = 12 + MathUtils.digitCount(RequestHandler.KEEP_ALIVE_TIMEOUT);
+        hdr.wIndex(hdr.wIndex() - len);
+        hdr.putAscii("close\r\n");
+        return this;
     }
 
     public void setResponse(Response response) {
@@ -85,6 +101,7 @@ public class Reply {
             CharList tmp = (CharList) Shared.SYNC_BUFFER.get()[2];
             tmp.ensureCapacity(100);
             tmp.clear();
+            //hdr.putAscii("Date: Mon, 24 Jan 2022 14:45:28 GMT\r\n");
 
             if (response != null) {
                 response.writeHeader(tmp);

@@ -29,7 +29,6 @@ import roj.net.WrappedSocket;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.locks.LockSupport;
 
 import static roj.net.cross.Util.*;
 
@@ -43,72 +42,78 @@ final class ClientLogin extends Stated {
     @Override
     Stated next(Client W) throws IOException {
         WrappedSocket ch = W.ch;
-
-        ByteBuffer rb = ch.buffer();
-
-        int t = TIMEOUT;
-        int except = 3;
-        while (!AEServer.server.shutdown) {
-            int read;
-            if ((read = ch.read(except - rb.position())) == 0 && rb.position() < except) {
-                LockSupport.parkNanos(1000_000);
-                if (t-- < 0) {
-                    syncPrint(W + ": 登录超时");
-                    write1(ch, (byte) PS_ERROR_TIMEOUT);
-                    break;
-                }
-                continue;
-            }
-
-            if (read < 0) break;
-
-            int nameLen = rb.get(1) & 0xFF;
-            int passLen = rb.get(2) & 0xFF;
-            if (rb.position() < nameLen + passLen + 3) {
-                except = nameLen + passLen + 3;
-                continue;
-            }
-            rb.position(3);
-
-            int code = AEServer.server.login(W,
-                                      false,
-                                      getUTF(rb, nameLen),
-                                      getUTF(rb, passLen));
-            if (code != -1) {
-                syncPrint(W + ": 登录失败: " + ERROR_NAMES[code - 0x20]);
-                write1(ch, (byte) code);
-                return Logout.LOGOUT;
-            }
-
-            rb.clear();
-            rb.put((byte) PC_LOGON_C)
-              .put((byte) AEServer.server.info.length)
-              .put((byte) W.room.motd.length)
-              .put((byte) (W.room.portMap.length / 2))
-              .putInt(W.clientId).put(AEServer.server.info)
-              .put(W.room.motd).put(W.room.portMap).flip();
-            writeAndFlush(ch, rb, 500);
-            if (W.room.upnpAddress != null) {
-                rb.clear();
-                rb.put(W.room.upnpAddress).flip();
-                writeAndFlush(ch, rb, 500);
-            }
-
-            byte[] addr = ch.socket().getInetAddress().getAddress();
-            rb.clear();
-            rb.put((byte) PH_CLIENT_LOGIN)
-              .putInt(W.clientId)
-              .putShort((short) ch.socket().getPort())
-              .put((byte) addr.length)
-              .put(addr).flip();
-
-            W.room.master.sync(rb);
-            rb.clear();
-
-            syncPrint(W + ": 登录成功");
-            return ClientWork.CLIENT_WORK;
+        if (System.currentTimeMillis() > W.timer) {
+            syncPrint(W + ": 登录超时");
+            write1(ch, (byte) PS_ERROR_TIMEOUT);
+            return Logout.LOGOUT;
         }
 
-        return Logout.LOGOUT;
+        ByteBuffer rb = ch.buffer();
+        int except;
+        switch (W.st1) {
+            case 0:
+                except = 3;
+                break;
+            case 1:
+                except = (rb.get(1) & 0xFF) + (rb.get(2) & 0xFF) + 3;
+                break;
+            default:
+                // should not got here
+                throw new IllegalStateException();
+        }
+
+        if (rb.position() < except) {
+            int read = ch.read(except - rb.position());
+            if (read < 0) return null;
+        }
+        if (rb.position() < except) {
+            return this;
+        }
+
+        int nameLen = rb.get(1) & 0xFF;
+        int passLen = rb.get(2) & 0xFF;
+        if (rb.position() < nameLen + passLen + 3) {
+            W.st1 = 1;
+            return this;
+        }
+        rb.position(3);
+
+        int code = AEServer.server.login(W,
+                                         false,
+                                         getUTF(rb, nameLen),
+                                         getUTF(rb, passLen));
+        if (code != -1) {
+            syncPrint(W + ": 登录失败: " + ERROR_NAMES[code - 0x20]);
+            write1(ch, (byte) code);
+            return Logout.LOGOUT;
+        }
+
+        rb.clear();
+        rb.put((byte) PC_LOGON_C)
+          .put((byte) AEServer.server.info.length)
+          .put((byte) W.room.motd.length)
+          .put((byte) (W.room.portMap.length / 2))
+          .putInt(W.clientId).put(AEServer.server.info)
+          .put(W.room.motd).put(W.room.portMap).flip();
+        writeAndFlush(ch, rb, 500);
+        if (W.room.upnpAddress != null) {
+            rb.clear();
+            rb.put(W.room.upnpAddress).flip();
+            writeAndFlush(ch, rb, 500);
+        }
+
+        byte[] addr = ch.socket().getInetAddress().getAddress();
+        rb.clear();
+        rb.put((byte) PH_CLIENT_LOGIN)
+          .putInt(W.clientId)
+          .putShort((short) ch.socket().getPort())
+          .put((byte) addr.length)
+          .put(addr).flip();
+
+        W.room.master.sync(rb);
+        rb.clear();
+
+        syncPrint(W + ": 登录成功");
+        return ClientWork.CLIENT_WORK;
     }
 }

@@ -127,8 +127,9 @@ public class PlainSocket implements WrappedSocket {
         ByteBuffer tmp;
         if (!src.isDirect()) {
             if (!src.hasArray()) {
-                if (wBuf.capacity() < src.remaining())
-                    wBuf = ByteBuffer.allocate(src.remaining());
+                int cap = Math.min(Shared.WRITE_MAX, src.remaining());
+                if (wBuf.capacity() < cap)
+                    wBuf = ByteBuffer.allocate(cap);
                 else
                     wBuf.clear();
                 wBuf.put(src).flip();

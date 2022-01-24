@@ -26,10 +26,14 @@
 package roj.net.cross.server;
 
 import roj.collect.IntMap;
+import roj.concurrent.ImmediateExecutor;
+import roj.concurrent.PrefixFactory;
+import roj.concurrent.TaskPool;
+import roj.concurrent.task.ITask;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
+import roj.net.misc.FDCLoop;
 import roj.net.misc.Shutdownable;
-import roj.net.misc.TaskManager;
 import roj.net.mss.MSSServerEngineFactory;
 import roj.util.EmptyArrays;
 
@@ -54,8 +58,8 @@ import static roj.net.cross.Util.*;
  * @author Roj233
  * @since 2021/8/17 22:17
  */
-public class AEServer implements Runnable, Shutdownable {
-    static AEServer  server;
+public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
+    static AEServer server;
     // 20分钟
     static final int PIPE_TIMEOUT = 1200_000;
 
@@ -69,14 +73,14 @@ public class AEServer implements Runnable, Shutdownable {
 
     int pipeId;
     ConcurrentHashMap<Integer, PipeGroup> pipes = new ConcurrentHashMap<>();
-    Random rnd;
+    final Random rnd;
 
-    protected final ServerSocket socket;
+    private final TaskPool asyncPool;
+    private final FDCLoop<Client> man;
+    private final ServerSocket socket;
     private final MSSServerEngineFactory factory;
 
-    AtomicInteger remain;
-
-    TaskManager watcher = new TaskManager();
+    final AtomicInteger remain;
 
     public AEServer(InetSocketAddress addr, int conn, MSSServerEngineFactory factory) throws IOException {
         ServerSocket s = this.socket = new ServerSocket();
@@ -85,6 +89,34 @@ public class AEServer implements Runnable, Shutdownable {
         this.remain = new AtomicInteger(conn);
         this.factory = factory;
         this.rnd = new SecureRandom();
+
+        int thr = Runtime.getRuntime().availableProcessors();
+        String p = System.getProperty("AE.client_selectors");
+        if (p != null) {
+            try {
+                thr = Integer.parseInt(p);
+            } catch (NumberFormatException ignored) {}
+        }
+        this.man = new FDCLoop<>(this, "Client IO", thr, 60000, 100);
+
+        thr = 6;
+        p = System.getProperty("AE.executors");
+        if (p != null) {
+            try {
+                thr = Integer.parseInt(p);
+            } catch (NumberFormatException ignored) {}
+        }
+        this.asyncPool = new TaskPool(1, thr, 1, 1, new PrefixFactory("Executor", 120000));
+        this.asyncPool.setRejectPolicy(this);
+    }
+
+    @Override
+    public void onReject(ITask task, int minPending) {
+        new ImmediateExecutor(task).start();
+    }
+
+    public void asyncExecute(ITask task) {
+        asyncPool.pushTask(task);
     }
 
     @Override
@@ -106,7 +138,8 @@ public class AEServer implements Runnable, Shutdownable {
 
                     FileDescriptor fd = NIOUtil.fd(c);
                     initSocketPref(c);
-                    watcher.pushTask(new Client(new MSSSocket(c, fd, factory.newEngine())));
+                    Client client = new Client(new MSSSocket(c, fd, factory.newEngine()));
+                    man.register(client, client);
                 }
             } catch (Throwable e) {
                 e.printStackTrace();
@@ -140,22 +173,32 @@ public class AEServer implements Runnable, Shutdownable {
         return shutdown;
     }
 
+    @Override
     public void shutdown() {
         if(shutdown) return;
         try {
             socket.close();
         } catch (IOException ignored) {}
 
+        asyncPool.shutdown();
+        man.shutdown();
+
         for (Room room : rooms.values()) {
             room.token = null;
             room.master = null;
             synchronized (room.clients) {
                 for (Client w : room.clients.values()) {
-                    w.self.interrupt();
-                    LockSupport.unpark(w.self);
                     if (w.ch == null) continue;
                     try {
                         write1(w.ch, (byte) PS_ERROR_SHUTDOWN);
+                    } catch (IOException ignored) {}
+
+                    try {
+                        int t = 10;
+                        while (!w.ch.shutdown() && t-- > 0) {
+                            LockSupport.parkNanos(10000);
+                        }
+                        w.close();
                     } catch (IOException ignored) {}
                 }
             }
@@ -164,9 +207,6 @@ public class AEServer implements Runnable, Shutdownable {
 
         LockSupport.parkNanos(1000_000);
         shutdown = true;
-
-        watcher.waitUntilFinish();
-        watcher = null;
 
         System.out.println("服务器关闭");
     }

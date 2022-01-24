@@ -16,7 +16,7 @@ public final class PipeGroup {
     long timeout;
     int id, upPass, downPass;
     Client downOwner;
-    Pipe   pairRef;
+    Pipe pairRef;
 
     // -2超时 -1连接断开 0房主关闭 1客户端关闭
     public void close(int from) throws IOException {
@@ -52,6 +52,8 @@ public final class PipeGroup {
         if (from != 1 && downOwner.getPipe(id) != null) {
             downOwner.closePipe(id);
             downOwner.sync(packet);
+            if (downOwner.pending == this)
+                downOwner.pending = null;
             packet.position(0);
         }
 

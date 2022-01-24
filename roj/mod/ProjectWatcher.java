@@ -42,7 +42,7 @@ import java.util.concurrent.locks.LockSupport;
  * @author Roj233
  * @since 2021/7/17 19:01
  */
-public final class ProjectWatcher extends IProjectWatcher implements Runnable {
+final class ProjectWatcher extends IProjectWatcher implements Runnable {
     static final class X {
         WatchKey key;
         final String owner;
@@ -170,6 +170,8 @@ public final class ProjectWatcher extends IProjectWatcher implements Runnable {
                         for (X set : remove) {
                             actions.remove(set);
                             set.key.cancel();
+                            set.s.clear();
+                            set.s.add(null);
                         }
                     }
                 }

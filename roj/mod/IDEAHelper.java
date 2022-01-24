@@ -43,10 +43,9 @@ import java.util.List;
  * Automatic add/remove IDEA source roots
  *
  * @author solo6975
- * @version 1.0
  * @since 2021/7/23 10:57
  */
-public class IDEAHelper {
+class IDEAHelper {
     public static void config(File imlPath, String projName, boolean remove) throws IOException, ParseException {
         String basePath = "file://$MODULE_DIR$/projects/" + projName + "/";
 

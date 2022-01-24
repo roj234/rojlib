@@ -41,12 +41,22 @@ public class FileResponse extends StreamResponse {
 
     @Override
     public void writeHeader(CharList list) {
+        String mime = file.getName();
+        mime = mime.substring(mime.lastIndexOf('.') + 1).toLowerCase();
         String type;
-        String name = file.getName();
-        if (name.endsWith(".html"))
-            type = "text/html; charset=UTF-8";
-        else
-            type = "application/octet-stream";
+        switch (mime) {
+            case "html":
+                type = "text/html; charset=UTF-8";
+                break;
+            case "css":
+                type = "text/css; charset=UTF-8";
+                break;
+            case "js":
+                type = "text/javascript; charset=UTF-8";
+                break;
+            default:
+                type = "application/octet-stream";
+        }
 
         list.append("Content-Type: ").append(type).append(CRLF)
             .append("Content-Length: ").append(Long.toString(file.length())).append(CRLF);

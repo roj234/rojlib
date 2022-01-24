@@ -118,14 +118,14 @@ public final class FMDMain {
                 System.out.print(" by ");
                 CmdUtil.fg(CmdUtil.Color.YELLOW, true);
                 System.out.println("Roj234");
-                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload");
+                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload, auto");
                 System.out.println();
             }
         }
 
         if(args.length == 0) {
             if(isCLI) {
-                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload");
+                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload, auto");
                 System.out.println();
                 return;
             }
@@ -185,6 +185,10 @@ public final class FMDMain {
                 break;
             case "preAT":
                 exitCode = preAT(new UIWarp());
+                break;
+            case "auto":
+                assert isCLI;
+                AutoCompile.setEnabled(Boolean.parseBoolean(args[1]));
                 break;
             case "reload":
                 if(isCLI) {

@@ -25,13 +25,13 @@
  */
 package roj.net.http.serv;
 
+import roj.net.WrappedSocket;
 import roj.net.http.Code;
 import roj.text.CharList;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Socket;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -57,8 +57,8 @@ public class ZipRouter implements Router {
     }
 
     @Override
-    public Reply response(Socket socket, Request request) throws IOException {
-        String url = request.path().substring(1);
+    public Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException {
+        String url = req.path().substring(1);
 
         boolean flag = url.endsWith("/");
         ZipEntry ze = zipFs.getEntry(flag ? url + "index.html" : url);

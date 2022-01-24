@@ -26,12 +26,12 @@
 package roj.net.cross;
 
 import roj.collect.IntMap;
+import roj.concurrent.PacketBuffer;
 import roj.config.word.AbstLexer;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.NetworkUtil;
 import roj.net.WrappedSocket;
-import roj.net.misc.PacketBuffer;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
 import roj.util.Helpers;
@@ -325,7 +325,7 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                             syncPrint("未知数据包: " + NIOUtil.dumpBuffer(rb));
                         }
                         rb.clear();
-                        break conn;
+                        break block;
                 }
                 rb.clear();
                 heart = T_HEART;

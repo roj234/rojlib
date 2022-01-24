@@ -210,16 +210,13 @@ public final class Request {
         return new Request(act, version, path, headers, postFields, (InetSocketAddress) socket.socket().getRemoteSocketAddress());
     }
 
-    public static Request parseAsync(WrappedSocket socket, Router router, Object[] holder) throws IllegalRequestException {
-        Object obj = holder[0];
+    public static Request parseAsync(WrappedSocket socket, Router router, HttpLexer[] holder) throws IllegalRequestException {
+        HttpLexer lexer = holder[0];
 
-        HttpLexer lexer;
-        if(obj == null) {
+        if(lexer == null) {
             StreamLikeSequence seq = new StreamLikeSequence(true);
             lexer = new HttpLexer().init(seq.init(socket, router));
             holder[0] = lexer;
-        } else {
-            lexer = (HttpLexer) holder[0];
         }
 
         try {

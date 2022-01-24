@@ -26,26 +26,28 @@
 package roj.net.http;
 
 import roj.collect.TimedHashMap;
-import roj.concurrent.TaskPool;
+import roj.math.MutableInt;
 import roj.net.SocketFactory;
 import roj.net.http.serv.RequestHandler;
 import roj.net.http.serv.Router;
+import roj.net.misc.FDCLoop;
+import roj.ui.CmdUtil;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class HttpServer implements Runnable {
-    public static final boolean THROTTLING_CHECK_ENABLED = false;
-    public static final Map<String, AtomicInteger> CONNECTING_ADDRESSES = new TimedHashMap<>(1000);
+    static final boolean CheckDDOS = false;
+    final Map<String, MutableInt> connecting = new TimedHashMap<>(1000);
 
     final ServerSocket   socket;
-    final SocketFactory factory;
-    final Router        router;
-    final TaskPool pool;
+    final SocketFactory  factory;
+    final Router  router;
+    final FDCLoop<RequestHandler> proc;
 
     public HttpServer(InetSocketAddress address, int conn, Router router) throws IOException {
         this(address, conn, router, SocketFactory.PLAIN_FACTORY);
@@ -57,8 +59,9 @@ public class HttpServer implements Runnable {
         socket.setReuseAddress(true);
         socket.bind(address, conn);
         this.router = router;
-        final int cpus = Runtime.getRuntime().availableProcessors();
-        this.pool = new TaskPool(cpus >> 1, cpus << 1, 32);
+
+        int cpus = Runtime.getRuntime().availableProcessors();
+        this.proc = new FDCLoop<>(null, "Http Connection #", cpus, 30000, 100);
     }
 
     public final ServerSocket getSocket() {
@@ -67,7 +70,6 @@ public class HttpServer implements Runnable {
 
     @Override
     public void run() {
-        TaskPool pool = this.pool;
         while (true) {
             Socket c;
             try {
@@ -77,8 +79,27 @@ public class HttpServer implements Runnable {
             }
             try {
                 c.setReuseAddress(true);
-                pool.pushTask(new RequestHandler(factory.wrap(c), router));
-            } catch (IOException e) {
+                if(CheckDDOS) {
+                    InetAddress ip = c.getInetAddress();
+                    int port = c.getPort();
+
+                    Map<String, MutableInt> m = connecting;
+                    String key = String.valueOf(ip) + ':' + port;
+                    MutableInt i = m.get(key);
+                    if (i == null) {
+                        m.put(key, i = new MutableInt());
+                    }
+
+                    int count = i.incrementAndGet();
+                    if (count > 100) {
+                        if (count % 128 == 0)
+                            CmdUtil.warning(System.currentTimeMillis() + ':' + key + ": throttling.");
+                        c.close();
+                    }
+                }
+
+                proc.register(new RequestHandler(factory.wrap(c), router), null);
+            } catch (Throwable e) {
                 e.printStackTrace();
             }
         }
@@ -86,6 +107,6 @@ public class HttpServer implements Runnable {
 
     public void stop() throws IOException {
         socket.close();
-        pool.shutdown();
+        proc.shutdown();
     }
 }

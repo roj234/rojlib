@@ -46,6 +46,7 @@ import javax.net.ssl.X509TrustManager;
 import java.io.*;
 import java.math.BigInteger;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.*;
 import java.security.cert.X509Certificate;
@@ -65,6 +66,12 @@ public final class NetworkUtil {
             SSLContext.getDefault().init(null, new TrustManager[] {new TrustAllManager()}, null);
         } catch (NoSuchAlgorithmException | KeyManagementException ignored) {}
         // should not happen
+    }
+
+    static InetAddress any;
+    public static InetAddress anyLocalAddress() {
+        if (any != null) return any;
+        return any = new InetSocketAddress(0).getAddress();
     }
 
     public static int number2hex(int i, byte[] buf) {

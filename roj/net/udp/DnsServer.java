@@ -31,12 +31,10 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.math.MathUtils;
 import roj.net.NetworkUtil;
+import roj.net.WrappedSocket;
 import roj.net.http.Action;
 import roj.net.http.Code;
-import roj.net.http.serv.Reply;
-import roj.net.http.serv.Request;
-import roj.net.http.serv.Router;
-import roj.net.http.serv.StringResponse;
+import roj.net.http.serv.*;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
@@ -1229,15 +1227,15 @@ public class DnsServer implements Router, Runnable {
     }
 
     @Override
-    public Reply response(Socket socket, Request request) throws IOException {
-        switch (request.path()) {
+    public Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException {
+        switch (req.path()) {
             case "/favicon.ico":
                 return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
             case "/":
             case "": {
                 StringBuilder sb = new StringBuilder().append("<head><meta charset='UTF-8' /><title>AsyncDns 1.2</title></head><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.2</h1>");
 
-                String msg = request.getFields().get("msg");
+                String msg = req.getFields().get("msg");
                 if (msg != null) {
                     sb.append("<div style='background: 0xAA8888; margin: 16px; padding: 16px; border: #000 1px dashed; font-size: 24px; text-align: center;'>")
                       .append(TextUtil.unescapeBytes(msg))
@@ -1271,10 +1269,10 @@ public class DnsServer implements Router, Runnable {
                 return reply;
             }
             case "/set": {
-                if(request.action() != Action.POST) {
+                if(req.action() != Action.POST) {
                     return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.forError(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
                 }
-                Map<String, String> postFields = request.postFields();
+                Map<String, String> postFields = req.postFields();
                 String url = postFields.get("url");
                 String type = postFields.get("type");
                 String cnt = postFields.get("cnt");

@@ -1,17 +1,20 @@
 package roj.net.cross.server;
 
 import roj.collect.IntMap;
-import roj.concurrent.task.ITaskNaCl;
+import roj.concurrent.PacketBuffer;
 import roj.config.data.CMapping;
+import roj.io.NIOUtil;
 import roj.net.WrappedSocket;
 import roj.net.cross.AEClient;
-import roj.net.misc.PacketBuffer;
+import roj.net.misc.FDChannel;
 import roj.net.misc.Pipe;
+import roj.net.misc.Selectable;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.util.Iterator;
-import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 
 import static roj.net.cross.Util.*;
 import static roj.net.cross.server.AEServer.server;
@@ -20,16 +23,13 @@ import static roj.net.cross.server.AEServer.server;
  * @author Roj233
  * @since 2022/1/24 3:21
  */
-final class Client implements ITaskNaCl, Runnable {
-    WrappedSocket ch;
-
-    Room   room;
-    int    clientId;
-    Thread self;
+public final class Client extends FDChannel implements Selectable, Consumer<Client> {
+    Room room;
+    int  clientId;
 
     // region 统计数据 (可以删除)
     public final long creation;
-    public long lastHeart;
+    public long       lastPacket;
 
     public int getClientId() {
         return clientId;
@@ -40,7 +40,11 @@ final class Client implements ITaskNaCl, Runnable {
     }
     // endregion
 
+    // 状态量
     private Stated state;
+    long timer, pingTimer;
+    int st1, waiting;
+    UPnPPingTask task;
 
     @Override
     public String toString() {
@@ -54,39 +58,136 @@ final class Client implements ITaskNaCl, Runnable {
     }
 
     Client(WrappedSocket ch) {
-        this.ch = ch;
+        super(ch);
         this.creation = System.currentTimeMillis() / 1000;
         this.state = Handshake.HANDSHAKE;
+        this.state.enter(this);
+        this.wBuf = ByteBuffer.allocateDirect(2000);
+        wBuf.limit(0);
     }
 
     @Override
-    public void run() {
-        self = Thread.currentThread();
-        catcher:
+    public void selected(int readyOps) {
+        if (waiting > 0) return;
         try {
-            while (state != null && !server.shutdown) {
-                state = state.next(this);
-                if (state == PipeLogin.PIPE_OK) break catcher;
+            if (state == null) {
+                if (!ch.shutdown() && timer-- > 0) {
+                    return;
+                }
+                close();
+            } else {
+                Stated newState = state.next(this);
+                if (newState == PipeLogin.PIPE_OK) {
+                    key.cancel();
+                } else if (newState != state) {
+                    state = newState;
+                    if (newState == null) {
+                        timer = 10;
+                    } else {
+                        newState.enter(this);
+                    }
+                }
             }
-            state = Closed.CLOSED;
-
-            while (!ch.shutdown()) {
-                LockSupport.parkNanos(100);
-            }
-            ch.close();
         } catch (Throwable e) {
-            syncPrint(this + ": 断开 " + e.getMessage());
+            syncPrint(this + ": 异常 " + e.getMessage());
             if (e.getClass() != IOException.class) e.printStackTrace();
 
             try {
                 write1(ch, (byte) PS_ERROR_IO);
                 ch.shutdown();
             } catch (IOException ignored) {}
-
-            try {
-                ch.close();
-            } catch (IOException ignored) {}
+            close();
         }
+    }
+
+    public CMapping serialize() {
+        CMapping json = new CMapping();
+        json.put("id", clientId);
+        json.put("ip", ch.socket().getRemoteSocketAddress().toString());
+        Stated state = this.state;
+        json.put("state", state == null ? "CLOSED" : state.getClass().getSimpleName());
+        json.put("time", creation);
+        long up = 0, down = 0;
+        if (!pipes.isEmpty()) {
+            synchronized (pipes) {
+                for (PipeGroup pg : pipes.values()) {
+                    Pipe pr = pg.pairRef;
+                    if (pr == null) continue;
+                    up += pr.uploaded;
+                    down += pr.downloaded;
+                }
+            }
+        }
+        json.put("up", clientId == 0 ? down : up);
+        json.put("down", clientId == 0 ? up : down);
+        json.put("heart", lastPacket / 1000);
+        json.put("pipe", pipes.size());
+        return json;
+    }
+
+    static final int MAX_PACKET = 10020;
+    int        wTimer;
+    ByteBuffer wBuf;
+    public void tick() throws IOException {
+        if (ch == null) return;
+        ch.dataFlush();
+
+        if (state != null) {
+            state.tick(this);
+        }
+
+        if (clientId == 0 && !pipes.isEmpty()) {
+            long time = System.currentTimeMillis();
+            // 嗯...差不多可以，只要脸不太黑...
+            if ((time & 127) == 0) {
+                synchronized (pipes) {
+                    for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
+                        PipeGroup pair = itr.next();
+                        if (pair.pairRef.idleTime > AEServer.PIPE_TIMEOUT) {
+                            itr.remove();
+                            pair.close(-2);
+                        }
+                    }
+                }
+            }
+        }
+
+        ByteBuffer b = this.wBuf;
+        if (b.hasRemaining()) {
+            ch.write(b);
+            if (wTimer++ > 1000) {
+                syncPrint(this + " 写出超时!");
+                toState(Logout.LOGOUT);
+            }
+            if (b.hasRemaining()) return;
+            if (!packets.hasMore())
+                key.interestOps(SelectionKey.OP_READ);
+        }
+
+        if (packets.hasMore()) {
+            b.clear();
+            while (!packets.take(b)) {
+                if (b.capacity() >= MAX_PACKET) {
+                    packets.poll();
+                    throw new IllegalStateException("Packet too big");
+                }
+                NIOUtil.clean(b);
+                b = this.wBuf = ByteBuffer.allocateDirect(Math.min(b.capacity() << 1, MAX_PACKET));
+            }
+            b.flip();
+            ch.write(b);
+            if (b.hasRemaining()) {
+                wTimer = 0;
+            } else if (!packets.hasMore())
+                key.interestOps(SelectionKey.OP_READ);
+        }
+    }
+
+    @Override
+    public void close() {
+        try {
+            ch.close();
+        } catch (IOException ignored) {}
 
         if (room != null) {
             if (room.master == this) {
@@ -106,79 +207,27 @@ final class Client implements ITaskNaCl, Runnable {
             }
         }
 
+        if (key != null) key.cancel();
         ch = null;
         server.remain.getAndIncrement();
-
-        synchronized (this) {
-            notify();
-        }
-    }
-
-    public CMapping serialize() {
-        CMapping json = new CMapping();
-        json.put("id", clientId);
-        json.put("ip", ch.socket().getRemoteSocketAddress().toString());
-        json.put("state", state.getClass().getSimpleName());
-        json.put("time", creation);
-        long up = 0, down = 0;
-        if (!pipes.isEmpty()) {
-            synchronized (pipes) {
-                for (PipeGroup pg : pipes.values()) {
-                    Pipe pr = pg.pairRef;
-                    if (pr == null) continue;
-                    up += pr.uploaded;
-                    down += pr.downloaded;
-                }
-            }
-        }
-        json.put("up", clientId == 0 ? down : up);
-        json.put("down", clientId == 0 ? up : down);
-        json.put("heart", lastHeart / 1000);
-        json.put("pipe", pipes.size());
-        return json;
     }
 
     @Override
-    public void calculate(Thread thread) {
-        run();
-    }
-
-    @Override
-    public boolean isDone() {
-        return ch == null;
-    }
-
-    void pollPackets() throws IOException {
-        byte[] data = packets.poll();
-        if (data != null) {
-            ByteBuffer src = ByteBuffer.wrap(data);
-            int time = 1000;
-            while (time-- > 0 && !server.shutdown) {
-                ch.write(src);
-                if (src.hasRemaining()) { LockSupport.parkNanos(1000); } else break;
-            }
-            if (time <= 0) throw new IOException("超时");
-        }
-
-        if (!pipes.isEmpty()) {
-            long time = System.currentTimeMillis();
-            // 嗯...差不多可以，只要脸不太黑...
-            if ((time & 127) != 0) return;
-            synchronized (pipes) {
-                for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
-                    PipeGroup pair = itr.next();
-                    if (pair.pairRef.idleTime > AEServer.PIPE_TIMEOUT) {
-                        itr.remove();
-                        pair.close(-2);
-                    }
-                }
-            }
-        }
+    public void accept(Client client) {
+        assert client == this;
+        close();
     }
 
     private final PacketBuffer packets = new PacketBuffer();
     public void sync(ByteBuffer rb) {
+        if (rb.remaining() > MAX_PACKET) throw new IllegalArgumentException("Packet too big");
         packets.offer(rb);
+        key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+    }
+
+    void toState(Stated state) {
+        this.state = state;
+        this.state.enter(this);
     }
 
     final IntMap<PipeGroup> pipes = new IntMap<>();
@@ -231,5 +280,16 @@ final class Client implements ITaskNaCl, Runnable {
 
     public PipeGroup getPipe(int pipeId) {
         return pipes.get(pipeId);
+    }
+
+    UPnPPingTask ping(byte[] ip, char port, long sec) {
+        if (System.currentTimeMillis() - pingTimer < 10000) {
+            return null;
+        }
+        pingTimer = System.currentTimeMillis();
+
+        UPnPPingTask task = new UPnPPingTask(ip, port, sec);
+        server.asyncExecute(task);
+        return task;
     }
 }

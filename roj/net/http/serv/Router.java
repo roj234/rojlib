@@ -25,9 +25,10 @@
  */
 package roj.net.http.serv;
 
+import roj.net.WrappedSocket;
+
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.net.Socket;
 
 /**
  * @author Roj234
@@ -43,7 +44,7 @@ public interface Router {
         return 5000;
     }
 
-    Reply response(Socket socket, Request request) throws IOException;
+    Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException;
 
     default int maxLength() {
         return 1048576; // 1MB

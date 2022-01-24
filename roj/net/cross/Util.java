@@ -257,10 +257,6 @@ public class Util {
      * u1 msgLen;
      * utf[msgLen] msg;
      * }
-     *
-     * enum OP {
-     *     0=SET_INACTIVE, 1=SET_ACTIVE
-     * }
      */
     public static final int P_MSG = 12;
     /**
@@ -299,20 +295,64 @@ public class Util {
      * 同P_MSG只是
      * msgLen长度为2bytes
      */
-    public static final int P_MSG_LONG = 13;
+    public static final int P_MSG_LONG = 16;
+    /**
+     * 聊天特殊操作
+     * {
+     * u1 id;
+     * SPEC_OP type;
+     * u4 payload;
+     * }
+     */
+    public static final int P_MSG_OP = 17;
+    /**
+     * 当前在线的客户端
+     * {
+     * u1 id;
+     * u2 packetLen;
+     * ONLINES[] onlines;
+     * }
+     *
+     * ONLINES {
+     *     u4 id;
+     *     u1 nameLen;
+     *     utf[nameLen] nickName;
+     * }
+     */
+    public static final int P_MSG_ONLINES = 18;
+    /**
+     * 改昵称
+     * {
+     * u1 id;
+     * u1 nameLen;
+     * utf[nameLen] nickName;
+     * }
+     */
+    public static final int P_MSG_NICKNAME = 19;
+
+    public static final int
+            SPEC_OP_ENABLE_CHAT = 0,
+            SPEC_OP_DISABLE_CHAT = 1,
+            SPEC_OP_BAN = 2,
+            SPEC_OP_UNBAN = 3,
+            SPEC_OP_BAN_ALL = 4,
+            SPEC_OP_UNBAN_ALL = 5,
+            SPEC_OP_OFFLINE = 6,
+            SPEC_OP_ONLINE = 7,
+            SPEC_OP_GET_ONLINES = 8,
+            SPEC_OP_GET_RECENT_MESSAGE = 9;
 
     // endregion
 
-    public static final String[] ERROR_NAMES = {"IO错误", "登录失败(密码无效/房间不存在/房间已有房主)", "已连接", "未连接", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时"};
+    public static final String[] ERROR_NAMES = {"发生了异常", "登录失败", "未知数据包", "服务器关闭", "主机掉线", "系统限制", "超时", "你被T了"};
     public static final int PS_ERROR_IO = 0x20;
     public static final int PS_ERROR_AUTH = 0x21;
-    public static final int PS_ERROR_CONNECTED = 0x22;
-    public static final int PS_ERROR_NOT_CONNECT = 0x23;
-    public static final int PS_ERROR_UNKNOWN_PACKET = 0x24;
-    public static final int PS_ERROR_SHUTDOWN = 0x25;
-    public static final int PS_ERROR_MASTER_DIE = 0x26;
-    public static final int PS_ERROR_SYSTEM_LIMIT = 0x27;
-    public static final int PS_ERROR_TIMEOUT = 0x28;
+    public static final int PS_ERROR_UNKNOWN_PACKET = 0x22;
+    public static final int PS_ERROR_SHUTDOWN = 0x23;
+    public static final int PS_ERROR_MASTER_DIE = 0x24;
+    public static final int PS_ERROR_SYSTEM_LIMIT = 0x25;
+    public static final int PS_ERROR_TIMEOUT = 0x26;
+    public static final int PS_ERROR_KICKED = 0x27;
 
     public static final int T_HEART_TIMEOUT = 10000;
     public static final int T_HEART = 1500;

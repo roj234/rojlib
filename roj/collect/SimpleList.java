@@ -447,6 +447,41 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         size = 0;
     }
 
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof List))
+            return false;
+        List<?> l = (List<?>) o;
+        if (l.size() != size) return false;
+        if (o instanceof RandomAccess) {
+            for (int i = 0; i < size; i++) {
+                Object o1 = list[i];
+                Object o2 = l.get(i);
+                if (!(o1==null ? o2==null : o1.equals(o2))) return false;
+            }
+        } else {
+            ListIterator<E> e1 = listIterator();
+            ListIterator<?> e2 = l.listIterator();
+            while (e1.hasNext()) {
+                E o1 = e1.next();
+                Object o2 = e2.next();
+                if (!(o1==null ? o2==null : o1.equals(o2)))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    public int hashCode() {
+        int v = 1;
+        for (int i = 0; i < size; i++) {
+            Object e = list[i];
+            v = 31 * v + (e == null ? 0 : e.hashCode());
+        }
+        return v;
+    }
+
     public void i_setSize(int i) {
         this.size = i;
     }

@@ -40,7 +40,7 @@ import java.util.Arrays;
  * @author Roj233
  * @since 2021/12/24 23:27
  */
-public class Pipe {
+public class Pipe implements Selectable {
     public Object att;
     protected SelectionKey upKey, downKey;
 
@@ -77,9 +77,9 @@ public class Pipe {
         this.toc.limit(0);
     }
 
-    public final int transfer() throws IOException {
-        if (upstream == null || downstream == null) return S_CLOSED;
-        return transfer(false);
+    public final void selected(int readyOps) throws IOException {
+        if (upstream == null || downstream == null) return;
+        transfer(false);
     }
 
     final int transfer(boolean bufferOnly) throws IOException {
@@ -176,6 +176,16 @@ public class Pipe {
             return S_NET;
         }
         return S_NOTHING;
+    }
+
+    @Override
+    public void tick() {
+        idleTime++;
+    }
+
+    @Override
+    public boolean isClosedOn(SelectionKey key) {
+        return (key == upKey && upstream == null) || (key == downKey && downstream == null);
     }
 
     private void closeDown() {

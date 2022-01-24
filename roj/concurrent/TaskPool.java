@@ -37,12 +37,17 @@ import java.util.concurrent.locks.LockSupport;
 public class TaskPool implements ThreadStateMonitor, TaskHandler {
     protected final TaskExecutor[] thread;
     protected final MyThreadFactory factory;
+    protected RejectPolicy policy;
 
     public static final MyThreadFactory DEFAULT = TaskExecutor::new;
 
     @FunctionalInterface
     public interface MyThreadFactory {
         TaskExecutor get(TaskPool pool);
+    }
+    @FunctionalInterface
+    public interface RejectPolicy {
+        void onReject(ITask task, int minPending);
     }
 
     protected int core, max, addThr, maxThr;
@@ -128,9 +133,16 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         th.pushTask(task);
     }
 
+    public void setRejectPolicy(RejectPolicy policy) {
+        this.policy = policy;
+    }
+
     protected void onReject(ITask task, int minPending) {
-        // maybe execution by caller
-        throw new RejectedExecutionException("Minimum tasks on thread (" + minPending + ") is larger than limit (" + maxThr + ")");
+        if (policy == null) {
+            throw new RejectedExecutionException("Minimum tasks on thread (" + minPending + ") is larger than limit (" + maxThr + ")");
+        } else {
+            policy.onReject(task, minPending);
+        }
     }
 
     private void newWorker(ITask task, int ov) {

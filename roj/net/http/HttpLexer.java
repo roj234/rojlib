@@ -49,6 +49,10 @@ public final class HttpLexer {
     public int index;
     CharList found = new CharList();
 
+    public CharSequence getInput() {
+        return input;
+    }
+
     /**
      * 读词
      */

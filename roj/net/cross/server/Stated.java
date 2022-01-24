@@ -38,6 +38,13 @@ import static roj.net.cross.Util.*;
  * @since 2021/12/21 13:18
  */
 abstract class Stated {
+    void enter(Client self) {
+        self.timer = System.currentTimeMillis() + TIMEOUT;
+        self.st1 = 0;
+    }
+
+    void tick(Client W) throws IOException {}
+
     abstract Stated next(Client self) throws IOException;
 
     static void unknownPacket(Client self, ByteBuffer rb) throws IOException {
@@ -51,9 +58,13 @@ abstract class Stated {
     }
 
     static boolean isInRoom(Client t) throws IOException {
-        if (t.room != null) {
-            if (t.room.master == null || !t.room.clients.containsKey(t.clientId)) {
+        Room room = t.room;
+        if (room != null) {
+            if (room.master == null) {
                 write1(t.ch, (byte) PS_ERROR_MASTER_DIE);
+                return false;
+            } else if (!room.clients.containsKey(t.clientId)) {
+                write1(t.ch, (byte) PS_ERROR_KICKED);
                 return false;
             }
         }

@@ -25,103 +25,99 @@
  */
 package roj.net.http.serv;
 
-import roj.concurrent.task.ITaskNaCl;
 import roj.net.Notify;
 import roj.net.WrappedSocket;
 import roj.net.http.Code;
-import roj.net.http.HttpServer;
+import roj.net.http.HttpLexer;
 import roj.net.http.IllegalRequestException;
+import roj.net.misc.FDChannel;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
+import java.nio.channels.SelectionKey;
+import java.util.function.Consumer;
 
-public class RequestHandler implements ITaskNaCl {
-    WrappedSocket channel;
+public final class RequestHandler extends FDChannel {
+    public static final int KEEP_ALIVE_TIMEOUT = 300;
+
     final Router router;
-    byte stage;
-    Request request;
-    Reply reply;
+
+    static final byte INITIAL = 0, PARSING_REPLY = 1, SENDING_REPLY = 2, HANGING = 3, CLOSING = 4, CLOSED = 5, EXCEPTION_CLOSED = 6;
+    boolean enter;
+    byte state;
     long time;
-    final Object[] lexerHolder = new Object[1];
 
-    static final Logger L = Logger.getLogger("RequestHandler");
+    Request request;
+    Reply   reply;
+    Consumer<WrappedSocket> cb;
 
-    public RequestHandler(WrappedSocket channel, Router router) {
-        this.channel = channel;
+    final HttpLexer[] lexerHolder = new HttpLexer[1];
+
+    public RequestHandler(WrappedSocket ch, Router router) {
+        super(ch);
         this.router = router;
     }
 
     @Override
-    public boolean continueExecuting() {
-        return stage < 5;
+    public void tick() {
+        if (state == HANGING && System.currentTimeMillis() > time) {
+            enter = false;
+            state = CLOSING;
+        }
     }
 
-    public final void calculate(Thread thread) throws IOException {
-        Reply reply = this.reply;
+    public void waitAnd(Consumer<WrappedSocket> o) {
+        cb = o;
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (ch == null) return;
+
         try {
-            Socket socket = this.channel.socket();
-            InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
+            rs();
+        } catch (IOException ignored) {}
 
-            if (stage < 3) {
-                if (stage == 0) {
-                    socket.setSoTimeout(router.readTimeout());
+        state = CLOSED;
+        key.cancel();
 
-                    if(HttpServer.THROTTLING_CHECK_ENABLED) {
-                        final Map<String, AtomicInteger> addresses = HttpServer.CONNECTING_ADDRESSES;
-                        AtomicInteger integer = addresses.get(remote.getHostString());
-                        if (integer == null) {
-                            synchronized (addresses) {
-                                addresses.put(remote.getHostString(), integer = new AtomicInteger());
-                            }
-                        }
-                        int visited = integer.incrementAndGet();
+        WrappedSocket ch = this.ch;
+        this.ch = null;
 
-                        stage = 1;
-                        if (visited > 100) {
-                            if (visited > 120) {
-                                socket.shutdownInput();
-                                socket.shutdownOutput();
-                                // 连接挂起
-                                stage = 5;
-                                if (visited % 128 == 0)
-                                    L.warning(System.currentTimeMillis() + ":" + remote.getHostString() + ": Connection throttling.");
-                                return;
-                            } else {
-                                reply = new Reply(Code.UNAVAILABLE, new StringResponse("DDoS detected"));
-                                reply.prepare();
-                            }
-                            this.reply = reply;
-                            return;
-                        }
-                    } else {
-                        stage = 1;
-                    }
-                }
+        try {
+            ch.shutdown();
+        } catch (IOException ignored) {}
 
-                if(stage < 2) {
-                    long time = System.currentTimeMillis() + router.readTimeout();
+        ch.close();
+    }
 
-                    if (!channel.handShake()) {
-                        return;
+    @Override
+    @SuppressWarnings("fallthrough")
+    public void selected(int readyOps) throws Exception {
+        try {
+            switch (state) {
+                case INITIAL:
+                    if (!enter) {
+                        time = System.currentTimeMillis() + router.readTimeout();
+                        enter = true;
                     }
                     if (System.currentTimeMillis() > time) {
-                        this.stage = 4;
+                        enter = false;
+                        state = CLOSING;
                         return;
                     }
 
-                    this.stage = 2;
-                }
+                    key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                    if (!ch.handShake()) return;
+                    key.interestOps(SelectionKey.OP_READ);
 
-                if(reply == null) {
+                    enter = false;
+                    state = PARSING_REPLY;
+                case PARSING_REPLY:
+                    Reply reply;
                     try {
-                        if((request = Request.parseAsync(channel, router, lexerHolder)) == null)
-                            return;
+                        if((request = Request.parseAsync(ch, router, lexerHolder)) == null) return;
                         try {
-                            reply = router.response(socket, request);
+                            reply = router.response(ch, request, this);
                         } catch (Throwable e) {
                             reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
                         }
@@ -132,78 +128,94 @@ public class RequestHandler implements ITaskNaCl {
                                 StringResponse.forError(0, e)
                         );
                     }
-                }
+                    if (reply != null) reply.prepare();
+                    this.reply = reply;
 
-                if (reply != null) reply.prepare();
-                this.reply = reply;
-                this.stage = (byte) (reply == null ? 4 : 3);
-                return;
-            }
+                    enter = false;
+                    state = reply == null ? CLOSING : SENDING_REPLY;
+                case SENDING_REPLY:
+                    if (!enter) {
+                        key.interestOps(SelectionKey.OP_WRITE);
+                        time = System.currentTimeMillis() + router.writeTimeout(request);
+                        enter = true;
+                    }
 
-            long time = this.time;
-            if (time == 0)
-                time = this.time = System.currentTimeMillis() + router.writeTimeout(request);
-
-            if (stage == 3) {
-                if (reply.send(this.channel)) {
-                    if (System.currentTimeMillis() > time) {
-                        System.err.println("[Warn] " + System.currentTimeMillis() + ": Timeout while sending " + reply + " to " + remote);
+                    reply = this.reply;
+                    if (reply.send(ch)) {
+                        if (System.currentTimeMillis() > time) {
+                            enter = false;
+                            state = CLOSING;
+                            key.interestOps(SelectionKey.OP_WRITE);
+                        }
+                        return;
                     } else {
+                        enter = false;
+                        state = request.headers().get("Connection").equalsIgnoreCase("keep-alive") && reply.keepAlive() ? HANGING : CLOSING;
+                    }
+                case HANGING:
+                    if (cb != null) {
+                        cb.accept(ch);
+                        key.cancel();
+                        ch = null;
+                        state = CLOSED;
                         return;
                     }
-                }
-                this.stage = 4;
-            } else {
-                if (channel.shutdown()) {
-                    channel.close();
-                    if (reply != null) reply.release();
-                    this.reply = null;
-                    this.stage = 5;
-                }
-            }
-            return;
-
-        } catch (Throwable e) {
-            if (reply != null) {
-                reply.release();
-            }
-
-            reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
-            try {
-                long time = System.currentTimeMillis();
-                long timeout = router.writeTimeout(request);
-
-                while (reply.send(this.channel)) {
-                    if (System.currentTimeMillis() - time >= timeout) {
-                        break;
+                    if (!enter) {
+                        rs();
+                        key.interestOps(SelectionKey.OP_READ);
+                        time = System.currentTimeMillis() + KEEP_ALIVE_TIMEOUT * 1000;
+                        enter = true;
+                    } else {
+                        enter = false;
+                        state = ch.read() < 0 ? CLOSING : INITIAL;
                     }
-                }
-            } catch (Throwable ignored) {
+                    break;
+                case CLOSING:
+                    if (!enter) {
+                        key.interestOps(SelectionKey.OP_WRITE);
+                        time = System.currentTimeMillis() + router.writeTimeout(null);
+                        enter = true;
+                        rs();
+                    }
 
-            } finally {
-                reply.release();
+                    if (!ch.shutdown() && System.currentTimeMillis() <= time) {
+                        return;
+                    }
+
+                    ch.close();
+                    enter = false;
+                    state = CLOSED;
+                    key.cancel();
+                    break;
+                case CLOSED:
+                case EXCEPTION_CLOSED:
+                default:
+                    throw new IllegalStateException();
             }
-
+        } catch (Throwable e) {
             System.out.println("异常 " + e.getMessage());
-            if (e.getClass() != IOException.class)
-                e.printStackTrace();
+            if (e.getClass() != IOException.class) e.printStackTrace();
 
             try {
-                /*
-                 * Only try once
-                 */
-                channel.shutdown();
-            } catch (IOException ignored) {}
+                Reply reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
+                reply.send(ch);
+                reply.release();
+            } catch (Throwable ignored) {}
 
-            channel.close();
-
-            stage = 6;
+            try {
+                close();
+            } finally {
+                state = EXCEPTION_CLOSED;
+            }
         }
-        channel = null;
     }
 
-    @Override
-    public final boolean isDone() {
-        return channel == null;
+    private void rs() throws IOException {
+        if (reply != null) {
+            reply.release();
+            reply = null;
+        }
+        request = null;
+        ch.buffer().clear();
     }
 }

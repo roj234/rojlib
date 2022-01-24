@@ -45,7 +45,7 @@ import static roj.mod.Shared.TMP_DIR;
  * @author Roj234
  * @since 2021/5/30 19:59
  */
-public final class ATHelper {
+final class ATHelper {
     static final class Library {
         final MutableZipFile source;
         final long lastModify;

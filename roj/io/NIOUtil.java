@@ -35,12 +35,16 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.net.DatagramSocket;
+import java.net.DatagramSocketImpl;
 import java.net.Socket;
 import java.net.SocketImpl;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.function.Consumer;
 
 /**
@@ -48,10 +52,10 @@ import java.util.function.Consumer;
  * @since  2020/12/6 14:15
  */
 public final class NIOUtil {
-    public static SCNative SCN;
-    public static FCNative FCN;
-    public static H        UTIL;
-    public static Consumer<Object> CLEAN;
+    private static SCNative SCN, DCN;
+    private static FCNative FCN;
+    private static H        UTIL;
+    private static Consumer<Object> CLEAN;
 
     private static Throwable e;
 
@@ -69,18 +73,27 @@ public final class NIOUtil {
 
         SocketChannel sc = SocketChannel.open();
         sc.close();
-        File tmp = File.createTempFile("nio", null);
-        FileChannel fc = FileChannel.open(tmp.toPath());
+
+        File tmp = new File(System.getProperty("java.io.tmpdir", ".") + "/nio.1");
+        FileChannel fc = FileChannel.open(tmp.toPath(),
+                                          StandardOpenOption.WRITE,
+                                          StandardOpenOption.CREATE,
+                                          StandardOpenOption.DELETE_ON_CLOSE);
         fc.close();
-        tmp.delete();
+
+        DatagramChannel dc = DatagramChannel.open();
+        dc.close();
 
         try {
             UTIL = DirectAccessor.builder(H.class)
                                  .access(Socket.class, "impl", "socketImpl", null)
                                  .access(SocketImpl.class, "fd", "socketFd", null)
-                                 .access(FileDescriptor.class, "fd", null, "fdFd")
+                                 .access(DatagramSocket.class, "impl", "socketImpl1", null)
+                                 .access(DatagramSocketImpl.class, "fd", "socketFd1", null)
+                                 .access(FileDescriptor.class, "fd", "fdVal", "fdFd")
                                  .access(sc.getClass(), new String[] {"fd", "nd"}, new String[] {"sChFd", "sChNd"}, null)
                                  .access(fc.getClass(), new String[] {"fd", "nd"}, new String[] {"fChFd", "fChNd"}, null)
+                                 .access(dc.getClass(), new String[] {"fd", "nd"}, new String[] {"dChFd", "dChNd"}, null)
                                  .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
                                  .delegate_o(b.getClass(), new String[] {"address", "attachment", "cleaner"})
                                  .build();
@@ -107,6 +120,15 @@ public final class NIOUtil {
             };
             FCN = DirectAccessor.builder(FCNative.class)
                                 .delegate(UTIL.fChNd(fc).getClass(), ss2, ss1).build();
+
+            ss1 = new String[]{
+                    "read", "readv", "write", "writev"
+            };
+            ss2 = new String[]{
+                    "read0", "readv0", "write0", "writev0"
+            };
+            DCN = DirectAccessor.builder(SCNative.class)
+                                .delegate(UTIL.dChNd().getClass(), ss2, ss1).build();
         } catch (Throwable e1) {
             if (e == null) e = e1;
             else e.addSuppressed(e1);
@@ -132,9 +154,10 @@ public final class NIOUtil {
     public static final int UNSUPPORTED_CASE = -6;
 
     public static final int SOCKET_FD = 1;
-    public static final int APPEND_FD = 2;
+    public static final int DATAGRAM_FD = 2;
+    public static final int APPEND_FD = 3;
 
-    public static final int DIRECT_CACHE_MAX = 131072;
+    public static final int DIRECT_CACHE_MAX = 9999;
     static final FastThreadLocal<ByteBuffer> DIRECT_CACHE = new FastThreadLocal<ByteBuffer>() {
         @Override
         protected ByteBuffer initialValue() {
@@ -171,7 +194,19 @@ public final class NIOUtil {
         } else {
             if(!fd.valid())
                 throw new IOException();
-            int wrote = flag == 1 ? SCN.write(fd, UTIL.address(buf) + pos, len) : FCN.write(fd, UTIL.address(buf) + pos, len, (flag & 2) == 2);
+            int wrote;
+            long addr = UTIL.address(buf) + pos;
+            switch (flag) {
+                case SOCKET_FD:
+                    wrote = SCN.write(fd, addr, len);
+                    break;
+                case DATAGRAM_FD:
+                    wrote = DCN.write(fd, addr, len);
+                    break;
+                default:
+                    wrote = FCN.write(fd, addr, len, (flag & APPEND_FD) != 0);
+                    break;
+            }
 
             if (wrote > 0) {
                 buf.position(pos + wrote);
@@ -181,7 +216,7 @@ public final class NIOUtil {
         }
     }
 
-    public static int readToNativeBuffer(FileDescriptor fd, ByteBuffer buf, int socket) throws IOException {
+    public static int readToNativeBuffer(FileDescriptor fd, ByteBuffer buf, int flag) throws IOException {
         int pos = buf.position();
         int lim = buf.limit();
 
@@ -191,7 +226,19 @@ public final class NIOUtil {
         } else {
             if(!fd.valid())
                 throw new IOException();
-            int read = socket == 1 ? SCN.read(fd, UTIL.address(buf) + pos, len) : FCN.read(fd, UTIL.address(buf) + pos, len);
+            int read;
+            long addr = UTIL.address(buf) + pos;
+            switch (flag) {
+                case SOCKET_FD:
+                    read = SCN.read(fd, addr, len);
+                    break;
+                case DATAGRAM_FD:
+                    read = DCN.read(fd, addr, len);
+                    break;
+                default:
+                    read = FCN.read(fd, addr, len);
+                    break;
+            }
 
             if (read > 0) {
                 buf.position(pos + read);
@@ -218,8 +265,22 @@ public final class NIOUtil {
         return fd;
     }
 
+    public static FileDescriptor fd(DatagramSocket socket) throws IOException {
+        FileDescriptor fd = UTIL.socketFd1(UTIL.socketImpl1(socket));
+        if(fd.valid())
+            UTIL.configureBlocking(fd, false);
+        else
+            throw new IOException("Invalid FileDescriptor");
+
+        return fd;
+    }
+
     public static FileDescriptor fd(SocketChannel socket) {
         return UTIL.sChFd(socket);
+    }
+
+    public static FileDescriptor fd(DatagramChannel socket) {
+        return UTIL.dChFd(socket);
     }
 
     public static FileDescriptor fd(FileChannel fc) {
@@ -229,6 +290,12 @@ public final class NIOUtil {
     public static void close(FileDescriptor fd) throws IOException {
         if(!fd.valid()) return;
         SCN.close(fd);
+        UTIL.fdFd(fd, -1);
+    }
+
+    public static void closeF(FileDescriptor fd) throws IOException {
+        if(!fd.valid()) return;
+        FCN.close(fd);
         UTIL.fdFd(fd, -1);
     }
 
@@ -242,14 +309,19 @@ public final class NIOUtil {
 
     private interface H {
         SocketImpl socketImpl(Socket socket);
+        DatagramSocketImpl socketImpl1(DatagramSocket socket);
 
         FileDescriptor socketFd(SocketImpl impl);
+        FileDescriptor socketFd1(DatagramSocketImpl impl);
         FileDescriptor sChFd(SocketChannel ch);
+        FileDescriptor dChFd(DatagramChannel ch);
         FileDescriptor fChFd(FileChannel ch);
         void fdFd(FileDescriptor fd, int fd2);
+        int fdVal(FileDescriptor fd);
 
         Object fChNd(FileChannel ch);
         Object sChNd();
+        Object dChNd();
 
         long address(Object buf);
         Object attachment(Object buf);
