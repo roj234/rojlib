@@ -160,14 +160,18 @@ public class DnsServer implements Router, Runnable {
                 if(line.isEmpty() || line.startsWith("#"))
                     continue;
 
-                int i = line.indexOf('\t');
+                int i = line.indexOf(' ');
+                if (i < 0) {
+                    System.err.println("Invalid line " + line);
+                    continue;
+                }
 
                 RecordKey key = new RecordKey();
-                key.url = line.substring(0, i);
+                key.url = line.substring(i + 1);
                 key.qClass = C_IN;
 
                 Record record = new Record();
-                byte[] value = NetworkUtil.ip2bytes(line.substring(i + 1));
+                byte[] value = NetworkUtil.ip2bytes(line.substring(0, i));
                 record.qType = value.length == 4 ? Q_A : Q_AAAA;
                 record.data = value;
                 record.TTL = Integer.MAX_VALUE;
@@ -1170,7 +1174,7 @@ public class DnsServer implements Router, Runnable {
                 if((len & 0xC0) != 0xC0)
                     throw new RuntimeException("Illegal label length " + Integer.toHexString(len));
                 int ri = rx.rIndex;
-                rx.rIndex = ((len & ~0xC0) << 8) | r.readUByte();
+                rx.rIndex = ((len & ~0xC0) << 8) | r.readUnsignedByte();
                 readDomainEx(rx, rx, sb);
                 rx.rIndex = ri + (r == rx ? 1:0);
                 return;

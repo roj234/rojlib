@@ -22,7 +22,8 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
- */package roj.reflect;
+ */
+package roj.reflect;
 
 import roj.asm.util.AccessFlag;
 
@@ -36,10 +37,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Roj234
  * @since  2020/10/17 18:31
  */
-final class UFA extends FieldAccessor {
-    interface UNSAFE {
+public final class UFA extends FieldAccessor {
+    public interface UNSAFE {
         void setUnsafe(Object javaUnsafe);
         Object getUnsafe();
+
+        long allocateMemory(long size);
+        long reallocateMemory(long addr, long newsize);
+        void setMemory(Object base, long addr, long len, byte val);
+        void copyMemory(Object base, long addr, Object tbase, long taddr, long len);
+        void freeMemory(long addr);
+
 
         long staticFieldOffset(Field field);
         long objectFieldOffset(Field field);
@@ -84,7 +92,7 @@ final class UFA extends FieldAccessor {
         void    putDoubleVolatile(Object o, long offset, double x);
     }
 
-    private static final UNSAFE U;
+    public static final UNSAFE U;
     static {
         Method[] methods = UNSAFE.class.getDeclaredMethods();
         String[] names = new String[methods.length - 2];

@@ -42,7 +42,7 @@ import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.mapper.Util;
 import roj.util.ByteList;
-import roj.util.ByteList.WriteOnly;
+import roj.util.ByteList.Streamed;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
@@ -1320,7 +1320,7 @@ public class NiximSystem {
             this.destClass = destClass;
 
             this.cw = new ConstantPoolEmpty();
-            this.bw = new WriteOnly();
+            this.bw = new Streamed();
             this.br = new ByteReader();
         }
 

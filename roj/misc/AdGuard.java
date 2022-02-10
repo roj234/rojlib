@@ -77,6 +77,7 @@ public class AdGuard {
             if (System.currentTimeMillis() - file.lastModified() > map.getLong("update")) {
                 String url = map.getString("url");
                 if (!url.isEmpty()) {
+                    System.out.println("Update " + file + " via " + url);
                     HttpConnection hc = new HttpConnection(new URL(url));
                     hc.connect();
                     InputStream in = hc.getInputStream();

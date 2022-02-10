@@ -95,46 +95,14 @@ public interface Opcodes {
             AALOAD = 0x32,
             BALOAD = 0x33,
             CALOAD = 0x34,
-            SALOAD = 0x35, 
-/*
-指令格式：aALOAD
-
-功能描述：栈顶的数组下标（index）、数组引用（arrayref）出栈,并根据这两个数值取出对应的数组元素值（value）进栈。
-
-抛出异常：如果arrayref的值为null,会抛出NullPointerException。如果index造成数组越界,会抛出ArrayIndexOutOfBoundsException。
-
-指令执行前  指令执行后
-栈底
-...         ...
-arrayref    value
-index
-栈顶
-
-index      ：  int类型
-arrayref   ：  数组的引用
-
-
-*/
+            SALOAD = 0x35,
 
     // Variable Store
     ISTORE = 0x36,
             LSTORE = 0x37,
             FSTORE = 0x38,
             DSTORE = 0x39,
-            ASTORE = 0x3a, 
-/*
-指令格式：ASTORE index
-
-功能描述：将栈顶数值（引用ref）存入当前frame的局部变量数组中指定下标（index）处的变量中,栈顶数值出栈。
-
-指令执行前 指令执行后
-栈底
-...        ...
-引用ref
-栈顶
-
-index：无符号一byte整数。该指令和wide联用,index可以为无符号两byte整数。
-*/
+            ASTORE = 0x3a,
 
     ISTORE_0 = 0x3b,
             ISTORE_1 = 0x3c,

@@ -895,9 +895,10 @@ public abstract class AbstLexer {
 
     /**
      * 忽略 // 或 /* ... *\/ 注释
+     * @param col add comment to
      */
     @SuppressWarnings("fallthrough")
-    protected final Word ignoreStdNote() throws ParseException {
+    protected final Word ignoreJavaComment(CharList col) throws ParseException {
         CharSequence input = this.input;
         int index = this.index;
         if (index < input.length()) {
@@ -914,6 +915,8 @@ public abstract class AbstLexer {
                                 break o;
                         }
                     }
+                    if (col != null)
+                        col.append(input, this.index + 1, index);
                 }
                 break;
                 case '*': {
@@ -929,6 +932,8 @@ public abstract class AbstLexer {
                             }
                         }
                     }
+                    if (col != null)
+                        col.append(input, this.index + 1, index - 1);
                 }
                 break;
                 default:

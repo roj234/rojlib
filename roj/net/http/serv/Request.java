@@ -25,18 +25,22 @@
  */
 package roj.net.http.serv;
 
+import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
 import roj.config.ParseException;
+import roj.math.MathUtils;
+import roj.math.MutableInt;
 import roj.math.Version;
-import roj.net.Notify;
-import roj.net.StreamLikeSequence;
+import roj.net.SocketSequence;
 import roj.net.WrappedSocket;
 import roj.net.http.*;
 import roj.text.TextUtil;
+import roj.text.UTFCoder;
 import roj.util.Helpers;
 
-import java.net.InetSocketAddress;
+import javax.annotation.Nullable;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,23 +50,24 @@ import java.util.Map;
 public final class Request {
     private final int action;
     private final String path, version;
-    private final Headers           headers;
-    private final InetSocketAddress remote;
+    private final Headers headers;
 
-    private Object postFields;
-    private Map<String, String> getFields;
+    private Object postFields, getFields;
+    private Map<String, String> cookie;
 
-    private Request(int action, String version, String path, Headers headers, String postFields, InetSocketAddress remote) {
+    private Request(int action, String version, String path) {
         this.action = action;
         this.version = version;
-        this.path = path;
-        this.headers = headers;
-        this.postFields = postFields;
-        this.remote = remote;
-    }
 
-    public InetSocketAddress remote() {
-        return remote;
+        int qo = path.indexOf('?');
+        if (qo >= 0) {
+            this.path = path.substring(0, qo);
+            this.getFields = path.substring(qo+1);
+        } else {
+            this.path = path;
+            this.getFields = Collections.emptyMap();
+        }
+        this.headers = new Headers();
     }
 
     public int action() {
@@ -74,52 +79,54 @@ public final class Request {
     }
 
     public String host() {
-        return headers.get("host");
+        return headers.get("Host");
     }
 
     public String path() {
-        int qo = path.indexOf('?');
-        if (qo != -1) {
-            return path.substring(0, qo);
-        } else {
-            return path;
-        }
+        return path;
     }
 
     public Headers headers() {
         return headers;
     }
 
+    @Nullable
     public Map<String, String> postFields() {
-        if (postFields instanceof String) {
-            String pf = (String) postFields;
-            postFields = getQueries(pf);
+        if (postFields instanceof CharSequence) {
+            CharSequence pf = (CharSequence) postFields;
+            postFields = getQueries(pf, "&");
         }
         return Helpers.cast(postFields);
     }
 
+    @Nullable
     public String postFieldsRaw() {
-        if (postFields instanceof String) {
-            return (String) postFields;
+        if (postFields == null) {
+            return null;
+        } else if (postFields instanceof String) {
+            return (String) (postFields = postFields.toString());
         }
         throw new IllegalStateException("Parsed");
     }
 
     public Map<String, String> getFields() {
-        if (getFields == null) {
-            int qo = path.indexOf('?');
-            if (qo != -1) {
-                getFields = getQueries(path.substring(qo + 1));
-            } else {
-                getFields = Collections.emptyMap();
-            }
+        if (getFields instanceof CharSequence) {
+            getFields = getQueries((CharSequence) getFields, "&");
         }
-        return getFields;
+        return Helpers.cast(getFields);
     }
 
-    private static Map<String, String> getQueries(String query) {
-        Map<String, String> map = new MyHashMap<>();
-        List<String> queries = TextUtil.split(new ArrayList<>(), query, '&');
+    public Map<String, String> cookie() {
+        if (cookie == null) {
+            String cookie = headers.get("Cookie");
+            this.cookie = cookie == null ? Collections.emptyMap() : getQueries(cookie, "; ");
+        }
+        return cookie;
+    }
+
+    private static Map<String, String> getQueries(CharSequence query, String delimiter) {
+        Map<String, String> map = new LinkedMyHashMap<>();
+        List<String> queries = TextUtil.split(new ArrayList<>(), query, delimiter);
         for (int i = 0; i < queries.size(); i++) {
             String member = queries.get(i);
             int po = member.indexOf('=');
@@ -132,115 +139,129 @@ public final class Request {
         return map.isEmpty() ? Collections.emptyMap() : map;
     }
 
+    public String header(String s) {
+        return headers.get(s);
+    }
+
+    public Map<String, String> fields() {
+        MyHashMap<String, String> map = new MyHashMap<>(getFields());
+        Map<String, String> map1 = postFields();
+        if (map1 != null) map.putAll(map1);
+        return map;
+    }
+
     public String toString() {
-        return remote + ": " + action + ' ' + host() + path;
+        return action + ' ' + host() + path;
     }
 
-    public static Request parse(WrappedSocket socket, Router router) throws IllegalRequestException {
-        Object[] data = Shared.SYNC_BUFFER.get();
+    byte state;
 
-        StreamLikeSequence plain = (StreamLikeSequence) data[0];
-        HttpLexer lexer = ((HttpLexer) data[1]).init(plain.init(socket, router));
-
-        try {
-            return getRequest(lexer, router, socket);
-        } catch (Notify notifyException) {
-            int code = Code.INTERNAL_ERROR;
-            switch (notifyException.code) {
-                case -127:
-                    code = Code.ENTITY_TOO_LARGE;
-                    break;
-                case -128:
-                    code = Code.TIMEOUT;
-                    break;
-            }
-            throw new IllegalRequestException(code, notifyException);
-        } finally {
-            lexer.init(null);
-            plain.release();
-        }
-    }
-
-    public static Request getRequest(HttpLexer lexer, Router router, WrappedSocket socket) throws IllegalRequestException {
-        String method = lexer.readHttpWord(),
-                path = lexer.readHttpWord(),
-                version = lexer.readHttpWord();
-
-        if (version == null || !version.startsWith("HTTP/"))
-            throw new IllegalRequestException(Code.BAD_REQUEST, "Illegal header " + version);
-
-        if (path.length() > 1024) {
-            throw new IllegalRequestException(Code.URI_TOO_LONG);
-        }
-
-        int act = Action.valueOf(method);
-        if (!router.checkAction(act))
-            throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "Illegal action " + method);
-
-        String postFields = null;
-
-        Headers headers = new Headers();
-        while (true) {
-            String t = lexer.readHttpWord();
-            if (t == Shared._ERROR) {
-                throw new IllegalRequestException(Code.BAD_REQUEST, lexer.err("Unexpected " + t));
-            } else if (t == Shared._SHOULD_EOF) {
-                break;
-            } else if (t == null) {
-                break;
-            } else {
-                headers.add(t, lexer.readHttpWord());
-            }
-        }
-
-        if (act == Action.POST) {
-            try {
-                postFields = lexer.content(headers.get("Content-Length"), router.postMaxLength());
-            } catch (ParseException e) {
-                throw new IllegalRequestException(Code.BAD_REQUEST, e);
-            }
-        }
-
-        version = version.substring(version.indexOf('/') + 1);
-
-        final ByteBuffer buffer = socket.buffer();
-        if(buffer != null)
-            buffer.clear();
-
-        return new Request(act, version, path, headers, postFields, (InetSocketAddress) socket.socket().getRemoteSocketAddress());
-    }
-
-    public static Request parseAsync(WrappedSocket socket, Router router, HttpLexer[] holder) throws IllegalRequestException {
-        HttpLexer lexer = holder[0];
+    public static Request parse(WrappedSocket ch, Router router, Object[] holder) throws IllegalRequestException, IOException {
+        HttpLexer lexer = (HttpLexer) holder[0];
 
         if(lexer == null) {
-            StreamLikeSequence seq = new StreamLikeSequence(true);
-            lexer = new HttpLexer().init(seq.init(socket, router));
+            SocketSequence seq = new SocketSequence(true);
+            lexer = new HttpLexer().init(seq.init(ch, router.readTimeout(), router.maxLength()));
             holder[0] = lexer;
         }
 
         try {
-            Request request = getRequest(lexer, router, socket);
-            holder[0] = null;
-            return request;
-        } catch (OperationDone asyncReadRequest) {
+            Request req;
+            if (holder[1] == null) {
+                String method = lexer.readHttpWord(),
+                        path = lexer.readHttpWord(),
+                        version = lexer.readHttpWord();
+
+                if (version == null || !version.startsWith("HTTP/"))
+                    throw new IllegalRequestException(Code.BAD_REQUEST, "Illegal header " + version);
+
+                if (path.length() > 1024) {
+                    throw new IllegalRequestException(Code.URI_TOO_LONG);
+                }
+
+                int act = Action.valueOf(method);
+                if (!router.checkAction(act))
+                    throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "Illegal action " + method);
+
+                holder[1] = req = new Request(act, version.substring(version.indexOf('/') + 1), path);
+
+                compact(lexer, ch.buffer());
+            } else {
+                req = (Request) holder[1];
+            }
+
+            Headers headers = req.headers;
+            if (req.state < 1) {
+                headers.clear();
+                try {
+                    headers.readFromLexer(lexer);
+                } catch (ParseException e) {
+                    throw new IllegalRequestException(Code.BAD_REQUEST, e);
+                }
+
+                compact(lexer, ch.buffer());
+                req.state = 1;
+            }
+
+            if (req.action == Action.POST) {
+                if (req.state < 2) {
+                    UTFCoder uc = new UTFCoder();
+                    holder[2] = uc;
+                    uc.charBuf.list = lexer.getBuf();
+                    uc.keep = true;
+
+                    String cl = headers.get("Content-Length");
+                    if (cl != null) {
+                        int len = MathUtils.parseInt(cl);
+                        if (len > router.postMaxLength()) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+                        req.postFields = new MutableInt(len);
+                        uc.charBuf.ensureCapacity(len);
+                    }
+                    req.state = 2;
+                }
+
+                UTFCoder uc = (UTFCoder) holder[2];
+                if (req.postFields == null) {
+                    // no content length
+                    if (!"close".equalsIgnoreCase(headers.get("Connection")))
+                        throw new IllegalRequestException(411);
+                    int r;
+                    while ((r = ch.read()) > 0) {
+                        ByteBuffer rb = ch.buffer();
+                        rb.flip();
+                        uc.decode(rb, true);
+                        rb.clear();
+                    }
+                    if (r == 0) return null;
+                } else {
+                    MutableInt remain = (MutableInt) req.postFields;
+                    if (ch.read(remain.getValue()) < 0) throw new IOException("Unexpected EOF");
+
+                    ByteBuffer rb = ch.buffer();
+                    int r = rb.position();
+                    rb.flip();
+                    uc.decode(rb, true);
+                    rb.clear();
+
+                    if (remain.addAndGet(-r) > 0) return null;
+                }
+                req.postFields = uc.charBuf;
+            }
+
+            compact(lexer, ch.buffer());
+            holder[0] = holder[1] = holder[2] = null;
+            return req;
+        } catch (OperationDone noDataAvailable) {
             lexer.index = 0;
             return null;
-        } catch (Notify notifyException) {
-            int code = Code.INTERNAL_ERROR;
-            switch (notifyException.code) {
-                case -127:
-                    code = Code.ENTITY_TOO_LARGE;
-                    break;
-                case -128:
-                    code = Code.TIMEOUT;
-                    break;
-            }
-            throw new IllegalRequestException(code, notifyException);
         }
     }
 
-    public String header(String s) {
-        return headers.get(s.toLowerCase());
+    private static void compact(HttpLexer lexer, ByteBuffer buf) {
+        if(buf != null)  {
+            buf.flip().position(lexer.index);
+            lexer.index = 0;
+            buf.compact();
+        }
     }
 }

@@ -53,7 +53,7 @@ public class ByteListOutput extends SimpleJavaFileObject {
 
     @Override
     public OutputStream openOutputStream() {
-        return output.asOutputStream();
+        return output;
     }
 
     public ByteList getOutput() {

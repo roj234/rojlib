@@ -32,24 +32,30 @@ package roj.config.data;
  * @since 2021/4/21 22:51
  */
 public enum Type {
-    LIST, MAP, STRING, INTEGER, NULL, BOOL, DOUBLE, LONG, OBJECT, COMMENT, DATETIME, DATE;
+    LIST, MAP, STRING, NULL, BOOL,
+    INTEGER, LONG, DOUBLE, OBJECT,
+    DATE;
+    // todo byte short float and primitive array....
 
     public static final Type[] VALUES = values();
 
     public boolean isNumber() {
-        return this == INTEGER || this == DOUBLE || this == LONG;
+        return ordinal() >= INTEGER.ordinal() && ordinal() <= DOUBLE.ordinal();
     }
 
-    public boolean fits(Type type) {
+    public boolean isSimilar(Type type) {
         switch (this) {
-            case DOUBLE:
-            case INTEGER:
-            case BOOL:
             case STRING:
+            case BOOL:
+            case INTEGER:
             case LONG:
+            case DOUBLE:
+            case DATE:
                 return type == DOUBLE || type == INTEGER || type == BOOL || type == STRING || type == LONG;
             case NULL:
                 return false;
+            case MAP:
+                return type == MAP || type == OBJECT;
             default:
                 return type == this;
         }

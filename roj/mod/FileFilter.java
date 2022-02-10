@@ -78,13 +78,13 @@ class FileFilter implements Predicate<File> {
                     StreamingChars reader = new StreamingChars(128) {
                         @Override
                         public void ensureRead(int required) {
-                            int i = bufOff;
-                            if(i < 0) return;
+                            int i = flag;
+                            if((i & 1) != 0) return;
                             super.ensureRead(required);
-                            for (; i < cl.length(); i++) {
-                                if(cl.charAt(i) == '\n') {
-                                    bufOff = -1;
-                                    cl.setIndex(i + 1);
+                            for (; i < buf.length(); i++) {
+                                if(buf.charAt(i) == '\n') {
+                                    flag |= 1;
+                                    buf.wIndex(i + 1);
                                     break;
                                 }
                             }

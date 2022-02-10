@@ -88,8 +88,6 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         if (running == -1) {
             throw new RejectedExecutionException("TaskPool was shutdown.");
         }
-        int minPending = Integer.MAX_VALUE;
-        TaskExecutor th = null;
 
         final TaskExecutor[] processors = this.thread;
 
@@ -105,6 +103,8 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
             return;
         }
 
+        TaskExecutor th = null;
+        int minPending = Integer.MAX_VALUE;
         for (int i = 0; i < len; i++) {
             TaskExecutor p = processors[i];
             if (p.getTaskAmount() < minPending) {

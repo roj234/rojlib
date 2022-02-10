@@ -96,7 +96,7 @@ public class StringResponse implements Response {
         if (buf == null)
             throw new IllegalStateException("Not prepared");
         channel.write(buf);
-        return buf.remaining() > 0;
+        return buf.hasRemaining();
     }
 
     public void release() {}

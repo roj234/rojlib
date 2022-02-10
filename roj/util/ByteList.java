@@ -32,15 +32,15 @@ import roj.text.TextUtil;
 import javax.annotation.Nonnull;
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
  * @since 2021/5/29 20:45
  */
-public class ByteList implements DataInput {
+public class ByteList extends OutputStream implements DataInput, DataOutput, CharSequence {
     public byte[] list;
-    protected int wIndex;
+    int wIndex;
+    public int rIndex;
 
     public ByteList() {
         this.list = EmptyArrays.BYTES;
@@ -59,10 +59,9 @@ public class ByteList implements DataInput {
         return wIndex;
     }
 
-    public ByteList put(byte e) {
-        ensureCapacity(wIndex + 1);
-        list[wIndex++] = e;
-        return this;
+    public void wIndex(int id) {
+        ensureCapacity(id);
+        this.wIndex = id;
     }
 
     public void ensureCapacity(int required) {
@@ -75,81 +74,25 @@ public class ByteList implements DataInput {
         }
     }
 
-    public ByteList put(byte[] b) {
-        return put(b, 0, b.length);
-    }
-
-    public ByteList put(byte[] b, int off, int len) {
-        if (len < 0 || off < 0 || len > b.length - off)
-            throw new ArrayIndexOutOfBoundsException();
-        if (len > 0) {
-            ensureCapacity(wIndex + len);
-            System.arraycopy(b, off, list, wIndex, len);
-            wIndex += len;
-        }
-        return this;
-    }
-
-    public ByteList put(ByteList b) {
-        if (b.getClass() == WriteOnly.class)
-            return this;
-        put(b.list, b.arrayOffset(), b.wIndex - b.arrayOffset());
-        return this;
-    }
-
-    public ByteList put(int i, byte e) {
-        list[i] = e;
-        return this;
-    }
-
-    public int getU(int i) {
-        if (i > wIndex) throw new ArrayIndexOutOfBoundsException();
-        return list[i] & 0xFF;
-    }
-
-    public byte get(int i) {
-        if (i > wIndex) throw new ArrayIndexOutOfBoundsException();
-        return list[i];
-    }
-
-    byte get0(int i) {
-        return i >= list.length ? 0 : list[i];
-    }
-
-    public void wIndex(int id) {
-        ensureCapacity(id);
-        this.wIndex = id;
-    }
-
     public byte[] toByteArray() {
-        byte[] result = new byte[wIndex - arrayOffset()];
-        System.arraycopy(list, arrayOffset(), result, 0, result.length);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "ByteList{" + TextUtil.dumpBytes(list, arrayOffset(), wIndex) + '}';
-    }
-
-    public final ByteList slice(int off, int len) {
-        return new Slice(list, off + arrayOffset(), len);
+        byte[] b = new byte[wIndex];
+        System.arraycopy(list, 0, b, 0, b.length);
+        return b;
     }
 
     public void clear() {
         wIndex = rIndex = 0;
     }
 
-    public String getString() {
-        return new String(list, arrayOffset(), wIndex, StandardCharsets.UTF_8);
-    }
-
-    public final int limit() {
-        return wIndex - arrayOffset();
-    }
-
     public int arrayOffset() {
         return 0;
+    }
+
+    /**
+     * 注: 读取指针与rIndex独立，历史原因
+     */
+    public final InputStream asInputStream() {
+        return new AsInputStream();
     }
 
     public final ByteList readStreamFully(InputStream stream) throws IOException {
@@ -173,33 +116,15 @@ public class ByteList implements DataInput {
         return this;
     }
 
-    public final int readStream(InputStream stream, int max) throws IOException {
+    public final int readStream(InputStream in, int max) throws IOException {
         if (getClass() != ByteList.class)
             throw new IllegalStateException();
 
         ensureCapacity(wIndex + max);
-        int real = stream.read(this.list, wIndex, max);
+        int real = in.read(list, wIndex, max);
         if (real > 0)
             wIndex += real;
         return real;
-    }
-
-    /**
-     * 注: 没有单独的R/W指针
-     * Read: 0 - ptr-1
-     * Write: ptr - Infinity
-     */
-    public final InputStream asInputStream() {
-        return new AsInputStream();
-    }
-
-    /**
-     * 注: 没有单独的R/W指针
-     * Read: 0 - ptr-1
-     * Write: ptr - Infinity
-     */
-    public final AsOutputStream asOutputStream() {
-        return new AsOutputStream();
     }
 
     public final void writeToStream(OutputStream os) throws IOException {
@@ -208,7 +133,7 @@ public class ByteList implements DataInput {
         }
     }
 
-    public final ByteList setValue(byte[] array) {
+    public final ByteList setArray(byte[] array) {
         if (getClass() != ByteList.class)
             throw new IllegalStateException();
         if (array == null)
@@ -220,12 +145,8 @@ public class ByteList implements DataInput {
         return this;
     }
 
-    public final byte[] getByteArray() {
-        return list == null ? null : (wIndex == list.length && arrayOffset() == 0 ? list : toByteArray());
-    }
-
     public void trim() {
-        if (list != null && wIndex < list.length) {
+        if (wIndex < list.length) {
             if (wIndex > 0) {
                 byte[] newList = new byte[wIndex];
                 System.arraycopy(list, 0, newList, 0, wIndex);
@@ -286,39 +207,157 @@ public class ByteList implements DataInput {
         }
     }
 
+    public final int limit() {
+        return wIndex - arrayOffset();
+    }
+    public final boolean hasRemaining() {
+        return remaining() > 0;
+    }
+    public final int remaining() {
+        return wIndex - rIndex - arrayOffset();
+    }
+
+    private int putIndex(int i) {
+        int wi = wIndex;
+        ensureCapacity(wi + i);
+        wIndex = wi + i;
+        return wi;
+    }
+    private int readIndex(int i) {
+        int ri = rIndex;
+        if (ri + i + arrayOffset() > wIndex) throw new ArrayIndexOutOfBoundsException();
+        rIndex = ri + i;
+        return ri;
+    }
+    private int ci(int i) {
+        if ((i += arrayOffset()) > wIndex) throw new ArrayIndexOutOfBoundsException();
+        return i;
+    }
+
+    // region DataOutput (non-chainable) PUT methods
+    @Override
+    public void write(int b) {
+        put((byte) b);
+    }
+
+    @Override
+    public void write(@Nonnull byte[] b) {
+        put(b, 0, b.length);
+    }
+
+    @Override
+    public void write(@Nonnull byte[] b, int off, int len) {
+        put(b, off, len);
+    }
+
+    @Override
+    public void writeBoolean(boolean v) {
+        put((byte) (v ? 1 : 0));
+    }
+
+    @Override
+    public void writeByte(int v) {
+        put((byte) v);
+    }
+
+    @Override
+    public void writeShort(int s) {
+        put((byte) (s >>> 8)).put((byte) s);
+    }
+
+    @Override
+    public void writeChar(int c) {
+        writeShort(c);
+    }
+
+    @Override
+    public void writeInt(int i) {
+        putInt(i);
+    }
+
+    @Override
+    public void writeLong(long l) {
+        putLong(l);
+    }
+
+    @Override
+    public void writeFloat(float v) {
+        putInt(Float.floatToIntBits(v));
+    }
+
+    @Override
+    public void writeDouble(double v) {
+        putLong(Double.doubleToLongBits(v));
+    }
+
+    @Override
+    public void writeBytes(@Nonnull String s) {
+        int len = s.length();
+        for (int i = 0; i < len; i++) {
+            put((byte) s.charAt(i));
+        }
+    }
+
+    @Override
+    public void writeChars(@Nonnull String s) {
+        putChars(s);
+    }
+
+    @Override
+    public void writeUTF(@Nonnull String str) throws UTFDataFormatException {
+        try {
+            ByteList.writeUTF(this, str, 0);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new UTFDataFormatException(e.getMessage());
+        }
+    }
+    // endregion
+    // region Relative and Absolute bulk PUT methods from original ByteWriter
+
+    public final ByteList putBool(boolean b) {
+        int i = putIndex(1);
+        list[i] = (byte) (b ? 1 : 0);
+        return this;
+    }
+
+    public final ByteList put(byte e) {
+        int i = putIndex(1);
+        list[i] = e;
+        return this;
+    }
+    public final ByteList put(int i, byte e) {
+        ensureCapacity(i + 1);
+        list[i] = e;
+        return this;
+    }
+
+    public final ByteList put(byte[] b) {
+        return put(b, 0, b.length);
+    }
+
+    public final ByteList put(byte[] b, int off, int len) {
+        if (len < 0 || off < 0 || len > b.length - off)
+            throw new ArrayIndexOutOfBoundsException();
+        if (len > 0) {
+            int off1 = putIndex(len);
+            System.arraycopy(b, off, list, off1, len);
+        }
+        return this;
+    }
+
+    public ByteList put(ByteList b) {
+        if (b.getClass() == Streamed.class) {
+            throw new IllegalArgumentException("Unable to put STREAMED byte list");
+        }
+        put(b.list, b.arrayOffset(), b.wIndex - b.arrayOffset());
+        return this;
+    }
+
     public static int zig(int i) {
         return (i & Integer.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
     }
-
     public static long zig(long i) {
         return (i & Long.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
-    }
-
-    public static int zag(int i) {
-        return (i >> 1) & ~(1 << 31) ^ -(i & 1);
-    }
-
-    public static long zag(long i) {
-        return (i >> 1) & ~(1L << 63) ^ -(i & 1);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ByteList ot = (ByteList) o;
-        return ArrayUtil.rangedEquals(list, arrayOffset(), wIndex(), ot.list, ot.arrayOffset(), ot.wIndex());
-    }
-
-    @Override
-    public int hashCode() {
-        return ArrayUtil.rangedHashCode(list, arrayOffset(), wIndex());
-    }
-
-    // region Relative bulk PUT methods from original ByteWriter
-    public ByteList putBool(boolean b) {
-        put((byte) (b ? 1 : 0));
-        return this;
     }
 
     public ByteList putVarInt(int i) {
@@ -345,49 +384,166 @@ public class ByteList implements DataInput {
         list.list[list.wIndex - 1] &= 0x7F;
     }
 
+    public ByteList putVLUI(int i) {
+        long v = i & 0xFFFFFFFFL;
+        byte[] l;
+        int wi = wIndex;
+
+        if (v >= 0x200000) {
+            if (v >= 0x10000000) { // 5 bytes, 29-32 bits
+                ensureCapacity(wi + 5);
+                wIndex = wi + 5;
+                l = list;
+                l[wi++] = ((byte) 0b00001000);
+                l[wi++] = ((byte) (v >>> 24));
+            } else { // 4 bytes, 22-28 bits
+                ensureCapacity(wi + 4);
+                wIndex = wi + 4;
+                l = list;
+                l[wi++] = ((byte) (0b00010000 | ((v >> 24) & 0xF)));
+            }
+            l[wi++] = ((byte) (v >>> 16));
+            l[wi++] = ((byte) (v >>> 8));
+            l[wi  ] = ((byte) v);
+        } else {
+            if (v >= 0x4000) { // 3 bytes, 15-21 bits
+                ensureCapacity(wi + 3);
+                wIndex = wi + 3;
+                l = list;
+                l[wi++] = ((byte) (0b00100000 | ((v >>> 16) & 0x1F)));
+                l[wi++] = ((byte) (v >>> 8));
+                l[wi  ] = ((byte) v);
+            } else if (v >= 0x80) { // 2 bytes, 8-14bits
+                ensureCapacity(wi + 2);
+                wIndex = wi + 2;
+                l = list;
+                l[wi++] = ((byte) (0b01000000 | ((v >>> 8) & 0x3F)));
+                l[wi  ] = ((byte) v);
+            } else { // 1byte, 0-7 bits
+                return put((byte) (0b10000000 | v));
+            }
+        }
+        return this;
+    }
+
     public ByteList putIntLE(int i) {
-        return this.put((byte) i).put((byte) (i >>> 8))
-                   .put((byte) (i >>> 16)).put((byte) (i >>> 24));
+        return putIntLE(putIndex(4), i);
+    }
+    public ByteList putIntLE(int wi, int i) {
+        ensureCapacity(wi + 4);
+        byte[] list = this.list;
+        list[wi++] = (byte) i;
+        list[wi++] = (byte) (i >>> 8);
+        list[wi++] = (byte) (i >>> 16);
+        list[wi  ] = (byte) (i >>> 24);
+        return this;
     }
 
     public ByteList putInt(int i) {
-        return this.put((byte) (i >>> 24)).put((byte) (i >>> 16))
-                   .put((byte) (i >>> 8)).put((byte) i);
+        return putInt(putIndex(4), i);
     }
-
-    public ByteList putLong(long l) {
-        return this.put((byte) (l >>> 56)).put((byte) (l >>> 48))
-                   .put((byte) (l >>> 40)).put((byte) (l >>> 32))
-                   .put((byte) (l >>> 24)).put((byte) (l >>> 16))
-                   .put((byte) (l >>> 8)).put((byte) l);
+    public ByteList putInt(int wi, int i) {
+        ensureCapacity(wi + 4);
+        byte[] list = this.list;
+        list[wi++] = (byte) (i >>> 24);
+        list[wi++] = (byte) (i >>> 16);
+        list[wi++] = (byte) (i >>> 8);
+        list[wi  ] = (byte) i;
+        return this;
     }
 
     public ByteList putLongLE(long l) {
-        return this.put((byte) l).put((byte) (l >>> 8))
-                   .put((byte) (l >>> 16)).put((byte) (l >>> 24))
-                   .put((byte) (l >>> 32)).put((byte) (l >>> 40))
-                   .put((byte) (l >>> 48)).put((byte) (l >>> 56));
+        return putLongLE(putIndex(8), l);
+    }
+    public ByteList putLongLE(int wi, long l) {
+        ensureCapacity(wi + 8);
+        byte[] list = this.list;
+        list[wi++] = (byte) l;
+        list[wi++] = (byte) (l >>> 8);
+        list[wi++] = (byte) (l >>> 16);
+        list[wi++] = (byte) (l >>> 24);
+        list[wi++] = (byte) (l >>> 32);
+        list[wi++] = (byte) (l >>> 40);
+        list[wi++] = (byte) (l >>> 48);
+        list[wi  ] = (byte) (l >>> 56);
+        return this;
+    }
+
+    public ByteList putLong(long l) {
+        return putLong(putIndex(8), l);
+    }
+    public ByteList putLong(int wi, long l) {
+        ensureCapacity(wi + 8);
+        byte[] list = this.list;
+        list[wi++] = (byte) (l >>> 56);
+        list[wi++] = (byte) (l >>> 48);
+        list[wi++] = (byte) (l >>> 40);
+        list[wi++] = (byte) (l >>> 32);
+        list[wi++] = (byte) (l >>> 24);
+        list[wi++] = (byte) (l >>> 16);
+        list[wi++] = (byte) (l >>> 8);
+        list[wi  ] = (byte) l;
+        return this;
     }
 
     public ByteList putFloat(float f) {
-        return putInt(Float.floatToIntBits(f));
+        return putFloat(putIndex(4), f);
+    }
+    public ByteList putFloat(int wi, float f) {
+        return putInt(wi, Float.floatToIntBits(f));
     }
 
     public ByteList putDouble(double d) {
-        return putLong(Double.doubleToLongBits(d));
+        return putDouble(putIndex(8), d);
+    }
+    public ByteList putDouble(int wi, double d) {
+        return putLong(wi, Double.doubleToLongBits(d));
     }
 
     public ByteList putShort(int s) {
-        return put((byte) (s >>> 8)).put((byte) s);
+        return putShort(putIndex(2), s);
+    }
+    public ByteList putShort(int wi, int s) {
+        ensureCapacity(wi + 2);
+        byte[] list = this.list;
+        list[wi++] = (byte) (s >>> 8);
+        list[wi  ] = (byte) s;
+        return this;
     }
 
     public ByteList putShortLE(int s) {
-        return put((byte) s).put((byte) (s >>> 8));
+        return putShortLE(putIndex(2), s);
+    }
+    public ByteList putShortLE(int wi, int s) {
+        ensureCapacity(wi + 2);
+        byte[] list = this.list;
+        list[wi++] = (byte) s;
+        list[wi  ] = (byte) (s >>> 8);
+        return this;
+    }
+
+    public ByteList putMedium(int m) {
+        return putShort(putIndex(3), m);
+    }
+    public ByteList putMedium(int wi, int m) {
+        ensureCapacity(wi + 3);
+        byte[] list = this.list;
+        list[wi++] = (byte) (m >>> 16);
+        list[wi++] = (byte) (m >>> 8);
+        list[wi  ] = (byte) m;
+        return this;
     }
 
     public ByteList putChars(CharSequence s) {
+        return putChars(putIndex(s.length() << 1), s);
+    }
+    public ByteList putChars(int wi, CharSequence s) {
+        ensureCapacity(wi + (s.length() << 1));
+        byte[] list = this.list;
         for (int i = 0; i < s.length(); i++) {
-            putShort(s.charAt(i));
+            char c = s.charAt(i);
+            list[wi++] = (byte) (c >>> 8);
+            list[wi++] = (byte) c;
         }
         return this;
     }
@@ -422,19 +578,30 @@ public class ByteList implements DataInput {
         return this;
     }
 
+    public ByteList putAscii(CharSequence s) {
+        return putAscii(putIndex(s.length()), s);
+    }
     @SuppressWarnings("deprecation")
-    public ByteList putAscii(String s) {
-        ensureCapacity(wIndex + s.length());
-        s.getBytes(0, s.length(), list, wIndex);
-        wIndex += s.length();
+    public ByteList putAscii(int wi, CharSequence s) {
+        ensureCapacity(wi + s.length());
+        if (s.getClass() == String.class) {
+            s.toString().getBytes(0, s.length(), list, wi);
+        } else {
+            byte[] list = this.list;
+            for (int i = 0; i < s.length(); i++) {
+                list[wi++] = (byte) s.charAt(i);
+            }
+        }
         return this;
     }
 
     public ByteList put(ByteBuffer buf) {
+        return put(putIndex(buf.remaining()), buf);
+    }
+    public ByteList put(int wi, ByteBuffer buf) {
         int rem = buf.remaining();
-        ensureCapacity(wIndex + rem);
-        buf.get(list, wIndex, rem);
-        wIndex += rem;
+        ensureCapacity(wi + rem);
+        buf.get(list, wi, rem);
         return this;
     }
 
@@ -518,29 +685,6 @@ public class ByteList implements DataInput {
     }
     // endregion
     // region Relative bulk GET methods from original ByteReader
-    public int rIndex;
-
-    public final int rIndex() {
-        return rIndex;
-    }
-
-    public final ByteList rIndex(int rIndex) {
-        this.rIndex = rIndex;
-        return this;
-    }
-
-    public final boolean hasRemaining() {
-        return rIndex < wIndex;
-    }
-
-    public final int remaining() {
-        return wIndex - rIndex - arrayOffset();
-    }
-
-    // check rIndex
-    private void ci(int v) {
-        if (rIndex + arrayOffset() + v > wIndex) throw new ArrayIndexOutOfBoundsException();
-    }
 
     @Override
     public final void readFully(@Nonnull byte[] b) {
@@ -566,50 +710,51 @@ public class ByteList implements DataInput {
         if (len < 0 || off < 0 || len > b.length - off)
             throw new ArrayIndexOutOfBoundsException();
         if (len > 0) {
-            ci(len);
-            System.arraycopy(list, rIndex + arrayOffset(), b, off, len);
-            rIndex += len;
+            System.arraycopy(list, readIndex(len) + arrayOffset(), b, off, len);
         }
     }
 
+    public final boolean readBoolean(int i) {
+        return list[ci(i)] == 1;
+    }
     @Override
     public final boolean readBoolean() {
-        ci(1);
-        return list[arrayOffset() + rIndex++] == 1;
+        return list[readIndex(1) + arrayOffset()] == 1;
     }
 
+    public final byte get(int i) {
+        return list[ci(i)];
+    }
     @Override
     public final byte readByte() {
-        ci(1);
-        return list[arrayOffset() + rIndex++];
+        return list[readIndex(1) + arrayOffset()];
     }
 
+    public final int getU(int i) {
+        return list[ci(i)] & 0xFF;
+    }
     @Override
     public final int readUnsignedByte() {
-        ci(1);
-        return list[arrayOffset() + rIndex++] & 0xFF;
+        return list[readIndex(1) + arrayOffset()] & 0xFF;
     }
 
-    public final short readUByte() {
-        ci(1);
-        return (short) (list[arrayOffset() + rIndex++] & 0xFF);
-    }
-
-    @Override
-    public final int readUnsignedShort() {
-        ci(2);
-        int i = rIndex + arrayOffset();
-        rIndex += 2;
+    public final int readUnsignedShort(int i) {
+        i = ci(i);
         byte[] l = this.list;
         return (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
     }
+    @Override
+    public final int readUnsignedShort() {
+        return readUnsignedShort(readIndex(2));
+    }
 
-    public final int readUShortLE() {
-        ci(2);
-        int i = rIndex + arrayOffset();
-        rIndex += 2;
+    public final int readUShortLE(int i) {
+        i = ci(i);
         byte[] l = this.list;
         return (l[i++] & 0xFF) | (l[i] & 0xFF) << 8;
+    }
+    public final int readUShortLE() {
+        return readUShortLE(readIndex(2));
     }
 
     @Override
@@ -618,14 +763,29 @@ public class ByteList implements DataInput {
     }
 
     @Override
-    public char readChar() {
+    public final char readChar() {
         return (char) readUnsignedShort();
+    }
+
+    public final int readMedium() {
+        return readInt(readIndex(3));
+    }
+    public final int readMedium(int i) {
+        i = ci(i);
+        byte[] l = this.list;
+        return (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
+    }
+
+    public static int zag(int i) {
+        return (i >> 1) & ~(1 << 31) ^ -(i & 1);
+    }
+    public static long zag(long i) {
+        return (i >> 1) & ~(1L << 63) ^ -(i & 1);
     }
 
     public final int readVarInt() {
         return readVarInt(true);
     }
-
     public final int readVarInt(boolean mayNeg) {
         int value = 0;
         int i = 0;
@@ -645,7 +805,6 @@ public class ByteList implements DataInput {
     public final long readVarLong() {
         return readVarLong(true);
     }
-
     public final long readVarLong(boolean mayNeg) {
         long value = 0;
         int i = 0;
@@ -662,51 +821,61 @@ public class ByteList implements DataInput {
         throw new RuntimeException("VarLong end tag!");
     }
 
+    // Variable length unsigned int
+    public final int readVLUI() {
+        int v = readUnsignedByte();
+
+        int len = 7;
+        while (len >= 3) {
+            if ((v & (1 << len)) != 0) {
+                // strip out marker
+                v ^= 1 << len;
+                break;
+            }
+            len--;
+        }
+        if (len == 2) throw new RuntimeException("VLUI width");
+        len = 8 - len;
+        while (--len > 0) {
+            v = (v << 8) | readUnsignedByte();
+        }
+
+        return v;
+    }
+
     @Override
     public final int readInt() {
-        ci(4);
-        int i = rIndex + arrayOffset();
-        rIndex += 4;
+        return readInt(readIndex(4));
+    }
+    public final int readInt(int i) {
+        i = ci(i);
         byte[] l = this.list;
         return (l[i++] & 0xFF) << 24 | (l[i++] & 0xFF) << 16 |
                 (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
     }
 
     public final int readIntLE() {
-        ci(4);
-        int i = rIndex + arrayOffset();
-        rIndex += 4;
+        return readIntLE(readIndex(4));
+    }
+    public final int readIntLE(int i) {
+        i = ci(i);
         byte[] l = this.list;
         return (l[i++] & 0xFF) | (l[i++] & 0xFF) << 8 |
                 (l[i++] & 0xFF) << 16 | (l[i] & 0xFF) << 24;
     }
 
     public final long readUInt() {
-        //checkLength(4);
-        int i = rIndex + arrayOffset();
-        rIndex += 4;
-        byte[] l = this.list;
-        return  (l[i++] & 0xFFL) << 24 |
-                (l[i++] & 0xFFL) << 16 |
-                (l[i++] & 0xFF) << 8 |
-                (l[i] & 0xFF);
+        return readInt() & 0xFFFFFFFFL;
     }
-
     public final long readUIntLE() {
-        ci(4);
-        int i = rIndex + arrayOffset();
-        rIndex += 4;
-        byte[] l = this.list;
-        return  (l[i++] & 0xFF) |
-                (l[i++] & 0xFF) << 8 |
-                (l[i++] & 0xFFL) << 16 |
-                (l[i] & 0xFFL) << 24;
+        return readIntLE() & 0xFFFFFFFFL;
     }
 
     public final long readLongLE() {
-        ci(8);
-        int i = rIndex + arrayOffset();
-        rIndex += 8;
+        return readLongLE(readIndex(8));
+    }
+    public final long readLongLE(int i) {
+        i = ci(i);
         byte[] l = this.list;
         return  (l[i++] & 0xFFL) | (l[i++] & 0xFFL) << 8 |
                 (l[i++] & 0xFFL) << 16 | (l[i++] & 0xFFL) << 24 |
@@ -714,10 +883,12 @@ public class ByteList implements DataInput {
                 (l[i++] & 0xFFL) << 48 | (l[i] & 0xFFL) << 56;
     }
 
+    @Override
     public final long readLong() {
-        ci(8);
-        int i = rIndex + arrayOffset();
-        rIndex += 8;
+        return readLong(readIndex(8));
+    }
+    public final long readLong(int i) {
+        i = ci(i);
         byte[] l = this.list;
         return  (l[i++] & 0xFFL) << 56 | (l[i++] & 0xFFL) << 48 |
                 (l[i++] & 0xFFL) << 40 | (l[i++] & 0xFFL) << 32 |
@@ -727,12 +898,18 @@ public class ByteList implements DataInput {
 
     @Override
     public final float readFloat() {
-        return Float.intBitsToFloat(readInt());
+        return Float.intBitsToFloat(readInt(readIndex(4)));
+    }
+    public final float readFloat(int i) {
+        return Float.intBitsToFloat(readInt(i));
     }
 
     @Override
     public final double readDouble() {
-        return Double.longBitsToDouble(readLong());
+        return Double.longBitsToDouble(readLong(readIndex(8)));
+    }
+    public final double readDouble(int i) {
+        return Double.longBitsToDouble(readLong(i));
     }
 
     @Override
@@ -796,11 +973,12 @@ public class ByteList implements DataInput {
         return s;
     }
 
-    @SuppressWarnings("deprecation")
     public final String readAscii(int len) {
-        String s = new String(list, 0, rIndex + arrayOffset(), len);
-        rIndex += len;
-        return s;
+        return readAscii(readIndex(len), len);
+    }
+    @SuppressWarnings("deprecation")
+    public final String readAscii(int i, int len) {
+        return new String(list, 0, ci(i), len);
     }
 
     public final ByteList readZeroEnd(int max) {
@@ -815,11 +993,14 @@ public class ByteList implements DataInput {
     }
 
     public ByteList slice(int length) {
-        if (length == 0)
-            return new WriteOnly();
+        if (length == 0) return new ByteList();
         ByteList list = slice(rIndex, length);
         rIndex += length;
         return list;
+    }
+
+    public final ByteList slice(int off, int len) {
+        return new Slice(list, off + arrayOffset(), len);
     }
 
     @Nonnull
@@ -851,23 +1032,19 @@ public class ByteList implements DataInput {
     }
 
     public static void decodeUTF(int max, CharList out, ByteList in) throws UTFDataFormatException {
-        if (max < 0)
-            max = in.wIndex();
-
-        // The number of chars produced may be less than length
+        if (max <= 0) max = in.wIndex();
         out.ensureCapacity(max);
 
         decodeUTF0(max, out, in, 0, 0);
     }
 
-    public static int decodeUTFPartialExternal(int inputOff, int max, CharList out, ByteList in) throws UTFDataFormatException {
-        if (max < 0)
-            max = in.wIndex();
+    public static int decodeUTFPartial(int off, int max, CharList out, ByteList in) throws UTFDataFormatException {
+        if (max <= 0) max = in.wIndex();
 
-        return decodeUTF0(max, out, in, inputOff, FLAG_EXTERNAL | FLAG_PARTIAL) - inputOff;
+        return decodeUTF0(max, out, in, off,  FLAG_PARTIAL) - off;
     }
 
-    public static final int FLAG_PARTIAL = 1, FLAG_EXTERNAL = 2;
+    public static final int FLAG_PARTIAL = 1;
     @SuppressWarnings("fallthrough")
     public static int decodeUTF0(int max, CharList out, ByteList in, int i, int flag) throws UTFDataFormatException {
         int c;
@@ -882,7 +1059,6 @@ public class ByteList implements DataInput {
         cyl:
         while (i < max) {
             c = in.getU(i);
-            sw:
             switch (c >> 4) {
                 case 0:
                 case 1:
@@ -901,7 +1077,7 @@ public class ByteList implements DataInput {
                     /* 110x xxxx   10xx xxxx*/
                     i += 2;
                     if (i > max) {
-                        if((flag & 1) != 0) {
+                        if ((flag & 1) != 0) {
                             i -= 2;
                             break cyl;
                         } else {
@@ -920,7 +1096,7 @@ public class ByteList implements DataInput {
                     /* 1110 xxxx  10xx xxxx  10xx xxxx */
                     i += 3;
                     if (i > max) {
-                        if((flag & 1) != 0) {
+                        if ((flag & 1) != 0) {
                             i -= 3;
                             break cyl;
                         } else {
@@ -940,51 +1116,10 @@ public class ByteList implements DataInput {
                             c3 & 0x3F));
                     break;
                 case 15:
-                    if((flag & 2) != 0)
-                        switch (c & 14) {
-                            case 2:
-                            case 4:
-                            case 6:  /* 1111 0xxx [10xx xxxx] * 3  注意：非java标准编码 */
-                                if (i + 4 > max)
-                                    if((flag & 1) != 0) {
-                                        i -= 4;
-                                        break cyl;
-                                    } else {
-                                        throw new UTFDataFormatException("malformed input: partial character at end");
-                                    }
-                                read0(in, i, out, 3);
-                                i += 4;
-                                break sw;
-                            case 8:
-                            case 10:  /* 1111 0xxx [10xx xxxx] * 4  注意：非UTF-8标准编码 */
-                                if (i + 5 > max)
-                                    if((flag & 1) != 0) {
-                                        i -= 5;
-                                        break cyl;
-                                    } else {
-                                        throw new UTFDataFormatException("malformed input: partial character at end");
-                                    }
-                                read0(in, i, out, 4);
-                                i += 5;
-                                break sw;
-                            case 12:  /* 1111 0xxx [10xx xxxx] * 5  注意：非UTF-8标准编码 */
-                                if (i + 6 > max)
-                                    if((flag & 1) != 0) {
-                                        i -= 6;
-                                        break cyl;
-                                    } else {
-                                        throw new UTFDataFormatException("malformed input: partial character at end");
-                                    }
-                                read0(in, i, out, 5);
-                                i += 6;
-                                break sw;
-                            case 14:
-                                // error
-                        }
                 default:
                     /* 10xx xxxx,  1111 xxxx */
-                    if((flag & 1) != 0) {
-                        i --;
+                    if ((flag & 1) != 0) {
+                        i--;
                         break cyl;
                     }
                     throw new UTFDataFormatException("malformed input around byte " + i);
@@ -993,30 +1128,8 @@ public class ByteList implements DataInput {
 
         return i;
     }
-
-    private static void read0(ByteList in, int i, CharList out, int len) throws UTFDataFormatException {
-        int k = in.get(i++) & 0x0F;
-        while (i < len) {
-            k <<= 6;
-            int code = in.get(i++);
-            if ((code & 0xC0) != 0x80)
-                throw new UTFDataFormatException("malformed input around byte " + (i - 1));
-            k |= code;
-        }
-
-        if(k > 65535)
-            out.appendCodePoint(k);
-        else
-            out.append((char) k);
-    }
-
-
-    @Deprecated
-    public int length() {
-        return wIndex - arrayOffset();
-    }
     // endregion
-    // Relative bit get method from original BitReader
+    // region Relative bit get method from original BitReader
     public byte bitIndex;
 
     public final int readBit1() {
@@ -1028,9 +1141,13 @@ public class ByteList implements DataInput {
         return bit;
     }
 
+    public byte get0(int i) {
+        return i >= wIndex ? 0 : list[i];
+    }
+
     public final int readBit(int numBits) {
         int d;
-        int rIndex = this.rIndex + arrayOffset();
+        int ri = rIndex + arrayOffset();
         switch (numBits) {
             case 1:
                 return readBit1();
@@ -1042,8 +1159,8 @@ public class ByteList implements DataInput {
             case 7:
             case 8:
             case 9:
-                d = (((((list[rIndex++] & 0xFF) << 8) |
-                        (get0(rIndex) & 0xFF)) << bitIndex)
+                d = (((((list[ri++] & 0xFF) << 8) |
+                        (get0(ri) & 0xFF)) << bitIndex)
                         & 0xFFFF) >> 16 - numBits;
             break;
             case 10:
@@ -1054,9 +1171,9 @@ public class ByteList implements DataInput {
             case 15:
             case 16:
             case 17:
-                d = (((((get(rIndex++) & 0xFF) << 16) |
-                        ((get0(rIndex++) & 0xFF) << 8) |
-                        (get0(rIndex) & 0xFF)) << bitIndex)
+                d = (((((get(ri++) & 0xFF) << 16) |
+                        ((get0(ri++) & 0xFF) << 8) |
+                        (get0(ri) & 0xFF)) << bitIndex)
                         & 0xFFFFFF) >> 24 - numBits;
             break;
             default:
@@ -1072,35 +1189,104 @@ public class ByteList implements DataInput {
         this.rIndex += bitIndex >> 3;
         this.bitIndex = (byte) (bitIndex & 0x7);
     }
+
+    public void endBitRead() {
+        if (bitIndex != 0) {
+            bitIndex = 0;
+            rIndex++;
+        }
+    }
+    // endregion
+    // region Ascii Sequence
+    @Override
+    public int length() {
+        return wIndex - arrayOffset();
+    }
+
+    @Override
+    public char charAt(int i) {
+        return (char) list[i + arrayOffset()];
+    }
+
+    @Override
+    public CharSequence subSequence(int start, int end) {
+        return new Slice(list, start, end - start);
+    }
     // endregion
 
-    /**
-     * 只写，加快速度
-     */
-    public static final class WriteOnly extends ByteList {
-        public WriteOnly() {
-            super(EmptyArrays.BYTES);
+    @Override
+    public String toString() {
+        return "ByteList{" + TextUtil.dumpBytes(list, arrayOffset(), wIndex) + '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ByteList ot = (ByteList) o;
+        return ArrayUtil.rangedEquals(list, arrayOffset(), wIndex(), ot.list, ot.arrayOffset(), ot.wIndex());
+    }
+
+    @Override
+    public int hashCode() {
+        return ArrayUtil.rangedHashCode(list, arrayOffset(), wIndex());
+    }
+
+    public static final class Streamed extends ByteList {
+        OutputStream out;
+        int fakeWriteIndex;
+
+        public Streamed() {
+            super(128);
+        }
+
+        public Streamed(OutputStream out, int bufferCapacity) {
+            super(bufferCapacity);
+            this.out = out;
+        }
+
+        public void setOut(OutputStream out) {
+            this.out = out;
         }
 
         @Override
         public void ensureCapacity(int required) {
-            throw new UnsupportedOperationException();
+            if (required >= list.length) {
+                required -= wIndex;
+                flush();
+            }
+            if (required >= list.length) {
+                list = new byte[required];
+            }
+        }
+
+        public void flush() {
+            if (wIndex > 0) {
+                if (out != null) {
+                    try {
+                        out.write(list, 0, wIndex);
+                    } catch (IOException e) {
+                        Helpers.athrow(e);
+                    }
+                }
+                fakeWriteIndex += wIndex;
+                wIndex = 0;
+            }
+        }
+
+        @Override
+        public void close() {
+            flush();
+        }
+
+        @Override
+        public int wIndex() {
+            return fakeWriteIndex;
         }
 
         @Override
         public void wIndex(int pos) {
-            this.wIndex = pos;
-        }
-
-        @Override
-        public final ByteList put(byte e) {
-            wIndex++;
-            return this;
-        }
-
-        public ByteList put(byte[] b, int off, int len) {
-            wIndex += len;
-            return this;
+            this.fakeWriteIndex = pos;
         }
 
         @Override
@@ -1113,66 +1299,43 @@ public class ByteList implements DataInput {
      * 只读
      */
     public static final class Slice extends ByteList {
-        private final int offset;
-        private final int length;
+        private final int off, len;
 
-        public Slice(byte[] array, int start, int length) {
+        public Slice(byte[] array, int start, int len) {
             super(array);
-            this.wIndex = start + length;
-            this.length = start + length;
-            this.offset = start;
+            this.wIndex = start + len;
+            this.len = start + len;
+            this.off = start;
         }
 
         @Override
         public void ensureCapacity(int required) {
-            if (required > length) {
-                throw new ArrayIndexOutOfBoundsException("Required " + required + " Current " + length);
+            if (required > len) {
+                throw new UnsupportedOperationException();
             }
         }
 
         @Override
         public int arrayOffset() {
-            return offset;
+            return off;
         }
 
         @Override
         public void clear() {
-            throw new UnsupportedOperationException("Readonly");
-        }
-
-        @Override
-        public String getString() {
-            return new String(list, offset, length - offset, StandardCharsets.UTF_8);
+            throw new UnsupportedOperationException();
         }
 
         @Override
         public int wIndex() {
-            return wIndex - offset;
+            return wIndex - off;
         }
 
         @Override
-        public final ByteList put(byte e) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public final ByteList put(int i, byte e) {
-            return super.put(i + offset, e);
-        }
-
-        @Override
-        public byte get(int i) {
-            return super.get(i + offset);
-        }
-
-        @Override
-        public int getU(int i) {
-            return super.getU(i + offset);
-        }
-
-        @Override
-        public ByteList put(byte[] b, int off, int len) {
-            throw new UnsupportedOperationException();
+        public void wIndex(int i) {
+            if (i > len) {
+                throw new UnsupportedOperationException();
+            }
+            this.wIndex = i + off;
         }
 
         @Override
@@ -1182,9 +1345,9 @@ public class ByteList implements DataInput {
 
         @Override
         public byte[] toByteArray() {
-            byte[] result = new byte[length - offset];
-            System.arraycopy(list, offset, result, 0, result.length);
-            return result;
+            byte[] b = new byte[len - off];
+            System.arraycopy(list, off, b, 0, b.length);
+            return b;
         }
     }
 
@@ -1195,17 +1358,16 @@ public class ByteList implements DataInput {
 
         @Override
         public int read() {
-            return pos >= wIndex ? -1 : (list[pos++] & 0xFF);
+            if (pos == wIndex) return -1;
+            return list[pos++] & 0xFF;
         }
 
         @Override
         public int read(@Nonnull byte[] arr, int off, int len) {
-            if(len == 0)
-                return 0;
+            if(len == 0) return 0;
 
             int r = Math.min(wIndex - pos, len);
-            if (r <= 0)
-                return -1;
+            if (r <= 0) return -1;
 
             System.arraycopy(list, pos, arr, off, r);
             pos += r;
@@ -1222,87 +1384,6 @@ public class ByteList implements DataInput {
         @Override
         public int available() {
             return Math.max(0, wIndex - pos);
-        }
-    }
-
-    public final class AsOutputStream extends OutputStream implements DataOutput {
-        AsOutputStream() {}
-
-        @Override
-        public void write(int b) {
-            put((byte) b);
-        }
-
-        @Override
-        public void write(@Nonnull byte[] b) {
-            put(b, 0, b.length);
-        }
-
-        @Override
-        public void write(@Nonnull byte[] b, int off, int len) {
-            put(b, off, len);
-        }
-
-        @Override
-        public void writeBoolean(boolean v) {
-            put((byte) (v ? 1 : 0));
-        }
-
-        @Override
-        public void writeByte(int v) {
-            put((byte) v);
-        }
-
-        @Override
-        public void writeShort(int s) {
-            put((byte) (s >>> 8)).put((byte) s);
-        }
-
-        @Override
-        public void writeChar(int c) {
-            writeShort(c);
-        }
-
-        @Override
-        public void writeInt(int i) {
-            putInt(i);
-        }
-
-        @Override
-        public void writeLong(long l) {
-            putLong(l);
-        }
-
-        @Override
-        public void writeFloat(float v) {
-            putInt(Float.floatToIntBits(v));
-        }
-
-        @Override
-        public void writeDouble(double v) {
-            putLong(Double.doubleToLongBits(v));
-        }
-
-        @Override
-        public void writeBytes(@Nonnull String s) {
-            int len = s.length();
-            for (int i = 0; i < len; i++) {
-                put((byte) s.charAt(i));
-            }
-        }
-
-        @Override
-        public void writeChars(@Nonnull String s) {
-            putChars(s);
-        }
-
-        @Override
-        public void writeUTF(@Nonnull String str) throws UTFDataFormatException {
-            try {
-                ByteList.writeUTF(ByteList.this, str, 0);
-            } catch (ArrayIndexOutOfBoundsException e) {
-                throw new UTFDataFormatException(e.getMessage());
-            }
         }
     }
 }

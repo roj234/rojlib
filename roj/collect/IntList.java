@@ -83,7 +83,14 @@ public class IntList implements Iterable<Integer> {
 
     @Override
     public String toString() {
-        return "IntList" + Arrays.toString(list);
+        StringBuilder sb = new StringBuilder("IntList[");
+        int i = 0;
+        while (true) {
+            sb.append(list[i++]);
+            if (i == size) break;
+            sb.append(", ");
+        }
+        return sb.append(']').toString();
     }
 
     @Nonnull

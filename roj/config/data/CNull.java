@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.Structs;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
@@ -88,22 +89,7 @@ public final class CNull extends CEntry {
     }
 
     @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
-        return sb.append("null");
-    }
-
-    @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append("null");
-    }
-
-    @Override
-    public StringBuilder toINI(StringBuilder sb, int depth) {
-        return sb.append("null");
-    }
-
-    @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append("null");
     }
 
@@ -113,18 +99,18 @@ public final class CNull extends CEntry {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.NULL.ordinal());
-    }
-
-    @Override
-    protected boolean isSimilar(CEntry value) {
-        return false;
     }
 
     @Override
     public boolean equals(Object obj) {
         return obj == NULL;
+    }
+
+    @Override
+    public boolean isSimilar(CEntry o) {
+        return o == this;
     }
 
     @Override

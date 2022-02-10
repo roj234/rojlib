@@ -163,7 +163,7 @@ public class Generic implements IGeneric {
             fn.appendTypeParameter(sb, owner, null);
         } else {
             int start = owner.lastIndexOf('/') + 1;
-            sb.append(owner, start, owner.length() - start);
+            sb.append(owner, start, owner.length());
         }
         if (children != null && !children.isEmpty()) {
             sb.append('<');

@@ -39,23 +39,24 @@ import java.util.concurrent.locks.LockSupport;
  */
 public final class PacketBuffer {
     static final AtomicIntegerFieldUpdater<PacketBuffer> BAR = AtomicIntegerFieldUpdater.newUpdater(PacketBuffer.class, "barrier");
-    static final AtomicIntegerFieldUpdater<PacketBuffer> WCNT = AtomicIntegerFieldUpdater.newUpdater(PacketBuffer.class, "wCount");
-    static final AtomicIntegerFieldUpdater<PacketBuffer> RCNT = AtomicIntegerFieldUpdater.newUpdater(PacketBuffer.class, "rCount");
     static final AtomicReferenceFieldUpdater<Buf, Thread> OWN = AtomicReferenceFieldUpdater.newUpdater(Buf.class, Thread.class, "owner");
+    //static final AtomicReferenceFieldUpdater<Buf, Buf> NEXT = AtomicReferenceFieldUpdater.newUpdater(Buf.class, Buf.class, "next");
+    //static final AtomicReferenceFieldUpdater<PacketBuffer, Buf> TAIL = AtomicReferenceFieldUpdater.newUpdater(PacketBuffer.class, Buf.class, "tail");
 
     public PacketBuffer() {
-        this(10);
+        this(false, 10);
     }
 
-    public PacketBuffer(int capacity) {
-        buffers = new Buf[capacity];
-        for (int i = 0; i < buffers.length; i++) {
-            buffers[i] = new Buf();
+    public PacketBuffer(boolean fifo, int capacity) {
+        if (fifo) {
+            head = new Buf();
+        } else {
+            head = null;
+            buffers = new Buf[capacity];
+            for (int i = 0; i < buffers.length; i++) {
+                buffers[i] = new Buf();
+            }
         }
-    }
-
-    public int getReadIndex() {
-        return rCount;
     }
 
     public boolean hasMore() {
@@ -63,29 +64,36 @@ public final class PacketBuffer {
     }
 
     private volatile Buf[] buffers;
-    private volatile int   barrier, wCount, rCount;
+    private volatile int   barrier;
+    private final    Buf   head;
+    private          Buf   tail;
+
+    public boolean isFIFO() {
+        return head != null;
+    }
 
     public boolean take(ByteBuffer b) {
         for(;;) {
             int bar = barrier;
             if (bar == 0) return false;
             if (bar > 0 && BAR.compareAndSet(this, bar--, -1)) {
-                Buf h = buffers[bar];
+                Buf h = buffers != null ? buffers[bar] : head.next;
+
                 if (b.remaining() < h.len) {
                     bar++;
                 } else {
                     b.put(h.data, 0, h.len);
                     h.len = 0;
+                    if (buffers == null) syncUnlink();
                     LockSupport.unpark(OWN.getAndSet(h, null));
-                    RCNT.getAndIncrement(this);
                 }
+
                 if (!BAR.compareAndSet(this, -1, bar)) {
                     barrier = 0;
                     throw new IllegalStateException();
                 }
                 return h.len == 0;
             }
-            LockSupport.parkNanos(1000);
         }
     }
 
@@ -94,39 +102,51 @@ public final class PacketBuffer {
             int bar = barrier;
             if (bar == 0) return null;
             if (bar > 0 && BAR.compareAndSet(this, bar--, -1)) {
-                Buf h = buffers[bar];
-                byte[] b = Arrays.copyOf(h.data, h.len);
+                Buf h;
+                byte[] b;
+                if (buffers == null) {
+                    h = syncUnlink();
+                    b = h.data;
+                } else {
+                    h = buffers[bar];
+                    b = Arrays.copyOf(h.data, h.len);
+                }
+
                 LockSupport.unpark(OWN.getAndSet(h, null));
-                RCNT.getAndIncrement(this);
+
                 if (!BAR.compareAndSet(this, -1, bar)) {
                     barrier = 0;
                     throw new IllegalStateException();
                 }
                 return b;
             }
+        }
+    }
+
+    private Buf syncUnlink() {
+        Buf next = head.next;
+        if (next == null) return null;
+        if (next == tail) tail = null;
+        head.next = next.next;
+        next.next = null;
+        return next;
+    }
+
+    public final void offer(ByteBuffer b) {
+        while (!offerOnce(b, false)) {
             LockSupport.parkNanos(1000);
         }
     }
 
-    public int offer(ByteBuffer b) {
-        int r;
-        while ((r = offerOnce(b, false)) < 0) {
+    public final void offerAndAwait(ByteBuffer b) {
+        while (!offerOnce(b, true)) {
             LockSupport.parkNanos(1000);
         }
-        return r;
     }
 
-    public int offerAndAwait(ByteBuffer b) {
-        int r;
-        while ((r = offerOnce(b, true)) < 0) {
-            LockSupport.parkNanos(1000);
-        }
-        return r;
-    }
-
-    public int offerOnce(ByteBuffer b, boolean await) {
+    public boolean offerOnce(ByteBuffer b, boolean await) {
         int bar = barrier;
-        if (bar == buffers.length) {
+        if (buffers != null && bar == buffers.length) {
             Buf[] buf = buffers;
             if (BAR.compareAndSet(this, bar, -1)) {
                 if (buf == buffers) {
@@ -139,33 +159,46 @@ public final class PacketBuffer {
                     throw new IllegalStateException();
                 }
             } else {
-                return -1;
+                return false;
             }
         }
+
+        // FIFO也许可以不要用独占锁...
         if (bar >= 0 && BAR.compareAndSet(this, bar, -1)) {
-            Buf h = buffers[bar];
-            if (h.data.length < (h.len = b.remaining()))
-                h.data = new byte[h.len];
+            Buf h;
+            if (buffers != null) {
+                h = buffers[bar];
+                if (h.data.length < (h.len = b.remaining()))
+                    h.data = new byte[h.len];
+            } else {
+                // already synchronized
+                Buf prevTail = this.tail;
+                this.tail = h = new Buf();
+                if (prevTail != null) prevTail.next = h;
+                else head.next = h;
+                h.data = new byte[h.len = b.remaining()];
+            }
             b.get(h.data, 0, h.len);
             h.owner = await ? Thread.currentThread() : null;
             if (!BAR.compareAndSet(this, -1, bar + 1)) {
                 barrier = bar;
                 throw new IllegalStateException();
             }
-            int i = WCNT.getAndIncrement(this);
             if (await) {
                 if (h.owner == Thread.currentThread()) {
                     LockSupport.park(this);
                 }
             }
-            return i;
+            return true;
         }
-        return -1;
+        return false;
     }
 
     static final class Buf {
         byte[] data = EmptyArrays.BYTES;
         int len;
         volatile Thread owner;
+
+        /*volatile */Buf next;
     }
 }

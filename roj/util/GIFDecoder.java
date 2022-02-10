@@ -62,8 +62,8 @@ public class GIFDecoder {
             colorTableSize = getSpecifyBit(flag, 0, 2);
             colorTableSize = 1 << colorTableSize + 1;
         }
-        gif.bgColorIndex = r.readUByte();
-        short whPercent0 = r.readUByte();
+        gif.bgColorIndex = r.readByte();
+        int whPercent0 = r.readUnsignedByte();
         if (whPercent0 != 0)
             gif.whPercent = (((double) whPercent0) + 15.0d) / 64.0d;
 
@@ -73,7 +73,7 @@ public class GIFDecoder {
         }
 
         while (true) {
-            if (r.rIndex >= r.length()) {
+            if (r.rIndex >= r.limit()) {
                 throw new IOException("Unexpected end of input.");
             }
             byte blockId = r.readByte();
@@ -96,15 +96,15 @@ public class GIFDecoder {
         int size = colorTable.length;
         if (size == 0) return;
         for (int i = 0; i < size; i++) {
-            int r = rd.readUByte();
-            int g = rd.readUByte();
-            int b = rd.readUByte();
+            int r = rd.readUnsignedByte();
+            int g = rd.readUnsignedByte();
+            int b = rd.readUnsignedByte();
             colorTable[i] = 0xFF000000 | r << 16 | g << 8 | b;
         }
     }
 
     public static void readExtension(Gif gif, ByteList r) throws IOException {
-        short ext = r.readUByte();
+        int ext = r.readUnsignedByte();
         switch (ext) {
             case 0xFE:
                 System.out.println("Comment:" + new String(skipSubBlock(r, new ByteList())));
@@ -135,10 +135,10 @@ public class GIFDecoder {
 
     public static int skipSubBlock(ByteList r) {
         int startIndex = r.rIndex;
-        short subBlockLen = r.readUByte();
+        int subBlockLen = r.readUnsignedByte();
         while (subBlockLen != 0 && !r.hasRemaining()) {
             r.rIndex += subBlockLen;
-            subBlockLen = r.readUByte();
+            subBlockLen = r.readUnsignedByte();
             startIndex++;
         }
         return r.rIndex - startIndex - 1;
@@ -161,12 +161,12 @@ public class GIFDecoder {
         frame.disposalMethod = (flag & 0x1C) >>> 2;
         frame.transparent = isBitTrue(flag, 0);
         frame.delay = r.readUShortLE();
-        frame.transpantColorIndex = r.readUByte();
+        frame.transparentColor = r.readByte();
         r.rIndex++;
     }
 
     public static void readAppExtensions(Gif gif, ByteList r) {
-        short len = r.readUByte();
+        int len = r.readUnsignedByte();
         try {
             gif.appName = r.readUTF(8);
             gif.appCode = r.readUTF(3);
@@ -310,9 +310,6 @@ public class GIFDecoder {
             currFrame = null;
         }
 
-        static final int[] _EMPTY = new int[0];
-
-
         public List<int[]> toColorArray() {
             List<int[]> frameAlignedData = new ArrayList<>((int) (frames.size() / 0.7) + 1);
             LZWInflater inf = new LZWInflater();
@@ -324,7 +321,7 @@ public class GIFDecoder {
             this.currFrame = null;
             //this.frames.clear();
             //this.frames = null;
-            this.globalColorTable = _EMPTY;
+            this.globalColorTable = EmptyArrays.INTS;
             return frameAlignedData;
         }
 
@@ -385,7 +382,7 @@ public class GIFDecoder {
         final int[] imageDecode(Frame frame, int[] color, LZWInflater codes) {
             int clearCode = codes.clearCode;
             int endOfInfoCode = codes.endOfInfoCode;
-            int transparent = frame.transparent ? frame.transpantColorIndex : -1;
+            int transparent = frame.transparent ? frame.transparentColor & 0xFF : -1;
             IntList output = new IntList(clearCode);
             int code = 0;
             while (true) {
@@ -458,12 +455,12 @@ public class GIFDecoder {
         }
 
         public final int getBackgroundColor() {
-            if (globalColorTable != _EMPTY) {
-                return globalColorTable[bgColorIndex];
+            if (globalColorTable != EmptyArrays.INTS) {
+                return globalColorTable[bgColorIndex & 0xFF];
             }
             Frame frame = this.frames.get(0);
-            if (frame.localColorTable != _EMPTY)
-                return frame.localColorTable[bgColorIndex];
+            if (frame.localColorTable != EmptyArrays.INTS)
+                return frame.localColorTable[bgColorIndex & 0xFF];
             return 0;
         }
 
@@ -487,19 +484,16 @@ public class GIFDecoder {
         boolean sorted;
         boolean interlace;
         public int delay;
-        int[] localColorTable = Gif._EMPTY;
+        int[] localColorTable;
 
-        Short transpantColorIndex;
-        Byte minCodeSize;
+        byte transparentColor;
+        byte minCodeSize;
         byte[] imgData;
 
         public int[] pixels;
 
         public void setImgData(int[] pixels) {
-            this.imgData = null;
-            this.transpantColorIndex = null;
-            this.minCodeSize = null;
-            this.localColorTable = Gif._EMPTY;
+            this.localColorTable = EmptyArrays.INTS;
             this.pixels = pixels;
         }
 

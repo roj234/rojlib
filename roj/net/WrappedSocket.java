@@ -37,6 +37,8 @@ import java.nio.channels.WritableByteChannel;
  * @since 2020/11/29 15:33
  */
 public interface WrappedSocket extends AutoCloseable, WritableByteChannel/*, ReadableByteChannel*/ {
+    int WRITE_ONCE = 32768;
+
     Socket socket();
 
     /**

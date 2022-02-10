@@ -27,7 +27,7 @@
 package roj.util;
 
 import roj.text.CharList;
-import roj.util.ByteList.WriteOnly;
+import roj.util.ByteList.Streamed;
 
 import java.io.UTFDataFormatException;
 
@@ -112,7 +112,7 @@ public final class ByteReader {
 
     public ByteList slice(int length) {
         if (length == 0)
-            return new WriteOnly();
+            return new Streamed();
         ByteList list = this.bytes.slice(rIndex, length);
         rIndex += length;
         return list;

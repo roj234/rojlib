@@ -274,7 +274,7 @@ public class Pack125 {
         }
         w2.put(w3);
 
-        int len = r.limit() - r.rIndex;
+        int len = r.remaining();
         w.putVarInt(len, false).put(r.list, r.rIndex + r.arrayOffset(), len);
         this.cLen++;
         return this;

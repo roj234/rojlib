@@ -26,31 +26,35 @@
 package roj.net.http;
 
 import roj.config.ParseException;
-import roj.math.MathUtils;
-import roj.net.Notify;
 import roj.text.CharList;
-import roj.util.ByteList;
 
 import static roj.config.word.AbstLexer.WHITESPACE;
 
 /**
  * @author Roj234
- * @version 1.0
  * @since  2021/2/4 16:56
  */
 public final class HttpLexer {
+    public static final String _SHOULD_EOF = new String();
+    public static final String _ERROR = new String();
+
     public HttpLexer init(CharSequence s) {
         this.input = s;
         this.index = 0;
         return this;
     }
 
-    CharSequence input;
+    private CharSequence input;
     public int index;
-    CharList found = new CharList();
+
+    private final CharList found = new CharList();
 
     public CharSequence getInput() {
         return input;
+    }
+
+    public char[] getBuf() {
+        return found.list;
     }
 
     /**
@@ -72,17 +76,17 @@ public final class HttpLexer {
                         i++;
                         if (remain > 3 && in.charAt(i) == '\r' && in.charAt(i + 1) == '\n') {
                             this.index = i + 2;
-                            return Shared._SHOULD_EOF;
+                            return _SHOULD_EOF;
                         }
                     } else {
                         this.index = i;
-                        return Shared._ERROR;
+                        return _ERROR;
                     }
                     break;
                 case ':':
                     if (in.charAt(i++) != ' ') {
                         this.index = i;
-                        return Shared._ERROR;
+                        return _ERROR;
                     }
 
                     while ((c = in.charAt(i++)) != '\r' || in.charAt(i) != '\n') {
@@ -123,74 +127,11 @@ public final class HttpLexer {
             }
         }
         this.index = i;
-        return Shared._SHOULD_EOF;
-    }
-
-    public String content(String length, int max) throws ParseException {
-        int index = this.index;
-        final CharSequence input = this.input;
-
-        final CharList temp = this.found;
-        temp.clear();
-
-        int len;
-        if (length != null) {
-            try {
-                len = MathUtils.parseInt(length);
-                if (index + len > input.length()) {
-                    throw err("Invalid clen " + len + " of fact " + input.length());
-                }
-            } catch (NumberFormatException e) {
-                throw err("Excepting NUMBER, got " + length);
-            }
-            if (len > max)
-                throw new Notify(-127);
-        } else {
-            try { // wait for connection close
-                int i = index;
-                while (input.length() == Integer.MAX_VALUE) {
-                    input.charAt(i++);
-                }
-            } catch (ArrayIndexOutOfBoundsException ignored) {}
-
-            len = input.length() - index;
-        }
-
-        temp.ensureCapacity(temp.length() + len);
-
-        char[] list = temp.list;
-        int j = temp.length();
-
-        try {
-            int byteLen = 0;
-            while (byteLen < len) {
-                final char c = input.charAt(index++);
-                list[j++] = c;
-                byteLen += ByteList.byteCountUTF8(c);
-            }
-
-        } catch (ArrayIndexOutOfBoundsException ignored) {
-            System.err.println("Connection closed too early");
-            j--;
-        }
-        temp.setIndex(j);
-
-        this.index = index;
-        return temp.toString();
+        return _SHOULD_EOF;
     }
 
     public ParseException err(String reason) {
         ParseException pe = new ParseException(input, reason, index, null);
-        try {
-            pe.__lineParser();
-        } catch (Throwable ignored) {
-            pe.noDetail();
-        }
-        return pe;
-    }
-
-    public ParseException err(String reason, Throwable reason2) {
-        ParseException pe = new ParseException(input, reason, index, reason2);
         try {
             pe.__lineParser();
         } catch (Throwable ignored) {

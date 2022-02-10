@@ -36,9 +36,9 @@ import roj.concurrent.OperationDone;
 public final class VarType {
     public static final byte TOP = 0,
             INT = 1,
-            FLOAT = 2,
-            DOUBLE = 3,
-            LONG = 4,
+            LONG = 2,
+            FLOAT = 3,
+            DOUBLE = 4,
             NULL = 5,
             UNINITIAL_THIS = 6,
             REFERENCE = 7,

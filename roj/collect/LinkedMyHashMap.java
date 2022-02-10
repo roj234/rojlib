@@ -28,6 +28,7 @@ package roj.collect;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.function.BiConsumer;
 
 /**
  * @author Roj234
@@ -112,6 +113,16 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
     @Override
     public Iterator<Entry<K, V>> entryIterator() {
         return new EntryItr();
+    }
+
+    @Override
+    public void forEach(BiConsumer<? super K, ? super V> action) {
+        LinkedEntry<K, V> e = reversed ? tail : head._next;
+
+        while (e != null && e != head) {
+            action.accept(e.k, e.v);
+            e = reversed ? e.prev : e._next;
+        }
     }
 
     public class EntryItr implements Iterator<Entry<K, V>> {

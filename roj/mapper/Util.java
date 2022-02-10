@@ -370,7 +370,7 @@ public final class Util {
         cl.clear();
 
         String b;
-        if ((b = map.get(cl.append(name, s, e - s - (file ? 6 : 0)))) != null) {
+        if ((b = map.get(cl.append(name, s, e - (file ? 6 : 0)))) != null) {
             return file ? (b + ".class") : b;
         }
 
@@ -419,9 +419,9 @@ public final class Util {
         int dollar = TextUtil.limitedIndexOf(name, '$', s, e);
 
         cl.clear();
-        if (dollar != -1 && (b = map.get(cl.append(name, s, dollar - s))) != null) {
+        if (dollar != -1 && (b = map.get(cl.append(name, s, dollar))) != null) {
             cl.clear();
-            return cl.append(b).append(name, dollar, e - dollar).toString();
+            return cl.append(b).append(name, dollar, e).toString();
         }
 
         return file ? name.subSequence(s, e).toString() : null;

@@ -36,20 +36,20 @@ import java.net.URL;
  * @since 2021/10/23 21:36
  */
 public class HttpConnection {
-    URL        url;
-    HttpClient connector;
-    HttpHead   response;
+    private       URL        url;
+    private final HttpClient client;
+    private       HttpHead   response;
 
     public HttpConnection(final URL url) {
         this.url = url;
-        connector = new HttpClient();
+        client = new HttpClient();
     }
 
     public void connect() throws IOException {
-        if (!connector.connected()) {
-            connector.url(url).send();
+        if (!client.connected()) {
+            client.url(url).send();
             try {
-                response = connector.response();
+                response = client.response();
             } catch (ParseException e) {
                 throw new IOException(e.toString(), e);
             }
@@ -57,7 +57,7 @@ public class HttpConnection {
     }
 
     public void disconnect() throws IOException {
-        connector.disconnect();
+        client.disconnect();
     }
 
     public URL getURL() {
@@ -91,10 +91,10 @@ public class HttpConnection {
 
     public InputStream getInputStream() throws IOException {
         connect();
-        return connector.getInputStream();
+        return client.getInputStream();
     }
 
     public HttpClient getClient() {
-        return connector;
+        return client;
     }
 }

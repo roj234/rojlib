@@ -269,6 +269,7 @@ public final class NetworkUtil {
                 try (FileOutputStream fos = new FileOutputStream(priKey)) {
                     saveRSAKey(pair, fos, keyPass);
                 }
+                if (pubKey != null)
                 try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(pubKey))) {
                     RSAPublicKey pk = (RSAPublicKey) pair.getPublic();
                     byte[] t = pk.getPublicExponent().toByteArray();

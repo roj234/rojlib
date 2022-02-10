@@ -51,21 +51,21 @@ public class Pipe implements Selectable {
     // state / flag
     public long uploaded, downloaded;
 
-    public boolean isUpstreamEof() {
+    public final boolean isUpstreamEof() {
         return upstream == null;
     }
 
-    public boolean isDownstreamEof() {
+    public final boolean isDownstreamEof() {
         return downstream == null;
     }
 
-    public void setUpstream(FileDescriptor upstream) {
+    public final void setUpstream(FileDescriptor upstream) {
         if (toh == null) throw new IllegalStateException();
         this.upstream = upstream;
     }
 
     static final int S_BUFFER = -1, S_NET = 0, S_NOTHING = 1, S_CLOSED = 2;
-    static final int BUFFER_CAPACITY = 4096;
+    public static final int BUFFER_CAPACITY = 4096;
 
     public Pipe(FileDescriptor upstream, FileDescriptor downstream) {
         this.upstream = upstream;
@@ -77,12 +77,12 @@ public class Pipe implements Selectable {
         this.toc.limit(0);
     }
 
-    public final void selected(int readyOps) throws IOException {
+    public void selected(int readyOps) throws IOException {
         if (upstream == null || downstream == null) return;
         transfer(false);
     }
 
-    final int transfer(boolean bufferOnly) throws IOException {
+    protected final int transfer(boolean bufferOnly) throws IOException {
         int c;
         if (toh.hasRemaining()) {
             try {
@@ -126,8 +126,6 @@ public class Pipe implements Selectable {
         if (toc.hasRemaining()) return S_BUFFER;
         if (bufferOnly) return S_NOTHING;
 
-        boolean flag = false;
-
         toc.clear();
         try {
             c = NIOUtil.readToNativeBuffer(upstream, toc, NIOUtil.SOCKET_FD);
@@ -135,6 +133,8 @@ public class Pipe implements Selectable {
             c = -1;
         }
         toc.flip();
+
+        boolean flag = false;
         if (c > 0) {
             flag = true;
         } else if (c < 0) {
@@ -203,7 +203,7 @@ public class Pipe implements Selectable {
         this.downstream = client;
     }
 
-    void doCipher() throws GeneralSecurityException {}
+    protected void doCipher() throws GeneralSecurityException {}
 
     public final void close() throws IOException {
         if (upstream == null) return;
@@ -256,7 +256,7 @@ public class Pipe implements Selectable {
         }
 
         @Override
-        final void doCipher() throws GeneralSecurityException {
+        protected final void doCipher() throws GeneralSecurityException {
             ByteBuffer target = toh;
             ByteBuffer tmp = this.tmp;
             if (target.hasRemaining()) {

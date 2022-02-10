@@ -87,15 +87,13 @@ public class CharList implements CharSequence {
         append(array, 0, array.length);
     }
 
-    public void append(char[] array, int start, int length) {
-        if (start + length > array.length) {
-            throw new ArrayIndexOutOfBoundsException("Source[" + (start + length) + "] of " + array.length);
+    public void append(char[] c, int start, int end) {
+        if (start < 0 || end > c.length || c.length < end - start) {
+            throw new ArrayIndexOutOfBoundsException();
         }
-        if (start < 0)
-            throw new ArrayIndexOutOfBoundsException("Source[" + start + "] of " + array.length);
-
+        int length = end - start;
         ensureCapacity(ptr + length);
-        System.arraycopy(array, start, list, ptr, length);
+        System.arraycopy(c, start, list, ptr, length);
         ptr += length;
     }
 
@@ -104,8 +102,8 @@ public class CharList implements CharSequence {
         append(array.list, 0, array.ptr);
     }
 
-    public void append(CharList array, int start, int length) {
-        append(array.list, start, length);
+    public void append(CharList array, int start, int end) {
+        append(array.list, start, end);
     }
 
     public CharList append(Object cs) {
@@ -123,20 +121,18 @@ public class CharList implements CharSequence {
         return this;
     }
 
-    public CharList append(CharSequence cs, int start, int length) {
+    public CharList append(CharSequence cs, int start, int end) {
         if (cs instanceof CharList) {
-            append(((CharList) cs).list, start, length);
+            append(((CharList) cs).list, start, end);
             return this;
         }
 
-        ensureCapacity(ptr + length);
+        ensureCapacity(ptr + end - start);
 
         char[] list = this.list;
         int j = ptr;
 
-        length += start;
-
-        for (int i = start; i < length; i++) {
+        for (int i = start; i < end; i++) {
             list[j++] = cs.charAt(i);
         }
         ptr = j;
@@ -532,7 +528,7 @@ public class CharList implements CharSequence {
         }
 
         @Override
-        public void append(char[] array, int start, int length) {
+        public void append(char[] c, int start, int length) {
             throw new UnsupportedOperationException("Readonly");
         }
 

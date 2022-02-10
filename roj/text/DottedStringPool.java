@@ -78,7 +78,7 @@ public class DottedStringPool extends StringPool {
     public String readDlm(ByteList r) {
         int blocks = r.readVarInt(false);
         if(blocks == 0) {
-            blocks = r.readUByte() - 1;
+            blocks = r.readUnsignedByte() - 1;
             CharList cl = tmp2;
             if(cl == null)
                 cl = tmp2 = new CharList();

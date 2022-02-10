@@ -69,7 +69,7 @@ public abstract class AnnVal {
     }
 
     public static AnnVal parse(ConstantPool pool, ByteList r) {
-        int type = r.readUByte();
+        int type = r.readUnsignedByte();
 
         switch (type) {
             case BOOLEAN:

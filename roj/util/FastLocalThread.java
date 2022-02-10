@@ -43,4 +43,5 @@ public class FastLocalThread extends Thread {
     }
 
     Object[] localDataArray = EmptyArrays.OBJECTS;
+    final Object arrayLock = new Object();
 }

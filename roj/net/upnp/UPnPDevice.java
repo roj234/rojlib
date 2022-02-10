@@ -9,7 +9,9 @@ import roj.config.XMLParser;
 import roj.config.data.AbstXML;
 import roj.config.data.XElement;
 import roj.config.data.XHeader;
+import roj.io.IOUtil;
 import roj.io.StreamingChars;
+import roj.net.SocketSequence;
 import roj.net.http.Headers;
 import roj.net.http.HttpClient;
 import roj.net.http.HttpHead;
@@ -20,6 +22,7 @@ import roj.util.ByteList;
 
 import java.io.IOException;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
@@ -149,14 +152,15 @@ public final class UPnPDevice {
 
         final InetAddress addr;
         final List<byte[]> requests;
-        final UTFCoder coder;
         final List<UPnPDevice> devices;
 
         public Discoverer4(InetAddress addr, List<String> types, List<UPnPDevice> devices) {
             this.addr = addr;
             this.requests = new ArrayList<>(types.size());
 
-            UTFCoder coder = this.coder = new UTFCoder();
+            UTFCoder coder = IOUtil.SharedUTFCoder.get();
+            coder.keep = false;
+            coder.charBuf.clear();
             for (int i = 0; i < types.size(); i++) {
                 String s = types.get(i);
                 coder.charBuf.append(SEARCH_PREFIX).append(UPnPUtil.addNamespace(s)).append(SEARCH_POSTFIX);
@@ -170,7 +174,7 @@ public final class UPnPDevice {
             executing = true;
 
             HttpLexer hl = new HttpLexer();
-            ByteList bl = coder.byteBuf;
+            ByteList bl = IOUtil.getSharedByteBuf();
             bl.ensureCapacity(UPnPUtil.MTU);
             DatagramPacket pkt = new DatagramPacket(bl.list, UPnPUtil.MTU);
 
@@ -185,7 +189,7 @@ public final class UPnPDevice {
                         UPnPDevice device = new UPnPDevice(addr, pkt.getAddress());
 
                         bl.wIndex(pkt.getLength());
-                        HttpHead head = HttpHead.parse(hl.init(coder.decodeR()));
+                        HttpHead head = HttpHead.parse(hl.init(bl));
                         String error = init(head.headers, device);
                         if (error == null) {
                             synchronized (devices) {
@@ -235,16 +239,19 @@ public final class UPnPDevice {
             }
         }
 
-        //HttpURLConnection hc = (HttpURLConnection) new URL(loc).openConnection();
-
         HttpClient hc = new HttpClient();
         Headers map = hc.url(new URL(loc)).method("GET").headers();
         map.put("Connection", "Close");
         hc.send();
 
-        StreamingChars chars = new StreamingChars().reset(hc.getInputStream());
-        HttpHead.parse(new HttpLexer().init(chars));
-        chars.cl.clear();
+        SocketSequence chars = new SocketSequence(false).init(hc.getChannel(), 1000, 0);
+
+        // todo test
+        HttpLexer hl = new HttpLexer();
+        HttpHead.parse(hl.init(chars));
+        ByteBuffer bb = hc.getChannel().buffer();
+        bb.flip().position(hl.index);
+        bb.compact();
 
         int slash = loc.indexOf("/", 7);
         if (slash >= 0) loc = loc.substring(0, slash);
@@ -255,8 +262,8 @@ public final class UPnPDevice {
         for (int i = 0; i < xmlServices.size(); i++) {
             XElement xServ = xmlServices.get(i);
             Service srv = new Service();
-            srv.serviceType = xServ.getByTagName("serviceType").children(0).asText();
-            srv.serviceId = xServ.getByTagName("serviceId").children(0).asText();
+            srv.serviceType = xServ.getByTagName("serviceType").children(0).asString();
+            srv.serviceId = xServ.getByTagName("serviceId").children(0).asString();
 
             srv.controlURL = getURL(loc, "controlURL", xServ);
             srv.eventSubURL = getURL(loc, "eventSubURL", xServ);
@@ -271,7 +278,7 @@ public final class UPnPDevice {
             AbstXML xDesc = xDevice.get(i);
             if (xDesc.childElementCount() > 0) {
                 if (xDesc.children(0).isString()) {
-                    deviceInfo.put(xDesc.asElement().tag, xDesc.children(0).asText().trim());
+                    deviceInfo.put(xDesc.asElement().tag, xDesc.children(0).asString().trim());
                 }
             }
         }
@@ -280,7 +287,7 @@ public final class UPnPDevice {
     }
 
     private static String getURL(String base, String name, XElement xml) {
-        String url = xml.getByTagName(name).children(0).asText();
+        String url = xml.getByTagName(name).children(0).asString();
         return !url.startsWith("/") ? base + "/" + url : base + url;
     }
 
@@ -365,7 +372,7 @@ public final class UPnPDevice {
                     Map<String, String> ret = new MyHashMap<>(child.size());
                     for (int i = 0; i < child.size(); i++) {
                         XElement xKey = child.get(i).asElement();
-                        ret.put(xKey.tag, xKey.children(0).asText().trim());
+                        ret.put(xKey.tag, xKey.children(0).asString().trim());
                     }
                     return ret;
                 }
@@ -375,7 +382,7 @@ public final class UPnPDevice {
             Map<String, String> ret = new MyHashMap<>(child.size());
             for (int i = 0; i < child.size(); i++) {
                 XElement xKey = child.get(i).asElement();
-                ret.put(xKey.tag, xKey.childElementCount() == 0 ? "" : xKey.children(0).asText().trim());
+                ret.put(xKey.tag, xKey.childElementCount() == 0 ? "" : xKey.children(0).asString().trim());
             }
             return ret;
         }

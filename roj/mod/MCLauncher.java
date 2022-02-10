@@ -45,6 +45,7 @@ import roj.concurrent.task.ITask;
 import roj.concurrent.task.ITaskNaCl;
 import roj.config.JSONParser;
 import roj.config.ParseException;
+import roj.config.data.CCommMap;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
@@ -68,7 +69,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -1113,7 +1116,7 @@ public class MCLauncher extends JFrame {
 
     public static void save() {
         try (FileOutputStream fos = new FileOutputStream(new File(BASE, "launcher.json"))) {
-            fos.write(config.toShortJSON().getBytes(StandardCharsets.UTF_8));
+            fos.write(config.toJSON().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             error("配置保存失败\n详情看控制台");
             e.printStackTrace();
@@ -1279,17 +1282,30 @@ public class MCLauncher extends JFrame {
         Map<String, String> mcEnv = new MyHashMap<>();
 
         String playerName = mc_conf.getString("player_name");
-        if(playerName.equals(""))
-            playerName = "Roj234";
-        String uuid = UUID.nameUUIDFromBytes(playerName.getBytes(StandardCharsets.UTF_8)).toString();
+        if(playerName.equals("")) playerName = "Roj234";
+
+        String authToken = null, authUUID = null;
+        File def = new File(mc_conf.getString("external_auth_file"));
+        if (def.isFile()) {
+            try {
+                CMapping map = JSONParser.parse(IOUtil.readUTF(def)).asMap();
+                authToken = map.getString("token");
+                authUUID = map.getString("uuid");
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+        }
+        if (authUUID == null) {
+            authToken = authUUID = UUID.nameUUIDFromBytes(playerName.getBytes(StandardCharsets.UTF_8)).toString();
+        }
 
         mcEnv.put("user_type", "Legacy");
         mcEnv.put("version_type", "FMD");
         mcEnv.put("launcher_name", "FMD");
         mcEnv.put("launcher_version", VERSION);
         mcEnv.put("player_name", playerName);
-        mcEnv.put("auth_access_token", uuid);
-        mcEnv.put("auth_uuid", uuid);
+        mcEnv.put("auth_access_token", authToken);
+        mcEnv.put("auth_uuid", authUUID);
         mcEnv.put("assets_index_name", mc_conf.getString("assets"));
         mcEnv.put("assets_root", '"' + AbstLexer.addSlashes(mc_conf.getString("assets_root") + File.separatorChar + "assets") + '"');
         mcEnv.put("game_directory", mc_conf.getString("root"));
@@ -1299,8 +1315,10 @@ public class MCLauncher extends JFrame {
 
         CmdUtil.info("启动客户端...");
 
+        String java = mc_conf.getString("java");
+        if (java.isEmpty()) java = "java";
         SimpleList<String> list = new SimpleList<>();
-        list.add("java");
+        list.add(java);
         TextUtil.replaceVariable(env, mc_conf.getString("jvmArg"), list);
         list.add(mc_conf.getString("mainClass"));
         TextUtil.replaceVariable(mcEnv, mc_conf.getString("mcArg"), list);
@@ -1346,7 +1364,11 @@ public class MCLauncher extends JFrame {
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, boolean insulation, String mirror, String jvmArg, String mcArg) throws IOException {
-        CMapping mc_conf = new CMapping();
+        CMapping mc_conf = new CCommMap();
+        mc_conf.getComments().put("java", "自定义java路径");
+        mc_conf.put("java", "");
+        mc_conf.getComments().put("external_auth_file", "自定义authtoken和uuid的来源以便正版登录\n格式json mapping, 键: token,uuid");
+        mc_conf.put("external_auth_file", "./auth.json");
 
         mc_conf.put("assets_root", mcRoot.getAbsolutePath());
         mc_conf.put("root", insulation ? mcJson.getParentFile().getAbsolutePath() : mcRoot.getAbsolutePath());

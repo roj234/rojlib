@@ -43,10 +43,11 @@ import java.util.*;
  * @since 2021/5/2 8:22
  */
 public final class EnumHelper<E extends Enum<E>> {
-    public static final H H = DirectAccessor.builder(H.class).access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null).build();
+    public static final CDirAcc cDirAcc = DirectAccessor.builder(CDirAcc.class)
+            .access(Class.class, "enumConstantDirectory", "getEnumConstantDirectory", null).build();
     private static final FieldAccessor ordinalAcc;
 
-    public interface H {
+    public interface CDirAcc {
         Map<String, ?> getEnumConstantDirectory(Class<? extends Enum<?>> clazz);
     }
 
@@ -238,7 +239,7 @@ public final class EnumHelper<E extends Enum<E>> {
 
         E cast = clazz.cast(cst.newInstance(param));
 
-        Map<String, ?> obj = H.getEnumConstantDirectory(clazz);
+        Map<String, ?> obj = cDirAcc.getEnumConstantDirectory(clazz);
         if(obj != null) {
             Map<String, E> map = Helpers.cast(obj);
             map.put(value, cast);

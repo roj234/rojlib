@@ -43,7 +43,7 @@ class MulticastListener extends Thread implements Shutdownable {
                     UPnPDevice device = new UPnPDevice(null, pkt.getAddress());
 
                     bl.wIndex(pkt.getLength());
-                    HttpHead head = HttpHead.parse(lexer.init(coder.decodeR()));
+                    HttpHead head = HttpHead.parse(lexer.init(bl));
 
                     String error;
                     if (!"*".equals(head.getPath())) error = "Illegal HTTP url " + head.getPath();

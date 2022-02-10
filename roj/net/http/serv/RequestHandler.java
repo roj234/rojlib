@@ -25,10 +25,8 @@
  */
 package roj.net.http.serv;
 
-import roj.net.Notify;
 import roj.net.WrappedSocket;
 import roj.net.http.Code;
-import roj.net.http.HttpLexer;
 import roj.net.http.IllegalRequestException;
 import roj.net.misc.FDChannel;
 
@@ -41,7 +39,7 @@ public final class RequestHandler extends FDChannel {
 
     final Router router;
 
-    static final byte INITIAL = 0, PARSING_REPLY = 1, SENDING_REPLY = 2, HANGING = 3, CLOSING = 4, CLOSED = 5, EXCEPTION_CLOSED = 6;
+    static final byte HANDSHAKE = 0, PARSING_REPLY = 1, SENDING_REPLY = 2, HANGING = 3, CLOSING = 4, CLOSED = 5, EXCEPTION_CLOSED = 6;
     boolean enter;
     byte state;
     long time;
@@ -50,7 +48,7 @@ public final class RequestHandler extends FDChannel {
     Reply   reply;
     Consumer<WrappedSocket> cb;
 
-    final HttpLexer[] lexerHolder = new HttpLexer[1];
+    final Object[] holder = new Object[3];
 
     public RequestHandler(WrappedSocket ch, Router router) {
         super(ch);
@@ -95,7 +93,7 @@ public final class RequestHandler extends FDChannel {
     public void selected(int readyOps) throws Exception {
         try {
             switch (state) {
-                case INITIAL:
+                case HANDSHAKE:
                     if (!enter) {
                         time = System.currentTimeMillis() + router.readTimeout();
                         enter = true;
@@ -106,8 +104,10 @@ public final class RequestHandler extends FDChannel {
                         return;
                     }
 
-                    key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-                    if (!ch.handShake()) return;
+                    if (!ch.handShake()) {
+                        key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                        return;
+                    }
                     key.interestOps(SelectionKey.OP_READ);
 
                     enter = false;
@@ -115,18 +115,16 @@ public final class RequestHandler extends FDChannel {
                 case PARSING_REPLY:
                     Reply reply;
                     try {
-                        if((request = Request.parseAsync(ch, router, lexerHolder)) == null) return;
+                        if((request = Request.parse(ch, router, holder)) == null) return;
                         try {
                             reply = router.response(ch, request, this);
                         } catch (Throwable e) {
+                            e.printStackTrace();
                             reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
                         }
                     } catch (IllegalRequestException e) {
-                        final Throwable cause = e.getCause();
-                        reply = new Reply(e.code, cause instanceof Notify ?
-                                StringResponse.forError(e.code, e.code == Code.INTERNAL_ERROR ? cause.getCause() : null) :
-                                StringResponse.forError(0, e)
-                        );
+                        e.printStackTrace();
+                        reply = new Reply(e.code, StringResponse.forError(0, e));
                     }
                     if (reply != null) reply.prepare();
                     this.reply = reply;
@@ -166,10 +164,14 @@ public final class RequestHandler extends FDChannel {
                         time = System.currentTimeMillis() + KEEP_ALIVE_TIMEOUT * 1000;
                         enter = true;
                     } else {
-                        enter = false;
-                        state = ch.read() < 0 ? CLOSING : INITIAL;
+                        int r = ch.read();
+                        if (r > 0) {
+                            enter = false;
+                            state = HANDSHAKE;
+                            key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                            break;
+                        }
                     }
-                    break;
                 case CLOSING:
                     if (!enter) {
                         key.interestOps(SelectionKey.OP_WRITE);
@@ -193,14 +195,16 @@ public final class RequestHandler extends FDChannel {
                     throw new IllegalStateException();
             }
         } catch (Throwable e) {
-            System.out.println("异常 " + e.getMessage());
             if (e.getClass() != IOException.class) e.printStackTrace();
+            else System.out.println("异常 " + e.getMessage());
 
-            try {
-                Reply reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
-                reply.send(ch);
-                reply.release();
-            } catch (Throwable ignored) {}
+            if (ch.isOpen()) {
+                try {
+                    Reply reply = new Reply(Code.INTERNAL_ERROR, StringResponse.forError(0, e));
+                    reply.send(ch);
+                    reply.release();
+                } catch (Throwable ignored) {}
+            }
 
             try {
                 close();

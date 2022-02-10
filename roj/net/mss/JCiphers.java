@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.util.Arrays;
 
 /**
  * @author Roj233
@@ -42,6 +43,7 @@ import java.security.InvalidKeyException;
  */
 public final class JCiphers implements MSSCiphers {
     public static final JCiphers AES_CFB8 = new JCiphers("AES/CFB8/NoPadding", 32);
+    public static final JCiphers AES_GCM = new JCiphers("AES/GCM/NoPadding", 32);
 
     private final String alg;
     private final int sharedKeySize;
@@ -53,12 +55,12 @@ public final class JCiphers implements MSSCiphers {
 
     @Override
     public String name() {
-        return "AES";
+        return alg;
     }
 
     @Override
     public int specificationId() {
-        return 0x00000015;
+        return 0x00000015 | (alg.hashCode() << 8);
     }
 
     @Override
@@ -94,7 +96,9 @@ public final class JCiphers implements MSSCiphers {
         @Override
         public void setKey(byte[] key, int flags) {
             try {
-                cip.init(mode, new SecretKeySpec(key, cip.getAlgorithm().substring(0, cip.getAlgorithm().indexOf('/'))), new IvParameterSpec(new byte[16]));
+                cip.init(mode,
+                         new SecretKeySpec(key, cip.getAlgorithm().substring(0, cip.getAlgorithm().indexOf('/'))),
+                         new IvParameterSpec(Arrays.copyOf(key, 16)));
             } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
                 e.printStackTrace();
             }

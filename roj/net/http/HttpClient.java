@@ -31,9 +31,10 @@ import roj.io.EmptyInputStream;
 import roj.net.Connector;
 import roj.net.SecureUtil;
 import roj.net.SocketFactory;
-import roj.net.StreamLikeSequence;
+import roj.net.SocketSequence;
 import roj.text.CharList;
 import roj.util.ByteList;
+import roj.util.FastThreadLocal;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -186,10 +187,14 @@ public class HttpClient extends Connector {
 
     private InputStream in;
 
-    public HttpHead response() throws ParseException, IOException {
-        Object[] data = Shared.SYNC_BUFFER.get();
+    static final FastThreadLocal<Object[]> LOCAL_LEXER = FastThreadLocal.withInitial(() -> {
+        return new Object[] {new SocketSequence(false), new HttpLexer() };
+    });
 
-        StreamLikeSequence plain = (StreamLikeSequence)data[0];
+    public HttpHead response() throws ParseException, IOException {
+        Object[] data = LOCAL_LEXER.get();
+
+        SocketSequence plain = (SocketSequence)data[0];
         HttpLexer lexer = ((HttpLexer)data[1]).init(plain.init(channel, readTimeout, maxReceive <= 0 ? Integer.MAX_VALUE : maxReceive));
 
         try {

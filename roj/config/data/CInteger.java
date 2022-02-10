@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.Structs;
 import roj.math.MathUtils;
 import roj.util.ByteList;
 
@@ -85,8 +86,8 @@ public final class CInteger extends CEntry {
     }
 
     @Override
-    public boolean equalsTo(CEntry entry) {
-        return entry.getType().fits(Type.INTEGER) && entry.asInteger() == value;
+    public boolean isSimilar(CEntry o) {
+        return o.getType() == Type.INTEGER || (o.getType().isSimilar(Type.INTEGER) && o.asInteger() == value);
     }
 
     @Override
@@ -95,22 +96,7 @@ public final class CInteger extends CEntry {
     }
 
     @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
-        return sb.append(value);
-    }
-
-    @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append(value);
-    }
-
-    @Override
-    public StringBuilder toINI(StringBuilder sb, int depth) {
-        return sb.append(value);
-    }
-
-    @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append(value);
     }
 
@@ -120,12 +106,7 @@ public final class CInteger extends CEntry {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.INTEGER.ordinal()).putInt(value);
-    }
-
-    @Override
-    protected boolean isSimilar(CEntry value) {
-        return value.getType().isNumber();
     }
 }

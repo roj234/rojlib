@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.Structs;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
@@ -84,8 +85,8 @@ public final class CDouble extends CEntry {
     }
 
     @Override
-    public boolean equalsTo(CEntry entry) {
-        return entry.getType().fits(Type.DOUBLE) && entry.asDouble() == value;
+    public boolean isSimilar(CEntry o) {
+        return o.getType() == Type.DOUBLE || (o.getType().isSimilar(Type.DOUBLE) && o.asDouble() == value);
     }
 
     @Override
@@ -94,22 +95,7 @@ public final class CDouble extends CEntry {
     }
 
     @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
-        return sb.append(value);
-    }
-
-    @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append(value);
-    }
-
-    @Override
-    public StringBuilder toINI(StringBuilder sb, int depth) {
-        return sb.append(value);
-    }
-
-    @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append(value);
     }
 
@@ -119,12 +105,7 @@ public final class CDouble extends CEntry {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.DOUBLE.ordinal()).putDouble(value);
-    }
-
-    @Override
-    protected boolean isSimilar(CEntry value) {
-        return value.getType().isNumber();
     }
 }

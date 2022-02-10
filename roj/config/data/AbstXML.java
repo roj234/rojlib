@@ -362,7 +362,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
             XElement e = dst.get(i).asElement();
             CEntry attr = e.getAttribute(name);
             for (int j = 0; j < find.size(); j++) {
-                if(/* cmp */attr.equalsTo(find.get(j))) {
+                if(/* cmp */attr.isSimilar(find.get(j))) {
                     continue o;
                 }
             }
@@ -418,7 +418,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         this.children = children;
     }
 
-    public String asText() {
+    public String asString() {
         throw new IllegalArgumentException("This is not text");
     }
 

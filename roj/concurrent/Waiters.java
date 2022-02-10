@@ -72,6 +72,10 @@ public class Waiters {
         return false;
     }
 
+    public boolean hasAny() {
+        return head != null;
+    }
+
     static final class Entry {
         int id;
         Thread owner;

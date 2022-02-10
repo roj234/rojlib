@@ -8,17 +8,16 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/1/14 20:07
  */
-public class CMappingCommented extends CMapping {
+public class CCommMap extends CMapping {
     final MyHashMap<String, String> comments = new MyHashMap<>();
 
-    public CMappingCommented() {
-    }
+    public CCommMap() {}
 
-    public CMappingCommented(Map<String, CEntry> map) {
+    public CCommMap(Map<String, CEntry> map) {
         super(map);
     }
 
-    public CMappingCommented(int size) {
+    public CCommMap(int size) {
         super(size);
     }
 

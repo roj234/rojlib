@@ -40,7 +40,7 @@ public final class XText extends AbstXML {
     }
 
     @Override
-    public String asText() {
+    public String asString() {
         return value;
     }
 

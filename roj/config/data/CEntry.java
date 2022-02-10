@@ -25,15 +25,16 @@
  */
 package roj.config.data;
 
+import org.jetbrains.annotations.ApiStatus;
 import roj.collect.MyHashMap;
 import roj.config.serial.Serializer;
 import roj.config.serial.Serializers;
+import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -47,12 +48,10 @@ import java.util.Map;
 public abstract class CEntry {
     protected CEntry() {}
 
-    @Nonnull
     public abstract Type getType();
 
     ////// easy caster
 
-    @Nonnull
     public String asString() {
         throw new ClassCastException(getType() + " unable cast to 'string'");
     }
@@ -69,12 +68,10 @@ public abstract class CEntry {
         throw new ClassCastException(getType() + " unable cast to 'long'");
     }
 
-    @Nonnull
     public CMapping asMap() {
         throw new ClassCastException(getType() + " unable cast to 'map'");
     }
 
-    @Nonnull
     public CList asList() {
         throw new ClassCastException(getType() + " unable cast to 'list'");
     }
@@ -90,21 +87,11 @@ public abstract class CEntry {
     ////// toString methods
 
     @Override
-    public final String toString() {
+    public String toString() {
         return toShortJSON();
     }
 
-    public abstract StringBuilder toYAML(StringBuilder sb, int depth);
-
-    public final String toYAML() {
-        return toYAML(new StringBuilder(), 0).toString();
-    }
-
-    public final StringBuilder toYAMLb() {
-        return toYAML(new StringBuilder(), 0);
-    }
-
-    public abstract StringBuilder toJSON(StringBuilder sb, int depth);
+    protected abstract StringBuilder toJSON(StringBuilder sb, int depth);
 
     public final String toJSON() {
         return toJSON(new StringBuilder(), 0).toString();
@@ -115,14 +102,30 @@ public abstract class CEntry {
     }
 
     public final String toShortJSON() {
-        return toJSON(new StringBuilder(), -9999999).toString();
+        return toJSON(new StringBuilder(), -1).toString();
     }
 
     public final StringBuilder toShortJSONb() {
-        return toJSON(new StringBuilder(), -9999999);
+        return toJSON(new StringBuilder(), -1);
     }
 
-    protected abstract StringBuilder toINI(StringBuilder sb, int depth);
+    @ApiStatus.OverrideOnly
+    protected StringBuilder toYAML(StringBuilder sb, int depth) {
+        return toJSON(sb, 0);
+    }
+
+    public final String toYAML() {
+        return toYAML(new StringBuilder(), 0).toString();
+    }
+
+    public final StringBuilder toYAMLb() {
+        return toYAML(new StringBuilder(), 0);
+    }
+
+    @ApiStatus.OverrideOnly
+    protected StringBuilder toINI(StringBuilder sb, int depth) {
+        return toJSON(sb, 0);
+    }
 
     public final String toINI() {
         return toINI(new StringBuilder(), 0).toString();
@@ -132,7 +135,10 @@ public abstract class CEntry {
         return toINI(new StringBuilder(), 0);
     }
 
-    protected abstract StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain);
+    @ApiStatus.OverrideOnly
+    protected StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
+        return toJSON(sb, 0);
+    }
 
     public final String toTOML() {
         return toTOML(new StringBuilder(), 0, new CharList()).toString();
@@ -140,6 +146,27 @@ public abstract class CEntry {
 
     public final StringBuilder toTOMLb() {
         return toTOML(new StringBuilder(), 0, new CharList());
+    }
+
+    @ApiStatus.OverrideOnly
+    protected StringBuilder toXML(StringBuilder sb, int depth) {
+        return toJSON(sb, 0);
+    }
+
+    public final String toXML() {
+        return toXML(new StringBuilder(), 0).toString();
+    }
+
+    public final StringBuilder toXMLb() {
+        return toXML(new StringBuilder(), 0);
+    }
+
+    public final String toCompatXML() {
+        return toXML(new StringBuilder(), -1).toString();
+    }
+
+    public final StringBuilder toCompatXMLb() {
+        return toXML(new StringBuilder(), -1);
     }
 
     // Converting
@@ -221,10 +248,21 @@ public abstract class CEntry {
         }
     }
 
-    public abstract void toBinary(ByteList w);
+    public final void toBinary(ByteList w) {
+        toBinary(w, null);
+    }
+    public abstract void toBinary(ByteList w, Structs struct);
 
     public static CEntry fromBinary(ByteList r) {
-        byte b = r.readByte();
+        return fromBinary(r, null);
+    }
+    public static CEntry fromBinary(ByteList r, Structs struct) {
+        int b = r.readUnsignedByte();
+        if (struct != null) {
+            CMapping m = struct.fromBinary(b, r);
+            if (m != null) return m;
+        }
+
         switch (Type.VALUES[b & 0xF]) {
             case BOOL:
                 return CBoolean.valueOf(r.readBoolean());
@@ -237,7 +275,7 @@ public abstract class CEntry {
                 int cap = r.readVarInt(false);
                 Map<String, CEntry> map = new MyHashMap<>(cap);
                 while (cap-- > 0) {
-                    map.put(r.readVarIntUTF(), fromBinary(r));
+                    map.put(r.readVarIntUTF(), fromBinary(r, struct));
                 }
 
                 CEntry x = map.get("==");
@@ -249,7 +287,7 @@ public abstract class CEntry {
                 }
                 return new CMapping(map);
             case LIST:
-                return CList._fromBinary(b >>> 4, r);
+                return CList._fromBinary(b >>> 4, r, struct);
             case LONG:
                 return CLong.valueOf(r.readLong());
             case DOUBLE:
@@ -257,15 +295,11 @@ public abstract class CEntry {
             case STRING:
                 return CString.valueOf(r.readVarIntUTF());
             default:
-                throw new IllegalArgumentException("Unsupported type");
+                throw new IllegalArgumentException("Unexpected id " + b);
         }
     }
 
     // Utilities
-
-    public boolean equalsTo(CEntry entry) {
-        return equals(entry);
-    }
 
     protected static String addSlash(String key) {
         for (int i = 0; i < key.length(); i++) {
@@ -277,7 +311,7 @@ public abstract class CEntry {
         return key;
     }
 
-    protected boolean isSimilar(CEntry value) {
-        return value.getType() == this.getType();
+    public boolean isSimilar(CEntry o) {
+        return getType().isSimilar(o.getType());
     }
 }

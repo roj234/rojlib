@@ -49,8 +49,8 @@ final class Handshake extends Stated {
             return null;
         }
 
-        self.key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
         if (!ch.handShake()) {
+            self.key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
             return this;
         }
         self.key.interestOps(SelectionKey.OP_READ);

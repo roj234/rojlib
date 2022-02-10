@@ -48,6 +48,12 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
         this.dimension = dimension;
     }
 
+    public MDArrayInsnNode(String clazz, int dimension) {
+        super(Opcodes.MULTIANEWARRAY);
+        this.owner = clazz;
+        this.dimension = dimension;
+    }
+
     @Override
     public int nodeType() {
         return T_MULTIANEWARRAY;

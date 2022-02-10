@@ -1,0 +1,66 @@
+==========================================
+前些日子clone了个项目，它是H5，页面5MB，.git200M
+于是我决定，等到我这个.git > 100M的时候就删了repo重建一个好了
+所以这个文件就有了必要，再加上太长的commitmessage也没人看
+==========================================
+
+计划
+==========================================
+变量id的计算专门在collect里搞个class
+MethodPoet的if做好后，需要给NodeHelper加上关闭缓存的方法
+
+
+20220210
+==========================================
+ASM:
+支持链式操作的MethodPoet，方便的构造方法所需的InsnNode
+
+IO:
+NIOUtil支持扩大直接缓冲(未测试)
+NIOUtil支持读取UDP包,然而不支持获取源地址 awsl
+
+网络:
+NIO选择器循环基本没问题了，(http服务器的)延迟第一次在50ms,往后2-3ms, 第一次如果还要启动线程大概要130ms
+增加了WebSocket协议以及其非官方扩展permessage-deflate的支持
+Http服务器使用NIO选择器循环支持keep-alive
+删除了Notify异常
+
+多线程:
+时序测试工具AsyncTest
+  基于TaskSequencer 实现(大概)高效一点的定时任务
+PacketBuffer除了原有的基于数组的FILO还支持了基于链表的FIFO
+
+字符串:
+  UTFCoder支持转换为/自Hex与Base64
+  ACalendar支持RFC日期
+
+配置:
+尝试把XML数据结构合并入Centry,失败
+配置文件新增结构压缩功能,省略通用的CMapping中的key，对于测试内容（MC的TileEntity）可以节约50%左右空间
+ (它还支持你给一些预定义的结构)
+
+其他：
+ByteList继承自OutputStream并支持了"作为缓冲区"方式，还支持了绝对位置的set/get甚至还可以当作只支持Ascii的CharSequence
+FastThreadLocal现在可以复用id，并且可以主动/被动清理所有线程(绝对支持:FastLocalThread,部分支持:Thread)中的对象: clearAll()
+
+工具:
+  清理微信垃圾文件
+  TCP走MSS协议的代理服务器/客户端
+
+制作了一个基于WebSocket的即时通信软件：MyChat，实际上不是制作，而是改造... 我2019年就做了
+  当时是"第一代"
+  其灵感来自于AjaxIM和信呼
+  基于我自制的PHP MVC框架,无名,混上Discuz的模板引擎和错误处理,以及哪个CMS的Mysql访问类
+  前端就是PHP写出来，加上websocket
+  websocket服务器也是php写的，网上抄来改改，啥都不懂，只能处理text帧
+  勉强能用，有好友，群，分组，还可以发表情和图片
+  于是当时初三的我拿这个参加了"全国中小学生电脑制作比赛"
+  拿了个市级三等奖，无语
+  PS 往前一年我做的一个给电脑换壁纸的软件还有省级一等奖呢
+
+  第二代
+  界面做过了，仿QQ，删掉了bootstrap
+  css除了normalize和font-awesome基本都是自己写的
+  js不用说,我管他叫FunEx,约等于requirejs+jQuery
+  这回为手机版考虑，我按照功能分模块，比如啥GroupUI, RecentUI, FriendUI啥的
+  等做好了也会放github上

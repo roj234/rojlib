@@ -32,44 +32,63 @@ import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
-@Deprecated
-public class TaskExecutorInterval {
-    private static final Comparator<IntervalTask> CPR = (o1, o2) -> Long.compare(o1.nextRun, o2.nextRun);
-    BSLowHeap<IntervalTask> tasks, backup;
-    AtomicInteger lock;
+/**
+ * 处理定时任务
+ * @author Roj234
+ * @since 2022/2/8 8:00
+ */
+public class TaskSequencer implements Runnable {
+    static final Comparator<SchedTask> CPR = (o1, o2) -> Long.compare(o1.nextRun, o2.nextRun);
 
-    public TaskExecutorInterval() {
+    private BSLowHeap<SchedTask> tasks, backup;
+    private final AtomicInteger lock;
+    private Thread worker;
+
+    public TaskSequencer() {
         this.tasks = new BSLowHeap<>(CPR);
         this.backup = new BSLowHeap<>(CPR);
         this.lock = new AtomicInteger();
     }
 
+    @Override
+    public void run() {
+        worker = Thread.currentThread();
+        while (!Thread.interrupted()) {
+            long next = work();
+            if (next < 0) LockSupport.park();
+            else LockSupport.parkNanos(next * 1_000_000L);
+        }
+    }
+
     /**
      * @return Minimum task run later
      */
-    public long run() {
+    public long work() {
         if (tasks.isEmpty()) {
             return -1L;
         } else {
             Thread t = Thread.currentThread();
 
+            while (!lock.compareAndSet(0, 1)) LockSupport.parkNanos(9999);
+
             long time = System.currentTimeMillis();
-            while (!lock.compareAndSet(0, 1))
-                LockSupport.parkNanos(9999);
-            BSLowHeap<IntervalTask> tt = this.tasks;
+            BSLowHeap<SchedTask> tt = this.tasks;
             int i;
             for (i = 0; i < tt.size(); i++) {
-                IntervalTask task = this.tasks.get(i);
+                SchedTask task = tt.get(i);
                 if(task.nextRun <= time) {
-                    if (!task.run.isCancelled() && task.maxRun-- != 0) {
+                    if (!task.isCancelled()) {
                         try {
-                            task.run.calculate(t);
+                            task.compute(t);
                         } catch (Throwable e) {
-                            if(!(e instanceof InterruptedException))
-                                e.printStackTrace();
+                            e.printStackTrace();
                         }
-                        task.nextRun = task.interval + time;
-                        backup.add(task);
+                        if (--task.remain == 0) {
+                            task.nextRun = -1;
+                        } else {
+                            task.nextRun = task.interval + time;
+                            backup.add(task);
+                        }
                     }
                 } else {
                     break;
@@ -79,19 +98,26 @@ public class TaskExecutorInterval {
                 backup.add(tt.get(i));
             }
             tasks = backup;
-            backup = tt;
-            tt.clear();
-            time = tasks.get(0).nextRun - System.currentTimeMillis();
             lock.set(0);
-            return time;
+
+            (backup = tt).clear();
+
+            SchedTask task = tasks.top();
+            return task == null ? -1 : task.nextRun - System.currentTimeMillis();
         }
     }
 
-    public void add(ITask task, long interval, long delay, int maxRun) {
-        IntervalTask t = new IntervalTask(task, interval, delay, maxRun);
-        while (!lock.compareAndSet(0, 2))
-            LockSupport.parkNanos(9999);
+    public SchedTask register(ITask task, int interval, int delay, int remain) {
+        SchedTask t = new SchedTask(task, interval, delay, remain);
+        register(t);
+        return t;
+    }
+
+    public void register(SchedTask t) {
+        while (!lock.compareAndSet(0, 2)) LockSupport.parkNanos(9999);
+        SchedTask prev = tasks.top();
         tasks.add(t);
+        if (tasks.top() != prev) LockSupport.unpark(worker);
         lock.set(0);
     }
 }

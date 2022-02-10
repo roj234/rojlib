@@ -25,19 +25,105 @@
  */
 package roj.util;
 
+import roj.collect.LongBitSet;
+import roj.reflect.DirectAccessor;
+
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
+
 /**
  * @author Roj233
  * @since 2021/9/13 12:48
  */
 public class FastThreadLocal<T> {
-    private static int registrations;
     private static final ThreadLocal<Object[]> slowGetter = new ThreadLocal<>();
+
+    private static int registrations;
+    private static final LongBitSet reusable = new LongBitSet();
+
+    private static Thread[] threads;
+    private static BiFunction<Object, Object, Object> getMap;
+    private static BiConsumer<Object, Object> remove;
+
+    static {
+        init();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void init() {
+        try {
+            getMap = DirectAccessor
+                    .builder(BiFunction.class).delegate_o(ThreadLocal.class, "getMap", "apply")
+                    .build();
+            remove = DirectAccessor
+                    .builder(BiConsumer.class)
+                    .delegate_o(getMap.apply(slowGetter, Thread.currentThread()).getClass(), "remove", "accept")
+                    .build();
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+    }
 
     public final int seqNum;
 
     public FastThreadLocal() {
-        synchronized (FastThreadLocal.class) {
-            this.seqNum = registrations++;
+        synchronized (slowGetter) {
+            int firstUsable = reusable.first();
+            if (firstUsable >= 0) {
+                reusable.remove(firstUsable);
+                this.seqNum = firstUsable;
+            } else {
+                this.seqNum = registrations++;
+            }
+        }
+    }
+
+    public static <T> FastThreadLocal<T> withInitial(Supplier<T> s) {
+        return new FastThreadLocal<T>() {
+            @Override
+            protected T initialValue() {
+                return s.get();
+            }
+        };
+    }
+
+    @Override
+    protected void finalize() {
+        synchronized (slowGetter) {
+            reusable.add(seqNum);
+        }
+        clearAll();
+    }
+
+    public void clearAll() {
+        ThreadGroup g = Thread.currentThread().getThreadGroup();
+        while (g.getParent() != null) g = g.getParent();
+
+        Thread[] t = threads;
+        int c = g.activeCount();
+        if (t == null || t.length < c) {
+            synchronized (reusable) { // 换个锁
+                t = threads;
+                if (t == null || t.length < c) {
+                    t = threads = new Thread[c];
+                }
+            }
+        }
+
+        c = g.enumerate(t);
+        while (c-- > 0) {
+            if (t[c] instanceof FastLocalThread) {
+                FastLocalThread flt = (FastLocalThread) t[c];
+                if (flt.localDataArray.length >= seqNum) {
+                    synchronized (flt.arrayLock) {
+                        // 要么没复制，要么复制完了而且新数组已设置
+                        flt.localDataArray[seqNum] = null;
+                    }
+                }
+            } else {
+                remove.accept(getMap.apply(slowGetter, t[c]), slowGetter);
+            }
         }
     }
 
@@ -48,8 +134,7 @@ public class FastThreadLocal<T> {
     @SuppressWarnings("unchecked")
     public T get() {
         Object[] x = getDataHolder();
-        if(x[seqNum] == null)
-            x[seqNum] = initialValue();
+        if(x[seqNum] == null) x[seqNum] = initialValue();
         return (T) x[seqNum];
     }
 
@@ -65,10 +150,12 @@ public class FastThreadLocal<T> {
             if(data.length <= seqNum) {
                 Object[] oldArray = data;
                 data = new Object[seqNum + 1];
-                if(oldArray.length > 0) {
-                    System.arraycopy(oldArray, 0, data, 0, oldArray.length);
+                synchronized (t1.arrayLock) {
+                    if (oldArray.length > 0) {
+                        System.arraycopy(oldArray, 0, data, 0, oldArray.length);
+                    }
+                    t1.localDataArray = data;
                 }
-                t1.localDataArray = data;
             }
             return data;
         }

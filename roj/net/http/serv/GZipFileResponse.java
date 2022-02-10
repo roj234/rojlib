@@ -28,7 +28,6 @@ package roj.net.http.serv;
 import roj.io.ByteBufferOutputStream;
 import roj.net.NetworkUtil;
 import roj.net.WrappedSocket;
-import roj.net.http.Shared;
 import roj.text.CharList;
 import roj.util.ByteList;
 
@@ -42,13 +41,17 @@ import java.util.zip.Deflater;
  * @since  2020/12/5 18:31
  */
 public class GZipFileResponse extends FileResponse {
+    public static final byte[] END_OF_CHUNK = new byte[] {
+            '0', '\r', '\n', '\r', '\n'
+    };
+
     ReusableGZOutput gz;
     final ByteList tmp = new ByteList();
     final byte[]   hex = new byte[8];
 
     public GZipFileResponse(File absolute) {
         super(absolute);
-        gz = new ReusableGZOutput(Shared.WRITE_MAX, Deflater.DEFAULT_COMPRESSION);
+        gz = new ReusableGZOutput(WrappedSocket.WRITE_ONCE, Deflater.DEFAULT_COMPRESSION);
     }
 
     @Override
@@ -89,7 +92,7 @@ public class GZipFileResponse extends FileResponse {
             buf.put(hex, off, 8 - off).put((byte) '\r').put((byte) '\n');
 
             if (read < 0) {
-                buf.put(Shared.END_OF_CHUNK);
+                buf.put(END_OF_CHUNK);
             }
 
             buf.flip();

@@ -25,16 +25,14 @@
  */
 package roj.config.data;
 
-import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.*;
 
 /**
@@ -46,7 +44,7 @@ public class CMapping extends CEntry {
     private CharList            dot;
 
     public CMapping() {
-        this.map = new LinkedMyHashMap<>();
+        this.map = new /*Linked*/MyHashMap<>();
     }
 
     public CMapping(Map<String, CEntry> map) {
@@ -61,7 +59,7 @@ public class CMapping extends CEntry {
         return map.size();
     }
 
-    public final CharList dot(boolean dotMode) {
+    public CharList dot(boolean dotMode) {
         if (dotMode == (dot == null))
             this.dot = dotMode ? new CharList() : null;
         return dot;
@@ -71,151 +69,167 @@ public class CMapping extends CEntry {
         return map;
     }
 
-    @Nonnull
     @Override
     public Type getType() {
         return Type.MAP;
     }
 
-    @Nonnull
     public final Set<String> keySet() {
         return map.keySet();
     }
 
-    @Nonnull
     public final Set<Map.Entry<String, CEntry>> entrySet() {
         return map.entrySet();
     }
 
-    @Nonnull
     public final Collection<CEntry> values() {
         return map.values();
     }
 
-    public final CEntry put(@Nonnull String key, CEntry entry) {
-        return putsIfAbsent(key, entry == null ? CNull.NULL : entry, 2);
+    // region PUT
+
+    public final CEntry put(String key, CEntry entry) {
+        return put1(key, entry == null ? CNull.NULL : entry, 2);
     }
 
-    public final CEntry put(@Nonnull String key, String entry) {
+    public final CEntry put(String key, String entry) {
+        if (entry == null) return map.remove(key);
+
         CEntry prev = get(key);
         if (prev.getType() == Type.STRING) {
-            if (entry == null) {
-                return put(key, CNull.NULL);
-            }
             ((CString) prev).value = entry;
             return null;
         } else {
-            return put(key, entry == null ? CNull.NULL : new CString(entry));
+            return put1(key, CString.valueOf(entry), 2);
         }
     }
 
-    public final CEntry put(@Nonnull String key, int entry) {
+    public final CEntry put(String key, int entry) {
         CEntry prev = get(key);
         if (prev.getType() == Type.INTEGER) {
             ((CInteger) prev).value = entry;
             return null;
         } else {
-            return put(key, new CInteger(entry));
+            return put1(key, CInteger.valueOf(entry), 2);
         }
     }
 
-    public final CEntry put(@Nonnull String key, double entry) {
-        CEntry prev = get(key);
-        if (prev.getType() == Type.DOUBLE) {
-            ((CDouble) prev).value = entry;
-            return null;
-        } else {
-            return put(key, new CDouble(entry));
-        }
-    }
-
-    public final CEntry put(@Nonnull String key, long entry) {
+    public final CEntry put(String key, long entry) {
         CEntry prev = get(key);
         if (prev.getType() == Type.LONG) {
             ((CLong) prev).value = entry;
             return null;
         } else {
-            return put(key, new CLong(entry));
+            return put1(key, CLong.valueOf(entry), 2);
         }
     }
 
-    public final CEntry put(@Nonnull String key, boolean entry) {
-        return put(key, CBoolean.valueOf(entry));
+    public final CEntry put(String key, double entry) {
+        CEntry prev = get(key);
+        if (prev.getType() == Type.DOUBLE) {
+            ((CDouble) prev).value = entry;
+            return null;
+        } else {
+            return put1(key, CDouble.valueOf(entry), 2);
+        }
     }
 
-    public final long getLong(String key) {
-        CEntry entry = getDot0(key);
-        return entry.getType().fits(Type.LONG) ? entry.asLong() : 0L;
+    public final CEntry put(String key, boolean entry) {
+        return put1(key, CBoolean.valueOf(entry), 2);
+    }
+
+
+
+    public final CEntry putIfAbsent(String key, CEntry entry) {
+        return put1(key, entry, 0);
+    }
+
+    public final String putIfAbsent(String key, String entry) {
+        return put1(key, CString.valueOf(entry), 0).asString();
+    }
+
+    public final boolean putIfAbsent(String key, boolean entry) {
+        return put1(key, CBoolean.valueOf(entry), 0).asBool();
+    }
+
+    public final int putIfAbsent(String key, int entry) {
+        return put1(key, CInteger.valueOf(entry), 0).asInteger();
+    }
+
+    public final int putIfAbsent(String key, long entry) {
+        return put1(key, CLong.valueOf(entry), 0).asInteger();
+    }
+
+    public final double putIfAbsent(String key, double entry) {
+        return put1(key, CDouble.valueOf(entry), 0).asDouble();
+    }
+
+    public final CMapping getOrCreateMap(String key) {
+        return put1(key, new CMapping(), 0).asMap();
+    }
+
+    public final CList getOrCreateList(String key) {
+        return put1(key, new CList(), 0).asList();
+    }
+
+    // endregion
+    // region GET
+
+    public final boolean containsKey(String key) {
+        return get1(key, false, null) != null;
+    }
+
+    public final boolean containsKey(String key, Type type) {
+        return get(key).getType().isSimilar(type);
     }
 
     public final boolean getBool(String key) {
-        CEntry entry = getDot0(key);
-        return entry.getType().fits(Type.BOOL) && entry.asBool();
+        CEntry entry = get(key);
+        return entry.getType().isSimilar(Type.BOOL) && entry.asBool();
     }
 
     public final String getString(String key) {
-        CEntry entry = getDot0(key);
-        return entry.getType().fits(Type.STRING) ? entry.asString() : "";
+        CEntry entry = get(key);
+        return entry.getType().isSimilar(Type.STRING) ? entry.asString() : "";
     }
 
     public final int getInteger(String key) {
-        CEntry entry = getDot0(key);
+        CEntry entry = get(key);
         return entry.getType().isNumber() ? entry.asInteger() : 0;
     }
 
+    public final long getLong(String key) {
+        CEntry entry = get(key);
+        return entry.getType().isNumber() ? entry.asLong() : 0L;
+    }
+
     public final double getDouble(String key) {
-        CEntry entry = getDot0(key);
+        CEntry entry = get(key);
         return entry.getType().isNumber() ? entry.asDouble() : 0;
     }
 
-    @Nonnull
     public final CEntry get(String key) {
-        return getDotEntry(key, false, CNull.NULL);
+        return get1(key, false, CNull.NULL);
     }
 
-    @Nullable
     public final CEntry getOrNull(String key) {
-        return getDotEntry(key, false, null);
+        return get1(key, false, null);
     }
 
-    @Nonnull
     public final CEntry getDot(String key) {
-        return getDotEntry(key, true, CNull.NULL);
+        return get1(key, true, CNull.NULL);
     }
 
-    private CEntry getDot0(String key) {
-        return getDotEntry(key, false, CNull.NULL);
-    }
+    // endregion
 
-    public CEntry getDotEntry(String keys, boolean force, CEntry def) {
-        if (keys == null) return def;
-        if (null == dot && !force) return map.getOrDefault(keys, def);
-        CharList tmp = dot == null ? new CharList() : dot;
-        tmp.clear();
+    public static final int F_DOTTED = 1, F_REPLACE = 2;
 
-        CEntry entry = this;
-        int i = 0;
-        do {
-            do {
-                char c = keys.charAt(i++);
-                if (c == '.') break;
-                tmp.append(c);
-            } while (i < keys.length());
-
-            if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
-                Map<String, CEntry> map = entry.asMap().map;
-                // equal is content-equal
-                entry = map.get(tmp);
-                tmp.clear();
-                if (entry == null || entry.getType() == Type.NULL) return def;
+    public CEntry put1(String keys, CEntry value, int flag) {
+        if (null == dot && (flag & F_DOTTED) == 0) {
+            if ((flag & F_REPLACE) != 0 || !map.getOrDefault(keys, CNull.NULL).isSimilar(value)) {
+                map.put(keys, value);
+                return value;
             }
-        } while (i < keys.length());
-        return entry;
-    }
-
-    public CEntry putsIfAbsent(String keys, CEntry value, int force) {
-        if (null == dot && (force & 1) == 0) {
-            if ((force & 2) != 0 || !containsKey(keys, value)) map.put(keys, value);
             return map.getOrDefault(keys, value);
         }
         CharList tmp = dot == null ? new CharList() : dot;
@@ -232,10 +246,10 @@ public class CMapping extends CEntry {
 
             if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
                 Map<String, CEntry> map = entry.asMap().map;
-                // equal is content-equal
+                // noinspection all
                 entry = map.getOrDefault(tmp, CNull.NULL);
                 if (i == keys.length()) {
-                    if (!entry.isSimilar(value) || (force & 2) != 0) {
+                    if ((flag & F_REPLACE) != 0 || !entry.isSimilar(value)) {
                         map.put(tmp.toString(), entry = value);
                     }
                 } else {
@@ -249,79 +263,56 @@ public class CMapping extends CEntry {
         return entry == CNull.NULL ? value : entry;
     }
 
-    public final CEntry putIfAbsent(@Nonnull String key, @Nonnull CEntry entry) {
-        return putsIfAbsent(key, entry, 0);
-    }
+    public CEntry get1(String keys, boolean dotted, CEntry def) {
+        if (keys == null) return def;
+        if (null == dot && !dotted) return map.getOrDefault(keys, def);
+        CharList tmp = dot == null ? new CharList() : dot;
+        tmp.clear();
 
-    public final String putIfAbsent(@Nonnull String key, @Nonnull String entry) {
-        return putsIfAbsent(key, CString.valueOf(entry), 0).asString();
-    }
+        CEntry entry = this;
+        int i = 0;
+        do {
+            do {
+                char c = keys.charAt(i++);
+                if (c == '.') break;
+                tmp.append(c);
+            } while (i < keys.length());
 
-    public final int putIfAbsent(@Nonnull String key, int entry) {
-        return putsIfAbsent(key, CInteger.valueOf(entry), 0).asInteger();
+            if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
+                Map<String, CEntry> map = entry.asMap().map;
+                // equal is content-equal
+                // noinspection all
+                entry = map.get(tmp);
+                tmp.clear();
+                if (entry == null || entry.getType() == Type.NULL) return def;
+            }
+        } while (i < keys.length());
+        return entry;
     }
-
-    public final double putIfAbsent(@Nonnull String key, double entry) {
-        return putsIfAbsent(key, CDouble.valueOf(entry), 0).asDouble();
-    }
-
-    public final boolean putIfAbsent(@Nonnull String key, boolean entry) {
-        return putsIfAbsent(key, CBoolean.valueOf(entry), 0).asBool();
-    }
-
-    public final CMapping getOrCreateMap(String key) {
-        return putsIfAbsent(key, new CMapping(), 0).asMap();
-    }
-
-    public final CList getOrCreateList(String key) {
-        return putsIfAbsent(key, new CList(), 0).asList();
-    }
-
-    public final boolean containsKey(@Nullable String key) {
-        return getOrNull(key) != null;
-    }
-
-    public final boolean containsKey(@Nullable String key, @Nonnull Type type) {
-        return get(key).getType().fits(type);
-    }
-
-    private boolean containsKey(@Nullable String key, @Nonnull CEntry entry) {
-        return get(key).isSimilar(entry);
-    }
-
 
     /**
-     * 与o合并 警告，可能会导致list有重复对象
-     * @param selfBetter 优先从自身的map/list合并
+     * @param self 优先从自身合并
      */
-    public void merge(CMapping o, boolean selfBetter, boolean deep) {
+    public void merge(CMapping o, boolean self, boolean deep) {
         if (!deep) {
-            if (!selfBetter) {
-                this.map.putAll(o.map);
+            if (!self) {
+                map.putAll(o.map);
             } else {
-                Map<String, CEntry> map1 = new MyHashMap<>(this.map);
-                this.map.putAll(o.map);
-                this.map.putAll(map1);
+                Map<String, CEntry> map1 = new MyHashMap<>(map);
+                map.putAll(o.map);
+                map.putAll(map1);
             }
         } else {
             Map<String, CEntry> map = new MyHashMap<>(o.map);
             for (Map.Entry<String, CEntry> entry : this.map.entrySet()) {
-                CEntry s_val = entry.getValue();
-                CEntry t_val = map.remove(entry.getKey());
-                if (t_val != null) {
-                    if (s_val.getType().fits(t_val.getType())) {
-                        switch (s_val.getType()) {
-                            case MAP:
-                                if (!selfBetter) t_val.asMap().merge(s_val.asMap(), true, true);
-                                else s_val.asMap().merge(t_val.asMap(), false, true);
-                                break;
-                            case LIST:
-                                if (!selfBetter) t_val.asList().addAll(s_val.asList());
-                                else s_val.asList().addAll(t_val.asList());
-                                break;
-                        }
+                CEntry a = entry.getValue();
+                CEntry b = map.remove(entry.getKey());
+                if (b != null) {
+                    if (a.getType() == Type.MAP && Type.MAP.isSimilar(b.getType())) {
+                        if (!self) b.asMap().merge(a.asMap(), true, true);
+                        else a.asMap().merge(b.asMap(), false, true);
                     }
-                    if (!selfBetter) entry.setValue(t_val);
+                    if (!self) entry.setValue(b);
                 }
             }
             this.map.putAll(map);
@@ -345,12 +336,12 @@ public class CMapping extends CEntry {
             for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
                 String k = entry.getKey();
                 if (names.remove(k)) {
-                    CEntry s_val = map.get(k);
-                    CEntry t_val = entry.getValue();
-                    if (!s_val.getType().fits(t_val.getType())) {
-                        map.put(k, t_val);
-                    } else if (s_val.getType() == Type.MAP) {
-                        s_val.asMap().unmerge(t_val.asMap(), true);
+                    CEntry a = map.get(k);
+                    CEntry b = entry.getValue();
+                    if (!a.getType().isSimilar(b.getType())) {
+                        map.put(k, b);
+                    } else if (a.getType() == Type.MAP) {
+                        a.asMap().unmerge(b.asMap(), true);
                     }
                 } else {
                     map.put(entry.getKey(), entry.getValue());
@@ -362,13 +353,16 @@ public class CMapping extends CEntry {
         }
     }
 
+    public final void remove(String name) {
+        map.remove(name);
+    }
+
     public final void clear() {
         map.clear();
     }
 
-    @Nonnull
     @Override
-    public final CMapping asMap() {
+    public CMapping asMap() {
         return this;
     }
 
@@ -380,28 +374,30 @@ public class CMapping extends CEntry {
 
     public CMapping withComments() {
         if (getType() != Type.MAP) throw new UnsupportedOperationException();
-        return new CMappingCommented(map);
+        return new CCommMap(map);
     }
 
     @Override
     public StringBuilder toYAML(StringBuilder sb, int depth) {
         if (!map.isEmpty()) {
             sb.append('\n');
-            for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-                for (int i = 0; i < depth; i++) {
-                    sb.append(' ');
-                }
+            Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
+            while (true) {
+                Map.Entry<String, CEntry> entry = itr.next();
 
                 String comment = getCommentInternal(entry.getKey());
                 if (comment != null && comment.length() > 0) {
-                    addComments(sb.append('#'), depth, comment, "\n# ");
-                    sb.delete(sb.length() - 2, sb.length());
+                    addComments(sb, depth, comment, "#", "\n");
                 }
 
-                sb.append((CString.YAMLADDITIONALCHECK && CString.rawSafe(entry.getKey())) ? entry.getKey() : addSlash(entry.getKey())).append(':').append(' ');
-                entry.getValue().toYAML(sb, depth + 2).append('\n');
+                for (int i = 0; i < depth; i++) sb.append(' ');
+
+                sb.append((CString.NO_RAW_CHECK && CString.rawSafe(entry.getKey())) ? entry.getKey() : addSlash(entry.getKey())).append(':').append(' ');
+                entry.getValue().toYAML(sb, depth + 2);
+                if (!itr.hasNext()) break;
+                sb.append('\n');
             }
-            return sb.delete(sb.length() - 1, sb.length());
+            return sb;
         }
         return sb.append("{}");
     }
@@ -410,29 +406,33 @@ public class CMapping extends CEntry {
     public StringBuilder toJSON(StringBuilder sb, int depth) {
         sb.append('{');
         if (!map.isEmpty()) {
+            Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
             if (depth < 0) {
-                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                while (true) {
+                    Map.Entry<String, CEntry> entry = itr.next();
                     sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':');
-                    entry.getValue().toJSON(sb, -1).append(',');
+                    entry.getValue().toJSON(sb, -1);
+                    if (!itr.hasNext()) break;
+                    sb.append(',');
                 }
-                sb.delete(sb.length() - 1, sb.length());
             } else {
                 sb.append('\n');
-                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-                    for (int i = 0; i < depth + 4; i++) {
-                        sb.append(' ');
-                    }
+                while (true) {
+                    Map.Entry<String, CEntry> entry = itr.next();
 
                     String comment = getCommentInternal(entry.getKey());
                     if (comment != null && comment.length() > 0) {
-                        addComments(sb.append("//"), depth, comment, "\n");
-                        sb.delete(sb.length() - 3, sb.length());
+                        addComments(sb, depth + 4, comment, "//", "\n");
                     }
 
+                    for (int i = 0; i < depth + 4; i++) sb.append(' ');
+
                     sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':').append(' ');
-                    entry.getValue().toJSON(sb, depth + 4).append(',').append('\n');
+                    entry.getValue().toJSON(sb, depth + 4);
+                    if (!itr.hasNext()) break;
+                    sb.append(",\n");
                 }
-                sb.delete(sb.length() - 2, sb.length() - 1);
+                sb.append('\n');
                 for (int i = 0; i < depth; i++) {
                     sb.append(' ');
                 }
@@ -444,6 +444,7 @@ public class CMapping extends CEntry {
     @Override
     public StringBuilder toINI(StringBuilder sb, int depth) {
         if (!map.isEmpty()) {
+            Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
             if (depth == 0) {
                 CEntry root = map.get("<root>");
                 if (root != null) {
@@ -451,14 +452,15 @@ public class CMapping extends CEntry {
                         throw new IllegalArgumentException("INI文件格式第二级必须是映射");
                     root.toINI(sb.append('\n'), 0);
                 }
-                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                while (true) {
+                    Map.Entry<String, CEntry> entry = itr.next();
+
                     String key = entry.getKey();
                     if (key.equals("<root>")) continue;
 
                     String comment = getCommentInternal(entry.getKey());
                     if (comment != null && comment.length() > 0) {
-                        addComments(sb.append(";"), depth, comment, "\n; ");
-                        sb.delete(sb.length() - 2, sb.length());
+                        addComments(sb, depth, comment, ";", "\n");
                     }
 
                     sb.append('[');
@@ -472,11 +474,14 @@ public class CMapping extends CEntry {
                     CEntry value = entry.getValue();
                     if (!(value instanceof CMapping))
                         throw new IllegalArgumentException("INI文件格式第二级必须是映射");
-                    value.toINI(sb, 1).append('\n');
+                    value.toINI(sb, 1);
+                    if (!itr.hasNext()) break;
+                    sb.append('\n');
                 }
-                sb.delete(sb.length() - 1, sb.length());
             } else if (depth == 1) {
-                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                while (true) {
+                    Map.Entry<String, CEntry> entry = itr.next();
+
                     String key = entry.getKey();
                     int i = 0;
                     for (; i < key.length(); i++) {
@@ -489,9 +494,10 @@ public class CMapping extends CEntry {
                         sb.append('"').append(AbstLexer.addSlashes(key)).append('"');
                     else
                         sb.append(key);
-                    entry.getValue().toINI(sb.append(' ').append('=').append(' '), 2).append('\n');
+                    entry.getValue().toINI(sb.append(' ').append('=').append(' '), 2);
+                    if (!itr.hasNext()) break;
+                    sb.append('\n');
                 }
-                sb.delete(sb.length() - 1, sb.length());
             } else {
                 throw new IllegalArgumentException("INI不支持两级以上的映射");
             }
@@ -515,8 +521,7 @@ public class CMapping extends CEntry {
             for (Map.Entry<String, CEntry> entry : map.entrySet()) {
                 String comment = getCommentInternal(entry.getKey());
                 if (comment != null && comment.length() > 0) {
-                    addComments(sb.append('#'), 0, comment, "\n# ");
-                    sb.delete(sb.length() - 2, sb.length());
+                    addComments(sb, 0, comment, "#", "\n");
                 }
 
                 CEntry v = entry.getValue();
@@ -550,21 +555,23 @@ public class CMapping extends CEntry {
     }
 
     @SuppressWarnings("fallthrough")
-    protected static void addComments(StringBuilder sb, int depth, CharSequence comment, CharSequence end) {
+    protected static void addComments(StringBuilder sb, int depth,
+            CharSequence com, CharSequence prefix, CharSequence postfix) {
         int r = 0, i = 0, prev = 0;
-        while (i < comment.length()) {
-            switch (comment.charAt(i)) {
+        while (i < com.length()) {
+            switch (com.charAt(i)) {
                 case '\r':
-                    if (i + 1 >= comment.length() || comment.charAt(i + 1) != '\n') {
+                    if (i + 1 >= com.length() || com.charAt(i + 1) != '\n') {
                         break;
                     } else {
                         r = 1;
                         i++;
                     }
                 case '\n':
-                    for (int j = 0; j < depth; j++) sb.append(' ');
-                    if (prev != i) sb.append(comment, prev, i - r);
-                    sb.append(end);
+                    if (prev != i) {
+                        for (int j = 0; j < depth; j++) sb.append(' ');
+                        sb.append(prefix).append(com, prev, i - r).append(postfix);
+                    }
                     prev = i + 1;
                     r = 0;
                     break;
@@ -572,9 +579,10 @@ public class CMapping extends CEntry {
             i++;
         }
 
-        for (int j = 0; j < depth; j++) sb.append(' ');
-        if (prev != i) sb.append(comment, prev, i);
-        sb.append(end);
+        if (prev != i) {
+            for (int j = 0; j < depth; j++) sb.append(' ');
+            sb.append(prefix).append(com, prev, i).append(postfix);
+        }
     }
 
     @Override
@@ -587,10 +595,14 @@ public class CMapping extends CEntry {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
+        if (struct != null && struct.toBinary(this, w)) {
+            return;
+        }
         w.put((byte) Type.MAP.ordinal()).putVarInt(map.size(), false);
+        if (map.isEmpty()) return;
         for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-            entry.getValue().toBinary(w.putVarIntUTF(entry.getKey()));
+            entry.getValue().toBinary(w.putVarIntUTF(entry.getKey()), struct);
         }
     }
 
@@ -601,15 +613,11 @@ public class CMapping extends CEntry {
 
         CMapping mapping = (CMapping) o;
 
-        return Objects.equals(map, mapping.map);
+        return this.map.equals(mapping.map);
     }
 
     @Override
     public int hashCode() {
-        return map != null ? map.hashCode() : 0;
-    }
-
-    public final void remove(String name) {
-        map.remove(name);
+        return map.hashCode();
     }
 }

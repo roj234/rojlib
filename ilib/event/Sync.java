@@ -32,21 +32,19 @@ import ilib.network.IMessageHandler;
 import ilib.network.MessageContext;
 import ilib.util.TextHelper;
 import ilib.util.TimeUtil;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent;
+import net.minecraftforge.fml.relauncher.Side;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToLongMap;
 import roj.io.FileUtil;
 import roj.util.ByteList;
-import roj.util.ByteList.WriteOnly;
-
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.util.text.TextComponentString;
-
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent;
-import net.minecraftforge.fml.relauncher.Side;
+import roj.util.ByteList.Streamed;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -60,7 +58,7 @@ import java.util.Map;
  * @since  2021/5/30 22:59
  */
 public class Sync {
-    static ByteList NULL_BYTES = new WriteOnly();
+    static ByteList NULL_BYTES = new Streamed();
     static ILChannel SYNC = new ILChannel("IL_SYN");
 
     ToLongMap<String> fileMD5 = new ToLongMap<>();

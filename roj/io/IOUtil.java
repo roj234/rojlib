@@ -26,7 +26,7 @@
 
 package roj.io;
 
-import roj.text.CharList;
+import roj.text.UTFCoder;
 import roj.util.ByteList;
 import roj.util.FastThreadLocal;
 import sun.reflect.Reflection;
@@ -40,49 +40,27 @@ import java.nio.charset.UnsupportedCharsetException;
  * @since 2021/5/26 0:13
  */
 public class IOUtil {
-    private static final FastThreadLocal<Object[]> BYTE_BUFFER = new FastThreadLocal<Object[]>() {
-        @Override
-        protected Object[] initialValue() {
-            return new Object[] {
-                    new ByteList(),
-                    new CharList()
-            };
-        }
-    };
+    public static final FastThreadLocal<UTFCoder> SharedUTFCoder = FastThreadLocal.withInitial(UTFCoder::new);
 
     public static ByteList getSharedByteBuf() {
-        ByteList o = (ByteList) BYTE_BUFFER.get()[0];
+        ByteList o = SharedUTFCoder.get().byteBuf;
         o.clear();
         return o;
     }
 
     private static ByteList read1(Class<?> jar, String path, ByteList list) throws IOException {
-        InputStream stream = jar.getClassLoader().getResourceAsStream(path);
-        if (stream == null)
-            throw new FileNotFoundException(path);
-        return read0(stream, list);
+        InputStream in = jar.getClassLoader().getResourceAsStream(path);
+        if (in == null) throw new FileNotFoundException(path);
+        return list.readStreamFully(in);
     }
 
     public static String readAs(InputStream in, String encoding) throws UnsupportedCharsetException, IOException {
         if(encoding.equalsIgnoreCase("UTF-8") || encoding.equalsIgnoreCase("UTF8")) {
             return readUTF(in);
         } else {
-            ByteList bl = read0(in, getSharedByteBuf());
+            ByteList bl = getSharedByteBuf().readStreamFully(in);
             return new String(bl.list, 0, bl.wIndex(), Charset.forName(encoding));
         }
-    }
-
-    private static ByteList read0(InputStream stream, ByteList list) throws IOException {
-        int except = stream.available();
-        if (except < 0) {
-            throw new IOException("available < 0");
-        }
-        list.ensureCapacity(except);
-        list.readStreamFully(stream);
-
-        stream.close();
-
-        return list;
     }
 
     public static byte[] read(String path) throws IOException {
@@ -98,24 +76,19 @@ public class IOUtil {
     }
 
     public static byte[] read(File file) throws IOException {
-        return read0(new FileInputStream(file), getSharedByteBuf()).toByteArray();
+        return read(new FileInputStream(file));
     }
 
     public static byte[] read(InputStream in) throws IOException {
-        return read0(in, getSharedByteBuf()).toByteArray();
+        return getSharedByteBuf().readStreamFully(in).toByteArray();
     }
 
     public static String readUTF(Class<?> jar, String path) throws IOException {
-        Object[] x = BYTE_BUFFER.get();
-        ByteList bl = (ByteList) x[0];
-        bl.clear();
-        CharList cl = (CharList) x[1];
-        cl.clear();
-        ByteList.decodeUTF(-1, cl, read1(jar, path, bl));
-        if(cl.length() > 8192) {
-            x[1] = new CharList(8192);
-        }
-        return cl.toString();
+        UTFCoder x = SharedUTFCoder.get();
+        x.keep = false;
+        x.byteBuf.clear();
+        read1(jar, path, x.byteBuf);
+        return x.decode();
     }
 
     public static String readUTF(String path) throws IOException {
@@ -123,28 +96,14 @@ public class IOUtil {
     }
 
     public static String readUTF(File f) throws IOException {
-        Object[] x = BYTE_BUFFER.get();
-        ByteList bl = (ByteList) x[0];
-        bl.clear();
-        CharList cl = (CharList) x[1];
-        cl.clear();
-        ByteList.decodeUTF(-1, cl, read0(new FileInputStream(f), bl));
-        if(cl.length() > 8192) {
-            x[1] = new CharList(8192);
-        }
-        return cl.toString();
+        return readUTF(new FileInputStream(f));
     }
 
     public static String readUTF(InputStream in) throws IOException {
-        Object[] x = BYTE_BUFFER.get();
-        ByteList bl = (ByteList) x[0];
-        bl.clear();
-        CharList cl = (CharList) x[1];
-        cl.clear();
-        ByteList.decodeUTF(-1, cl, read0(in, bl));
-        if(cl.length() > 8192) {
-            x[1] = new CharList(8192);
-        }
-        return cl.toString();
+        UTFCoder x = SharedUTFCoder.get();
+        x.keep = false;
+        x.byteBuf.clear();
+        x.byteBuf.readStreamFully(in);
+        return x.decode();
     }
 }

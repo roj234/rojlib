@@ -28,6 +28,7 @@ package roj.concurrent;
 import roj.concurrent.task.ExecutionTask;
 import roj.concurrent.task.ITask;
 import roj.util.FastLocalThread;
+import roj.util.SleepingBeauty;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
@@ -38,6 +39,10 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
     final ThreadStateMonitor monitor;
     final int timeout;
     volatile boolean busy;
+
+    static {
+        SleepingBeauty.sleep();
+    }
 
     public TaskExecutor() {
         this(ThreadStateMonitor.EVER);
@@ -72,7 +77,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
     @Override
     public void run() {
         out:
-        while (!tasks.isEmpty() || monitor.working()) {
+        while (monitor.working()) {
             ITask task;
             do {
                 task = tasks.peek();
@@ -81,13 +86,13 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
                         notifyAll();
                     }
 
+                    long t = System.currentTimeMillis();
+                    boolean in = Thread.interrupted();
                     LockSupport.parkNanos(timeout * 1000_000L);
+                    if (in) interrupt();
                     // maybe there's something to do now.
 
-                    if (tasks.isEmpty()) {
-                        synchronized (this) {
-                            notifyAll();
-                        }
+                    if (tasks.isEmpty() && System.currentTimeMillis() - t >= timeout) {
                         if (monitor.threadDeath(this)) {
                             break out;
                         }

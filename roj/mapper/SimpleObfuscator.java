@@ -34,7 +34,7 @@ import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.ByteList.WriteOnly;
+import roj.util.ByteList.Streamed;
 import roj.util.ByteReader;
 
 import java.io.File;
@@ -466,7 +466,7 @@ public final class SimpleObfuscator extends Obfuscator {
         public void initNil(ByteList data) {
             this.br.refresh(data);
             this.cw = new ConstantPoolEmpty();
-            this.bw = new WriteOnly();
+            this.bw = new Streamed();
         }
 
         int ldcPos;

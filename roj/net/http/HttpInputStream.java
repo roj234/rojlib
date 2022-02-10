@@ -82,6 +82,6 @@ class HttpInputStream {
                 }
             }
         }
-        return new DeflateInputStream(in, new Inflater(wrap));
+        return new InflateInputStream(in, new Inflater(wrap));
     }
 }

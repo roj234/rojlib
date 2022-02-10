@@ -32,7 +32,12 @@ import roj.asm.util.IType;
  * @author Roj234
  * @since  2020/8/10 17:53
  */
-public final class LocalVariable {
+public class LocalVariable {
+    public LocalVariable(String name, IType type) {
+        this.name = name;
+        this.type = type;
+    }
+
     public LocalVariable(int slot, String name, IType type, InsnNode start, InsnNode end) {
         this.slot = slot;
         this.name = name;

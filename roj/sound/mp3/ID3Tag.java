@@ -290,9 +290,8 @@ public class ID3Tag {
             fsize = len = byte2int(b, off, id_part);//Size  $xx xx xx xx
         else
             fsize = len = synchSafeInt(b, off);        //Size 4 * %0xxxxxxx
-        if (fsize < 1) {       // 防垃圾数据
-            //throw new IllegalArgumentException("帧内容的大小不得小于 1");
-            System.err.println("帧内容的大小不得小于 1, " + fsize);
+        if (fsize < 1) {
+            //System.err.println("空的ID3 Frame");
             return frame_header;
         }
 
@@ -344,25 +343,25 @@ public class ID3Tag {
                     coder = new String(b, off, len, TEXT_ENCODING[enc]);
                     break;
                 case "USLT":    //USLT:  歌词
-                    off += 4;    //Language: 4-byte
-                    len -= 4;
+                    //off += 4;    //Language: 4-byte
+                    //len -= 4;
                     lyrics = new String(b, off, len, TEXT_ENCODING[enc]);
                     System.out.println("LYRIC " + lyrics);
                     break;
                 case "APIC":    //APIC
                     //MIME type: "image/png" or "image/jpeg"
                     for (id_part = off; b[id_part] != 0 && id_part < endPos; id_part++) ;
-                    String MIMEtype = new String(b, off, id_part - off, TEXT_ENCODING[enc]);
-                    System.out.println("[APIC MIME type] " + MIMEtype);
+                    //String MIMEtype = new String(b, off, id_part - off, TEXT_ENCODING[enc]);
+                    //System.out.println("[APIC MIME type] " + MIMEtype);
                     len -= id_part - off + 1;
                     off = id_part + 1;
                     int picture_type = b[off] & 0xff;
-                    System.out.println("[APIC Picture type] " + picture_type);
+                    //System.out.println("[APIC Picture type] " + picture_type);
                     off++;    //Picture type
                     len--;
                     for (id_part = off; b[id_part] != 0 && id_part < endPos; id_part++) ;
-                    System.out.println("[APIC Description] "
-                            + new String(b, off, id_part - off, TEXT_ENCODING[enc]));
+                    //System.out.println("[APIC Description] "
+                    //        + new String(b, off, id_part - off, TEXT_ENCODING[enc]));
                     len -= id_part - off + 1;
                     off = id_part + 1;
                     //<text string according to encoding> $00 (00)

@@ -25,34 +25,23 @@
  */
 package roj.net.http;
 
-import roj.net.StreamLikeSequence;
-import roj.text.CharList;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterInputStream;
 
 /**
  * @author Roj234
- * @since  2020/11/28 21:13
+ * @since  2020/12/5 15:30
  */
-public final class Shared extends ThreadLocal<Object[]> {
-    private Shared() {}
-
-    public static final String _SHOULD_EOF = new String();
-    public static final String _ERROR = new String();
-
-    public static final int MAX_CHAR_BUFFER_CAPACITY    = 65536;
-    public static final int WRITE_MAX                   = 32768;
-
-    public static final ThreadLocal<Object[]> SYNC_BUFFER = new Shared();
-
-    @Override
-    protected Object[] initialValue() {
-        return new Object[]{
-                new StreamLikeSequence(false),
-                new HttpLexer(),
-                new CharList()
-        };
+final class InflateInputStream extends InflaterInputStream {
+    public InflateInputStream(InputStream in, Inflater inf) {
+        super(in, inf);
     }
 
-    public static final byte[] END_OF_CHUNK = new byte[] {
-            '0', '\r', '\n', '\r', '\n'
-    };
+    @Override
+    public void close() throws IOException {
+        this.inf.end();
+        super.close();
+    }
 }

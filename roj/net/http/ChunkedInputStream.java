@@ -25,8 +25,9 @@
  */
 package roj.net.http;
 
+import roj.config.ParseException;
 import roj.math.MathUtils;
-import roj.net.StreamLikeSequence;
+import roj.net.SocketSequence;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -96,9 +97,9 @@ class ChunkedInputStream extends InputStream {
 
     @SuppressWarnings("fallthrough")
     private void checkChunk() throws IOException {
-        Object[] data = Shared.SYNC_BUFFER.get();
+        Object[] data = HttpClient.LOCAL_LEXER.get();
 
-        StreamLikeSequence plain = (StreamLikeSequence)data[0];
+        SocketSequence plain = (SocketSequence)data[0];
         HttpLexer lexer = ((HttpLexer)data[1]).init(plain.init(in.socket, in.readTimeout, (int) in.dataRemain));
 
         lexer.index = in.buf.position();
@@ -129,17 +130,10 @@ class ChunkedInputStream extends InputStream {
 
                     // read tail header
                     stage = EOF;
-                    while (true) {
-                        String t = lexer.readHttpWord();
-                        if (t == Shared._ERROR) {
-                            throw new IOException("Unexpected trail header " + t);
-                        } else if (t == Shared._SHOULD_EOF) {
-                            break;
-                        } else if (t == null) {
-                            break;
-                        } else {
-                            tailHeader.add(t, lexer.readHttpWord());
-                        }
+                    try {
+                        tailHeader.readFromLexer(lexer);
+                    } catch (ParseException e) {
+                        throw new IOException(e);
                     }
                     break;
                 }

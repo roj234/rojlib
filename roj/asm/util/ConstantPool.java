@@ -199,7 +199,7 @@ public class ConstantPool {
     }
 
     static Constant readConstant(ByteList r) {
-        short b = r.readUByte();
+        int b = r.readUnsignedByte();
         if (Constant.toString(b) == null)
             throw new IllegalArgumentException("Illegal constant type " + b);
         switch (b) {

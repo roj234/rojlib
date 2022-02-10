@@ -66,9 +66,4 @@ public final class CDate extends CLong {
         int[] time = ACalendar.get1(value);
         return sb.append(time[ACalendar.YEAR]).append('-').append(time[ACalendar.MONTH]).append('-').append(time[ACalendar.DAY]);
     }
-
-//    @Override
-//    public StringBuilder toJSON(StringBuilder sb, int depth) {
-//        return sb.append("new Date(\"").append(toYAML(sb, 0)).append("\")");
-//    }
 }

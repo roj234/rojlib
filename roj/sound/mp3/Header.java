@@ -436,10 +436,9 @@ public final class Header implements AudioConfig {
                 " Layer" + layer +
                 ", " + getSamplingRate() +
                 "kHz " + getBitrate() +
-                "k, mode=" + Integer.toBinaryString(mode) +
-                ", mode_ext=" + Integer.toBinaryString(mode_extension) +
-                ", frameDuration=" + frameDuration +
-                '}';
+                "k, mode=0b" + Integer.toBinaryString(mode) +
+                ", mode_ext=0b" + Integer.toBinaryString(mode_extension) +
+                ", frameDuration=" + frameDuration;
     }
 
     // ================================ 辅助功能  =================================

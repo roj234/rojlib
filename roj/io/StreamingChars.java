@@ -26,14 +26,12 @@
 package roj.io;
 
 import roj.math.MathUtils;
-import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
 
 /**
@@ -42,19 +40,16 @@ import java.util.stream.IntStream;
  */
 public class StreamingChars implements CharSequence {
     InputStream in;
-    ByteList buffer;
-    public CharList cl;
-    protected int bufOff;
+    protected ByteList buf;
+    protected int flag;
     int max = -1;
 
     public StreamingChars() {
-        this.cl = new CharList(128);
-        this.buffer = new ByteList(256);
+        this.buf = new ByteList(256);
     }
 
-    public StreamingChars(int initialCapacity) {
-        this.cl = new CharList(initialCapacity >> 1);
-        this.buffer = new ByteList(initialCapacity);
+    public StreamingChars(int cap) {
+        this.buf = new ByteList(cap);
     }
 
     public StreamingChars maxReceive(int max) {
@@ -63,9 +58,8 @@ public class StreamingChars implements CharSequence {
     }
 
     public StreamingChars reset(InputStream in) {
-        buffer.clear();
-        cl.clear();
-        bufOff = 0;
+        buf.clear();
+        flag = 0;
         this.in = in;
         this.max = Integer.MAX_VALUE;
         return this;
@@ -73,57 +67,43 @@ public class StreamingChars implements CharSequence {
 
     @Override
     public int length() {
-        return bufOff == -1 ? cl.length() : Integer.MAX_VALUE;
+        return (flag & 1) != 0 ? buf.length() : Integer.MAX_VALUE;
     }
 
     @Override
     public char charAt(int index) {
         ensureRead(index + 1);
-        if (index >= cl.length()) return '\0';
-        return cl.charAt(index);
+        if (index >= buf.length()) return '\0';
+        return buf.charAt(index);
     }
 
     public void ensureRead(int required) {
-        int start = bufOff;
-        if(start < 0) return;
-        ByteList buf = this.buffer;
+        if((flag & 1) != 0) return;
+        ByteList buf = this.buf;
+        if (buf.length() >= required) return;
         try {
-            int read;
-            while (cl.length() < required) {
-                read = buffer.readStream(in, MathUtils.clamp(in.available(), 128, 4096));
-                if (read >= 0) {
-                    if (read > 0) {
-                        start = ByteList.decodeUTFPartialExternal(0, -1, cl, buf);
-                        if (start > 0) {
-                            System.arraycopy(buf.list, start, buf.list, 0, buf.wIndex() - start);
-                            buf.wIndex(buf.wIndex() - start);
-                        }
-                    }
-
-                    LockSupport.parkNanos(50);
-                } else {
-                    if(read == -1) {
-                        start = -1;
-                        return;
-                    }
-                    throw new IOException("in.read() got " + read);
+            int r = buf.readStream(in, MathUtils.clamp(in.available(), 128, 4096));
+            if (r < 0) {
+                if(r == -1) {
+                    flag |= 1;
+                    return;
                 }
+                throw new IOException("in.read() got " + r);
+            }
 
-                if(buf.wIndex() > max) {
-                    throw new IOException("Buffer read " + buf.wIndex() + " which is over the limitation " + max);
-                }
+            if(buf.wIndex() > max) {
+                throw new IOException("Buffer pos " + buf.wIndex() + " > " + max);
             }
         } catch (IOException e) {
+            flag |= 1;
             Helpers.athrow(e);
-        } finally {
-            bufOff = start;
         }
     }
 
     @Override
     public CharSequence subSequence(int start, int end) {
         ensureRead(end + 1);
-        return cl.subSequence(start, end);
+        return buf.subSequence(start, end);
     }
 
     @Override
@@ -139,6 +119,6 @@ public class StreamingChars implements CharSequence {
     @Nonnull
     @Override
     public String toString() {
-        return cl.toString();
+        return buf.readAscii(0, buf.wIndex());
     }
 }

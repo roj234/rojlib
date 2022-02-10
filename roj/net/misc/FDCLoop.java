@@ -10,7 +10,10 @@ import java.nio.channels.Selector;
  */
 public class FDCLoop<T extends FDChannel> extends NIOSelectLoop<T> {
     public FDCLoop(Shutdownable owner, String prefix, int maxThreads, int idleKill, int threshold) {
-        super(owner, prefix, maxThreads, idleKill, threshold);
+        super(owner, prefix, 1, maxThreads, idleKill, threshold);
+    }
+    public FDCLoop(Shutdownable owner, String prefix, int minThreads, int maxThreads, int idleKill, int threshold) {
+        super(owner, prefix, minThreads, maxThreads, idleKill, threshold);
     }
 
     @Override
@@ -26,5 +29,4 @@ public class FDCLoop<T extends FDChannel> extends NIOSelectLoop<T> {
         FileDescriptorChannel fdc = new FileDescriptorChannel(h.ch.fd());
         h.key = fdc.register(sel, SelectionKey.OP_READ, att);
     }
-
 }

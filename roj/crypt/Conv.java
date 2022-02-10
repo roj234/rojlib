@@ -25,8 +25,6 @@
  */
 package roj.crypt;
 
-import roj.text.TextUtil;
-
 /**
  * @author solo6975
  * @since 2021/10/3 11:12
@@ -98,14 +96,5 @@ public final class Conv {
             arr[length - i] = a;
         }
         return arr;
-    }
-
-    public static byte[] hex2bytes(CharSequence hex) {
-        int length = hex.length() / 2;
-        byte[] d = new byte[length];
-        for (int i = 0; i < length; i++) {
-            d[i] = (byte) ((TextUtil.c2i_hex(hex.charAt(i << 1)) << 4) | TextUtil.c2i_hex(hex.charAt(1 + (i << 1))));
-        }
-        return d;
     }
 }

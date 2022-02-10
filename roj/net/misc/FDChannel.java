@@ -20,4 +20,6 @@ public abstract class FDChannel implements Selectable {
     protected FDChannel(WrappedSocket ch) {
         this.ch = ch;
     }
+
+    protected FDChannel() {}
 }

@@ -142,7 +142,7 @@ public class Prefixer {
                                 break;
                             }
                         }
-                        cl2.append(cl1, pos, end + 1 - pos);
+                        cl2.append(cl1, pos, end + 1);
                     } else {
                         while (pos < end) {
                             char c = cl1.charAt(pos++);
@@ -160,7 +160,7 @@ public class Prefixer {
                            .append(Integer.toString(date[ACalendar.MONTH])).append('/')
                            .append(Integer.toString(date[ACalendar.DAY])).append(' ')
                            .append(Integer.toString(date[ACalendar.HOUR])).append(':')
-                           .append(Integer.toString(date[ACalendar.MINUTE])).append(cl1, pos, end + 1 - pos);
+                           .append(Integer.toString(date[ACalendar.MINUTE])).append(cl1, pos, end + 1);
                     }
                     if(str == 1) {
                         cl1.replace(0, end + 1, "");

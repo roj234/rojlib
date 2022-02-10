@@ -27,14 +27,12 @@ package roj.config.data;
 
 import roj.config.serial.Serializer;
 import roj.config.serial.Serializers;
+import roj.config.serial.Structs;
 import roj.util.ByteList;
 
-import javax.annotation.Nonnull;
 import java.util.Map;
 
 /**
- * Config Java Object
- *
  * @author Roj234
  * @since 2021/4/21 22:51
  */
@@ -51,13 +49,11 @@ public final class CObject<T> extends CMapping {
         this.value = (T) deser.deserialize(this);
     }
 
-    @Nonnull
     @Override
     public Type getType() {
         return Type.OBJECT;
     }
 
-    @Nonnull
     @Override
     @SuppressWarnings("unchecked")
     public <O> CObject<O> asObject(Class<O> clazz) {
@@ -122,13 +118,14 @@ public final class CObject<T> extends CMapping {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
         if (this.value == null) {
             w.put((byte) Type.NULL.ordinal());
         } else {
             int i = w.wIndex();
-            super.toBinary(w);
-            w.put(i, (byte) Type.OBJECT.ordinal());
+            super.toBinary(w, struct);
+            if (w.get(i) == Type.MAP.ordinal())
+                w.put(i, (byte) Type.OBJECT.ordinal());
         }
     }
 }

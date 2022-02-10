@@ -23,25 +23,47 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.net.http;
+package roj.concurrent;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.zip.Inflater;
-import java.util.zip.InflaterInputStream;
+import roj.concurrent.task.ITask;
 
 /**
  * @author Roj234
- * @since  2020/12/5 15:30
+ * @since 2021/4/21 22:51
  */
-final class DeflateInputStream extends InflaterInputStream {
-    public DeflateInputStream(InputStream in, Inflater inf) {
-        super(in, inf);
+public class SchedTask {
+    final ITask task;
+    public final int interval;
+    long nextRun;
+    int  remain;
+
+    public SchedTask(ITask task, int interval, int delay, int remain) {
+        if (interval <= 0 && remain != 1) throw new IllegalArgumentException("interval <= 0");
+        if (delay < 0) throw new IllegalArgumentException("delay < 0");
+
+        this.task = task;
+        this.interval = interval;
+        this.nextRun = System.currentTimeMillis() + delay;
+        this.remain = remain;
     }
 
-    @Override
-    public void close() throws IOException {
-        this.inf.end();
-        super.close();
+    public ITask getTask() {
+        return task;
+    }
+
+    public int getRemain() {
+        return remain;
+    }
+
+    public long getNextRun() {
+        return nextRun;
+    }
+
+    public boolean isCancelled() {
+        return task.isCancelled();
+    }
+
+    public void compute(Thread t) throws Exception {
+        task.calculate(t);
     }
 }

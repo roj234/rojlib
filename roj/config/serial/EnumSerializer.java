@@ -45,7 +45,7 @@ class EnumSerializer implements Serializer<Enum<?>> {
 
     @Override
     public Enum<?> deserialize(CObject<?> o) {
-        return (Enum<?>) EnumHelper.H.getEnumConstantDirectory(enumc).get(o.get("").asString());
+        return (Enum<?>) EnumHelper.cDirAcc.getEnumConstantDirectory(enumc).get(o.get("").asString());
     }
 
     @Override
@@ -60,6 +60,6 @@ class EnumSerializer implements Serializer<Enum<?>> {
 
     @Override
     public Enum<?> deserializeRc(CEntry o) {
-        return (Enum<?>) EnumHelper.H.getEnumConstantDirectory(enumc).get(o.asString());
+        return (Enum<?>) EnumHelper.cDirAcc.getEnumConstantDirectory(enumc).get(o.asString());
     }
 }

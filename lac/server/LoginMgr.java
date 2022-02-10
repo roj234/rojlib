@@ -28,16 +28,15 @@ package lac.server;
 
 import ilib.ImpLib;
 import lac.server.packets.PacketLogin;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.util.ByteList;
-import roj.util.FixedString;
-
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketChat;
 import net.minecraft.network.play.server.SPacketDisconnect;
 import net.minecraft.util.text.TextComponentTranslation;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.util.ByteList;
+import roj.util.FixedString;
 
 import java.io.*;
 
@@ -152,7 +151,7 @@ public final class LoginMgr {
             for (int i = 0; i < length; i++) {
                 String name = FORMAT.read(r);
                 String pass = FORMAT.read(r);
-                accounts.put(name, new Account(name, pass, r.rIndex() + 4));
+                accounts.put(name, new Account(name, pass, r.rIndex + 4));
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

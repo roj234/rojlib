@@ -27,7 +27,6 @@ package roj.config;
 
 import roj.collect.LongBitSet;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.concurrent.OperationDone;
 import roj.config.data.*;
 import roj.config.serial.Serializers;
@@ -60,11 +59,8 @@ public class XMLParser extends Parser {
             semicolon = 15, not = 16, colon = 17,
             namespace = 18, unknown = 19;
 
-    public static final MyHashSet<String> HTML_CLOSE_TAGS;
-    static {
-        HTML_CLOSE_TAGS = new MyHashSet<>("meta", "link", "input", "img");
-    }
     public static final int KEEP_ENTITY = 1, LENIENT = 2;
+    private static final int HEADER = 128;
 
     public static void main(String[] args) throws ParseException, IOException {
         System.out.print("XML = " + parse(IOUtil.readUTF(new File(args[0]))).toString());
@@ -79,25 +75,24 @@ public class XMLParser extends Parser {
     }
 
     public static XHeader parse(XMLexer wr, int flag) throws ParseException {
-        wr.flag = (byte) flag;
-        XHeader ce = xmlHeader(wr);
+        XHeader ce = xmlHeader(wr, flag | HEADER);
         if ((flag & NO_EOF) == 0 && wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }
         return ce;
     }
 
-    public static XHeader xmlHeader(XMLexer wr) throws ParseException {
+    public static XHeader xmlHeader(XMLexer wr, int flag) throws ParseException {
         int begin = wr.index;
         Word w = wr.nextWord();
         if (w.type() == left_curly_bracket) {
             w = wr.nextWord();
             if (w.type() != ask) {
-                if ((wr.flag & LENIENT) == 0)
+                if ((flag & LENIENT) == 0)
                     unexpected(wr, w.val(), "?");
                 wr.index = begin;
                 XHeader h = new XHeader();
-                h.appendChild(xmlElement(wr));
+                h.appendChild(xmlElement(wr, flag));
                 return h;
             }
             w = wr.nextWord();
@@ -135,7 +130,7 @@ public class XMLParser extends Parser {
                 switch (w.type()) {
                     case left_curly_bracket:
                         wr.retractWord();
-                        children.add(xmlElement(wr));
+                        children.add(xmlElement(wr, flag));
                         break;
                     case WordPresets.EOF:
                         break o;
@@ -154,7 +149,7 @@ public class XMLParser extends Parser {
     }
 
     @SuppressWarnings("fallthrough")
-    public static XElement xmlElement(XMLexer wr) throws ParseException {
+    public static XElement xmlElement(XMLexer wr, int flag) throws ParseException {
         Word w = wr.nextWord();
         if (w.type() == left_curly_bracket) {
             w = wr.nextWord();
@@ -218,13 +213,11 @@ public class XMLParser extends Parser {
                                     case WordPresets.LITERAL:
                                     case namespace:
                                         if (!w.val().equals(name)) {
-                                            ParseException e = wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
-                                            if((wr.flag & LENIENT) != 0) {
-                                                System.out.println(e.toString());
+                                            if((flag & LENIENT) != 0) {
                                                 wr.errorTag = w.val();
                                                 break o;
                                             } else {
-                                                throw e;
+                                                throw wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
                                             }
                                         }
 
@@ -237,7 +230,7 @@ public class XMLParser extends Parser {
                                 break;
                             } else {
                                 wr.restore(lcb);
-                                XElement xe = xmlElement(wr);
+                                XElement xe = xmlElement(wr, flag);
                                 if(xe != null) {
                                     children.add(xe);
                                 }
@@ -279,7 +272,7 @@ public class XMLParser extends Parser {
                     //}
                 }
 
-                if((wr.flag & LENIENT) == 0 || wr.hasNext())
+                if((flag & LENIENT) == 0 || wr.hasNext())
                     except(wr, right_curly_bracket, ">");
             }
 
@@ -304,6 +297,8 @@ public class XMLParser extends Parser {
                 return CDouble.valueOf(word.number().asDouble());
             case WordPresets.INTEGER:
                 return CInteger.valueOf(word.number().asInt());
+            case WordPresets.LONG:
+                return CLong.valueOf(word.number().asLong());
             case WordPresets.STRING:
                 return CString.valueOf(word.val());
             case WordPresets.LITERAL:
@@ -344,7 +339,6 @@ public class XMLParser extends Parser {
         static final LongBitSet XML_LITERAL = LongBitSet.from("+<>/=?;!\r\n \t");
 
         public Predicate<String> hasCloseTags = Helpers.alwaysTrue();
-        public byte flag;
         String errorTag;
 
         public XMLexer hasCloseTags(Predicate<String> p) {
@@ -453,11 +447,11 @@ public class XMLParser extends Parser {
                             case '<':
                                 index--;
                                 break o;
-                            case '&':
+                            /*case '&':
                                 if((flag & KEEP_ENTITY) != 0) {
                                     temp.append(decodeEntity());
                                     break;
-                                }
+                                }*/
                             default:
                                 temp.append(c);
                                 break;
@@ -530,36 +524,36 @@ public class XMLParser extends Parser {
             return readLiteral();
         }
 
-        private char decodeEntity() throws ParseException {
-            String v = readLiteral().val();
-
-            char c;
-            switch (v) {
-                case "lt":
-                    c = '<';
-                    break;
-                case "gt":
-                    c = '>';
-                    break;
-                case "amp":
-                    c = '&';
-                    break;
-                case "apos":
-                    c = '\'';
-                    break;
-                case "quot":
-                    c = '"';
-                    break;
-                default:
-                    throw err("无效转义符/作者不知道的转义符");
-            }
-
-            if (!readSymbol().val().equals(";")) {
-                throw err("转义需要以;结束");
-            }
-
-            return c;
-        }
+//        private char decodeEntity() throws ParseException {
+//            String v = readLiteral().val();
+//
+//            char c;
+//            switch (v) {
+//                case "lt":
+//                    c = '<';
+//                    break;
+//                case "gt":
+//                    c = '>';
+//                    break;
+//                case "amp":
+//                    c = '&';
+//                    break;
+//                case "apos":
+//                    c = '\'';
+//                    break;
+//                case "quot":
+//                    c = '"';
+//                    break;
+//                default:
+//                    throw err("无效转义符/作者不知道的转义符");
+//            }
+//
+//            if (!readSymbol().val().equals(";")) {
+//                throw err("转义需要以;结束");
+//            }
+//
+//            return c;
+//        }
 
         /**
          * 回收利用Word对象

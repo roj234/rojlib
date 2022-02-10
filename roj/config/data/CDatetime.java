@@ -41,7 +41,12 @@ public final class CDatetime extends CLong {
     @Nonnull
     @Override
     public Type getType() {
-        return Type.DATETIME;
+        return Type.DATE;
+    }
+
+    @Override
+    public boolean isSimilar(CEntry o) {
+        return super.isSimilar(o);
     }
 
     @Override
@@ -49,9 +54,4 @@ public final class CDatetime extends CLong {
         int[] time = ACalendar.get1(value);
         return sb.append(time[ACalendar.YEAR]).append('-').append(time[ACalendar.MONTH]).append('-').append(time[ACalendar.DAY]).append('T').append(time[ACalendar.HOUR]).append(':').append(time[ACalendar.MINUTE]).append(':').append(time[ACalendar.SECOND]).append('.').append(time[ACalendar.MILLISECOND]).append('Z');
     }
-
-//    @Override
-//    public StringBuilder toJSON(StringBuilder sb, int depth) {
-//        return sb.append("new Date(").append(value).append(")");
-//    }
 }

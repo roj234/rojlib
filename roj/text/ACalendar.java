@@ -37,9 +37,8 @@ import java.util.TimeZone;
  * @since 2021/6/16 2:48
  */
 public class ACalendar {
-    public static void main(String[] args) {
-        int[] a = get1(args.length > 0 ? Long.parseLong(args[0]) : System.currentTimeMillis());
-        System.out.println(a[YEAR] + "年" + a[MONTH] + "月" + a[DAY] + "日 " + a[HOUR] + "：" + a[MINUTE] + "：" + a[SECOND] + "." + a[MILLISECOND] + " 星期" + a[DAY_OF_WEEK] + " 闰年" + a[REN_YEAR]);
+    public ACalendar copy() {
+        return new ACalendar(timezone);
     }
 
     public static final int
@@ -57,7 +56,15 @@ public class ACalendar {
 
     private final int[] buf = new int[TOTAL];
     private final long[] cache = new long[4];
-    private final TimeZone timezone;
+    private TimeZone timezone;
+
+    public TimeZone getTimezone() {
+        return timezone;
+    }
+
+    public void setTimezone(TimeZone timezone) {
+        this.timezone = timezone;
+    }
 
     public ACalendar() {
         this(TimeZone.getDefault());
@@ -72,7 +79,8 @@ public class ACalendar {
     }
 
     public int[] get(long unix) {
-        return get(unix + timezone.getOffset(unix), buf, cache);
+        if (timezone != null) unix += timezone.getOffset(unix);
+        return get(unix, buf, cache);
     }
 
     public static int[] get1() {
@@ -87,18 +95,14 @@ public class ACalendar {
         if(buf.length < 7)
             throw new ArrayIndexOutOfBoundsException(6);
 
-        // TIMEZONE OFFSET
-        // date += 8 * 3600 * 1000;
-
         date = His(date, buf);
-
         date += GREGORIAN_OFFSET_DAY;
 
         if(date < MINIMUM_GREGORIAN_DAY)
             throw new ArithmeticException("ACalendar does not support time < 1582/8/15");
 
         int y = buf[YEAR] = yearSinceUnix(date);
-        long days = daySinceAD(y, 1, 1, null);
+        long days = daySinceAD(y, 1, 1, cache);
         boolean renYear = isRenYear(y);
 
         int daysSinceY = (int)(date - days);
@@ -257,16 +261,6 @@ public class ACalendar {
         return a >= 0 ? a / b : (a + 1) / b - 1;
     }
 
-    public static long divMod(int a, int b) {
-        if(a >= 0) {
-            return (long) (a % b) << 32 | (long) (a / b);
-        } else {
-            int div = (a + 1) / b - 1;
-            int mod = a - b * div;
-            return ((((long) mod) << 32) & 0xFFFFFFFF00000000L) | (((long) div) & 0xFFFFFFFFL);
-        }
-    }
-
     public static long divModLss(long a, int b, int[] buf) {
         if(a >= 0) {
             return (a % b) << 54 | (a / b);
@@ -277,26 +271,16 @@ public class ACalendar {
         }
     }
 
-    public static String pad(int number, int min) {
-        int len = MathUtils.digitCount(number);
-        min -= len;
-        if(min > 0) {
-            StringBuilder sb = new StringBuilder(min + len);
-            for (int i = 0; i < min; i++) {
-                sb.append('0');
-            }
-            return sb.append(number).toString();
-        } else {
-            return Integer.toString(number);
-        }
-    }
-
     public static void pad(StringBuilder sb, int number, int min) {
         for (int i = min - MathUtils.digitCount(number) - 1; i >= 0; i--) {
             sb.append('0');
         }
         sb.append(number);
     }
+
+    private static final String[]
+            UTCWEEK = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"},
+            UTCMONTH = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
     public StringBuilder formatDate(String format, long stamp) {
         int[] date = get(stamp);
@@ -321,6 +305,9 @@ public class ACalendar {
                     break;
                 case 'l':
                     sb.append("星期").append(MathUtils.CHINA_NUMERIC[date[DAY_OF_WEEK]]);
+                    break;
+                case 'W':
+                    sb.append(UTCWEEK[date[DAY_OF_WEEK]]);
                     break;
                 case 'w':
                     sb.append(date[DAY_OF_WEEK]);
@@ -383,6 +370,9 @@ public class ACalendar {
                       .append(date[SECOND])
                       .insert(tzoff(stamp, sb) + 2, ':');
                     break;
+                case 'M':
+                    sb.append(UTCMONTH[date[MONTH]]);
+                    break;
                 case 'U':
                     sb.append(stamp / 1000);
                     break;
@@ -392,6 +382,10 @@ public class ACalendar {
             }
         }
         return sb;
+    }
+
+    public StringBuilder toRFCDate(long date) {
+        return formatDate("W, d M Y H:i:s", date).append(" GMT");
     }
 
     private int tzoff(long stamp, StringBuilder sb) {

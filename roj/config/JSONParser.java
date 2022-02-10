@@ -33,6 +33,7 @@ import roj.config.word.AbstLexer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -60,10 +61,11 @@ public final class JSONParser extends Parser {
             UNESCAPED_SINGLE_QUOTE = 4,
             NO_EOF                 = 8,
             INTERN                 = 16,
-            LENINT_COMMA           = 32;
+            LENINT_COMMA           = 32,
+            COMMENT                = 64;
 
     public static void main(String[] args) throws ParseException, IOException {
-        System.out.println(parse(IOUtil.readUTF(new File(args[0]))));
+        System.out.println(parse(IOUtil.readUTF(new File(args[0])), COMMENT).toJSONb());
     }
 
     public static CEntry parse(CharSequence string) throws ParseException {
@@ -77,6 +79,9 @@ public final class JSONParser extends Parser {
     public static CEntry parse(AbstLexer wr, int flag) throws ParseException {
         JSONLexer l = (JSONLexer) wr;
         l.flag = (byte) flag;
+        if ((flag & COMMENT) != 0) {
+            l.comment = new CharList();
+        }
 
         CEntry ce;
         try {
@@ -95,7 +100,7 @@ public final class JSONParser extends Parser {
      * 解析数组定义 <BR>
      * [xxx, yyy, zzz] or []
      */
-    private static CList jsonArray(AbstLexer wr, byte flag, Serializers ser) throws ParseException {
+    private static CList jsonArray(JSONLexer wr, byte flag, Serializers ser) throws ParseException {
         CList list = new CList();
 
         boolean more = true;
@@ -129,6 +134,7 @@ public final class JSONParser extends Parser {
             }
         }
 
+        wr.clearComment();
         return list;
     }
 
@@ -137,7 +143,7 @@ public final class JSONParser extends Parser {
      * {xxx: yyy, zzz: uuu}
      */
     @SuppressWarnings("fallthrough")
-    private static CMapping jsonObject(AbstLexer wr, byte flag, Serializers ser) throws ParseException {
+    private static CMapping jsonObject(JSONLexer wr, byte flag, Serializers ser) throws ParseException {
         CMapping map = new CMapping();
 
         boolean more = true;
@@ -171,6 +177,7 @@ public final class JSONParser extends Parser {
             String v = name.val();
             if((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(v))
                 throw wr.err("重复的key: " + v);
+            map = wr.addComment(map, v);
 
             Word w = wr.nextWord();
             if (w.type() != colon)
@@ -190,11 +197,12 @@ public final class JSONParser extends Parser {
             }
         }
 
+        wr.clearComment();
         return map;
     }
 
     @SuppressWarnings("fallthrough")
-    private static CEntry jsonRead(AbstLexer wr, byte flag, Serializers ser) throws ParseException {
+    private static CEntry jsonRead(JSONLexer wr, byte flag, Serializers ser) throws ParseException {
         Word w = wr.nextWord();
         switch (w.type()) {
             case left_m_bracket:
@@ -263,8 +271,22 @@ public final class JSONParser extends Parser {
 
     public static class JSONLexer extends AbstLexer {
         final MyHashSet<String> ipool = new MyHashSet<>();
+        CharList comment;
 
         public byte flag;
+
+        public CMapping addComment(CMapping map, String v) {
+            if (comment == null || comment.length() == 0) return map;
+            map = map.withComments();
+            map.getComments().put(v, comment.toString());
+            comment.clear();
+            return map;
+        }
+
+        public void clearComment() {
+            if (comment == null) return;
+            comment.clear();
+        }
 
         @Override
         @SuppressWarnings("fallthrough")
@@ -281,7 +303,8 @@ public final class JSONParser extends Parser {
                         return readConstString((char) c);
                     case '/':
                         this.index = i;
-                        Word word = ignoreStdNote();
+                        Word word = ignoreJavaComment(comment);
+                        if (comment != null) comment.append("\n");
                         if (word != null)
                             return word;
                         i = this.index;

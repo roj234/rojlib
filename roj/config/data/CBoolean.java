@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.Structs;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
@@ -36,7 +37,7 @@ import javax.annotation.Nonnull;
 public final class CBoolean extends CEntry {
     public static final CBoolean TRUE = new CBoolean(), FALSE = new CBoolean();
 
-    public CBoolean() {}
+    private CBoolean() {}
 
     @Nonnull
     @Override
@@ -74,27 +75,12 @@ public final class CBoolean extends CEntry {
     }
 
     @Override
-    public boolean equalsTo(CEntry entry) {
-        return entry.getType().fits(Type.BOOL) && entry.asBool() == asBool();
-    }
-
-    @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
-        return sb.append(this == TRUE);
+    public boolean isSimilar(CEntry o) {
+        return o.getType() == Type.BOOL || (o.getType().isSimilar(Type.BOOL) && o.asBool() == (this == TRUE));
     }
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append(this == TRUE);
-    }
-
-    @Override
-    public StringBuilder toINI(StringBuilder sb, int depth) {
-        return sb.append(this == TRUE);
-    }
-
-    @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
         return sb.append(this == TRUE);
     }
 
@@ -104,7 +90,12 @@ public final class CBoolean extends CEntry {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.BOOL.ordinal()).putBool(this == TRUE);
+    }
+
+    @Override
+    public int hashCode() {
+        return this == TRUE ? 432895 : 1278;
     }
 }

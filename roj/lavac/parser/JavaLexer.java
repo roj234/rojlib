@@ -37,7 +37,7 @@ public final class JavaLexer extends JSLexer {
                         return readConstString('"');
                     case '/':
                         this.index = i;
-                        Word word = ignoreStdNote();
+                        Word word = ignoreJavaComment(found);
                         i = this.index;
                         if (word != null) return word;
                         break;

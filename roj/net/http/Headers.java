@@ -28,12 +28,10 @@ package roj.net.http;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.ParseException;
 import roj.text.CharList;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author solo6975
@@ -51,13 +49,29 @@ public final class Headers extends MyHashMap<CharSequence, String> {
 
     CharList tmp = new CharList();
 
+    public Headers readFromLexer(HttpLexer wr) throws ParseException {
+        while (true) {
+            String t = wr.readHttpWord();
+            if (t == HttpLexer._ERROR) {
+                throw wr.err("Unexpected header error");
+            } else if (t == HttpLexer._SHOULD_EOF) {
+                break;
+            } else if (t == null) {
+                break;
+            } else {
+                add(t, wr.readHttpWord());
+            }
+        }
+        return this;
+    }
+
     protected Entry<CharSequence, String> createEntry(CharSequence key) {
         return new E(key);
     }
 
     public List<String> getAll(final String s) {
         final E e = (E) this.getEntry(s);
-        if (e == null) return Collections.emptyList();
+        if (e == null) return null;
 
         SimpleList<String> list = new SimpleList<>(e.all.size() + 1);
         list.add(e.v);
@@ -101,6 +115,18 @@ public final class Headers extends MyHashMap<CharSequence, String> {
             size++;
         e.all = Collections.emptyList();
         e.v = value;
+    }
+
+    public void set(String key, List<String> value) {
+        E e = (E) getOrCreateEntry(key);
+        if (e.v == IntMap.NOT_USING) size++;
+        if (value.size() == 1) {
+            e.all = Collections.emptyList();
+        } else {
+            e.all = new ArrayList<>(value);
+            e.all.remove(0);
+        }
+        e.v = value.get(0);
     }
 
     public List<String> removeAll(String key) {

@@ -28,12 +28,12 @@
  */
 package roj.sound.mp3;
 
-import roj.concurrent.task.ITask;
+import roj.concurrent.task.ITaskNaCl;
 
 /**
  * 由于大量浮点运算，多相合成滤波耗时最多，使用并发运算加速解码
  */
-final class SynthesisTask implements ITask, Runnable {
+final class SynthesisTask implements ITaskNaCl, Runnable {
     private final int ch;
     private final float[] samples;
     private float[][] bufA, bufB; // 调用者无锁双缓冲
@@ -44,7 +44,7 @@ final class SynthesisTask implements ITask, Runnable {
     public SynthesisTask(Layer3 owner, int ch) {
         this.owner = owner;
         this.ch = ch;
-        done = true;
+        this.done = true;
         samples = new float[32];
         bufA = new float[owner.granules][32 * 18];
         bufB = new float[owner.granules][32 * 18];
@@ -53,20 +53,19 @@ final class SynthesisTask implements ITask, Runnable {
     /**
      * 交换双缓冲
      */
-    public float[][] swapBuf() {
+    float[][] swapBuf() {
         // 1. 交换缓冲区
         float[][] p = bufA;
         bufA = bufB;
         bufB = p;
 
-        // 2. 干活
         done = false;
 
         // 3. 返回"空闲的"缓冲区，该缓冲区内的数据已被run()方法使用完毕
         return bufA;
     }
 
-    public float[][] getEmptyBuffer() {
+    float[][] getEmptyBuffer() {
         return bufA;
     }
 
@@ -76,11 +75,13 @@ final class SynthesisTask implements ITask, Runnable {
     }
 
     public void run() {
+        if (done) return;
         int granules = owner.granules;
         Synthesis syth = owner.synthesis;
 
         // 1. 干活
-        final float[] samples = this.samples;
+        float[][] bufB = this.bufB;
+        float[] samples = this.samples;
         for (int gr = 0; gr < granules; gr++) {
             float[] xr = bufB[gr];
             for (int j = 0; j < 18; j += 2) {
@@ -100,36 +101,18 @@ final class SynthesisTask implements ITask, Runnable {
             }
         }
 
-        done = true;
         synchronized (this) {
-            notifyAll();
+            done = true;
+            notify();
         }
     }
 
-    public void forEnd() throws InterruptedException {
-        if (done)
-            return;
+    void await() throws InterruptedException {
         synchronized (this) {
-            while (!done) {
+            if (!done) {
                 wait();
             }
         }
-    }
-
-    @Override
-    public boolean isCancelled() {
-        return done;
-    }
-
-    @Override
-    public boolean cancel(boolean force) {
-        done = true;
-
-        synchronized (this) {
-            notifyAll();
-        }
-
-        return false;
     }
 
     @Override

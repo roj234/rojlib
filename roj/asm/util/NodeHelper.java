@@ -136,6 +136,127 @@ public class NodeHelper {
         }
     }
 
+    public static void loadLongSlow(long number, InsnList target) {
+        switch ((int) number) {
+            case 0:
+            case 1:
+                target.add(npc((byte) (LCONST_0 + number)));
+                break;
+            case -1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+                target.add(npc((byte) (ICONST_0 + number)));
+                target.add(npc(I2L));
+                break;
+            default:
+                if((byte)number == number) {
+                    target.add(new U2InsnNode(BIPUSH, (int) number));
+                    target.add(npc(I2L));
+                } else if((short)number == number) {
+                    target.add(new U2InsnNode(SIPUSH, (int) number));
+                    target.add(npc(I2L));
+                } else if ((int)number == number) {
+                    target.add(new LdcInsnNode(LDC, new CstInt((int) number)));
+                    target.add(npc(I2L));
+                } else {
+                    target.add(new LdcInsnNode(LDC2_W, new CstLong(number)));
+                }
+        }
+    }
+
+    public static InsnNode loadLong(long number) {
+        switch ((int) number) {
+            case 0:
+            case 1:
+                return npc((byte) (LCONST_0 + number));
+            default:
+                return new LdcInsnNode(LDC2_W, new CstLong(number));
+        }
+    }
+
+    public static void loadFloatSlow(float number, InsnList target) {
+        int n = (int) number;
+        if (number != n) {
+            target.add(new LdcInsnNode(LDC, new CstFloat(number)));
+            return;
+        }
+        switch (n) {
+            case 0:
+            case 1:
+            case 2:
+                target.add(npc((byte) (FCONST_0 + number)));
+                break;
+            case -1:
+            case 3:
+            case 4:
+            case 5:
+                target.add(npc((byte) (ICONST_0 + number)));
+                target.add(npc(I2F));
+                break;
+            default:
+                if((byte)n == n) {
+                    target.add(new U2InsnNode(BIPUSH, n));
+                    target.add(npc(I2F));
+                } /*else if((short)n == n) {
+                    target.add(new U2InsnNode(SIPUSH, n));
+                    target.add(npc(I2F));
+                } */else {
+                    target.add(new LdcInsnNode(LDC, new CstFloat(number)));
+                }
+        }
+    }
+
+    public static InsnNode loadFloat(float number) {
+        int n = (int) number;
+        if (number != n || n < 0 || n > 2) {
+            return new LdcInsnNode(LDC, new CstFloat(number));
+        }
+        return npc((byte) (FCONST_0 + number));
+    }
+
+    public static void loadDoubleSlow(double number, InsnList target) {
+        int n = (int) number;
+        if (number != n) {
+            target.add(new LdcInsnNode(LDC2_W, new CstDouble(number)));
+            return;
+        }
+        switch (n) {
+            case 0:
+            case 1:
+                target.add(npc((byte) (DCONST_0 + number)));
+                break;
+            case -1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+                target.add(npc((byte) (ICONST_0 + number)));
+                target.add(npc(I2D));
+                break;
+            default:
+                if((byte)n == n) {
+                    target.add(new U2InsnNode(BIPUSH, n));
+                } else if((short)n == n) {
+                    target.add(new U2InsnNode(SIPUSH, n));
+                } else {
+                    //target.add(new LdcInsnNode(LDC, new CstInt(n)));
+                    target.add(new LdcInsnNode(LDC2_W, new CstDouble(number)));
+                    return;
+                }
+                target.add(npc(I2D));
+        }
+    }
+
+    public static InsnNode loadDouble(double number) {
+        int n = (int) number;
+        if (number != n || n < 0 || n > 1) {
+            return new LdcInsnNode(LDC2_W, new CstDouble(number));
+        }
+        return npc((byte) (DCONST_0 + number));
+    }
+
     public static void compress(@Nonnull InsnList list, byte base, int id) {
         switch (base) {
             case ALOAD:

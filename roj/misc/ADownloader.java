@@ -47,6 +47,11 @@ import java.util.ArrayList;
  * @since 2021/9/12 23:16
  */
 public class ADownloader {
+    public static final MyHashSet<String> HTML_CLOSE_TAGS;
+    static {
+        HTML_CLOSE_TAGS = new MyHashSet<>("meta", "link", "input", "img");
+    }
+
     public static void main(String[] args) throws IOException, ParseException {
         if (args.length < 2) {
             System.out.println("ADownloader <dst> <src> [cookie-id]...");
@@ -61,30 +66,29 @@ public class ADownloader {
         FileOutputStream fos = new FileOutputStream(args[0], true);
         XMLexer init = new XMLexer();
         init.init(IOUtil.readUTF(new FileInputStream(args[1])));
-        init.hasCloseTags(s -> !XMLParser.HTML_CLOSE_TAGS.contains(s.toLowerCase()));
-        init.flag = XMLParser.KEEP_ENTITY | XMLParser.LENIENT;
-        XElement elm = XMLParser.xmlElement(init);
+        init.hasCloseTags(s -> !HTML_CLOSE_TAGS.contains(s.toLowerCase()));
+        XElement elm = XMLParser.xmlElement(init, XMLParser.KEEP_ENTITY | XMLParser.LENIENT);
 
         ArrayList<XElement> threads = new ArrayList<>();
         elm.iterate(xml -> {
             if(xml.isString()) return;
             XElement e = xml.asElement();
             if(e.getAttribute("class").asString().equals("h-threads-info")) {
-                String cookie = e.children(3).asElement().children(0).asText();
+                String cookie = e.children(3).asElement().children(0).asString();
                 if(targetCookie.isEmpty() || targetCookie.contains(cookie))
                     threads.add(e);
             }
         });
         CharList tmp = new CharList();
         for (XElement e : threads) {
-            String title = e.children(0).asElement().children(0).asText();
+            String title = e.children(0).asElement().children(0).asString();
             if(e.children(1).childElementCount() == 0)  {
                 System.out.println("跳广告: " + e);
                 continue;
             }
-            String author = e.children(1).asElement().children(0).asText();
-            String time = e.children(2).asElement().children(0).asText();
-            String cookie = e.children(3).asElement().children(0).asText();
+            String author = e.children(1).asElement().children(0).asString();
+            String time = e.children(2).asElement().children(0).asString();
+            String cookie = e.children(3).asElement().children(0).asString();
             tmp.clear();
             tmp.append(title).append(" -- ").append(author).append(" (").append(cookie).append(")\r\n")
                .append("  --- ").append(time).append("\r\n");
@@ -92,7 +96,7 @@ public class ADownloader {
             XElement content = e.getXS("span.div(1)").get(0).asElement();
             for (AbstXML x : content) {
                 if(x.isString())
-                    tmp.append(x.asText());
+                    tmp.append(x.asString());
             }
             if(tmp.length() - l < 64) {
                 System.out.println("Skip " + tmp);

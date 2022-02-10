@@ -26,7 +26,6 @@
 package roj.net.http.serv;
 
 import roj.net.WrappedSocket;
-import roj.net.http.Shared;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,7 +51,7 @@ public abstract class StreamResponse implements Response {
         if (stream == null) throw new IllegalStateException();
         if (eof) return false;
 
-        int transfer = channel.write(stream, Shared.WRITE_MAX);
+        int transfer = channel.write(stream, 999999);
         if (transfer < 0)
             eof = true;
 

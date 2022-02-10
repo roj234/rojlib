@@ -28,7 +28,6 @@ package roj.net;
 
 import roj.crypt.CipheR;
 import roj.io.NIOUtil;
-import roj.net.http.Shared;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.MSSException;
@@ -76,6 +75,7 @@ public class MSSSocket extends PlainSocket {
         outCopy = bb.duplicate();
         bb.flip();
         hsOut = bb;
+        //hsOut = NIOUtil.expandDirectBuffer(hsOut, _size);
     }
 
     @SuppressWarnings("fallthrough")
@@ -147,6 +147,14 @@ public class MSSSocket extends PlainSocket {
 
     private CipheR d, e;
 
+    public CipheR getDecrypter() {
+        return d;
+    }
+
+    public CipheR getEncrypter() {
+        return e;
+    }
+
     public int read(int max) throws IOException {
         if (hsOut != null) throw new MSSException("Not handshake");
 
@@ -172,7 +180,7 @@ public class MSSSocket extends PlainSocket {
         if (hsOut != null) throw new MSSException("Not handshake");
         if (!dataFlush()) return 0;
 
-        int cap = Math.min(Shared.WRITE_MAX, src.remaining());
+        int cap = Math.min(WRITE_ONCE, src.remaining());
         if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
         else wBuf.clear();
 
@@ -199,7 +207,7 @@ public class MSSSocket extends PlainSocket {
         if (hsOut != null) throw new MSSException("Not handshake");
         if (!dataFlush()) return 0;
 
-        int cap = Math.min(Shared.WRITE_MAX, max) << 1;
+        int cap = Math.min(WRITE_ONCE, max) << 1;
         if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
         else wBuf.clear();
         int len = src.read(wBuf.array(), 0, cap >> 1);

@@ -89,6 +89,7 @@
         at roj.config.JSONParser.jsonRead(JSONParser.java:217)  
         ......  
 ```  
+    保存Map中共有的Key节约空间: roj.config.serial.Structs
     使用：  
       你可以直接调用各parser的静态parse方法  
         此时不支持序列化  
@@ -148,6 +149,8 @@
   PluginRenamer 恢复被无良腐竹改了的插件名  
   Prefixer 加LICENSE  
   Stripper 截取小说，或者用CRLF换行文件的指定几行  
+  MSSProxier MSS协议代理
+  CleanWechat 清除一定时间以前的文件
   
 ### roj.mod  
   可选前置: md_5:SpecialSource, lzma:LZMA-0.1  
@@ -168,6 +171,10 @@
   Pipeline 管道处理模式 (未测试)  
   Gay 简单版本管理系统，我是拿来做增量更新的  
     这个名字？ Gayhub     2333333  
+  NIOSelectLoop NIO选择器循环, 嗯，怎么用在IDEA里看子类好了
+    其实它就像个线程池, 包含SelectThread
+     ST会在空闲时执行idleTick方法, 有（任意）key选到后执行（所有）tick方法, 
+     同时也会执行onSelect(int readyOps)
   
 ### roj.opengl  
   前置: LWJGL  
@@ -303,9 +310,9 @@
   CmdUtil 给控制台来点颜色看看！  
   
 ### roj.util  
-  ByteList，能扩展的ByteBuffer  
+  ByteList，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output
   ComboRandom，多个种子的random  
-  FastThreadLocal 空间换时间  
+  FastThreadLocal 空间换时间，与FastLocalThread更配哦  
   GIFDecoder 解码GIF文件  
 </pre>  
   

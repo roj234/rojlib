@@ -67,7 +67,7 @@ public class ResWriter implements Runnable, Callable<Void> {
                 bl.readStreamFully((InputStream) value);
                 value = bl;
             }
-            zfw.writeNamed(entry.getKey(), value instanceof ByteList ? (ByteList) value : bl.setValue((byte[]) value));
+            zfw.writeNamed(entry.getKey(), value instanceof ByteList ? (ByteList) value : bl.setArray((byte[]) value));
             bl.clear();
         }
         return null;

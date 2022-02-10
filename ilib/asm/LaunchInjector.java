@@ -26,15 +26,14 @@
 package ilib.asm;
 
 import ilib.api.ContextClassTransformer;
-import roj.asm.SharedBuf;
-import roj.asm.SharedBuf.Level;
-import roj.asm.util.Context;
-import roj.util.ByteList;
-
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader.Acceptor;
 import net.minecraft.launchwrapper.LaunchClassLoader.Reader;
+import roj.asm.SharedBuf;
+import roj.asm.SharedBuf.Level;
+import roj.asm.util.Context;
+import roj.util.ByteList;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -59,7 +58,7 @@ class LaunchInjector implements Acceptor {
         if (shared == null)
             rd.threadLocalForYou = shared = new ByteList();
 
-        shared.setValue(rd.buf1);
+        shared.setArray(rd.buf1);
         Context ctx = new Context(name, shared);
 
         Level level = SharedBuf.alloc();
@@ -71,7 +70,7 @@ class LaunchInjector implements Acceptor {
                     if (o instanceof ContextClassTransformer) {
                         ((ContextClassTransformer) o).transform(trName, ctx);
                     } else {
-                        shared.setValue(((IClassTransformer) o).transform(name, trName, ctx.get(true).getByteArray()));
+                        shared.setArray(((IClassTransformer) o).transform(name, trName, ctx.get(true).toByteArray()));
                         ctx.set(shared);
                     }
                 } catch (Throwable e) {

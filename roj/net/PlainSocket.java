@@ -26,7 +26,6 @@
 package roj.net;
 
 import roj.io.NIOUtil;
-import roj.net.http.Shared;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -98,6 +97,9 @@ public class PlainSocket implements WrappedSocket {
                 read = NIOUtil.readToNativeBuffer(fd, buf,
                                                   NIOUtil.SOCKET_FD);
             } while (read == -3 && !socket.isClosed());
+        } catch (IOException e) {
+            socket.close();
+            throw e;
         } finally {
             buf.limit(lim);
         }
@@ -108,7 +110,7 @@ public class PlainSocket implements WrappedSocket {
         ByteBuffer cur = rBuf;
         ByteBuffer next = ByteBuffer.allocateDirect(cap);
         cur.flip();
-        next.put(cur).limit(cur.remaining());
+        next.put(cur);
         NIOUtil.clean(cur);
         return rBuf = next;
     }
@@ -127,7 +129,7 @@ public class PlainSocket implements WrappedSocket {
         ByteBuffer tmp;
         if (!src.isDirect()) {
             if (!src.hasArray()) {
-                int cap = Math.min(Shared.WRITE_MAX, src.remaining());
+                int cap = Math.min(WRITE_ONCE, src.remaining());
                 if (wBuf.capacity() < cap)
                     wBuf = ByteBuffer.allocate(cap);
                 else
@@ -142,16 +144,21 @@ public class PlainSocket implements WrappedSocket {
         }
 
         int w;
-        do {
-            if (tmp != null) {
-                w = NIOUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(), NIOUtil.SOCKET_FD);
-                if (w > 0) {
-                    tmp.position(tmp.position() + w);
+        try {
+            do {
+                if (tmp != null) {
+                    w = NIOUtil.swrite(fd, tmp.array(), tmp.position(), tmp.limit(), NIOUtil.SOCKET_FD);
+                    if (w > 0) {
+                        tmp.position(tmp.position() + w);
+                    }
+                } else {
+                    w = NIOUtil.writeFromNativeBuffer(fd, src, NIOUtil.SOCKET_FD);
                 }
-            } else {
-                w = NIOUtil.writeFromNativeBuffer(fd, src, NIOUtil.SOCKET_FD);
-            }
-        } while (w == -3 && !socket.isClosed());
+            } while (w == -3 && !socket.isClosed());
+        } catch (IOException e) {
+            socket.close();
+            throw e;
+        }
 
         return tmp == wBuf ? tmp.limit() : w;
     }
@@ -162,7 +169,7 @@ public class PlainSocket implements WrappedSocket {
             return -1;
         if (!dataFlush()) return 0;
 
-        int cap = Math.min(Shared.WRITE_MAX, max);
+        int cap = Math.min(WRITE_ONCE, max);
         if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
         else wBuf.clear();
 
@@ -171,13 +178,18 @@ public class PlainSocket implements WrappedSocket {
         wBuf.limit(len);
 
         int w;
-        do {
-            w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(),
-                               NIOUtil.SOCKET_FD);
-            if (w > 0) {
-                wBuf.position(wBuf.position() + w);
-            }
-        } while (w == -3 && !socket.isClosed());
+        try {
+            do {
+                w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(),
+                                   NIOUtil.SOCKET_FD);
+                if (w > 0) {
+                    wBuf.position(wBuf.position() + w);
+                }
+            } while (w == -3 && !socket.isClosed());
+        } catch (IOException e) {
+            socket.close();
+            throw e;
+        }
         return w;
     }
 
@@ -185,13 +197,17 @@ public class PlainSocket implements WrappedSocket {
     public boolean dataFlush() throws IOException {
         if (wBuf.hasRemaining()) {
             int w;
-            do {
-                w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(), NIOUtil.SOCKET_FD);
-                if (w > 0)
-                    wBuf.position(wBuf.position() + w);
-            } while (w == -3 && !socket.isClosed());
-            if (w < 0)
+            try {
+                do {
+                    w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(), NIOUtil.SOCKET_FD);
+                    if (w > 0)
+                        wBuf.position(wBuf.position() + w);
+                } while (w == -3 && !socket.isClosed());
+            } catch (IOException e) {
                 socket.close();
+                throw e;
+            }
+            if (w < 0) socket.close();
         }
         return !wBuf.hasRemaining();
     }

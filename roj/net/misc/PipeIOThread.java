@@ -39,7 +39,7 @@ public final class PipeIOThread extends NIOSelectLoop<Pipe> {
     private static PipeIOThread inst;
 
     private PipeIOThread(Shutdownable owner) {
-        super(owner,"Pipe IO", Runtime.getRuntime().availableProcessors(), 60000, 100);
+        super(owner, "Pipe IO", 0, Runtime.getRuntime().availableProcessors(), 60000, 100);
     }
 
     @Override

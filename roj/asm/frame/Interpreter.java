@@ -58,7 +58,7 @@ import static roj.asm.frame.VarType.*;
  * @version 1.1
  * @since 2021/6/18 9:51
  */
-public final class Interpreter {
+public class Interpreter {
     public Interpreter() {}
 
     String clazz;
@@ -109,11 +109,11 @@ public final class Interpreter {
 
     // region A
 
-    private void pushRefArray(String name) {
+    final void pushRefArray(String name) {
         stack.add(obj("[L" + name + ';'));
     }
 
-    private void pushPrimArray(int arrayType) {
+    final void pushPrimArray(int arrayType) {
         stack.add(obj("[" + (char) PrimArrayTypeToNativeType(arrayType)));
     }
 
@@ -139,17 +139,17 @@ public final class Interpreter {
         throw new IllegalStateException("Unknown PrimArrayType " + id);
     }
 
-    private void loadInArray(Var v) {
+    final void loadInArray(Var v) {
         if (v.owner == null || !v.owner.startsWith("["))
             throw new IllegalArgumentException("Not an array: " + v);
         stack.add(obj(v.owner.substring(1)));
     }
 
-    private static Var obj(String name) {
+    static Var obj(String name) {
         return new Var(name);
     }
 
-    private void initialize(Var v, String className) {
+    final void initialize(Var v, String className) {
         Var v2 = new Var(v.type == UNINITIAL_THIS ? clazz : className);
 
         Var[] list = stack.list;
@@ -168,7 +168,7 @@ public final class Interpreter {
         }
     }
 
-    private Var loadRef(int i) {
+    final Var loadRef(int i) {
         Var v = local.get(i);
         switch (v.type) {
             case REFERENCE:
@@ -181,7 +181,7 @@ public final class Interpreter {
         }
     }
 
-    private Var pop() {
+    final Var pop() {
         Var v = stack.get(stack.size - 1);
         stack.pop(1);
         return v;
@@ -190,7 +190,7 @@ public final class Interpreter {
     /*
      * At no point can long or double be operated (as a TOP or using int ops) on individually.
      */
-    private void checkStackTop(byte type) {
+    final void checkStackTop(byte type) {
         Var v = stack.get(stack.size - 1);
         if(v.type != type) {
             if(v.type == TOP) {
@@ -204,7 +204,7 @@ public final class Interpreter {
     /*
      * Ref-like: REF, NULL and UNINITIAL
      */
-    private void popRefLike() {
+    final void popRefLike() {
         Var v = stack.get(stack.size - 1);
         stack.pop(1);
         switch (v.type) {
@@ -217,7 +217,7 @@ public final class Interpreter {
         }
     }
 
-    private Var pop(byte type) {
+    final Var pop(byte type) {
         switch (type) {
             case DOUBLE:
             case LONG:
@@ -249,7 +249,7 @@ public final class Interpreter {
         return v;
     }
 
-    private void pop(byte type, int count) {
+    final void pop(byte type, int count) {
         for (int i = 0; i < count; i++) {
             pop(type);
         }
@@ -938,7 +938,7 @@ public final class Interpreter {
 
     // region B
 
-    private void checkReturn(char type) {
+    final void checkReturn(char type) {
         switch (returnType) {
             case NativeType.BOOLEAN:
             case NativeType.BYTE:
@@ -955,7 +955,7 @@ public final class Interpreter {
 
     }
 
-    private static Var fromType(Type type, CharList sb) {
+    final static Var fromType(Type type, CharList sb) {
         int arr = type.array;
         if (arr == 0) {
             final int i = ofType(type);
@@ -973,7 +973,7 @@ public final class Interpreter {
         }
     }
 
-    private void pushType(Type type) {
+    final void pushType(Type type) {
         Var v = fromType(type, sb);
         if (v == null)
             return;
@@ -982,14 +982,14 @@ public final class Interpreter {
             stack.add(Var.TOP);
     }
 
-    private void popType(Type type) {
+    final void popType(Type type) {
         Var v = fromType(type, sb);
         if (v == null)
             return;
         pop(v.type);
     }
 
-    private static byte typeType(Type type) {
+    final static byte typeType(Type type) {
         final int t = ofType(type);
         switch (t) {
             case -1:
@@ -1002,7 +1002,7 @@ public final class Interpreter {
     }
 
     // 变量i是这个类型的吗? stopped: 需要使用LVT检测！
-    private void isVarType(int id, byte type, boolean load) {
+    final void isVarType(int id, byte type, boolean load) {
         switch (type) {
             case DOUBLE:
             case LONG:

@@ -101,7 +101,7 @@ public class JSLexer extends AbstLexer {
                         return readConstString((char) c);
                     case '/':
                         this.index = index;
-                        Word word = ignoreStdNote();
+                        Word word = ignoreJavaComment(found);
                         if (word != null) return word;
                         index = this.index;
                         break;

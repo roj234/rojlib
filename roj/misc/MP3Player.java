@@ -131,15 +131,15 @@ public class MP3Player {
         }
 
         public void dumpInfo() {
-            System.out.println("MP3头: " + player.getHeader());
-            System.out.println("文件信息: " + player.getID3Tag());
+            System.out.println(player.getHeader());
+            System.out.println(player.getID3Tag());
             System.out.println("已播放 " + player.getHeader().getElapse() + "s");
             System.out.println();
         }
     }
 
     public static float dbSound(double linear) {
-        return (float) (Math.log10(linear == 0.0 ? 1e-4 : linear) * 20.0);
+        return (float) (Math.log10(linear <= 0 ? 1e-4 : linear) * 20.0);
     }
 
     public static void main(String[] args) throws IOException {
@@ -180,6 +180,7 @@ public class MP3Player {
                     tmp.add(w.val());
                     tokenizer.recycle(w);
                 }
+                if (tmp.isEmpty()) continue;
                 switch (tmp.get(0)) {
                     case "single":
                         if(tmp.get(1).equals("on"))
@@ -242,6 +243,7 @@ public class MP3Player {
                         File[] list = play.playList;
                         for (int i = 0; i < list.length; i++) {
                             File f = list[i];
+                            if (tmp.size() > 1 && !f.getName().contains(tmp.get(1))) continue;
                             System.out.println("  " + (i + 1) + ". " + f.getPath());
                         }
                         System.out.println("===================================");

@@ -95,7 +95,7 @@ public class TextUtil {
 
     public static String toFixed(double d, int accurate) {
         String db = Double.toString(d);
-        if (db.length() > 5) {
+        if (db.length() > accurate) {
             int dot = db.lastIndexOf('.');
             if(dot != -1) {
                 db = db.substring(0, Math.min(dot + 1 + accurate, db.length()));
@@ -246,8 +246,8 @@ public class TextUtil {
         off &= ~31;
         printOff(sb, off);
         while (true) {
-            sb.append(i2h_char((b[off] >>> 4) & 0xf))
-              .append(i2h_char(b[off++] & 0xf));
+            sb.append(b2h(b[off] >>> 4))
+              .append(b2h(b[off++] & 0xf));
             if (off == len) break;
             if ((off & 1) == 0) sb.append(' ');
             if ((off & 15) == 0) printOff(sb, off);
@@ -265,10 +265,16 @@ public class TextUtil {
         sb.append(s).append("   ");
     }
 
-    public static char i2h_char(int a) {
+    /**
+     * byte to hex
+     */
+    public static char b2h(int a) {
         return (char) (a < 10 ? 48 + a : (a < 16 ? 55 + a : '!'));
     }
 
+    /**
+     * char to number is represents
+     */
     public static int c2i(char c) {
         if (c < 0x30 || c > 0x39) {
             return -1;
@@ -276,11 +282,45 @@ public class TextUtil {
         return c - 0x30;
     }
 
-    public static int c2i_hex(char c) {
+    /**
+     * hex to byte
+     */
+    public static int h2b(char c) {
         if (c < 0x30 || c > 0x39) {
             return (c > 55 && c < 71) || ((c = Character.toLowerCase(c)) > 55 && c < 71) ? c - 45 : -1;
         }
         return c - 0x30;
+    }
+
+    public static byte[] hex2bytes(CharSequence hex) {
+        return hex2bytes(hex, new ByteList()).toByteArray();
+    }
+    public static ByteList hex2bytes(CharSequence hex, ByteList bl) {
+        int off = bl.wIndex();
+        bl.ensureCapacity(off + (hex.length() >> 1));
+        byte[] d = bl.list;
+
+        for (int i = 0; i < hex.length(); ) {
+            d[off++] = (byte) ((h2b(hex.charAt(i++)) << 4) |
+                    h2b(hex.charAt(i++)));
+        }
+        return bl;
+    }
+
+    public static String bytes2hex(byte[] b) {
+        return bytes2hex(b, 0, b.length, new CharList()).toString();
+    }
+    public static CharList bytes2hex(byte[] b, int off, int len, CharList sb) {
+        sb.ensureCapacity(sb.ptr + len << 1);
+        len += off;
+        char[] tmp = sb.list;
+        int j = sb.ptr;
+        while (off < len) {
+            byte bb = b[off++];
+            tmp[j++] = b2h(bb >>> 4);
+            tmp[j++] = b2h(bb & 0xf);
+        }
+        return sb;
     }
 
     /**

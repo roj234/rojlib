@@ -44,10 +44,10 @@ public class HttpServer implements Runnable {
     static final boolean CheckDDOS = false;
     final Map<String, MutableInt> connecting = new TimedHashMap<>(1000);
 
-    final ServerSocket   socket;
-    final SocketFactory  factory;
-    final Router  router;
-    final FDCLoop<RequestHandler> proc;
+    final ServerSocket socket;
+    final SocketFactory factory;
+    final Router router;
+    final FDCLoop<RequestHandler> loop;
 
     public HttpServer(InetSocketAddress address, int conn, Router router) throws IOException {
         this(address, conn, router, SocketFactory.PLAIN_FACTORY);
@@ -61,11 +61,15 @@ public class HttpServer implements Runnable {
         this.router = router;
 
         int cpus = Runtime.getRuntime().availableProcessors();
-        this.proc = new FDCLoop<>(null, "Http Connection #", cpus, 30000, 100);
+        this.loop = new FDCLoop<>(null, "Http Worker", cpus, 30000, 100);
     }
 
     public final ServerSocket getSocket() {
         return socket;
+    }
+
+    public FDCLoop<RequestHandler> getLoop() {
+        return loop;
     }
 
     @Override
@@ -98,7 +102,7 @@ public class HttpServer implements Runnable {
                     }
                 }
 
-                proc.register(new RequestHandler(factory.wrap(c), router), null);
+                loop.register(new RequestHandler(factory.wrap(c), router), null);
             } catch (Throwable e) {
                 e.printStackTrace();
             }
@@ -107,6 +111,6 @@ public class HttpServer implements Runnable {
 
     public void stop() throws IOException {
         socket.close();
-        proc.shutdown();
+        loop.shutdown();
     }
 }

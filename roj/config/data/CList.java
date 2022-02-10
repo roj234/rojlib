@@ -31,11 +31,11 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.serial.Serializer;
 import roj.config.serial.Serializers;
+import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -54,29 +54,30 @@ public class CList extends CEntry implements Iterable<CEntry> {
         this.list = new ArrayList<>(size);
     }
 
-    public CList(List<CEntry> list) {
-        this.list = list;
+    @SuppressWarnings("unchecked")
+    public CList(List<? extends CEntry> list) {
+        this.list = (List<CEntry>) list;
     }
 
     public static CList of(Object... objects) {
-        CList list = new CList(objects.length);
-        for (Object o : objects) {
-            list.add(wrap(o));
-        }
-        return list;
+        return CEntry.wrap(objects).asList();
     }
 
-    static CList _fromBinary(int type, ByteList r) {
+    static CList _fromBinary(int type, ByteList r, Structs s) {
         int cap = r.readVarInt(false);
         List<CEntry> list = new ArrayList<>(cap);
         if (type == 0) {
             while (cap-- > 0)
-                list.add(fromBinary(r));
+                list.add(fromBinary(r, s));
         } else {
-            switch (Type.VALUES[type - 1]) {
+            switch (Type.VALUES[--type]) {
                 case BOOL:
                     while (cap-- > 0)
                         list.add(CBoolean.valueOf(r.readBit1() != 0));
+                    if (r.bitIndex != 0) {
+                        r.bitIndex = 0;
+                        r.rIndex++;
+                    }
                     break;
                 case INTEGER:
                     while (cap-- > 0)
@@ -89,14 +90,25 @@ public class CList extends CEntry implements Iterable<CEntry> {
                 case OBJECT:
                 case MAP:
                     while (cap-- > 0) {
+                        if (s != null) {
+                            int rid = r.readUnsignedByte();
+                            if (rid != Type.MAP.ordinal()) {
+                                CMapping m = s.fromBinary(rid, r);
+                                if (m == null)
+                                    throw new IllegalArgumentException("Illegal struct descriptor");
+                                list.add(m);
+                                continue;
+                            }
+                        }
+
                         int cap1 = r.readVarInt(false);
                         Map<String, CEntry> map = new MyHashMap<>(cap1);
                         while (cap1-- > 0) {
-                            map.put(r.readVarIntUTF(), fromBinary(r));
+                            map.put(r.readVarIntUTF(), fromBinary(r, s));
                         }
 
                         CEntry x = map.get("==");
-                        if (type - 1 == Type.OBJECT.ordinal() && x != null) {
+                        if (type == Type.OBJECT.ordinal() && x != null) {
                             Serializer<?> deser = Serializers.DEFAULT.find(x.asString());
                             if (deser != null) {
                                 list.add(new CObject<>(map, deser));
@@ -145,12 +157,12 @@ public class CList extends CEntry implements Iterable<CEntry> {
         return list.spliterator();
     }
 
-    public final CList add(@Nullable CEntry entry) {
+    public final CList add(CEntry entry) {
         list.add(entry == null ? CNull.NULL : entry);
         return this;
     }
 
-    public final void add(@Nonnull String s) {
+    public final void add(String s) {
         list.add(CString.valueOf(s));
     }
 
@@ -170,7 +182,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
         list.add(CBoolean.valueOf(b));
     }
 
-    public final void set(int index, @Nullable CEntry entry) {
+    public final void set(int index, CEntry entry) {
         list.set(index, entry == null ? CNull.NULL : entry);
     }
 
@@ -221,6 +233,18 @@ public class CList extends CEntry implements Iterable<CEntry> {
         return numberList.toArray();
     }
 
+    public final void addAll(CList list) {
+        this.list.addAll(list.list);
+    }
+
+    public final List<CEntry> raw() {
+        return list;
+    }
+
+    public final void clear() {
+        list.clear();
+    }
+
     @Nonnull
     @Override
     public final CList asList() {
@@ -254,23 +278,17 @@ public class CList extends CEntry implements Iterable<CEntry> {
                 }
                 sb.delete(sb.length() - 1, sb.length());
             } else {
-                if (depth > 0) sb.append('\n');
+                sb.append('\n');
                 for (int j = 0; j < list.size(); j++) {
                     CEntry entry = list.get(j);
-                    if (depth > 0) {
-                        for (int i = 0; i < depth + 4; i++) {
-                            sb.append(' ');
-                        }
+                    for (int i = 0; i < depth + 4; i++) {
+                        sb.append(' ');
                     }
                     entry.toJSON(sb, depth + 4).append(",\n");
                 }
-                if (depth > 0) {
-                    sb.delete(sb.length() - 2, sb.length() - 1);
-                    for (int i = 0; i < depth; i++) {
-                        sb.append(' ');
-                    }
-                } else {
-                    sb.delete(sb.length() - 2, sb.length());
+                sb.delete(sb.length() - 2, sb.length() - 1);
+                for (int i = 0; i < depth; i++) {
+                    sb.append(' ');
                 }
             }
         }
@@ -325,7 +343,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
     @Override
     @SuppressWarnings("fallthrough")
-    public final void toBinary(ByteList w) {
+    public final void toBinary(ByteList w, Structs struct) {
         int iType = -1;
         List<CEntry> list = this.list;
         for (int i = 0; i < list.size(); i++) {
@@ -341,7 +359,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
         Type type = iType >= 0 ? Type.VALUES[iType] : null;
         if (type == null) {
             for (int i = 0; i < list.size(); i++) {
-                list.get(i).toBinary(w);
+                list.get(i).toBinary(w, struct);
             }
             return;
         } else if (type == Type.NULL) {
@@ -366,10 +384,16 @@ public class CList extends CEntry implements Iterable<CEntry> {
                 case OBJECT:
                     el.asObject(Object.class).serialize();
                 case MAP:
-                    Map<String, CEntry> map = el.asMap().raw();
-                    w.putVarInt(map.size(), false);
-                    for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-                        entry.getValue().toBinary(w.putVarIntUTF(entry.getKey()));
+                    if (struct == null || !struct.toBinary(el.asMap(), w)) {
+                        if (struct != null) w.put((byte) el.getType().ordinal());
+
+                        Map<String, CEntry> map = el.asMap().raw();
+                        w.putVarInt(map.size(), false);
+                        if (!map.isEmpty()) {
+                            for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                                entry.getValue().toBinary(w.putVarIntUTF(entry.getKey()), struct);
+                            }
+                        }
                     }
                     break;
                 case LONG:
@@ -401,17 +425,5 @@ public class CList extends CEntry implements Iterable<CEntry> {
     @Override
     public final int hashCode() {
         return list != null ? list.hashCode() : 0;
-    }
-
-    public final void addAll(CList list) {
-        this.list.addAll(list.list);
-    }
-
-    public final List<CEntry> raw() {
-        return list;
-    }
-
-    public final void clear() {
-        list.clear();
     }
 }

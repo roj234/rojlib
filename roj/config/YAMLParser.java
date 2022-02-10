@@ -267,7 +267,7 @@ public class YAMLParser extends Parser {
                     CEntry entry = wr.anchors.get(name.val());
                     if(entry == null)
                         throw wr.err("不存在的锚点 " + name.val());
-                    if(!entry.getType().fits(Type.MAP))
+                    if(!entry.getType().isSimilar(Type.MAP))
                         throw wr.err("锚点 " + name.val() + " 无法转换为map");
                     map.raw().putAll(entry.asMap().raw());
                     break;

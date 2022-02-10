@@ -442,7 +442,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         if (file.attr.uSize > MAXIMUM_BYTE_ARRAY_LENGTH)
             throw new ZipException("Compressed size >= 2Gbytes(1 << 30) limitation, streaming method is required!");
 
-        return file.data = getFileData(file, new ByteList((int) file.attr.uSize)).getByteArray();
+        return file.data = getFileData(file, new ByteList((int) file.attr.uSize)).toByteArray();
     }
 
     public ByteList getFileData(EFile file, ByteList buf) throws IOException {
@@ -755,23 +755,24 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                 ByteList buf = this.buffer;
                 buf.clear();
                 buf.ensureCapacity(2048);
+                byte[] list = buf.list;
                 if (file.compress) {
                     Deflater def = this.deflater;
-                    final int d2 = buf.list.length / 2;
+                    final int d2 = list.length / 2;
                     int read;
-                    while ((read = in.read(buf.list, 0, d2)) > 0) {
-                        def.setInput(buf.list, 0, read);
-                        crc.update(buf.list, 0, read);
-                        while (!deflater.needsInput()) {
-                            int len = def.deflate(buf.list, d2, buf.list.length - d2);
-                            appender.write(buf.list, 0, len);
+                    while ((read = in.read(list, 0, d2)) > 0) {
+                        def.setInput(list, 0, read);
+                        crc.update(list, 0, read);
+                        while (!def.needsInput()) {
+                            int len = def.deflate(list, d2, list.length - d2);
+                            appender.write(list, 0, len);
                         }
                     }
                     def.finish();
 
                     while (!def.finished()) {
-                        int len = def.deflate(buf.list, 0, buf.list.length);
-                        appender.write(buf.list, 0, len);
+                        int len = def.deflate(list, 0, list.length);
+                        appender.write(list, 0, len);
                     }
 
                     attr.uSize = def.getBytesRead();
@@ -779,9 +780,9 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                     def.reset();
                 } else {
                     int read;
-                    while ((read = in.read(buf.list, 0, buf.list.length)) > 0) {
-                        appender.write(buf.list, 0, read);
-                        crc.update(buf.list, 0, read);
+                    while ((read = in.read(list, 0, list.length)) > 0) {
+                        appender.write(list, 0, read);
+                        crc.update(list, 0, read);
                         attr.cSize += read;
                     }
                     attr.uSize = attr.cSize;
@@ -866,7 +867,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
     public void setManifest(Manifest mf) throws IOException {
         ByteList bl = new ByteList();
-        mf.write(bl.asOutputStream());
+        mf.write(bl);
         setFileData("META-INF/MANIFEST.MF", bl);
     }
 
@@ -1113,7 +1114,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         @SuppressWarnings("fallthrough")
         void readExtra(ByteList extra, boolean checkZIP64) {
-            extra.rIndex(0);
+            extra.rIndex = 0;
             while (extra.remaining() > 4) {
                 int flag = extra.readUShortLE();
                 int length = extra.readUShortLE();
@@ -1164,7 +1165,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
 
         @SuppressWarnings("fallthrough")
         long readExtra(ByteList extra, boolean checkZIP64, long header) {
-            extra.rIndex(0);
+            extra.rIndex = 0;
             while (extra.remaining() > 4) {
                 int flag = extra.readUShortLE();
                 int length = extra.readUShortLE();

@@ -25,18 +25,32 @@
  */
 package roj.net.http.serv;
 
+import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.WrappedSocket;
 import roj.net.http.Code;
 import roj.net.http.Headers;
-import roj.net.http.Shared;
+import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.ByteList;
+import roj.util.FastThreadLocal;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.TimeZone;
+import java.util.zip.Deflater;
 
 public class Reply {
+    public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+    public static final ACalendar        RFC_DATE    = new ACalendar(TimeZone.getTimeZone("GMT"));
+
+    static final class Local {
+        ACalendar date = RFC_DATE.copy();
+        Deflater def = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+    }
+    static final FastThreadLocal<Local> LocalShared = FastThreadLocal.withInitial(Local::new);
+
     static final String CRLF = "\r\n";
 
     private final ByteList hdr;
@@ -56,7 +70,7 @@ public class Reply {
         this.response = response;
     }
 
-    public Reply(String text) {
+    public Reply(CharSequence text) {
         this.hdr = new ByteList(128);
         this.hdr.putAscii("HTTP/1.1 200 OK\r\nServer: Async/2.0\r\nConnection: keep-alive\r\n");
         this.response = new StringResponse(text);
@@ -98,15 +112,16 @@ public class Reply {
     public void prepare() throws IOException {
         if (response != null) response.prepare();
         if (buf == null) {
-            CharList tmp = (CharList) Shared.SYNC_BUFFER.get()[2];
-            tmp.ensureCapacity(100);
+            CharList tmp = IOUtil.SharedUTFCoder.get().charBuf;
             tmp.clear();
-            //hdr.putAscii("Date: Mon, 24 Jan 2022 14:45:28 GMT\r\n");
+            tmp.ensureCapacity(100);
 
-            if (response != null) {
-                response.writeHeader(tmp);
-            }
+            if (response != null) response.writeHeader(tmp);
+            else tmp.append("Content-Length: 0\r\n");
             headers.encode(tmp);
+            //if (!headers.containsKey("Date")) {
+            //    hdr.putAscii("Date: ").putAscii(RFC_DATE.copy().toRFCDate(System.currentTimeMillis()).append("\r\n"));
+            //}
             ByteList.writeUTF(hdr, tmp.append("\r\n"), -1);
             buf = ByteBuffer.wrap(hdr.list, 0, hdr.wIndex());
         }

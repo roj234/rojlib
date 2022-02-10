@@ -61,6 +61,7 @@ class IDEAHelper {
                     return;
             }
         }
+
         if(!remove) {
             XElement el = new XElement("sourceFolder");
             el.setAttribute("isTestSource", "false");

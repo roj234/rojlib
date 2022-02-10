@@ -27,7 +27,6 @@ package roj.net.http;
 
 import roj.config.ParseException;
 import roj.math.Version;
-import roj.net.Notify;
 
 /**
  * @author Roj234
@@ -38,9 +37,8 @@ public class HttpHead {
     public final boolean isRequest;
     public final Headers headers;
 
-    public HttpHead(Headers headers, boolean request, String... abc) {
-        assert abc.length == 3;
-        this.abc = abc;
+    public HttpHead(Headers headers, boolean request, String a, String b, String c) {
+        this.abc = new String[] { a, b, c };
         this.isRequest = request;
         this.headers = headers;
     }
@@ -83,51 +81,19 @@ public class HttpHead {
     }
 
     public static HttpHead parse(HttpLexer lexer) throws ParseException {
-        try {
-            String version_method = lexer.readHttpWord();
+        String version_method = lexer.readHttpWord();
 
-            String code_url = lexer.readHttpWord();
-            lexer.index++;
-            String codeDesc_version = lexer.readLine();
+        String code_url = lexer.readHttpWord();
+        lexer.index++;
+        String codeDesc_version = lexer.readLine();
 
-            boolean request = false;
-            if (version_method == null || !version_method.startsWith("HTTP/")) {
-                if (!codeDesc_version.startsWith("HTTP/")) throw lexer.err("Illegal header " + version_method);
-                request = true;
-            }
-
-            return new HttpHead(parseHeadFields(lexer), request, version_method.substring(version_method.indexOf(' ') + 1), code_url, codeDesc_version);
-        } catch (Notify notify) {
-            String code;
-            switch (notify.code) {
-                case -127:
-                    code = "Received data > Max receive size";
-                    break;
-                case -128:
-                    code = "Timeout";
-                    break;
-                default:
-                    code = "Unknown";
-                    break;
-            }
-            throw lexer.err(code, notify);
+        boolean request = false;
+        if (version_method == null || !version_method.startsWith("HTTP/")) {
+            if (!codeDesc_version.startsWith("HTTP/")) throw lexer.err("Illegal header " + version_method);
+            request = true;
         }
-    }
 
-    public static Headers parseHeadFields(HttpLexer lexer) throws ParseException {
-        Headers headers = new Headers();
-        while (true) {
-            String t = lexer.readHttpWord();
-            if (t == Shared._ERROR) {
-                throw lexer.err("Unexpected " + t);
-            } else if (t == Shared._SHOULD_EOF) {
-                break;
-            } else if (t == null) {
-                break;
-            } else {
-                headers.add(t, lexer.readHttpWord());
-            }
-        }
-        return headers;
+        return new HttpHead(new Headers().readFromLexer(lexer), request,
+                            version_method.substring(version_method.indexOf(' ') + 1), code_url, codeDesc_version);
     }
 }

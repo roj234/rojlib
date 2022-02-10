@@ -31,6 +31,7 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -44,10 +45,6 @@ import static roj.collect.IntMap.NOT_USING;
  * 基于Hash-like机制实现的较高速Map
  */
 public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K, V>> {
-    public void _int_plus_size() {
-        size++;
-    }
-
     /**
      * Both Add and Remove
      */
@@ -656,6 +653,21 @@ public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K
             return true;
         }
         return false;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void forEach(BiConsumer<? super K, ? super V> action) {
+        Entry<?, ?>[] es = this.entries;
+        if (es == null) return;
+        for (int i = 0; i < length; i++) {
+            Entry<K, V> e = (Entry<K, V>) es[i];
+            if (e == null) continue;
+            while (e != null) {
+                action.accept(e.k, e.v);
+                e = e.next;
+            }
+        }
     }
 
     @Override

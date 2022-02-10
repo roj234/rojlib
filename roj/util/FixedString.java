@@ -59,7 +59,7 @@ public class FixedString {
         String string;
         switch (len) {
             case 1:
-                sLen = r.readUByte();
+                sLen = r.readUnsignedByte();
                 break;
             case 2:
                 sLen = r.readUnsignedShort();

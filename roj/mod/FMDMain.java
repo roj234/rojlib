@@ -477,7 +477,7 @@ public final class FMDMain {
         } else {
             Shared.load_S2M_Map();
             for(CEntry ce : MAIN_CONFIG.getDot("预AT.编译期+运行期").asMap().values()) {
-                if(ce.getType().fits(Type.MAP))
+                if(ce.getType() == Type.MAP)
                     loadATMap(ce.asMap(), true);
             }
         }
@@ -1728,7 +1728,7 @@ public final class FMDMain {
             List<CEntry> rl = list.raw();
             for (int i = 0; i < rl.size(); i++) {
                 CEntry entry = rl.get(i);
-                if (entry.getType().fits(Type.STRING)) {
+                if (entry.getType() == Type.STRING) {
                     String s = entry.asString().trim();
                     if (s.length() > 0)
                         set.accept(s);

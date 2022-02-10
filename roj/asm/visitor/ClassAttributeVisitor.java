@@ -29,7 +29,7 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
-import roj.util.ByteList.WriteOnly;
+import roj.util.ByteList.Streamed;
 
 /**
  * Class attribute visitor
@@ -91,7 +91,7 @@ public class ClassAttributeVisitor extends AttributeVisitor {
             case "Deprecated":
                 if(length != 0)
                     throw new IllegalArgumentException("Deprecated.length must be zero");
-                return visitKnown(new AttrUnknown("Deprecated", new WriteOnly()));
+                return visitKnown(new AttrUnknown("Deprecated", new Streamed()));
             case "SourceDebugExtension":
             default:
                 return visitUnknown(name, length);

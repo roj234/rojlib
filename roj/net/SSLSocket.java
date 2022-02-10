@@ -27,7 +27,6 @@ package roj.net;
 
 
 import roj.io.NIOUtil;
-import roj.net.http.Shared;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -389,7 +388,7 @@ public class SSLSocket extends PlainSocket {
         if (!hsDone) throw new SSLException("Not handshake");
         if (!dataFlush()) return 0;
 
-        int cap = Math.min(Shared.WRITE_MAX, max);
+        int cap = Math.min(WRITE_ONCE, max);
         if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
         else wBuf.clear();
         int len = src.read(wBuf.array(), 0, cap);

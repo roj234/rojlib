@@ -1271,10 +1271,11 @@ final class Layer3 extends Layer {
         // 更好的方法是放在解码下一帧主数据之前处理，如果位流错误，可以顺便纠正。
 
         try {
-            filterCh0.forEnd();
+            filterCh0.await();
             if (channels == 2)
-                filterCh1.forEnd();
+                filterCh1.await();
         } catch (InterruptedException e) {
+            e.printStackTrace();
             close();
             return off;
         }

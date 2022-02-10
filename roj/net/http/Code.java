@@ -30,7 +30,7 @@ import roj.collect.CharMap;
 /**
  * A helper class which define the HTTP response codes
  */
-public class Code {
+public final class Code {
     public static final int
     SWITCHING_PROTOCOL = 101,
 

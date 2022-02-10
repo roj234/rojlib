@@ -27,7 +27,6 @@ package roj.misc;
 
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
-import roj.net.http.WebSocketManager;
 import roj.net.http.serv.GZipFileResponse;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.Response;
@@ -48,13 +47,8 @@ public class HttpExample {
         Response gzc = new GZipFileResponse(new File("E:/章节修复.txt"));
 
         SleepingBeauty.sleep();
-        WebSocketManager man = new WebSocketManager(null, 4);
         HttpServer server = new HttpServer(new InetSocketAddress(2333), 2048,
                                            (ch, request, handle) -> {
-            if ("websocket".equals(request.header("Upgrade"))) {
-                return man.switchToWebsocket(request, handle);
-            }
-
             Reply reply;
             int action = request.action();
 

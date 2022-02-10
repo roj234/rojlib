@@ -26,6 +26,7 @@
 package roj.config.data;
 
 import roj.config.YAMLParser;
+import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.math.MathUtils;
 import roj.util.ByteList;
@@ -89,23 +90,23 @@ public final class CString extends CEntry {
     }
 
     @Override
-    public boolean equalsTo(CEntry entry) {
-        return entry.getType().fits(Type.STRING) && entry.asString().equals(value);
-    }
-
-    @Override
     public int hashCode() {
         return value == null ? 0 : value.hashCode();
     }
 
     @Override
+    public boolean isSimilar(CEntry o) {
+        return o.getType() == Type.STRING || (o.getType().isSimilar(Type.STRING) && o.asString().equals(value));
+    }
+
+    @Override
     public StringBuilder toYAML(StringBuilder sb, int depth) {
-        if(!YAMLADDITIONALCHECK || !rawSafe(value))
+        if(!NO_RAW_CHECK || !rawSafe(value))
             return toJSON(sb, depth);
         return sb.append(value);
     }
 
-    static final boolean YAMLADDITIONALCHECK = System.getProperty("roj.config.noYamlAddChk") == null;
+    static final boolean NO_RAW_CHECK = System.getProperty("roj.config.noRawCheck") == null;
     static boolean rawSafe(CharSequence value) {
         if(value.length() == 0)
             return false;
@@ -146,18 +147,15 @@ public final class CString extends CEntry {
     }
 
     @Override
+    protected StringBuilder toXML(StringBuilder sb, int depth) {
+        return !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ?
+                sb.append("<![CDATA[").append(value).append("]]>") :
+                sb.append(value);
+    }
+
+    @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
         return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
-    }
-
-    @Override
-    public StringBuilder toINI(StringBuilder sb, int depth) {
-        return toJSON(sb, depth);
-    }
-
-    @Override
-    public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
-        return toJSON(sb, depth);
     }
 
     @Override
@@ -166,8 +164,7 @@ public final class CString extends CEntry {
     }
 
     @Override
-    public void toBinary(ByteList w) {
+    public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.STRING.ordinal()).putVarIntUTF(value);
     }
-
 }

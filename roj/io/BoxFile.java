@@ -175,7 +175,7 @@ public class BoxFile implements Closeable {
         uc.byteBuf.clear();
         ByteList bl = get(name, uc.byteBuf);
         if(bl == null) return null;
-        return bl.getByteArray();
+        return bl.toByteArray();
     }
 
     public String getUTF(String name) throws IOException {

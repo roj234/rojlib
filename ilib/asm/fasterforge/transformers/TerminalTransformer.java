@@ -26,6 +26,8 @@
 package ilib.asm.fasterforge.transformers;
 
 import ilib.api.ContextClassTransformer;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstRef;
@@ -39,9 +41,6 @@ import roj.asm.visitor.AsIsAttributeVisitor;
 import roj.asm.visitor.CodeVisitor;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 
 import java.util.List;
 
@@ -105,7 +104,7 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
                         bw.clear();
                         visit(cw);
                         if (dirty) {
-                            attr.getRawData().setValue(bw.toByteArray());
+                            attr.getRawData().setArray(bw.toByteArray());
                         }
                     }
                 }

@@ -38,7 +38,7 @@ import roj.asm.util.ExceptionEntry;
 import roj.asm.util.InsnList;
 import roj.collect.*;
 import roj.util.ByteList;
-import roj.util.ByteList.WriteOnly;
+import roj.util.ByteList.Streamed;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
@@ -238,7 +238,7 @@ public class AttrCode extends Attribute {
         }
 
         int pos = 0;
-        ByteList w = new WriteOnly();
+        ByteList w = new Streamed();
 
         for (int i = 0; i < insn.size(); i++) {
             InsnNode node = insn.get(i);

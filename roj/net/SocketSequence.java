@@ -26,14 +26,10 @@
 package roj.net;
 
 import roj.concurrent.OperationDone;
-import roj.net.http.serv.Router;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.IntStream;
@@ -42,67 +38,63 @@ import java.util.stream.IntStream;
  * @author Roj234
  * @since  2021/2/4 15:43
  */
-public class StreamLikeSequence implements CharSequence {
+public final class SocketSequence implements CharSequence {
     private final boolean async;
+    private WrappedSocket ch;
+    private long dead;
+    private int max;
 
-    WrappedSocket socket;
-    long time;
-    int maxRecv;
-
-    public StreamLikeSequence(boolean async) {
+    public SocketSequence(boolean async) {
         this.async = async;
     }
 
-    public StreamLikeSequence init(WrappedSocket socket, Router router) {
-        return init(socket, router.readTimeout(), router.maxLength());
-    }
-
-    public StreamLikeSequence init(WrappedSocket socket, int timeout, int maxRecv) {
-        if (!async || time == 0)
-            this.time = System.currentTimeMillis() + (timeout <= 0 ? 5000 : timeout);
-        this.socket = socket;
-        this.maxRecv = maxRecv;
+    public SocketSequence init(WrappedSocket ch, int timeout, int max) {
+        if (!async || dead == 0)
+            this.dead = System.currentTimeMillis() + (timeout <= 0 ? 5000 : timeout);
+        this.ch = ch;
+        this.max = max <= 0 ? Integer.MAX_VALUE : max;
         return this;
     }
 
     public void release() {
-        this.socket = null;
+        this.ch = null;
     }
 
     @Override
     public int length() {
-        return maxRecv;
+        return max;
     }
 
     @Override
     public char charAt(int index) {
         fill(index + 1);
-        return (char) socket.buffer().get(index);
+        return (char) ch.buffer().get(index);
     }
 
     private void fill(int want) {
-        if(maxRecv <= 0) return;
-        ByteBuffer buf = socket.buffer();
+        if(max <= 0) return;
+
+        ByteBuffer buf = ch.buffer();
         try {
             while (buf.position() < want) {
-                if (System.currentTimeMillis() > time) {
-                    throw new SocketTimeoutException();
+                if (System.currentTimeMillis() > dead) {
+                    throw new IOException("timeout");
                 }
 
-                if(buf.position() > maxRecv) {
-                    throw new BufferOverflowException();
+                if(buf.position() > max) {
+                    throw new IOException("overflow");
                 }
 
-                int read = socket.read();
+                int read = ch.read();
                 if (read == 0) {
                     if(async) throw OperationDone.INSTANCE;
                     LockSupport.parkNanos(10000);
                 } else if (read < 0) {
                     if(read == -1) {
-                        maxRecv = -1;
+                        max = buf.position();
                         return;
                     }
-                    throw new SocketException("socket.read() got " + read);
+                    throw new IOException("read() got " + read);
                 }
             }
         } catch (IOException e) {
@@ -128,6 +120,11 @@ public class StreamLikeSequence implements CharSequence {
     @Nonnull
     @Override
     public String toString() {
-        return socket.buffer().asCharBuffer().toString();
+        ByteBuffer bb = ch.buffer();
+        char[] data = new char[bb.position()];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (char) bb.get(i);
+        }
+        return new String(data);
     }
 }
