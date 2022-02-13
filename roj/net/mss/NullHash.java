@@ -33,10 +33,8 @@ import java.nio.ByteBuffer;
  * @author Roj233
  * @since 2021/12/29 16:10
  */
-public final class NullHash implements MSSHash {
-    public static final MSSHash NULL_HASH = new NullHash();
-
-    private NullHash() {}
+final class NullHash implements MSSHash {
+    NullHash() {}
 
     @Override
     public int length() {
@@ -44,15 +42,15 @@ public final class NullHash implements MSSHash {
     }
 
     @Override
-    public void writeHash(ByteBuffer payload, ByteBuffer outBuf, CipheR encoder) {}
+    public void write(ByteBuffer payload, ByteBuffer outBuf, CipheR encoder) {}
 
     @Override
-    public Object readHash(ByteBuffer inBuf, CipheR decoder) {
+    public Object preRead(ByteBuffer inBuf, CipheR decoder) {
         return null;
     }
 
     @Override
-    public boolean checkHash(Object hash, ByteBuffer payload) {
+    public boolean check(Object hash, ByteBuffer payload) {
         return true;
     }
 

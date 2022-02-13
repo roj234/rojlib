@@ -26,6 +26,7 @@
 package roj.net.mss;
 
 import roj.crypt.CipheR;
+import roj.util.ByteList;
 import roj.util.EmptyArrays;
 
 import javax.crypto.Cipher;
@@ -42,30 +43,17 @@ import java.util.Arrays;
  * @since 2021/12/22 19:18
  */
 public final class JCiphers implements MSSCiphers {
-    public static final JCiphers AES_CFB8 = new JCiphers("AES/CFB8/NoPadding", 32);
-    public static final JCiphers AES_GCM = new JCiphers("AES/GCM/NoPadding", 32);
-
     private final String alg;
-    private final int sharedKeySize;
+    private final int keySize;
 
     public JCiphers(String alg, int sharedKeySize) {
         this.alg = alg;
-        this.sharedKeySize = sharedKeySize;
+        this.keySize = sharedKeySize;
     }
 
     @Override
-    public String name() {
-        return alg;
-    }
-
-    @Override
-    public int specificationId() {
-        return 0x00000015 | (alg.hashCode() << 8);
-    }
-
-    @Override
-    public int getSharedKeySize() {
-        return sharedKeySize;
+    public int getKeySize() {
+        return keySize;
     }
 
     @Override
@@ -111,7 +99,7 @@ public final class JCiphers implements MSSCiphers {
             if (tmp.length < rm)
                 tmp = new byte[rm];
             if (in.hasArray()) {
-                int len = cip.doFinal(in.array(), in.arrayOffset() + in.position(), in.remaining(), tmp);
+                int len = cip.update(in.array(), in.arrayOffset() + in.position(), in.remaining(), tmp);
                 in.position(in.limit());
                 out.put(tmp, 0, len);
             } else {
@@ -119,10 +107,17 @@ public final class JCiphers implements MSSCiphers {
                 if (tmp.length < rm + r)
                     tmp = new byte[rm + r];
                 in.get(tmp, 0, r);
-                int len = cip.doFinal(tmp, 0, r, tmp, r);
+                int len = cip.update(tmp, 0, r, tmp, r);
                 out.put(tmp, r, len);
             }
             return CipheR.OK;
+        }
+
+        @Override
+        public void crypt(ByteList in, ByteList out) throws GeneralSecurityException {
+            out.ensureCapacity(in.wIndex());
+            int len = cip.update(in.list, in.arrayOffset(), in.wIndex(), out.list, out.wIndex());
+            out.wIndex(out.wIndex() + len);
         }
     }
 }

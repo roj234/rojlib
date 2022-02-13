@@ -89,8 +89,8 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
                 }
             }
         } catch (Throwable e) {
-            syncPrint(this + ": 异常 " + e.getMessage());
             if (e.getClass() != IOException.class) e.printStackTrace();
+            else syncPrint(this + ": 异常 " + e.getMessage());
 
             try {
                 write1(ch, (byte) PS_ERROR_IO);
@@ -130,11 +130,12 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
     ByteBuffer wBuf;
     public void tick() throws IOException {
         if (ch == null) return;
-        ch.dataFlush();
-
         if (state != null) {
             state.tick(this);
-        }
+            if (state instanceof Logout) return;
+        } else return;
+
+        ch.dataFlush();
 
         if (clientId == 0 && !pipes.isEmpty()) {
             long time = System.currentTimeMillis();
@@ -178,6 +179,7 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
             ch.write(b);
             if (b.hasRemaining()) {
                 wTimer = 0;
+                key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
             } else if (!packets.hasMore())
                 key.interestOps(SelectionKey.OP_READ);
         }

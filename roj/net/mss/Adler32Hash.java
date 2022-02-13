@@ -44,7 +44,7 @@ public class Adler32Hash extends Adler32 implements MSSHash {
     }
 
     @Override
-    public void writeHash(ByteBuffer payload, ByteBuffer outBuf, CipheR encoder) throws GeneralSecurityException {
+    public void write(ByteBuffer payload, ByteBuffer outBuf, CipheR encoder) throws GeneralSecurityException {
         reset();
         int p = payload.position();
         update(payload);
@@ -57,7 +57,7 @@ public class Adler32Hash extends Adler32 implements MSSHash {
     }
 
     @Override
-    public Object readHash(ByteBuffer inBuf, CipheR decoder) throws GeneralSecurityException {
+    public Object preRead(ByteBuffer inBuf, CipheR decoder) throws GeneralSecurityException {
         int lim = inBuf.limit();
         inBuf.limit(inBuf.position() + 4);
         decoder.crypt(inBuf, tmp4a);
@@ -68,7 +68,7 @@ public class Adler32Hash extends Adler32 implements MSSHash {
     }
 
     @Override
-    public boolean checkHash(Object _hash, ByteBuffer payload) {
+    public boolean check(Object _hash, ByteBuffer payload) {
         if (_hash != tmp4a) throw new IllegalArgumentException();
         int hash = tmp4a.getInt();
         tmp4a.clear();

@@ -66,7 +66,7 @@ final class Handshake extends Stated {
             }
 
             if (rb.getInt(0) != MAGIC) {
-                state((byte) HS_ERR_TIMEOUT, ch);
+                state((byte) HS_ERR_PROTOCOL, ch);
                 return null;
             }
 
@@ -111,6 +111,6 @@ final class Handshake extends Stated {
 
     static void state(byte id, WrappedSocket ch) throws IOException {
         if (ch.handShake()) write1(ch, id);
-        else write1Direct(ch, (byte) HS_ERR_TIMEOUT);
+        else write1Direct(ch, id);
     }
 }

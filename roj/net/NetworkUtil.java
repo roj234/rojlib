@@ -33,7 +33,8 @@ import roj.crypt.SM4;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.mss.MSSEngineClient;
-import roj.net.mss.PreSharedPubKey;
+import roj.net.mss.MSSPubKey;
+import roj.net.mss.SimplePubKey;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -310,7 +311,9 @@ public final class NetworkUtil {
 
             KeyFactory kf = KeyFactory.getInstance("RSA");
             PublicKey pk = kf.generatePublic(new RSAPublicKeySpec(mod, exp));
-            MSSEngineClient.setDefaultKeyFormats(new PreSharedPubKey(pk));
+            MSSEngineClient._setDefaultPSK(new MSSPubKey[]{
+                new SimplePubKey(233, pk)
+            });
         } catch (IOException | GeneralSecurityException e) {
             e.printStackTrace();
             System.err.println("MSS引擎预共享密钥初始化失败");
@@ -348,7 +351,7 @@ public final class NetworkUtil {
                             .access(InetAddress.class, new String[] {"addressCache", "negativeCache"},
                                     new String[] {"getHostCache", "getNegativeCache"}, null)
                             .i_access("java.net.InetAddress$Cache", "cache",
-                                      new Type("java/util/LinkedHashMap"), "getInternalMap", null)
+                                      new Type("java/util/LinkedHashMap"), "getInternalMap", null, false)
                             .build();
                     } catch (Throwable e) {
                         CacheUtil = (a, b) -> null;

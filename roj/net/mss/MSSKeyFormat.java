@@ -23,20 +23,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package roj.crypt;
+package roj.net.mss;
 
-import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
 
 /**
  * @author Roj233
- * @since 2021/12/28 0:05
+ * @since 2021/12/22 12:54
  */
-public interface DeCipher {
+public interface MSSKeyFormat<T> extends MSSClientKey {
     String name();
-    void setKey(byte[] key, int flags);
-    default void setOption(String key, Object value) {}
-    int getBlockSize();
+    int formatId();
 
-    int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException;
+    byte[] encode(T publicKey) throws GeneralSecurityException;
+    MSSPubKey decode(byte[] data) throws GeneralSecurityException;
+
+    void checkPrivateKey(PrivateKey key) throws GeneralSecurityException;
 }

@@ -1,12 +1,15 @@
 package roj.math;
 
 
+import roj.asm.type.ParamHelper;
+import roj.asm.util.AccessFlag;
 import roj.reflect.DirectAccessor;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * Mutable Big Integer Accessor
@@ -16,23 +19,23 @@ import java.util.ArrayList;
  */
 public final class MutableBigInteger {
     public MutableBigInteger() {
-        ptr = o.init1();
+        ptr = o._n1();
     }
 
     public MutableBigInteger(int val) {
-        ptr = o.init2(val);
+        ptr = o._n2(val);
     }
 
     public MutableBigInteger(int[] val) {
-        ptr = o.init3(val);
+        ptr = o._n3(val);
     }
 
     public MutableBigInteger(BigInteger b) {
-        ptr = o.init4(b);
+        ptr = o._n4(b);
     }
 
     public MutableBigInteger(MutableBigInteger val) {
-        ptr = o.init5(val.ptr);
+        ptr = o._n5(val.ptr);
     }
 
     private MutableBigInteger(Object o) {
@@ -44,98 +47,163 @@ public final class MutableBigInteger {
     }
 
     private interface Opr {
-        Object init1();
-        Object init2(int val);
-        Object init3(int[] val);
-        Object init4(BigInteger val);
-        Object init5(Object val);
-
-        BigInteger toBigInteger(Object ptr, int sign);
-        BigInteger toBigInteger(Object ptr);
-        BigDecimal toBigDecimal(Object ptr, int sign, int scale);
-        long toCompactValue(Object ptr, int sign);
+        void add(Object ptr, Object I);
+        Object toString(Object ptr);
+        int getInt(Object ptr, int I);
+        long getLong(Object ptr, int I);
         void clear(Object ptr);
-        void reset(Object ptr);
-        int compare(Object ptr, Object b);
-        int compareHalf(Object ptr, Object b);
+        int compare(Object ptr, Object I);
+        void setValue(Object ptr, int[] I, int II);
+        void setInt(Object ptr, int I, int II);
         void normalize(Object ptr);
-        int[] toIntArray(Object ptr);
-        void setInt(Object ptr, int index, int val);
-        void setValue(Object ptr, int[] val, int length);
-        void copyValue(Object ptr, Object src);
-        void copyValue(Object ptr, int[] val);
-        boolean isOne(Object ptr);
-        boolean isZero(Object ptr);
-        boolean isEven(Object ptr);
-        boolean isOdd(Object ptr);
-        boolean isNormal(Object ptr);
-        void safeRightShift(Object ptr, int n);
-        void rightShift(Object ptr, int n);
-        void safeLeftShift(Object ptr, int n);
-        void leftShift(Object ptr, int n);
-        void add(Object ptr, Object addend);
-        void addShifted(Object ptr, Object addend, int n);
-        void addDisjoint(Object ptr, Object addend, int n);
-        void addLower(Object ptr, Object addend, int n);
-        int subtract(Object ptr, Object b);
-        void multiply(Object ptr, Object y, Object z);
-        void mul(Object ptr, int y, Object z);
-        int divideOneWord(Object ptr, int divisor, Object quotient);
-        Object divide(Object ptr, Object b, Object quotient);
-        Object divide1(Object ptr, Object b, Object quotient, boolean needRemainder);
-        Object divideKnuth(Object ptr, Object b, Object quotient);
-        Object divideKnuth1(Object ptr, Object b, Object quotient, boolean needRemainder);
-        Object divideAndRemainderBurnikelZiegler(Object ptr, Object b, Object quotient);
+        void ensureCapacity(Object ptr, int I);
+        void reset(Object ptr);
+        Object divide(Object ptr, Object I, Object II);
+        Object divide(Object ptr, Object I, Object II, boolean III);
+        long divide(Object ptr, long I, Object II);
+        Object divideAndRemainderBurnikelZiegler(Object ptr, Object I, Object II);
+        int mulsub(Object ptr, int[] I, int[] II, int III, int IV, int V);
+        boolean unsignedLongCompare(Object ptr, long I, long II);
+        Object getLower(Object ptr, int I);
+        int getLowestSetBit(Object ptr);
+        long inverseMod64(long I);
+        Object modInverse(Object ptr, Object I);
+        Object mutableModInverse(Object ptr, Object I);
+        void primitiveLeftShift(Object ptr, int I);
+        void primitiveRightShift(Object ptr, int I);
+        Object binaryGCD(Object ptr, Object I);
+        int binaryGcd(int I, int II);
+        int compareShifted(Object ptr, Object I, int II);
+        void copyAndShift(int[] I, int II, int III, int[] IV, int V, int VI);
+        int difference(Object ptr, Object I);
+        int divadd(Object ptr, int[] I, int[] II, int III);
+        int divaddLong(Object ptr, int I, int II, int[] III, int IV);
+        Object divide2n1n(Object ptr, Object I, Object II);
+        Object divide3n2n(Object ptr, Object I, Object II);
+        Object divideLongMagnitude(Object ptr, long I, Object II);
+        Object divideMagnitude(Object ptr, Object I, Object II, boolean III);
+        Object euclidModInverse(Object ptr, int I);
+        Object fixup(Object I, Object II, int III);
+        Object getBlock(Object ptr, int I, int II, int III);
+        int[] getMagnitudeArray(Object ptr);
+        int inverseMod32(int I);
+        void keepLower(Object ptr, int I);
+        Object modInverseBP2(Object I, int II);
+        Object modInverseMP2(Object ptr, int I);
+        int mulsubBorrow(Object ptr, int[] I, int[] II, int III, int IV, int V);
+        int mulsubLong(Object ptr, int[] I, int II, int III, int IV, int V);
+        void ones(Object ptr, int I);
+        long toLong(Object ptr);
+        Object toBigDecimal(Object ptr, int I, int II);
+        void safeRightShift(Object ptr, int I);
+        void addLower(Object ptr, Object I, int II);
+        int compareHalf(Object ptr, Object I);
+        void mul(Object ptr, int I, Object II);
+        void copyValue(Object ptr, Object I);
+        void copyValue(Object ptr, int[] I);
         long bitLength(Object ptr);
-        long divide2(Object ptr, long v, Object quotient);
-        long divWord(long n, int d);
-        Object hybridGCD(Object ptr, Object b);
-        int binaryGcd(int a, int b);
-        Object mutableModInverse(Object ptr, Object p);
-        Object modInverseMP2(Object ptr, int k);
-        int inverseMod32(int val);
-        long inverseMod64(long val);
-        Object modInverseBP2(Object mod, int k);
-        Object fixup(Object c, Object p, int k);
-        Object euclidModInverse(Object ptr, int k);
+        Object toBigInteger(Object ptr, int I);
+        Object toBigInteger(Object ptr);
+        int divideOneWord(Object ptr, int I, Object II);
+        long divWord(long I, int II);
+        boolean isOdd(Object ptr);
+        boolean isEven(Object ptr);
+        void rightShift(Object ptr, int I);
+        void leftShift(Object ptr, int I);
+        Object divideKnuth(Object ptr, Object I, Object II);
+        Object divideKnuth(Object ptr, Object I, Object II, boolean III);
+        int subtract(Object ptr, Object I);
+        boolean isZero(Object ptr);
+        void multiply(Object ptr, Object I, Object II);
+        void addDisjoint(Object ptr, Object I, int II);
+        boolean isNormal(Object ptr);
+        void addShifted(Object ptr, Object I, int II);
+        boolean isOne(Object ptr);
+        int[] toIntArray(Object ptr);
+        void safeLeftShift(Object ptr, int I);
+        long toCompactValue(Object ptr, int I);
+        Object hybridGCD(Object ptr, Object I);
+
+        int[] _nArrG(Object ptr);
+        void _nArrS(Object ptr, int[] arr);
+
+        Object _n1();
+        Object _n2(int val);
+        Object _n3(int[] val);
+        Object _n4(BigInteger val);
+        Object _n5(Object val);
     }
 
     private final Object ptr;
 
-    static final Opr o;
+    private static final Opr o;
     static {
-        Class<?> mb = null;
+        Class<?> mb;
         try {
             mb = Class.forName("java.math.MutableBigInteger");
         } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+            throw new Error();
         }
-        ArrayList<String> list = new ArrayList<>(20);
-        for (Method method : Opr.class.getDeclaredMethods()) {
-            if(!method.getName().startsWith("init")) {
-                list.add(method.getName());
-            }
+
+        DirectAccessor<Opr> dab = DirectAccessor.builderInternal(Opr.class).unchecked()
+            .construct(mb, "_n1", "_n2", "_n3", "_n4")
+            .construct(mb, "_n5", mb)
+            .access(mb, "value", "_nArrG", "_nArrS");
+
+        Comparator<Method> MC = (o1, o2) -> {
+            int i = o1.getName().compareTo(o2.getName());
+            return i == 0 ?
+                ParamHelper.classDescriptors(o1.getParameterTypes(), o1.getReturnType())
+                           .compareTo(
+                               ParamHelper.classDescriptors(o2.getParameterTypes(), o2.getReturnType())) : i;
+        };
+
+        // Do not except it to have ANY order
+        Method[] myMethods = Opr.class.getDeclaredMethods();
+        Arrays.sort(myMethods, MC);
+        Method[] itMethods = mb.getDeclaredMethods();
+        Arrays.sort(itMethods, MC);
+        String target = "java/math/MutableBigInteger";
+
+        int i = 0, j = 0;
+        while (i < myMethods.length) {
+            Method m = myMethods[i++];
+            if (m.getName().startsWith("_")) continue;
+            Method im = itMethods[j++];
+            dab.i_delegate(target, m.getName(), ParamHelper.classDescriptors(im.getParameterTypes(), im.getReturnType()),
+                           m, (im.getModifiers() & AccessFlag.STATIC) != 0, true);
         }
-        o = DirectAccessor.builder(Opr.class).unchecked()
-                          .constructFuzzy(mb, "init1", "init2", "init3")
-                          .construct(mb, "init4", BigInteger.class)
-                          .construct(mb, "init5", mb)
-                          .delegate_o(mb, list.toArray(new String[list.size()]))
-                          .build();
+
+        o = dab.build();
+    }
+
+    public int[] getArray0() {
+        return o._nArrG(ptr);
+    }
+    public void setArray0(int[] arr) {
+        o._nArrS(ptr, arr);
+    }
+
+    /**
+     * Internal helper method to return the magnitude array. The caller is not
+     * supposed to modify the returned array.
+     */
+    public int[] getMagnitudeArray() {
+        return o.getMagnitudeArray(ptr);
     }
 
     /**
      * Convert this MutableBigInteger to a BigInteger object.
      */
     public BigInteger toBigInteger(int sign) {
-        return o.toBigInteger(ptr, sign);
+        return (BigInteger) o.toBigInteger(ptr, sign);
     }
 
     /**
      * Converts this number to a nonnegative {@code BigInteger}.
      */
     public BigInteger toBigInteger() {
-        return o.toBigInteger(ptr);
+        return (BigInteger) o.toBigInteger(ptr);
     }
 
     /**
@@ -143,7 +211,7 @@ public final class MutableBigInteger {
      * and scale.
      */
     public BigDecimal toBigDecimal(int sign, int scale) {
-        return o.toBigDecimal(ptr, sign, scale);
+        return (BigDecimal) o.toBigDecimal(ptr, sign, scale);
     }
 
     /**
@@ -196,7 +264,6 @@ public final class MutableBigInteger {
     public void normalize() {
         o.normalize(ptr);
     }
-
 
     /**
      * Convert this MutableBigInteger into an int array with no leading
@@ -392,7 +459,7 @@ public final class MutableBigInteger {
     }
 
     public MutableBigInteger divide(MutableBigInteger b, MutableBigInteger quotient, boolean needRemainder) {
-        return fromPtr(o.divide1(ptr, b.ptr, quotient.ptr, needRemainder));
+        return fromPtr(o.divide(ptr, b.ptr, quotient.ptr, needRemainder));
     }
 
     /**
@@ -414,7 +481,7 @@ public final class MutableBigInteger {
      *
      */
     public MutableBigInteger divideKnuth(MutableBigInteger b, MutableBigInteger quotient, boolean needRemainder) {
-        return fromPtr(o.divideKnuth1(ptr, b.ptr, quotient.ptr, needRemainder));
+        return fromPtr(o.divideKnuth(ptr, b.ptr, quotient.ptr, needRemainder));
     }
 
     /**
@@ -445,7 +512,7 @@ public final class MutableBigInteger {
      * @return the remainder of the division will be returned.
      */
     public long divide(long v, MutableBigInteger quotient) {
-        return o.divide2(ptr, v, quotient.ptr);
+        return o.divide(ptr, v, quotient.ptr);
     }
 
     /**

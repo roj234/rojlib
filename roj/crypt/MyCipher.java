@@ -28,6 +28,7 @@ package roj.crypt;
 import roj.text.TextUtil;
 
 import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -41,7 +42,8 @@ import java.security.GeneralSecurityException;
  */
 public class MyCipher implements CipheR, DeCipher {
     public static final String MODE = "MC_MODE", IV = "IV";
-    public static final int MODE_ECB = 0, MODE_CBC = 1, MODE_PCBC = 2, MODE_OFB = 3, MODE_CFB = 4, MODE_CTR = 5;
+    public static final int MODE_ECB = 0, MODE_CBC = 1, MODE_PCBC = 2, MODE_OFB = 3, MODE_CFB = 4, MODE_CTR = 5,
+        MODE_CTS = 6, MODE_XTS = 7;
 
     public static final int PKCS5_PADDING = 8;
 
@@ -197,7 +199,8 @@ public class MyCipher implements CipheR, DeCipher {
             case MODE_ECB: // Electronic Cipher Book
             case MODE_CBC: // Cipher Block Chaining
             case MODE_PCBC: // Plain Cipher Block Chaining
-                blockCipher(in, out);
+            case MODE_CTS: // Cipher Text Stealing
+                blockCipher(type, in, out);
                 break;
             default:
                 if((blockSize & 3) != 0 || !try4(in, out))
@@ -210,7 +213,7 @@ public class MyCipher implements CipheR, DeCipher {
         return OK;
     }
 
-    private void blockCipher(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
+    private void blockCipher(byte type, ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
         ByteBuffer b0 = this.iv;
         ByteBuffer b1 = this.t0;
         int blockSize = b0.capacity();
@@ -266,6 +269,16 @@ public class MyCipher implements CipheR, DeCipher {
                             bb0[i] = (byte) (b ^ in.get());
                         }
                     }
+                }
+            }
+            break;
+            case MODE_CTS: {
+                byte[] bb1 = b1.array();
+                blockCipher((byte) MODE_CBC, in, out);
+                if ((mode & DECRYPT) == 0) {
+
+                } else {
+                    if (cyl < 2) throw new IllegalBlockSizeException();
                 }
             }
             break;

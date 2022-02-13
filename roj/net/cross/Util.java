@@ -354,9 +354,9 @@ public class Util {
     public static final int PS_ERROR_TIMEOUT = 0x26;
     public static final int PS_ERROR_KICKED = 0x27;
 
-    public static final int T_HEART_TIMEOUT = 10000;
-    public static final int T_HEART = 1500;
-    public static final int T_HEART_RETRY = 200;
+    public static final int T_HEART_TIMEOUT = 60000;
+    public static final int T_HEART = 30000;
+    public static final int T_HEART_RETRY = 2000;
 
     public static PrintStream out;
 

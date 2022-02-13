@@ -30,8 +30,7 @@ import roj.concurrent.task.ITaskNaCl;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.NetworkUtil;
-import roj.net.mss.MSSServerEngineFactory;
-import roj.net.mss.PreSharedPubKey;
+import roj.net.mss.*;
 import roj.util.ByteList;
 import roj.util.FastLocalThread;
 
@@ -70,8 +69,8 @@ public class Server extends FastLocalThread {
 
     static final int IDENTIFIER = 0xABCDEF12;
 
-    final ServerSocket socket;
-    final MSSServerEngineFactory factory;
+    final ServerSocket     socket;
+    final MSSEngineFactory factory;
     Repository repo;
 
     AtomicInteger connected = new AtomicInteger();
@@ -86,8 +85,11 @@ public class Server extends FastLocalThread {
         if (pair == null)
             throw new NoSuchAlgorithmException("A critical parameter to construct the MSS engine is missing");
 
-        this.factory = new MSSServerEngineFactory(new PreSharedPubKey(pair.getPublic()),
-                                                  pair.getPublic(), pair.getPrivate());
+        SimpleEngineFactory factory = new SimpleEngineFactory(JKeyFormat.JAVARSA, pair.getPublic(), pair.getPrivate());
+        factory.setPSK(new MSSKeyPair[]{
+            new SimplePSK(233, pair.getPublic(), pair.getPrivate())
+        });
+        this.factory = factory;
         this.socket = socket(address, max);
         this.maxConn = max;
     }

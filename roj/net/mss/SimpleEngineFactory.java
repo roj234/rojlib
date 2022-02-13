@@ -40,29 +40,35 @@ import java.security.cert.X509Certificate;
  * @author Roj233
  * @since 2021/12/24 22:44
  */
-public final class MSSServerEngineFactory {
+public final class SimpleEngineFactory implements MSSEngineFactory {
     private final PrivateKey privateKey;
     private final byte[] publicKey;
-    private final int pubKeyFormat;
+    private final int    pubKeyFormat;
+    private MSSKeyPair[] psk;
 
-    public <T> MSSServerEngineFactory(MSSPubKey<T> format, T publicKey, PrivateKey key) throws GeneralSecurityException {
+    public <T> SimpleEngineFactory(MSSKeyFormat<T> format, T publicKey, PrivateKey key) throws GeneralSecurityException {
         this.privateKey = key;
         this.publicKey = format.encode(publicKey);
-        this.pubKeyFormat = format.specificationId();
+        this.pubKeyFormat = format.formatId();
         format.checkPrivateKey(key);
     }
 
-     MSSServerEngineFactory(PrivateKey key, byte[] publicKey, int pubKeyFormat) {
+    public void setPSK(MSSKeyPair[] psk) {
+        this.psk = psk;
+    }
+
+     SimpleEngineFactory(PrivateKey key, byte[] publicKey, int pubKeyFormat) {
         this.privateKey = key;
         this.publicKey = publicKey;
         this.pubKeyFormat = pubKeyFormat;
     }
 
+    @Override
     public MSSEngineServer newEngine() throws GeneralSecurityException {
-        return new MSSEngineServer().__init(pubKeyFormat, publicKey, privateKey);
+        return new MSSEngineServer()._init(pubKeyFormat, publicKey, privateKey, psk);
     }
 
-    public static MSSServerEngineFactory fromKeystore(InputStream ks, char[] pass) throws IOException, GeneralSecurityException {
+    public static MSSEngineFactory fromKeystore(InputStream ks, char[] pass) throws IOException, GeneralSecurityException {
         KeyManager[] kmf = SecureUtil.makeKeyManagers(ks, pass);
 
         X509Certificate pubKey = null;
@@ -79,7 +85,9 @@ public final class MSSServerEngineFactory {
         if (pubKey == null)
             throw new NoSuchAlgorithmException("No such key");
 
-        PreSharedCertificate pkf = new PreSharedCertificate(pubKey);
-        return new MSSServerEngineFactory(privateKey, new byte[1], pkf.specificationId());
+        SimplePSK pkf = new SimplePSK(0, pubKey.getPublicKey(), privateKey);
+        SimpleEngineFactory f = new SimpleEngineFactory(null, null, 0);
+        f.psk = new MSSKeyPair[] {pkf};
+        return f;
     }
 }

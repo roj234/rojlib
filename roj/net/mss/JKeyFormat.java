@@ -25,52 +25,60 @@
  */
 package roj.net.mss;
 
-import roj.text.TextUtil;
+import roj.util.Helpers;
 
-import java.security.InvalidKeyException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.cert.CertificateException;
+import java.security.*;
+import java.security.spec.X509EncodedKeySpec;
 
 /**
  * @author Roj233
  * @since 2021/12/22 12:53
  */
-public final class PreSharedPubKey implements MSSPubKey<PublicKey> {
-    private final PublicKey[] keys;
+public final class JKeyFormat implements MSSKeyFormat<PublicKey> {
+    public static final JKeyFormat JAVARSA;
 
-    public PreSharedPubKey(PublicKey... keys) {
-        assert keys.length > 0;
-        this.keys = keys;
+    static {
+        try {
+            JAVARSA = new JKeyFormat("RSA");
+        } catch (NoSuchAlgorithmException e) {
+            Helpers.athrow(e);
+            throw null;
+        }
+    }
+
+    private final KeyFactory factory;
+
+    public JKeyFormat(String alg) throws NoSuchAlgorithmException {
+        factory = KeyFactory.getInstance(alg);
+    }
+
+    public JKeyFormat(KeyFactory factory) {
+        this.factory = factory;
     }
 
     @Override
     public String name() {
-        return "PreSharedKey";
+        return factory.getAlgorithm();
     }
 
     @Override
-    public int specificationId() {
-        return 0x10100000;
+    public int formatId() {
+        return CipherSuite.KEY_X509;
     }
 
     @Override
-    public byte[] encode(PublicKey pk) throws InvalidKeyException {
-        for (int i = 0; i < keys.length; i++) {
-            if (pk == keys[i]) {
-                return new byte[] { (byte) i };
-            }
-        }
-        throw new InvalidKeyException("This key is not supported.");
+    public byte[] encode(PublicKey publicKey) throws GeneralSecurityException {
+        return publicKey.getEncoded();
     }
 
     @Override
-    public PublicKey decode(byte[] data) throws CertificateException {
-        if (data.length != 1)
-            throw new CertificateException("无效公钥 " + TextUtil.dumpBytes(data));
-        return keys[data[0] & 0xFF];
+    public MSSPubKey decode(byte[] data) throws GeneralSecurityException {
+        return new SimplePubKey(factory.generatePublic(new X509EncodedKeySpec(data)));
     }
 
     @Override
-    public void checkPrivateKey(PrivateKey key) {}
+    public void checkPrivateKey(PrivateKey privateKey) throws GeneralSecurityException {
+        if (!privateKey.getAlgorithm().equals(factory.getAlgorithm()))
+            throw new GeneralSecurityException("Invalid private key");
+    }
 }

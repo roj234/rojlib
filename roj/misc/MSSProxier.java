@@ -6,10 +6,7 @@ import roj.net.MSSSocket;
 import roj.net.NetworkUtil;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
-import roj.net.mss.JPubKey;
-import roj.net.mss.MSSEngineClient;
-import roj.net.mss.MSSServerEngineFactory;
-import roj.net.mss.PreSharedPubKey;
+import roj.net.mss.*;
 
 import java.io.File;
 import java.io.FileDescriptor;
@@ -32,7 +29,7 @@ public class MSSProxier implements Runnable {
     public static void main(String[] args) throws IOException, GeneralSecurityException {
         if (args.length < 3) {
             System.out.println("客户端: MSSProxier <local_port> <remote_domain_or_ip> <remote_port>");
-            System.out.println("服务端: MSSProxier <local_port> <remote_domain_or_ip> <remote_port> <key_password> <is_pre_shared_key(布尔)>");
+            System.out.println("服务端: MSSProxier <local_port> <remote_domain_or_ip> <remote_port> <key_password>");
             System.out.println(" proxy via MSS connection");
             return;
         }
@@ -47,17 +44,20 @@ public class MSSProxier implements Runnable {
                 return;
             }
 
-            boolean unshared = !Boolean.parseBoolean(args[4]);
-            inst.alloc = new MSSServerEngineFactory(unshared ?
-                                                            JPubKey.JAVARSA : new PreSharedPubKey(pair.getPublic()),
-                                                    pair.getPublic(), pair.getPrivate());
+            SimpleEngineFactory f = new SimpleEngineFactory(JKeyFormat.JAVARSA, pair.getPublic(), pair.getPrivate());
+            f.setPSK(new MSSKeyPair[] {
+                new SimplePSK(233, pair.getPublic(), pair.getPrivate())
+            });
+            inst.alloc = f;
+        } else {
+            NetworkUtil.MSSLoadClientRSAKey(new File("mssproxy_client.key"));
         }
         inst.run();
     }
 
     final ServerSocket socket;
     public InetSocketAddress remote;
-    MSSServerEngineFactory alloc;
+    MSSEngineFactory alloc;
 
     public MSSProxier(InetSocketAddress address, int conn) throws IOException {
         ServerSocket socket = this.socket = new ServerSocket();

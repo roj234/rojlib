@@ -464,8 +464,9 @@ public abstract class MathUtils {
             '万', '亿'
     };
 
-    public static StringBuilder toChinaString(StringBuilder list, long number) {
-        StringBuilder sb = new StringBuilder();
+    public static StringBuilder toChinaString(StringBuilder sb, long number) {
+        sb.delete(0, sb.length());
+        if (number == 0) return sb.append(CHINA_NUMERIC[0]);
         if (number < 0) {
             sb.append('负');
             number = -number;
@@ -529,10 +530,10 @@ public abstract class MathUtils {
             }
         }
 
-        if (sb.charAt(0) == CHINA_NUMERIC[1] && sb.charAt(1) == CHINA_NUMERIC_POSITION[0])
+        if (sb.length() > 1 && sb.charAt(0) == CHINA_NUMERIC[1] && sb.charAt(1) == CHINA_NUMERIC_POSITION[0])
             sb.deleteCharAt(0);
 
-        return list.append(sb);
+        return sb;
     }
 
     /**

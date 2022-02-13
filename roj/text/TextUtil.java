@@ -245,15 +245,43 @@ public class TextUtil {
         if (off >= len) return sb;
         off &= ~31;
         printOff(sb, off);
+        int d = 0;
         while (true) {
-            sb.append(b2h(b[off] >>> 4))
+            sb.append(b2h((b[off] & 0xFF) >>> 4))
               .append(b2h(b[off++] & 0xf));
-            if (off == len) break;
+            d++;
+            if (off == len) {
+                sb.append(" ");
+
+                int rem = 16 - d;
+                rem = (rem << 1) + (rem >> 1) + 1;
+                for (int i = 0; i < rem; i++) sb.append(" ");
+
+                off -= d;
+                while (d-- > 0) {
+                    int j = b[off++] & 0xFF;
+                    sb.append(isAsciiDisplayChar(j) ? (char) j : '.');
+                }
+                break;
+            }
             if ((off & 1) == 0) sb.append(' ');
-            if ((off & 15) == 0) printOff(sb, off);
+            if ((off & 15) == 0) {
+                sb.append(" ");
+                off -= 16;
+                d = 0;
+                for (int i = 0; i < 16; i++) {
+                    int j = b[off++] & 0xFF;
+                    sb.append(isAsciiDisplayChar(j) ? (char) j : '.');
+                }
+                printOff(sb, off);
+            }
         }
 
         return sb;
+    }
+
+    public static boolean isAsciiDisplayChar(int j) {
+        return j > 31 && j < 127;
     }
 
     static void printOff(StringBuilder sb, int v) {
@@ -262,7 +290,7 @@ public class TextUtil {
         for (int k = 7 - s.length(); k >= 0; k--) {
             sb.append('0');
         }
-        sb.append(s).append("   ");
+        sb.append(s).append("  ");
     }
 
     /**
@@ -287,7 +315,10 @@ public class TextUtil {
      */
     public static int h2b(char c) {
         if (c < 0x30 || c > 0x39) {
-            return (c > 55 && c < 71) || ((c = Character.toLowerCase(c)) > 55 && c < 71) ? c - 45 : -1;
+            if ((c > 64 && c < 71) || ((c = Character.toUpperCase(c)) > 64 && c < 71)) {
+                return c - 55;
+            }
+            throw new IllegalArgumentException("Not a hex character '" + c + "'");
         }
         return c - 0x30;
     }
@@ -301,9 +332,12 @@ public class TextUtil {
         byte[] d = bl.list;
 
         for (int i = 0; i < hex.length(); ) {
-            d[off++] = (byte) ((h2b(hex.charAt(i++)) << 4) |
+            char c = hex.charAt(i++);
+            if (c == ' ') continue;
+            d[off++] = (byte) ((h2b(c) << 4) |
                     h2b(hex.charAt(i++)));
         }
+        bl.wIndex(off);
         return bl;
     }
 
@@ -316,7 +350,7 @@ public class TextUtil {
         char[] tmp = sb.list;
         int j = sb.ptr;
         while (off < len) {
-            byte bb = b[off++];
+            int bb = b[off++] & 0xFF;
             tmp[j++] = b2h(bb >>> 4);
             tmp[j++] = b2h(bb & 0xf);
         }

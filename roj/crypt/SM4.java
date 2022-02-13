@@ -25,6 +25,8 @@
  */
 package roj.crypt;
 
+import roj.util.ByteList;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -33,7 +35,7 @@ import static roj.crypt.Conv.IRL;
 /**
  * 国密SM4 - 对称加解密
  */
-public final class SM4 implements DeCipher {
+public final class SM4 implements CipheR {
     private final int[] sKey = new int[32];
     private final int[] tmp  = new int[36];
 
@@ -41,7 +43,7 @@ public final class SM4 implements DeCipher {
 
     @Override
     public String name() {
-        return "SM4 1.2.0";
+        return "SM4";
     }
 
     @Override
@@ -71,6 +73,20 @@ public final class SM4 implements DeCipher {
         }
         out.putInt(T[35]).putInt(T[34]).putInt(T[33]).putInt(T[32]);
         return CipheR.OK;
+    }
+
+    @Override
+    public void crypt(ByteList in, ByteList out) {
+        int[] T = this.tmp;
+        int[] sKey = this.sKey;
+
+        T[0] = in.readInt(); T[1] = in.readInt(); T[2] = in.readInt(); T[3] = in.readInt();
+        int i = 0;
+        while (i < 32) {
+            T[i + 4] = T[i] ^ sm4_Lt(T[i + 1] ^ T[i + 2] ^ T[i + 3] ^ sKey[i]);
+            i++;
+        }
+        out.putInt(T[35]).putInt(T[34]).putInt(T[33]).putInt(T[32]);
     }
 
     private static final byte[] SBOX = {

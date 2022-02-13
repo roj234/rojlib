@@ -1,24 +1,21 @@
 package roj.net.mss;
 
-import roj.crypt.OAEP;
-
+import javax.annotation.Nullable;
 import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
-import java.security.PublicKey;
+import java.security.PrivateKey;
 
 /**
  * @author solo6975
- * @since 2022/2/13 13:02
+ * @since 2022/2/13 13:06
  */
-public interface MSSPubKey {
-    String name();
-    int keyId();
+public interface MSSKeyPair extends MSSPubKey {
+    @Nullable
+    PrivateKey pri();
 
-    PublicKey key();
-    default int maxEncodeBytes() { return 128; }
-
-    default Cipher encoder() {
-        PublicKey key = key();
+    default Cipher priEncoder() {
+        PrivateKey key = pri();
+        if (key == null) throw new UnsupportedOperationException();
         try {
             Cipher c = Cipher.getInstance(key.getAlgorithm());
             c.init(Cipher.ENCRYPT_MODE, key);
@@ -28,8 +25,9 @@ public interface MSSPubKey {
         }
     }
 
-    default Cipher decoder() {
-        PublicKey key = key();
+    default Cipher priDecoder() {
+        PrivateKey key = pri();
+        if (key == null) throw new UnsupportedOperationException();
         try {
             Cipher c = Cipher.getInstance(key.getAlgorithm());
             c.init(Cipher.DECRYPT_MODE, key);
@@ -37,9 +35,5 @@ public interface MSSPubKey {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Should not happen");
         }
-    }
-
-    default OAEP createOAEP() {
-        return new OAEP(maxEncodeBytes());
     }
 }

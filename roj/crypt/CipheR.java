@@ -25,23 +25,29 @@
  */
 package roj.crypt;
 
+import roj.util.ByteList;
+
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
 /**
- * 【包含】状态的密码算法
- *
  * @author Roj233
- * @since 2021/9/7 13:07
+ * @since 2021/12/28 0:05
  */
 public interface CipheR {
+    int OK = 0, BUFFER_OVERFLOW = -1;
     int ENCRYPT = 0, DECRYPT = 1;
 
     String name();
     void setKey(byte[] key, int flags);
     default void setOption(String key, Object value) {}
 
-    int OK              = 0;
-    int BUFFER_OVERFLOW = 1;
+    /**
+     * Zero: can process arbitrary length of plaintext
+     * Non-Zero: can ONLY process [it] length of plaintext at once (ECB feedback by default)
+     */
+    default int getBlockSize() { return 0; }
+
     int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException;
+    void crypt(ByteList in, ByteList out) throws GeneralSecurityException;
 }

@@ -36,10 +36,10 @@ import java.security.GeneralSecurityException;
  */
 public interface MSSHash {
     int length();
-    void writeHash(ByteBuffer payload, ByteBuffer outBuf, CipheR encoder) throws GeneralSecurityException;
+    void write(ByteBuffer payload, ByteBuffer outBuf, CipheR encoder) throws GeneralSecurityException;
 
-    Object readHash(ByteBuffer inBuf, CipheR decoder) throws GeneralSecurityException;
-    boolean checkHash(Object hash, ByteBuffer payload);
+    Object preRead(ByteBuffer inBuf, CipheR decoder) throws GeneralSecurityException;
+    boolean check(Object hash, ByteBuffer payload);
 
     int computeHandshakeHash(byte[] b);
 }

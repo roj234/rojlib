@@ -107,13 +107,13 @@ public class MSSSocket extends PlainSocket {
 
             switch (result) {
                 case MSSEngine.HS_OK:
-                    if (engine.getHandShakeStatus() == MSSEngine.HS_FINISHED) {
-                        hsDone();
-                        break needIO;
-                    }
                     if (outCopy.position() > 0) {
                         hsOut.position(0).limit(outCopy.position());
                         outCopy.clear();
+                        super.write(hsOut);
+                        break needIO;
+                    }
+                    if (engine.getHandShakeStatus() == MSSEngine.HS_FINISHED) {
                         break needIO;
                     }
                     break;
@@ -129,18 +129,34 @@ public class MSSSocket extends PlainSocket {
                     break;
             }
         } while (true);
+        if (engine.getHandShakeStatus() == MSSEngine.HS_FINISHED) {
+            if (!hsOut.hasRemaining()) hsDone();
+        }
 
         return hsOut == null;
     }
 
-    private void hsDone() {
+    private void hsDone() throws MSSException {
         NIOUtil.clean(hsOut);
         hsOut = null;
+
+        engine.checkError();
 
         outCopy = rBuf.duplicate();
 
         d = engine.getDecoder();
         e = engine.getEncoder();
+
+        outCopy.position(0).limit(rBuf.position());
+        rBuf.clear();
+        try {
+            d.crypt(outCopy, rBuf);
+        } catch (Throwable e) {
+            try {
+                close();
+            } catch (IOException ignored) {}
+            throw new MSSException("Cipher fault", e);
+        }
     }
 
     // endregion
@@ -153,6 +169,10 @@ public class MSSSocket extends PlainSocket {
 
     public CipheR getEncrypter() {
         return e;
+    }
+
+    public MSSEngine getEngine() {
+        return engine;
     }
 
     public int read(int max) throws IOException {
@@ -169,7 +189,9 @@ public class MSSSocket extends PlainSocket {
         try {
             d.crypt(outCopy, rBuf);
         } catch (Throwable e) {
-            rBuf.position(begin + nread);
+            try {
+                close();
+            } catch (IOException ignored) {}
             throw new MSSException("Cipher fault", e);
         }
         return nread;

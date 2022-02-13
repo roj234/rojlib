@@ -688,25 +688,25 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
 
     @Override
     public final void readFully(@Nonnull byte[] b) {
-        readBytes(b, 0, b.length);
+        read(b, 0, b.length);
     }
 
     @Override
     public final void readFully(@Nonnull byte[] b, int off, int len) {
-        readBytes(b, off, len);
+        read(b, off, len);
     }
 
     public final byte[] readBytes(int len) {
         byte[] result = new byte[len];
-        readBytes(result, 0, len);
+        read(result, 0, len);
         return result;
     }
 
-    public final void readBytes(byte[] b) {
-        readBytes(b, 0, b.length);
+    public final void read(byte[] b) {
+        read(b, 0, b.length);
     }
 
-    public final void readBytes(byte[] b, int off, int len) {
+    public final void read(byte[] b, int off, int len) {
         if (len < 0 || off < 0 || len > b.length - off)
             throw new ArrayIndexOutOfBoundsException();
         if (len > 0) {

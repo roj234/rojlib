@@ -145,8 +145,8 @@ public final class Ver {
             FileRecord fr = new FileRecord();
             fr.size = r.readVarLong(false);
             fr.lastMod = r.readVarLong() + dt;
-            r.readBytes(fr.hash = new byte[32]);
-            r.readBytes(fr.data = new byte[r.readVarInt(false)]);
+            r.read(fr.hash = new byte[32]);
+            r.read(fr.data = new byte[r.readVarInt(false)]);
             files.put(k, fr);
         }
         if (len > 0) {

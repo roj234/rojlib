@@ -66,6 +66,29 @@ public final class Conv {
         return dst;
     }
 
+    public static int[] b2i_LE(byte[] src, int sOff, int len, int[] dst, int dOff) {
+        int more = len & 3;
+        if(dst.length - dOff < len / 4 + (more > 0 ? 1 : 0))
+            throw new ArrayIndexOutOfBoundsException();
+
+        len -= more;
+        len += sOff;
+        while (sOff < len) {
+            dst[dOff++] = (src[sOff] & 0xFF) | (src[sOff + 1] & 0xFF) << 8 | (src[sOff + 2] & 0xFF) << 16 | (src[sOff + 3] & 0xFF) << 24;
+            sOff += 4;
+        }
+        if(more != 0) {
+            len += more;
+            int n = 0, sh = 0;
+            while (sOff < len) {
+                n |= (src[sOff++] & 0xFF) << sh;
+                sh += 8;
+            }
+            dst[dOff] = n;
+        }
+        return dst;
+    }
+
     public static byte[] i2b(int[] src, int sOff, int len, byte[] dst, int dOff) {
         if(dst.length < len << 2)
             throw new ArrayIndexOutOfBoundsException();
@@ -83,6 +106,9 @@ public final class Conv {
     // Int Rotate Left
     public static int IRL(int n, int bit) {
         return (n << bit) | (n >>> bit);
+    }
+    public static int IRL1(int n, int bit) {
+        return (n << bit) | (n >>> (32 - bit));
     }
 
     public static int[] reverse(int[] arr, int i, int length) {

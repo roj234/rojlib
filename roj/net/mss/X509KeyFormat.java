@@ -25,37 +25,48 @@
  */
 package roj.net.mss;
 
-import roj.crypt.CipheR;
-import roj.crypt.MyCipher;
-import roj.crypt.SM4;
+import java.io.ByteArrayInputStream;
+import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
- * @since 2021/12/22 19:18
+ * @since 2021/12/22 12:53
  */
-public final class SM4CFB implements MSSCiphers {
+public class X509KeyFormat implements MSSKeyFormat<X509Certificate> {
+    private final CertificateFactory factory;
+
+    public X509KeyFormat() {
+        try {
+            factory = CertificateFactory.getInstance("X.509");
+        } catch (Throwable e) {
+            throw new Error();
+        }
+    }
+
     @Override
     public String name() {
-        return "SM4_CFB";
+        return "X.509 " + factory.getType();
     }
 
     @Override
-    public int specificationId() {
-        return 0x00000010;
+    public int formatId() {
+        return CipherSuite.KEY_X509_CERTIFICATE;
     }
 
     @Override
-    public int getSharedKeySize() {
-        return 64;
+    public byte[] encode(X509Certificate publicKey) throws GeneralSecurityException {
+        return publicKey.getEncoded();
     }
 
     @Override
-    public CipheR createEncoder() {
-        return new MyCipher(new SM4(), MyCipher.MODE_CFB);
+    public MSSPubKey decode(byte[] data) throws GeneralSecurityException {
+        X509Certificate crt = (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(data));
+        return new X509CertKey(0, crt);
     }
 
     @Override
-    public CipheR createDecoder() {
-        return new MyCipher(new SM4(), MyCipher.MODE_CFB);
-    }
+    public void checkPrivateKey(PrivateKey key) {}
 }

@@ -9,9 +9,25 @@ import roj.util.ByteList;
  * @since 2022/1/18 19:39
  */
 public class PEHeader implements Writable {
-    public static final int FORMAT_PE32 = 267;
+    public static final int FORMAT_PE32     = 267;
     public static final int FORMAT_PE32plus = 523;
-    public static final int FORMAT_ROM = 263;
+    public static final int FORMAT_ROM      = 263;
+
+    public static final char C_NO_RELOC                = 0x0001;
+    public static final char C_EXECUTABLE              = 0x0002;
+    public static final char C_NO_LINE                 = 0x0004;
+    public static final char C_NO_LOCAL_SYM            = 0x0008;
+    public static final char C_AGGRESIVES_TRIM_WORKSET = 0x0010;
+    public static final char C_LARGE_ADDRESS_AWARE     = 0x0020;
+    public static final char C_BYTES_REVERSED_LO       = 0x0080; // 低位字节反转?
+    public static final char C_32BIT_MACHINE           = 0x0100;
+    public static final char C_DEBUG_STRIPPED          = 0x0200;
+    public static final char C_REMOVABLE_RUN_FROM_SWAP = 0x0400; // 若在可移动设备则复制到交换文件
+    public static final char C_NET_RUN_FROM_SWAP       = 0x0800; // 同上，来自网络
+    public static final char C_SYSTEM                  = 0x1000;
+    public static final char C_DLL                     = 0x2000;
+    public static final char C_UP_SYSTEM_ONLY          = 0x4000; // 只能运行在UP机器?
+    public static final char C_BYTES_REVERSED_HI       = 0x8000; // 高位字节反转?
 
     public char cpuType;
     public char sectionCount;
@@ -20,23 +36,26 @@ public class PEHeader implements Writable {
     public int  symbolCount;
     public char optHeaderSize;
     public char characteristics;
+
+    // Optional header
     public char format;
+
     public char linkerVersion;
-    public int codeSize;
+    public int codeSize;               // 所有代码段(section?)的总和大小,注意：必须是FileAlignment的整数倍,存在但没用
     public int initializedDataSize;
     public int uninitializedDataSize;
-    public int entryPoint;
+    public int entryPoint;             // ※程序入口地址OEP，这是一个RVA(Relative Virtual Address),通常会落在.text section,此字段对于DLLs/EXEs都适用。
     public int codeBase;
     public int dataBase;
-    public long imageBase;
-    public int sectionAlign;
-    public int fileAlign;
+    public long imageBase;             // ※内存镜像基址(默认装入起始地址),默认为4000H
+    public int sectionAlign;           // ※内存对齐:一旦映像到内存中，每一个section保证从一个「此值之倍数」的虚拟地址开始
+    public int fileAlign;              // ※文件对齐：最初是200H，现在是1000H
     public int OSVersion;
     public int imageVersion;
     public int subsystemVersion;
     public int win32Version;
-    public int imageSize;
-    public int headerSize;
+    public int imageSize;              // ※PE文件在内存中映像总大小,sizeof(ImageBuffer),SectionAlignment的倍数
+    public int headerSize;             // ※DOS头(64B)+PE标记(4B)+标准PE头(20B)+可选PE头+节表的总大小，按照文件对齐(FileAlignment的倍数)
     public int checksum;
     public char subsystem;
     public char DLLCharacteristic;
@@ -44,8 +63,8 @@ public class PEHeader implements Writable {
     public long stackCommitSize;
     public long heapReservedSize;
     public long heapCommitSize;
-    public int loaderFlag;
-    public int dataIndexSize;
+    public int loaderFlag;             // 总是0？？
+    public int dataIndexSize;          // 总是16？？
 
     public long getTimestamp() {
         return timestamp * 1000L;
@@ -100,6 +119,8 @@ public class PEHeader implements Writable {
         }
         w.putIntLE(loaderFlag)
          .putIntLE(dataIndexSize);
+        if (loaderFlag != 0 || dataIndexSize != 16)
+            throw new AssertionError("Precondition from CSDN failed");
     }
 
     @Override

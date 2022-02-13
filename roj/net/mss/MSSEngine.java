@@ -36,7 +36,8 @@ import java.util.Arrays;
 import java.util.Random;
 
 /**
- * MSS协议处理器：My Secure Socket
+ * MSS协议处理器：My Secure Socket <br>
+ *     现在支持了一半的1-RTT: 在CLIENT_RNDB发送之后可以用一半的密钥先加密
  * @author Roj233
  * @since 2021/12/22 12:21
  */
@@ -45,60 +46,70 @@ public abstract class MSSEngine implements Pipeline {
     MSSEngine(Random rnd) { this.random = rnd; }
 
     final Random random;
-    MSSHash hash = new Adler32Hash();
+    MSSKeyVerifier verifier;
 
-    static MSSCiphers[] defaultSupportedCiphers = { new SM4CFB(), JCiphers.AES_CFB8 };
-    MSSCiphers[] supportedCiphers = defaultSupportedCiphers;
+    static CipherSuite[] defaultCipherSuites = { CipherSuites.X509_DHE_XCHACHA20_SHA256_XHASH,
+                                                 CipherSuites.X509_DHE_AESGCM_SHA256_XHASH,
+                                                 CipherSuites.X509_ECDHE_AESGCM_SHA384_XHASH };
+    CipherSuite[] cipherSuites = defaultCipherSuites;
 
-    public static void setDefaultSupportedCiphers(MSSCiphers[] ciphers) {
+    public static void setDefaultCipherSuites(CipherSuite[] ciphers) {
         if (ciphers.length > 65535)
             throw new IllegalArgumentException("ciphers.length > 65535");
-        MSSEngine.defaultSupportedCiphers = ciphers.clone();
+        MSSEngine.defaultCipherSuites = ciphers.clone();
     }
 
-    public final void setSupportedCiphers(MSSCiphers[] ciphers) {
+    public final void setCipherSuites(CipherSuite[] ciphers) {
         if (ciphers.length > 65535)
             throw new IllegalArgumentException("ciphers.length > 65535");
-        this.supportedCiphers = ciphers;
+        this.cipherSuites = ciphers;
     }
 
-    static final byte CLOSED = 1, STREAMING = 2;
+    static final byte CLOSED = 1, STREAMING = 2, RANDOM_PADDING = 4, PSK_ONLY = 8;
 
-    byte flag;
-    int stage, bufferSize;
+    byte flag, stage;
+    CipherSuite suite; MSSSubKey dh; MSSHash hash; MSSSign signer;
+    int bufferSize;
     CipheR encoder, decoder;
     byte[] sharedKey, closeReason;
+    int sessionId;
+    MSSException error;
 
     /**
      * 客户端模式
      */
     public abstract boolean isClientMode();
 
-    public void setHashAlgorithm(MSSHash hash) {
-        this.hash = hash;
-    }
-
-    public MSSHash getHashAlgorithm() {
-        return hash;
-    }
-
     /**
      * 是否使用流模式
      */
     public final void setStreamMode(boolean b) {
-        if (stage != 0) throw new IllegalStateException();
-        if (b)
-            flag |= STREAMING;
-        else
-            flag &= ~STREAMING;
+        if (b) flag |= STREAMING;
+        else flag &= ~STREAMING;
     }
-
     public final boolean isStreamMode() {
         return (flag & STREAMING) != 0;
     }
-
     public final boolean isClosed() {
         return (flag & CLOSED) != 0;
+    }
+
+    public abstract void setPreSharedKeys(MSSPubKey[] keys);
+
+    public final CipherSuite getCipherSuite() {
+        return suite;
+    }
+
+    public void setCertificateVerifier(MSSKeyVerifier verifier) {
+        this.verifier = verifier;
+    }
+    public MSSKeyVerifier getCertificateVerifier() {
+        return verifier;
+    }
+
+    public final int getSessionId() {
+        if (stage != HS_DONE) throw new IllegalStateException();
+        return sessionId;
     }
 
     /**
@@ -120,14 +131,14 @@ public abstract class MSSEngine implements Pipeline {
         }
     }
 
-    void endCipher() {
+    private void endCipher() {
         if (sharedKey != null) {
+            Arrays.fill(sharedKey, (byte) 0);
             try {
-                encoder.setKey(new byte[1], CipheR.ENCRYPT);
-                decoder.setKey(new byte[1], CipheR.ENCRYPT);
+                encoder.setKey(sharedKey, CipheR.ENCRYPT);
+                decoder.setKey(sharedKey, CipheR.ENCRYPT);
             } catch (Throwable ignored) {}
             encoder = decoder = null;
-            Arrays.fill(sharedKey, (byte) 0);
             sharedKey = null;
         }
     }
@@ -138,6 +149,11 @@ public abstract class MSSEngine implements Pipeline {
         this.encoder = this.decoder = null;
         this.sharedKey = this.closeReason = null;
         this.flag = 0;
+        this.dh = null;
+        this.hash = null;
+        this.suite = null;
+        this.signer = null;
+        this.error = null;
     }
 
     public final boolean isHandshakeDone() {
@@ -168,21 +184,80 @@ public abstract class MSSEngine implements Pipeline {
         return decoder;
     }
 
+    // 公开状态
     public static final int HS_FINISHED = 0, HS_RCV = 1, HS_SND = 2;
     public static final int HS_OK = 0, BUFFER_OVERFLOW = 1, BUFFER_UNDERFLOW = 2;
 
-    // 状态
+    // 内部状态
     static final int C_HS_INIT = 0, C_RNDB_WAIT = 1, DONE_WAIT = 4;
     static final int S_HS_WAIT = 0, S_RNDA_WAIT = 1;
     static final int TMP_1 = 2, TMP_2 = 3, HS_DONE = 5, HS_FAIL = 6;
 
     // 数据包header
-    static final int  PH_CLIENT_HALLO = 0x53534E43; // ASCII 'SSNC'
-    static final byte PH_ERROR        = 0x01;
+    static final char PROTOCOL_VERSION = 11;
+
+    // 2-RTT:
+    // CLIENT_HALLO =>
+    // <= SERVER_HALLO
+    //
+    // CLIENT_RNDA =>
+    // <= SERVER_RNDB
+    //
+    // PH_DONE =>
+    // Payload =>
+
+    // {
+    //   CLIENT_HALLO hdr; // ASCII 'SSNC'
+    //   u2 PROTOCOL_VERSION;
+    //   u2 cipher_suite_count;
+    //   u2 psk_count;
+    //   int[cipher_suite_count] cipher_suites;
+    //   int[psk_count] psk_ids; (negotiated)
+    //   u4 random;
+    // }
+    static final int  PH_CLIENT_HALLO = 0x53534E43;
+    // {
+    //   SERVER_HALLO hdr;
+    //   u2 pubkey_len; (0 means psk available)
+    //   u2 dh_key_len+signature_len;
+    //   u2 selected_psk_id;
+    //   u2 selected_cipher_suite_id;
+    //   byte[pubkey_len] pubkey;
+    //   byte[dh_key_len] dh_key;
+    //   byte[signature_len] dh_signature;
+    // }
     static final byte PH_SERVER_HALLO = 0x40;
+    // {
+    //   CLIENT_RNDA hdr;
+    //   u2 ciphertext_len;
+    //   u2 dh_key_len;
+    //   u2 certificate_len; (0 means not use client-verify)
+    //   byte[ciphertext_len] ciphertext;
+    //   byte[dh_key_len] dh_key;
+    //   byte[certificate_len] certificate;
+    // }
     static final byte PH_CLIENT_RNDA  = 0x41;
+    // {
+    //   SERVER_RNDB hdr;
+    //   u4 key_hash;
+    //   u2 keyB_len+sign_len;
+    //   byte[keyB_len] keyB; (ciphered by rndA+dh_sec)
+    //   byte[sign_len] dh_sign; (signed by signer via pubKey rndA,rndB,dh_common_key)
+    // }
     static final byte PH_SERVER_RNDB  = 0x42;
+    // { // 服务端验证密钥正确
+    //   DONE hdr;
+    //   u2 key_len;
+    //   byte[key_len] key; (ciphered by rndA+rndB+dh_sec)
+    // }
     static final byte PH_DONE         = 0x43;
+    // {
+    //   ERROR hdr;
+    //   u1 code;
+    //   u1 msg_len;
+    //   byte[msg_len] msg;
+    // }
+    static final byte PH_ERROR        = 0x01;
 
     // u1 PH_CHUNK, u2 length, u1[length] data
     static final byte PH_CHUNK        = 0x30;
@@ -259,7 +334,7 @@ public abstract class MSSEngine implements Pipeline {
                 rcv.position(3).limit(ph);
                 Object _hash = null;
                 try {
-                    _hash = hash.readHash(rcv, decoder);
+                    _hash = hash.preRead(rcv, decoder);
                 } catch (GeneralSecurityException e) {
                     _close("Hash计算失败");
                 }
@@ -282,7 +357,7 @@ public abstract class MSSEngine implements Pipeline {
                     dst.limit(dst.position()).reset();
                     pos = rcv.position();
                     rcv.position(3);
-                    if (!hash.checkHash(_hash, dst))
+                    if (!hash.check(_hash, dst))
                         _close("Hash验证失败");
                     rcv.position(pos);
                     dst.position(dst.limit()).limit(lim);
@@ -359,7 +434,7 @@ public abstract class MSSEngine implements Pipeline {
                 snd.put(PH_CHUNK).putChar((char) w);
 
                 try {
-                    hash.writeHash(src, snd, encoder);
+                    hash.write(src, snd, encoder);
                     encoder.crypt(src, snd);
                 } catch (GeneralSecurityException e) {
                     _close("加密失败");
@@ -376,27 +451,56 @@ public abstract class MSSEngine implements Pipeline {
         throw new MSSException(reason);
     }
 
-    public final void getHandshakeErrorPacket(String reason, ByteBuffer buf) {
-        if (stage != HS_FAIL) throw new IllegalStateException();
-        byte[] utf = reason.getBytes(StandardCharsets.UTF_8);
-        buf.put(PH_ERROR).put((byte) utf.length).put(utf);
+    /**
+     * 是的, by design ,你要主动告诉对面错在哪里
+     */
+    public final void checkError() throws MSSException {
+        if (error != null) throw error;
     }
 
-    final int error(String reason) throws MSSException {
+    final int error(String reason, ByteBuffer snd) throws MSSException {
         stage = HS_FAIL;
-        throw new MSSException(reason);
+        byte[] data = reason.getBytes(StandardCharsets.UTF_8);
+        MSSException e = error = new MSSException(reason);
+        if (snd.capacity() < 2 + data.length) throw e;
+        snd.clear();
+        snd.put(PH_ERROR).put((byte) data.length).put(data);
+        return HS_OK;
     }
 
-    final int error(String reason, Throwable ex) throws MSSException {
+    final int error(Throwable ex, String reason, ByteBuffer snd) throws MSSException {
         stage = HS_FAIL;
-        throw new MSSException(reason, ex);
+        byte[] data = reason.getBytes(StandardCharsets.UTF_8);
+        MSSException e = error = new MSSException(reason, ex);
+        if (snd.capacity() < 2 + data.length) throw e;
+        snd.clear();
+        snd.put(PH_ERROR).put((byte) data.length).put(data);
+        return HS_OK;
     }
 
     final int packetError(ByteBuffer rcv) throws MSSException {
-        if (rcv.remaining() < 2) return BUFFER_UNDERFLOW;
-        if (rcv.remaining() < (rcv.get(1) & 0xFF) + 2) return BUFFER_UNDERFLOW;
-        byte[] utf = new byte[rcv.remaining() - 2];
+        if (rcv.remaining() < 2) return uf(2);
+        if (rcv.remaining() < (rcv.get(1) & 0xFF) + 2) return uf((rcv.get(1) & 0xFF) + 2);
+        byte[] utf = new byte[rcv.get(1) & 0xFF];
+        for (int i = 0; i < utf.length; i++) {
+            // 保不齐又来个log4j2或类似的0day...
+            byte b = utf[i];
+            if (b < 32) {
+                utf[i] = ' ';
+            } else {
+                switch (b) {
+                    case '{':
+                    case '[':
+                    case '<':
+                    case '$':
+                        utf[i] = ' ';
+                }
+            }
+        }
+        rcv.position(2);
         rcv.get(utf);
-        return error("对等端: " + new String(utf, StandardCharsets.UTF_8));
+        stage = HS_FAIL;
+        error = new MSSException("对面告诉你 '" + new String(utf, StandardCharsets.UTF_8) + "'");
+        throw error;
     }
 }

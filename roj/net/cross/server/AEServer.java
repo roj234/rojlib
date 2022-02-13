@@ -34,7 +34,7 @@ import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.misc.FDCLoop;
 import roj.net.misc.Shutdownable;
-import roj.net.mss.MSSServerEngineFactory;
+import roj.net.mss.MSSEngineFactory;
 import roj.util.EmptyArrays;
 
 import java.io.FileDescriptor;
@@ -77,12 +77,12 @@ public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
 
     private final TaskPool asyncPool;
     private final FDCLoop<Client> man;
-    private final ServerSocket socket;
-    private final MSSServerEngineFactory factory;
+    private final ServerSocket     socket;
+    private final MSSEngineFactory factory;
 
     final AtomicInteger remain;
 
-    public AEServer(InetSocketAddress addr, int conn, MSSServerEngineFactory factory) throws IOException {
+    public AEServer(InetSocketAddress addr, int conn, MSSEngineFactory factory) throws IOException {
         ServerSocket s = this.socket = new ServerSocket();
         s.setReuseAddress(true);
         s.bind(addr, conn);

@@ -37,9 +37,10 @@ import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.StringResponse;
-import roj.net.mss.JPubKey;
-import roj.net.mss.MSSServerEngineFactory;
-import roj.net.mss.PreSharedPubKey;
+import roj.net.mss.JKeyFormat;
+import roj.net.mss.MSSKeyPair;
+import roj.net.mss.SimpleEngineFactory;
+import roj.net.mss.SimplePSK;
 import roj.text.CharList;
 import roj.text.LoggingStream;
 import roj.text.TextUtil;
@@ -76,7 +77,7 @@ public class AEGuiServer {
         byte[] keyPass = null;
         String port = null, motd = "任务：拯救世界(1/1)";
         int webPort = -1, maxUsers = 100;
-        boolean log = false, unshared = false;
+        boolean log = false;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "-consolelog":
@@ -93,9 +94,6 @@ public class AEGuiServer {
                     break;
                 case "-keypass":
                     keyPass = args[++i].getBytes(StandardCharsets.UTF_8);
-                    break;
-                case "-unshared":
-                    unshared = true;
                     break;
                 case "-motd":
                     motd = args[++i];
@@ -137,9 +135,10 @@ public class AEGuiServer {
         if (pair == null) return;
 
         try {
-            MSSServerEngineFactory factory = new MSSServerEngineFactory(unshared ?
-                       JPubKey.JAVARSA : new PreSharedPubKey(pair.getPublic()),
-                       pair.getPublic(), pair.getPrivate());
+            SimpleEngineFactory factory = new SimpleEngineFactory(JKeyFormat.JAVARSA, pair.getPublic(), pair.getPrivate());
+            factory.setPSK(new MSSKeyPair[]{
+                new SimplePSK(233, pair.getPublic(), pair.getPrivate())
+            });
             server = new AEServer(addr, maxUsers, factory);
         } catch (IOException | GeneralSecurityException e) {
             System.out.println("Invalid certificate / IO Error");

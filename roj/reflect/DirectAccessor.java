@@ -42,14 +42,12 @@ import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.collect.IBitSet;
-import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SingleBitSet;
 import roj.concurrent.Ref;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.EmptyArrays;
-import roj.util.Helpers;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
@@ -61,7 +59,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.type.NativeType.CLASS;
-import static roj.collect.IntMap.NOT_USING;
 
 /**
  * 替代反射，目前不能修改final字段，然而这是JVM的锅 <br>
@@ -90,8 +87,8 @@ public final class DirectAccessor<T> {
     private       Clazz    var;
 
     // Cached object
-    private final CacheMap caches;
-    private       CacheMap.Entry cache;
+    private final MyHashMap<String, Cache> caches;
+    private       Cache                    cache;
 
     // Cast check
     private       boolean check;
@@ -104,38 +101,12 @@ public final class DirectAccessor<T> {
     private String[] from, to;
     private List<Class<?>[]> fuzzy;
 
-    static final class CacheMap extends MyHashMap<String, Class<?>> {
-        static final class Entry extends MyHashMap.Entry<String, Class<?>> {
-            public Entry(String s) {
-                super(s, Helpers.cast(IntMap.NOT_USING));
-            }
-            FieldInsnNode node;
-        }
-
-        @Override
-        protected MyHashMap.Entry<String, Class<?>> createEntry(String id) {
-            return new Entry(id);
-        }
-
-        public Class<?> put(String key, Class<?> e, FieldInsnNode node) {
-            if (size > length * loadFactor) {
-                length <<= 1;
-                resize();
-            }
-
-            MyHashMap.Entry<String, Class<?>> entry = getOrCreateEntry(key);
-            Object old = entry.v;
-            if (old == NOT_USING) {
-                size++;
-                entry.v = e;
-                ((Entry) entry).node = node;
-                return null;
-            }
-            return (Class<?>) old;
-        }
+    static final class Cache {
+        Class<?> clazz;
+        FieldInsnNode node;
     }
 
-    private DirectAccessor(Class<T> deClass, String packageName) {
+    private DirectAccessor(Class<T> deClass, String pkg, boolean checkDuplicate) {
         this.owner = deClass;
         this.check = true;
         if(!deClass.isInterface())
@@ -150,13 +121,13 @@ public final class DirectAccessor<T> {
             if (("toString".equals(method.getName()) ||
                     "clone".equals(method.getName())) && method.getParameterCount() == 0) continue;
 
-            if(methodByName.put(method.getName(), method) != null) {
+            if(methodByName.put(method.getName(), method) != null && checkDuplicate) {
                 throw new IllegalArgumentException("方法名重复: '" + method.getName() + "' in " + deClass.getName());
             }
         }
         var = new Clazz();
-        caches = new CacheMap();
-        String clsName = packageName + "DAB$" + NEXT_ID.getAndIncrement();
+        caches = new MyHashMap<>();
+        String clsName = pkg + "DAB$" + NEXT_ID.getAndIncrement();
         makeHeader(clsName, deClass.getName().replace('.', '/'), var);
         addInit(var);
         if(DEBUG)
@@ -316,7 +287,10 @@ public final class DirectAccessor<T> {
             var.methods.add(get);
         }
 
-        caches.put(name, targetClass, _get);
+        Cache cache = new Cache();
+        cache.clazz = targetClass;
+        cache.node = _get;
+        caches.put(name, cache);
 
         return this;
     }
@@ -333,7 +307,7 @@ public final class DirectAccessor<T> {
     }
 
     public DirectAccessor<T> useCache(String name) {
-        cache = (CacheMap.Entry) caches.getEntry(name);
+        cache = caches.get(name);
         if(cache == null && name != null) {
             throw new IllegalArgumentException("Cache '" + name + "' not exist");
         }
@@ -394,7 +368,7 @@ public final class DirectAccessor<T> {
         Method[] sMethods = new Method[names.length];
         Constructor<?>[] tMethods = new Constructor<?>[names.length];
 
-        Constructor<?>[] constructors = target.getConstructors();
+        Constructor<?>[] constructors = fuzzy == null ? null : target.getDeclaredConstructors();
         for (int i = 0; i < names.length; i++) {
             String name = names[i];
             Method m = methodByName.remove(name);
@@ -426,7 +400,7 @@ public final class DirectAccessor<T> {
             try {
                 if (fuzzy == null || (!fuzzy.isEmpty() && fuzzy.get(i) != null)) {
                     // for exception
-                    tMethods[i] = target.getConstructor(fuzzy == null ? types : (types = fuzzy.get(i)));
+                    tMethods[i] = target.getDeclaredConstructor(fuzzy == null ? types : (types = fuzzy.get(i)));
                 } else {
                     objectToObject(types);
                     int found = 0;
@@ -475,7 +449,7 @@ public final class DirectAccessor<T> {
             Method sm = sMethods[i];
             Class<?>[] params2 = sm.getParameterTypes();
             String sDesc = objectDescriptors(params, sm.getReturnType(), fuzzy == null);
-            roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, names[i], sDesc);
+            roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, sm.getName(), sDesc);
 
             AttrCode code;
             invoke.code = code = new AttrCode(invoke);
@@ -592,9 +566,9 @@ public final class DirectAccessor<T> {
             return this;
         boolean useCache = cache != null;
         if(useCache) {
-            if (!target.isAssignableFrom(cache.v))
+            if (!target.isAssignableFrom(cache.clazz))
                 throw new IllegalArgumentException(
-                        "使用了缓存的对象 '" + cache.v.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.v.getName() + "'.");
+                        "使用了缓存的对象 '" + cache.clazz.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.clazz.getName() + "'.");
         }
 
         Method[] tMethods = new Method[selfNames.length];
@@ -732,7 +706,6 @@ public final class DirectAccessor<T> {
                     insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
                     if (check && !target.isAssignableFrom(params2[0]))
                         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, tName));
-                    //invoke.parameters().add(0, new Type(fuzzyMode == null ? target.getName().replace('.', '/') : "java/lang/Object"));
                 }
             }
 
@@ -799,9 +772,9 @@ public final class DirectAccessor<T> {
             return this;
         boolean useCache = cache != null;
         if(useCache) {
-            if (!target.isAssignableFrom(cache.v))
+            if (!target.isAssignableFrom(cache.clazz))
                 throw new IllegalArgumentException(
-                        "使用了缓存的对象 '" + cache.v.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.v.getName() + "'.");
+                        "使用了缓存的对象 '" + cache.clazz.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.clazz.getName() + "'.");
         }
 
         Field[] fieldFs = new Field[fields.length];
@@ -943,61 +916,71 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> i_construct(String target, String initParam, String self) {
-        Method method = methodByName.remove(self);
-        if (method == null) {
+    public DirectAccessor<T> i_construct(String target, String desc, String self) {
+        Method mm = methodByName.remove(self);
+        if (mm == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
         }
 
+        return i_construct(target, desc, mm);
+    }
+
+    public DirectAccessor<T> i_construct(String target, String desc, Method self) {
         target = target.replace('.', '/');
 
-        String methodParam = ParamHelper.classDescriptors(method.getParameterTypes(), method.getReturnType());
+        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self.getName(),
+                                     ParamHelper.classDescriptors(self.getParameterTypes(), self.getReturnType()));
 
-        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self, methodParam);
-        AttrCode code = invoke.code = new AttrCode(invoke);
+        AttrCode code;
+        invoke.code = code = new AttrCode(invoke);
 
         InsnList insn = code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, target));
         insn.add(NodeHelper.npc(Opcodes.DUP));
 
-        List<Type> params = ParamHelper.parseMethod(initParam);
+        List<Type> params = ParamHelper.parseMethod(desc);
         params.remove(params.size() - 1);
         int size = 1;
-        for (int j = 0; j < params.size(); j++) {
-            NodeHelper.compress(insn, NodeHelper.X_LOAD(params.get(j).nativeName().charAt(0)), size++);
-            switch (params.get(j).type) {
-                case NativeType.DOUBLE:
-                case NativeType.LONG:
+        for (int i = 0; i < params.size(); i++) {
+            Type param = params.get(i);
+            char x = param.nativeName().charAt(0);
+            NodeHelper.compress(insn, NodeHelper.X_LOAD(x), ++size);
+            switch (x) {
+                case 'D':
+                case 'L':
                     size++;
             }
         }
 
         code.stackSize = code.localSize = (char) (size + 1);
 
-        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, target, "<init>", initParam));
+        insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, target, "<init>", desc));
         insn.add(NodeHelper.npc(Opcodes.ARETURN));
 
         var.methods.add(invoke);
 
         if(sb != null) {
             sb.append("\n  构造器代理[不安全]: ").append(target).append("\n  方法:\n    ")
-              .append(self).append(' ').append(initParam);
+              .append(self.getName()).append(' ').append(desc);
         }
 
         return this;
     }
 
-    public DirectAccessor<T> i_delegate(String target, String methodName, String methodDesc, String self, boolean isStatic, boolean isDirect) {
+    public DirectAccessor<T> i_delegate(String target, String name, String desc, String self, boolean isStatic, boolean isDirect) {
         Method m = methodByName.remove(self);
         if (m == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
         }
+        return i_delegate(target, name, desc, m, isStatic, isDirect);
+    }
 
+    public DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, boolean isStatic, boolean isDirect) {
         target = target.replace('.', '/');
 
-        String sDesc = ParamHelper.classDescriptors(m.getParameterTypes(), m.getReturnType());
+        String sDesc = ParamHelper.classDescriptors(self.getParameterTypes(), self.getReturnType());
 
-        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self, sDesc);
+        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self.getName(), sDesc);
         AttrCode code;
         invoke.code = code = new AttrCode(invoke);
         var.methods.add(invoke);
@@ -1006,15 +989,16 @@ public final class DirectAccessor<T> {
 
         if (!isStatic) {
             insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
-            //invoke.parameters().add(0, new Type("java/lang/Object"));
         }
 
-        List<Type> params = ParamHelper.parseMethod(methodDesc);
+        List<Type> params = ParamHelper.parseMethod(desc);
         params.remove(params.size() - 1);
-        int size = 1;
-        for (Type param : params) {
-            NodeHelper.compress(insn, NodeHelper.X_LOAD((char) param.type), ++size);
-            switch (param.type) {
+        int size = isStatic ? 0 : 1;
+        for (int i = 0; i < params.size(); i++) {
+            Type param = params.get(i);
+            char x = param.nativeName().charAt(0);
+            NodeHelper.compress(insn, NodeHelper.X_LOAD(x), ++size);
+            switch (x) {
                 case 'D':
                 case 'L':
                     size++;
@@ -1024,70 +1008,71 @@ public final class DirectAccessor<T> {
         code.stackSize = (char) Math.max(size + (isStatic ? 1 : 0), 1);
         code.localSize = (char) (size + 1);
 
-        insn.add(new InvokeInsnNode(isStatic ? Opcodes.INVOKESTATIC : (isDirect ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), target, m.getName(), methodDesc));
-        insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(m.getReturnType())));
+        insn.add(new InvokeInsnNode(isStatic ? Opcodes.INVOKESTATIC : (isDirect ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), target, self.getName(), desc));
+        insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(self.getReturnType())));
 
         if(sb != null) {
             sb.append("\n  方法代理[不安全]: ").append(target).append("\n  方法:\n    ")
-              .append(methodName).append(' ').append(methodDesc).append(" => ").append(self).append(' ').append(sDesc);
+              .append(name).append(' ').append(desc).append(" => ").append(self.getName()).append(' ').append(sDesc);
         }
 
         return this;
     }
 
-    public DirectAccessor<T> i_access(String target, String field, Type fieldType, String getter, String setter) {
+    public DirectAccessor<T> i_access(String target, String name, Type type, String getter, String setter, boolean isStatic) {
+        Method g = methodByName.remove(getter);
+        if (g == null) {
+            throw new IllegalArgumentException(owner.getName() + '.' + getter + " 不存在或已被占用!");
+        }
+        Method s = methodByName.remove(setter);
+        if (s == null) {
+            throw new IllegalArgumentException(owner.getName() + '.' + setter + " 不存在或已被占用!");
+        }
+        return i_access(target, name, type, g, s, isStatic);
+    }
+
+    public DirectAccessor<T> i_access(String target, String name, Type type, Method getter, Method setter, boolean isStatic) {
         target = target.replace('.', '/');
 
         if(getter != null) {
-            Method method = methodByName.remove(getter);
-            if (method == null) {
-                throw new IllegalArgumentException(owner.getName() + '.' + getter + " 不存在或已被占用!");
-            }
-            if(method.getParameterCount() != 2)
-                throw new IllegalArgumentException(owner.getName() + '.' + getter + ": 期待两个参数, got " + method.getParameterCount() + '!');
-
-            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, "get", "()" + ParamHelper.classDescriptor(method.getReturnType()));
+            Class<?>[] params2 = isStatic ? EmptyArrays.CLASSES : getter.getParameterTypes();
+            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, getter.getName(), ParamHelper.classDescriptors(params2, getter.getReturnType()));
             AttrCode code = get.code = new AttrCode(get);
 
-            byte type = get.getReturnType().type;
-            code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1);
-            code.localSize = 2;
+            byte typeId = type.type;
+            code.stackSize = (char) (typeId == NativeType.DOUBLE || typeId == NativeType.LONG ? 2 : 1);
 
             InsnList insn = code.instructions;
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
-            insn.add(new FieldInsnNode(Opcodes.GETFIELD, target, field, fieldType));
-            insn.add(NodeHelper.X_RETURN(fieldType.nativeName()));
+            if(!isStatic) {
+                code.localSize = 2;
+                insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                insn.add(new FieldInsnNode(Opcodes.GETFIELD, target, name, type));
+            } else {
+                code.localSize = 1;
+                insn.add(new FieldInsnNode(Opcodes.GETSTATIC, target, name, type));
+            }
+            insn.add(NodeHelper.X_RETURN(type.nativeName()));
 
             var.methods.add(get);
         }
 
         if(setter != null) {
-            Method method = methodByName.remove(setter);
-            if (method == null) {
-                throw new IllegalArgumentException(owner.getName() + '.' + setter + " 不存在或已被占用!");
-            }
-            if(method.getParameterCount() != 1)
-                throw new IllegalArgumentException(owner.getName() + '.' + setter + " 是个 setter, " +
-                                                           "只因有1个参数, got " + method.getParameterCount() + '!');
-            if(method.getReturnType() != void.class)
-                throw new IllegalArgumentException(owner.getName() + '.' + setter + " 是个 setter, " +
-                                                           "但是它的返回值不是void: " + method.getReturnType());
-
-            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, "set", ParamHelper.classDescriptors(method.getParameterTypes(), void.class));
+            Class<?>[] params2 = setter.getParameterTypes();
+            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, setter.getName(), ParamHelper.classDescriptors(params2, void.class));
             AttrCode code = set.code = new AttrCode(set);
 
-            byte type = set.getReturnType().type;
-            code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1);
-            code.localSize = (char) (code.stackSize + 1);
+            byte typeId = type.type;
+            code.stackSize = (char) (typeId == NativeType.DOUBLE || typeId == NativeType.LONG ? 3 : 2);
 
             InsnList insn = code.instructions;
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
-            if (check)
-                insn.add(new ClassInsnNode(Opcodes.CHECKCAST, target));
-            insn.add(NodeHelper.X_LOAD_I(fieldType.nativeName().charAt(0), 2));
-            if (check && fieldType.type == CLASS)
-                insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fieldType.owner));
-            insn.add(new FieldInsnNode(Opcodes.PUTFIELD, target, field, fieldType));
+            if(!isStatic) {
+                code.localSize = (char) (code.stackSize + 1);
+                insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+            } else {
+                code.localSize = --code.stackSize;
+            }
+            insn.add(NodeHelper.X_LOAD_I(type.nativeName().charAt(0), isStatic ? 1 : 2));
+            insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, target, name, type));
             insn.add(NodeHelper.npc(Opcodes.RETURN));
 
             var.methods.add(set);
@@ -1095,19 +1080,23 @@ public final class DirectAccessor<T> {
 
         if(sb != null) {
             sb.append("\n  字段代理[不安全]: ").append(target).append("\n  方法:\n    ");
-            sb.append(target).append(' ').append(fieldType)
-              .append(" => [").append(getter).append(", ").append(setter).append(']');
+            sb.append(target).append(' ').append(type)
+              .append(" => [").append(getter.getName()).append(", ").append(setter.getName()).append(']');
         }
 
         return this;
     }
 
-    public static <V> DirectAccessor<V> builder(Class<V> deClass) {
-        return new DirectAccessor<>(deClass, "roj/reflect/");
+    public static <V> DirectAccessor<V> builder(Class<V> impl) {
+        return new DirectAccessor<>(impl, "roj/reflect/", true);
     }
 
-    public static <V> DirectAccessor<V> withPackage(Class<V> deClass, Class<?> packageClass) {
-        return new DirectAccessor<>(deClass, packageClass.getName().substring(0, packageClass.getName().lastIndexOf('/') + 1));
+    public static <V> DirectAccessor<V> builderInternal(Class<V> impl) {
+        return new DirectAccessor<>(impl, "roj/reflect/", false);
+    }
+
+    public static <V> DirectAccessor<V> withPackage(Class<V> impl, Class<?> pkg) {
+        return new DirectAccessor<>(impl, pkg.getName().substring(0, pkg.getName().lastIndexOf('/') + 1), true);
     }
 
     public DirectAccessor<T> unchecked() {

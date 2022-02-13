@@ -34,9 +34,9 @@ import java.security.GeneralSecurityException;
  * @since 2021/12/22 12:36
  */
 public interface MSSCiphers {
-    String name();
-    int specificationId();
-    int getSharedKeySize();
+    default int preference() { return 0; }
+
+    int getKeySize();
     CipheR createEncoder() throws GeneralSecurityException;
     CipheR createDecoder() throws GeneralSecurityException;
 }

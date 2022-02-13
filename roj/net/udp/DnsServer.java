@@ -50,8 +50,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Simple DNS Server
- *
+ * Simple DNS Server <br>
+ * <a href="https://www.rfc-editor.org/info/rfc1035">RFC1035</a>
  * @author solo6975
  * @since 2021/7/23 20:49
  */

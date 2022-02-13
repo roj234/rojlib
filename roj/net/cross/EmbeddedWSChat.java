@@ -39,6 +39,7 @@ public class EmbeddedWSChat extends WebSockets implements Router {
         prot.clear(); prot.add("WSChat");
     }
 
+    // 非同寻常的结论需要有非同寻常的证据
     @Override
     protected void registerNewWorker(RequestHandler handle, boolean zip) {
         ChatImpl w = new ChatImpl();

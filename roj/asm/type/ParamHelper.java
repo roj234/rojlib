@@ -332,10 +332,12 @@ public final class ParamHelper {
         sb.append(ret).append(' ').append(methodName).append("(");
 
         if (!types.isEmpty()) {
-            for (Type p : types) {
-                sb.append(p).append(", ");
-            }
-            sb.delete(sb.length() - 2, sb.length());
+            int i = 0;
+            do {
+                sb.append(types.get(i++));
+                if (i == types.size()) break;
+                sb.append(", ");
+            } while (true);
         }
 
         types.add(ret);

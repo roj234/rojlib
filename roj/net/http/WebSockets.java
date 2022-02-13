@@ -56,7 +56,7 @@ import java.util.zip.Inflater;
 
 /**
  * Websocket协议 <br>
- * @see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4
+ * <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC6455</a>
  * @author Roj234
  * @since  2021/2/14 18:26
  */

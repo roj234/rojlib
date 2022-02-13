@@ -32,10 +32,11 @@ import java.security.MessageDigest;
  * @author solo6975
  * @since 2021/10/3 15:06
  */
-public abstract class BufferedDigest extends MessageDigest {
+public abstract class BufferedDigest extends MessageDigest implements Cloneable {
     protected final int[]  intBuffer;
     protected final byte[] byteBuffer;
     protected int          bufOff;
+    protected boolean      LE;
 
     protected BufferedDigest(String algorithm) {
         super(algorithm);
@@ -89,7 +90,8 @@ public abstract class BufferedDigest extends MessageDigest {
             if ((this.bufOff = (bufOff + require)) < max) {
                 return;
             }
-            Conv.b2i(byteBuffer, 0, max, intBuffer, 0);
+            if (LE) Conv.b2i_LE(byteBuffer, 0, max, intBuffer, 0);
+            else Conv.b2i(byteBuffer, 0, max, intBuffer, 0);
             engineIntDigest();
             this.bufOff = 0;
             off += require;
@@ -99,7 +101,8 @@ public abstract class BufferedDigest extends MessageDigest {
         int r = len & (max - 1);
         len -= r;
         for (len += off; off < len; off += max) {
-            Conv.b2i(input, off, max, intBuffer, 0);
+            if (LE) Conv.b2i_LE(input, off, max, intBuffer, 0);
+            else Conv.b2i(input, off, max, intBuffer, 0);
             engineIntDigest();
         }
         this.bufOff = r;
@@ -113,8 +116,11 @@ public abstract class BufferedDigest extends MessageDigest {
     protected abstract int engineGetIntBufferLength();
 
     protected final void engineFinish() {
-        if (bufOff != 0) {
-            Conv.b2i(byteBuffer, 0, bufOff, intBuffer, 0);
+        int bo = bufOff;
+        if (bo != 0) {
+            byte[] bb = this.byteBuffer;
+            Conv.b2i(bb, 0, bo, intBuffer, 0);
+            while (bo < bb.length) bb[bo++] = 0;
             engineIntDigest();
             bufOff = 0;
         }
