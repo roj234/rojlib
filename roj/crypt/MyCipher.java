@@ -26,6 +26,7 @@
 package roj.crypt;
 
 import roj.text.TextUtil;
+import roj.util.ByteList;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -40,26 +41,26 @@ import java.security.GeneralSecurityException;
  * @author Roj233
  * @since 2021/12/27 21:35
  */
-public class MyCipher implements CipheR, DeCipher {
+public class MyCipher implements CipheR {
     public static final String MODE = "MC_MODE", IV = "IV";
     public static final int MODE_ECB = 0, MODE_CBC = 1, MODE_PCBC = 2, MODE_OFB = 3, MODE_CFB = 4, MODE_CTR = 5,
         MODE_CTS = 6, MODE_XTS = 7;
 
     public static final int PKCS5_PADDING = 8;
 
-    public final DeCipher cip;
+    public final CipheR cip;
 
     private final ByteBuffer iv, t0;
 
     private byte type, mode;
 
-    public MyCipher(DeCipher cip) {
+    public MyCipher(CipheR cip) {
         this.cip = cip;
         this.iv = ByteBuffer.allocate(cip.getBlockSize());
         this.t0 = ByteBuffer.allocate(cip.getBlockSize());
     }
 
-    public MyCipher(DeCipher cip, int i) {
+    public MyCipher(CipheR cip, int i) {
         this(cip);
         type = (byte) i;
     }
@@ -213,6 +214,11 @@ public class MyCipher implements CipheR, DeCipher {
         return OK;
     }
 
+    @Override
+    public void crypt(ByteList in, ByteList out) throws GeneralSecurityException {
+
+    }
+
     private void blockCipher(byte type, ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
         ByteBuffer b0 = this.iv;
         ByteBuffer b1 = this.t0;
@@ -276,9 +282,9 @@ public class MyCipher implements CipheR, DeCipher {
                 byte[] bb1 = b1.array();
                 blockCipher((byte) MODE_CBC, in, out);
                 if ((mode & DECRYPT) == 0) {
-
+throw new IllegalArgumentException("Not implement yet");
                 } else {
-                    if (cyl < 2) throw new IllegalBlockSizeException();
+                    if (in.remaining() < blockSize) throw new IllegalBlockSizeException();
                 }
             }
             break;

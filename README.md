@@ -1,7 +1,12 @@
 <pre>  
-## 碎碎念  
-本来有想在这里写点东西，不过觉得还是算了  
-哦，谁教教我md的语法啊，现在就是一路pre莽过去  
+## 写在前面  
+1. 谁教教我md的语法啊 233  
+2. 最近看了不少RFC, 感觉他们比CDSN好一万倍  
+3. 按照忘了哪里看的资料, 如果我想多来点star, 我应该(举例)  
+  把roj.asm拆出去开一个独立的项目叫做EasyASM啥的  
+  把roj.kscript拆出去开一个独立的项目叫做TinyJSEngine啥的  
+  把roj.mapper拆出去开一个独立的项目叫做YetAnotherObfuscator啥的  
+  ...  
   
 ## About this library  
 我的，也许很不好的理念，就是  
@@ -99,7 +104,8 @@
   
 ### roj.crypt  
   几种加密/哈希算法，还有CFB等套在块密码上面的壳子  
-  SM3 SM4 CRC64  
+  SM3 SM4 CRC64
+  ChaCha20 XChaCha20 Poly1305和他们的合体
   
 ### roj.io  
   多线程下载器 FileUtil.downloadFile / FileUtil.downloadFileAsync  
@@ -166,7 +172,13 @@
     todo: 支持UPnP  
   MSS协议，My Secure Socket    roj.net.mss  
     因为SSL不好用，自用的话还不如自己写一个协议  
-    支持选密码套件，支持流式处理而不是数据包  
+    支持选密码套件，支持流式处理而不是数据包
+    根据我贫乏的知识我推测它具有前向安全性
+      1. 客户端发送的对称密钥A通过信任的公钥加密
+      2. 服务端与返回的第二级非对称公钥(DHE/ECDHE)一起提供一个校验码
+         HMAC/Poly1305...  其中使用了对称密钥A
+    2-RTT
+    可以做到1-RTT但是挺麻烦的...
   WrappedSocket socket的NIO包装 （用DirectAccessor干了native方法）  
   Pipeline 管道处理模式 (未测试)  
   Gay 简单版本管理系统，我是拿来做增量更新的  
