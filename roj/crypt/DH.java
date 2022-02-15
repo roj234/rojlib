@@ -1,7 +1,6 @@
 package roj.crypt;
 
 import roj.net.mss.MSSSubKey;
-import roj.util.ByteList;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -18,140 +17,59 @@ public class DH implements MSSSubKey {
     static final int PRIKEY_BITS = 40*8;
     static final int PRIME_BITS = 48*8;
 
-    private BigInteger p, g;
+    private final BigInteger p, g;
     private BigInteger mySec, myPub;
-    private int pktLen;
 
-    /**
-     * First(Prime Sender)
-     */
-    public void init(Random r, boolean def) {
-        BigInteger p;
-        int g;
-        if (def) {
-            g = 5;
-            p = DEFAULT_PRIME;
-        } else {
-            switch (r.nextInt(4)) {
-                case 0:
-                    g = 2;
-                    break;
-                case 1:
-                    g = 3;
-                    break;
-                case 2:
-                    g = 5;
-                    break;
-                case 3:
-                default:
-                    g = 7;
-                    break;
-            }
-            p = BigInteger.probablePrime(PRIME_BITS, r);
-            int i = r.nextInt(2333);
-            while (i-- > 0) r.nextInt();
-        }
-        this.p = p;
-        this.g = new BigInteger(1, new byte[]{(byte) g});
-        this.mySec = new BigInteger(PRIKEY_BITS, r);
-        this.myPub = this.g.modPow(mySec, p);
-        this.pktLen = def ? 4 + myPub.bitLength()/8 : 10 + p.bitLength()/8 + this.g.bitLength()/8 + myPub.bitLength()/8;
+    public DH() {
+        this(5, DEFAULT_PRIME);
     }
 
-    /**
-     * Second(Prime Receiver)
-     */
-    public void init(Random r) {
+    public DH(int g, BigInteger p) {
+        this.p = p;
+        this.g = BigInteger.valueOf(g);
+    }
+
+    public static DH randomly(Random r) {
+        int g;
+        switch (r.nextInt(4)) {
+            case 0:
+                g = 2;
+                break;
+            case 1:
+                g = 3;
+                break;
+            case 2:
+                g = 5;
+                break;
+            case 3:
+            default:
+                g = 7;
+                break;
+        }
+        return new DH(g, BigInteger.probablePrime(PRIME_BITS, r));
+    }
+
+    public void initA(Random r, int sharedRandom) {
         this.mySec = new BigInteger(PRIKEY_BITS, r);
+        this.myPub = this.g.modPow(mySec, p);
     }
 
     public int length() {
-        return pktLen;
+        return 1 + myPub.bitLength()/8;
     }
 
-    public void reset() {
+    public void clear() {
         this.myPub = this.mySec = null;
     }
 
-    public boolean write1(ByteBuffer bb) {
-        if (bb.remaining() < pktLen) return false;
-        bb.put((byte) (p != DEFAULT_PRIME ? 1 : 0));
-        if (p != DEFAULT_PRIME) {
-            byte[] b = p.toByteArray();
-            bb.putChar((char) b.length).put(b);
-            b = g.toByteArray();
-            bb.putChar((char) b.length).put(b);
-        }
-        return write2(bb);
+    public void writeA(ByteBuffer bb) {
+        bb.put(myPub.toByteArray());
     }
 
-    public BigInteger read1(ByteBuffer bb) {
-        if (bb.get() == 1) {
-            byte[] b = new byte[bb.getChar()];
-            bb.get(b);
-            p = new BigInteger(b);
-            b = new byte[bb.getChar()];
-            bb.get(b);
-            g = new BigInteger(b);
-        } else {
-            g = new BigInteger("5");
-            p = DEFAULT_PRIME;
-        }
-        myPub = g.modPow(mySec, p);
-        this.pktLen = 2 + myPub.bitLength()/8;
-        return read2(bb);
-    }
-
-    public boolean write2(ByteBuffer bb) {
-        if (bb.remaining() < pktLen) return false;
-        byte[] b = myPub.toByteArray();
-        bb.putChar((char) b.length).put(b);
-        return true;
-    }
-
-    public BigInteger read2(ByteBuffer bb) {
-        byte[] b = new byte[bb.getChar()];
+    public byte[] readA(ByteBuffer bb) {
+        byte[] b = new byte[bb.remaining()];
         bb.get(b);
-        return new BigInteger(b).modPow(mySec, p);
-    }
-
-    public void write1(ByteList bb) {
-        bb.put((byte) (p != DEFAULT_PRIME ? 1 : 0));
-        if (p != DEFAULT_PRIME) {
-            byte[] b = p.toByteArray();
-            bb.putShort(b.length).put(b);
-            b = g.toByteArray();
-            bb.putShort(b.length).put(b);
-        }
-        write2(bb);
-    }
-
-    public BigInteger read1(ByteList bb) {
-        if (bb.readByte() == 1) {
-            byte[] b = new byte[bb.readChar()];
-            bb.read(b);
-            p = new BigInteger(b);
-            b = new byte[bb.readChar()];
-            bb.read(b);
-            g = new BigInteger(b);
-        } else {
-            g = new BigInteger("5");
-            p = DEFAULT_PRIME;
-        }
-        myPub = g.modPow(mySec, p);
-        this.pktLen = 2 + myPub.bitLength()/8;
-        return read2(bb);
-    }
-
-    public void write2(ByteList bb) {
-        byte[] b = myPub.toByteArray();
-        bb.putShort((char) b.length).put(b);
-    }
-
-    public BigInteger read2(ByteList bb) {
-        byte[] b = new byte[bb.readChar()];
-        bb.read(b);
-        return new BigInteger(b).modPow(mySec, p);
+        return new BigInteger(b).modPow(mySec, p).toByteArray();
     }
 
     /*

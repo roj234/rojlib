@@ -21,21 +21,8 @@ public final class XChaCha_Poly1305 extends ChaCha_Poly1305 {
     }
 
     @Override
-    void init() {
-        ChaCha c = this.c;
-        int[] key = c.key;
-
-        if (prng != null) {
-            prng.nextBytes(tmpNonce);
-            c.setNonce(tmpNonce);
-        }
-
-        key[12] = 0;
-        c.reset();
-        c.KeyStream();
-
-        byte[] l = tb.list;
-        Conv.i2b(c.tmp, 0, 8, l, 0);
-        p.setKey(l);
+    void generateNonce(int[] key) {
+        prng.nextBytes(tmpNonce);
+        c.setNonce(tmpNonce);
     }
 }

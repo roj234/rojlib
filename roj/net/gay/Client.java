@@ -28,7 +28,7 @@ package roj.net.gay;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
-import roj.net.NetworkUtil;
+import roj.net.mss.PSKEngineFactory;
 import roj.util.ByteList;
 
 import java.io.File;
@@ -58,8 +58,8 @@ public class Client {
         Socket socket = new Socket();
         socket.connect(InetSocketAddress.createUnresolved(s.substring(s.indexOf(':') + 1), Integer.parseInt(s.substring(0, s.indexOf(':')))), 15000);
 
-        NetworkUtil.MSSLoadClientRSAKey(new File("g_client.key"));
-        MSSSocket mss = new MSSSocket(socket, NIOUtil.fd(socket));
+        MSSSocket mss = new MSSSocket(socket, NIOUtil.fd(socket),
+        PSKEngineFactory.load(new File("g_client.key"), "RSA").newEngine());
         int timeout = 5000;
         while (!mss.handShake()) {
             LockSupport.parkNanos(20);

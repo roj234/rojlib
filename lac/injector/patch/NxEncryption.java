@@ -62,29 +62,13 @@ class NxEncryption {
         byte[] key = buf.readByteArray();
         this.verifyToken = buf.readByteArray();
         if (isMyCryptPacket) {
-            MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
-            sm4.setKey(verifyToken, MyCipher.DECRYPT | MyCipher.PKCS5_PADDING);
+            MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CFB);
+            sm4.setKey(verifyToken, MyCipher.DECRYPT);
             try {
                 sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
             } catch (GeneralSecurityException e) {
                 e.printStackTrace();
             }
-        }
-        this.publicKey = CryptManager.decodePublicKey(key);
-    }
-
-    @Inject("a")
-    public void readNoJianrong(PacketBuffer buf) {
-        buf.readByte();
-        this.hashedServerId = buf.readString(20);
-        byte[] key = buf.readByteArray();
-        this.verifyToken = buf.readByteArray();
-        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
-        sm4.setKey(verifyToken, MyCipher.DECRYPT | MyCipher.PKCS5_PADDING);
-        try {
-            sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
-        } catch (GeneralSecurityException e) {
-            e.printStackTrace();
         }
         this.publicKey = CryptManager.decodePublicKey(key);
     }

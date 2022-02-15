@@ -27,10 +27,13 @@ package roj.net.gay;
 
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITaskNaCl;
+import roj.crypt.PSKFile;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
-import roj.net.NetworkUtil;
-import roj.net.mss.*;
+import roj.net.mss.JKeyPair;
+import roj.net.mss.MSSEngineFactory;
+import roj.net.mss.MSSKeyPair;
+import roj.net.mss.SimpleEngineFactory;
 import roj.util.ByteList;
 import roj.util.FastLocalThread;
 
@@ -80,15 +83,14 @@ public class Server extends FastLocalThread {
     TaskPool watcher = new TaskPool(1, 10, 1);
 
     public Server(InetSocketAddress address, int max) throws IOException, GeneralSecurityException {
-        KeyPair pair = NetworkUtil.genAndStoreRSAKey(new File("g_server.key"),
-                                                     new File("g_client.key"), new byte[2]);
+        KeyPair pair = PSKFile.getInstance("RSA").loadOrGenerate(
+                new File("g_server.key"),
+                new File("g_client.key"), new byte[0]);
         if (pair == null)
             throw new NoSuchAlgorithmException("A critical parameter to construct the MSS engine is missing");
 
-        SimpleEngineFactory factory = new SimpleEngineFactory(JKeyFormat.JAVARSA, pair.getPublic(), pair.getPrivate());
-        factory.setPSK(new MSSKeyPair[]{
-            new SimplePSK(233, pair.getPublic(), pair.getPrivate())
-        });
+        SimpleEngineFactory factory = new SimpleEngineFactory(pair);
+        factory.setPSK(new MSSKeyPair[]{ new JKeyPair(0, pair) });
         this.factory = factory;
         this.socket = socket(address, max);
         this.maxConn = max;
@@ -112,7 +114,7 @@ public class Server extends FastLocalThread {
                 } else {
                     watcher.pushTask(new Task(this, new MSSSocket(c, NIOUtil.fd(c), factory.newEngine())));
                 }
-            } catch (IOException | GeneralSecurityException e) {
+            } catch (IOException e) {
                 if(e.getMessage().contains("close")) return;
                 e.printStackTrace();
             }

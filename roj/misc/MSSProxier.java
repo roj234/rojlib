@@ -1,9 +1,9 @@
 package roj.misc;
 
 import roj.crypt.CipheR;
+import roj.crypt.PSKFile;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
-import roj.net.NetworkUtil;
 import roj.net.misc.Pipe;
 import roj.net.misc.PipeIOThread;
 import roj.net.mss.*;
@@ -36,21 +36,21 @@ public class MSSProxier implements Runnable {
         MSSProxier inst = new MSSProxier(new InetSocketAddress(Integer.parseInt(args[0])), 100);
         inst.remote = new InetSocketAddress(InetAddress.getByName(args[1]), Integer.parseInt(args[2]));
         if (args.length > 3) {
-            KeyPair pair = NetworkUtil.genAndStoreRSAKey(new File("mssproxy.key"),
-                                                         new File("mssproxy_client.key"),
-                                                         args[3].getBytes(StandardCharsets.UTF_8));
+            KeyPair pair = PSKFile.getInstance("RSA").loadOrGenerate(
+                    new File("mssproxy.key"),
+                    new File("mssproxy_client.key"),
+                    args[3].getBytes(StandardCharsets.UTF_8));
+
             if (pair == null) {
                 System.err.println("Failed to generate keypair, exiting");
                 return;
             }
 
-            SimpleEngineFactory f = new SimpleEngineFactory(JKeyFormat.JAVARSA, pair.getPublic(), pair.getPrivate());
-            f.setPSK(new MSSKeyPair[] {
-                new SimplePSK(233, pair.getPublic(), pair.getPrivate())
-            });
+            SimpleEngineFactory f = new SimpleEngineFactory(pair);
+            f.setPSK(new MSSKeyPair[] { new JKeyPair(0, pair) });
             inst.alloc = f;
         } else {
-            NetworkUtil.MSSLoadClientRSAKey(new File("mssproxy_client.key"));
+            inst.alloc = PSKEngineFactory.load(new File("mssproxy_client.key"), "RSA");
         }
         inst.run();
     }
@@ -84,10 +84,10 @@ public class MSSProxier implements Runnable {
         }
     }
 
-    private MSSSocket connect() throws IOException, GeneralSecurityException {
+    private MSSSocket connect() throws IOException {
         Socket tar = new Socket();
         tar.connect(remote, 2400);
-        return new MSSSocket(tar, NIOUtil.fd(tar), alloc == null ? new MSSEngineClient() : alloc.newEngine());
+        return new MSSSocket(tar, NIOUtil.fd(tar), alloc.newEngine());
     }
 
     public void stop() throws IOException {

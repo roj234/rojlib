@@ -12,17 +12,33 @@ import java.util.function.Supplier;
 public class SimpleCiphers implements MSSCiphers {
     protected final int keySize, mcFlag;
     protected final Supplier<CipheR> provider;
+    protected final boolean stream;
 
     public SimpleCiphers(int keySize, Supplier<CipheR> provider) {
         this.keySize = keySize;
         this.provider = provider;
         this.mcFlag = 0;
+        this.stream = provider.get().getBlockSize() == 0;
     }
 
     public SimpleCiphers(int keySize, Supplier<CipheR> provider, int mcFlag) {
         this.keySize = keySize;
         this.provider = provider;
         this.mcFlag = mcFlag;
+        switch (mcFlag) {
+            case MyCipher.MODE_CFB:
+            case MyCipher.MODE_CTR:
+            case MyCipher.MODE_OFB:
+                stream = true;
+                break;
+            default:
+                stream = false;
+        }
+    }
+
+    @Override
+    public boolean isStreamCipher() {
+        return stream;
     }
 
     @Override

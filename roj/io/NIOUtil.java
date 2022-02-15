@@ -28,7 +28,6 @@ package roj.io;
 import roj.io.misc.FCNative;
 import roj.io.misc.SCNative;
 import roj.reflect.DirectAccessor;
-import roj.reflect.UFA;
 import roj.text.TextUtil;
 import roj.util.FastThreadLocal;
 import roj.util.Helpers;
@@ -101,7 +100,7 @@ public final class NIOUtil {
                                  .access(dc.getClass(), new String[] {"fd", "nd"}, new String[] {"dChFd", "dChNd"}, null)
                                  .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
                                  .delegate_o(b.getClass(), new String[] {"attachment", "cleaner"})
-                                 .access(b.getClass(), new String[] {"address", "capacity"}, new String[] { "address", null }, new String[] { "setAddress", "setCapacity" })
+                                 .access(b.getClass(), "address", "address", null)
                                  .build();
         } catch (Throwable e1) {
             if (e == null) e = e1;
@@ -329,11 +328,9 @@ public final class NIOUtil {
         Object sChNd();
         Object dChNd();
 
-        void setAddress(Object buf, long addr);
         long address(Object buf);
         Object attachment(Object buf);
         Object cleaner(Object buf);
-        void setCapacity(Object buf, int cap);
 
         void configureBlocking(FileDescriptor fd, boolean var1) throws IOException;
     }
@@ -342,34 +339,6 @@ public final class NIOUtil {
         while (UTIL.attachment(o) != null)
             o = UTIL.attachment(o);
         return o;
-    }
-
-    private static boolean UFAAvailable = true;
-    public static ByteBuffer expandDirectBuffer(ByteBuffer b, int newCapacity) {
-        if (!b.isDirect()) throw new IllegalArgumentException("Not direct buffer");
-        if (UTIL.attachment(b) != null) throw new IllegalArgumentException("Not topmost buffer");
-        int capacity = b.capacity();
-        if (newCapacity < b.limit())
-            throw new IllegalArgumentException("Truncate less than limit");
-        if (newCapacity != capacity) {
-            long address = UTIL.address(b);
-            if (address == 0)
-                throw new IllegalStateException("Freed buffer");
-            if (UFAAvailable) {
-                try {
-                    UTIL.setAddress(b, UFA.U.reallocateMemory(address, newCapacity));
-                    UTIL.setCapacity(b, newCapacity);
-                    return b;
-                } catch (Throwable ignored) {
-                    UFAAvailable = false;
-                }
-            }
-            ByteBuffer b1 = ByteBuffer.allocateDirect(newCapacity);
-            b1.put(b);
-            clean(b);
-            return b1;
-        }
-        return b;
     }
 
     public static void clean(Buffer shared) {

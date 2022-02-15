@@ -25,7 +25,6 @@
  */
 package lac.server.nixim;
 
-import lac.server.Config;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
@@ -58,9 +57,8 @@ class NxEncryption {
         buf.writeByte(99);
         buf.writeString(this.hashedServerId);
 
-        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
-        sm4.setKey(verifyToken, MyCipher.ENCRYPT | MyCipher.PKCS5_PADDING);
-        sm4.setOption(MyCipher.IV, Config.ENCRYPT_IV);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CFB);
+        sm4.setKey(verifyToken, MyCipher.ENCRYPT);
 
         byte[] encoded = this.publicKey.getEncoded();
         try {

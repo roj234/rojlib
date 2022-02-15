@@ -12,9 +12,10 @@ public interface MSSSign {
     int length();
 
     default void setSignKey(MSSPubKey key) {
-        setSignKey(key.key().getEncoded());
+        setSignKey(key.encodedKey());
     }
     void setSignKey(byte[] key);
+    default void updateSign(byte[] b) { updateSign(b, 0, b.length); }
     void updateSign(byte[] b, int off, int len);
     void updateSign(ByteBuffer b);
     byte[] sign();

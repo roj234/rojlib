@@ -56,7 +56,7 @@ public final class RequestHandler extends FDChannel {
     }
 
     @Override
-    public void tick() {
+    public void tick(int elapsed) {
         if (state == HANGING && System.currentTimeMillis() > time) {
             enter = false;
             state = CLOSING;

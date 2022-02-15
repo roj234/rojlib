@@ -14,7 +14,7 @@ import java.security.cert.X509Certificate;
  * @author Roj233
  * @since 2022/2/13 20:25
  */
-public class X509KeyVerifier implements MSSKeyVerifier {
+public class X509KeyVerifier implements MSSKeyManager {
     private static X509TrustManager systemDefault;
 
     final X509TrustManager tm;

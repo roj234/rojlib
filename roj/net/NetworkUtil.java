@@ -28,33 +28,20 @@ package roj.net;
 import roj.asm.type.Type;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
-import roj.crypt.MyCipher;
-import roj.crypt.SM4;
-import roj.io.IOUtil;
 import roj.math.MathUtils;
-import roj.net.mss.MSSEngineClient;
-import roj.net.mss.MSSPubKey;
-import roj.net.mss.SimplePubKey;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.ByteList;
 import sun.net.InetAddressCachePolicy;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import java.io.*;
-import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.security.*;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.security.spec.RSAPrivateKeySpec;
-import java.security.spec.RSAPublicKeySpec;
 import java.util.LinkedHashMap;
 
 /**
@@ -206,117 +193,6 @@ public final class NetworkUtil {
         @Override
         public X509Certificate[] getAcceptedIssuers() {
             return new X509Certificate[0];
-        }
-    }
-
-    public static KeyPair loadRSAKey(InputStream in, byte[] pass) throws IOException, GeneralSecurityException {
-        DataInputStream dis = new DataInputStream(in);
-        if (dis.readInt() != 0xCFCFCFCF) throw new IOException("Illegal header");
-        byte[] t = new byte[dis.readInt()];
-        dis.readFully(t);
-        BigInteger publicExp = new BigInteger(t);
-
-        t = new byte[dis.readInt()];
-        dis.readFully(t);
-
-        MyCipher mc = new MyCipher(new SM4(), MyCipher.MODE_CTR);
-        mc.setKey(pass, MyCipher.DECRYPT);
-        mc.crypt(ByteBuffer.wrap(t), ByteBuffer.wrap(t));
-        BigInteger privExp = new BigInteger(t);
-
-        t = new byte[dis.readInt()];
-        dis.readFully(t);
-        BigInteger mod = new BigInteger(t);
-
-        KeyFactory kf = KeyFactory.getInstance("RSA");
-        PrivateKey pk = kf.generatePrivate(new RSAPrivateKeySpec(mod, privExp));
-        PublicKey pu = kf.generatePublic(new RSAPublicKeySpec(mod, publicExp));
-        return new KeyPair(pu, pk);
-    }
-
-    public static void saveRSAKey(KeyPair kp, OutputStream out, byte[] pass) throws IOException, GeneralSecurityException {
-        ByteList b = IOUtil.getSharedByteBuf();
-        b.clear();
-        b.putInt(0xCFCFCFCF);
-
-        RSAPublicKey pk = (RSAPublicKey) kp.getPublic();
-        byte[] t = pk.getPublicExponent().toByteArray();
-        b.putInt(t.length).writeToStream(out);
-        b.clear();
-        out.write(t);
-
-        RSAPrivateKey pr = (RSAPrivateKey) kp.getPrivate();
-        t = pr.getPrivateExponent().toByteArray();
-        b.putInt(t.length).writeToStream(out);
-        b.clear();
-
-        MyCipher mc = new MyCipher(new SM4(), MyCipher.MODE_CTR);
-        mc.setKey(pass, MyCipher.ENCRYPT);
-        mc.crypt(ByteBuffer.wrap(t), ByteBuffer.wrap(t));
-        out.write(t);
-
-        t = pr.getModulus().toByteArray();
-        b.putInt(t.length).writeToStream(out);
-        b.clear();
-        out.write(t);
-    }
-
-    public static KeyPair genAndStoreRSAKey(File priKey, File pubKey, byte[] keyPass) {
-        KeyPair pair;
-        if (!priKey.isFile()) {
-            try {
-                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
-                pair = kpg.generateKeyPair();
-                try (FileOutputStream fos = new FileOutputStream(priKey)) {
-                    saveRSAKey(pair, fos, keyPass);
-                }
-                if (pubKey != null)
-                try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(pubKey))) {
-                    RSAPublicKey pk = (RSAPublicKey) pair.getPublic();
-                    byte[] t = pk.getPublicExponent().toByteArray();
-                    dos.writeInt(t.length);
-                    dos.write(t);
-
-                    t = pk.getModulus().toByteArray();
-                    dos.writeInt(t.length);
-                    dos.write(t);
-                }
-            } catch (GeneralSecurityException | IOException e) {
-                System.out.println("您的实现不支持RSA加密");
-                e.printStackTrace();
-                return null;
-            }
-        } else {
-            try {
-                pair = loadRSAKey(new FileInputStream(priKey), keyPass);
-            } catch (IOException | GeneralSecurityException e) {
-                System.out.println("您的实现不支持RSA加密");
-                e.printStackTrace();
-                return null;
-            }
-        }
-        return pair;
-    }
-
-    public static void MSSLoadClientRSAKey(File file) {
-        if (!file.isFile()) return;
-        try (DataInputStream di = new DataInputStream(new FileInputStream(file))) {
-            byte[] t = new byte[di.readInt()];
-            di.read(t);
-            BigInteger exp = new BigInteger(t);
-
-            t = new byte[di.readInt()];
-            di.read(t);
-            BigInteger mod = new BigInteger(t);
-
-            KeyFactory kf = KeyFactory.getInstance("RSA");
-            PublicKey pk = kf.generatePublic(new RSAPublicKeySpec(mod, exp));
-            MSSEngineClient._setDefaultPSK(new MSSPubKey[]{
-                new SimplePubKey(233, pk)
-            });
-        } catch (IOException | GeneralSecurityException e) {
-            e.printStackTrace();
-            System.err.println("MSS引擎预共享密钥初始化失败");
         }
     }
 

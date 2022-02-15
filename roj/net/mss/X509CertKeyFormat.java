@@ -25,60 +25,44 @@
  */
 package roj.net.mss;
 
-import roj.util.Helpers;
-
-import java.security.*;
-import java.security.spec.X509EncodedKeySpec;
+import java.io.ByteArrayInputStream;
+import java.security.GeneralSecurityException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 
 /**
  * @author Roj233
  * @since 2021/12/22 12:53
  */
-public final class JKeyFormat implements MSSKeyFormat<PublicKey> {
-    public static final JKeyFormat JAVARSA;
+public class X509CertKeyFormat implements MSSKeyFormat<X509Certificate> {
+    private final CertificateFactory factory;
 
-    static {
+    public X509CertKeyFormat() {
         try {
-            JAVARSA = new JKeyFormat("RSA");
-        } catch (NoSuchAlgorithmException e) {
-            Helpers.athrow(e);
-            throw null;
+            factory = CertificateFactory.getInstance("X.509");
+        } catch (Throwable e) {
+            throw new Error();
         }
     }
 
-    private final KeyFactory factory;
-
-    public JKeyFormat(String alg) throws NoSuchAlgorithmException {
-        factory = KeyFactory.getInstance(alg);
-    }
-
-    public JKeyFormat(KeyFactory factory) {
-        this.factory = factory;
-    }
-
     @Override
-    public String name() {
-        return factory.getAlgorithm();
+    public String getAlgorithm() {
+        return "X.509";
     }
 
     @Override
     public int formatId() {
-        return CipherSuite.KEY_X509;
+        return CipherSuite.KEY_X509_CERTIFICATE;
     }
 
     @Override
-    public byte[] encode(PublicKey publicKey) throws GeneralSecurityException {
-        return publicKey.getEncoded();
+    public byte[] encode(X509Certificate pk) throws GeneralSecurityException {
+        return pk.getEncoded();
     }
 
     @Override
     public MSSPubKey decode(byte[] data) throws GeneralSecurityException {
-        return new SimplePubKey(factory.generatePublic(new X509EncodedKeySpec(data)));
-    }
-
-    @Override
-    public void checkPrivateKey(PrivateKey privateKey) throws GeneralSecurityException {
-        if (!privateKey.getAlgorithm().equals(factory.getAlgorithm()))
-            throw new GeneralSecurityException("Invalid private key");
+        X509Certificate crt = (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(data));
+        return new X509CertKey(0, crt);
     }
 }

@@ -27,6 +27,7 @@ package roj.crypt;
 
 import roj.util.ByteList;
 
+import javax.crypto.IllegalBlockSizeException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
@@ -42,12 +43,19 @@ public interface CipheR {
     void setKey(byte[] key, int flags);
     default void setOption(String key, Object value) {}
 
+    default boolean isBaseCipher() { return false; }
     /**
-     * Zero: can process arbitrary length of plaintext
-     * Non-Zero: can ONLY process [it] length of plaintext at once (ECB feedback by default)
+     * Zero: stream cipher
      */
     default int getBlockSize() { return 0; }
+    default int getCryptSize(int data) { return data; }
 
     int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException;
-    void crypt(ByteList in, ByteList out) throws GeneralSecurityException;
+    default void crypt(ByteList in, ByteList out) throws GeneralSecurityException {
+        int len = getCryptSize(in.wIndex());
+        out.wIndex(out.wIndex() + len);
+        len = crypt(ByteBuffer.wrap(in.list, in.arrayOffset(), in.wIndex()),
+              ByteBuffer.wrap(out.list, out.wIndex(), len));
+        if (len != OK) throw new IllegalBlockSizeException("Precondition Violation");
+    }
 }

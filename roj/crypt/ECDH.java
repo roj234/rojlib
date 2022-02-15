@@ -1,88 +1,94 @@
 package roj.crypt;
 
-import roj.util.ByteList;
+import roj.net.mss.MSSSubKey;
+import sun.security.util.CurveDB;
+import sun.security.util.NamedCurve;
 
-import java.math.BigInteger;
+import javax.crypto.KeyAgreement;
+import java.nio.ByteBuffer;
+import java.security.*;
+import java.security.spec.AlgorithmParameterSpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Random;
 
 /**
- * y^2 = x^3 + ax + b <br/>
- * 假设爱丽丝与鲍勃需要建立共享密钥，但他们之间唯一的信道可能被第三方伊夫窃听，此时可以使用椭圆曲线密码学。
- * 首先，需要事先提前约定域参数（质数域 { F_{p}} { F_{p}}时为 { (p,a,b,G,n,h)} { (p,a,b,G,n,h)}，
- * 二元域 { F_{2}} F_{{2}}时为 { (m,f(x),a,b,G,n,h)} { (m,f(x),a,b,G,n,h)}），
- * 它是公开信息，定义了所使用的椭圆曲线；然后，双方准备符合条件的密钥
- * （在区间 { [1,n-1]} { [1,n-1]}随机一个整数作为私钥 { d} d，
- * 并与基点 { G} G相乘得到点 { Q=dG} { Q=dG}，即公钥），
- * 此时爱丽丝的密钥为 { (d_{A},Q_{A})} { (d_{A},Q_{A})}，
- * 鲍勃的密钥为 { (d_{B},Q_{B})} { (d_{B},Q_{B})}；
- * 接着，双方将自己的公钥 { Q_{A}} { Q_{A}}或 { Q_{B}} { Q_{B}}发送给对方；
- *
- * 爱丽丝计算点 { (x_{k},y_{k})=d_{A}Q_{B}} { (x_{k},y_{k})=d_{A}Q_{B}}，
- * 鲍勃计算点 { (x_{k},y_{k})=d_{B}Q_{A}} { (x_{k},y_{k})=d_{B}Q_{A}}，
- * 这就得到了双方的共享秘密 { x_{k}} x_k（即该点的x坐标）。
- * 由于 { d_{A}Q_{B}=d_{A}d_{B}G=d_{B}d_{A}G=d_{B}Q_{A}} { d_{A}Q_{B}=d_{A}d_{B}G=d_{B}d_{A}G=d_{B}Q_{A}}，
- * 因此双方得到的 { x_{k}} x_k是相等的。
- * 在实际应用中，常使用 { x_{k}} x_k和其他相关参数作为一个密钥衍生函数的输入，密钥为其输出。
- *
- * 在这个过程中，伊夫知道椭圆曲线的域参数，但爱丽丝只透露了她的公钥 { Q_{A}} { Q_{A}}，伊
- * 夫无法获得她的私钥 { d_{A}} { d_{A}}，除非伊夫能够解决椭圆曲线上的离散对数问题，这个问题被认为是困难的。
- * 同理，鲍勃的私钥也是安全的。
- * 若伊夫要计算出双方的共享秘密 { x_{k}} x_k，就需要求解迪菲-赫尔曼问题，而计算离散对数是此问题的已知最优解法，伊夫无法用其他方式直接解出共享秘密。
  * @author solo6975
  * @since 2022/2/12 15:31
  */
-public class ECDH {
-    static final class ECDHPoint {
-        BigInteger x, y;
+public class ECDH implements MSSSubKey {
+    public static final Collection<? extends NamedCurve> CURVES = CurveDB.getSupportedCurves();
 
-        public ECDHPoint() {}
-        public ECDHPoint(BigInteger x, BigInteger y) {
-            this.x = x;
-            this.y = y;
+    private final KeyPairGenerator ecpg;
+    private final KeyFactory eckf;
+    private final KeyAgreement ecka;
+    private final AlgorithmParameterSpec curve;
+
+    private byte[] data;
+
+    public ECDH() {
+        this(CURVES.iterator().next());
+    }
+
+    public ECDH(AlgorithmParameterSpec curve) {
+        this.curve = curve;
+        try {
+            ecpg = KeyPairGenerator.getInstance("EC");
+            eckf = KeyFactory.getInstance("EC");
+            ecka = KeyAgreement.getInstance("ECDH");
+        } catch (NoSuchAlgorithmException e) {
+            throw new Error(e);
         }
+    }
 
-        public ECDHPoint mul(BigInteger privateKey) {
-            return new ECDHPoint(x.multiply(privateKey), y.multiply(privateKey));
+    public static ECDH randomly(Random r) {
+        int i = r.nextInt(CURVES.size());
+        Iterator<? extends NamedCurve> itr = CURVES.iterator();
+        while (true) {
+            NamedCurve curve = itr.next();
+            if (i-- == 0) return new ECDH(curve);
         }
     }
 
-    public static void main(String[] args) {
-        DH client = new DH();
-        ByteList my = new ByteList();
+    @Override
+    public void initA(Random r, int sharedRandom) {
+        try {
+            SecureRandom r1 = r instanceof SecureRandom ? (SecureRandom) r : null;
 
-        client.write1(my);
+            ecpg.initialize(curve, r1);
+            KeyPair eckp = ecpg.generateKeyPair();
+            ecka.init(eckp.getPrivate(), r1);
 
-        DH server = new DH();
-        BigInteger bi1 = server.read1(my);
-        System.out.println(bi1);
-
-        my.clear();
-        server.write2(my);
-
-        BigInteger bi2 = client.read2(my);
-        System.out.println(bi2);
+            data = eckp.getPublic().getEncoded();
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
+            e.printStackTrace();
+        }
     }
 
-    private final BigInteger a, b;
-    private final ECDHPoint G;
-
-    // y^2 = x^3 + ax + b
-    public ECDH(BigInteger a, BigInteger b) {
-        this.a = a;
-        this.b = b;
-        this.G = new ECDHPoint();
-        G.x = new BigInteger("214123542352344232572348952763982");
-        G.y = getY(G.x);
+    @Override
+    public int length() {
+        return data.length;
     }
 
-    private BigInteger getY(BigInteger x) {
-        return x.pow(3).add(a.multiply(x)).add(b);
+    @Override
+    public void clear() {
+        data = null;
     }
 
-    public ECDHPoint getPublicKey(BigInteger privateKey) {
-        return G.mul(privateKey);
+    @Override
+    public void writeA(ByteBuffer bb) {
+        bb.put(data);
     }
 
-    public BigInteger getCommonValue(BigInteger myPrivateKey, BigInteger otherPublicKey) {
-        return myPrivateKey.multiply(otherPublicKey);
+    @Override
+    public byte[] readA(ByteBuffer bb) {
+        byte[] data = new byte[bb.remaining()];
+        bb.get(data);
+        try {
+            ecka.doPhase(eckf.generatePublic(new X509EncodedKeySpec(data)), true);
+        } catch (InvalidKeyException | InvalidKeySpecException ignored) {}
+        return ecka.generateSecret();
     }
 }

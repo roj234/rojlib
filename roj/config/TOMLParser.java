@@ -369,10 +369,10 @@ public class TOMLParser extends Parser {
                                 return readSymbol();
                             } else if ((flag & NO_NUMBER) == 0 && NUMBER.contains(c)) {
                                 if (in.length() - i > 5 && in.charAt(i+3) == '-') {
-                                    Word_L w = formRFCTime();
+                                    Word_L w = formRFCTime(true);
                                     if (w != null) return w;
                                 } else if (in.length() - i > 3 && in.charAt(i+1) == ':') {
-                                    Word_L w = formRFCTime();
+                                    Word_L w = formRFCTime(true);
                                     if (w != null) return w;
                                 }
                                 return readDigit(false);

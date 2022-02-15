@@ -74,6 +74,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
             Selector sel = this.selector;
             NIOSelectLoop<?> loop = this.owner;
             MyKeySet keys = (MyKeySet) sel.selectedKeys();
+            int elapsed;
 
             mainLoop:
             while (!loop.wasShutdown()) {
@@ -90,7 +91,6 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                 while (wakeupLock) LockSupport.park();
 
                 this.idle = true;
-                this.time = System.currentTimeMillis();
 
                 if (Thread.interrupted()) break;
                 if (sel.keys().isEmpty()) {
@@ -98,14 +98,19 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                     if (sel.keys().isEmpty()) {
                         if (Thread.interrupted() || owner.getRunningCount() > owner.minThreads) break;
                     }
+                    time = System.currentTimeMillis();
                 }
 
                 if (keys.isEmpty()) {
+                    elapsed = (int) (System.currentTimeMillis() - time);
+                    time = System.currentTimeMillis();
+                    if (elapsed == 0) continue;
+
                     synchronized (sel.keys()) {
                         for (SelectionKey key : sel.keys()) {
                             Selectable t = ((Att) key.attachment()).t;
                             try {
-                                t.idleTick();
+                                t.tick(elapsed);
                             } catch (Throwable e) {
                                 if (e instanceof ThreadDeath) break mainLoop;
                                 owner.exception.accept("T_IDLE_TICK", e);
@@ -150,11 +155,16 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                     }
                 }
                 keys.clear();
+
+                elapsed = (int) (System.currentTimeMillis() - time);
+                time = System.currentTimeMillis();
+                if (elapsed == 0) continue;
+
                 synchronized (sel.keys()) {
                     for (SelectionKey key : sel.keys()) {
                         Selectable t = ((Att) key.attachment()).t;
                         try {
-                            t.tick();
+                            t.tick(elapsed);
                         } catch (Throwable e) {
                             if (e instanceof ThreadDeath) break mainLoop;
                             owner.exception.accept("T_TICK", e);

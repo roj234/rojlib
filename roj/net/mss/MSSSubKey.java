@@ -1,8 +1,5 @@
 package roj.net.mss;
 
-import roj.util.ByteList;
-
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Random;
 
@@ -14,22 +11,17 @@ public interface MSSSubKey {
     /**
      * Initialize as Sender
      */
-    void init(Random r, boolean def);
+    void initA(Random r, int sharedRandom);
     /**
      * Initialize as Receiver
      */
-    void init(Random r);
+    default void initB(Random r, int sharedRandom) { initA(r, sharedRandom); }
 
     int length();
-    void reset();
+    void clear();
 
-    boolean write1(ByteBuffer bb);
-    BigInteger read1(ByteBuffer bb);
-    boolean write2(ByteBuffer bb);
-    BigInteger read2(ByteBuffer bb);
-
-    void write1(ByteList bb);
-    BigInteger read1(ByteList bb);
-    void write2(ByteList bb);
-    BigInteger read2(ByteList bb);
+    void writeA(ByteBuffer bb);
+    byte[] readA(ByteBuffer bb);
+    default void writeB(ByteBuffer bb) { writeA(bb); }
+    default byte[] readB(ByteBuffer bb) { return readA(bb); }
 }

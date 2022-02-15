@@ -46,9 +46,15 @@ public class ChaCha implements CipheR {
     }
 
     @Override
+    public boolean isBaseCipher() {
+        return true;
+    }
+
+    @Override
     public void setKey(byte[] pass, int flags) {
         if(pass.length != 32)
-            throw new IllegalArgumentException("ChaCha only supports 256 bits of key! (" + pass.length + ")");
+            //    throw new IllegalArgumentException("ChaCha only supports 256 bits of key! (" + pass.length + ")");
+            pass = new SM3().digest(pass);
         Conv.b2i_LE(pass, 0, 32, key, 4);
         reset();
     }
@@ -172,9 +178,6 @@ public class ChaCha implements CipheR {
         Round(Dst, round);
         for (int i = 0; i < 16; i++) Dst[i] = Integer.reverseBytes(Dst[i] + Src[i]);
         Src[12]++; // Counter
-
-        byte[] tmp = new byte[64];
-        Conv.i2b(Dst, 0, 16, tmp, 0);
     }
 
     static void Round(int[] T, int round) {

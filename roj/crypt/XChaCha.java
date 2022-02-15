@@ -15,6 +15,11 @@ public final class XChaCha extends ChaCha {
     byte[] iv;
 
     @Override
+    public String name() {
+        return "XChaCha";
+    }
+
+    @Override
     public void setKey(byte[] pass, int flags) {
         super.setKey(pass, flags);
         keySet = true;
@@ -27,11 +32,13 @@ public final class XChaCha extends ChaCha {
     public void setOption(String key, Object value) {
         switch (key) {
             case NONCE:
-                setNonce((byte[]) value);
+                byte[] nonce = (byte[]) value;
+                if (keySet) setNonce(nonce);
+                else iv = nonce;
                 break;
             case RANDOM_GENERATE_NONCE:
                 Random rng = (Random) value;
-                byte[] nonce = new byte[24];
+                nonce = new byte[24];
                 rng.nextBytes(nonce);
                 if (keySet) setNonce(nonce);
                 else iv = nonce;

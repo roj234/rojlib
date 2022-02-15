@@ -2,6 +2,7 @@ package roj.crypt;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.ShortBufferException;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
 /**
@@ -15,7 +16,13 @@ public final class PKCS5 implements Padding {
         this.block = padding;
     }
 
-    public void encode(byte[] src, int srcLen, byte[] dst) throws GeneralSecurityException {
+    @Override
+    public int getPaddedLength(int data) {
+        int len = block - data % block;
+        return data + len;
+    }
+
+    public void pad(byte[] src, int srcLen, byte[] dst) throws GeneralSecurityException {
         System.arraycopy(src, 0, dst, 0, srcLen);
         int len = block - srcLen % block;
 
@@ -26,7 +33,7 @@ public final class PKCS5 implements Padding {
         while (len-- > 0) dst[lim++] = num;
     }
 
-    public int decode(byte[] src, int srcLen, byte[] dst) throws GeneralSecurityException {
+    public int unpad(byte[] src, int srcLen, byte[] dst) throws GeneralSecurityException {
         byte last = src[srcLen - 1];
         int num = last & 0xff;
         if (num <= 0 || num > block) throw new BadPaddingException();
@@ -37,8 +44,23 @@ public final class PKCS5 implements Padding {
         for (int i = srcLen - 2; i >= start; i--) {
             if (src[i] != last) throw new BadPaddingException();
         }
-        System.arraycopy(src, 0, dst, 0, srcLen - num);
+        if (src != dst) System.arraycopy(src, 0, dst, 0, srcLen - num);
         return srcLen - num;
+    }
+
+    @Override
+    public void unpad(ByteBuffer buf) throws GeneralSecurityException {
+        byte last = buf.get(buf.limit() - 1);
+        int num = last & 0xff;
+        if (num <= 0 || num > block) throw new BadPaddingException();
+
+        int start = buf.limit() - num;
+        if (start < 0) throw new BadPaddingException();
+
+        for (int i = buf.limit() - 2; i >= start; i--) {
+            if (buf.get(i) != last) throw new BadPaddingException();
+        }
+        buf.limit(buf.limit() - num);
     }
 
     @Override

@@ -29,18 +29,17 @@ import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
+import roj.crypt.PSKFile;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
-import roj.net.NetworkUtil;
 import roj.net.cross.Util;
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.Reply;
 import roj.net.http.serv.StringResponse;
-import roj.net.mss.JKeyFormat;
+import roj.net.mss.JKeyPair;
 import roj.net.mss.MSSKeyPair;
 import roj.net.mss.SimpleEngineFactory;
-import roj.net.mss.SimplePSK;
 import roj.text.CharList;
 import roj.text.LoggingStream;
 import roj.text.TextUtil;
@@ -68,7 +67,7 @@ import java.util.Map;
 public class AEGuiServer {
     static AEServer server;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws GeneralSecurityException {
         if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "NIO Native Helper is unavailable!\n请使用Java8!");
             return;
@@ -97,6 +96,9 @@ public class AEGuiServer {
                     break;
                 case "-motd":
                     motd = args[++i];
+                    break;
+                case "-keyformat":
+                    break;
             }
         }
 
@@ -130,17 +132,19 @@ public class AEGuiServer {
             return;
         }
 
-        KeyPair pair = NetworkUtil.genAndStoreRSAKey(new File("ae_server.key"),
-                                                     new File("ae_client.key"), keyPass);
-        if (pair == null) return;
+        KeyPair pair = PSKFile.getInstance("RSA").loadOrGenerate(
+                new File("ae_server.key"),
+                new File("ae_client.key"), keyPass);
+        if (pair == null) {
+            System.out.println("无法解密密钥");
+            return;
+        }
 
         try {
-            SimpleEngineFactory factory = new SimpleEngineFactory(JKeyFormat.JAVARSA, pair.getPublic(), pair.getPrivate());
-            factory.setPSK(new MSSKeyPair[]{
-                new SimplePSK(233, pair.getPublic(), pair.getPrivate())
-            });
+            SimpleEngineFactory factory = new SimpleEngineFactory(pair);
+            factory.setPSK(new MSSKeyPair[]{ new JKeyPair(0, pair) });
             server = new AEServer(addr, maxUsers, factory);
-        } catch (IOException | GeneralSecurityException e) {
+        } catch (GeneralSecurityException | IOException e) {
             System.out.println("Invalid certificate / IO Error");
             e.printStackTrace();
             return;

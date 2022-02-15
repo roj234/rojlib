@@ -38,16 +38,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since  2020/10/17 18:31
  */
 public final class UFA extends FieldAccessor {
-    public interface UNSAFE {
+    interface UNSAFE {
         void setUnsafe(Object javaUnsafe);
         Object getUnsafe();
-
-        long allocateMemory(long size);
-        long reallocateMemory(long addr, long newsize);
-        void setMemory(Object base, long addr, long len, byte val);
-        void copyMemory(Object base, long addr, Object tbase, long taddr, long len);
-        void freeMemory(long addr);
-
 
         long staticFieldOffset(Field field);
         long objectFieldOffset(Field field);
@@ -92,7 +85,7 @@ public final class UFA extends FieldAccessor {
         void    putDoubleVolatile(Object o, long offset, double x);
     }
 
-    public static final UNSAFE U;
+    private static final UNSAFE U;
     static {
         Method[] methods = UNSAFE.class.getDeclaredMethods();
         String[] names = new String[methods.length - 2];

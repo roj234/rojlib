@@ -724,7 +724,7 @@ public abstract class AbstLexer {
         return formClip(WordPresets.STRING, readSlashString(key, true));
     }
 
-    protected Word_L formRFCTime() throws ParseException {
+    protected Word_L formRFCTime(boolean must) throws ParseException {
         CharSequence val = getText();
         int j = this.index, i = j;
 
@@ -738,9 +738,9 @@ public abstract class AbstLexer {
             if (!NUMBER.contains(c)) break;
             j++;
         } while (true);
-        if (c != '-' && c != '/' && c != ':') throw err("无效分隔符", j);
+        if (c != '-' && c != '/' && c != ':') if (!must) return null; else throw err("无效分隔符", j);
         if (c != ':') {
-            y = MathUtils.parseInt(val, i, j, 10);
+            y = dateNum(val, i, j, must);
             i = ++j;
 
             do {
@@ -749,9 +749,9 @@ public abstract class AbstLexer {
                 if (!NUMBER.contains(c)) break;
                 j++;
             } while (true);
-            if (c != '-' && c != '/') throw err("无效分隔符", j);
-            m = MathUtils.parseInt(val, i, j, 10);
-            if (m == 0 || m > 12) throw err("你是哪个星球的？一年" + m + "个月", i);
+            if (c != '-' && c != '/') if (!must) return null; else throw err("无效分隔符", j);
+            m = dateNum(val, i, j, must);
+            if (m == 0 || m > 12) if (!must) return null; else throw err("你是哪个星球的？一年" + m + "个月", i);
             i = ++j;
 
             do {
@@ -760,8 +760,8 @@ public abstract class AbstLexer {
                 if (!NUMBER.contains(c)) break;
                 j++;
             } while (true);
-            d = MathUtils.parseInt(val, i, j, 10);
-            if (d == 0 || d > 31) throw err("你是哪个星球的？一个月" + d + "天", i);
+            d = dateNum(val, i, j, must);
+            if (d == 0 || d > 31) if (!must) return null; else throw err("你是哪个星球的？一个月" + d + "天", i);
 
             ts = (ACalendar.daySinceAD(y, m, d, null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L;
             if (c != 'T' && c != 't' && c != ' ') {
@@ -784,10 +784,9 @@ public abstract class AbstLexer {
                 if (!NUMBER.contains(c)) break;
                 j++;
             } while (true);
-            if (c != ':') throw err("无效分隔符", j);
+            if (c != ':') if (!must) return null; else throw err("无效分隔符", j);
         }
-        y = MathUtils.parseInt(val, i, j, 10);
-        if (y > 23) throw err("你一天" + y + "小时", i);
+        y = dateNum(val, i, j, must);
         i = ++j;
 
         do {
@@ -796,9 +795,8 @@ public abstract class AbstLexer {
             if (!NUMBER.contains(c)) break;
             j++;
         } while (true);
-        if (c != ':') throw err("无效分隔符", j);
-        m = MathUtils.parseInt(val, i, j, 10);
-        if (m > 59) throw err("你一小时" + m + "分钟", i);
+        if (c != ':') if (!must) return null; else throw err("无效分隔符", j);
+        m = dateNum(val, i, j, must);
         i = ++j;
 
         do {
@@ -807,8 +805,10 @@ public abstract class AbstLexer {
             if (!NUMBER.contains(c)) break;
             j++;
         } while (true);
-        d = MathUtils.parseInt(val, i, j, 10);
-        if (d > 59) throw err("你一分钟" + d + "秒", i);
+        d = dateNum(val, i, j, must);
+        if (y > 23) if (!must) return null; else throw err("你一天" + y + "小时", i);
+        if (m > 59) if (!must) return null; else throw err("你一小时" + m + "分钟", i);
+        if (d > 59) if (!must) return null; else throw err("你一分钟" + d + "秒", i);
         i = ++j;
 
         ts += y * 3600000 + m * 60000 + d * 1000;
@@ -819,8 +819,8 @@ public abstract class AbstLexer {
                 if (!NUMBER.contains(c)) break;
                 j++;
             } while (true);
-            y = MathUtils.parseInt(val, i, j, 10);
-            if (y < 0 || y > 1000) throw err("无效毫秒", i);
+            y = dateNum(val, i, j, must);
+            if (y < 0 || y > 1000) if (!must) return null; else throw err("无效毫秒", i);
             i = ++j;
             ts += y;
         }
@@ -838,9 +838,9 @@ public abstract class AbstLexer {
             if (!NUMBER.contains(c)) break;
             j++;
         } while (true);
-        if (c != ':') throw err("无效分隔符", j);
-        y = MathUtils.parseInt(val, i, j, 10);
-        if (y > 23) throw err("你一天" + y + "小时", i);
+        if (c != ':') if (!must) return null; else throw err("无效分隔符", j);
+        y = dateNum(val, i, j, must);
+        if (y > 23) if (!must) return null; else throw err("你一天" + y + "小时", i);
         i = ++j;
 
         do {
@@ -849,13 +849,21 @@ public abstract class AbstLexer {
             if (!NUMBER.contains(c)) break;
             j++;
         } while (true);
-        m = MathUtils.parseInt(val, i, j, 10);
-        if (m > 59) throw err("你一小时" + m + "分钟", i);
+        m = dateNum(val, i, j, must);
+        if (m > 59) if (!must) return null; else throw err("你一小时" + m + "分钟", i);
 
         long timezoneOffset = y * 3600000 + m * 60000;
         Word_L w = new Word_L(WordPresets.RFCDATE_DATETIME_TZ, ts + d * timezoneOffset, val.subSequence(index, j-1).toString());
         this.index = j;
         return w;
+    }
+
+    private int dateNum(CharSequence val, int f, int t, boolean must) throws ParseException {
+        try {
+            return MathUtils.parseInt(val, f, t, 10);
+        } catch (NumberFormatException e) {
+            if (must) return Integer.MAX_VALUE; else throw err("无效的数字", f);
+        }
     }
 
     /**

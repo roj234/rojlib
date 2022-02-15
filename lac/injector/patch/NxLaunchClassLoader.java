@@ -90,9 +90,9 @@ class NxLaunchClassLoader extends ClassLoader implements AccessHelper {
         ByteList bw = new ByteList();
         digestModFiles(notMd5, bw);
 
-        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CBC);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CFB);
         sm4.setOption(MyCipher.IV, Arrays.copyOf(notMd5.digest(), 16));
-        sm4.setKey(bw.toByteArray(), CipheR.DECRYPT | MyCipher.PKCS5_PADDING);
+        sm4.setKey(bw.toByteArray(), CipheR.DECRYPT);
 
         bw.clear();
 

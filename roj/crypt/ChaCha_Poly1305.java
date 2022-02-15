@@ -14,13 +14,15 @@ import java.util.Random;
  */
 public class ChaCha_Poly1305 implements CipheR {
     public static final String NONCE = "IV", AAD = "AAD", PRNG = "PRNG";
+    static final int INITED = 2;
 
     final ChaCha   c;
     final Poly1305 p;
     final ByteList tb;
 
-    ByteList aad;
-    int flag;
+    private byte[] aad;
+    private byte flag;
+    private long processed;
 
     Random prng;
 
@@ -50,10 +52,10 @@ public class ChaCha_Poly1305 implements CipheR {
     @Override
     public final void setKey(byte[] key, int flags) {
         c.setKey(key, flags);
-        this.flag = flags;
+        this.flag = (byte) flags;
     }
 
-    public final void setAAD(ByteList aad) {
+    public final void setAAD(byte[] aad) {
         this.aad = aad;
     }
 
@@ -70,7 +72,7 @@ public class ChaCha_Poly1305 implements CipheR {
                 c.setNonce((byte[]) value);
                 break;
             case AAD:
-                aad = (ByteList) value;
+                aad = (byte[]) value;
                 break;
             case PRNG:
                 prng = (Random) value;
@@ -83,14 +85,17 @@ public class ChaCha_Poly1305 implements CipheR {
         return 0;
     }
 
-    void init() {
+    @Override
+    public int getCryptSize(int data) {
+        return (flag & DECRYPT) != 0 ? data - 16 : data + 16;
+    }
+
+    private void init() {
         ChaCha c = this.c;
         int[] key = c.key;
 
         if (prng != null) {
-            key[13] = prng.nextInt();
-            key[14] = prng.nextInt();
-            key[15] = prng.nextInt();
+            generateNonce(key);
         }
 
         key[12] = 0;
@@ -99,7 +104,25 @@ public class ChaCha_Poly1305 implements CipheR {
 
         byte[] l = tb.list;
         Conv.i2b(c.tmp, 0, 8, l, 0);
+
+        Poly1305 p = this.p;
         p.setKey(l);
+
+        byte[] aad = this.aad;
+        if (aad != null) {
+            int len = aad.length;
+            p.update(aad);
+            while ((len++ & 15) != 0) p.update((byte) 0);
+        }
+
+        processed = 0;
+        flag |= INITED;
+    }
+
+    void generateNonce(int[] key) {
+        key[13] = prng.nextInt();
+        key[14] = prng.nextInt();
+        key[15] = prng.nextInt();
     }
 
     @Override
@@ -107,6 +130,7 @@ public class ChaCha_Poly1305 implements CipheR {
         if ((flag & CipheR.DECRYPT) == 0) {
             if (out.remaining() < in.remaining() + 16) return BUFFER_OVERFLOW;
             bbEncrypt(in, out);
+            out.put(getPoly1305().list, 0, 16);
         } else {
             if (out.remaining() < in.remaining() - 16) return BUFFER_OVERFLOW;
             if (!in.hasRemaining()) return OK;
@@ -116,31 +140,15 @@ public class ChaCha_Poly1305 implements CipheR {
     }
 
     public final void bbEncrypt(ByteBuffer in, ByteBuffer out) {
-        init();
+        if ((flag & INITED) == 0) init();
 
-        int pos = out.position(), len;
+        int pos = out.position(), lim = out.limit();
         c.crypt(in, out);
-
-        ByteList aad = this.aad;
-        p.update(aad.list, aad.arrayOffset(), len = aad.wIndex());
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
-        int lim = out.limit();
         out.limit(out.position()).position(pos);
         p.update(out);
         out.limit(lim);
 
-        len = out.position() - pos;
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
-        ByteList tb = this.tb;
-        tb.putLongLE(aad.wIndex()).putLongLE(out.position() - pos);
-        p.update(tb.list, 0, 16);
-        tb.clear();
-
-        p._digestFinal(p.bList, tb);
-        out.put(tb.list, 0, 16);
-        tb.clear();
+        processed += out.position() - pos;
     }
 
     public final void bbDecrypt(ByteBuffer in, ByteBuffer out) throws AEADBadTagException {
@@ -149,45 +157,22 @@ public class ChaCha_Poly1305 implements CipheR {
         int lim = in.limit(), pos = in.position();
 
         in.limit(lim - 16);
+        p.update(in);
+
+        in.position(pos);
         c.crypt(in, out);
         in.limit(lim);
+        processed = lim - pos - 16;
 
-        int len;
-        ByteList aad = this.aad;
-        p.update(aad.list, aad.arrayOffset(), len = aad.wIndex());
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
-        in.limit(in.position()).position(pos);
-        p.update(in);
-        in.limit(lim);
-
-        len = lim - pos;
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
-        ByteList tb = this.tb;
-        tb.putLongLE(aad.wIndex()).putLongLE(lim - 16);
-        p.update(tb.list, 0, 16);
-        tb.clear();
-
-        p._digestFinal(p.bList, tb);
-
+        ByteList tb = getPoly1305();
         boolean ok = true;
-        //   Validating the authenticity of a message involves a bitwise
-        //   comparison of the calculated tag with the received tag.  In most use
-        //   cases, nonces and AAD contents are not "used up" until a valid
-        //   message is received.  This allows an attacker to send multiple
-        //   identical messages with different tags until one passes the tag
-        //   comparison.  This is hard if the attacker has to try all 2^128
-        //   possible tags one by one.  However, if the timing of the tag
-        //   comparison operation reveals how long a prefix of the calculated and
-        //   received tags is identical, the number of messages can be reduced
-        //   significantly.
+        //  If the timing of the tag comparison operation reveals how long
+        //  a prefix of the calculated and received tags is identical.
         for (int i = 0; i < 4; i++) {
             if (tb.readInt() != in.getInt()) {
                 ok = false;
             }
         }
-        tb.clear();
         if (!ok) throw new AEADBadTagException();
     }
 
@@ -195,30 +180,20 @@ public class ChaCha_Poly1305 implements CipheR {
     public final void crypt(ByteList in, ByteList out) throws AEADBadTagException {
         if ((flag & CipheR.DECRYPT) == 0) {
             blEncrypt(in, out);
+            out.put(getPoly1305().list, 0, 16);
         } else {
             blDecrypt(in, out);
         }
     }
 
     public final void blEncrypt(ByteList in, ByteList out) {
-        init();
+        if ((flag & INITED) == 0) init();
 
-        int pos = out.wIndex(), len;
+        int pos = out.wIndex();
         c.crypt(in, out);
+        p.update(out.list, pos, pos = out.wIndex() - pos);
 
-        ByteList aad = this.aad;
-        p.update(aad.list, aad.arrayOffset(), len = aad.wIndex());
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
-        p.update(out.list, pos, len = out.wIndex() - pos);
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
-        ByteList tb = this.tb;
-        tb.putLongLE(aad.wIndex()).putLongLE(out.wIndex() - pos);
-        p.update(tb.list, 0, 16);
-        tb.clear();
-
-        p._digestFinal(p.bList, out);
+        processed += pos;
     }
 
     public final void blDecrypt(ByteList in, ByteList out) throws AEADBadTagException {
@@ -229,27 +204,33 @@ public class ChaCha_Poly1305 implements CipheR {
         in.wIndex(in.wIndex() + 16);
 
         int len;
-        ByteList aad = this.aad;
-        p.update(aad.list, aad.arrayOffset(), len = aad.wIndex());
-        while ((len++ & 15) != 0) p.update((byte) 0);
-
         p.update(in.list, in.arrayOffset(), len = in.wIndex() - 16);
-        while ((len++ & 15) != 0) p.update((byte) 0);
+        processed = len;
 
-        ByteList tb = this.tb;
-        tb.putLongLE(aad.wIndex()).putLongLE(in.wIndex() - 16);
-        p.update(tb.list, 0, 16);
-        tb.clear();
-
-        p._digestFinal(p.bList, tb);
-
+        ByteList tb = getPoly1305();
         boolean ok = true;
         for (int i = 0; i < 4; i++) {
             if (tb.readInt() != in.readInt()) {
                 ok = false;
             }
         }
-        tb.clear();
         if (!ok) throw new AEADBadTagException();
+    }
+
+    public final ByteList getPoly1305() {
+        int len = (int) (processed & 15);
+        while ((len++ & 15) != 0) p.update((byte) 0);
+
+        ByteList tb = this.tb;
+        tb.clear();
+        tb.putLongLE(aad == null ? 0 : aad.length).putLongLE(processed);
+        p.update(tb.list, 0, 16);
+        tb.clear();
+
+        p._digestFinal(p.bList, tb);
+
+        flag &= ~INITED;
+
+        return tb;
     }
 }

@@ -26,27 +26,18 @@
 package roj.crypt;
 
 import roj.text.TextUtil;
-import roj.util.ByteList;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.ShortBufferException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
 /**
- * 让ECB模式的块密码支持流式OFB/CFB/CTR和CBC/PCBC <br>
- *     简而言之，省的以后弄<br>
- *     此外，你会发现它可以套娃
+ * 让ECB模式的块密码支持流式OFB/CFB/CTR和CBC/PCBC
  * @author Roj233
  * @since 2021/12/27 21:35
  */
 public class MyCipher implements CipheR {
     public static final String MODE = "MC_MODE", IV = "IV";
-    public static final int MODE_ECB = 0, MODE_CBC = 1, MODE_PCBC = 2, MODE_OFB = 3, MODE_CFB = 4, MODE_CTR = 5,
-        MODE_CTS = 6, MODE_XTS = 7;
-
-    public static final int PKCS5_PADDING = 8;
+    public static final int MODE_ECB = 0, MODE_CBC = 1, MODE_PCBC = 2, MODE_OFB = 3, MODE_CFB = 4, MODE_CTR = 5;
 
     public final CipheR cip;
 
@@ -55,6 +46,7 @@ public class MyCipher implements CipheR {
     private byte type, mode;
 
     public MyCipher(CipheR cip) {
+        if (!cip.isBaseCipher() || cip.getBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
         this.cip = cip;
         this.iv = ByteBuffer.allocate(cip.getBlockSize());
         this.t0 = ByteBuffer.allocate(cip.getBlockSize());
@@ -81,16 +73,6 @@ public class MyCipher implements CipheR {
                 break;
         }
         cip.setKey(key, cryptFlags);
-        resetIV();
-    }
-
-    public void resetIV() {
-        iv.clear();
-        try {
-            cip.crypt(ByteBuffer.wrap(new byte[cip.getBlockSize()]), iv);
-        } catch (GeneralSecurityException ignored) {}
-        iv.position(0);
-        t0.position(0);
     }
 
     @Override
@@ -112,34 +94,13 @@ public class MyCipher implements CipheR {
 
     @Override
     public int getBlockSize() {
-        return cip.getBlockSize();
-    }
-
-    public static void PKCS5(ByteBuffer buf, boolean unpad, int block) throws GeneralSecurityException {
-        if (unpad) {
-            byte last = buf.get(buf.position() - 1);
-            int num = last & 0xff;
-            if (num <= 0 || num > block)
-                throw new BadPaddingException();
-
-            int start = buf.position() - num;
-            if (start < 0)
-                throw new BadPaddingException();
-
-            for (int i = buf.position() - 2; i >= start; i--) {
-                if (buf.get(i) != last)
-                    throw new BadPaddingException();
-            }
-            buf.position(buf.position() - num);
-        } else {
-            int len = block - buf.limit() % block;
-
-            int lim = buf.limit();
-            if (buf.capacity() < lim + len)
-                throw new ShortBufferException("Unable pad, more: " + (len + lim - buf.capacity()));
-            byte num = (byte) len;
-            buf.limit(lim + len);
-            while (len-- > 0) buf.put(lim++, num);
+        switch (type) {
+            case MODE_ECB:
+            case MODE_CBC:
+            case MODE_PCBC:
+                return cip.getBlockSize();
+            default:
+                return 0;
         }
     }
 
@@ -192,31 +153,18 @@ public class MyCipher implements CipheR {
     public int crypt(ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
         if (out.remaining() < in.remaining()) return BUFFER_OVERFLOW;
 
-        int blockSize = iv.capacity();
-        if ((mode & (DECRYPT | PKCS5_PADDING)) == PKCS5_PADDING)
-            PKCS5(in, false, blockSize);
-
         switch (type) {
             case MODE_ECB: // Electronic Cipher Book
             case MODE_CBC: // Cipher Block Chaining
             case MODE_PCBC: // Plain Cipher Block Chaining
-            case MODE_CTS: // Cipher Text Stealing
                 blockCipher(type, in, out);
                 break;
             default:
-                if((blockSize & 3) != 0 || !try4(in, out))
+                if((iv.capacity() & 3) != 0 || !try4(in, out))
                     try1(in, out, in.remaining());
         }
 
-        if ((mode & (DECRYPT | PKCS5_PADDING)) == (DECRYPT | PKCS5_PADDING))
-            PKCS5(out, true, blockSize);
-
         return OK;
-    }
-
-    @Override
-    public void crypt(ByteList in, ByteList out) throws GeneralSecurityException {
-
     }
 
     private void blockCipher(byte type, ByteBuffer in, ByteBuffer out) throws GeneralSecurityException {
@@ -275,16 +223,6 @@ public class MyCipher implements CipheR {
                             bb0[i] = (byte) (b ^ in.get());
                         }
                     }
-                }
-            }
-            break;
-            case MODE_CTS: {
-                byte[] bb1 = b1.array();
-                blockCipher((byte) MODE_CBC, in, out);
-                if ((mode & DECRYPT) == 0) {
-throw new IllegalArgumentException("Not implement yet");
-                } else {
-                    if (in.remaining() < blockSize) throw new IllegalBlockSizeException();
                 }
             }
             break;

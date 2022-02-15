@@ -27,16 +27,14 @@ package roj.net.mss;
 
 import roj.crypt.CipheR;
 
-import java.security.GeneralSecurityException;
-
 /**
  * @author Roj233
  * @since 2021/12/22 12:36
  */
 public interface MSSCiphers {
-    default int preference() { return 0; }
+    default boolean isStreamCipher() { return false; }
 
     int getKeySize();
-    CipheR createEncoder() throws GeneralSecurityException;
-    CipheR createDecoder() throws GeneralSecurityException;
+    CipheR createEncoder();
+    CipheR createDecoder();
 }

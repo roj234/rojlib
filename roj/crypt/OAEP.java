@@ -1,6 +1,7 @@
 package roj.crypt;
 
 import javax.crypto.BadPaddingException;
+import javax.crypto.ShortBufferException;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -70,7 +71,15 @@ public final class OAEP implements Padding {
         return t.length + r.length;
     }
 
-    public void encode(byte[] src, int srcLen, byte[] dst) throws GeneralSecurityException {
+    @Override
+    public int getPaddedLength(int data) {
+        return length();
+    }
+
+    public void pad(byte[] src, int srcLen, byte[] dst) throws GeneralSecurityException {
+        if (srcLen > t.length) throw new BadPaddingException("Unable to pad");
+        if (dst.length < length()) throw new ShortBufferException();
+
         // 随机生成r
         rnd.nextBytes(r);
 
@@ -103,10 +112,12 @@ public final class OAEP implements Padding {
         System.arraycopy(r, 0, dst, t.length, r.length);
     }
 
-    public int decode(byte[] src, int srcOff, byte[] dst) throws GeneralSecurityException {
+    public int unpad(byte[] src, int srcOff, byte[] dst) throws GeneralSecurityException {
         if (src.length - srcOff < length()) throw new BadPaddingException();
 
-        int m_len = this.t.length;
+        int m_len = t.length;
+        if (dst.length < m_len) throw new ShortBufferException();
+
         byte[] r = this.r;
 
         // 恢复随机串 r 为 Y ^ H(X)
@@ -120,13 +131,21 @@ public final class OAEP implements Padding {
 
         // 恢复消息 m00...0 为 X ^ G(r)
         G.update(r, 0, r.length);
-        G.digest(dst, 0, m_len);
-        for (int i = 0; i < m_len; i++) {
-            dst[i] ^= src[i];
+
+        if (src != dst) {
+            G.digest(dst, 0, m_len);
+            for (int i = 0; i < m_len; i++) {
+                dst[i] ^= src[i];
+            }
+        } else {
+            byte[] t = this.t;
+            G.digest(t, 0, m_len);
+            for (int i = 0; i < m_len; i++) {
+                dst[i] ^= t[i];
+            }
         }
-        for (int i = dst.length - 1; i >= 0; i--) {
-            if (dst[i] != 0) return i+1;
-        }
+
+        while (m_len-- > 0) if (dst[m_len] != 0) return m_len+1;
         return 0;
     }
 

@@ -9,8 +9,7 @@ import java.nio.channels.SelectionKey;
  * @since 2022/1/24 11:55
  */
 public interface Selectable extends Closeable {
-    default void tick() throws IOException {}
-    default void idleTick() throws IOException { tick(); }
+    default void tick(int elapsed) throws IOException {}
 
     boolean isClosedOn(SelectionKey key);
     default void close() throws IOException {}

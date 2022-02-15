@@ -3,43 +3,20 @@ package roj.net.mss;
 import roj.crypt.OAEP;
 
 import javax.crypto.Cipher;
-import java.security.GeneralSecurityException;
-import java.security.PublicKey;
 
 /**
  * @author solo6975
  * @since 2022/2/13 13:02
  */
 public interface MSSPubKey {
-    String name();
-    int keyId();
+    String getAlgorithm();
+    int pskIdentity();
 
-    PublicKey key();
-    default int maxEncodeBytes() { return 128; }
+    byte[] encodedKey();
 
-    default Cipher encoder() {
-        PublicKey key = key();
-        try {
-            Cipher c = Cipher.getInstance(key.getAlgorithm());
-            c.init(Cipher.ENCRYPT_MODE, key);
-            return c;
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Should not happen");
-        }
-    }
-
-    default Cipher decoder() {
-        PublicKey key = key();
-        try {
-            Cipher c = Cipher.getInstance(key.getAlgorithm());
-            c.init(Cipher.DECRYPT_MODE, key);
-            return c;
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Should not happen");
-        }
-    }
+    Cipher encoder();
 
     default OAEP createOAEP() {
-        return new OAEP(maxEncodeBytes());
+        return new OAEP(128);
     }
 }

@@ -71,9 +71,11 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
         if (waiting > 0) return;
         try {
             if (state == null) {
-                if (!ch.shutdown() && timer-- > 0) {
-                    return;
-                }
+                try {
+                    if (!ch.shutdown() && timer-- > 0) {
+                        return;
+                    }
+                } catch (IOException ignored) {}
                 close();
             } else {
                 Stated newState = state.next(this);
@@ -128,7 +130,7 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
     static final int MAX_PACKET = 10020;
     int        wTimer;
     ByteBuffer wBuf;
-    public void tick() throws IOException {
+    public void tick(int elapsed) throws IOException {
         if (ch == null) return;
         if (state != null) {
             state.tick(this);

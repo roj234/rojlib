@@ -30,6 +30,7 @@ import roj.crypt.CipheR;
 import roj.io.NIOUtil;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
+import roj.net.mss.MSSEngineFactory;
 import roj.net.mss.MSSException;
 
 import java.io.FileDescriptor;
@@ -44,7 +45,15 @@ import java.nio.ByteBuffer;
 public class MSSSocket extends PlainSocket {
     // A RSA public key is ~900B in X.509 format
     // Hoping expandNetOut would never be called
-    private static final int BUFFER_CAPACITY = 1536;
+    private static final int BUFFER_CAPACITY = 1;
+
+    private static MSSEngineFactory alloc;
+    public static void setDefaultAllocator(MSSEngineFactory factory) {
+        alloc = factory;
+    }
+    public static MSSEngineFactory getDefaultAllocator() {
+        return alloc;
+    }
 
     private final MSSEngine engine;
 
@@ -61,7 +70,7 @@ public class MSSSocket extends PlainSocket {
     }
 
     public MSSSocket(Socket sc, FileDescriptor fd) {
-        this(sc, fd, new MSSEngineClient());
+        this(sc, fd, alloc == null ? new MSSEngineClient() : alloc.newEngine());
     }
 
     // region handshake
@@ -75,7 +84,6 @@ public class MSSSocket extends PlainSocket {
         outCopy = bb.duplicate();
         bb.flip();
         hsOut = bb;
-        //hsOut = NIOUtil.expandDirectBuffer(hsOut, _size);
     }
 
     @SuppressWarnings("fallthrough")
@@ -146,6 +154,9 @@ public class MSSSocket extends PlainSocket {
 
         d = engine.getDecoder();
         e = engine.getEncoder();
+
+        byte[] preFlight = engine.getPreflightData();
+        if (preFlight != null) rBuf.put(preFlight);
 
         outCopy.position(0).limit(rBuf.position());
         rBuf.clear();

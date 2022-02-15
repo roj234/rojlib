@@ -25,48 +25,75 @@
  */
 package roj.net.mss;
 
-import java.io.ByteArrayInputStream;
+import roj.util.Helpers;
+
 import java.security.GeneralSecurityException;
-import java.security.PrivateKey;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
 
 /**
  * @author Roj233
  * @since 2021/12/22 12:53
  */
-public class X509KeyFormat implements MSSKeyFormat<X509Certificate> {
-    private final CertificateFactory factory;
+public final class X509KeyFormat implements MSSKeyFormat<PublicKey> {
+    public static final X509KeyFormat RSA, EC, DH;
 
-    public X509KeyFormat() {
+    static {
+        X509KeyFormat t;
         try {
-            factory = CertificateFactory.getInstance("X.509");
-        } catch (Throwable e) {
-            throw new Error();
+            RSA = new X509KeyFormat("RSA", CipherSuite.KEY_X509_RSA);
+        } catch (NoSuchAlgorithmException e) {
+            Helpers.athrow(e);
+            throw null;
         }
+
+        try {
+            t = new X509KeyFormat("EC", CipherSuite.KEY_X509_EC);
+        } catch (NoSuchAlgorithmException e) {
+            t = null;
+        }
+        EC = t;
+
+        try {
+            t = new X509KeyFormat("DH", CipherSuite.KEY_X509_DH);
+        } catch (NoSuchAlgorithmException e) {
+            t = null;
+        }
+        DH = t;
+    }
+
+    private final KeyFactory factory;
+    private final byte id;
+
+    public X509KeyFormat(String alg, int fid) throws NoSuchAlgorithmException {
+        factory = KeyFactory.getInstance(alg);
+        id = (byte) fid;
+    }
+
+    public X509KeyFormat(KeyFactory factory, int fid) {
+        this.factory = factory;
+        id = (byte) fid;
     }
 
     @Override
-    public String name() {
-        return "X.509 " + factory.getType();
+    public String getAlgorithm() {
+        return factory.getAlgorithm();
     }
 
     @Override
     public int formatId() {
-        return CipherSuite.KEY_X509_CERTIFICATE;
+        return id & 0xFF;
     }
 
     @Override
-    public byte[] encode(X509Certificate publicKey) throws GeneralSecurityException {
-        return publicKey.getEncoded();
+    public byte[] encode(PublicKey pub) {
+        return pub.getEncoded();
     }
 
     @Override
     public MSSPubKey decode(byte[] data) throws GeneralSecurityException {
-        X509Certificate crt = (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(data));
-        return new X509CertKey(0, crt);
+        return new JPubKey(factory.generatePublic(new X509EncodedKeySpec(data)));
     }
-
-    @Override
-    public void checkPrivateKey(PrivateKey key) {}
 }

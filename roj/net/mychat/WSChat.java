@@ -38,8 +38,8 @@ public abstract class WSChat extends WebSockets.Worker {
     protected boolean shutdownInProgress;
 
     @Override
-    public final void tick() throws IOException {
-        super.tick();
+    public final void tick(int elapsed) throws IOException {
+        super.tick(elapsed);
         if (!hasDataPending() && pb.hasMore()) {
             ByteList b = WebSockets.getUTFCoder().byteBuf;
             b.ensureCapacity(256);

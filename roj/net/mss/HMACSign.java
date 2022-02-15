@@ -17,15 +17,13 @@ public class HMACSign implements MSSSign {
     public static final HMACSign SHA384withHMAC;
 
     static {
-        HMACSign t;
         try {
-            t = new HMACSign(MessageDigest.getInstance("SHA-256"), EmptyArrays.BYTES, 80);
+            SHA256withHMAC = new HMACSign(MessageDigest.getInstance("SHA-256"), EmptyArrays.BYTES, 80);
         } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-            t = null;
+            throw new Error();
         }
-        SHA256withHMAC = t;
 
+        HMACSign t;
         try {
             t = new HMACSign(MessageDigest.getInstance("SHA-384"), EmptyArrays.BYTES, 80);
         } catch (NoSuchAlgorithmException e) {
@@ -80,7 +78,7 @@ public class HMACSign implements MSSSign {
             md.update(salt);
             md.digestShared();
         }
-        return md.digestShared();
+        return data;
     }
 
     public MSSSign copy() {

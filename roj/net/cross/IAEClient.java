@@ -29,11 +29,11 @@ import roj.collect.Int2IntMap;
 import roj.collect.IntMap;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
-import roj.net.NetworkUtil;
 import roj.net.WrappedSocket;
 import roj.net.misc.Pipe;
 import roj.net.misc.Pipe.CipherPipe;
 import roj.net.misc.Shutdownable;
+import roj.net.mss.PSKEngineFactory;
 import roj.util.FastLocalThread;
 
 import java.io.File;
@@ -55,7 +55,10 @@ import static roj.net.cross.Util.*;
  */
 abstract class IAEClient extends FastLocalThread implements Shutdownable {
     static {
-        NetworkUtil.MSSLoadClientRSAKey(new File(System.getProperty("ae.keyPath", "ae_client.key")));
+        File file = new File(System.getProperty("ae.keyPath", "ae_client.key"));
+        if (file.isFile()) {
+            MSSSocket.setDefaultAllocator(PSKEngineFactory.load(file, "RSA"));
+        }
     }
 
     // 客户端最低保留频道

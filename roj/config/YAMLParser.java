@@ -773,7 +773,7 @@ public class YAMLParser extends Parser {
         @Override
         protected Word formNumberClip(byte flag, CharList temp, boolean negative) throws ParseException {
             if(temp.length() == 4) { // yyyyx
-                Word_L ts = formRFCTime();
+                Word_L ts = formRFCTime(false);
                 if (ts != null) return ts;
             }
             return formClip((short) (WordPresets.INTEGER + flag), temp).number(this, negative);

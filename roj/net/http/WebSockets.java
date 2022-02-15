@@ -263,7 +263,7 @@ public class WebSockets {
         }
 
         @Override
-        public void tick() throws IOException {
+        public void tick(int elapsed) throws IOException {
             ch.dataFlush();
             if (idle++ == 30000) {
                 send(FRAME_PING, null);

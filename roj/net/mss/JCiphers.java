@@ -30,12 +30,14 @@ import roj.util.ByteList;
 import roj.util.EmptyArrays;
 
 import javax.crypto.Cipher;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
@@ -57,12 +59,12 @@ public final class JCiphers implements MSSCiphers {
     }
 
     @Override
-    public CipheR createEncoder() throws GeneralSecurityException {
+    public CipheR createEncoder() {
         return new Delegate(alg, (byte) Cipher.ENCRYPT_MODE);
     }
 
     @Override
-    public CipheR createDecoder() throws GeneralSecurityException {
+    public CipheR createDecoder() {
         return new Delegate(alg, (byte) Cipher.DECRYPT_MODE);
     }
 
@@ -70,8 +72,12 @@ public final class JCiphers implements MSSCiphers {
         byte[] tmp;
         private final Cipher cip;
         private final byte mode;
-        Delegate(String name, byte mode) throws GeneralSecurityException {
-            this.cip = Cipher.getInstance(name);
+        Delegate(String name, byte mode) {
+            try {
+                this.cip = Cipher.getInstance(name);
+            } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+                throw new IllegalStateException("Unable to create the Cipher", e);
+            }
             this.mode = mode;
             this.tmp = EmptyArrays.BYTES;
         }
@@ -83,12 +89,12 @@ public final class JCiphers implements MSSCiphers {
 
         @Override
         public void setKey(byte[] key, int flags) {
+            SecretKeySpec sk = new SecretKeySpec(key, cip.getAlgorithm().substring(0, cip.getAlgorithm().indexOf('/')));
             try {
-                cip.init(mode,
-                         new SecretKeySpec(key, cip.getAlgorithm().substring(0, cip.getAlgorithm().indexOf('/'))),
-                         new IvParameterSpec(Arrays.copyOf(key, 16)));
+                cip.init(mode, sk, new IvParameterSpec(Arrays.copyOf(key, 16)));
             } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
                 e.printStackTrace();
+                System.out.println("Failed to initialize cipher");
             }
         }
 

@@ -44,7 +44,7 @@ final class Logout extends Stated {
     }
 
     @Override
-    Stated next(Client self) throws IOException {
+    Stated next(Client self) {
         if (self.st1 == 0) {
             self.ch.buffer().clear();
             try {
@@ -53,9 +53,11 @@ final class Logout extends Stated {
             self.st1 = 1;
         }
         if (this == LOGOUT) {
-            if (self.ch.read() == 0 && self.timer-- > 0) {
-                return this;
-            }
+            try {
+                if (self.ch.read() == 0 && self.timer-- > 0) {
+                    return this;
+                }
+            } catch (IOException ignored) {}
         }
         syncPrint(self + ": 断开");
         return null;

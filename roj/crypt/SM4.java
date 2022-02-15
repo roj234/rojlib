@@ -61,6 +61,11 @@ public final class SM4 implements CipheR {
     }
 
     @Override
+    public boolean isBaseCipher() {
+        return true;
+    }
+
+    @Override
     public int crypt(ByteBuffer in, ByteBuffer out) {
         int[] T = this.tmp;
         int[] sKey = this.sKey;

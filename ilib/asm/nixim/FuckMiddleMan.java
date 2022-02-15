@@ -58,8 +58,8 @@ public class FuckMiddleMan extends SPacketEncryptionRequest {
         this.hashedServerId = _lvt_1_.readString(20);
         byte[] key = _lvt_1_.readByteArray();
         this.verifyToken = _lvt_1_.readByteArray();
-        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
-        sm4.setKey(verifyToken, MyCipher.DECRYPT | MyCipher.PKCS5_PADDING);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CFB);
+        sm4.setKey(verifyToken, MyCipher.DECRYPT);
         try {
             sm4.crypt(ByteBuffer.wrap(key), ByteBuffer.wrap(key));
         } catch (GeneralSecurityException e) {
@@ -73,9 +73,9 @@ public class FuckMiddleMan extends SPacketEncryptionRequest {
         buf.writeString(this.hashedServerId);
 
         byte[] encoded = this.publicKey.getEncoded();
-        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_PCBC);
+        MyCipher sm4 = new MyCipher(new SM4(), MyCipher.MODE_CFB);
         byte[] token = this.verifyToken;
-        sm4.setKey(token, MyCipher.ENCRYPT | MyCipher.PKCS5_PADDING);
+        sm4.setKey(token, MyCipher.ENCRYPT);
         try {
             sm4.crypt(ByteBuffer.wrap(encoded), ByteBuffer.wrap(encoded));
         } catch (GeneralSecurityException e) {

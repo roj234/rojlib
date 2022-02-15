@@ -179,7 +179,7 @@ public class Pipe implements Selectable {
     }
 
     @Override
-    public void tick() {
+    public void tick(int elapsed) {
         idleTime++;
     }
 

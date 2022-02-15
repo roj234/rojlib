@@ -32,8 +32,9 @@ import javax.net.ssl.X509KeyManager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
+import java.security.KeyPair;
 import java.security.PrivateKey;
+import java.security.UnrecoverableKeyException;
 import java.security.cert.X509Certificate;
 
 /**
@@ -41,34 +42,33 @@ import java.security.cert.X509Certificate;
  * @since 2021/12/24 22:44
  */
 public final class SimpleEngineFactory implements MSSEngineFactory {
-    private final PrivateKey privateKey;
-    private final byte[] publicKey;
-    private final int    pubKeyFormat;
-    private MSSKeyPair[] psk;
+    private final MSSKeyPair pair;
+    private MSSPubKey[] psk;
 
-    public <T> SimpleEngineFactory(MSSKeyFormat<T> format, T publicKey, PrivateKey key) throws GeneralSecurityException {
-        this.privateKey = key;
-        this.publicKey = format.encode(publicKey);
-        this.pubKeyFormat = format.formatId();
-        format.checkPrivateKey(key);
+    public <T> SimpleEngineFactory(MSSKeyFormat<T> format, T pub, PrivateKey pri) throws GeneralSecurityException {
+        this.pair = new JKeyPair(format.formatId(), 0, format.encode(pub), pri);
+    }
+
+    public SimpleEngineFactory(MSSKeyPair pair) {
+        this.pair = pair;
+    }
+
+    public SimpleEngineFactory(KeyPair pair) throws GeneralSecurityException {
+        this.pair = new JKeyPair(pair);
     }
 
     public void setPSK(MSSKeyPair[] psk) {
         this.psk = psk;
     }
 
-     SimpleEngineFactory(PrivateKey key, byte[] publicKey, int pubKeyFormat) {
-        this.privateKey = key;
-        this.publicKey = publicKey;
-        this.pubKeyFormat = pubKeyFormat;
-    }
-
     @Override
-    public MSSEngineServer newEngine() throws GeneralSecurityException {
-        return new MSSEngineServer()._init(pubKeyFormat, publicKey, privateKey, psk);
+    public MSSEngineServer newEngine() {
+        MSSEngineServer server = new MSSEngineServer();
+        server.setPSK(psk);
+        return server.init(pair);
     }
 
-    public static MSSEngineFactory fromKeystore(InputStream ks, char[] pass) throws IOException, GeneralSecurityException {
+    public static MSSEngineFactory fromKeystore(InputStream ks, char[] pass, String keyType) throws IOException, GeneralSecurityException {
         KeyManager[] kmf = SecureUtil.makeKeyManagers(ks, pass);
 
         X509Certificate pubKey = null;
@@ -76,18 +76,14 @@ public final class SimpleEngineFactory implements MSSEngineFactory {
         for (KeyManager manager : kmf) {
             if (manager instanceof X509KeyManager) {
                 X509KeyManager km = (X509KeyManager) manager;
-                String alias = km.chooseServerAlias("RSA", null, null);
+                String alias = km.chooseServerAlias(keyType, null, null);
                 privateKey = km.getPrivateKey(alias);
                 pubKey = km.getCertificateChain(alias)[0];
                 break;
             }
         }
-        if (pubKey == null)
-            throw new NoSuchAlgorithmException("No such key");
+        if (pubKey == null) throw new UnrecoverableKeyException("No such key");
 
-        SimplePSK pkf = new SimplePSK(0, pubKey.getPublicKey(), privateKey);
-        SimpleEngineFactory f = new SimpleEngineFactory(null, null, 0);
-        f.psk = new MSSKeyPair[] {pkf};
-        return f;
+        return new SimpleEngineFactory(new KeyPair(pubKey.getPublicKey(), privateKey));
     }
 }

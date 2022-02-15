@@ -26,18 +26,31 @@
 package roj.net.mss;
 
 import java.security.GeneralSecurityException;
-import java.security.PrivateKey;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * @author Roj233
  * @since 2021/12/22 12:54
  */
 public interface MSSKeyFormat<T> extends MSSClientKey {
-    String name();
+    static MSSKeyFormat<?> getInstance(String alg) throws NoSuchAlgorithmException {
+        switch (alg) {
+            case "RSA":
+                return X509KeyFormat.RSA;
+            case "EC":
+                return X509KeyFormat.EC;
+            case "DH":
+                return X509KeyFormat.DH;
+            case "X509CERT":
+                return new X509CertKeyFormat();
+            default:
+                throw new NoSuchAlgorithmException(alg);
+        }
+    }
+
+    String getAlgorithm();
     int formatId();
 
     byte[] encode(T publicKey) throws GeneralSecurityException;
     MSSPubKey decode(byte[] data) throws GeneralSecurityException;
-
-    void checkPrivateKey(PrivateKey key) throws GeneralSecurityException;
 }

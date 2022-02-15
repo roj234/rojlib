@@ -17,7 +17,7 @@ import java.util.Comparator;
  * @author Roj233
  * @since 2021/7/8 0:35
  */
-public final class MutableBigInteger {
+public final class MutableBigInteger implements Comparable<MutableBigInteger> {
     public MutableBigInteger() {
         ptr = o._n1();
     }
@@ -126,6 +126,7 @@ public final class MutableBigInteger {
 
         int[] _nArrG(Object ptr);
         void _nArrS(Object ptr, int[] arr);
+        int _nArrLen(Object ptr);
 
         Object _n1();
         Object _n2(int val);
@@ -148,7 +149,7 @@ public final class MutableBigInteger {
         DirectAccessor<Opr> dab = DirectAccessor.builderInternal(Opr.class).unchecked()
             .construct(mb, "_n1", "_n2", "_n3", "_n4")
             .construct(mb, "_n5", mb)
-            .access(mb, "value", "_nArrG", "_nArrS");
+            .access(mb, new String[]{"value","intLen"}, new String[]{"_nArrG", "_nArrLen"}, new String[]{"_nArrS",null});
 
         Comparator<Method> MC = (o1, o2) -> {
             int i = o1.getName().compareTo(o2.getName());
@@ -182,6 +183,9 @@ public final class MutableBigInteger {
     }
     public void setArray0(int[] arr) {
         o._nArrS(ptr, arr);
+    }
+    public int getIntLen() {
+        return o._nArrLen(ptr);
     }
 
     /**
@@ -592,5 +596,23 @@ public final class MutableBigInteger {
      */
     public MutableBigInteger euclidModInverse(int k) {
         return fromPtr(o.euclidModInverse(ptr, k));
+    }
+
+    @Override
+    public boolean equals(Object o1) {
+        if (this == o1) return true;
+        if (o1 == null || getClass() != o1.getClass()) return false;
+
+        return o.compare(ptr, ((MutableBigInteger) o1).ptr) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(o.getMagnitudeArray(ptr));
+    }
+
+    @Override
+    public int compareTo(MutableBigInteger o1) {
+        return o.compare(ptr, o1.ptr);
     }
 }
