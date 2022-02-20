@@ -35,11 +35,13 @@ import roj.asm.tree.attr.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.Context;
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
+import roj.collect.SimpleList;
 import roj.mapper.util.Desc;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -67,7 +69,7 @@ public final class CodeMapper extends Mapping {
     private IBitSet validVarChars = HUMAN_READABLE_TOKENS;
 
     private final UnaryOperator<String> NAME_REMAPPER = (old) -> {
-        String now = Util.mapOwner(classMap, old, false);
+        String now = Util.getInstance().mapOwner(classMap, old, false);
         return now == null ? old : now;
     };
 
@@ -91,7 +93,7 @@ public final class CodeMapper extends Mapping {
     }
 
     public final void remap(boolean singleThread, List<Context> arr) {
-        if(singleThread || arr.size() < 50 * Util.CPU) {
+        if(singleThread || arr.size() <= 1000) {
             Context cur = null;
 
             try {
@@ -103,14 +105,13 @@ public final class CodeMapper extends Mapping {
                 throw new RuntimeException("At parsing " + cur, e);
             }
         } else {
-            int threshold = (arr.size() / Util.CPU) + 1;
-            List<List<Context>> splatted = new ArrayList<>(Util.CPU + 1);
+            List<List<Context>> splatted = new ArrayList<>(arr.size() / 1000 + 1);
 
             int i = 0;
             while (i < arr.size()) {
-                int delta = Math.min(arr.size() - i, threshold);
-                splatted.add(arr.subList(i, i + delta));
-                i += delta;
+                int cnt = Math.min(arr.size() - i, 1000);
+                splatted.add(arr.subList(i, i + cnt));
+                i += cnt;
             }
 
             Util.async(this::processOne, splatted);
@@ -119,6 +120,7 @@ public final class CodeMapper extends Mapping {
 
     // 致天天想着搞优化的我: 有顺序！！！
     public final void processOne(Context ctx) {
+        Util U = Util.getInstance();
         ConstantData data = ctx.getData();
         data.normalize();
 
@@ -135,14 +137,14 @@ public final class CodeMapper extends Mapping {
             for (int j = 0; j < classes.size(); j++) {
                 AttrInnerClasses.InnerClass clz = classes.get(j);
                 if (clz.name != null && clz.parent != null) {
-                    String name = Util.mapOwner(classMap, clz.parent + '$' + clz.name, false);
+                    String name = U.mapOwner(classMap, clz.parent + '$' + clz.name, false);
                     if (name != null) {
                         int i = name.lastIndexOf('$');
                         if(i == -1) {
                             if(DEBUG)
                                 System.out.println("[CM Warn] No '$' sig: " + clz.parent + '$' + clz.name + " => " + name);
                             clz.name = name;
-                            name = Util.mapOwner(classMap, clz.parent, false);
+                            name = U.mapOwner(classMap, clz.parent, false);
                             if(name != null)
                                 clz.parent = name;
                         } else {
@@ -152,7 +154,7 @@ public final class CodeMapper extends Mapping {
                     }
                 }
                 if (clz.self != null) {
-                    String name = Util.mapOwner(classMap, clz.self, false);
+                    String name = U.mapOwner(classMap, clz.self, false);
                     if (name != null)
                         clz.self = name;
                 }
@@ -177,7 +179,7 @@ public final class CodeMapper extends Mapping {
                         CstMethodType type = (CstMethodType) cst;
 
                         String oldCls = type.getValue().getString();
-                        String newCls = Util.transformMethodParam(classMap, oldCls);
+                        String newCls = U.transformMethodParam(classMap, oldCls);
 
                         if (!oldCls.equals(newCls)) {
                             type.setValue(data.cp.getUtf(newCls));
@@ -193,7 +195,7 @@ public final class CodeMapper extends Mapping {
         // 泛型的UTF(几乎)不可能重复，但真碰到了我倒霉，还是放前面，至于和BSM重复？滚蛋
         mapSignature(data.cp, data.attributes);
 
-        mapParam(ctx, data);
+        mapParam(U, ctx, data);
 
         // 以后可能会有attribute序列化的需求，省得忘了
         data.normalize();
@@ -221,30 +223,32 @@ public final class CodeMapper extends Mapping {
         }
     }
 
-    private void mapClassAndSuper(ConstantData data) {
-        String name = Util.mapOwner(classMap, data.name, false);
+    private void mapClassAndSuper(Util U, ConstantData data) {
+        String name = U.mapOwner(classMap, data.name, false);
         if(name != null)
             data.nameCst.setValue(data.cp.getUtf(name));
 
-        name = Util.mapOwner(classMap, data.parent, false);
-        if(name != null) // noinspection all
-            data.parentCst.setValue(data.cp.getUtf(name));
+        if (data.parentCst != null) {
+            name = U.mapOwner(classMap, data.parent, false);
+            if (name != null)
+                data.parentCst.setValue(data.cp.getUtf(name));
+        }
 
         List<CstClass> itf = data.interfaces;
         for (int i = 0; i < itf.size(); i++) {
             CstClass clz = itf.get(i);
-            name = Util.mapOwner(classMap, clz.getValue().getString(), false);
+            name = U.mapOwner(classMap, clz.getValue().getString(), false);
             if (name != null)
                 clz.setValue(data.cp.getUtf(name));
         }
     }
 
-    private void mapParam(Context ctx, ConstantData data) {
+    private void mapParam(Util U, Context ctx, ConstantData data) {
         String oldCls, newCls;
         int i;
 
         List<MethodSimple> methods1 = data.methods;
-        Desc md = Util.shareMD();
+        Desc md = U.sharedDC;
         md.owner = data.name;
         for (i = 0; i < methods1.size(); i++) {
             MethodSimple method = methods1.get(i);
@@ -267,7 +271,7 @@ public final class CodeMapper extends Mapping {
              * Method Parameters
              */
             oldCls = method.type.getString();
-            newCls = Util.transformMethodParam(classMap, oldCls);
+            newCls = U.transformMethodParam(classMap, oldCls);
 
             if(!oldCls.equals(newCls)) {
                 method.type = data.cp.getUtf(newCls);
@@ -304,7 +308,7 @@ public final class CodeMapper extends Mapping {
              * Field Type
              */
             oldCls = field.type.getString();
-            newCls = Util.transformFieldType(classMap, oldCls);
+            newCls = U.transformFieldType(classMap, oldCls);
 
             if(newCls != null) {
                 field.type = data.cp.getUtf(newCls);
@@ -319,7 +323,7 @@ public final class CodeMapper extends Mapping {
 
         // 十分不幸的是, field rename (when parameterized) 会被 LVT 工序影响
         for (i = 0; i < methods1.size(); i++) {
-            transform_LVT_LVTT_ST(data, methods1.get(i));
+            transform_LVT_LVTT_ST(U, data, methods1.get(i));
         }
 
         List<CstRef> cst = ctx.getFieldConstants();
@@ -330,7 +334,7 @@ public final class CodeMapper extends Mapping {
              * 修改{@link CstRefField}字段类型
              */
             oldCls = field.desc().getType().getString();
-            newCls = Util.transformFieldType(classMap, oldCls);
+            newCls = U.transformFieldType(classMap, oldCls);
 
             if(newCls != null) {
                 field.desc().setType(data.cp.getUtf(newCls));
@@ -345,10 +349,10 @@ public final class CodeMapper extends Mapping {
             CstRef method = cst.get(i);
 
             /**
-             * 修改{@link CstRefField}方法调用
+             * 修改{@link CstRefMethod}方法调用
              */
             oldCls = method.desc().getType().getString();
-            newCls = Util.transformMethodParam(classMap, oldCls);
+            newCls = U.transformMethodParam(classMap, oldCls);
 
             if(!newCls.equals(oldCls)) {
                 data.cp.setUTFValue(method.desc().getType(), newCls);
@@ -365,7 +369,7 @@ public final class CodeMapper extends Mapping {
              * 修改class名字
              */
             oldCls = clazz.getValue().getString();
-            newCls = Util.mapOwner(classMap, oldCls, false);
+            newCls = U.mapOwner(classMap, oldCls, false);
             if(newCls != null) {
                 if(DEBUG) {
                     System.out.println("[" + data.name + "]C: " + oldCls + ' ' + newCls);
@@ -381,7 +385,7 @@ public final class CodeMapper extends Mapping {
              * Lambda方法的参数
              */
             oldCls = dyn.getDesc().getType().getString();
-            newCls = Util.transformMethodParam(classMap, oldCls);
+            newCls = U.transformMethodParam(classMap, oldCls);
 
             if(!oldCls.equals(newCls)) {
                 data.cp.setUTFValue(dyn.getDesc().getType(), newCls);
@@ -392,7 +396,7 @@ public final class CodeMapper extends Mapping {
         }
     }
 
-    private void transform_LVT_LVTT_ST(ConstantData data, MethodSimple method) {
+    private void transform_LVT_LVTT_ST(Util U, ConstantData data, MethodSimple method) {
         AttrUnknown au = (AttrUnknown) method.attributes.getByName("Code");
         if(au != null) {
             ByteReader r = Parser.reader(au);
@@ -403,21 +407,25 @@ public final class CodeMapper extends Mapping {
             int len = r.readUnsignedShort(); // exception
             r.rIndex += len << 3;
 
+            boolean foundLvt = false;
+
             String methodDesc = method.name.getString() + '|' + method.rawDesc();
             ConstantPool pool = data.cp;
+            int attrLenIndex = r.rIndex;
             len = r.readUnsignedShort();
             for (int i = 0; i < len; i++) {
                 String name = ((CstUTF) pool.get(r)).getString();
                 int end = r.readInt() + r.rIndex;
                 switch (name) {
                     case "LocalVariableTable":
+                        foundLvt = true;
                         List<SimpleVar> list = readVar(pool, r);
                         for (int j = 0; j < list.size(); j++) {
                             SimpleVar entry = list.get(j);
                             String ref = entry.refType.getString();
                             if (ref.endsWith(";")) { // [Lxx; or Lxx;
                                 Type type = ParamHelper.parseField(ref);
-                                String clazz = Util.mapOwner(classMap, type.owner, false);
+                                String clazz = U.mapOwner(classMap, type.owner, false);
                                 if (clazz != null) {
                                     type.owner = clazz;
                                     data.cp.setUTFValue(entry.refType, ParamHelper.getField(type));
@@ -437,6 +445,7 @@ public final class CodeMapper extends Mapping {
                         }
                         break;
                     case "LocalVariableTypeTable":
+                        foundLvt = true;
                         list = readVar(pool, r);
                         for (int j = 0; j < list.size(); j++) {
                             SimpleVar entry = list.get(j);
@@ -459,12 +468,16 @@ public final class CodeMapper extends Mapping {
                 }
                 r.rIndex = end;
             }
+
+            if (!foundLvt) {
+                plusEntryName(data, method, methodDesc, au, attrLenIndex);
+            }
         }
     }
 
     static List<SimpleVar> readVar(ConstantPool cp, ByteReader r) {
         int len = r.readUnsignedShort();
-        List<SimpleVar> list = new ArrayList<>(len);
+        List<SimpleVar> list = new SimpleList<>(len);
 
         for (int i = 0; i < len; i++) {
             SimpleVar sv = new SimpleVar();
@@ -487,7 +500,39 @@ public final class CodeMapper extends Mapping {
         void write(ByteList w) {
             w.putShort(start).putShort(end)
              .putShort(name.getIndex()).putShort(refType.getIndex())
-             .putShortLE(slot);
+             .putShort(slot);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void plusEntryName(ConstantData data, MethodSimple method, String methodDesc, AttrUnknown attr, int index) {
+
+        switch (paramNameType) {
+            case 2:
+            case 3:
+                Map<String, List<String>> remapNames = (Map<String, List<String>>) paramNameMap.get(data.name);
+                if(remapNames != null) {
+                    List<String> vars = remapNames.get(methodDesc);
+                    List<Type> types = method.parameters();
+                    if(vars != null) {
+                        ByteList r = attr.getRawData();
+                        ByteList w = new ByteList(r.wIndex() + 30);
+                        w.put(r);
+                        attr.setRawData(w);
+                        int endOfCode = r.readInt(4) + 1;
+
+                        int x = Math.min(vars.size(), types.size());
+                        w.putShort(index, w.readUnsignedShort(index) + 1)
+                         .putShort(x);
+                        for (int i = 0; i < x; i++) {
+                            w.putShort(0).putShort(endOfCode)
+                             .putShort(data.cp.getUtfId(vars.get(i)))
+                             .putShort(data.cp.getUtfId(ParamHelper.getField(types.get(i))))
+                             .putShort(((method.accesses & AccessFlag.STATIC) == 0 ? 1 : 0) + i);
+                        }
+                    }
+                }
+                break;
         }
     }
 

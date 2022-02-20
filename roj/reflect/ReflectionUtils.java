@@ -26,8 +26,8 @@
 
 package roj.reflect;
 
-import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
+import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -43,14 +43,20 @@ import java.util.List;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
 
-import static roj.asm.type.NativeType.ARRAY;
-import static roj.asm.type.NativeType.CLASS;
+import static roj.asm.type.Type.ARRAY;
+import static roj.asm.type.Type.CLASS;
 
 /**
  * @author Roj234
  * @since 2021/6/17 19:51
  */
 public final class ReflectionUtils {
+    public static int getMajorVersion() {
+        String v = System.getProperty("java.version");
+        String major = v.substring(0, v.indexOf('.'));
+        return Integer.parseInt(major);
+    }
+
     /**
      * 在obj中查找类型为targetClass的field
      *
@@ -76,12 +82,12 @@ public final class ReflectionUtils {
      * 获取current + 父类 所有Field
      */
     public static List<Field> getFields(Class<?> clazz) {
-        MyHashSet<Field> fields = new MyHashSet<>();
+        ArrayList<Field> fields = new ArrayList<>();
         while (clazz != Object.class) {
             Collections.addAll(fields, clazz.getDeclaredFields());
             clazz = clazz.getSuperclass();
         }
-        return new ArrayList<>(fields);
+        return fields;
     }
 
     public static void consumeFields(Class<?> clazz, Consumer<Field> consumer) {
@@ -278,13 +284,13 @@ public final class ReflectionUtils {
     }
 
     public static String accessorName(Field field) {
-        char c = ParamHelper.classDescriptor(field.getType()).charAt(0);
+        char c = ParamHelper.class2asm(field.getType()).charAt(0);
         switch (c) {
             case ARRAY:
             case CLASS:
                 return "Object";
             default:
-                StringBuilder s = new StringBuilder(NativeType.toString((byte) c));
+                StringBuilder s = new StringBuilder(Type.toString((byte) c));
                 s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
                 return s.toString();
         }

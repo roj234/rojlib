@@ -25,8 +25,6 @@
  */
 package roj.kscript.type;
 
-import roj.config.word.AbstLexer;
-
 /**
  * @author Roj234
  * @since 2021/5/29 1:28
@@ -37,14 +35,5 @@ public abstract class KBase implements KType {
     @Override
     public final String toString() {
         return toString0(new StringBuilder(), 0).toString();
-    }
-
-    protected static String optionalSlashes(String key) {
-        for (int i = 0; i < key.length(); i++) {
-            if (AbstLexer.SPECIAL_CHARS.contains(key.charAt(i))) {
-                return '"' + AbstLexer.addSlashes(key) + '"';
-            }
-        }
-        return key;
     }
 }

@@ -28,10 +28,7 @@ package roj.concurrent;
 import roj.concurrent.task.ITask;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/11/30 23:07
  */
 public interface TaskHandler {

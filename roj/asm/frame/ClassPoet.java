@@ -2,7 +2,6 @@ package roj.asm.frame;
 
 import roj.asm.tree.Clazz;
 import roj.asm.tree.Method;
-import roj.asm.util.AccessFlag;
 
 /**
  * @author Roj234
@@ -18,8 +17,9 @@ public class ClassPoet {
 
     // check abstract...
     public MethodPoet method(String name, String desc, int flag) {
-        Method m = new Method(AccessFlag.of(flag), poem, name, desc);
+        Method m = new Method(flag, poem, name, desc);
         poem.methods.add(m);
+        mp.method = m;
         mp.init(m);
         return mp;
     }

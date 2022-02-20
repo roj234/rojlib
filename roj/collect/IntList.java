@@ -60,7 +60,7 @@ public class IntList implements Iterable<Integer> {
         Arrays.fill(list, DEFAULT_VALUE);
     }
 
-    public void ensureCap(int cap) {
+    public void ensureCapacity(int cap) {
         if (list.length < cap) {
             int length = ((cap * 3) >> 1) + 1;
             int[] newList = new int[length];
@@ -115,13 +115,13 @@ public class IntList implements Iterable<Integer> {
     }
 
     public boolean add(int e) {
-        ensureCap(size + 1);
+        ensureCapacity(size + 1);
         list[size++] = e; // [1,1,1,2]
         return true; //[3]
     }
 
     public boolean addAll(int[] ints) {
-        ensureCap(size + ints.length);
+        ensureCapacity(size + ints.length);
         System.arraycopy(ints, 0, list, size, ints.length);
         size += ints.length;
         return true;
@@ -135,7 +135,7 @@ public class IntList implements Iterable<Integer> {
         if (len < 0)
             throw new NegativeArraySizeException();
         if (len == 0) return false;
-        ensureCap(size + len);
+        ensureCapacity(size + len);
         System.arraycopy(ints, 0, list, size, len);
         size += len;
         return true;
@@ -144,7 +144,7 @@ public class IntList implements Iterable<Integer> {
     public boolean addAll(int i, int[] ints) {
         if (i > size)
             throw new ArrayIndexOutOfBoundsException(i);
-        ensureCap(size + ints.length);
+        ensureCapacity(size + ints.length);
         System.arraycopy(list, i, list, i + ints.length, size - i);
         System.arraycopy(ints, 0, list, i, ints.length);
         size += ints.length;
@@ -154,7 +154,7 @@ public class IntList implements Iterable<Integer> {
     public boolean addAllReversed(int i, int[] collection) {
         if (i > size)
             throw new ArrayIndexOutOfBoundsException(i);
-        ensureCap(size + collection.length);
+        ensureCapacity(size + collection.length);
         System.arraycopy(list, i, list, i + collection.length, size - i);
         for (int k = collection.length - 1; k >= 0; k--) {
             list[i++] = collection[k];

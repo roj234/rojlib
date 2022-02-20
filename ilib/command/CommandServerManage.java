@@ -28,12 +28,12 @@ package ilib.command;
 
 import ilib.command.sub.AbstractSubCommand;
 import io.netty.channel.ChannelHandler;
+import roj.net.WrappedSocket;
+import roj.net.http.serv.*;
+
 import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
-import roj.net.WrappedSocket;
-import roj.net.http.Code;
-import roj.net.http.serv.*;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -138,14 +138,14 @@ public final class CommandServerManage extends AbstractSubCommand {
 
     private static class ServerManageRouter implements Router {
         @Override
-        public Reply response(WrappedSocket ch, Request req, RequestHandler handle) {
+        public Response response(WrappedSocket ch, Request req, RequestHandler rh) {
             switch (req.path()) {
                 case "status":
                 case "tps":
                 case "mem":
                 case "execution":
             }
-            return new Reply(Code.NOT_FOUND, new StringResponse("服务器制作中"));
+            return new StringResponse("服务器制作中");
         }
     }
 }

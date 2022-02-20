@@ -25,12 +25,9 @@
  */
 package roj.asm.tree;
 
-import roj.asm.util.AccessFlag;
-import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
+import roj.asm.Parser;
 import roj.util.ByteList;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -43,17 +40,10 @@ public final class AccessData implements IClass {
     public final String name, superName;
     public final List<String> itf;
     public final List<MOF>    methods, fields;
-    /**
-     * Read only
-     */
     public char acc;
-    private final int cao;
-    private byte[] byteCode;
 
-    public AccessData releaseBCI() {
-        byteCode = null;
-        return this;
-    }
+    private final int cao;
+    private final byte[] byteCode;
 
     public AccessData(byte[] byteCode, List<MOF> fields, List<MOF> methods, int cao, String name, String superName, List<String> itf) {
         this.byteCode = byteCode;
@@ -66,18 +56,18 @@ public final class AccessData implements IClass {
     }
 
     @Override
-    public String className() {
+    public String name() {
         return name;
     }
 
     @Override
-    public String parentName() {
+    public String parent() {
         return superName;
     }
 
     @Override
     public List<String> interfaces() {
-        return Collections.unmodifiableList(itf);
+        return itf;
     }
 
     @Override
@@ -90,25 +80,9 @@ public final class AccessData implements IClass {
         return fields;
     }
 
-    public int getMethodByName(String key) {
-        for (int i = 0; i < methods.size(); i++) {
-            MoFNode ms = methods.get(i);
-            if (ms.name().equals(key)) return i;
-        }
-        return -1;
-    }
-
-    public int getFieldByName(String key) {
-        for (int i = 0; i < fields.size(); i++) {
-            MoFNode fs = fields.get(i);
-            if (fs.name().equals(key)) return i;
-        }
-        return -1;
-    }
-
     @Override
     public byte type() {
-        return 2;
+        return Parser.CTYPE_LOD_1;
     }
 
     public static final class MOF implements MoFNode {
@@ -125,18 +99,14 @@ public final class AccessData implements IClass {
             this.dao = dao;
         }
 
+        // 不想用非静态class
         @Override
-        public void toByteArray(ConstantPool pool, ByteList w) {
-            throw new UnsupportedOperationException();
+        public void accessFlag(int flag) {
+            throw new IllegalStateException("Use AccessData.setFlagFor()");
         }
 
         @Override
-        public FlagList accessFlag() {
-            return AccessFlag.of(acc);
-        }
-
-        @Override
-        public char accessFlag2() {
+        public char accessFlag() {
             return acc;
         }
 
@@ -152,7 +122,7 @@ public final class AccessData implements IClass {
 
         @Override
         public int type() {
-            return 0;
+            return Parser.MFTYPE_LOD1;
         }
 
         @Override
@@ -161,23 +131,26 @@ public final class AccessData implements IClass {
         }
     }
 
-    public FlagList accessFlag() {
-        return AccessFlag.of((short) ((byteCode[cao] & 0xff) << 8 | (byteCode[cao + 1] & 0xff)));
+    public char accessFlag() {
+        return (char) ((byteCode[cao] & 0xff) << 8 | (byteCode[cao + 1] & 0xff));
     }
 
-    public void accessFlag(FlagList list) {
-        acc = list.flag;
-        int val = list.flag;
-        byteCode[cao] = (byte) (val >>> 8);
-        byteCode[cao + 1] = (byte) val;
+    public void accessFlag(int flag) {
+        acc = (char) flag;
+        byteCode[cao] = (byte) (flag >>> 8);
+        byteCode[cao + 1] = (byte) flag;
     }
 
-    public AccessData setFlagFor(MOF node, FlagList list) {
-        node.acc = list.flag;
-        int val = list.flag;
-        byteCode[node.dao] = (byte) (val >>> 8);
-        byteCode[node.dao + 1] = (byte) val;
+    public AccessData setFlagFor(MOF node, int flag) {
+        node.acc = (char) flag;
+        byteCode[node.dao] = (byte) (flag >>> 8);
+        byteCode[node.dao + 1] = (byte) flag;
         return this;
+    }
+
+    @Override
+    public ByteList getBytes(ByteList buf) {
+        return buf.put(byteCode);
     }
 
     public byte[] toByteArray() {

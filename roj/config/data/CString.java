@@ -155,7 +155,7 @@ public final class CString extends CEntry {
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
+        return AbstLexer.addSlashes(value, sb.append('"')).append('"');
     }
 
     @Override

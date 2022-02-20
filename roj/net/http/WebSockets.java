@@ -30,9 +30,9 @@ import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.WrappedSocket;
-import roj.net.http.serv.Reply;
 import roj.net.http.serv.Request;
 import roj.net.http.serv.RequestHandler;
+import roj.net.http.serv.Response;
 import roj.net.http.serv.StringResponse;
 import roj.net.misc.FDCLoop;
 import roj.net.misc.FDChannel;
@@ -105,15 +105,16 @@ public class WebSockets {
         Base64.encode(bl.setArray(SHA1.digest(bl.list)), out);
     }
 
-    public final Reply switchToWebsocket(Request req, RequestHandler handle) {
+    public final Response switchToWebsocket(Request req, RequestHandler handle) {
         String ver = req.header("Sec-WebSocket-Version");
         String protocol = req.header("Sec-WebSocket-Protocol");
-        if(!ver.equals("13") || !validProtocol.contains(protocol == null ? "" : protocol))
-            return new Reply(Code.UNAVAILABLE, new StringResponse("Unsupported protocol \"" + protocol + "\""));
+        if(!ver.equals("13") || !validProtocol.contains(protocol == null ? "" : protocol)) {
+            handle.reply(503);
+            return new StringResponse("Unsupported protocol \"" + protocol + "\"");
+        }
 
         String key = req.header("Sec-WebSocket-Key");
-        Reply reply = new Reply(Code.SWITCHING_PROTOCOL);
-        ByteList b = reply.getRawHeaders();
+        ByteList b = handle.reply(101).getRawHeaders();
         b.clear();
         b.putAscii("HTTP/1.1 101 Switching Protocols\r\n" +
                            "Server: Async/1.2\r\n" +
@@ -138,16 +139,16 @@ public class WebSockets {
 
         b.putAscii("\r\n");
 
-        registerNewWorker(handle, zip);
-        return reply;
+        registerNewWorker(req, handle, zip);
+        return null;
     }
 
-    protected void registerNewWorker(RequestHandler handle, boolean zip) {
+    protected void registerNewWorker(Request req, RequestHandler handle, boolean zip) {
         Worker w = newWorker.get();
         w.ch = handle.ch;
         if (zip) w.enableZip();
 
-        handle.waitAnd(s -> {
+        handle.setPreCloseCallback(s -> {
             try {
                 loop.register(Helpers.cast(w), Helpers.cast(closeCallback));
             } catch (Exception e) {
@@ -265,6 +266,7 @@ public class WebSockets {
         @Override
         public void tick(int elapsed) throws IOException {
             ch.dataFlush();
+            // idle += elapsed;
             if (idle++ == 30000) {
                 send(FRAME_PING, null);
             } else if (idle == 35000) {
@@ -516,12 +518,12 @@ public class WebSockets {
         }
 
         protected void onData(int ph, ByteBuffer in) throws IOException {
-            System.out.println("Data " + NIOUtil.dumpClean(in));
-            send(ph & 15, in);
+            //System.out.println("Data " + NIOUtil.dumpClean(in));
+            //send(ph & 15, in);
         }
 
         protected void onClosed() {
-            System.out.println("Closed via " + errCode + "@" + errMsg);
+            //System.out.println("Closed via " + errCode + "@" + errMsg);
         }
 
         public final boolean hasDataPending() {

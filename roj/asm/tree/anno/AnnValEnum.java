@@ -56,4 +56,22 @@ public final class AnnValEnum extends AnnVal {
     public byte type() {
         return ENUM;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AnnValEnum anEnum = (AnnValEnum) o;
+
+        if (!clazz.equals(anEnum.clazz)) return false;
+        return value.equals(anEnum.value);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = clazz.hashCode();
+        result = 31 * result + value.hashCode();
+        return result;
+    }
 }

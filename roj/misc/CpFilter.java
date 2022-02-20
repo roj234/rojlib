@@ -74,7 +74,7 @@ public class CpFilter {
 
         for (String entry : zf.getEntries().keySet()) {
             if(entry.endsWith("/") || (!dt.isEmpty() && !dt.contains(entry.substring(0, entry.length() - 6)))) {
-                zf.setFileData(entry, null);
+                zf.put(entry, null);
             }
         }
         zf.store();

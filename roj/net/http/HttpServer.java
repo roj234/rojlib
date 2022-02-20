@@ -31,6 +31,7 @@ import roj.net.SocketFactory;
 import roj.net.http.serv.RequestHandler;
 import roj.net.http.serv.Router;
 import roj.net.misc.FDCLoop;
+import roj.net.misc.Listener;
 import roj.ui.CmdUtil;
 
 import java.io.IOException;
@@ -40,28 +41,29 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
 
-public class HttpServer implements Runnable {
+public class HttpServer extends Listener {
     static final boolean CheckDDOS = false;
     final Map<String, MutableInt> connecting = new TimedHashMap<>(1000);
 
-    final ServerSocket socket;
-    final SocketFactory factory;
-    final Router router;
-    final FDCLoop<RequestHandler> loop;
+    private final SocketFactory factory;
+    private final Router router;
+    private FDCLoop<RequestHandler> loop;
 
     public HttpServer(InetSocketAddress address, int conn, Router router) throws IOException {
         this(address, conn, router, SocketFactory.PLAIN_FACTORY);
     }
 
     public HttpServer(InetSocketAddress address, int conn, Router router, SocketFactory factory) throws IOException {
-        this.factory = factory;
-        ServerSocket socket = this.socket = new ServerSocket();
+        ServerSocket socket = new ServerSocket();
         socket.setReuseAddress(true);
         socket.bind(address, conn);
+        init(socket);
+
+        this.factory = factory;
         this.router = router;
 
         int cpus = Runtime.getRuntime().availableProcessors();
-        this.loop = new FDCLoop<>(null, "Http Worker", cpus, 30000, 100);
+        this.loop = new FDCLoop<>(null, "HTTP服务器", 0, cpus, 30000, 100);
     }
 
     public final ServerSocket getSocket() {
@@ -71,46 +73,46 @@ public class HttpServer implements Runnable {
     public FDCLoop<RequestHandler> getLoop() {
         return loop;
     }
+    public void setLoop(FDCLoop<RequestHandler> loop) {
+        this.loop = loop;
+    }
 
-    @Override
-    public void run() {
-        while (true) {
-            Socket c;
-            try {
-                c = socket.accept();
-            } catch (IOException e) {
-                break;
-            }
-            try {
-                c.setReuseAddress(true);
-                if(CheckDDOS) {
-                    InetAddress ip = c.getInetAddress();
-                    int port = c.getPort();
-
-                    Map<String, MutableInt> m = connecting;
-                    String key = String.valueOf(ip) + ':' + port;
-                    MutableInt i = m.get(key);
-                    if (i == null) {
-                        m.put(key, i = new MutableInt());
-                    }
-
-                    int count = i.incrementAndGet();
-                    if (count > 100) {
-                        if (count % 128 == 0)
-                            CmdUtil.warning(System.currentTimeMillis() + ':' + key + ": throttling.");
-                        c.close();
-                    }
-                }
-
-                loop.register(new RequestHandler(factory.wrap(c), router), null);
-            } catch (Throwable e) {
-                e.printStackTrace();
-            }
-        }
+    public void start() throws IOException {
+        loop.registerListener(this);
     }
 
     public void stop() throws IOException {
         socket.close();
         loop.shutdown();
+    }
+
+    @Override
+    public void selected(int readyOps) throws Exception {
+        Socket c = socket.accept();
+        try {
+            c.setReuseAddress(true);
+            if(CheckDDOS) {
+                InetAddress ip = c.getInetAddress();
+                int port = c.getPort();
+
+                Map<String, MutableInt> m = connecting;
+                String key = String.valueOf(ip) + ':' + port;
+                MutableInt i = m.get(key);
+                if (i == null) {
+                    m.put(key, i = new MutableInt());
+                }
+
+                int count = i.incrementAndGet();
+                if (count > 100) {
+                    if (count % 128 == 0)
+                        CmdUtil.warning(System.currentTimeMillis() + ':' + key + ": throttling.");
+                    c.close();
+                }
+            }
+
+            loop.register(new RequestHandler(factory.wrap(c), router), null);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 }

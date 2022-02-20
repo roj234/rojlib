@@ -30,21 +30,17 @@ import roj.asm.Parser;
 import roj.asm.cst.CstString;
 import roj.asm.tree.Clazz;
 import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.ClassInsnNode;
-import roj.asm.tree.insn.FieldInsnNode;
-import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.insn.LdcInsnNode;
-import roj.asm.type.NativeType;
+import roj.asm.tree.insn.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.collect.IBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SingleBitSet;
 import roj.concurrent.Ref;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.EmptyArrays;
@@ -58,7 +54,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static roj.asm.type.NativeType.CLASS;
+import static roj.asm.type.Type.CLASS;
+import static roj.asm.util.AccessFlag.PUBLIC;
 
 /**
  * 替代反射，目前不能修改final字段，然而这是JVM的锅 <br>
@@ -74,7 +71,6 @@ public final class DirectAccessor<T> {
     public static final IBitSet EMPTY_BITS           = new SingleBitSet();
 
     static final AtomicInteger NEXT_ID = new AtomicInteger();
-    static final FlagList      PUBLIC  = new FlagList(AccessFlag.PUBLIC);
 
     private static final Ref<Object> CallbackBuffer = Ref.from();
     private static void syncCallback(Object handle) {
@@ -191,7 +187,7 @@ public final class DirectAccessor<T> {
             code.localSize = 1;
             InsnList insn = code.instructions;
             insn.add(new LdcInsnNode(Opcodes.LDC, new CstString(sb.toString())));
-            insn.add(NodeHelper.npc(Opcodes.ARETURN));
+            insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
             var.methods.add(toString);
             sb = null;
@@ -238,12 +234,12 @@ public final class DirectAccessor<T> {
             code.stackSize = 2;
             code.localSize = 2;
             insn = code.instructions;
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+            insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
+            insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
             if(check)
                 insn.add(new ClassInsnNode(Opcodes.CHECKCAST, type));
             insn.add(_set);
-            insn.add(NodeHelper.npc(Opcodes.RETURN));
+            insn.add(NPInsnNode.of(Opcodes.RETURN));
 
             var.methods.add(set);
         }
@@ -259,10 +255,10 @@ public final class DirectAccessor<T> {
             code.localSize = 1;
 
             insn = code.instructions;
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
-            insn.add(NodeHelper.npc(Opcodes.ACONST_NULL));
+            insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
+            insn.add(NPInsnNode.of(Opcodes.ACONST_NULL));
             insn.add(_set);
-            insn.add(NodeHelper.npc(Opcodes.RETURN));
+            insn.add(NPInsnNode.of(Opcodes.RETURN));
 
             var.methods.add(clear);
         }
@@ -280,9 +276,9 @@ public final class DirectAccessor<T> {
 
 
             insn = code.instructions;
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+            insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
             insn.add(_get);
-            insn.add(NodeHelper.npc(Opcodes.ARETURN));
+            insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
             var.methods.add(get);
         }
@@ -416,8 +412,8 @@ public final class DirectAccessor<T> {
                             if(found++ > 0)
                                 throw new IllegalArgumentException(
                                         "无法为 " + owner.getName() + '.' + name + " 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n" +
-                                                "其一: " + ParamHelper.classDescriptors(tMethods[i].getParameterTypes(), void.class) + "\n" +
-                                                "其二: " + ParamHelper.classDescriptors(cr.getParameterTypes(), void.class));
+                                                "其一: " + ParamHelper.class2asm(tMethods[i].getParameterTypes(), void.class) + "\n" +
+                                                "其二: " + ParamHelper.class2asm(cr.getParameterTypes(), void.class));
                             tMethods[i] = cr;
                         }
                     }
@@ -426,14 +422,14 @@ public final class DirectAccessor<T> {
                 }
             } catch (NoSuchMethodException e) {
                 throw new IllegalArgumentException(
-                        "无法找到 " + target.getName() + " 的构造器, 参数: " + ParamHelper.classDescriptors(types, void.class));
+                        "无法找到 " + target.getName() + " 的构造器, 参数: " + ParamHelper.class2asm(types, void.class));
             }
         }
         if(sb != null) {
             sb.append("\n  构造器代理: ").append(target.getName()).append("\n  方法:\n    ");
             for (int i = 0; i < tMethods.length; i++) {
                 Constructor<?> tm = tMethods[i];
-                sb.append(names[i]).append(" (").append(ParamHelper.classDescriptors(
+                sb.append(names[i]).append(" (").append(ParamHelper.class2asm(
                         tm.getParameterTypes(), void.class)).append(")").append("\n    ");
             }
             sb.setIndex(sb.length() - 5);
@@ -444,7 +440,7 @@ public final class DirectAccessor<T> {
         for (int i = 0; i < tMethods.length; i++) {
             Constructor<?> m = tMethods[i];
             Class<?>[] params = m.getParameterTypes();
-            String tDesc = ParamHelper.classDescriptors(params, void.class);
+            String tDesc = ParamHelper.class2asm(params, void.class);
 
             Method sm = sMethods[i];
             Class<?>[] params2 = sm.getParameterTypes();
@@ -456,12 +452,12 @@ public final class DirectAccessor<T> {
 
             InsnList insn = code.instructions;
             insn.add(new ClassInsnNode(Opcodes.NEW, tName));
-            insn.add(NodeHelper.npc(Opcodes.DUP));
+            insn.add(NPInsnNode.of(Opcodes.DUP));
 
             int size = 1;
             for (int j = 0; j < params.length; j++) {
                 Class<?> param = params[j];
-                String tag = ParamHelper.XPrefix(param);
+                String tag = NodeHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), size++);
                 if (check && !param.isAssignableFrom(params2[j]))
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, param.getName().replace('.', '/')));
@@ -475,7 +471,7 @@ public final class DirectAccessor<T> {
             code.stackSize = code.localSize = (char) (size + 1);
 
             insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, tName, "<init>", tDesc));
-            insn.add(NodeHelper.npc(Opcodes.ARETURN));
+            insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
             var.methods.add(invoke);
         }
@@ -636,8 +632,8 @@ public final class DirectAccessor<T> {
                             if(!Arrays.equals(m.getParameterTypes(), tMethods[i].getParameterTypes())) {
                                 throw new IllegalArgumentException(
                                         "无法为 " + owner.getName() + '.' + name + " 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n" +
-                                                "其一: " + ParamHelper.classDescriptors(tMethods[i].getParameterTypes(), tMethods[i].getReturnType()) + "\n" +
-                                                "其二: " + ParamHelper.classDescriptors(m.getParameterTypes(), m.getReturnType()));
+                                                "其一: " + ParamHelper.class2asm(tMethods[i].getParameterTypes(), tMethods[i].getReturnType()) + "\n" +
+                                                "其二: " + ParamHelper.class2asm(m.getParameterTypes(), m.getReturnType()));
                             } else {
                                 // 继承，却改变了返回值的类型
                                 // 同参同反不考虑
@@ -655,11 +651,11 @@ public final class DirectAccessor<T> {
                 if(DEBUG) {
                     for (int j = 0; j < methods.size(); j++) {
                         Method mm = methods.get(j);
-                        System.out.println("名称: " + mm.getName() + " , 参数: " + ParamHelper.classDescriptors(mm.getParameterTypes(), mm.getReturnType()));
+                        System.out.println("名称: " + mm.getName() + " , 参数: " + ParamHelper.class2asm(mm.getParameterTypes(), mm.getReturnType()));
                     }
                 }
                 throw new IllegalArgumentException(
-                        "无法找到指定的方法: " + target.getName() + '.' + targetMethodName + " 参数 " + ParamHelper.classDescriptors(types, method.getReturnType()));
+                        "无法找到指定的方法: " + target.getName() + '.' + targetMethodName + " 参数 " + ParamHelper.class2asm(types, method.getReturnType()));
             }
 
             if (!method.getReturnType().isAssignableFrom(tMethods[i].getReturnType())) {
@@ -674,7 +670,7 @@ public final class DirectAccessor<T> {
             sb.append("\n  方法代理: ").append(target.getName()).append("\n  方法:\n    ");
             for (int i = 0; i < tMethods.length; i++) {
                 Method tm = tMethods[i];
-                sb.append(tm).append(" => ").append(selfNames[i]).append(" (").append(ParamHelper.classDescriptors(
+                sb.append(tm).append(" => ").append(selfNames[i]).append(" (").append(ParamHelper.class2asm(
                         tm.getParameterTypes(), tm.getReturnType())).append(")").append("\n    ");
             }
             sb.setIndex(sb.length() - 5);
@@ -685,7 +681,7 @@ public final class DirectAccessor<T> {
         for (int i = 0, len = tMethods.length; i < len; i++) {
             Method tm = tMethods[i];
             Class<?>[] params = tm.getParameterTypes();
-            String tDesc = ParamHelper.classDescriptors(params, tm.getReturnType());
+            String tDesc = ParamHelper.class2asm(params, tm.getReturnType());
 
             Method sm = sMethods[i];
             Class<?>[] params2 = sm.getParameterTypes();
@@ -700,10 +696,10 @@ public final class DirectAccessor<T> {
             int isStatic = (tm.getModifiers() & AccessFlag.STATIC) != 0 ? 1 : 0;
             if (isStatic == 0) {
                 if (useCache) {
-                    insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+                    insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
                     insn.add(cache.node);
                 } else {
-                    insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                    insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
                     if (check && !target.isAssignableFrom(params2[0]))
                         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, tName));
                 }
@@ -712,7 +708,7 @@ public final class DirectAccessor<T> {
             int size = useCache || isStatic == 1 ? 0 : 1;
             int j = size;
             for (Class<?> param : params) {
-                String tag = ParamHelper.XPrefix(param);
+                String tag = NodeHelper.XPrefix(param);
                 NodeHelper.compress(insn, NodeHelper.X_LOAD(tag.charAt(0)), ++size);
                 if (check && !param.isPrimitive() && !param.isAssignableFrom(params2[j])) // 强制转换再做检查...
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, param.getName().replace('.', '/')));
@@ -728,7 +724,7 @@ public final class DirectAccessor<T> {
             code.localSize = (char) (size + 1);
 
             insn.add(new InvokeInsnNode(isStatic == 1 ? Opcodes.INVOKESTATIC : (flags != null && flags.contains(i) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), tName, tm.getName(), tDesc));
-            insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(tm.getReturnType())));
+            insn.add(NodeHelper.X_RETURN(NodeHelper.XPrefix(tm.getReturnType())));
         }
         return this;
     }
@@ -812,7 +808,7 @@ public final class DirectAccessor<T> {
                                          "不应该有参数, got " + (method.getParameterCount() - off) + '!');
                 if(!method.getReturnType().isAssignableFrom(fieldFs[i].getType()))
                     throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 getter, " +
-                                         "但是返回值不兼容 " + fieldFs[i].getType().getName() + " (" + method.getReturnType() + ')');
+                                         "但是返回值不兼容 " + fieldFs[i].getType().getName() + " (" + method.getReturnType().getName() + ')');
                 getterMs[i] = method;
             }
 
@@ -827,10 +823,10 @@ public final class DirectAccessor<T> {
                                                                "只因有1个参数, got " + method.getParameterCount() + '!');
                 if(!method.getParameterTypes()[off].isAssignableFrom(fieldFs[i].getType()))
                     throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 setter, " +
-                                                               "但是参数[" + (off + 1) + "]不兼容 " + fieldFs[i].getType().getName() + " (" + method.getReturnType() + ')');
+                                                               "但是参数[" + (off + 1) + "]不兼容 " + fieldFs[i].getType().getName() + " (" + method.getReturnType().getName() + ')');
                 if(method.getReturnType() != void.class)
                     throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 setter, " +
-                                                               "但是它的返回值不是void: " + method.getReturnType());
+                                                               "但是它的返回值不是void: " + method.getReturnType().getName());
                 setterMs[i] = method;
             }
         }
@@ -848,26 +844,26 @@ public final class DirectAccessor<T> {
 
         for (int i = 0, len = fieldFs.length; i < len; i++) {
             Field field = fieldFs[i];
-            Type fType = ParamHelper.parseField(ParamHelper.classDescriptor(field.getType()));
+            Type fType = ParamHelper.parseField(ParamHelper.class2asm(field.getType()));
             boolean isStatic = (field.getModifiers() & AccessFlag.STATIC) != 0;
 
             Method getter = getterMs[i];
             if(getter != null) {
                 Class<?>[] params2 = isStatic || useCache ? EmptyArrays.CLASSES : getter.getParameterTypes();
-                roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, getter.getName(), ParamHelper.classDescriptors(params2, getter.getReturnType()));
+                roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, getter.getName(), ParamHelper.class2asm(params2, getter.getReturnType()));
                 AttrCode code = get.code = new AttrCode(get);
 
                 byte type = fType.type;
-                code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 2 : 1);
+                code.stackSize = (char) (type == Type.DOUBLE || type == Type.LONG ? 2 : 1);
 
                 InsnList insn = code.instructions;
                 if(!isStatic) {
                     code.localSize = (char) (useCache ? 1 : 2);
                     if (useCache) {
-                        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+                        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
                         insn.add(cache.node);
                     } else {
-                        insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                        insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
                         if (check && !target.isAssignableFrom(params2[0]))
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, tName));
                     }
@@ -884,20 +880,20 @@ public final class DirectAccessor<T> {
             Method setter = setterMs[i];
             if(setter != null) {
                 Class<?>[] params2 = setter.getParameterTypes();
-                roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, setter.getName(), ParamHelper.classDescriptors(params2, void.class));
+                roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, setter.getName(), ParamHelper.class2asm(params2, void.class));
                 AttrCode code = set.code = new AttrCode(set);
 
                 byte type = fType.type;
-                code.stackSize = (char) (type == NativeType.DOUBLE || type == NativeType.LONG ? 3 : 2);
+                code.stackSize = (char) (type == Type.DOUBLE || type == Type.LONG ? 3 : 2);
 
                 InsnList insn = code.instructions;
                 if(!isStatic) {
                     code.localSize = (char) (code.stackSize + (useCache ? 0 : 1));
                     if(useCache) {
-                        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+                        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
                         insn.add(cache.node);
                     } else {
-                        insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                        insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
                         if (check && !target.isAssignableFrom(params2[0]))
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, tName));
                     }
@@ -908,7 +904,7 @@ public final class DirectAccessor<T> {
                 if (check && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic || useCache ? 0 : 1]))
                     insn.add(new ClassInsnNode(Opcodes.CHECKCAST, fType.owner));
                 insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, tName, field.getName(), fType));
-                insn.add(NodeHelper.npc(Opcodes.RETURN));
+                insn.add(NPInsnNode.of(Opcodes.RETURN));
 
                 var.methods.add(set);
             }
@@ -929,14 +925,14 @@ public final class DirectAccessor<T> {
         target = target.replace('.', '/');
 
         roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self.getName(),
-                                     ParamHelper.classDescriptors(self.getParameterTypes(), self.getReturnType()));
+                                     ParamHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
 
         AttrCode code;
         invoke.code = code = new AttrCode(invoke);
 
         InsnList insn = code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, target));
-        insn.add(NodeHelper.npc(Opcodes.DUP));
+        insn.add(NPInsnNode.of(Opcodes.DUP));
 
         List<Type> params = ParamHelper.parseMethod(desc);
         params.remove(params.size() - 1);
@@ -955,7 +951,7 @@ public final class DirectAccessor<T> {
         code.stackSize = code.localSize = (char) (size + 1);
 
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, target, "<init>", desc));
-        insn.add(NodeHelper.npc(Opcodes.ARETURN));
+        insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
         var.methods.add(invoke);
 
@@ -978,7 +974,7 @@ public final class DirectAccessor<T> {
     public DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, boolean isStatic, boolean isDirect) {
         target = target.replace('.', '/');
 
-        String sDesc = ParamHelper.classDescriptors(self.getParameterTypes(), self.getReturnType());
+        String sDesc = ParamHelper.class2asm(self.getParameterTypes(), self.getReturnType());
 
         roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self.getName(), sDesc);
         AttrCode code;
@@ -988,7 +984,7 @@ public final class DirectAccessor<T> {
         InsnList insn = code.instructions;
 
         if (!isStatic) {
-            insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+            insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
         }
 
         List<Type> params = ParamHelper.parseMethod(desc);
@@ -1009,7 +1005,7 @@ public final class DirectAccessor<T> {
         code.localSize = (char) (size + 1);
 
         insn.add(new InvokeInsnNode(isStatic ? Opcodes.INVOKESTATIC : (isDirect ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), target, self.getName(), desc));
-        insn.add(NodeHelper.X_RETURN(ParamHelper.XPrefix(self.getReturnType())));
+        insn.add(NodeHelper.X_RETURN(NodeHelper.XPrefix(self.getReturnType())));
 
         if(sb != null) {
             sb.append("\n  方法代理[不安全]: ").append(target).append("\n  方法:\n    ")
@@ -1036,16 +1032,16 @@ public final class DirectAccessor<T> {
 
         if(getter != null) {
             Class<?>[] params2 = isStatic ? EmptyArrays.CLASSES : getter.getParameterTypes();
-            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, getter.getName(), ParamHelper.classDescriptors(params2, getter.getReturnType()));
+            roj.asm.tree.Method get = new roj.asm.tree.Method(PUBLIC, var, getter.getName(), ParamHelper.class2asm(params2, getter.getReturnType()));
             AttrCode code = get.code = new AttrCode(get);
 
             byte typeId = type.type;
-            code.stackSize = (char) (typeId == NativeType.DOUBLE || typeId == NativeType.LONG ? 2 : 1);
+            code.stackSize = (char) (typeId == Type.DOUBLE || typeId == Type.LONG ? 2 : 1);
 
             InsnList insn = code.instructions;
             if(!isStatic) {
                 code.localSize = 2;
-                insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
                 insn.add(new FieldInsnNode(Opcodes.GETFIELD, target, name, type));
             } else {
                 code.localSize = 1;
@@ -1058,22 +1054,22 @@ public final class DirectAccessor<T> {
 
         if(setter != null) {
             Class<?>[] params2 = setter.getParameterTypes();
-            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, setter.getName(), ParamHelper.classDescriptors(params2, void.class));
+            roj.asm.tree.Method set = new roj.asm.tree.Method(PUBLIC, var, setter.getName(), ParamHelper.class2asm(params2, void.class));
             AttrCode code = set.code = new AttrCode(set);
 
             byte typeId = type.type;
-            code.stackSize = (char) (typeId == NativeType.DOUBLE || typeId == NativeType.LONG ? 3 : 2);
+            code.stackSize = (char) (typeId == Type.DOUBLE || typeId == Type.LONG ? 3 : 2);
 
             InsnList insn = code.instructions;
             if(!isStatic) {
                 code.localSize = (char) (code.stackSize + 1);
-                insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
             } else {
                 code.localSize = --code.stackSize;
             }
             insn.add(NodeHelper.X_LOAD_I(type.nativeName().charAt(0), isStatic ? 1 : 2));
             insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, target, name, type));
-            insn.add(NodeHelper.npc(Opcodes.RETURN));
+            insn.add(NPInsnNode.of(Opcodes.RETURN));
 
             var.methods.add(set);
         }
@@ -1081,7 +1077,8 @@ public final class DirectAccessor<T> {
         if(sb != null) {
             sb.append("\n  字段代理[不安全]: ").append(target).append("\n  方法:\n    ");
             sb.append(target).append(' ').append(type)
-              .append(" => [").append(getter.getName()).append(", ").append(setter.getName()).append(']');
+              .append(" => [").append(getter == null ? "null" : getter.getName()).append(", ")
+              .append(setter == null ? "null" : setter.getName()).append(']');
         }
 
         return this;
@@ -1179,11 +1176,11 @@ public final class DirectAccessor<T> {
         code.stackSize = 1;
         code.localSize = 1;
         InsnList insn = code.instructions;
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "java/lang/Object",
                                     "clone", "()Ljava/lang/Object;"));
         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, clz.name));
-        insn.add(NodeHelper.npc(Opcodes.ARETURN));
+        insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
         clz.interfaces.add("java/lang/Cloneable");
         clz.methods.add(cl);
@@ -1202,25 +1199,25 @@ public final class DirectAccessor<T> {
         code.stackSize = 1;
         code.localSize = 1;
         InsnList insn = code.instructions;
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
-        insn.add(NodeHelper.npc(Opcodes.RETURN));
+        insn.add(NPInsnNode.of(Opcodes.RETURN));
 
         clz.methods.add(init);
 
-        init = new roj.asm.tree.Method(AccessFlag.PUBLIC | AccessFlag.STATIC, clz, "<clinit>", "()V");
+        init = new roj.asm.tree.Method(PUBLIC | AccessFlag.STATIC, clz, "<clinit>", "()V");
         code = init.code = new AttrCode(init);
 
         code.stackSize = 2;
         code.localSize = 0;
         insn = code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, clz.name));
-        insn.add(NodeHelper.npc(Opcodes.DUP));
+        insn.add(NPInsnNode.of(Opcodes.DUP));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.name, "<init>", "()V"));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC,
                                     DirectAccessor.class.getName().replace('.', '/'),
                                     "syncCallback", "(Ljava/lang/Object;)V"));
-        insn.add(NodeHelper.npc(Opcodes.RETURN));
+        insn.add(NPInsnNode.of(Opcodes.RETURN));
 
         clz.methods.add(init);
     }
@@ -1234,7 +1231,7 @@ public final class DirectAccessor<T> {
 
         clz.parent = MAGIC_ACCESSOR_CLASS;
         clz.interfaces.add(invokerName.replace('.', '/'));
-        clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC | AccessFlag.PUBLIC);
+        clz.accesses = AccessFlag.SUPER_OR_SYNC | PUBLIC;
     }
 
     /**
@@ -1249,14 +1246,12 @@ public final class DirectAccessor<T> {
     }
 
     static String objectDescriptors(Class<?>[] classes, Class<?> returns, boolean no_obj) {
-        CharList sb = ParamHelper.sharedBuffer.get();
-        sb.clear();
-        sb.append('(');
+        CharList sb = IOUtil.getSharedCharBuf().append('(');
 
         for (Class<?> clazz : classes) {
-            ParamHelper.classDescriptor(sb, no_obj | clazz.isPrimitive() ? clazz : Object.class);
+            ParamHelper.class2asm(sb, no_obj | clazz.isPrimitive() ? clazz : Object.class);
         }
         sb.append(')');
-        return ParamHelper.classDescriptor(sb, no_obj | returns.isPrimitive() ? returns : Object.class).toString();
+        return ParamHelper.class2asm(sb, no_obj | returns.isPrimitive() ? returns : Object.class).toString();
     }
 }

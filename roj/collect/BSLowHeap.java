@@ -36,7 +36,7 @@ import java.util.*;
  * @author Roj234
  * @since  2021/2/2 19:59
  */
-public class BSLowHeap<T> implements Collection<T> {
+public class BSLowHeap<T> implements List<T> {
     static final int DEF_SIZE = 16;
     static final float INC_RATE = 1.5f;
 
@@ -75,15 +75,14 @@ public class BSLowHeap<T> implements Collection<T> {
         this(DEF_SIZE, cmp);
     }
 
+    @SuppressWarnings("unchecked")
     public BSLowHeap(int capacity, Comparator<T> cmp) {
         if(capacity <= 1)
             capacity = DEF_SIZE;
         this.entries = Helpers.cast(new Object[capacity]);
-        this.cmp = cmp;
+        this.cmp = cmp == null ? (o1, o2) -> ((Comparable<T>)o1).compareTo(o2) : cmp;
     }
 
-    /* 增长二叉堆容量 */
-    @SuppressWarnings("unchecked")
     public void resize() {
         Object[] entriesO = this.entries;
 
@@ -114,6 +113,11 @@ public class BSLowHeap<T> implements Collection<T> {
             add(o);
         }
         return true;
+    }
+
+    @Override
+    public boolean addAll(int index, @Nonnull Collection<? extends T> c) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -164,10 +168,16 @@ public class BSLowHeap<T> implements Collection<T> {
         return remove(0);
     }
 
-    public int indexOf(T node) {
-        int index = binarySearch(node);
+    @SuppressWarnings("unchecked")
+    public int indexOf(Object o) {
+        int index = binarySearch((T) o);
 
         return index >= 0 ? index : -1;
+    }
+
+    @Override
+    public int lastIndexOf(Object o) {
+        return indexOf(o);
     }
 
     @SuppressWarnings("unchecked")
@@ -183,6 +193,19 @@ public class BSLowHeap<T> implements Collection<T> {
     @SuppressWarnings("unchecked")
     public T get(int idx) {
         return (T) entries[idx];
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public T set(int idx, T el) {
+        T oel = (T) entries[idx];
+        entries[idx] = el;
+        return oel;
+    }
+
+    @Override
+    public void add(int index, T element) {
+        throw new UnsupportedOperationException();
     }
 
     public void clear() {
@@ -206,16 +229,33 @@ public class BSLowHeap<T> implements Collection<T> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public boolean contains(Object o) {
-        return indexOf((T) o) != -1;
+        return indexOf(o) != -1;
+    }
+
+    @Nonnull
+    @Override
+    public Iterator<T> iterator() {
+        return listIterator(0);
+    }
+
+    @Nonnull
+    @Override
+    public ListIterator<T> listIterator() {
+        return listIterator(0);
     }
 
     @Nonnull
     @Override
     @SuppressWarnings("unchecked")
-    public Iterator<T> iterator() {
-        return entries == null || size == 0 ? Collections.emptyIterator() : new ArrayIterator<>((T[]) entries, 0, size);
+    public ListIterator<T> listIterator(int index) {
+        return entries == null || size == 0 ? Collections.emptyListIterator() : new ArrayIterator<>((T[]) entries, index, size);
+    }
+
+    @Nonnull
+    @Override
+    public List<T> subList(int fromIndex, int toIndex) {
+        throw new UnsupportedOperationException();
     }
 
     @Nonnull
@@ -237,5 +277,11 @@ public class BSLowHeap<T> implements Collection<T> {
             a = Arrays.copyOf(a, size);
         System.arraycopy(entries, 0, a, 0, size);
         return a;
+    }
+
+    @Override
+    public void sort(Comparator<? super T> c) {
+        if (c != cmp && c != null)
+            throw new UnsupportedOperationException();
     }
 }

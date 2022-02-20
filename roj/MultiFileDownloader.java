@@ -26,12 +26,10 @@
 package roj;
 
 import roj.concurrent.PrefixFactory;
-import roj.concurrent.SimpleSpinLock;
-import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.ITask;
 import roj.io.FileUtil;
 import roj.io.down.Downloader;
+import roj.io.down.IDown;
 import roj.io.down.MTDProgress;
 import roj.text.SimpleLineReader;
 import roj.ui.UIUtil;
@@ -51,35 +49,19 @@ import java.util.List;
 public final class MultiFileDownloader {
     static List<String> urls = new ArrayList<>();
 
-    public static class MyProgressHandler extends MTDProgress {
-        SimpleSpinLock ssl = new SimpleSpinLock();
-
+    public static class MyProgress extends MTDProgress {
         @Override
-        public void handleDone(Downloader dn) {
-            ssl.enqueueWriteLock();
-            super.handleDone(dn);
-            ssl.releaseWriteLock();
+        public void onJoin(IDown dn) {
+            synchronized (workers) {
+                workers.add(dn);
+            }
         }
 
         @Override
-        public void handleJoin(Downloader dn) {
-            ssl.enqueueWriteLock();
-            super.handleJoin(dn);
-            ssl.releaseWriteLock();
-        }
-
-        @Override
-        public void handleProgress(Downloader dn, long downloaded, long deltaRead) {
-            ssl.enqueueWriteLock();
-            super.handleProgress(dn, downloaded, deltaRead);
-            ssl.releaseWriteLock();
-        }
-
-        @Override
-        public void onReturn() {}
+        public void onFinish() {}
 
         public void myOnReturn() {
-            super.onReturn();
+            super.onFinish();
         }
     }
 
@@ -94,13 +76,12 @@ public final class MultiFileDownloader {
             parseFileNames(args[i]);
         }
 
-        FileUtil.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
-
+        FileUtil.userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
         int threadCount;
         if (!flag) {
             String ua = UIUtil.userInput("UA(可选): ");
             if (!ua.equals("")) {
-                FileUtil.USER_AGENT = ua;
+                FileUtil.userAgent = ua;
             }
 
             System.out.print("线程数[1, 500]: ");
@@ -109,23 +90,8 @@ public final class MultiFileDownloader {
             threadCount = Math.min(urls.size(), 500);
         }
 
-        FileUtil.ioPool = new TaskHandler() {
-            @Override
-            public void pushTask(ITask task) {
-                try {
-                    task.calculate(null);
-                } catch (Throwable e) {
-                    Helpers.athrow(e);
-                }
-            }
-
-            @Override
-            public void clearTasks() {
-
-            }
-        };
-        TaskPool testPool = new TaskPool(0, threadCount, 1, 512,
-                      new PrefixFactory("MFD-ParallelIO", 20000));
+        TaskPool parallel = new TaskPool(0, threadCount, 1, 512,
+                      new PrefixFactory("MFD并行IO", 20000));
 
         File base = new File(args[0]);
         if (!base.isDirectory() && !base.mkdirs()) {
@@ -134,17 +100,14 @@ public final class MultiFileDownloader {
 
         urls.sort(null);
 
-        MyProgressHandler handler = new MyProgressHandler();
-
-        File nfo = new File(base, "RojMFD.nfo");
+        MyProgress handler = new MyProgress();
 
         for (int k = 0; k < urls.size(); k++) {
-            int finalK = k;
-            testPool.pushRunnable(() -> {
-                String s = urls.get(finalK);
+            String s = urls.get(k);
+            parallel.pushRunnable(() -> {
                 File saveTo = new File(base, s.substring(s.lastIndexOf('/') + 1));
                 try {
-                    FileUtil.downloadFile(s, saveTo, nfo, handler, finalK, false).waitFor();
+                    Downloader.download(s, saveTo, handler).waitFor();
                 } catch (IOException e) {
                     Helpers.athrow(e);
                 }
@@ -153,12 +116,10 @@ public final class MultiFileDownloader {
 
         System.out.println("已启动 " + threadCount + "个线程");
 
-        testPool.waitUntilFinish();
+        parallel.waitUntilFinish();
 
         handler.myOnReturn();
     }
-
-    static int i = 1;
 
     private static void parseFileNames(String name) throws IOException {
         File file = new File(name);

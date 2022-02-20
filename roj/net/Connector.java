@@ -100,8 +100,10 @@ public abstract class Connector {
     public void disconnect() throws IOException {
         if (server != null) {
             if(channel != null) {
-                while (!channel.dataFlush()) ;
-                while (!channel.shutdown()) ;
+                try {
+                    while (!channel.dataFlush()) ;
+                    while (!channel.shutdown()) ;
+                } catch (Throwable ignored) {}
                 channel.close();
                 channel = null;
             }

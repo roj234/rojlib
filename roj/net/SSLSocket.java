@@ -36,7 +36,6 @@ import javax.net.ssl.SSLException;
 import java.io.EOFException;
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
@@ -320,11 +319,11 @@ public class SSLSocket extends PlainSocket {
                 case BUFFER_OVERFLOW:
                     // Reset the application buffer size.
                     appBufSize = engine.getSession().getApplicationBufferSize();
-                    if (appBufSize > rBuf.capacity()) {
-                        expandReadBuffer(appBufSize);
+                    if (appBufSize > rBuf.capacity() || read == 0) {
+                        expandReadBuffer(read > 0 ? appBufSize : rBuf.position() + appBufSize);
                         break;
                     }
-                    break;
+                    break vw;
                 case BUFFER_UNDERFLOW:
                     // Resize buffer if needed.
                     netBufSize = engine.getSession().getPacketBufferSize();
@@ -383,25 +382,6 @@ public class SSLSocket extends PlainSocket {
         return result.bytesConsumed();
     }
 
-    @Override
-    public int write(InputStream src, int max) throws IOException {
-        if (!hsDone) throw new SSLException("Not handshake");
-        if (!dataFlush()) return 0;
-
-        int cap = Math.min(WRITE_ONCE, max);
-        if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
-        else wBuf.clear();
-        int len = src.read(wBuf.array(), 0, cap);
-        if (len <= 0) return len;
-        wBuf.limit(len);
-
-        networkOut.clear();
-        engine.wrap(wBuf, networkOut);
-        networkOut.flip();
-
-        return len;
-    }
-
     public boolean dataFlush() throws IOException {
         if (networkOut.hasRemaining()) {
             tryFlush(networkOut);
@@ -447,6 +427,7 @@ public class SSLSocket extends PlainSocket {
     @Override
     public void close() throws IOException {
         super.close();
+        if (networkIn == null) return;
         NIOUtil.clean(networkIn);
         NIOUtil.clean(networkOut);
         networkIn = networkOut = null;

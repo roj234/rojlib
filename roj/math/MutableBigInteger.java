@@ -154,9 +154,9 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
         Comparator<Method> MC = (o1, o2) -> {
             int i = o1.getName().compareTo(o2.getName());
             return i == 0 ?
-                ParamHelper.classDescriptors(o1.getParameterTypes(), o1.getReturnType())
+                ParamHelper.class2asm(o1.getParameterTypes(), o1.getReturnType())
                            .compareTo(
-                               ParamHelper.classDescriptors(o2.getParameterTypes(), o2.getReturnType())) : i;
+                               ParamHelper.class2asm(o2.getParameterTypes(), o2.getReturnType())) : i;
         };
 
         // Do not except it to have ANY order
@@ -171,7 +171,7 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
             Method m = myMethods[i++];
             if (m.getName().startsWith("_")) continue;
             Method im = itMethods[j++];
-            dab.i_delegate(target, m.getName(), ParamHelper.classDescriptors(im.getParameterTypes(), im.getReturnType()),
+            dab.i_delegate(target, m.getName(), ParamHelper.class2asm(im.getParameterTypes(), im.getReturnType()),
                            m, (im.getModifiers() & AccessFlag.STATIC) != 0, true);
         }
 

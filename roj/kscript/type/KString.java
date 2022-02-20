@@ -106,7 +106,7 @@ public final class KString extends KBase {
 
     @Override
     public StringBuilder toString0(StringBuilder sb, int depth) {
-        return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
+        return AbstLexer.addSlashes(value, sb.append('"')).append('"');
     }
 
     @Override

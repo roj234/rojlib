@@ -35,13 +35,10 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
-import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
-import roj.asm.util.NodeHelper;
 import roj.collect.MyHashMap;
 import roj.collect.ToIntMap;
 import roj.config.data.CEntry;
@@ -61,8 +58,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.Opcodes.*;
-import static roj.asm.type.NativeType.ARRAY;
-import static roj.asm.type.NativeType.CLASS;
+import static roj.asm.type.Type.ARRAY;
+import static roj.asm.type.Type.CLASS;
+import static roj.asm.util.AccessFlag.PUBLIC;
 
 /**
  * @author Roj233
@@ -187,27 +185,9 @@ public final class Serializers {
         register(Set.class, new SetSerializer());
     }
 
-    static final FlagList PUBLIC = new FlagList(AccessFlag.PUBLIC);
     private static final AtomicInteger ordinal = new AtomicInteger();
 
-    private static final InsnNode MAP_PUT, MAP_GET, CAST,
-            TOLONG, TOBOOL, TOINT, TODOUBLE, TOSTRING,
-            FROMLONG, FROMBOOL, FROMINT, FROMDOUBLE, FROMSTRING;
-
     static {
-        MAP_PUT = new InvokeItfInsnNode("java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-        MAP_GET = new InvokeItfInsnNode("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
-        CAST = new ClassInsnNode(CHECKCAST, "roj/config/data/CEntry");
-        TOLONG = new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asLong", "()J");
-        TOBOOL = new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asBool", "()Z");
-        TOINT = new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asInteger", "()I");
-        TODOUBLE = new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asDouble", "()D");
-        TOSTRING = new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asString", "()Ljava/lang/String;");
-        FROMLONG = new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CLong", "valueOf", "(J)Lroj/config/data/CLong;");
-        FROMBOOL = new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CBoolean", "valueOf", "(Z)Lroj/config/data/CEntry;");
-        FROMINT = new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CInteger", "valueOf", "(I)Lroj/config/data/CInteger;");
-        FROMDOUBLE = new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CDouble", "valueOf", "(D)Lroj/config/data/CDouble;");
-        FROMSTRING = new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CString", "valueOf", "(Ljava/lang/String;)Lroj/config/data/CString;");
         try {
             byte[] read = IOUtil.read("roj/config/serial/GenSer.class");
             ConstantData d = Parser.parseConstants(read);
@@ -262,7 +242,7 @@ public final class Serializers {
         cz.methods.add(m0);
         AttrCode c0 = m0.code = new AttrCode(m0);
         c0.interpretFlags = AttrCode.COMPUTE_SIZES;
-        c0.instructions.add(NodeHelper.npc(RETURN));
+        c0.instructions.add(NPInsnNode.of(RETURN));
 
         m0 = new Method(PUBLIC, cz,
                                "serialize0", "(Lroj/config/data/CMapping;Ljava/lang/Object;)V");
@@ -271,11 +251,11 @@ public final class Serializers {
         c0.interpretFlags = AttrCode.COMPUTE_SIZES;
         InsnList rcSer = c0.instructions;
 
-        rcSer.add(NodeHelper.npc(ALOAD_2));
+        rcSer.add(NPInsnNode.of(ALOAD_2));
         rcSer.add(new ClassInsnNode(CHECKCAST, className));
-        rcSer.add(NodeHelper.npc(ALOAD_2));
+        rcSer.add(NPInsnNode.of(ALOAD_2));
 
-        rcSer.add(NodeHelper.npc(ALOAD_1));
+        rcSer.add(NPInsnNode.of(ALOAD_1));
         rcSer.add(new FieldInsnNode(GETFIELD, "roj/config/data/CMapping", "map", new Type("java/util/Map")));
 
         m0 = new Method(PUBLIC, cz, "deserializeRc", "(Lroj/config/data/CEntry;)Ljava/lang/Object;");
@@ -292,22 +272,22 @@ public final class Serializers {
                 m0.code.localSize = 2; m0.code.stackSize = 3;
 
                 err.add(new ClassInsnNode(NEW, "java/lang/AssertionError"));
-                err.add(NodeHelper.npc(DUP));
+                err.add(NPInsnNode.of(DUP));
                 err.add(new LdcInsnNode(new CstString(owner.getName() + " 没有无参构造器")));
                 err.add(new InvokeInsnNode(INVOKESPECIAL, "java/lang/AssertionError", "<init>", "(Ljava/lang/String;)V"));
-                err.add(NodeHelper.npc(ATHROW));
+                err.add(NPInsnNode.of(ATHROW));
             }
         }
 
-        rcDes.add(NodeHelper.npc(ALOAD_1));
+        rcDes.add(NPInsnNode.of(ALOAD_1));
         rcDes.add(new ClassInsnNode(CHECKCAST, "roj/config/data/CMapping"));
         rcDes.add(new FieldInsnNode(GETFIELD, "roj/config/data/CMapping", "map", new Type("java/util/Map")));
-        rcDes.add(NodeHelper.npc(ASTORE_1));
+        rcDes.add(NPInsnNode.of(ASTORE_1));
 
         rcDes.add(new ClassInsnNode(NEW, className));
-        rcDes.add(NodeHelper.npc(DUP));
+        rcDes.add(NPInsnNode.of(DUP));
         rcDes.add(new InvokeInsnNode(INVOKESPECIAL, className, "<init>", "()V"));
-        rcDes.add(NodeHelper.npc(ASTORE_2));
+        rcDes.add(NPInsnNode.of(ASTORE_2));
 
         ToIntMap<Type> storedSer = new ToIntMap<>(4);
         for (Field field : (flag & NOINHERIT) == 0 ?
@@ -317,7 +297,7 @@ public final class Serializers {
 
             FieldInsnNode getFA;
             if ((field.getModifiers() & AccessFlag.FINAL) != 0) {
-                roj.asm.tree.Field acc = new roj.asm.tree.Field(new FlagList(AccessFlag.STATIC), "a" + cz.fields.size(), new Type("roj/reflect/FieldAccessor"));
+                roj.asm.tree.Field acc = new roj.asm.tree.Field(AccessFlag.STATIC, "a" + cz.fields.size(), new Type("roj/reflect/FieldAccessor"));
                 cz.fields.add(acc);
                 int accId;
 
@@ -331,68 +311,68 @@ public final class Serializers {
                 getFA = new FieldInsnNode(GETSTATIC, cz, accId);
             } else getFA = null;
 
-            Type type = ParamHelper.parseField(ParamHelper.classDescriptor(field.getType()));
+            Type type = ParamHelper.parseField(ParamHelper.class2asm(field.getType()));
 
             // ser: dup, ldc [name], aload_2, getfield, convert, put
-            rcSer.add(NodeHelper.npc(DUP));
+            rcSer.add(NPInsnNode.of(DUP));
             rcSer.add(new LdcInsnNode(new CstString(field.getName())));
-            rcSer.add(NodeHelper.npc(ALOAD_2));
+            rcSer.add(NPInsnNode.of(ALOAD_2));
             rcSer.add(new FieldInsnNode(GETFIELD, className, field.getName(), type));
 
             // rcDes: dup, aload_1, ldc [name], get, convert, putfield
             if (getFA != null) {
                 rcDes.add(getFA);
-                rcDes.add(NodeHelper.npc(ALOAD_2));
+                rcDes.add(NPInsnNode.of(ALOAD_2));
                 rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/reflect/FieldAccessor", "setInstance", "(Ljava/lang/Object;)V"));
                 rcDes.add(getFA);
             } else {
-                rcDes.add(NodeHelper.npc(ALOAD_2));
+                rcDes.add(NPInsnNode.of(ALOAD_2));
             }
-            rcDes.add(NodeHelper.npc(ALOAD_1));
+            rcDes.add(NPInsnNode.of(ALOAD_1));
             rcDes.add(new LdcInsnNode(new CstString(field.getName())));
-            rcDes.add(MAP_GET);
-            rcDes.add(CAST);
+            rcDes.add(new InvokeItfInsnNode("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+            rcDes.add(new ClassInsnNode(CHECKCAST, "roj/config/data/CEntry"));
 
             // convert jfield -> cobject
             a:
             {
                 if (type.array == 0) {
                     switch (type.type) {
-                        case NativeType.BOOLEAN:
-                            rcSer.add(FROMBOOL);
-                            rcDes.add(TOBOOL);
+                        case Type.BOOLEAN:
+                            rcSer.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CBoolean", "valueOf", "(Z)Lroj/config/data/CEntry;"));
+                            rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asBool", "()Z"));
                             break a;
-                        case NativeType.BYTE:
-                        case NativeType.CHAR:
-                        case NativeType.SHORT:
-                        case NativeType.INT:
-                            rcSer.add(FROMINT);
-                            rcDes.add(TOINT);
+                        case Type.BYTE:
+                        case Type.CHAR:
+                        case Type.SHORT:
+                        case Type.INT:
+                            rcSer.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CInteger", "valueOf", "(I)Lroj/config/data/CInteger;"));
+                            rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asInteger", "()I"));
                             switch (type.type) {
-                                case NativeType.BYTE:
-                                    rcDes.add(NodeHelper.npc(I2B));
+                                case Type.BYTE:
+                                    rcDes.add(NPInsnNode.of(I2B));
                                     break;
-                                case NativeType.CHAR:
-                                    rcDes.add(NodeHelper.npc(I2C));
+                                case Type.CHAR:
+                                    rcDes.add(NPInsnNode.of(I2C));
                                     break;
-                                case NativeType.SHORT:
-                                    rcDes.add(NodeHelper.npc(I2S));
+                                case Type.SHORT:
+                                    rcDes.add(NPInsnNode.of(I2S));
                                     break;
                             }
                             break a;
-                        case NativeType.FLOAT:
-                            rcSer.add(NodeHelper.npc(F2D));
-                            rcSer.add(FROMDOUBLE);
-                            rcDes.add(TODOUBLE);
-                            rcDes.add(NodeHelper.npc(D2F));
+                        case Type.FLOAT:
+                            rcSer.add(NPInsnNode.of(F2D));
+                            rcSer.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CDouble", "valueOf", "(D)Lroj/config/data/CDouble;"));
+                            rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asDouble", "()D"));
+                            rcDes.add(NPInsnNode.of(D2F));
                             break a;
-                        case NativeType.DOUBLE:
-                            rcSer.add(FROMDOUBLE);
-                            rcDes.add(TODOUBLE);
+                        case Type.DOUBLE:
+                            rcSer.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CDouble", "valueOf", "(D)Lroj/config/data/CDouble;"));
+                            rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asDouble", "()D"));
                             break a;
-                        case NativeType.LONG:
-                            rcSer.add(FROMLONG);
-                            rcDes.add(TOLONG);
+                        case Type.LONG:
+                            rcSer.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CLong", "valueOf", "(J)Lroj/config/data/CLong;"));
+                            rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asLong", "()J"));
                             break a;
                     }
                 }
@@ -405,8 +385,8 @@ public final class Serializers {
                 }
             }
 
-            rcSer.add(MAP_PUT);
-            rcSer.add(NodeHelper.npc(POP));
+            rcSer.add(new InvokeItfInsnNode("java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"));
+            rcSer.add(NPInsnNode.of(POP));
 
             if (getFA == null) {
                 rcDes.add(new FieldInsnNode(PUTFIELD, className, field.getName(), type));
@@ -418,7 +398,7 @@ public final class Serializers {
                         pf.append("Object");
                         break;
                     default:
-                        pf.append(NativeType.toString(type.type));
+                        pf.append(Type.toString(type.type));
                         pf.setCharAt(0, Character.toUpperCase(pf.charAt(0)));
                 }
                 StringBuilder tp = new StringBuilder().append("(");
@@ -434,9 +414,9 @@ public final class Serializers {
                 rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/reflect/FieldAccessor",  "clearInstance", "()V"));
             }
         }
-        rcSer.add(NodeHelper.npc(RETURN));
-        rcDes.add(NodeHelper.npc(ALOAD_2));
-        rcDes.add(NodeHelper.npc(ARETURN));
+        rcSer.add(NPInsnNode.of(RETURN));
+        rcDes.add(NPInsnNode.of(ALOAD_2));
+        rcDes.add(NPInsnNode.of(ARETURN));
 
         if (cz.methods.get(2).code.instructions.size() == 1) {
             cz.methods.remove(2);
@@ -451,8 +431,8 @@ public final class Serializers {
             switch (type.owner) {
                 case "java/lang/String":
                 case "java/lang/CharSequence":
-                    rcSer.add(FROMSTRING);
-                    rcDes.add(TOSTRING);
+                    rcSer.add(new InvokeInsnNode(INVOKESTATIC, "roj/config/data/CString", "valueOf", "(Ljava/lang/String;)Lroj/config/data/CString;"));
+                    rcDes.add(new InvokeInsnNode(INVOKEVIRTUAL, "roj/config/data/CEntry", "asString", "()Ljava/lang/String;"));
                     return;
                 // Primitive wrappers may be null, using Specified Serializer is simpler
             }
@@ -476,13 +456,13 @@ public final class Serializers {
                 id = cz.fields.size();
                 storedSer.putInt(type, id);
 
-                roj.asm.tree.Field field1 = new roj.asm.tree.Field(new FlagList(AccessFlag.STATIC), "s" + id, new Type("roj/config/serial/Serializer"));
+                roj.asm.tree.Field field1 = new roj.asm.tree.Field(AccessFlag.STATIC, "s" + id, new Type("roj/config/serial/Serializer"));
                 cz.fields.add(field1);
 
                 // init(), 这是为了支持递归
                 InsnList init = cz.methods.get(2).code.instructions;
                 InsnNode ret = init.remove(init.size() - 1);
-                init.add(NodeHelper.npc(ALOAD_1));
+                init.add(NPInsnNode.of(ALOAD_1));
                 init.add(new LdcInsnNode(new CstString(cType.getName())));
                 init.add(new InvokeInsnNode(INVOKESPECIAL, "roj/config/serial/Serializers", "find", "(Ljava/lang/String;)Lroj/config/serial/Serializer;"));
                 init.add(new FieldInsnNode(PUTSTATIC, cz, id));
@@ -515,7 +495,7 @@ public final class Serializers {
         cz.methods.add(m0);
         AttrCode c0 = m0.code = new AttrCode(m0);
         c0.interpretFlags = AttrCode.COMPUTE_SIZES;
-        c0.instructions.add(NodeHelper.npc(RETURN));
+        c0.instructions.add(NPInsnNode.of(RETURN));
 
         m0 = new Method(PUBLIC, cz,
                                "serialize0", "(Ljava/lang/Object;)Lroj/config/data/CList;");
@@ -534,34 +514,34 @@ public final class Serializers {
         // 初始化 SER
 
         rcSer.add(new ClassInsnNode(NEW, "java/util/ArrayList"));
-        rcSer.add(NodeHelper.npc(DUP));
+        rcSer.add(NPInsnNode.of(DUP));
 
-        rcSer.add(NodeHelper.npc(ALOAD_1));
+        rcSer.add(NPInsnNode.of(ALOAD_1));
         rcSer.add(new ClassInsnNode(CHECKCAST, owner.getName().replace('.', '/')));
-        rcSer.add(NodeHelper.npc(DUP));
-        rcSer.add(NodeHelper.npc(ASTORE_2));
-        rcSer.add(NodeHelper.npc(ARRAYLENGTH));
+        rcSer.add(NPInsnNode.of(DUP));
+        rcSer.add(NPInsnNode.of(ASTORE_2));
+        rcSer.add(NPInsnNode.of(ARRAYLENGTH));
 
         rcSer.add(new InvokeInsnNode(INVOKESPECIAL, "java/util/ArrayList", "<init>", "(I)V"));
-        rcSer.add(NodeHelper.npc(ASTORE_1));
+        rcSer.add(NPInsnNode.of(ASTORE_1));
 
-        rcSer.add(NodeHelper.npc(ICONST_0)); // int i = 0;
-        rcSer.add(NodeHelper.npc(ISTORE_3));
+        rcSer.add(NPInsnNode.of(ICONST_0)); // int i = 0;
+        rcSer.add(NPInsnNode.of(ISTORE_3));
 
         // 初始化 DES
 
-        rcDes.add(NodeHelper.npc(ALOAD_1));
+        rcDes.add(NPInsnNode.of(ALOAD_1));
         rcDes.add(new ClassInsnNode(CHECKCAST, "roj/config/data/CList"));
         rcDes.add(new FieldInsnNode(GETFIELD, "roj/config/data/CList", "list", new Type("java/util/List")));
-        rcDes.add(NodeHelper.npc(DUP));
-        rcDes.add(NodeHelper.npc(ASTORE_1));
+        rcDes.add(NPInsnNode.of(DUP));
+        rcDes.add(NPInsnNode.of(ASTORE_1));
 
         rcDes.add(new InvokeItfInsnNode("java/util/List", "size", "()I"));
-        rcDes.add(new ClassInsnNode(ANEWARRAY, ParamHelper.classDescriptor(owner)));
-        rcDes.add(NodeHelper.npc(ASTORE_2));
+        rcDes.add(new ClassInsnNode(ANEWARRAY, ParamHelper.class2asm(owner)));
+        rcDes.add(NPInsnNode.of(ASTORE_2));
 
-        rcDes.add(NodeHelper.npc(ICONST_0)); // int i = 0;
-        rcDes.add(NodeHelper.npc(ISTORE_3));
+        rcDes.add(NPInsnNode.of(ICONST_0)); // int i = 0;
+        rcDes.add(NPInsnNode.of(ISTORE_3));
 
         // 循环头
         InsnNode add = new InvokeItfInsnNode("java/util/List", "add", "(Ljava/lang/Object;)Z");
@@ -576,29 +556,29 @@ public final class Serializers {
 
         // if (i < array.length) {
         rcSer.add(new NPInsnNode(ILOAD_3));
-        rcSer.add(NodeHelper.npc(ALOAD_2));
-        rcSer.add(NodeHelper.npc(ARRAYLENGTH));
+        rcSer.add(NPInsnNode.of(ALOAD_2));
+        rcSer.add(NPInsnNode.of(ARRAYLENGTH));
         rcSer.add(new IfInsnNode(IF_icmpge, cycleExit));
 
         rcDes.add(new NPInsnNode(ILOAD_3));
-        rcDes.add(NodeHelper.npc(ALOAD_2));
-        rcDes.add(NodeHelper.npc(ARRAYLENGTH));
+        rcDes.add(NPInsnNode.of(ALOAD_2));
+        rcDes.add(NPInsnNode.of(ARRAYLENGTH));
         rcDes.add(new IfInsnNode(IF_icmpge, cycleExit2));
 
         // local -> list, array, i
 
         // list.add(obj[i]);
-        rcSer.add(NodeHelper.npc(ALOAD_1));
-        rcSer.add(NodeHelper.npc(ALOAD_2));
-        rcSer.add(NodeHelper.npc(ILOAD_3));
-        rcSer.add(NodeHelper.npc(AALOAD));
+        rcSer.add(NPInsnNode.of(ALOAD_1));
+        rcSer.add(NPInsnNode.of(ALOAD_2));
+        rcSer.add(NPInsnNode.of(ILOAD_3));
+        rcSer.add(NPInsnNode.of(AALOAD));
 
         // obj[i] = list.get(i);
-        rcDes.add(NodeHelper.npc(ALOAD_2));
-        rcDes.add(NodeHelper.npc(ILOAD_3));
+        rcDes.add(NPInsnNode.of(ALOAD_2));
+        rcDes.add(NPInsnNode.of(ILOAD_3));
 
-        rcDes.add(NodeHelper.npc(ALOAD_1));
-        rcDes.add(NodeHelper.npc(ILOAD_3));
+        rcDes.add(NPInsnNode.of(ALOAD_1));
+        rcDes.add(NPInsnNode.of(ILOAD_3));
         rcDes.add(get);
 
         Class<?> upper = owner.getComponentType();
@@ -606,8 +586,8 @@ public final class Serializers {
                            new Type(upper.getName().replace('.', '/')));
 
         rcSer.add(add);
-        rcSer.add(NodeHelper.npc(POP));
-        rcDes.add(NodeHelper.npc(AASTORE));
+        rcSer.add(NPInsnNode.of(POP));
+        rcDes.add(NPInsnNode.of(AASTORE));
 
         // i++;
         rcSer.add(new IncrInsnNode(3, 1));
@@ -619,17 +599,17 @@ public final class Serializers {
         rcSer.add(cycleExit);
 
         rcSer.add(new ClassInsnNode(NEW, "roj/config/data/CList"));
-        rcSer.add(NodeHelper.npc(DUP));
-        rcSer.add(NodeHelper.npc(ALOAD_1));
+        rcSer.add(NPInsnNode.of(DUP));
+        rcSer.add(NPInsnNode.of(ALOAD_1));
         rcSer.add(new InvokeInsnNode(INVOKESPECIAL, "roj/config/data/CList", "<init>", "(Ljava/util/List;)V"));
-        rcSer.add(NodeHelper.npc(ARETURN));
+        rcSer.add(NPInsnNode.of(ARETURN));
 
         // 循环结束 DES
 
         rcDes.add(new GotoInsnNode(cycleBegin2));
         rcDes.add(cycleExit2);
         rcDes.add(NPInsnNode.of(ALOAD_2));
-        rcDes.add(NodeHelper.npc(ARETURN));
+        rcDes.add(NPInsnNode.of(ARETURN));
 
         if (cz.methods.get(2).code.instructions.size() == 1) {
             cz.methods.remove(2);

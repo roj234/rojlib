@@ -53,7 +53,7 @@ public abstract class AbstractExecutionTask implements ITask, Future<Void>, Runn
     }
 
     @Override
-    public void calculate(Thread thread) {
+    public void calculate() {
         try {
             run();
         } catch (Throwable e) {

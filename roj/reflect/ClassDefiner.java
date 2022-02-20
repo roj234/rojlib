@@ -34,8 +34,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
-import java.security.cert.Certificate;
-import java.util.Vector;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -47,7 +46,7 @@ public final class ClassDefiner extends ClassLoader {
                 ProtectionDomain protectionDomain);
         Class<?> defineClass1(ClassLoader loader, String name, byte[] b, int off, int len,
                 ProtectionDomain protectionDomain, String source);
-        Vector<Class<?>> getClasses(ClassLoader loader);
+        List<Class<?>> getClasses(ClassLoader loader);
     }
 
     private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
@@ -62,8 +61,6 @@ public final class ClassDefiner extends ClassLoader {
     private static final FastDef def;
     private static final Method  slowDef;
     static {
-        ClassLoader.registerAsParallelCapable();
-
         FastDef fi = null;
         try {
             SharedBuf.alloc().setLevel(true);
@@ -86,16 +83,12 @@ public final class ClassDefiner extends ClassLoader {
             }
         }
         slowDef = slowDef1;
+
+        ClassLoader.registerAsParallelCapable();
     }
 
     private ClassDefiner(ClassLoader parent) {
         super(parent);
-    }
-
-    public void clearLoadedClasses() {
-        if (def == null)
-            throw new UnsupportedOperationException();
-        def.getClasses(this).clear();
     }
 
     public Class<?> loadClass(String className, boolean init) throws ClassNotFoundException {
@@ -106,12 +99,19 @@ public final class ClassDefiner extends ClassLoader {
         return defineClassC(name, bytes, 0, bytes.length);
     }
 
+    public Class<?> defineClassUnloadable(String name, byte[] bytes, int off, int len) throws ClassFormatError {
+        return new ClassDefiner(null).defineClassC(name, bytes, off, len);
+    }
+
     public Class<?> defineClassC(String name, byte[] bytes, int off, int len) throws ClassFormatError {
         if (debug) {
             try (FileOutputStream fos = new FileOutputStream(new File(name + ".class"))) {
                 fos.write(bytes, off, len);
             } catch (IOException ignored) {}
         }
+
+        if(def != null) def.getClasses(this).clear();
+
         try {
             // 使用同样的加载器加载，保证Access
             return def == null ?
@@ -121,24 +121,7 @@ public final class ClassDefiner extends ClassLoader {
             // 使用自己加载（这样会没有protected的权限!）
         }
 
-        try {
-            return defineClass(name, bytes, off, len, getClass().getProtectionDomain());
-        } catch (Exception e1) {
-            if(def == null)
-                throw e1;
-        }
-
-        ProtectionDomain pd = getClass().getProtectionDomain();
-
-        Class<?> clazz = def.defineClass1(getParent(), name, bytes, off, len, pd, defineClassSourceLocation(pd));
-
-        if (pd.getCodeSource() != null) {
-            Certificate[] certs = pd.getCodeSource().getCertificates();
-            if (certs != null)
-                setSigners(clazz, certs);
-        }
-
-        return clazz;
+        return defineClass(name, bytes, off, len, getClass().getProtectionDomain());
     }
 
     private static String defineClassSourceLocation(ProtectionDomain pd) {

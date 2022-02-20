@@ -44,18 +44,15 @@ public class SocketInputStream extends InputStream {
     final WrappedSocket socket;
 
     final ByteBuffer buf;
-    private int markLimit;
+    private int markLimit, markPos;
 
     // Shared
     long dataRemain;
     int readTimeout;
 
-    public SocketInputStream(WrappedSocket socket, int bufPos) {
+    public SocketInputStream(WrappedSocket socket) {
         this.socket = socket;
         buf = socket.buffer();
-        int pos = buf.position();
-        buf.position(bufPos).limit(pos);
-        buf.compact().flip();
         dataRemain = buf.remaining();
     }
 
@@ -143,7 +140,7 @@ public class SocketInputStream extends InputStream {
         if (buf.position() > 0) {
             buf.compact().flip();
         }
-        buf.mark();
+        markPos = buf.position();
         markLimit = limit;
     }
 
@@ -155,7 +152,7 @@ public class SocketInputStream extends InputStream {
     @Override
     public void reset() throws IOException {
         if (socket.socket().isClosed()) throw new IOException("Socket closed.");
-        buf.reset();
+        buf.position(markPos);
     }
 
     void pass(int bufPos) {

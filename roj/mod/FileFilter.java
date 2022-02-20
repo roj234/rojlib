@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import static roj.mod.Shared.BASE;
-import static roj.mod.Shared.MAIN_CONFIG;
+import static roj.mod.Shared.CONFIG;
 
 /**
  * Class Timer
@@ -31,7 +31,7 @@ class FileFilter implements Predicate<File> {
 
     FileFilter() {}
 
-    static final byte[]            buffer     = new byte[MAIN_CONFIG.getInteger("AT查找缓冲区大小")];
+    static final byte[]            buffer     = new byte[CONFIG.getInteger("AT查找缓冲区大小")];
     static final List<CmtATEntry>  cmtEntries = new ArrayList<>();
 
     private long stamp;
@@ -70,7 +70,7 @@ class FileFilter implements Predicate<File> {
         if(buffer.length == 0)
             return false;
         try(FileInputStream in = new FileInputStream(file)) {
-            int len = in.read(buffer, 0, Math.min((int) file.length(), buffer.length));
+            int len = in.read(buffer);
             for (int i = 0; i < len; i++) {
                 if(buffer[i] == '/' && regionMatches(buffer, i, COMMENT_BEGIN)) {
                     PushbackInputStream in1 = new PushbackInputStream(in);
@@ -135,6 +135,26 @@ class FileFilter implements Predicate<File> {
         String clazz;
         List<String> value;
         boolean compile;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            CmtATEntry entry = (CmtATEntry) o;
+
+            if (compile != entry.compile) return false;
+            if (!clazz.equals(entry.clazz)) return false;
+            return value.equals(entry.value);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = clazz.hashCode();
+            result = 31 * result + value.hashCode();
+            result = 31 * result + (compile ? 1 : 0);
+            return result;
+        }
     }
 
     // endregion

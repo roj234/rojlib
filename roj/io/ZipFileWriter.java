@@ -50,15 +50,6 @@ import static roj.io.MutableZipFile.*;
  * @since 2021/10/5 13:54
  */
 public class ZipFileWriter extends OutputStream implements Closeable, AutoCloseable {
-    static final byte[] DEFAULT_COMMENT = c2b("By Roj234's ZipFileWriter");
-    private static byte[] c2b(String s) {
-        byte[] b = new byte[s.length()];
-        for (int i = 0; i < s.length(); i++) {
-            b[i] = (byte) s.charAt(i);
-        }
-        return b;
-    }
-
     private final Source file;
     private final Deflater deflater;
     private final List<byte[]> attrList;
@@ -85,7 +76,6 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         this.buffer = new ByteList();
         this.crc = new CRC32();
         this.eof = new EEOF();
-        this.eof.setComment(DEFAULT_COMMENT);
         this.duplicate = checkDuplicate ? new MyHashSet<>() : null;
     }
 
@@ -128,7 +118,6 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         long beginOffset = file.position();
         file.write(buf.list, 0, buf.wIndex());
         buf.clear();
-        long endOffset = file.position();
 
         int cSize;
         if (method == ZipEntry.DEFLATED) {
@@ -244,9 +233,8 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
           .putUTFData(ze.getName());
         entryBeginOffset = file.position();
         file.write(buffer.list, 0, buffer.wIndex());
-        if (extra != null)
-            file.write(extra);
-        entryEndOffset = entryBeginOffset + buffer.wIndex();
+        if (extra != null) file.write(extra);
+        entryEndOffset = file.position();
         buffer.clear();
     }
 
@@ -273,11 +261,14 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
 
             if (!def.finished()) {
                 def.setInput(b, off, len);
+
                 ByteList buf = this.buffer;
+                buf.ensureCapacity(1024);
+
+                byte[] list = buf.list;
                 while (!def.needsInput()) {
-                    buf.ensureCapacity(buf.wIndex() + 1024);
-                    off = deflater.deflate(buf.list, buf.wIndex(), 1024);
-                    buf.wIndex(buf.wIndex() + off);
+                    off = deflater.deflate(list);
+                    file.write(list, 0, off);
                 }
             } else {
                 throw new ZipException("Entry asynchronously closed");
@@ -289,32 +280,32 @@ public class ZipFileWriter extends OutputStream implements Closeable, AutoClosea
         Source f = this.file;
 
         if (entry.getMethod() != ZipEntry.STORED) {
-            f.seek(entryEndOffset);
             Deflater def = this.deflater;
+            def.finish();
+
             ByteList buf = this.buffer;
-            f.write(buf.list, 0, buf.wIndex());
             buf.clear();
-            if (!def.finished()) {
-                def.finish();
-                buf.ensureCapacity(1024);
-                while (!def.finished()) {
-                    int off = deflater.deflate(buf.list, 0, 1024);
-                    f.write(buf.list, 0, off);
-                }
+            buf.ensureCapacity(1024);
+            byte[] list = buf.list;
+
+            while (!def.finished()) {
+                f.write(list, 0, deflater.deflate(list));
             }
+
             // 没等于号，毕竟也可能正好是这个数
             if (def.getBytesRead() > U32_MAX)
                 throw new ZipException("Zip64(of LOC header) is required, while ZFW not(want to) support it yet(for space reason)");
         }
 
         long curr = f.position();
-        int cSize = (int) (curr - entryEndOffset);
         if (curr - entryEndOffset > U32_MAX)
             throw new ZipException("Zip64(of LOC header) is required, while ZFW not(want to) support it yet(for space reason)");
+
+        int cSize = (int) (curr - entryEndOffset);
         int uSize = entry.getMethod() == ZipEntry.STORED ? cSize : (int) deflater.getBytesRead();
         deflater.reset();
 
-        boolean attrZip64 = entryBeginOffset >= U32_MAX;
+        boolean attrZip64 = entryBeginOffset > U32_MAX;
         buffer.putInt(HEADER_ATTRIBUTE)
           .putShortLE(attrZip64 ? 45 : 20)
           .putShortLE(attrZip64 ? 45 : 20)

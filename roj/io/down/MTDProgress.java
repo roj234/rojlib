@@ -25,107 +25,39 @@
  */
 package roj.io.down;
 
-import roj.collect.ToLongMap;
-import roj.text.TextUtil;
-import roj.ui.CmdUtil;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Roj234
  * @since  2020/9/13 12:33
  */
 public class MTDProgress extends STDProgress {
-    private static final int TIME = 300;
-    private static final int TIME_A = 100;
-
-    ToLongMap<Downloader> downloaded, downloadBytes;
-    long all, lastTime2;
-
-    String s;
+    protected final List<IDown> workers;
 
     public MTDProgress() {
-        downloaded = new ToLongMap<>();
-        downloadBytes = new ToLongMap<>();
+        workers = new ArrayList<>();
     }
 
     @Override
-    public void handleJoin(Downloader dn) {
-        all += dn.length;
-        downloaded.putLong(dn, 0);
-        downloadBytes.putLong(dn, 0);
+    public void onJoin(IDown dn) {
+        workers.add(dn);
     }
 
     @Override
-    public void handleProgress(Downloader dn, long downloaded, long deltaRead) {
-        this.downloadBytes.getEntry(dn).v += deltaRead;
+    public void onChange(IDown dn) {
+        long t = System.currentTimeMillis();
+        if(t - last < printInterval && dn.getRemain() > 0) return;
+        last = t;
 
-        _progress(dn, downloaded);
-    }
-
-    private void _progress(Downloader thread, long downloaded) {
-        long curr = System.currentTimeMillis();
-        if (curr - lastTime < (DECR_LOGS_2 ? 5000 : TIME_A)) {
-            return;
-        }
-        lastTime = curr;
-
-        long sum = 0;
-        for (ToLongMap.Entry<Downloader> entry : this.downloaded.selfEntrySet()) {
-            if (entry.k == thread)
-                entry.v = downloaded;
-            sum += entry.v;
+        long sumDown = 0, sumTot = 0, sumByte = 0;
+        for (int i = 0; i < workers.size(); i++) {
+            IDown d = workers.get(i);
+            sumDown += d.getDownloaded();
+            sumTot += d.getTotal();
+            sumByte += d.getAverageSpeed();
         }
 
-        //if(sum >= all) {
-        //    handleDone(thread);
-        //    return;
-        //}
-
-        synchronized (System.out) {
-            CmdUtil.clearLine();
-            CmdUtil.fg(CmdUtil.Color.CYAN, false);
-
-            System.out.println(STDProgress.printProgress(sum * 100d / this.all));
-
-            if(!DECR_LOGS) {
-                CmdUtil.clearLine();
-                CmdUtil.fg(CmdUtil.Color.GREEN, false);
-
-                long diff = curr - lastTime2;
-                if (diff >= TIME) {
-                    sum = 0;
-                    for (ToLongMap.Entry<Downloader> entry : this.downloadBytes.selfEntrySet()) {
-                        sum += entry.v;
-                        entry.v = 0;
-                    }
-                    long lastAvg = (long) (sum * 1000d / diff);
-
-                    System.out.print(s = "Avg: " + TextUtil.scaledNumber(lastAvg).toUpperCase() + "B/S");
-
-                    lastTime2 = curr;
-                } else {
-                    System.out.print(s);
-                }
-            }
-
-            CmdUtil.reset();
-
-            if(!DECR_LOGS) {
-                System.out.println();
-            }
-
-            CmdUtil.cursorLeft(200);
-            CmdUtil.cursorUp(2);
-        }
-    }
-
-    @Override
-    public void handleReconnect(Downloader dn, long downloaded) {
-        pr("[线程" + dn.id + "]速度太慢, 尝试重建链接", CmdUtil.Color.YELLOW, true);
-    }
-
-    @Override
-    public void handleDone(Downloader dn) {
-        this.downloadBytes.getEntry(dn).v += dn.length - this.downloaded.putLong(dn, dn.length);
-        _progress(null, 0);
+        print(100d * sumDown / sumTot, sumByte);
     }
 }

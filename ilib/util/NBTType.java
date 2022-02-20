@@ -88,7 +88,7 @@ public class NBTType {
                 if (!compound.isEmpty()) {
                     Set<String> set = compound.getKeySet();
                     for (String s : set) {
-                        sb.append("\u00a7b\"").append(AbstLexer.addSlashes(s)).append("\"\u00a7e: ");
+                        AbstLexer.addSlashes(s, sb.append("\u00a7b\"")).append("\"\u00a7e: ");
                         betterRender(compound.getTag(s), sb);
                         sb.append("\u00a7a,");
                     }

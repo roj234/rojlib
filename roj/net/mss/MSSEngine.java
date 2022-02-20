@@ -340,8 +340,8 @@ public abstract class MSSEngine implements Pipeline {
 
     final Random random;
 
-    static CipherSuite[] defaultCipherSuites = { CipherSuites.ECDHE_XCHACHA20_SHA256,
-                                                 CipherSuites.ECDHE_AESCFB_SHA256 };
+    static CipherSuite[] defaultCipherSuites = { CipherSuites.DHE_XCHACHA20_SHA256,
+                                                 CipherSuites.DHE_AESCFB_SHA256 };
     CipherSuite[] cipherSuites = defaultCipherSuites;
 
     public static void setDefaultCipherSuites(CipherSuite[] ciphers) {

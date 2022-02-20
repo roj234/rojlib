@@ -32,7 +32,10 @@ import roj.asm.cst.CstUTF;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.util.*;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttributeList;
+import roj.asm.util.ConstantNamePool;
+import roj.asm.util.ConstantPool;
 import roj.collect.CharMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -52,6 +55,18 @@ import java.util.List;
  * @since 2021/5/29 17:16
  */
 public final class Parser {
+    public static final int CTYPE_LOD_1   = 0;
+    public static final int CTYPE_LOD_2   = 1;
+    public static final int CTYPE_LOD_3   = 2;
+    public static final int CTYPE_REFLECT = 3;
+    public static final int FTYPE_SIMPLE  = 0;
+    public static final int FTYPE_FULL    = 1;
+    public static final int FTYPE_REFLECT = 2;
+    public static final int MTYPE_SIMPLE  = 3;
+    public static final int MTYPE_FULL    = 4;
+    public static final int MTYPE_REFLECT = 5;
+    public static final int MFTYPE_LOD1   = 6;
+
     // region CLAZZ parse LOD 2
 
     public static Clazz parse(byte[] buf) {
@@ -87,14 +102,14 @@ public final class Parser {
          *
          * super_class, interfaces_count, fields_count, methods_count: zero
          */
-        result.accesses = AccessFlag.of(r.readShort());
+        result.accesses = r.readChar();
         try {
             result.name = pool.getName(r);
         } catch (ArrayIndexOutOfBoundsException e) {
             result.name = "ERROR: Unknown cpi";
         }
-        boolean module = result.accesses.hasAll(AccessFlag.MODULE);
-        if(module && result.accesses.flag != AccessFlag.MODULE)
+        boolean module = (result.accesses & AccessFlag.MODULE) != 0;
+        if(module && result.accesses != AccessFlag.MODULE)
             throw new IllegalArgumentException("Module should only have 'module' flag");
 
         result.parent = pool.getName(r);
@@ -115,7 +130,7 @@ public final class Parser {
         if(module && len != 0)
             throw new IllegalArgumentException("Module should not have fields");
         for (int i = 0; i < len; i++) {
-            FlagList access = AccessFlag.of(r.readShort());
+            int access = r.readUnsignedShort();
             CstUTF name = (CstUTF) pool.get(r);
             CstUTF desc = (CstUTF) pool.get(r);
 
@@ -129,7 +144,7 @@ public final class Parser {
             throw new IllegalArgumentException("Module should not have methods");
         List<Method> methods = result.methods;
         for (int i = 0; i < len; i++) {
-            FlagList access = AccessFlag.of(r.readShort());
+            int access = r.readUnsignedShort();
             CstUTF name = (CstUTF) pool.get(r);
             CstUTF desc = (CstUTF) pool.get(r);
 
@@ -143,11 +158,11 @@ public final class Parser {
         return result;
     }
 
-    public static byte[] toByteArray(Clazz c) {
+    public static byte[] toByteArray(IClass c) {
         return SharedBuf.store(c).toByteArray();
     }
 
-    public static ByteList toByteArrayShared(Clazz c) {
+    public static ByteList toByteArrayShared(IClass c) {
         return SharedBuf.store(c);
     }
 
@@ -231,14 +246,6 @@ public final class Parser {
         return result;
     }
 
-    public static byte[] toByteArray(ConstantData c) {
-        return SharedBuf.store(c).toByteArray();
-    }
-
-    public static ByteList toByteArrayShared(ConstantData c) {
-        return SharedBuf.store(c);
-    }
-
     // endregion
     // region ACCESS parse LOD 0
 
@@ -259,7 +266,7 @@ public final class Parser {
         }
         r.rIndex += 4; // ver
 
-        ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
+        ConstantNamePool pool = SharedBuf.alloc().newConstNamePool(r.readUnsignedShort());
         pool.skip(r);
         CharMap<Constant> map = pool.map;
         r.rIndex += 2;
@@ -344,7 +351,7 @@ public final class Parser {
 
         r.rIndex += 4; // ver
 
-        ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
+        ConstantNamePool pool = SharedBuf.alloc().newConstNamePool(r.readUnsignedShort());
         pool.skip(r);
         CharMap<Constant> map = pool.map;
         r.rIndex += 2;

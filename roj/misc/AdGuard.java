@@ -128,10 +128,7 @@ public class AdGuard {
         int httpPort = cfg.getInteger("managePort");
         if(httpPort > 0) {
             InetSocketAddress ha = new InetSocketAddress(InetAddress.getLoopbackAddress(), httpPort);
-            Thread http = new Thread(new HttpServer(ha, 256, dns));
-            http.setDaemon(true);
-            http.setName("Http Server");
-            http.start();
+            new HttpServer(ha, 256, dns).start();
             System.out.println("Http listening on " + ha);
         }
 

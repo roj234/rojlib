@@ -30,7 +30,6 @@ import roj.collect.MyHashMap;
 import roj.config.serial.Serializer;
 import roj.config.serial.Serializers;
 import roj.config.serial.Structs;
-import roj.config.word.AbstLexer;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -297,18 +296,6 @@ public abstract class CEntry {
             default:
                 throw new IllegalArgumentException("Unexpected id " + b);
         }
-    }
-
-    // Utilities
-
-    protected static String addSlash(String key) {
-        for (int i = 0; i < key.length(); i++) {
-            char c = key.charAt(i);
-            if (AbstLexer.SPECIAL_CHARS.contains(c)) {
-                return "\"" + AbstLexer.addSlashes(key) + "\"";
-            }
-        }
-        return key;
     }
 
     public boolean isSimilar(CEntry o) {

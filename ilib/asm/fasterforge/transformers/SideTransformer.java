@@ -83,7 +83,7 @@ public class SideTransformer implements ContextClassTransformer {
             while (it.hasNext()) {
                 MethodSimple method = it.next();
                 // not public
-                if ((method.accesses.flag & 0x1000) == 0)
+                if ((method.accesses & 0x1000) == 0)
                     continue;
                 for (AttrBootstrapMethods.BootstrapMethod dynamicLambdaHandle : dynamicLambdaHandles) {
                     if (method.name.getString().equals(dynamicLambdaHandle.name) && method.type.getString().equals(dynamicLambdaHandle.rawDesc())) {

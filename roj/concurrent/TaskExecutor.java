@@ -70,7 +70,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
         this.monitor = monitor;
     }
 
-    public boolean sleeping() {
+    public boolean busy() {
         return busy;
     }
     
@@ -106,7 +106,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
 
             busy = true;
             try {
-                task.calculate(this);
+                task.calculate();
             } catch (Throwable e) {
                 if(!(e instanceof InterruptedException))
                     e.printStackTrace();
@@ -125,7 +125,6 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
 
     @Override
     public void pushTask(ITask task) {
-        task.onJoin();
         tasks.add(task);
 
         if (!busy) {

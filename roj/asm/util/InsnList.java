@@ -70,7 +70,9 @@ public final class InsnList extends ArrayList<InsnNode> {
     }
 
     public IntBiMap<InsnNode> getPCMap() {
-        return AttrCode.reIndex(this, new ConstantPoolEmpty(), new IntBiMap<>());
+        IntBiMap<InsnNode> rev = new IntBiMap<>();
+        AttrCode.reIndex(this, new ConstantPoolEmpty(), rev);
+        return rev;
     }
 
     public void removeRange(int fromIndex, int toIndex) {

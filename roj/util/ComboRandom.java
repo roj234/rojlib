@@ -26,6 +26,7 @@
 package roj.util;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -60,7 +61,7 @@ public class ComboRandom extends Random {
     }
 
     public static ComboRandom from(String keys) {
-        return from(ByteBuffer.wrap(keys.getBytes()));
+        return from(ByteBuffer.wrap(keys.getBytes(StandardCharsets.UTF_8)));
     }
 
     public static ComboRandom from(byte[] b, int off, int len) {
@@ -68,6 +69,8 @@ public class ComboRandom extends Random {
     }
 
     public static ComboRandom from(ByteBuffer buf) {
+        if (!buf.hasRemaining()) throw new IllegalStateException("Empty buffer");
+
         long[] seed = new long[(buf.remaining() >> 3) + ((buf.remaining() & 7) != 0 ? 1 : 0)];
         int i = 0;
         while (buf.remaining() >= 8) seed[i++] = buf.getLong();

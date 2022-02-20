@@ -25,9 +25,11 @@
  */
 package roj.mapper.util;
 
+import roj.io.IOUtil;
 import roj.io.ZipFileWriter;
 import roj.util.ByteList;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -60,14 +62,17 @@ public class ResWriter implements Runnable, Callable<Void> {
 
     @Override
     public Void call() throws IOException {
-        ByteList bl = new ByteList();
+        ByteList bl = IOUtil.getSharedByteBuf();
         for (Map.Entry<String, ?> entry : resources.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof InputStream) {
-                bl.readStreamFully((InputStream) value);
-                value = bl;
+            Object v = entry.getValue();
+            if (v instanceof InputStream) {
+                bl.readStreamFully((InputStream) v);
+                v = bl;
+            } else if (v.getClass() == String.class) {
+                bl.readStreamFully(new FileInputStream(v.toString()));
+                v = bl;
             }
-            zfw.writeNamed(entry.getKey(), value instanceof ByteList ? (ByteList) value : bl.setArray((byte[]) value));
+            zfw.writeNamed(entry.getKey(), v instanceof ByteList ? (ByteList) v : bl.setArray((byte[]) v));
             bl.clear();
         }
         return null;

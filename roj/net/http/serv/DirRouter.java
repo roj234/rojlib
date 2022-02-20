@@ -54,15 +54,17 @@ public class DirRouter implements Router {
     }
 
     @Override
-    public Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException {
+    public Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException {
         String url = req.path();
         File f = new File(dir, url.endsWith("/") ? url + "index.html" : url);
         if(!f.isFile()) {
             if(url.endsWith("/")) {
-                return new Reply(Code.FORBIDDEN, StringResponse.forError(Code.FORBIDDEN, null));
+                rh.reply(403);
+                return StringResponse.forError(Code.FORBIDDEN, null);
             }
-            return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
+            rh.reply(404);
+            return StringResponse.forError(Code.NOT_FOUND, null);
         }
-        return new Reply(Code.OK, new FileResponse(f));
+        return new FileResponse(f);
     }
 }

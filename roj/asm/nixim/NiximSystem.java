@@ -31,12 +31,16 @@ import roj.asm.cst.*;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.*;
 import roj.asm.tree.attr.*;
+import roj.asm.tree.attr.AttrLineNumber.LineNumber;
 import roj.asm.tree.insn.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.*;
 import roj.asm.visitor.CodeVisitor;
-import roj.collect.*;
+import roj.collect.Int2IntMap;
+import roj.collect.IntMap;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
@@ -121,7 +125,7 @@ public class NiximSystem {
         if (data != null) {
             Context ctx = new Context(className, in);
             nixim(ctx, data);
-            return ctx.get();
+            return ctx.get(false);
         }
         return in;
     }
@@ -153,7 +157,7 @@ public class NiximSystem {
                         nx.shadowChecks.remove(t);
                         // noinspection all
                         ShadowCheck sc = (ShadowCheck) t;
-                        if ((sc.flag & ~AccessFlag.PRIVATE) != (fs.accesses.flag & (AccessFlag.STATIC | AccessFlag.FINAL))) {
+                        if ((sc.flag & ~AccessFlag.PRIVATE) != (fs.accesses & (AccessFlag.STATIC | AccessFlag.FINAL))) {
                             // 排除我有final你没有的情况
                             if ((sc.flag & AccessFlag.FINAL) == 0)
                                 throw new NiximException(data.name + '.' + fs.name() + "  Nixim字段 static/final存在与否不匹配");
@@ -170,7 +174,7 @@ public class NiximSystem {
                         nx.shadowChecks.remove(t);
                         // noinspection all
                         ShadowCheck sc = (ShadowCheck) t;
-                        if ((sc.flag & ~AccessFlag.FINAL) != (fs.accesses.flag & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
+                        if ((sc.flag & ~AccessFlag.FINAL) != (fs.accesses & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
                             // 排除我没有private你有的情况
                             if ((sc.flag & AccessFlag.PRIVATE) != 0)
                                 throw new NiximException(
@@ -288,7 +292,7 @@ public class NiximSystem {
                 throw new NiximException("验证失败 " + data.name, e);
             }
 
-            ctx.set(ctx.get(true));
+            ctx.set(ctx.get());
             nx = nx.next;
         }
 
@@ -386,7 +390,7 @@ public class NiximSystem {
             case "TAIL": {
                 Method tm = new Method(data, (MethodSimple) methods.get(index));
                 Int2IntMap assignedLV = new Int2IntMap();
-                int pl = tm.accesses.hasAny(AccessFlag.STATIC) ? -1 : 0;
+                int pl = 0 != (tm.accesses & AccessFlag.STATIC) ? -1 : 0;
                 // 和tail用到的变量取交集
                 if (s.assignId != null) {
                     computeParamLength(tm, assignedLV);
@@ -399,7 +403,7 @@ public class NiximSystem {
                 }
                 pl++;
 
-                String ret = ParamHelper.getReturn(tm.rawDesc()).nativeName();
+                String ret = ParamHelper.parseReturn(tm.rawDesc()).nativeName();
                 byte base = ret.isEmpty() ? RETURN : NodeHelper.X_LOAD(ret.charAt(0));
                 byte type;
                 InsnList targetInsn = s.method.code.instructions;
@@ -429,7 +433,6 @@ public class NiximSystem {
                 int accessedMax = 0;
 
                 InsnList insn = tm.code.instructions;
-                insn.remove(insn.size() - 1);
 
                 for (int i = 0; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
@@ -575,17 +578,17 @@ public class NiximSystem {
                     throw new NiximException("特殊方法(" + name + ")不能包含注解");
                 }
                 if (!name.startsWith(SPEC_M_CONSTRUCTOR)) {
-                    if (!method.accesses.hasAny(AccessFlag.STATIC))
+                    if (0 == (method.accesses & AccessFlag.STATIC))
                         throw new NiximException("特殊方法(" + name + ")必须是static的");
                     if (!method.rawDesc().startsWith("()")) {
                         throw new NiximException("特殊方法(" + name + ")不能有参数");
                     }
                 } else if (!method.rawDesc().endsWith(")V")) {
                     throw new NiximException("构造器调用标记(" + name + ")必须为void返回");
-                } else if (method.accesses.hasAny(AccessFlag.STATIC))
+                } else if (0 != (method.accesses & AccessFlag.STATIC))
                     throw new NiximException("构造器调用标记(" + name + ")不能是static的");
             }
-            if (!keepBridge && method.accesses.hasAny(AccessFlag.VOLATILE_OR_BRIDGE)) {
+            if (!keepBridge && 0 != (method.accesses & AccessFlag.VOLATILE_OR_BRIDGE)) {
                 methods.remove(i);
             }
         }
@@ -634,7 +637,7 @@ public class NiximSystem {
                 }
                 AnnValInt boolFlag = (AnnValInt) copy.get("targetIsFinal");
                 if (boolFlag != null && boolFlag.value == 1)
-                    field.accesses.add(AccessFlag.FINAL);
+                    field.accesses |= AccessFlag.FINAL;
 
                 AnnValString newName = (AnnValString) copy.get("newName");
 
@@ -678,7 +681,7 @@ public class NiximSystem {
         for (int i = 0; i < methods.size(); i++) {
             MethodSimple remain = methods.get(i);
             if (remain.name().startsWith("$$$")) continue;
-            int acc = remain.accesses.flag;
+            int acc = remain.accesses;
             if(((acc & (AccessFlag.PRIVATE | AccessFlag.STATIC)) != AccessFlag.STATIC) ||
                     ((acc & AccessFlag.PUBLIC) == 0 && !isSamePackage)) {
                 inaccessible.add(new DescEntry(remain));
@@ -686,7 +689,7 @@ public class NiximSystem {
         }
         for (int i = 0; i < fields.size(); i++) {
             FieldSimple remain = fields.get(i);
-            int acc = remain.accesses.flag;
+            int acc = remain.accesses;
             if(((acc & (AccessFlag.PRIVATE | AccessFlag.STATIC)) != AccessFlag.STATIC) ||
                     ((acc & AccessFlag.PUBLIC) == 0 && !isSamePackage)) {
                 inaccessible.add(new DescEntry(remain));
@@ -799,7 +802,7 @@ public class NiximSystem {
                         case PUTFIELD:
                         case PUTSTATIC:
                             FieldInsnNode fin = (FieldInsnNode) node;
-                            if (!fin.name.equals(field.name) || !fin.type.equals(field.type)) {
+                            if (!fin.name.equals(field.name) || !fin.rawType.equals(field.rawDesc())) {
                                 System.out.println("NiximWarn: 在static{}修改了不属于自己的字段 " + fin);
                             }
                             break;
@@ -931,12 +934,13 @@ public class NiximSystem {
                                 s.method.attributes.removeByName("LocalVariableTypeTable");
                                 AttrLineNumber ln = (AttrLineNumber) s.method.attributes.getByName("LineNumberTable");
                                 if (ln != null) {
-                                    for (Iterator<ToIntMap.Entry<InsnNode>> itr = ln.map.selfEntrySet().iterator(); itr.hasNext(); ) {
-                                        ToIntMap.Entry<InsnNode> entry = itr.next();
-                                        for (int j = 0; j < i; j++) {
-                                            if (insn.get(j) == entry.k) {
-                                                itr.remove();
-                                                break;
+                                    st:
+                                    for (int j = 0; j < ln.list.size(); j++) {
+                                        LineNumber ln1 = ln.list.get(j);
+                                        for (int k = 0; k < i; k++) {
+                                            if (insn.get(k) == ln1.node) {
+                                                ln.list.remove(j);
+                                                break st;
                                             }
                                         }
                                     }
@@ -952,7 +956,6 @@ public class NiximSystem {
                 Int2IntMap assignedLV = new Int2IntMap();
                 int paramLength = computeParamLength(method, assignedLV);
                 InsnList insn = method.code.instructions;
-                insn.remove(insn.size() - 1);
                 if (s.superCallEnd > 0)
                     insn.removeRange(0, s.superCallEnd);
 
@@ -1015,7 +1018,6 @@ public class NiximSystem {
                 Int2IntMap assignedLV = new Int2IntMap();
                 int paramLength = computeParamLength(method, assignedLV);
                 InsnList insn = method.code.instructions;
-                insn.remove(insn.size() - 1);
 
                 for (int i = s.superCallEnd; i < insn.size(); i++) {
                     InsnNode node = insn.get(i);
@@ -1067,7 +1069,7 @@ public class NiximSystem {
     }
 
     private static int computeParamLength(Method method, Int2IntMap assigned) {
-        int paramLength = method.accesses.hasAny(AccessFlag.STATIC) ? 0 : 1;
+        int paramLength = 0 != (method.accesses & AccessFlag.STATIC) ? 0 : 1;
         List<Type> params = method.parameters();
         for (int i = 0; i < params.size(); i++) {
             Type t = params.get(i);
@@ -1103,7 +1105,7 @@ public class NiximSystem {
                 check.toClass = owner == null ? targetDef : owner.value;
                 check.toName = ((AnnValString) shadow.get("value")).value;
 
-                check.flag = (byte) (obj.accesses.flag & (AccessFlag.FINAL | AccessFlag.STATIC | AccessFlag.PRIVATE));
+                check.flag = (byte) (obj.accesses & (AccessFlag.FINAL | AccessFlag.STATIC | AccessFlag.PRIVATE));
                 shadowChecks.add(check);
 
                 target.remove(j);

@@ -27,11 +27,11 @@ package roj.asm.type;
 
 import roj.asm.util.IGeneric;
 import roj.asm.util.IType;
-import roj.collect.CharMap;
 import roj.concurrent.OperationDone;
+import roj.io.IOUtil;
 import roj.text.CharList;
 
-import static roj.asm.type.NativeType.*;
+import javax.annotation.Nonnull;
 
 /**
  * 类型
@@ -40,17 +40,108 @@ import static roj.asm.type.NativeType.*;
  * @since 2021/6/18 9:51
  */
 public final class Type implements IType, IGeneric {
-    private static final CharMap<Type> STD = new CharMap<>(9);
+    public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
 
-    public static synchronized Type std(char c) {
-        Type type = STD.get(c);
-        if(type == null) {
-            STD.put(c, type = new Type(c));
+    @Nonnull
+    public static String toDesc(int type) {
+        switch (type) {
+            case ARRAY:
+                return "[";
+            case CLASS:
+                return "L";
+            case VOID:
+                return "V";
+            case BOOLEAN:
+                return "Z";
+            case BYTE:
+                return "B";
+            case CHAR:
+                return "C";
+            case SHORT:
+                return "S";
+            case INT:
+                return "I";
+            case FLOAT:
+                return "F";
+            case DOUBLE:
+                return "D";
+            case LONG:
+                return "J";
         }
-        if(type.array != 0) {
-            throw new IllegalArgumentException("Std type " + c + " has been changed.");
+        // noinspection all
+        return null;
+    }
+
+    @Nonnull
+    public static String toString(byte type) {
+        switch (type) {
+            case ARRAY:
+                return "array";
+            case CLASS:
+                return "class";
+            case VOID:
+                return "void";
+            case BOOLEAN:
+                return "boolean";
+            case BYTE:
+                return "byte";
+            case CHAR:
+                return "char";
+            case SHORT:
+                return "short";
+            case INT:
+                return "int";
+            case FLOAT:
+                return "float";
+            case DOUBLE:
+                return "double";
+            case LONG:
+                return "long";
         }
-        return type;
+        // noinspection all
+        return null;
+    }
+
+    public static boolean isValid(int c) {
+        // noinspection all
+        return toDesc(c) != null;
+    }
+
+    public static byte validate(int c) {
+        // noinspection all
+        if (toDesc(c) == null)
+            throw new IllegalArgumentException("Illegal native type desc " + c);
+        return (byte) c;
+    }
+
+    private static final Type[] STD = new Type[] {
+            new Type(VOID), new Type(BOOLEAN), new Type(BYTE), new Type(CHAR), new Type(SHORT),
+            new Type(INT), new Type(FLOAT), new Type(DOUBLE), new Type(LONG)
+    };
+
+    public static Type std(int c) {
+        switch (c) {
+            case VOID:
+                return STD[0];
+            case BOOLEAN:
+                return STD[1];
+            case BYTE:
+                return STD[2];
+            case CHAR:
+                return STD[3];
+            case SHORT:
+                return STD[4];
+            case INT:
+                return STD[5];
+            case FLOAT:
+                return STD[6];
+            case DOUBLE:
+                return STD[7];
+            case LONG:
+                return STD[8];
+            default:
+                return null;
+        }
     }
 
     /**
@@ -58,7 +149,7 @@ public final class Type implements IType, IGeneric {
      */
     public final byte type;
     public String owner;
-    public int array;
+    public char array;
 
     public Type(char type) {
         this(type, 0);
@@ -67,9 +158,9 @@ public final class Type implements IType, IGeneric {
     /**
      * TYPE_OTHER
      */
-    public Type(char type, int array) {
-        this.type = NativeType.validate(type);
-        this.array = array;
+    public Type(int type, int array) {
+        this.type = validate(type);
+        this.array = (char) array;
     }
 
     public Type(String type) {
@@ -82,7 +173,7 @@ public final class Type implements IType, IGeneric {
     public Type(String owner, int array) {
         this.type = CLASS;
         this.owner = owner;
-        this.array = array;
+        this.array = (char) array;
     }
 
     @Override
@@ -105,14 +196,14 @@ public final class Type implements IType, IGeneric {
         if (this.owner != null) {
             sb.append(owner);
         } else {
-            sb.append(NativeType.toString(type));
+            sb.append(toString(type));
         }
         for (int i = 0; i < this.array; i++)
             sb.append("[]");
     }
 
     public int length() {
-        return (array == 0 && (type == NativeType.LONG || type == NativeType.DOUBLE)) ? 2 : 1;
+        return (array == 0 && (type == LONG || type == DOUBLE)) ? 2 : 1;
     }
 
     public String nativeName() {
@@ -139,7 +230,7 @@ public final class Type implements IType, IGeneric {
     }
 
     public String toString() {
-        CharList sb = new CharList();
+        CharList sb = IOUtil.getSharedCharBuf();
         appendString(sb, null);
         return sb.toString();
     }
@@ -147,7 +238,7 @@ public final class Type implements IType, IGeneric {
     public Class<?> toJavaClass() throws ClassNotFoundException {
         switch (type) {
             case CLASS:
-                String cn = ParamHelper.normalize(owner, array);
+                String cn = ParamHelper.asm2class(owner, array);
                 try {
                     return Class.forName(cn, false, null);
                 } catch (ClassNotFoundException e) {
@@ -184,7 +275,7 @@ public final class Type implements IType, IGeneric {
 
         if (type != type1.type) return false;
         if (array != type1.array) return false;
-        return owner != null ? owner.equals(type1.owner) : type1.owner == null;
+        return type != CLASS || owner.equals(type1.owner);
     }
 
     @Override

@@ -30,6 +30,7 @@ import roj.util.ArrayUtil;
 import javax.annotation.Nonnull;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -251,6 +252,18 @@ public final class RingBuffer<T> implements Iterable<T> {
         head = tail = size = 0;
         for (int i = 0; i < array.length; i++) {
             array[i] = null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void getSome(int dir, int i, int fence, List<T> dst) {
+        Object[] arr = array;
+        while (i != fence) {
+            dst.add((T) arr[i]);
+            i += dir;
+
+            if (i == arr.length) i = 0;
+            else if (i < 0) i = arr.length - 1;
         }
     }
 

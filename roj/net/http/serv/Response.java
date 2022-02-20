@@ -25,8 +25,7 @@
  */
 package roj.net.http.serv;
 
-import roj.net.WrappedSocket;
-import roj.text.CharList;
+import roj.util.ByteList;
 
 import java.io.IOException;
 
@@ -36,16 +35,15 @@ public interface Response {
     void prepare() throws IOException;
 
     /**
-     * Send some content to
-     *
      * @return true if not all data were written.
-     * @throws IllegalStateException if not prepared.
      */
-    boolean send(WrappedSocket channel) throws IOException;
+    boolean send(RequestHandler rh) throws IOException;
 
-    void release() throws IOException;
-    /**
-     * Write HTTP request header
-     */
-    void writeHeader(CharList list);
+    default void release() throws IOException {}
+
+    void writeHeader(ByteList list);
+
+    default boolean wantCompress() {
+        return true;
+    }
 }

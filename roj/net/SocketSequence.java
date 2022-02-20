@@ -49,8 +49,8 @@ public final class SocketSequence implements CharSequence {
     }
 
     public SocketSequence init(WrappedSocket ch, int timeout, int max) {
-        if (!async || dead == 0)
-            this.dead = System.currentTimeMillis() + (timeout <= 0 ? 5000 : timeout);
+        if (!async) dead = System.currentTimeMillis() + (timeout <= 0 ? 5000 : timeout);
+        else dead = Long.MAX_VALUE;
         this.ch = ch;
         this.max = max <= 0 ? Integer.MAX_VALUE : max;
         return this;

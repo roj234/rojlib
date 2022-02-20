@@ -30,7 +30,7 @@ import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstDynamic;
-import roj.asm.type.NativeType;
+import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
 import roj.util.ByteList;
@@ -74,7 +74,7 @@ public final class LdcInsnNode extends InsnNode {
         boolean dj = false;
         if(c.type() == Constant.DYNAMIC) {
             String v = ((CstDynamic) c).getDesc().getType().getString();
-            dj = v.charAt(0) == NativeType.DOUBLE || v.charAt(0) == NativeType.LONG;
+            dj = v.charAt(0) == Type.DOUBLE || v.charAt(0) == Type.LONG;
         }
 
         switch (c.type()) {

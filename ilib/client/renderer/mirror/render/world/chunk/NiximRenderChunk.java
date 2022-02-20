@@ -126,7 +126,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
         if (!worldView.isEmpty()) {
             ++renderChunksUpdated;
 
-            boolean[] layerUsed = new boolean[BlockRenderLayer.values().length];
+            int layerUsed = 0;
 
             BlockRendererDispatcher dispatcher = RenderUtils.BLOCK_RENDERER;
 
@@ -197,7 +197,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
                         }
 
                         if (!noRender && dispatcher.renderBlock(state, pos, worldView, bufferbuilder)) {
-                            layerUsed[j] = true;
+                            layerUsed |= 1 << j;
                         }
                     }
                 }
@@ -205,7 +205,7 @@ public class NiximRenderChunk extends ListedRenderChunk implements MyRenderChunk
             }
 
             for (BlockRenderLayer layer : values) {
-                if (layerUsed[layer.ordinal()]) {
+                if ((layerUsed & (1 << layer.ordinal())) != 0) {
                     cc.setLayerUsed(layer);
                 }
 

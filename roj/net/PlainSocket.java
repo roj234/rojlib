@@ -29,7 +29,6 @@ import roj.io.NIOUtil;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 
@@ -161,36 +160,6 @@ public class PlainSocket implements WrappedSocket {
         }
 
         return tmp == wBuf ? tmp.limit() : w;
-    }
-
-    @Override
-    public int write(InputStream src, int max) throws IOException {
-        if(socket.isClosed())
-            return -1;
-        if (!dataFlush()) return 0;
-
-        int cap = Math.min(WRITE_ONCE, max);
-        if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
-        else wBuf.clear();
-
-        int len = src.read(wBuf.array());
-        if (len <= 0) return len;
-        wBuf.limit(len);
-
-        int w;
-        try {
-            do {
-                w = NIOUtil.swrite(fd, wBuf.array(), wBuf.position(), wBuf.limit(),
-                                   NIOUtil.SOCKET_FD);
-                if (w > 0) {
-                    wBuf.position(wBuf.position() + w);
-                }
-            } while (w == -3 && !socket.isClosed());
-        } catch (IOException e) {
-            socket.close();
-            throw e;
-        }
-        return w;
     }
 
     @Override

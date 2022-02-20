@@ -11,8 +11,8 @@ import roj.collect.MyHashSet;
  */
 public class SubImpl {
     public final MyHashSet<String> owners = new MyHashSet<>();
-    public NameAndType type;
-    public boolean original;
+    public Desc    type;
+    public boolean immutable;
 
     @Override
     public boolean equals(Object o) {

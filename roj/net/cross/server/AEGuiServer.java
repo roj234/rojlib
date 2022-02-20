@@ -33,9 +33,7 @@ import roj.crypt.PSKFile;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.cross.Util;
-import roj.net.http.Code;
 import roj.net.http.HttpServer;
-import roj.net.http.serv.Reply;
 import roj.net.http.serv.StringResponse;
 import roj.net.mss.JKeyPair;
 import roj.net.mss.MSSKeyPair;
@@ -43,7 +41,6 @@ import roj.net.mss.SimpleEngineFactory;
 import roj.text.CharList;
 import roj.text.LoggingStream;
 import roj.text.TextUtil;
-import roj.util.FastLocalThread;
 
 import javax.swing.*;
 import java.io.File;
@@ -67,7 +64,7 @@ import java.util.Map;
 public class AEGuiServer {
     static AEServer server;
 
-    public static void main(String[] args) throws GeneralSecurityException {
+    public static void main(String[] args) throws GeneralSecurityException, IOException {
         if(!NIOUtil.available()) {
             JOptionPane.showMessageDialog(null, "NIO Native Helper is unavailable!\n请使用Java8!");
             return;
@@ -150,20 +147,10 @@ public class AEGuiServer {
             return;
         }
         server.setMOTD(motd);
-
-        Thread tServer = new FastLocalThread(server);
-        tServer.setName("AEServer Acceptor");
-        tServer.start();
+        server.start();
 
         if(webPort != -1) {
-            try {
-                Thread t = new FastLocalThread(runServer(webPort));
-                t.setDaemon(true);
-                t.setName("AEServer Http");
-                t.start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            runServer(webPort).start();
         }
 
         LoggingStream.logger = new RingBuffer<>(1000);
@@ -192,17 +179,17 @@ public class AEGuiServer {
     }
 
     private static HttpServer runServer(int port) throws IOException {
-        Reply DONE = new Reply(Code.OK, new StringResponse("{\"o\":1}", "application/json"));
+        StringResponse DONE = new StringResponse("{\"o\":1}", "application/json");
 
         return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64,
                               (socket, request, requestHandler) -> {
             switch (request.path()) {
                 case "/bundle.min.css":
-                    return new Reply(Code.OK, new StringResponse(res("bundle.min.css"), "text/css"));
+                    return new StringResponse(res("bundle.min.css"), "text/css");
                 case "/bundle.min.js":
-                    return new Reply(Code.OK, new StringResponse(res("bundle.min.js"), "text/javascript"));
+                    return new StringResponse(res("bundle.min.js"), "text/javascript");
                 case "/":
-                    return new Reply(Code.OK, new StringResponse(res("server.html"), "text/html"));
+                    return new StringResponse(res("server.html"), "text/html");
                 case "/api_g":
                     switch (request.getFields().getOrDefault("o", "")) {
                         case "main":
@@ -222,11 +209,11 @@ public class AEGuiServer {
                                 }
                                 json.put("rooms", rooms);
                             }
-                            return new Reply(Code.OK, new StringResponse(json.toShortJSONb(), "application/json"));
+                            return new StringResponse(json.toShortJSONb(), "application/json");
                         case "users":
                             Room room = server.rooms.get(TextUtil.unescapeBytes(request.getFields().get("r")));
                             if(room == null) {
-                                return new Reply(Code.OK, new StringResponse("\"房间不存在\"", "application/json"));
+                                return new StringResponse("\"房间不存在\"", "application/json");
                             }
                             CList rooms = new CList();
                             synchronized (room.clients) {
@@ -234,7 +221,7 @@ public class AEGuiServer {
                                     rooms.add(w.serialize());
                                 }
                             }
-                            return new Reply(Code.OK, new StringResponse(rooms.toShortJSONb(), "application/json"));
+                            return new StringResponse(rooms.toShortJSONb(), "application/json");
                         case "cfg":
                             String r = request.getFields().get("r");
                             if(r != null) {
@@ -253,15 +240,15 @@ public class AEGuiServer {
                                 }
                                 r = json2.toShortJSON();
                             }
-                            return new Reply(Code.OK, new StringResponse(r, "application/json"));
+                            return new StringResponse(r, "application/json");
                     }
                     break;
                 case "/api":
-                    Map<String, String> post = request.postFields();
+                    Map<String, String> post = request.payloadFields();
                     if(!"-1".equals(post.get("r"))) {
                         Room room = server.rooms.get(post.get("r"));
                         if(room == null) {
-                            return new Reply(Code.OK, new StringResponse("{\"o\":0,\"r\":\"房间不存在\"}", "application/json"));
+                            return new StringResponse("{\"o\":0,\"r\":\"房间不存在\"}", "application/json");
                         }
                         switch (post.get("i")) {
                             case "r_lock":
@@ -299,7 +286,7 @@ public class AEGuiServer {
                                 return DONE;
                         }
                     }
-                    return new Reply(Code.OK, new StringResponse("未知操作"));
+                    return new StringResponse("未知操作");
             }
             return null;
         });

@@ -28,7 +28,7 @@ package roj.kscript.parser.ast;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.insn.LdcInsnNode;
-import roj.asm.util.NodeHelper;
+import roj.asm.tree.insn.NPInsnNode;
 import roj.config.word.NotStatementException;
 import roj.kscript.asm.CompileContext;
 import roj.kscript.asm.KS_ASM;
@@ -81,7 +81,7 @@ public class Field implements LoadExpression {
         ctx.list.add(new LdcInsnNode(Opcodes.LDC, new CstUTF("name")));
         if(delete) {
             ctx.list.add(NodeCache.a_field_0());
-            ctx.list.add(noRet ? NodeHelper.npc(Opcodes.POP) : NodeCache.a_asBool_1());
+            ctx.list.add(noRet ? NPInsnNode.of(Opcodes.POP) : NodeCache.a_asBool_1());
         } else {
             ctx.list.add(NodeCache.a_field_1());
         }

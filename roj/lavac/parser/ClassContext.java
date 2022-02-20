@@ -7,10 +7,10 @@ import roj.asm.tree.Method;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrMethodParameters;
+import roj.asm.tree.attr.AttrMethodParameters.MethodParam;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -51,10 +51,6 @@ public final class ClassContext {
     }
 
     private String path;
-
-    public static void main(String[] args) {
-
-    }
 
     public ClassContext(InputStream in, IAccessor ctx) {
         this.in = in;
@@ -129,7 +125,7 @@ public final class ClassContext {
 
         // ## 2.2 class type
         acc = getClass(wr, acc);
-        dest.accesses = AccessFlag.of(acc);
+        dest.accesses = (char) acc;
 
         // # 3.1 class name
         w = wr.nextWord();
@@ -233,7 +229,7 @@ public final class ClassContext {
                 wr.recycle(w);
                 wr.retractWord();
                 if(w.type() == Keyword.DEFAULT) {
-                    if(!dest.accesses.hasAny(AccessFlag.INTERFACE)) {
+                    if(0 == (dest.accesses & AccessFlag.INTERFACE)) {
                         throw wr.err("unexpected:default");
                     } else {
                         if((acc & AccessFlag.ABSTRACT) != 0) {
@@ -320,14 +316,14 @@ public final class ClassContext {
                                     paramAttr = new AttrMethodParameters();
                                     method.attributes.add(paramAttr);
                                 }
-                                paramAttr.flags.put(w.val(), AccessFlag.of(acc));
+                                paramAttr.flags.add(new MethodParam(w.val(), (char) acc));
                             }
 
                             w = wr.nextWord();
                             wr.recycle(w);
                             if (w.type() == Symbol.right_s_bracket) {
                                 if (lsVarargs)
-                                    method.accesses.add(AccessFlag.TRANSIENT_OR_VARARGS);
+                                    method.accesses |= AccessFlag.TRANSIENT_OR_VARARGS;
 
                                 break;
                             }
@@ -339,7 +335,7 @@ public final class ClassContext {
                     }
 
 
-                    boolean isAbst = !methodDefaulted && (dest.accesses.hasAny(AccessFlag.INTERFACE) || method.accesses.hasAny(AccessFlag.ABSTRACT));
+                    boolean isAbst = !methodDefaulted && (0 != (dest.accesses & AccessFlag.INTERFACE) || 0 != (method.accesses & AccessFlag.ABSTRACT));
 
                     if(!isAbst) {
                         w = wr.nextWord();
@@ -376,7 +372,7 @@ public final class ClassContext {
                         wr.retractWord();
 
                 } else { // field
-                    Field field = new Field(AccessFlag.of(acc), w.val(), type);
+                    Field field = new Field(acc, w.val(), type);
                     if (!finder.add(field.name)) {
                         fireDiagnostic(Diagnostic.Kind.ERROR, /*generic ?*/ "duplicate_field");
                     }
@@ -530,36 +526,37 @@ public final class ClassContext {
         if(tmp.length() == 0) {
             throw wr.err("empty:extends");
         }
-        FlagList acc = ctx.access(importMap.getOrDefault(tmp, tmp));
-        while (acc == null) {
+        Number n = ctx.access(importMap.getOrDefault(tmp, tmp));
+        while (n == null) {
             int lid = TextUtil.limitedLastIndexOf(tmp, '/', 32767);
             if(lid != -1) {
                 tmp.set(lid, '$');
-                acc = ctx.access(tmp);
+                n = ctx.access(tmp);
             } else {
                 break;
             }
         }
 
-        if(acc == null) {
+        if(n == null) {
             throw wr.err("unable_resolve:" + tmp.toString());
         }
 
         tmp.clear();
+        int acc = n.intValue();
 
-        if(!acc.hasAny(AccessFlag.STATIC) && reqStatic) {
+        if(0 == (acc & AccessFlag.STATIC) && reqStatic) {
             fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:non-static_inner_class");
         }
 
-        if(acc.hasAny(AccessFlag.FINAL | AccessFlag.ENUM)) {
+        if(0 == (acc & (AccessFlag.FINAL | AccessFlag.ENUM))) {
             fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:final,enum");
         }
 
-        if(acc.hasAny(AccessFlag.INTERFACE) == reqItf) {
+        if((0 != (acc & AccessFlag.INTERFACE)) == reqItf) {
             fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:" + (reqItf ? "non-" : "") + "interface");
         }
 
-        if(!acc.hasAny(AccessFlag.PUBLIC)) {
+        if(0 == (acc & AccessFlag.PUBLIC)) {
             int lid = TextUtil.limitedLastIndexOf(tmp, ',', 32767);
             int lid2 = dest.name.lastIndexOf('/');
             if(lid != lid2)

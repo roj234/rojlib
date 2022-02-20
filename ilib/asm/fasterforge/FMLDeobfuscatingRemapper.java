@@ -131,7 +131,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
 
     public String mapFieldName(String owner, String name, @Nullable String desc) {
         if (this.classNameBiMap != null && !this.classNameBiMap.isEmpty()) {
-            Desc fd = Util.shareMD();
+            Desc fd = Util.getInstance().sharedDC;
             fd.owner = owner;
             fd.name = name;
             fd.param = "";
@@ -143,7 +143,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
 
     public String map(String typeName) {
         if (!this.classNameBiMap.isEmpty()) {
-            return Util.mapClassName(classNameBiMap, typeName);
+            return Util.getInstance().mapClassName(classNameBiMap, typeName);
         } else {
             return typeName;
         }
@@ -151,7 +151,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
 
     public String unmap(String typeName) {
         if (!this.classNameBiMap.isEmpty()) {
-            return Util.mapClassName(classNameBiMap.flip(), typeName);
+            return Util.getInstance().mapClassName(classNameBiMap.flip(), typeName);
         } else {
             return typeName;
         }
@@ -159,7 +159,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
 
     public String mapMethodName(String owner, String name, String desc) {
         if (this.classNameBiMap != null && !this.classNameBiMap.isEmpty()) {
-            Desc shareMD = Util.shareMD();
+            Desc shareMD = Util.getInstance().sharedDC;
             shareMD.owner = owner;
             shareMD.name = name;
             shareMD.param = desc;

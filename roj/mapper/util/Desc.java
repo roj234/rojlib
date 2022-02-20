@@ -28,8 +28,8 @@ package roj.mapper.util;
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstRef;
 import roj.asm.tree.MoFNode;
+import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.util.ByteList;
 
 /**
@@ -39,28 +39,37 @@ import roj.util.ByteList;
  * @version 2.8
  * @since ?
  */
-public final class Desc implements MoFNode {
+public class Desc implements MoFNode {
+    public static final char NULL_FLAG = AccessFlag.PUBLIC | AccessFlag.PRIVATE;
+
     public String owner, name, param;
-    public FlagList flags;
+    public char flags;
+
+    public Desc() {
+        owner = name = param = "";
+        flags = NULL_FLAG;
+    }
 
     // As a Wildcard Field Descriptor
     public Desc(String owner, String name) {
         this.owner = owner;
         this.name = name;
         this.param = "";
+        this.flags = NULL_FLAG;
     }
 
     public Desc(String owner, String name, String param) {
         this.owner = owner;
         this.name = name;
         this.param = param;
+        this.flags = NULL_FLAG;
     }
 
-    public Desc(String owner, String name, String param, FlagList flags) {
+    public Desc(String owner, String name, String param, int flags) {
         this.owner = owner;
         this.name = name;
         this.param = param;
-        this.flags = flags;
+        this.flags = (char) flags;
     }
 
     @Override
@@ -94,27 +103,32 @@ public final class Desc implements MoFNode {
     }
 
     @Override
-    public void toByteArray(ConstantPool pool, ByteList w) {
+    public final void toByteArray(ConstantPool pool, ByteList w) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public String name() {
+    public final String name() {
         return name;
     }
 
     @Override
-    public String rawDesc() {
+    public final String rawDesc() {
         return param;
     }
 
     @Override
-    public FlagList accessFlag() {
+    public void accessFlag(int flag) {
+        this.flags = (char) flag;
+    }
+
+    @Override
+    public final char accessFlag() {
         return flags;
     }
 
     @Override
-    public int type() {
+    public final int type() {
         return 5;
     }
 }

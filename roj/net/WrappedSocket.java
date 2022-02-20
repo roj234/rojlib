@@ -27,7 +27,6 @@ package roj.net;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
@@ -55,8 +54,6 @@ public interface WrappedSocket extends AutoCloseable, WritableByteChannel/*, Rea
     ByteBuffer buffer();
 
     int write(ByteBuffer src) throws IOException;
-
-    int write(InputStream src, int max) throws IOException;
 
     /**
      * Flush any pending data to the network if possible.

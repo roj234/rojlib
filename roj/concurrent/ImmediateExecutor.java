@@ -27,7 +27,7 @@ public final class ImmediateExecutor extends FastLocalThread {
             ((Runnable) task).run();
         } else {
             try {
-                task.calculate(this);
+                task.calculate();
             } catch (Exception e) {
                 Helpers.athrow(e);
             }

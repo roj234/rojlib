@@ -67,6 +67,10 @@ public final class Proc1_12 extends Processor {
 
     Map<String, Map<String, List<String>>> paramMap = new MyHashMap<>(1000);
 
+    public static void __loadForge(File pkg, Mapping map) throws IOException {
+        Helper1_12.forgeInit(pkg, map);
+    }
+
     public Proc1_12(File mcServer, File mcJar, File mcpPackFile) {
         super(mcJar, mcServer);
         this.mcpPackFile = mcpPackFile;
@@ -95,7 +99,7 @@ public final class Proc1_12 extends Processor {
 
         done |= id + 1;
         if(done == 3) {
-            parallel.pushRunnable(this);
+            Task.pushRunnable(this);
         }
     }
 
@@ -130,7 +134,7 @@ public final class Proc1_12 extends Processor {
                 Context context = contexts.get(i);
                 ByteList result = patcher.patchClient(context.getFileName(), context.get());
                 if (result != null) {
-                    arr[0].add(new Context(context.getFileName(), context.get()));
+                    arr[0].add(new Context(context.getFileName(), context.get(false)));
                     context.set(result);
                 }
                 context.getData();
@@ -144,7 +148,7 @@ public final class Proc1_12 extends Processor {
 
         Runnable appleServerBinPatch = () -> {
             TrieTreeSet set = new TrieTreeSet();
-            FMDMain.readTextList(set::add, "FMD配置.忽略服务端jar中以以下文件名开头的文件");
+            FMDMain.readTextList(set::add, "忽略服务端jar中以以下文件名开头的文件");
 
             List<Context> contexts;
             try {
@@ -162,7 +166,7 @@ public final class Proc1_12 extends Processor {
                 Context context = contexts.get(i);
                 ByteList result = patcher.patchServer(context.getFileName(), context.get());
                 if (result != null) {
-                    arr[0].add(new Context(context.getFileName(), context.get()));
+                    arr[0].add(new Context(context.getFileName(), context.get(false)));
                     context.set(result);
                 }
                 context.getData();
@@ -222,7 +226,7 @@ public final class Proc1_12 extends Processor {
             rmp.extend(s2m); // 转换为 notch -> mcp 的映射器 : 直接映射mc本体
         };
 
-        threadWait(applyClientBinPatch, appleServerBinPatch, genMapping);
+        async(applyClientBinPatch, appleServerBinPatch, genMapping);
 
         ClassMerger merger = new ClassMerger();
         List<Context> merged = new ArrayList<>(merger.process(arr[1], arr[2]));
@@ -266,7 +270,7 @@ public final class Proc1_12 extends Processor {
 
         long start = System.currentTimeMillis();
 
-        threadWait(remapMerged, remapForge);
+        async(remapMerged, remapForge);
 
         long last = System.currentTimeMillis();
 
@@ -283,7 +287,7 @@ public final class Proc1_12 extends Processor {
 
         patcher.reset();
 
-        try (ZipFileWriter zfw = new ZipFileWriter(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar"))) {
+        try (ZipFileWriter zfw = new ZipFileWriter(new File(BASE, "class/" + MC_BINARY + ".jar"))) {
             FileTime time = FileTime.from(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
             for (int i = 0; i < merged.size(); i++) {
                 Context ctx = merged.get(i);

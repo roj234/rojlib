@@ -69,14 +69,12 @@ public class FMDInstall extends JFrame {
             JButton quickInst = new JButton("一键安装");
 
             install.addActionListener((ev) -> {
-                if(!waiter.sleeping())
-                    return;
+                if(waiter.busy()) return;
                 waiter.execute(FMDInstall::install);
             });
 
             quickInst.addActionListener((ev) -> {
-                if(!waiter.sleeping())
-                    return;
+                if(waiter.busy()) return;
                 waiter.execute(() -> {
                     FMDInstall.quickInst(null);
                 });
@@ -129,7 +127,7 @@ public class FMDInstall extends JFrame {
         if(mcRoot == null)
             return;
 
-        CList versions = MCLauncher.getMcVersionList(MAIN_CONFIG.get("启动器配置").asMap());
+        CList versions = MCLauncher.getMcVersionList(CONFIG.get("启动器配置").asMap());
         if (versions == null) return;
 
         CMapping target = null;
@@ -158,7 +156,7 @@ public class FMDInstall extends JFrame {
 
         String mcVer = MCLauncher.config.getString("mc_version");
 
-        CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
+        CMapping cfgLan = CONFIG.get("启动器配置").asMap();
         try {
             CharList out = new CharList(10000);
             ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
@@ -198,7 +196,7 @@ public class FMDInstall extends JFrame {
     }
 
     private static File getMcRoot() {
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
+        CMapping cfgGen = CONFIG.get("通用").asMap();
         File mcRoot = new File(cfgGen.getString("MC目录"));
         if(!mcRoot.isDirectory()) {
             JFileChooser fileChooser = new JFileChooser(BASE);
@@ -208,7 +206,7 @@ public class FMDInstall extends JFrame {
             int status = fileChooser.showOpenDialog(activeWindow);
             //没有选打开按钮结果提示
             if (status == JFileChooser.APPROVE_OPTION) {
-                MAIN_CONFIG.get("通用").asMap().put("MC目录", fileChooser.getSelectedFile().getAbsolutePath());
+                CONFIG.get("通用").asMap().put("MC目录", fileChooser.getSelectedFile().getAbsolutePath());
                 return fileChooser.getSelectedFile();
             } else {
                 error("用户取消操作.");
@@ -255,7 +253,7 @@ public class FMDInstall extends JFrame {
         List<File> versions;
         MCLauncher.load();
 
-        CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
+        CMapping cfgLan = CONFIG.get("启动器配置").asMap();
 
         CList vList = MCLauncher.getMcVersionList(cfgLan);
         if (vList == null) {
@@ -327,7 +325,7 @@ public class FMDInstall extends JFrame {
 
     public static void main(String[] args) {
         UIUtil.systemLook();
-        MAIN_CONFIG.size();
+        CONFIG.size();
         activeWindow = new FMDInstall(args.length > 0);
         activeWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 

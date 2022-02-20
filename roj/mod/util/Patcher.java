@@ -27,8 +27,6 @@ package roj.mod.util;
 
 import LZMA.LzmaInputStream;
 import roj.asm.tree.Clazz;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
 import roj.io.JarReaderStream;
 import roj.ui.CmdUtil;
@@ -198,7 +196,6 @@ public final class Patcher {
                 Clazz clazz = new Clazz();
                 clazz.parent = "java/lang/Object";
                 clazz.name = patch.source;
-                clazz.accesses = new FlagList(AccessFlag.PUBLIC | AccessFlag.SUPER_OR_SYNC);
                 return clazz.getBytes();
             }
             try {

@@ -52,4 +52,20 @@ public final class AnnValDouble extends AnnVal {
     public byte type() {
         return DOUBLE;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AnnValDouble aDouble = (AnnValDouble) o;
+
+        return Double.compare(aDouble.value, value) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        long temp = Double.doubleToLongBits(value);
+        return (int) (temp ^ (temp >>> 32));
+    }
 }

@@ -37,12 +37,7 @@ import roj.asm.tree.Clazz;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrSourceFile;
-import roj.asm.tree.insn.FieldInsnNode;
-import roj.asm.tree.insn.IfInsnNode;
-import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.insn.LabelInsnNode;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
+import roj.asm.tree.insn.*;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.collect.MyHashMap;
@@ -65,6 +60,8 @@ import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static roj.asm.util.AccessFlag.PUBLIC;
 
 public final class EventInvokerV2 implements IEventListener {
     private Object handler;
@@ -114,27 +111,25 @@ public final class EventInvokerV2 implements IEventListener {
         DirectAccessor.makeHeader("ilib/eh2/merged_" + id.getAndIncrement(), HANDLER_DESC, data);
         data.attributes.add(new AttrSourceFile(".merged_dynamic"));
 
-        final FlagList flags = new FlagList(AccessFlag.PUBLIC);
+        data.fields.add(new roj.asm.tree.Field(PUBLIC, "i", "[Ljava/lang/Object;"));
 
-        data.fields.add(new roj.asm.tree.Field(flags, "i", "[Ljava/lang/Object;"));
-
-        roj.asm.tree.Method init = new roj.asm.tree.Method(flags, data, "<init>", "([Ljava/lang/Object;)V");
+        roj.asm.tree.Method init = new roj.asm.tree.Method(PUBLIC, data, "<init>", "([Ljava/lang/Object;)V");
         data.methods.add(init);
         AttrCode code = init.code = new AttrCode(init);
 
         code.stackSize = code.localSize = 2;
         InsnList insns = code.instructions;
 
-        insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insns.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectAccessor.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
 
-        insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
-        insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
+        insns.add(NPInsnNode.of(Opcodes.ALOAD_0));
+        insns.add(NPInsnNode.of(Opcodes.ALOAD_1));
         insns.add(new FieldInsnNode(Opcodes.PUTFIELD, data, 0));
 
-        insns.add(NodeHelper.npc(Opcodes.RETURN));
+        insns.add(NPInsnNode.of(Opcodes.RETURN));
 
-        roj.asm.tree.Method invoke = new roj.asm.tree.Method(flags, data, "invoke", HANDLER_FUNC_DESC);
+        roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, data, "invoke", HANDLER_FUNC_DESC);
         data.methods.add(invoke);
         code = invoke.code = new AttrCode(invoke);
 
@@ -144,7 +139,7 @@ public final class EventInvokerV2 implements IEventListener {
         LabelInsnNode label = null;
         if(ignoreCancelled) {
             code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
-            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
+            insns.add(NPInsnNode.of(Opcodes.ALOAD_0));
             insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraftforge/fml/common/eventhandler/Event", "isCanceled", "()Z"));
             insns.add(new IfInsnNode(Opcodes.IFNE, label = new LabelInsnNode()));
         }
@@ -161,29 +156,29 @@ public final class EventInvokerV2 implements IEventListener {
 
             if(obj == null) {
                 if(!ready) {
-                    insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
+                    insns.add(NPInsnNode.of(Opcodes.ALOAD_0));
                     insns.add(new FieldInsnNode(Opcodes.GETFIELD, data, 0));
                     ready = true;
                     //缓存array
                 }
-                insns.add(NodeHelper.npc(Opcodes.DUP));
+                insns.add(NPInsnNode.of(Opcodes.DUP));
                 insns.add(NodeHelper.loadInt(i));
-                insns.add(NodeHelper.npc(Opcodes.AALOAD));
-                insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                insns.add(NPInsnNode.of(Opcodes.AALOAD));
+                insns.add(NPInsnNode.of(Opcodes.ALOAD_1));
                 insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, clz, method.getName(), signature));
             } else {
-                insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
+                insns.add(NPInsnNode.of(Opcodes.ALOAD_1));
                 insns.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, clz, method.getName(), signature));
             }
         }
 
         if(ready) {
-            insns.add(NodeHelper.npc(Opcodes.POP));
+            insns.add(NPInsnNode.of(Opcodes.POP));
         }
 
         if(label != null)
             insns.add(label);
-        insns.add(NodeHelper.npc(Opcodes.RETURN));
+        insns.add(NPInsnNode.of(Opcodes.RETURN));
 
         ByteList list = Parser.toByteArrayShared(data);
 
@@ -237,94 +232,6 @@ public final class EventInvokerV2 implements IEventListener {
 
     private static final String HANDLER_DESC = "net/minecraftforge/fml/common/eventhandler/IEventListener";
     private static final String HANDLER_FUNC_DESC = "(Lnet/minecraftforge/fml/common/eventhandler/Event;)V";
-    /*
-
-    public static void main(String[] args) throws IOException {
-
-        {
-            Clazz clazz = new Clazz();
-            DirectMethodAccess.makeHeader("u", HANDLER_DESC, clazz);
-            clazz.attributes.add(new AttrSourceFile(".dynamic"));
-
-            final FlagList flags = new FlagList(AccessFlag.PUBLIC);
-
-            clazz.fields.add(new Field(flags, "i", "Ljava/lang/Object;"));
-
-            roj.asm.struct.Method init = new roj.asm.struct.Method(flags, clazz, "<init>", "(Ljava/lang/Object;)V");
-            clazz.methods.add(init);
-            AttrCode code = init.code = new AttrCode(init);
-
-            code.stackLength = code.localLength = 2;
-            InsnList insns = code.instructions;
-
-            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
-            insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectMethodAccess.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
-
-            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
-            insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
-            insns.add(new FieldInsnNode(Opcodes.PUTFIELD, clazz, 0));
-
-            insns.add(NodeHelper.npc(Opcodes.RETURN));
-            insns.add(AttrCode.METHOD_END_MARK);
-
-            roj.asm.struct.Method invoke = new roj.asm.struct.Method(flags, clazz, "invoke", HANDLER_FUNC_DESC);
-            clazz.methods.add(invoke);
-            code = invoke.code = new AttrCode(invoke);
-
-            code.stackLength = 2;
-            code.localLength = 2;
-            insns = code.instructions;
-
-            insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
-            insns.add(new FieldInsnNode(Opcodes.GETFIELD, clazz, 0));
-            insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
-            insns.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "hl", "mn", "(Lcn;)V"));
-
-            insns.add(NodeHelper.npc(Opcodes.RETURN));
-            insns.add(AttrCode.METHOD_END_MARK);
-
-            try (FileOutputStream fos = new FileOutputStream(new File("object.class"))) {
-                clazz.bytes().writeToStream(fos);
-            }
-        }
-
-        Clazz clazz = new Clazz();
-        DirectMethodAccess.makeHeader("u", HANDLER_DESC, clazz);
-        clazz.attributes.add(new AttrSourceFile(".dynamic"));
-
-        final FlagList flags = new FlagList(AccessFlag.PUBLIC);
-
-        roj.asm.struct.Method init = new roj.asm.struct.Method(flags, clazz, "<init>", "()V");
-        clazz.methods.add(init);
-        AttrCode code = init.code = new AttrCode(init);
-
-        code.stackLength = code.localLength = 1;
-        InsnList insns = code.instructions;
-
-        insns.add(NodeHelper.npc(Opcodes.ALOAD_0));
-        insns.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, DirectMethodAccess.MAGIC_ACCESSOR_CLASS + ".<init>:()V"));
-
-        insns.add(NodeHelper.npc(Opcodes.RETURN));
-        insns.add(AttrCode.METHOD_END_MARK);
-
-        roj.asm.struct.Method invoke = new roj.asm.struct.Method(flags, clazz, "invoke", HANDLER_FUNC_DESC);
-        clazz.methods.add(invoke);
-        code = invoke.code = new AttrCode(invoke);
-
-        code.stackLength = 1;
-        code.localLength = 2;
-        insns = code.instructions;
-
-        insns.add(NodeHelper.npc(Opcodes.ALOAD_1));
-        insns.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "hl", "mn", "(Lcn;)V"));
-
-        insns.add(NodeHelper.npc(Opcodes.RETURN));
-        insns.add(AttrCode.METHOD_END_MARK);
-
-        try (FileOutputStream fos = new FileOutputStream(new File("static.class"))) {
-            clazz.bytes().writeToStream(fos);
-        }
-    }*/
 
     public static IEventListener createListener(Method method, Object target) throws ReflectiveOperationException {
         final Class<?> clazz = createWrapper(method);

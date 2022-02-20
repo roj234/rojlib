@@ -1,5 +1,6 @@
 package roj.asm.visitor;
 
+import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
@@ -20,7 +21,8 @@ public class ClassVisitor {
 
     protected final ByteList poolBuf = new ByteList();
 
-    public IVisitor fieldVisitor, methodVisitor;
+    public IVisitor fieldVisitor;
+    public MethodVisitor methodVisitor;
     public AttributeVisitor attributeVisitor;
     public boolean clearConstant;
 
@@ -74,7 +76,7 @@ public class ClassVisitor {
         int len0 = r.readUnsignedShort();
         String[] arr = new String[len0];
         for (int i = 0; i < arr.length; i++) {
-            arr[i] = ((CstUTF) pool.get(r)).getString();
+            arr[i] = ((CstClass) pool.get(r)).getValue().getString();
         }
         visitClass(acc, self, parent, arr);
 

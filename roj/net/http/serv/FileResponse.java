@@ -25,7 +25,7 @@
  */
 package roj.net.http.serv;
 
-import roj.text.CharList;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -40,7 +40,7 @@ public class FileResponse extends StreamResponse {
     }
 
     @Override
-    public void writeHeader(CharList list) {
+    public void writeHeader(ByteList list) {
         String mime = file.getName();
         mime = mime.substring(mime.lastIndexOf('.') + 1).toLowerCase();
         String type;
@@ -58,12 +58,18 @@ public class FileResponse extends StreamResponse {
                 type = "application/octet-stream";
         }
 
-        list.append("Content-Type: ").append(type).append(CRLF)
-            .append("Content-Length: ").append(Long.toString(file.length())).append(CRLF);
+        //list.putAscii("Content-Disposition: attachment; filename=\"" + file.getName() + '"').putAscii(CRLF)
+        list.putAscii("Content-Type: ").putAscii(type).putAscii(CRLF)
+            .putAscii("Content-Length: ").putAscii(Long.toString(file.length())).putAscii(CRLF);
     }
 
     @Override
     protected InputStream getStream() throws IOException {
         return new FileInputStream(file);
+    }
+
+    @Override
+    public boolean wantCompress() {
+        return file.length() > 100;
     }
 }

@@ -25,9 +25,9 @@
  */
 package roj.asm.tree;
 
-import roj.asm.util.FlagList;
 import roj.util.ByteList;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -37,19 +37,38 @@ import java.util.List;
  * @since 2021/7/22 18:20
  */
 public interface IClass {
-    String className();
-    String parentName();
-    FlagList accessFlag();
+    String name();
+    @Nullable
+    String parent();
+
+    default void accessFlag(int flag) {
+        throw new UnsupportedOperationException(getClass().getName() + " does not support set access flag");
+    }
+    char accessFlag();
 
     List<String> interfaces();
     List<? extends MoFNode> methods();
     List<? extends MoFNode> fields();
-    int getMethodByName(String name);
-    int getFieldByName(String name);
+    default int getMethodByName(String key) {
+        List<? extends MoFNode> methods = methods();
+        for (int i = 0; i < methods.size(); i++) {
+            MoFNode ms = methods.get(i);
+            if (ms.name().equals(key)) return i;
+        }
+        return -1;
+    }
+    default int getFieldByName(String key) {
+        List<? extends MoFNode> fields = fields();
+        for (int i = 0; i < fields.size(); i++) {
+            MoFNode fs = fields.get(i);
+            if (fs.name().equals(key)) return i;
+        }
+        return -1;
+    }
 
     byte type();
 
     default ByteList getBytes(ByteList buf) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException(getClass().getName() + " does not support encoding");
     }
 }

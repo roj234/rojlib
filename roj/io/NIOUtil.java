@@ -35,10 +35,7 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.net.DatagramSocket;
-import java.net.DatagramSocketImpl;
-import java.net.Socket;
-import java.net.SocketImpl;
+import java.net.*;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
@@ -66,10 +63,7 @@ public final class NIOUtil {
             if (e == null) e = e1;
             else e.addSuppressed(e1);
         }
-    }
-
-    static final class MemoryDescriptor {
-
+        if (e != null) e.printStackTrace();
     }
 
     private static void __init() throws IOException {
@@ -94,6 +88,7 @@ public final class NIOUtil {
                                  .access(SocketImpl.class, "fd", "socketFd", null)
                                  .access(DatagramSocket.class, "impl", "socketImpl1", null)
                                  .access(DatagramSocketImpl.class, "fd", "socketFd1", null)
+                                 .access(ServerSocket.class, "impl", "socketImpl2", null)
                                  .access(FileDescriptor.class, "fd", "fdVal", "fdFd")
                                  .access(sc.getClass(), new String[] {"fd", "nd"}, new String[] {"sChFd", "sChNd"}, null)
                                  .access(fc.getClass(), new String[] {"fd", "nd"}, new String[] {"fChFd", "fChNd"}, null)
@@ -270,6 +265,16 @@ public final class NIOUtil {
         return fd;
     }
 
+    public static FileDescriptor fd(ServerSocket socket) throws IOException {
+        FileDescriptor fd = UTIL.socketFd(UTIL.socketImpl2(socket));
+        if(fd.valid())
+            UTIL.configureBlocking(fd, false);
+        else
+            throw new IOException("Invalid FileDescriptor");
+
+        return fd;
+    }
+
     public static FileDescriptor fd(DatagramSocket socket) throws IOException {
         FileDescriptor fd = UTIL.socketFd1(UTIL.socketImpl1(socket));
         if(fd.valid())
@@ -315,6 +320,7 @@ public final class NIOUtil {
     private interface H {
         SocketImpl socketImpl(Socket socket);
         DatagramSocketImpl socketImpl1(DatagramSocket socket);
+        SocketImpl socketImpl2(ServerSocket socket);
 
         FileDescriptor socketFd(SocketImpl impl);
         FileDescriptor socketFd1(DatagramSocketImpl impl);

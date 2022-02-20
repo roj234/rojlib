@@ -26,6 +26,8 @@
 
 package roj.asm.tree;
 
+import roj.asm.Parser;
+import roj.asm.SharedBuf;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstUTF;
@@ -34,13 +36,12 @@ import roj.asm.type.Signature;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
+import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.PrimitiveIterator;
 
 /**
  * Class LOD 3
@@ -54,12 +55,13 @@ public final class Clazz implements IClass {
         this.methods = new ArrayList<>();
         this.fields = new ArrayList<>();
         this.attributes = new AttributeList();
+        this.accesses = AccessFlag.PUBLIC | AccessFlag.SUPER_OR_SYNC;
     }
 
     public Clazz(int version, int acc, String name, String parent) {
         this();
         this.version = version;
-        this.accesses = AccessFlag.of((short) acc);
+        this.accesses = (char) acc;
         this.name = name;
         this.parent = parent;
     }
@@ -69,18 +71,25 @@ public final class Clazz implements IClass {
         this.accesses = data.accesses;
         this.name = data.name;
         this.parent = data.parent;
-        this.interfaces = new ArrayList<>(data.interfaces.size());
-        for (CstClass clz : data.interfaces) {
+
+        this.interfaces = new SimpleList<>(data.interfaces.size());
+        List<CstClass> cstItfs = data.interfaces;
+        for (int i = 0; i < cstItfs.size(); i++) {
+            CstClass clz = cstItfs.get(i);
             this.interfaces.add(clz.getValue().getString());
         }
 
-        this.methods = new ArrayList<>(data.methods.size());
-        for (MethodSimple method : data.methods) {
+        this.methods = new SimpleList<>(data.methods.size());
+        List<MethodSimple> cstMethods = data.methods;
+        for (int i = 0; i < cstMethods.size(); i++) {
+            MethodSimple method = cstMethods.get(i);
             this.methods.add(new Method(data, method));
         }
 
-        this.fields = new ArrayList<>(data.fields.size());
-        for (FieldSimple field : data.fields) {
+        this.fields = new SimpleList<>(data.fields.size());
+        List<FieldSimple> cstFields = data.fields;
+        for (int i = 0; i < cstFields.size(); i++) {
+            FieldSimple field = cstFields.get(i);
             this.fields.add(new Field(data, field));
         }
 
@@ -110,7 +119,7 @@ public final class Clazz implements IClass {
 
     public int version;
 
-    public FlagList accesses;
+    public char accesses;
 
     public String name, parent;
 
@@ -129,10 +138,8 @@ public final class Clazz implements IClass {
         if (getInvisibleAnnotations() != null)
             sb.append(getInvisibleAnnotations());
 
-        for (PrimitiveIterator.OfInt itr = this.accesses.iterator(); itr.hasNext(); ) {
-            sb.append(AccessFlag.byIdClass(itr.nextInt())).append(' ');
-        }
-        sb.append("class ").append(signature == null ? this.name.substring(this.name.lastIndexOf('/') + 1) : signature);
+        AccessFlag.toString(accesses, AccessFlag.TS_CLASS, sb);
+        sb.append(signature == null ? this.name.substring(this.name.lastIndexOf('/') + 1) : signature);
         if (!"java/lang/Object".equals(this.parent) && this.parent != null)
             sb.append(" extends ").append(this.parent);
         if (this.interfaces.size() > 0) {
@@ -172,13 +179,13 @@ public final class Clazz implements IClass {
     }
 
     public ByteList getBytes() {
-        return getBytes(new ByteList(1024));
+        return new ByteList(Parser.toByteArray(this));
     }
 
     public ByteList getBytes(ByteList w) {
-        ConstantPool cw = new ConstantPool();
+        ConstantPool cw = SharedBuf.alloc().constWriter();
 
-        w.putShort(accesses.flag)
+        w.putShort(accesses)
          .putShort(cw.getClassId(name))
          .putShort(parent == null ? 0 : cw.getClassId(parent))
          .putShort(interfaces.size());
@@ -219,6 +226,8 @@ public final class Clazz implements IClass {
         assert w.wIndex() == cpl;
         w.wIndex(pos + cpl);
 
+        cw.clear();
+
         return w;
     }
 
@@ -240,7 +249,7 @@ public final class Clazz implements IClass {
     }
 
     @SuppressWarnings("fallthrough")
-    public void handleAttribute(ConstantPool pool, ByteReader r, String name, int length) {
+    private void handleAttribute(ConstantPool pool, ByteReader r, String name, int length) {
         Attribute attr;
         switch (name) {
             case "RuntimeVisibleTypeAnnotations":
@@ -315,7 +324,7 @@ public final class Clazz implements IClass {
     }
 
     @Override
-    public String className() {
+    public String name() {
         return name;
     }
 
@@ -325,13 +334,18 @@ public final class Clazz implements IClass {
     }
 
     @Override
-    public String parentName() {
+    public String parent() {
         return parent;
     }
 
     @Override
-    public FlagList accessFlag() {
+    public char accessFlag() {
         return accesses;
+    }
+
+    @Override
+    public void accessFlag(int flag) {
+        this.accesses = (char) flag;
     }
 
     @Override
@@ -344,24 +358,8 @@ public final class Clazz implements IClass {
         return fields;
     }
 
-    public int getMethodByName(String key) {
-        for (int i = 0; i < methods.size(); i++) {
-            MoFNode ms = methods.get(i);
-            if (ms.name().equals(key)) return i;
-        }
-        return -1;
-    }
-
-    public int getFieldByName(String key) {
-        for (int i = 0; i < fields.size(); i++) {
-            MoFNode fs = fields.get(i);
-            if (fs.name().equals(key)) return i;
-        }
-        return -1;
-    }
-
     @Override
     public byte type() {
-        return 0;
+        return Parser.CTYPE_LOD_3;
     }
 }

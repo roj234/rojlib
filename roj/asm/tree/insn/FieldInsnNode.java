@@ -56,6 +56,14 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
         this.type = type;
     }
 
+    public FieldInsnNode(byte code, String owner, String name, String type) {
+        super(code);
+
+        this.owner = owner;
+        this.name = name;
+        this.rawType = type;
+    }
+
     // net/xxx/abc.DEF:LXXXX javap
     public FieldInsnNode(byte code, String desc) {
         super(code);
@@ -70,18 +78,18 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
         }
         this.name = name;
 
-        this.type = ParamHelper.parseField(desc.substring(nIdx + 1));
+        this.rawType = desc.substring(nIdx + 1);
     }
 
     public FieldInsnNode(byte code, CstRefField ref) {
         super(code);
         this.owner = ref.getClassName();
         this.name = ref.desc().getName().getString();
-        this.type = ParamHelper.parseField(ref.desc().getType().getString());
+        this.rawType = ref.desc().getType().getString();
     }
 
-    public String owner, name;
-    public Type type;
+    public String owner, name, rawType;
+    private Type type;
 
     public FieldInsnNode(byte code, Clazz clazz, int index) {
         super(code);
@@ -89,6 +97,16 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
         this.owner = clazz.name;
         this.name = field.name;
         this.type = field.type;
+    }
+
+    public Type getType() {
+        if (type == null) type = ParamHelper.parseField(rawType);
+        return type;
+    }
+
+    public void setType(Type type) {
+        rawType = null;
+        this.type = type;
     }
 
     @Override
@@ -107,7 +125,8 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public void toByteArray(ConstantPool cw, ByteList w) {
-        w.put(code).putShort(cw.getFieldRefId(owner, name, ParamHelper.getField(type)));
+        if (type != null) rawType = ParamHelper.getField(type);
+        w.put(code).putShort(cw.getFieldRefId(owner, name, rawType));
     }
 
     @Override
@@ -128,6 +147,6 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, type, owner.substring(owner.lastIndexOf('/') + 1), name);
+        return OpcodeUtil.toString0(code, rawType, owner.substring(owner.lastIndexOf('/') + 1), name);
     }
 }

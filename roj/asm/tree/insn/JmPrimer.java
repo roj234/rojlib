@@ -27,9 +27,11 @@
 package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
+import roj.asm.OpcodeUtil;
 import roj.asm.util.ConstantPool;
-import roj.collect.LinkedIntMap;
 import roj.util.ByteList;
+
+import java.util.List;
 
 import static roj.asm.Opcodes.*;
 
@@ -41,7 +43,7 @@ public final class JmPrimer extends InsnNode {
         this.switcher = null;
     }
 
-    public JmPrimer(byte code, int def, LinkedIntMap<Integer> switcher) {
+    public JmPrimer(byte code, int def, List<SwitchEntry> switcher) {
         super(code);
         this.def = def;
         this.switcher = switcher;
@@ -81,12 +83,12 @@ public final class JmPrimer extends InsnNode {
     }
 
     public int selfIndex, arrayIndex;
-    public int                         def;
-    public final LinkedIntMap<Integer> switcher;
+    public int def;
+    public final List<SwitchEntry> switcher;
 
     @Override
     public String toString() {
-        return "Jump => " + def + " / " + switcher;
+        return "Jump(" + OpcodeUtil.toString0(code) + ") => " + def + " / " + switcher;
     }
 
     @Override

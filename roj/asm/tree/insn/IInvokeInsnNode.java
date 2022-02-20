@@ -29,6 +29,7 @@ package roj.asm.tree.insn;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -49,8 +50,13 @@ public abstract class IInvokeInsnNode extends InsnNode {
 
     final void initPar() {
         if (params == null) {
-            params = ParamHelper.parseMethod(rawParam);
-            returnType = params.remove(params.size() - 1);
+            if (rawParam.startsWith("()")) {
+                params = new ArrayList<>();
+                returnType = ParamHelper.parseReturn(rawParam);
+            } else {
+                params = ParamHelper.parseMethod(rawParam);
+                returnType = params.remove(params.size() - 1);
+            }
         }
     }
 

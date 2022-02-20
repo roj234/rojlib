@@ -32,7 +32,6 @@ import roj.asm.cst.CstInt;
 import roj.asm.cst.CstLong;
 import roj.asm.tree.insn.*;
 import roj.asm.type.Type;
-import roj.collect.CharMap;
 
 import javax.annotation.Nonnull;
 
@@ -43,18 +42,12 @@ import static roj.asm.Opcodes.*;
  * @since 2021/5/29 17:16
  */
 public class NodeHelper {
-    private static final CharMap<NPInsnNode> NP_CACHE = new CharMap<>();
-
     public static void insertDebug(InsnList list) {
-        list.add(npc(DUP));
+        list.add(NPInsnNode.of(DUP));
         list.add(new FieldInsnNode(GETSTATIC, "java/lang/System", "out", new Type("java/lang/PrintStream")));
-        list.add(npc(SWAP));
+        list.add(NPInsnNode.of(SWAP));
         list.add(new InvokeInsnNode(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;"));
         list.add(new InvokeInsnNode(INVOKEVIRTUAL, "java/lang/PrintStream", "println", "(Ljava/lang/String;)V"));
-    }
-
-    public static NPInsnNode npc(byte code) {
-        return NP_CACHE.computeIfAbsent((char) code, (i) -> new NPInsnNode((byte) i));
     }
 
     private static NPInsnNode getNode(char x, byte base) {
@@ -124,7 +117,7 @@ public class NodeHelper {
             case 3:
             case 4:
             case 5:
-                return npc((byte) (ICONST_0 + number));
+                return NPInsnNode.of((byte) (ICONST_0 + number));
             default:
                 if((byte)number == number) {
                     return new U1InsnNode(BIPUSH, number);
@@ -140,26 +133,26 @@ public class NodeHelper {
         switch ((int) number) {
             case 0:
             case 1:
-                target.add(npc((byte) (LCONST_0 + number)));
+                target.add(NPInsnNode.of((byte) (LCONST_0 + number)));
                 break;
             case -1:
             case 2:
             case 3:
             case 4:
             case 5:
-                target.add(npc((byte) (ICONST_0 + number)));
-                target.add(npc(I2L));
+                target.add(NPInsnNode.of((byte) (ICONST_0 + number)));
+                target.add(NPInsnNode.of(I2L));
                 break;
             default:
                 if((byte)number == number) {
                     target.add(new U2InsnNode(BIPUSH, (int) number));
-                    target.add(npc(I2L));
+                    target.add(NPInsnNode.of(I2L));
                 } else if((short)number == number) {
                     target.add(new U2InsnNode(SIPUSH, (int) number));
-                    target.add(npc(I2L));
+                    target.add(NPInsnNode.of(I2L));
                 } else if ((int)number == number) {
                     target.add(new LdcInsnNode(LDC, new CstInt((int) number)));
-                    target.add(npc(I2L));
+                    target.add(NPInsnNode.of(I2L));
                 } else {
                     target.add(new LdcInsnNode(LDC2_W, new CstLong(number)));
                 }
@@ -170,7 +163,7 @@ public class NodeHelper {
         switch ((int) number) {
             case 0:
             case 1:
-                return npc((byte) (LCONST_0 + number));
+                return NPInsnNode.of((byte) (LCONST_0 + number));
             default:
                 return new LdcInsnNode(LDC2_W, new CstLong(number));
         }
@@ -186,22 +179,22 @@ public class NodeHelper {
             case 0:
             case 1:
             case 2:
-                target.add(npc((byte) (FCONST_0 + number)));
+                target.add(NPInsnNode.of((byte) (FCONST_0 + number)));
                 break;
             case -1:
             case 3:
             case 4:
             case 5:
-                target.add(npc((byte) (ICONST_0 + number)));
-                target.add(npc(I2F));
+                target.add(NPInsnNode.of((byte) (ICONST_0 + number)));
+                target.add(NPInsnNode.of(I2F));
                 break;
             default:
                 if((byte)n == n) {
                     target.add(new U2InsnNode(BIPUSH, n));
-                    target.add(npc(I2F));
+                    target.add(NPInsnNode.of(I2F));
                 } /*else if((short)n == n) {
                     target.add(new U2InsnNode(SIPUSH, n));
-                    target.add(npc(I2F));
+                    target.add(of(I2F));
                 } */else {
                     target.add(new LdcInsnNode(LDC, new CstFloat(number)));
                 }
@@ -213,7 +206,7 @@ public class NodeHelper {
         if (number != n || n < 0 || n > 2) {
             return new LdcInsnNode(LDC, new CstFloat(number));
         }
-        return npc((byte) (FCONST_0 + number));
+        return NPInsnNode.of((byte) (FCONST_0 + number));
     }
 
     public static void loadDoubleSlow(double number, InsnList target) {
@@ -225,15 +218,15 @@ public class NodeHelper {
         switch (n) {
             case 0:
             case 1:
-                target.add(npc((byte) (DCONST_0 + number)));
+                target.add(NPInsnNode.of((byte) (DCONST_0 + number)));
                 break;
             case -1:
             case 2:
             case 3:
             case 4:
             case 5:
-                target.add(npc((byte) (ICONST_0 + number)));
-                target.add(npc(I2D));
+                target.add(NPInsnNode.of((byte) (ICONST_0 + number)));
+                target.add(NPInsnNode.of(I2D));
                 break;
             default:
                 if((byte)n == n) {
@@ -245,7 +238,7 @@ public class NodeHelper {
                     target.add(new LdcInsnNode(LDC2_W, new CstDouble(number)));
                     return;
                 }
-                target.add(npc(I2D));
+                target.add(NPInsnNode.of(I2D));
         }
     }
 
@@ -254,7 +247,7 @@ public class NodeHelper {
         if (number != n || n < 0 || n > 1) {
             return new LdcInsnNode(LDC2_W, new CstDouble(number));
         }
-        return npc((byte) (DCONST_0 + number));
+        return NPInsnNode.of((byte) (DCONST_0 + number));
     }
 
     public static void compress(@Nonnull InsnList list, byte base, int id) {
@@ -468,5 +461,30 @@ public class NodeHelper {
     public static boolean isReturn(int code) {
         code &= 0xFF;
         return code >= 0xAC && code <= 0xB1;
+    }
+
+    /**
+     * XLOAD / XRETURN 的前缀
+     */
+    public static String XPrefix(Class<?> clazz) {
+        if (clazz.isPrimitive()) {
+            switch (clazz.getName()) {
+                case "int":
+                case "char":
+                case "byte":
+                case "boolean":
+                case "short":
+                    return "I";
+                case "double":
+                    return "D";
+                case "long":
+                    return "L";
+                case "float":
+                    return "F";
+                case "void":
+                    return "";
+            }
+        }
+        return "A";
     }
 }

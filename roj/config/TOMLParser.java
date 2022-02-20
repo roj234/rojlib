@@ -57,11 +57,11 @@ public class TOMLParser extends Parser {
     }
 
     public static CMapping parse(CharSequence string) throws ParseException {
-        return parse((TOMLLexer) new TOMLLexer().init(string), 0, Serializers.DEFAULT);
+        return parse((TOMLLexer) new TOMLLexer().init(string), 0, null);
     }
 
     public static CMapping parse(CharSequence string, int flag) throws ParseException {
-        return parse((TOMLLexer) new TOMLLexer().init(string), flag, Serializers.DEFAULT);
+        return parse((TOMLLexer) new TOMLLexer().init(string), flag, null);
     }
 
     /**

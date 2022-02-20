@@ -36,4 +36,5 @@ import java.util.Map;
  */
 public interface Flippable<K, V> extends Map<K, V> {
     Flippable<V, K> flip();
+    V forcePut(K key, V e);
 }

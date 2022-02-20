@@ -104,7 +104,7 @@ public class Loader implements IFMLLoadingPlugin {
                     ZipEntry ze;
                     while ((ze = zis.getNextEntry()) != null) {
                         if (ze.getName().endsWith(".class")) {
-                            mz.setFileData(ze.getName(), new ByteList().readStreamFully(zis));
+                            mz.put(ze.getName(), new ByteList().readStreamFully(zis));
                         }
                     }
                     mz.store();
@@ -128,7 +128,7 @@ public class Loader implements IFMLLoadingPlugin {
                 try(MutableZipFile mz = new MutableZipFile(patchy)) {
                     for(String key : mz.getEntries().keySet()) {
                         if (key.startsWith("io/netty")) {
-                            mz.setFileData(key, null);
+                            mz.put(key, null);
                         }
                     }
                     mz.store();

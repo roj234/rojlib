@@ -104,6 +104,9 @@ public class TextUtil {
         return db;
     }
 
+    // 8bits: ⣿ 每个点代表一位
+    public static final int BRAILLN_CODE = 10240;
+
     public final static byte[] digits = {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
             'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -242,15 +245,25 @@ public class TextUtil {
                 len = b.length;
             }
         }
-        if (off >= len) return sb;
-        off &= ~31;
-        printOff(sb, off);
+        if (len <= 0) return sb;
+        if ((off & 15) != 0) {
+            printOff(sb, off & ~15);
+            int delta = off & 15;
+            while (delta-- > 0) {
+                sb.append("  ");
+                if ((delta & 1) != 0) {
+                    sb.append(' ');
+                }
+            }
+        } else {
+            printOff(sb, off);
+        }
         int d = 0;
         while (true) {
             sb.append(b2h((b[off] & 0xFF) >>> 4))
               .append(b2h(b[off++] & 0xf));
             d++;
-            if (off == len) {
+            if (--len == 0) {
                 sb.append(" ");
 
                 int rem = 16 - d;
@@ -607,20 +620,20 @@ public class TextUtil {
         while (i < str.length()) {
             if (first == str.charAt(i) &&
                     lastMatches(str, i, delimiter, 0, len) == len) {
-                i += len;
                 if (prev < i || keepEmpty) {
-                    list.add(prev == i ? "" : str.subSequence(prev, i - len + 1).toString());
+                    list.add(prev == i ? "" : str.subSequence(prev, i).toString());
                     if (--max == 0) {
                         return list;
                     }
                 }
+                i += len;
                 prev = i;
             }
             i++;
         }
 
         if (max > 0 && (prev < i || keepEmpty)) {
-            list.add(prev == i ? "" : str.subSequence(prev, i - len + 1).toString());
+            list.add(prev == i ? "" : str.subSequence(prev, i).toString());
         }
 
         return list;

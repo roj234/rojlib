@@ -43,10 +43,10 @@ import java.util.*;
  * @since  2020/8/28 19:18
  */
 public class Mapping {
-    Flippable<String, String> classMap;
-    MyHashMap<Desc, String>   fieldMap, methodMap;
-    final TrieTree<String>          packageMap;
-    final boolean checkFieldType;
+    protected Flippable<String, String> classMap;
+    protected MyHashMap<Desc, String> fieldMap, methodMap;
+    protected final TrieTree<String> packageMap;
+    protected final boolean checkFieldType;
 
     public Mapping() {
         this(false);
@@ -179,6 +179,7 @@ public class Mapping {
             cl.append("FL: ").append(entry.getKey().name).append(' ').append(entry.getValue()).append('\n');
         }
 
+        Util U = Util.getInstance();
         for(Map.Entry<Desc, String> entry : methodMap.entrySet()) {
             Desc desc = entry.getKey();
 
@@ -187,7 +188,7 @@ public class Mapping {
             if(cl == null) {
                 classFos.put(cn, cl = new CharList(100));
             }
-            String param = Util.transformMethodParam(classMap, desc.param);
+            String param = U.transformMethodParam(classMap, desc.param);
 
             cl.append("ML: ").append(desc.name).append(' ').append(desc.param).append(' ').append(entry.getValue()).append(' ').append(param.equals(desc.param) ? "~" : param).append('\n');
         }
@@ -207,8 +208,8 @@ public class Mapping {
     public static void makeInheritMap(Map<String, List<String>> superMap, Map<String, String> filter) {
         MapperList l = new MapperList();
 
-        ArrayList<String> self = new ArrayList<>();
-        ArrayList<String> next = new ArrayList<>();
+        SimpleList<String> self = new SimpleList<>();
+        SimpleList<String> next = new SimpleList<>();
 
         // 从一级继承构建所有继承, note: 是所有输入
         for (Iterator<Map.Entry<String, List<String>>> itr = superMap.entrySet().iterator(); itr.hasNext(); ) {
@@ -245,7 +246,7 @@ public class Mapping {
                     if (cycle > 15 && next.contains(s))
                         throw new IllegalStateException("Circular reference in " + s);
                 }
-                ArrayList<String> tmp1 = self;
+                SimpleList<String> tmp1 = self;
                 self = next;
                 next = tmp1;
                 next.clear();
@@ -282,5 +283,60 @@ public class Mapping {
 
     public final FindMap<Desc, String> getMethodMap() {
         return methodMap;
+    }
+
+    /**
+     * Mapper{A->B} .reverse()   =>>  Mapper{B->A}
+     */
+    public void reverse() {
+        Util U = Util.getInstance();
+
+        this.classMap = classMap.flip();
+        MyHashMap<Desc, String> fieldMap1 = new MyHashMap<>(this.fieldMap.size());
+        for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
+            Desc desc = entry.getKey();
+            Desc target = new Desc(desc.owner, entry.getValue(), desc.param, desc.flags);
+            String param = U.transformFieldType(classMap, desc.param);
+            if(param != null)
+                target.param = param;
+            fieldMap1.put(target, desc.name);
+        }
+        this.fieldMap = fieldMap1;
+
+        MyHashMap<Desc, String> methodMap1 = new MyHashMap<>(this.methodMap.size());
+        for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+            Desc desc = entry.getKey();
+            Desc target = new Desc(desc.owner, entry.getValue(), U.transformMethodParam(classMap, desc.param), desc.flags);
+            methodMap1.put(target, desc.name);
+        }
+        this.methodMap = methodMap1;
+    }
+
+    /**
+     * Mapper{B->C} .extend ( Mapper{A->B} )   =>>  Mapper{A->C}
+     */
+    public void extend(Mapping from) {
+        Util U = Util.getInstance();
+
+        for(Map.Entry<String, String> entry : classMap.entrySet()) {
+            classMap.put(entry.getKey(), from.classMap.getOrDefault(entry.getValue(), entry.getValue()));
+        }
+        Desc md = new Desc("", "", "");
+        for(Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
+            Desc descriptor = entry.getKey();
+            md.owner = U.mapClassName(classMap, descriptor.owner);
+            md.name = entry.getValue();
+            String param = U.transformFieldType(classMap, md.param = descriptor.param);
+            if(param != null)
+                md.param = param;
+            entry.setValue(from.fieldMap.getOrDefault(md, entry.getValue()));
+        }
+        for(Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+            Desc descriptor = entry.getKey();
+            md.owner = U.mapClassName(classMap, descriptor.owner);
+            md.name = entry.getValue();
+            md.param = U.transformMethodParam(classMap, descriptor.param);
+            entry.setValue(from.methodMap.getOrDefault(md, entry.getValue()));
+        }
     }
 }

@@ -27,26 +27,24 @@ package roj.mapper;
 
 import roj.asm.Parser;
 import roj.asm.tree.*;
+import roj.asm.tree.AccessData.MOF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
-import roj.asm.util.FlagList;
-import roj.collect.CharMap;
 import roj.collect.FindMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
-import roj.io.ZipUtil;
+import roj.io.ZipUtil.ICallback;
 import roj.mapper.util.Desc;
 import roj.mapper.util.SubImpl;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.io.InputStream;
+import java.util.*;
 
 /**
  * class混淆器
@@ -59,78 +57,89 @@ public abstract class Obfuscator {
 
     public static final int ADD_SYNTHETIC = 1, ADD_PUBLIC = 2, REMOVE_SYNTHETIC = 4;
 
-    public static final boolean WEAKER_BUT_SAFER = Boolean.parseBoolean(System.getProperty("roj.obf.weakerButSafer", "true"));
+    private static class Merger implements ICallback {
+        private final MyHashMap<String, List<String>> supers;
+        private final MyHashMap<String, List<MOF>>    inheritDesc;
 
-    ConstMapper m1;
-    CodeMapper  m2;
+        public Merger(MyHashMap<String, List<String>> supers, MyHashMap<String, List<MOF>> inheritDesc) {
+            this.supers = supers;
+            this.inheritDesc = inheritDesc;
+        }
 
-    MyHashSet<Desc> libMethods = new MyHashSet<>();
-
-    protected int flags;
-
-    public Obfuscator() {
-        m1 = new ConstMapper(true);
-        m1.flag = ConstMapper.FLAG_CONSTANTLY_MAP | ConstMapper.FLAG_CHECK_SUB_IMPL;
-        m2 = new CodeMapper(m1);
-    }
-
-    final void genDataInherit(List<File> files) {
-        if(files.isEmpty())
-            return;
-
-        MyHashSet<Desc> libMethods = this.libMethods;
-        libMethods.clear();
-
-        CharMap<FlagList> byAcc = new CharMap<>();
-
-        ZipUtil.ICallback cb = (fileName, s) -> {
-            byte[] bytes = IOUtil.read(s);
-            if(bytes.length < 32)
-                return;
+        @Override
+        public void onRead(String fileName, InputStream s) throws IOException {
+            ByteList bytes = IOUtil.getSharedByteBuf().readStreamFully(s);
 
             AccessData data;
             try {
-                data = Parser.parseAccessDirect(bytes);
+                data = Parser.parseAcc0(null, bytes);
             } catch (Throwable e) {
                 CmdUtil.warning("Class " + fileName + " is unable to read", e);
                 return;
             }
 
-            List<AccessData.MOF> ent = data.methods;
-            Desc m = new Desc(data.name, "", "");
-            for (int i = 0; i < ent.size(); i++) {
-                AccessData.MOF method = ent.get(i);
-                if(method.name.startsWith("<") || (method.acc & (AccessFlag.STATIC | AccessFlag.PRIVATE | AccessFlag.FINAL)) != 0) {
-                    continue;
-                }
-                m.name = method.name;
-                m.param = method.desc;
-                m.flags = byAcc.computeIfAbsent(method.acc, ConstMapper.fl);
-                libMethods.add(m);
-                m = new Desc(data.name, "", "");
-            }
-        };
+            read(data);
+        }
 
-        for (int i = 0; i < files.size(); i++) {
-            File fi = files.get(i);
-            String f = fi.getName();
-            if (!f.startsWith("[noread]"))
-                ZipUtil.unzip(fi, cb, (ze) -> ze.getName().endsWith(".class"));
+        void read(AccessData data) {
+            if (!data.superName.equals("java/lang/Object") || !data.itf.isEmpty()) {
+                if (!data.superName.equals("java/lang/Object")) data.itf.add(0, data.superName);
+                supers.put(data.name, data.itf);
+            }
+
+            List<MOF> ent = data.methods;
+            for (int i = ent.size() - 1; i >= 0; i--) {
+                MOF method = ent.get(i);
+                if (method.name.startsWith("<") || (method.acc & (AccessFlag.STATIC | AccessFlag.PRIVATE | AccessFlag.FINAL)) != 0) {
+                    ent.remove(i);
+                }
+            }
+            if (!ent.isEmpty()) inheritDesc.put(data.name, ent);
         }
     }
 
-    public void reset(List<File> libraries) {
+    ConstMapper m1;
+    CodeMapper  m2;
+
+    protected int flags;
+    private Map<String, IClass> named;
+
+    public Obfuscator() {
+        m1 = new ConstMapper(true);
+        m1.flag = ConstMapper.TRIM_DUPLICATE | ConstMapper.FLAG_CHECK_SUB_IMPL;
+        m2 = new CodeMapper(m1);
+    }
+
+    public void clear() {
+        m1.clear();
+        if (named != null) named.clear();
+    }
+
+    public void loadLibraries(List<?> libraries) {
         m1.loadLibraries(libraries);
-        genDataInherit(libraries);
+    }
+
+    public void reset() {
+        ConstMapper t = m1;
+        t.classMap.clear();
+        t.methodMap.clear();
+        t.fieldMap.clear();
+        named.clear();
     }
 
     public void obfuscate(List<Context> arr) {
         ConstMapper t = m1;
 
-        t.initSelf(arr.size());
+        if (named == null) named = new MyHashMap<>(arr.size());
+        for (int i = 0; i < arr.size(); i++) {
+            ConstantData data = arr.get(i).getData();
+            named.put(data.name, data);
+        }
 
         Context cur = null;
         try {
+            t.initSelf(arr.size());
+
             for (int i = 0; i < arr.size(); i++) {
                 t.S1_parse(cur = arr.get(i));
             }
@@ -141,17 +150,99 @@ public abstract class Obfuscator {
                 prepare(cur = arr.get(i));
             }
 
+            // 删去冲突项
+            t.loadLibraries(Collections.singletonList(arr));
+
+            // 反转字段映射
+            Util U = Util.getInstance();
+            MyHashSet<Desc> fMapReverse = new MyHashSet<>(t.fieldMap.size());
+            for (Map.Entry<Desc, String> entry : t.fieldMap.entrySet()) {
+                Desc desc = entry.getKey();
+                Desc target = new Desc(desc.owner, entry.getValue(), desc.param, desc.flags);
+                fMapReverse.add(target);
+            }
+
+            // 防止同名同参字段在继承链上出现, JVM也分辨不出
+            Desc d = new Desc();
+            List<Context> pending = arr;
+            do {
+                List<Context> next = new ArrayList<>();
+                for (int i = 0; i < pending.size(); i++) {
+                    cur = pending.get(i);
+                    ConstantData data = cur.getData();
+                    List<String> parents = t.selfSupers.get(data.name);
+                    if (parents == null) continue;
+
+                    List<FieldSimple> fields = data.fields;
+                    for (int j = 0; j < fields.size(); j++) {
+                        FieldSimple field = fields.get(j);
+                        d.owner = data.name;
+                        d.name = field.name();
+                        d.param = field.rawDesc();
+
+                        // no map
+                        String name = t.fieldMap.get(d);
+                        if (null == name) continue;
+                        d.name = name;
+
+                        for (int k = 0; k < parents.size(); k++) {
+                            d.owner = parents.get(k);
+                            Desc d1 = fMapReverse.find(d);
+                            if (d1 != d) {
+                                // duplicate...
+                                if ((d1.flags & AccessFlag.PRIVATE) != 0) {
+                                    // Uninheritable private field
+                                    break;
+                                } else if ((d1.flags & (AccessFlag.PROTECTED | AccessFlag.PUBLIC)) == 0) {
+                                    if (!Util.arePackagesSame(d.owner, data.name)) {
+                                        // Uninheritable package-private field
+                                        break;
+                                    }
+                                }
+
+                                d.owner = data.name;
+                                do {
+                                    name = obfFieldName(data, d);
+                                    // remove old
+                                    fMapReverse.remove(d);
+                                    if (name == null) {
+                                        d.name = field.name();
+                                        t.fieldMap.remove(d);
+                                    } else {
+                                        d.name = name;
+                                        // add / check duplicate
+                                        if (d != fMapReverse.intern(d)) {
+                                            continue;
+                                        }
+                                        d = d.copy();
+
+                                        d.name = field.name();
+                                        // change mapping
+                                        t.fieldMap.put(d, name);
+
+                                        // push next
+                                        if (!next.contains(cur)) next.add(cur);
+                                    }
+                                    break;
+                                } while (true);
+
+                                break;
+                            }
+                        }
+                    }
+                }
+                pending = next;
+            } while (!pending.isEmpty());
+
             FindMap<Desc, String> methodMap = t.getMethodMap();
             if(!methodMap.isEmpty()) {
-                Desc finder = new Desc("", "", "");
-                MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(arr, t, new MyHashMap<>(arr.size()));
+                MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(arr, t, named);
                 for (SubImpl impl : subs) {
-                    finder.name = impl.type.name;
-                    finder.param = impl.type.type;
+                    Desc finder = impl.type;
                     Iterator<String> itr = impl.owners.iterator();
 
                     // 不是外面的方法
-                    if(!impl.original) {
+                    if(!impl.immutable) {
                         String firstName;
                         do {
                             finder.owner = itr.next(); // findFirst
@@ -203,53 +294,45 @@ public abstract class Obfuscator {
 
     protected void prepare(Context c) {
         ConstantData data = c.getData();
+        data.normalize();
 
-        String dest = obfClass(data.name);
-        if(dest == TREMINATE_THIS_CLASS)
-            return;
+        String dest = obfClass(data);
+        if(dest == TREMINATE_THIS_CLASS) return;
 
         ConstMapper t = this.m1;
         if(dest != null && t.classMap.put(data.name, dest) != null) {
             System.out.println("重复的class name " + data.name);
         }
         if ((flags & ADD_PUBLIC) != 0) {
-            data.accesses.flag |= AccessFlag.PUBLIC;
+            data.accesses |= AccessFlag.PUBLIC;
         }
 
+        prepareInheritCheck(data.name);
         Desc desc = new Desc(data.name, "", "");
         List<? extends MethodNode> methods = data.methods;
         for (int i = 0; i < methods.size(); i++) {
-            if (methods.get(i) instanceof Method) {
-                c.get();
-                data = c.getData();
-                methods = data.methods;
-                i = 0;
-                continue;
-            }
             MethodSimple method = (MethodSimple) methods.get(i);
-            FlagList acc = method.accesses;
+            int acc = method.accesses;
             if ((flags & ADD_SYNTHETIC) != 0) {
-                acc.flag |= AccessFlag.SYNTHETIC;
+                acc |= AccessFlag.SYNTHETIC;
             } else if ((flags & REMOVE_SYNTHETIC) != 0) {
-                acc.flag &= ~AccessFlag.SYNTHETIC;
+                acc &= ~AccessFlag.SYNTHETIC;
             }
-            if ((flags & ADD_PUBLIC) != 0 && (acc.flag & AccessFlag.PRIVATE) == 0) {
-                acc.flag &= ~AccessFlag.PROTECTED;
-                acc.flag |= AccessFlag.PUBLIC;
+            if ((flags & ADD_PUBLIC) != 0 && (acc & AccessFlag.PRIVATE) == 0) {
+                acc &= ~AccessFlag.PROTECTED;
+                acc |= AccessFlag.PUBLIC;
             }
 
             if ((desc.name = method.name.getString()).charAt(0) == '<') continue; // clinit, init
             desc.param = method.type.getString();
-            if (!acc.hasAny(AccessFlag.STATIC | AccessFlag.PRIVATE)) {
-                if (isInherited(desc)) {
-                    continue;
-                }
+            if (0 == (acc & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
+                if (isInherited(desc)) continue;
             }
-            String ms = obfMethodName(desc);
+            desc.flags = (char) acc;
+
+            String ms = obfMethodName(data, desc);
             if (ms != null) {
                 t.methodMap.put(desc, ms);
-                libMethods.add(desc);
-                desc.flags = acc;
                 desc = new Desc(data.name, "", "");
             }
         }
@@ -257,45 +340,46 @@ public abstract class Obfuscator {
         List<FieldSimple> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
             FieldSimple field = fields.get(i);
-            FlagList acc = field.accesses;
+            int acc = field.accesses;
             if ((flags & ADD_SYNTHETIC) != 0) {
-                acc.flag |= AccessFlag.SYNTHETIC;
+                acc |= AccessFlag.SYNTHETIC;
             } else if ((flags & REMOVE_SYNTHETIC) != 0) {
-                acc.flag &= ~AccessFlag.SYNTHETIC;
+                acc &= ~AccessFlag.SYNTHETIC;
             }
-            if ((flags & ADD_PUBLIC) != 0 && (acc.flag & AccessFlag.PRIVATE) == 0) {
-                acc.flag &= ~AccessFlag.PROTECTED;
-                acc.flag |= AccessFlag.PUBLIC;
+            if ((flags & ADD_PUBLIC) != 0 && (acc & AccessFlag.PRIVATE) == 0) {
+                acc &= ~AccessFlag.PROTECTED;
+                acc |= AccessFlag.PUBLIC;
             }
 
             desc.name = field.name.getString();
             desc.param = field.type.getString();
-            String fs = obfFieldName(desc);
+            desc.flags = (char) acc;
+
+            String fs = obfFieldName(data, desc);
             if (fs != null) {
                 t.fieldMap.put(desc, fs);
-                desc.flags = acc;
                 desc = new Desc(data.name, "", "");
             }
         }
     }
 
-    private boolean isInherited(Desc k) {
-        String owner = k.owner;
+    private final List<String> iCheckTmp = new ArrayList<>();
+    private void prepareInheritCheck(String owner) {
+        List<String> tmp = iCheckTmp;
+        tmp.clear();
 
-        List<String> parents = m1.selfSupers.getOrDefault(owner, Util.OBJECT_INHERIT);
-        for (int i = 0; i < parents.size(); i++) {
-            String parent = parents.get(i);
-            k.owner = parent;
-
-            Desc entry = libMethods.find(k);
-            if (k != entry) {
-                k.owner = owner;
-                return entry.flags.hasAny(AccessFlag.PUBLIC | AccessFlag.PROTECTED) ||
-                        Util.arePackagesSame(owner, parent);
+        Map<String, List<String>> supers = m1.selfSupers;
+        List<String> parents = supers.get(owner);
+        if (parents != null) {
+            for (int i = 0; i < parents.size(); i++) {
+                String parent = parents.get(i);
+                if (!supers.containsKey(parent) && !named.containsKey(parent)) tmp.add(parent);
             }
         }
-        k.owner = owner;
-        return Util.getInstance().isInherited(k, m1.selfSupers, WEAKER_BUT_SAFER);
+    }
+    private boolean isInherited(Desc k) {
+        return iCheckTmp.isEmpty() ? Util.checkObjectInherit(k) :
+                Util.getInstance().isInherited(k, iCheckTmp, true);
     }
 
     public void writeObfuscationMap(File file) throws IOException {
@@ -309,19 +393,20 @@ public abstract class Obfuscator {
     public void dumpMissingClasses() {
         Set<String> notFoundClasses = Util.getInstance().notFoundClasses;
         if(!notFoundClasses.isEmpty()) {
-            System.out.println("有" + notFoundClasses.size() + "个类没有被找到," + (WEAKER_BUT_SAFER ? "这会导致更低的混淆水平" : "这可能导致潜在的崩溃"));
-            try {
-                if(UIUtil.readBoolean("你需要查看这些类吗?")) {
-                    System.out.println(TextUtil.prettyPrint(notFoundClasses));
-                }
-            } catch (IOException ignored) {}
+            notFoundClasses = new MyHashSet<>(notFoundClasses);
+        }
+        if(!notFoundClasses.isEmpty()) {
+            System.out.print(TextUtil.prettyPrint(notFoundClasses));
+            System.out.println(notFoundClasses.size() + "个类没有找到");
+            System.out.println("如果你没有在libraries中给出这些类, 则会影响混淆水平");
+            System.out.println("(我的意思是即使你给了,这里也可能会提示)");
         }
     }
 
     protected void beforeMapCode(List<Context> arr) {}
     protected void afterMapCode(List<Context> arr) {}
 
-    public abstract String obfClass(String origin);
-    public abstract String obfMethodName(Desc descriptor);
-    public abstract String obfFieldName(Desc descriptor);
+    public abstract String obfClass(IClass cls);
+    public abstract String obfMethodName(IClass cls, Desc entry);
+    public abstract String obfFieldName(IClass cls, Desc entry);
 }

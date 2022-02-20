@@ -26,14 +26,15 @@
 package ilib.asm;
 
 import ilib.api.ContextClassTransformer;
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader.Acceptor;
-import net.minecraft.launchwrapper.LaunchClassLoader.Reader;
 import roj.asm.SharedBuf;
 import roj.asm.SharedBuf.Level;
 import roj.asm.util.Context;
 import roj.util.ByteList;
+
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader.Acceptor;
+import net.minecraft.launchwrapper.LaunchClassLoader.Reader;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -70,18 +71,18 @@ class LaunchInjector implements Acceptor {
                     if (o instanceof ContextClassTransformer) {
                         ((ContextClassTransformer) o).transform(trName, ctx);
                     } else {
-                        shared.setArray(((IClassTransformer) o).transform(name, trName, ctx.get(true).toByteArray()));
+                        shared.setArray(((IClassTransformer) o).transform(name, trName, ctx.get().toByteArray()));
                         ctx.set(shared);
                     }
                 } catch (Throwable e) {
                     try (FileOutputStream out = new FileOutputStream(trName.replace('/', '.'))) {
-                        ctx.get(true).writeToStream(out);
+                        ctx.get().writeToStream(out);
                     } catch (IOException ignored) {}
                     throw e;
                 }
             }
 
-            ByteList list = ctx.get(true);
+            ByteList list = ctx.get();
             rd.buf1 = list.list;
             rd.pos1 = list.wIndex();
         } finally {

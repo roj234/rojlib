@@ -144,6 +144,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     @Nonnull
     @Override
     public Object[] toArray() {
+        if (size == 0) return EmptyArrays.OBJECTS;
         Object[] arr = new Object[size];
         System.arraycopy(list, 0, arr, 0, size);
         return arr;

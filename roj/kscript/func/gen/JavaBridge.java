@@ -31,14 +31,10 @@ import roj.asm.tree.Clazz;
 import roj.asm.tree.Field;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
-import roj.asm.type.NativeType;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
 import roj.asm.util.InsnList;
-import roj.asm.util.NodeHelper;
-import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
 import roj.kscript.api.IObject;
@@ -49,6 +45,7 @@ import roj.util.Helpers;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -65,36 +62,35 @@ public final class JavaBridge {
         Clazz clz = holder = new Clazz();
         clz.version = 52 << 16;
         clz.interfaces.add("roj/kscript/func/gen/KFuncJava");
-        clz.accesses = new FlagList(AccessFlag.SUPER_OR_SYNC | AccessFlag.PUBLIC);
 
-        Field id = new Field(new FlagList(), "id", Type.std(NativeType.INT));
+        Field id = new Field(0, "id", Type.std(Type.INT));
         clz.fields.add(id);
 
-        Field obj = new Field(new FlagList(), "obj", (Type) null);
+        Field obj = new Field(0, "obj", (Type) null);
         clz.fields.add(obj);
 
         roj.asm.tree.Method call = new roj.asm.tree.Method(AccessFlag.PUBLIC, clz, "invoke", "(Lroj/kscript/data/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;");
         clz.methods.add(call);
         (call.code = new AttrCode(call)).interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
         InsnList insn = call.code.instructions;
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insn.add(new FieldInsnNode(Opcodes.GETFIELD, clz, 0));
         SwitchInsnNode swch = new SwitchInsnNode(Opcodes.TABLESWITCH);
         insn.add(swch);
-        InsnNode def = NodeHelper.npc(Opcodes.ACONST_NULL);
+        InsnNode def = NPInsnNode.of(Opcodes.ACONST_NULL);
         swch.def = def;
         insn.add(def);
-        insn.add(NodeHelper.npc(Opcodes.ARETURN));
+        insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
         roj.asm.tree.Method copyAs = new roj.asm.tree.Method(0, clz, "copyAs", "(I)Lroj/kscript/func/gen/KFuncJava;");
         clz.methods.add(copyAs);
         (copyAs.code = new AttrCode(copyAs)).interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
         insn = copyAs.code.instructions;
         insn.add(new ClassInsnNode(Opcodes.NEW, ""));
-        insn.add(NodeHelper.npc(Opcodes.DUP));
-        insn.add(NodeHelper.npc(Opcodes.ILOAD_1));
+        insn.add(NPInsnNode.of(Opcodes.DUP));
+        insn.add(NPInsnNode.of(Opcodes.ILOAD_1));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "", "<init>", "(I)V"));
-        insn.add(NodeHelper.npc(Opcodes.ARETURN));
+        insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
         roj.asm.tree.Method __init__ = new roj.asm.tree.Method(0, clz, "<init>", "(I)V");
         clz.methods.add(__init__);
@@ -103,12 +99,12 @@ public final class JavaBridge {
         code.localSize = 1;
 
         insn = code.instructions;
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
-        insn.add(NodeHelper.npc(Opcodes.ILOAD_1));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ILOAD_1));
         insn.add(new FieldInsnNode(Opcodes.PUTFIELD, clz, 0));
-        insn.add(NodeHelper.npc(Opcodes.RETURN));
+        insn.add(NPInsnNode.of(Opcodes.RETURN));
 
         roj.asm.tree.Method gsObject = new roj.asm.tree.Method(0, clz, "get_set_Object", "(Ljava/lang/Object;)Ljava/lang/Object;");
         clz.methods.add(gsObject);
@@ -117,15 +113,15 @@ public final class JavaBridge {
         code.localSize = 1;
 
         insn = code.instructions;
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insn.add(new FieldInsnNode(Opcodes.GETFIELD, clz, 1));
 
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_1));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
         insn.add(new ClassInsnNode(Opcodes.CHECKCAST, ""));
         insn.add(new FieldInsnNode(Opcodes.PUTFIELD, clz, 1));
 
-        insn.add(NodeHelper.npc(Opcodes.ARETURN));
+        insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
         roj.asm.tree.Method __init_def__ = new roj.asm.tree.Method(0, clz, "<init>", "()V");
         clz.methods.add(__init_def__);
@@ -134,9 +130,9 @@ public final class JavaBridge {
         code.localSize = 1;
 
         insn = code.instructions;
-        insn.add(NodeHelper.npc(Opcodes.ALOAD_0));
+        insn.add(NPInsnNode.of(Opcodes.ALOAD_0));
         insn.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, clz.parent, "<init>", "()V"));
-        insn.add(NodeHelper.npc(Opcodes.RETURN));
+        insn.add(NPInsnNode.of(Opcodes.RETURN));
     }
 
     private void forReuse(String className, String methodOwner) {
@@ -159,10 +155,10 @@ public final class JavaBridge {
 
         in = clz.methods.get(3).code.instructions;
         FieldInsnNode fn = (FieldInsnNode) in.get(1);
-        fn.owner = className; fn.type = ct;
+        fn.owner = className; fn.setType(ct);
 
         fn = ((FieldInsnNode) in.get(5));
-        fn.owner = className; fn.type = ct;
+        fn.owner = className; fn.setType(ct);
 
         ((ClassInsnNode) in.get(4)).owner = methodOwner;
 
@@ -221,20 +217,20 @@ public final class JavaBridge {
 
     private void addMethod(Method value, AttrCode call, int id) {
         InsnList insn = call.instructions;
-        IntMap<InsnNode> targets = ((SwitchInsnNode) insn.get(3)).switcher;
+        List<SwitchEntry> targets = ((SwitchInsnNode) insn.get(3)).switcher;
 
-        String types = ParamHelper.classDescriptors(value.getParameterTypes(), value.getReturnType());
+        String types = ParamHelper.class2asm(value.getParameterTypes(), value.getReturnType());
 
         InsnNode target;
         insn.add(target = new NPInsnNode(Opcodes.ALOAD_0));
-        targets.put(id, target);
+        targets.add(new SwitchEntry(id, target));
 
         insn.add(new FieldInsnNode(Opcodes.GETFIELD, holder, 1));
         insn.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, value.getDeclaringClass().getName().replace('.', '/'), value.getName(), types));
         if(types.endsWith("V"))
             // todo make wrapper
         insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/VMUtil", "toJavaObject", "(Ljava/lang/Object;)Lroj/kscript/type/KJavaObject;"));
-        insn.add(NodeHelper.npc(Opcodes.ARETURN));
+        insn.add(NPInsnNode.of(Opcodes.ARETURN));
 
     }
 

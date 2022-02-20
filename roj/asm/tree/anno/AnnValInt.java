@@ -54,4 +54,22 @@ public final class AnnValInt extends AnnVal {
     public byte type() {
         return type;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AnnValInt anInt = (AnnValInt) o;
+
+        if (type != anInt.type) return false;
+        return value == anInt.value;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = type;
+        result = 31 * result + value;
+        return result;
+    }
 }

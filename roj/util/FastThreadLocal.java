@@ -46,10 +46,6 @@ public class FastThreadLocal<T> {
     private static BiFunction<Object, Object, Object> getMap;
     private static BiConsumer<Object, Object> remove;
 
-    static {
-        init();
-    }
-
     @SuppressWarnings("unchecked")
     private static void init() {
         try {
@@ -65,7 +61,7 @@ public class FastThreadLocal<T> {
         }
     }
 
-    public final int seqNum;
+    private final int seqNum;
 
     public FastThreadLocal() {
         synchronized (slowGetter) {
@@ -111,6 +107,8 @@ public class FastThreadLocal<T> {
             }
         }
 
+        if (getMap == null) init();
+
         c = g.enumerate(t);
         while (c-- > 0) {
             if (t[c] instanceof FastLocalThread) {
@@ -122,6 +120,7 @@ public class FastThreadLocal<T> {
                     }
                 }
             } else {
+                if (getMap == null) continue;
                 remove.accept(getMap.apply(slowGetter, t[c]), slowGetter);
             }
         }
@@ -133,16 +132,16 @@ public class FastThreadLocal<T> {
 
     @SuppressWarnings("unchecked")
     public T get() {
-        Object[] x = getDataHolder();
+        Object[] x = getDataHolder(seqNum);
         if(x[seqNum] == null) x[seqNum] = initialValue();
         return (T) x[seqNum];
     }
 
     public void set(T v) {
-        getDataHolder()[seqNum] = v;
+        getDataHolder(seqNum)[seqNum] = v;
     }
 
-    public Object[] getDataHolder() {
+    protected static Object[] getDataHolder(int seqNum) {
         Thread t = Thread.currentThread();
         if(t instanceof FastLocalThread) {
             FastLocalThread t1 = (FastLocalThread) t;

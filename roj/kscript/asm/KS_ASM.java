@@ -26,7 +26,11 @@
 package roj.kscript.asm;
 
 import org.jetbrains.annotations.Range;
-import roj.collect.*;
+import roj.collect.IntBiMap;
+import roj.collect.IntList;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.collect.Unioner.Region;
 import roj.config.word.LineHandler;
 import roj.kscript.type.KType;
 import roj.kscript.util.*;
@@ -35,6 +39,8 @@ import roj.kscript.vm.ErrorInfo;
 import roj.kscript.vm.Func;
 import roj.kscript.vm.Func_Try;
 import roj.util.Helpers;
+import roj.util.VarMapper;
+import roj.util.VarMapper.Var;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -254,51 +260,40 @@ public final class KS_ASM implements LineHandler {
                 cur = cur.next;
             }
 
-            Unioner<Unioner.Wrap<Variable>> cf = new Unioner<>(lets.size() + 1);
+            // 跳转栈的默认值
+            MyHashMap<Node, VInfo> mi = new MyHashMap<>();
+            VarMapper cf = new VarMapper() {
+                @Override
+                protected void onRegion(Region prev, Region r) {
+                    List<IVar> last = prev == null ? Collections.emptyList() : prev.value();
+                    VInfo info = null;//NodeUtil.calcDiff(last, r.value());
+                    if (info == null)
+                        System.out.println("Should not be null: " + r.value());
+
+                    mi.put(indexer.get((int) r.pos()), info);
+                }
+            };
+
+            List<Variable> usedVar = new ArrayList<>();
 
             for (int j = 0; j < lets.size(); j++) {
                 Variable v = lets.get(j);
                 // cf: start include and end exclude
                 if (v.end != null) {
-                    cf.add(new Unioner.Wrap<>(v, v.start == null ? 0 : indexer.getInt(v.start.replacement()),
-                                                  indexer.getInt(v.end.replacement()) + 1));
+                    Var v1 = new Var();
+                    v1.att = v;
+                    v1.start = v.start == null ? 0 : indexer.getInt(v.start.replacement());
+                    v1.end = indexer.getInt(v.end.replacement()) + 1;
+                    cf.add(v1);
+                    usedVar.add(v);
                 }
             }
 
-            MyHashMap<Node, VInfo> mi = new MyHashMap<>(cf.arraySize());
+            mi.ensureCapacity(cf.regionCount());
 
-            List<Variable> usedVar = new ArrayList<>();
-            int slotInUse = vars.size() + usedArgs.size(), maxInUse = vars.size() + usedArgs.size();
 
-            List<Unioner.Wrap<Variable>> last = Collections.emptyList();
-            for (Unioner.Region region : cf) {
-                List<Unioner.Wrap<Variable>> curr = region.i_value();
-
-                Unioner.Point point = region.node();
-                while (point != null) {
-                    Unioner.Wrap<Variable> vari = point.owner();
-                    if(point.end()) {
-                        if(vari.sth.index == slotInUse)
-                            slotInUse--;
-                    } else if(vari.sth.index == 0) {
-                        vari.sth.index = ++slotInUse;
-
-                        if(slotInUse > maxInUse) {
-                            usedVar.add(vari.sth);
-                            maxInUse = slotInUse;
-                        }
-                    }
-                    point = point.next();
-                }
-
-                VInfo info = NodeUtil.calcDiff(last, curr);
-                if (info == null)
-                    System.out.println("Should not be null: " + curr);
-
-                mi.put(indexer.get((int) region.node().pos()), info);
-
-                last = curr;
-            }
+            int slotInUse = vars.size() + usedArgs.size();
+            int maxInUse = cf.map(Collections.emptyList());
 
             mkVarName(frame, vars, usedVar, usedArgs, ctx.restParId);
 
@@ -333,11 +328,11 @@ public final class KS_ASM implements LineHandler {
                     case TRY_ENTER:
                     case TRY_EXIT: // only these node need to be compiled for better performance
                         cur.compile();
-                        cur.genDiff(cf, indexer);
+                        //cur.genDiff(cf, indexer);
                         break;
                     case GOTO:
                         cur.compile();
-                        cur.genDiff(cf, indexer);
+                        //cur.genDiff(cf, indexer);
                         ((GotoNode)cur).checkNext(prev);
                         break;
                 }

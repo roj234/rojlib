@@ -1,37 +1,28 @@
 package roj.mapper.util;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- *
  * @author Roj233
  * @since 2021/7/21 2:42
  */
-public class NameAndType {
-    public String owner, name, type;
-
+public class NameAndType extends Desc {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         NameAndType that = (NameAndType) o;
-        return name.equals(that.name) && type.equals(that.type);
+        return name.equals(that.name) && param.equals(that.param);
     }
 
     @Override
     public int hashCode() {
-        return name.hashCode() * 31 + type.hashCode();
+        return name.hashCode() * 31 + param.hashCode();
     }
 
-    @Override
-    public String toString() {
-        return name + ' ' + type;
-    }
-
-    public NameAndType copy() {
+    public NameAndType copy(String owner) {
         NameAndType nat = new NameAndType();
+        nat.owner = owner;
         nat.name = name;
-        nat.type = type;
+        nat.param = param;
         return nat;
     }
 }

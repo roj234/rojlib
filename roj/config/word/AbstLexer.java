@@ -77,74 +77,67 @@ public abstract class AbstLexer {
      * String 重转义
      */
     public static String addSlashes(CharSequence key) {
-        if(key instanceof CharList) {
-            return addSlashes0((CharList) key);
-        }
-
-        StringBuilder sb = key instanceof StringBuilder ? (StringBuilder) key : new StringBuilder(key);
-        for (int i = 0; i < sb.length(); i++) {
-            char c = sb.charAt(i);
-            switch (c) {
-                case '\\':
-                case '"':
-                    sb.insert(i++, '\\');
-                    break;
-                case '\n':
-                    sb.setCharAt(i, '\\');
-                    sb.insert(++i, 'n');
-                    break;
-                case '\r':
-                    sb.setCharAt(i, '\\');
-                    sb.insert(++i, 'r');
-                    break;
-                case '\t':
-                    sb.setCharAt(i, '\\');
-                    sb.insert(++i, 't');
-                    break;
-                case '\b':
-                    sb.setCharAt(i, '\\');
-                    sb.insert(++i, 'b');
-                    break;
-                case '\f':
-                    sb.setCharAt(i, '\\');
-                    sb.insert(++i, 'f');
-                    break;
-            }
-        }
-        return sb.toString();
+        return addSlashes(key, new StringBuilder()).toString();
     }
 
-    private static String addSlashes0(CharList sb) {
-        for (int i = 0; i < sb.length(); i++) {
-            char c = sb.charAt(i);
+    public static CharList addSlashes(CharSequence key, CharList to) {
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
             switch (c) {
                 case '\\':
                 case '"':
-                    sb.insert(i++, '\\');
+                    to.append('\\').append(c);
                     break;
                 case '\n':
-                    sb.set(i, '\\');
-                    sb.insert(++i, 'n');
+                    to.append("\\n");
                     break;
                 case '\r':
-                    sb.set(i, '\\');
-                    sb.insert(++i, 'r');
+                    to.append("\\r");
                     break;
                 case '\t':
-                    sb.set(i, '\\');
-                    sb.insert(++i, 't');
+                    to.append("\\t");
                     break;
                 case '\b':
-                    sb.set(i, '\\');
-                    sb.insert(++i, 'b');
+                    to.append("\\b");
                     break;
                 case '\f':
-                    sb.set(i, '\\');
-                    sb.insert(++i, 'f');
+                    to.append("\\f");
                     break;
+                default:
+                    to.append(c);
             }
         }
-        return sb.toString();
+        return to;
+    }
+
+    public static StringBuilder addSlashes(CharSequence key, StringBuilder to) {
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            switch (c) {
+                case '\\':
+                case '"':
+                    to.append('\\').append(c);
+                    break;
+                case '\n':
+                    to.append("\\n");
+                    break;
+                case '\r':
+                    to.append("\\r");
+                    break;
+                case '\t':
+                    to.append("\\t");
+                    break;
+                case '\b':
+                    to.append("\\b");
+                    break;
+                case '\f':
+                    to.append("\\f");
+                    break;
+                default:
+                    to.append(c);
+            }
+        }
+        return to;
     }
 
     // section 简单操作
@@ -876,7 +869,7 @@ public abstract class AbstLexer {
             return new Word().reset(id, index, s.toString());
         }
         Word w = cached.reset(id, index, s.toString());
-        cached = null;
+        //cached = null;
         return w;
     }
 

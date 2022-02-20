@@ -82,7 +82,8 @@ public class Translator {
         for (Map.Entry<String, IntMap<String>> entry : value.entrySet()) {
             sb.append(entry.getKey()).append(':').append('\n');
             for (IntMap.Entry<String> entry1 : entry.getValue().entrySet()) {
-                sb.append(' ').append(' ').append(entry1.getKey()).append('=').append('"').append(AbstLexer.addSlashes(entry1.getValue())).append('"').append('\n');
+                sb.append(' ').append(' ').append(entry1.getKey()).append('=').append('"');
+                AbstLexer.addSlashes(entry1.getValue(), sb).append('"').append('\n');
             }
         }
 
@@ -239,11 +240,11 @@ public class Translator {
                     byte[] bytes = applyClass(fn, IOUtil.read(zf.getInputStream(ze)));
                     if (bytes != null) {
                         System.out.println("已修改的内容: " + fn + ze.getName());
-                        mzf.setFileData(ze.getName(), new ByteList(bytes));
+                        mzf.put(ze.getName(), new ByteList(bytes));
                     }
                 }
             } else {
-                mzf.setFileData(ze.getName(), null);
+                mzf.put(ze.getName(), null);
             }
         }
 

@@ -30,6 +30,7 @@ import roj.asm.util.IGeneric;
 import roj.asm.util.IType;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
+import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.CharList;
 
@@ -55,7 +56,7 @@ public class Signature implements IType {
     public List<IGeneric> values;
     public IGeneric returns;
     public final byte type;
-    public List<IGeneric> throwsException;
+    public List<IGeneric> Throws;
 
     public Signature(int type) {
         this.genericTypeMap = new MyHashMap<>();
@@ -68,25 +69,25 @@ public class Signature implements IType {
         this.returns = value.remove(value.size() - 1);
         this.values = value;
         this.type = (isMethod ? METHOD : (value.isEmpty() ? FIELD_OR_CLASS : CLASS));
-        this.throwsException = exceptions;
+        this.Throws = exceptions;
     }
 
     @Override
     public String toGeneric() {
-        CharList sb = new CharList();
+        CharList sb = IOUtil.getSharedCharBuf();
+
         if (!genericTypeMap.isEmpty()) {
             sb.append('<');
             for (Map.Entry<String, List<Generic>> entry : genericTypeMap.entrySet()) {
                 sb.append(entry.getKey()).append(':');
-                Collection<Generic> list = entry.getValue();
+                List<Generic> list = entry.getValue();
 
-                boolean flag = false;
-                for (Generic value : list) {
+                list.get(0).appendGeneric(sb);
+
+                for (int i = 1; i < list.size(); i++) {
+                    Generic value = list.get(i);
                     if (value.type == Generic.TYPE_CLASS) {
-                        if (flag) {
-                            throw new IllegalArgumentException("At most one class extend!");
-                        }
-                        flag = true;
+                        throw new IllegalArgumentException("Interface expected here");
                     }
                     value.appendGeneric(sb);
                 }
@@ -103,24 +104,30 @@ public class Signature implements IType {
                 sb.append(')');
         }
         returns.appendGeneric(sb);
-        if (throwsException != null) {
-            for (IGeneric value : throwsException) {
+        if (Throws != null) {
+            for (int i = 0; i < Throws.size(); i++) {
                 sb.append('^');
-                value.appendGeneric(sb);
+                Throws.get(i).appendGeneric(sb);
             }
         }
         return sb.toString();
     }
 
     public String getSignatureType() {
-        if (genericTypeMap.isEmpty())
-            return "";
-        CharList sb = new CharList(40).append('<');
-        for (Map.Entry<String, List<Generic>> entry : genericTypeMap.entrySet()) {
+        if (genericTypeMap.isEmpty()) return "";
+
+        CharList sb = IOUtil.getSharedCharBuf();
+
+        sb.append('<');
+        Iterator<Map.Entry<String, List<Generic>>> itr = genericTypeMap.entrySet().iterator();
+        while (true) {
+            Map.Entry<String, List<Generic>> entry = itr.next();
             appendTypeParameter(sb, entry.getKey(), entry.getValue());
+
+            if (!itr.hasNext()) break;
             sb.append(", ");
         }
-        sb.setIndex(sb.length() - 2);
+
         return sb.append('>').toString();
     }
 
@@ -131,16 +138,18 @@ public class Signature implements IType {
         if (list.isEmpty()) return;
         if (list.size() > 1 || !list.get(0).owner.equals("java/lang/Object")) {
             sb.append(" extends ");
-            for (Generic value : list) {
+            int i = 0;
+            while (true) {
+                Generic value = list.get(i++);
                 value.appendString(sb, this);
+                if (i == list.size()) break;
                 sb.append(" & ");
             }
-            sb.setIndex(sb.length() - 3);
         }
     }
 
     public String toString() {
-        CharList sb = new CharList();
+        CharList sb = IOUtil.getSharedCharBuf();
         if (type == FIELD_OR_CLASS) {
             returns.appendString(sb, this);
         } else {
@@ -231,8 +240,7 @@ public class Signature implements IType {
 
     public static Signature parse(String generic) {
         MutableInt mi = new MutableInt();
-        CharList tmp = ParamHelper.sharedBuffer.get();
-        tmp.clear();
+        CharList tmp = IOUtil.getSharedCharBuf();
 
         int i = 0;
 
@@ -250,15 +258,12 @@ public class Signature implements IType {
                         tmp.clear();
                         List<Generic> list = new ArrayList<>(4);
 
-                        boolean first = true;
-
-                        while (first || hasNext(generic, i)) {
+                        do {
                             mi.setValue(i);
                             tmp.clear();
                             list.add((Generic) getSignatureValue(generic, mi, F_TEST_ITF, tmp));
                             i = mi.getValue();
-                            first = false;
-                        }
+                        } while (hasNext(generic, i));
                         tmp.clear();
 
                         map.put(key, list);
@@ -353,9 +358,9 @@ public class Signature implements IType {
 
             final char c = s.charAt(i);
             if ((F & F_PRIMITIVE) != 0) {
-                if (NativeType.isValid((byte) c) && c != NativeType.CLASS) {
+                if (Type.isValid(c) && c != Type.CLASS) {
                     mi.setValue(i + 1);
-                    return new Type(c, arrayLevel);
+                    return arrayLevel == 0 ? Type.std(c) : new Type(c, arrayLevel);
                 }
             }
 
@@ -393,13 +398,13 @@ public class Signature implements IType {
         boolean shouldFindNext = false;
 
         while (i < s.length()) {
-            char c1 = s.charAt(i++);
+            char c1 = s.charAt(i);
             if (c1 == ';' || c1 == '<') {
-                i--;
                 if (c1 == '<')
                     shouldFindNext = true;
                 break;
             }
+            i++;
             tmp.append(c1);
         }
 

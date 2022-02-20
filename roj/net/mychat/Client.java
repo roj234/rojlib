@@ -1,6 +1,5 @@
 package roj.net.mychat;
 
-import roj.config.data.CMapping;
 import roj.net.WrappedSocket;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.*;
@@ -24,20 +23,13 @@ public class Client implements Router {
 
         HttpServer server = new HttpServer(new InetSocketAddress(port), 127, new Client());
         System.out.println("访问地址: " + server.getSocket().getLocalSocketAddress());
-        server.run();
+        server.start();
     }
 
     static final DirRouter dir = new DirRouter(new File("D:\\S\\Server\\htdocs\\chat"));
 
     @Override
-    public Reply response(WrappedSocket ch, Request request, RequestHandler h) throws IOException {
-        if (request.path().equals("/config.json")) {
-            CMapping map = new CMapping();
-            map.put("server", "127.0.0.1:1999");
-            map.put("ws_server", "ws://127.0.0.1:1999");
-            map.put("ws_protocol", "WSChat");
-            return new Reply(map.toShortJSONb());
-        }
-        return dir.response(ch, request, h);
+    public Response response(WrappedSocket ch, Request request, RequestHandler rh) throws IOException {
+        return dir.response(ch, request, rh);
     }
 }

@@ -32,10 +32,6 @@ import ilib.asm.Preloader;
 import ilib.asm.fasterforge.anc.ClassInfo;
 import ilib.asm.fasterforge.anc.FastParser;
 import ilib.asm.fasterforge.anc.JarInfo;
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -47,6 +43,11 @@ import roj.io.MutableZipFile;
 import roj.text.StringPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
+
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -232,7 +233,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 if (result != null) {
                     if (mzf == null)
                         mzf = new MutableZipFile(new File(jar.getName()));
-                    mzf.setFileData(ze.getName(), new ByteList(result));
+                    mzf.put(ze.getName(), new ByteList(result));
                 }
             }
             if (ze.getName().endsWith(".class")) {

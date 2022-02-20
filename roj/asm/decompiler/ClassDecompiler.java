@@ -66,7 +66,7 @@ public class ClassDecompiler {
         List<LocalVariable> LVT = code.getLVT() == null ? null : code.getLVT().list;
 
         //初始化本地变量表名，首先如果是实例方法，需要把this放入第一个，然后依次将方法参数名放入
-        boolean isStaticMethod = method.accessFlag().hasAll(AccessFlag.STATIC);
+        boolean isStaticMethod = 0 != (method.accessFlag() & AccessFlag.STATIC);
         if (!isStaticMethod) {
             varNames.add("this");
         }

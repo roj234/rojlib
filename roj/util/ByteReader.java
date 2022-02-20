@@ -26,6 +26,7 @@
 
 package roj.util;
 
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList.Streamed;
 
@@ -52,7 +53,7 @@ public final class ByteReader {
 
     public final void refresh(ByteList bytes) {
         this.bytes = bytes;
-        this.rIndex = bytes.rIndex;
+        this.rIndex = 0;
     }
 
     public ByteList bytes() {
@@ -79,19 +80,12 @@ public final class ByteReader {
     }
 
     public String readUTF() throws UTFDataFormatException {
-        return DUC(readUnsignedShort(), bytes, rIndex);
-    }
+        int len = readUnsignedShort();
 
-    private CharList cache;
-    private String DUC(int len, ByteList bytes, int srcOffset) throws UTFDataFormatException {
-        if (this.cache == null) {
-            this.cache = new CharList(len);
-        }
-        ByteList.decodeUTF0(len + srcOffset, cache, bytes, srcOffset, 0);
+        CharList cl = IOUtil.getSharedCharBuf();
+        ByteList.decodeUTF0(len + rIndex, cl, bytes, rIndex, 0);
         rIndex += len;
-        String s = cache.toString();
-        cache.clear();
-        return s;
+        return cl.toString();
     }
 
     public final int readUnsignedShort() {

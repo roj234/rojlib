@@ -2,6 +2,7 @@ package roj.misc;
 
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
+import roj.io.IOUtil;
 import roj.net.http.HttpClient;
 import roj.net.http.HttpHead;
 
@@ -26,13 +27,14 @@ public class HttpTest {
         HttpClient c = new HttpClient();
         c.readTimeout(2000);
         c.method("GET").headers(headers);
-        c.url(new URL("http://127.0.0.1:2333/"));
+        c.url(new URL("http://127.0.0.1:1999/"));
 
         int i = 0;
         while (true) {
             c.send();
             HttpHead header = c.response();
             System.out.println(header);
+            IOUtil.getSharedByteBuf().readStreamFully(c.getInputStream());;
             LockSupport.parkNanos(500_000_000L);
 
             if (++i == 1000) {

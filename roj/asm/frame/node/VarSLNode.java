@@ -21,14 +21,14 @@ public final class VarSLNode extends InsnNode implements IIndexInsnNode {
     public VarSLNode(MethodPoet.Variable v, boolean store) {
         super((byte) 0);
         this.v = v;
-        switch (v.type.type) {
+        switch (v.fType.type) {
             case TOP:
                 throw new IllegalStateException();
             case INT:
             case LONG:
             case FLOAT:
             case DOUBLE:
-                code = (byte) (ILOAD - 1 + v.type.type);
+                code = (byte) (ILOAD - 1 + v.fType.type);
                 break;
             default:
                 code = ALOAD;
@@ -85,5 +85,9 @@ public final class VarSLNode extends InsnNode implements IIndexInsnNode {
 
     private static int loadSore(byte base, int id) {
         return ((base <= 25 ? ((base - 0x15) * 4 + 0x1a) : ((base - 0x36) * 4 + 0x3b)) + id);
+    }
+
+    public boolean isLoad() {
+        return code <= 25;
     }
 }

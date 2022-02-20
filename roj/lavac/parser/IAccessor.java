@@ -25,16 +25,13 @@
  */
 package roj.lavac.parser;
 
-import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
-
 /**
  * @author solo6975
  * @since 2021/7/22 19:05
  */
 public class IAccessor {
-    public FlagList access(CharSequence seq) {
-        return new FlagList(AccessFlag.PUBLIC);
+    public Number access(CharSequence seq) {
+        return 1;
     }
 
     public boolean canInstanceOf(String from, String to, boolean b) {

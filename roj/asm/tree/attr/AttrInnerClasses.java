@@ -36,7 +36,6 @@ import roj.util.ByteReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.PrimitiveIterator;
 
 /**
  * @author Roj234
@@ -114,9 +113,7 @@ public final class AttrInnerClasses extends Attribute {
 
         public String toString() {
             StringBuilder sb = new StringBuilder();
-            for (PrimitiveIterator.OfInt itr = AccessFlag.of(flags).iterator(); itr.hasNext(); ) {
-                sb.append(AccessFlag.byIdInnerClass(itr.nextInt())).append(' ');
-            }
+            AccessFlag.toString(flags, AccessFlag.TS_INNER, sb);
             sb.append("class ");
             if (parent == null && name == null) {
                 sb.append("<anonymous>");

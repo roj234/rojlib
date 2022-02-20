@@ -29,9 +29,13 @@ package roj.asm.tree.attr;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.util.ConstantPool;
 import roj.collect.IntMap;
-import roj.collect.ToIntMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
+
+import javax.annotation.Nonnull;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 import static roj.asm.tree.insn.InsnNode.validate;
 
@@ -39,12 +43,12 @@ import static roj.asm.tree.insn.InsnNode.validate;
  * @author Roj234
  * @since 2021/4/30 19:27
  */
-public final class AttrLineNumber extends Attribute implements ICodeAttribute {
-    public final ToIntMap<InsnNode> map;
+public final class AttrLineNumber extends Attribute {
+    public final List<LineNumber> list;
 
     public AttrLineNumber() {
         super("LineNumberTable");
-        this.map = new ToIntMap<>();
+        this.list = new ArrayList<>();
     }
 
     public AttrLineNumber(ByteReader r, IntMap<InsnNode> pcCounter) {
@@ -52,30 +56,63 @@ public final class AttrLineNumber extends Attribute implements ICodeAttribute {
 
         final int tableLen = r.readUnsignedShort();
 
-        ToIntMap<InsnNode> map = this.map = new ToIntMap<>(tableLen);
+        List<LineNumber> list = this.list = new ArrayList<>(tableLen);
         for (int i = 0; i < tableLen; i++) {
             int index = r.readUnsignedShort();
             InsnNode node = pcCounter.get(index);
             if (node == null)
                 throw new NullPointerException("Couldn't found bytecode offset for line number table: " + index);
-            map.putInt(node, r.readUnsignedShort());
+            list.add(new LineNumber(node, r.readUnsignedShort()));
         }
     }
 
     public String toString() {
         StringBuilder sb = new StringBuilder("LineNumberTable:   Node <=======> Line\n");
-        for (ToIntMap.Entry<InsnNode> entry : map.selfEntrySet()) {
-            sb.append("                  ").append(entry.getKey()).append(" = ").append(entry.getInt()).append('\n');
+        for (int i = 0; i < list.size(); i++) {
+            LineNumber ln = list.get(i);
+            sb.append("                  ").append(ln.node)
+              .append(" = ").append(ln.line).append('\n');
         }
         return sb.toString();
     }
 
     @Override
-    public void toByteArray(ConstantPool pool, ByteList w, ToIntMap<InsnNode> pcRev) {
-        w.putShort(map.size());
-        for (ToIntMap.Entry<InsnNode> entry : map.selfEntrySet()) {
-            w.putShort(pcRev.getInt(validate(entry.getKey())))
-                    .putShort(entry.getInt());
+    void toByteArray1(ConstantPool pool, ByteList w) {
+        w.putShort(list.size());
+        if (list.isEmpty()) return;
+        list.sort(list.get(0));
+        for (int i = 0; i < list.size(); i++) {
+            LineNumber ln = list.get(i);
+            w.putShort((ln.node = validate(ln.node)).bci)
+             .putShort(ln.line);
+        }
+    }
+
+    public static final class LineNumber implements Comparable<LineNumber>, Comparator<LineNumber> {
+        public InsnNode node;
+        char line;
+
+        public LineNumber(InsnNode node, int i) {
+            this.node = node;
+            this.line = (char) i;
+        }
+
+        public int getLine() {
+            return line;
+        }
+
+        public void setLine(int line) {
+            this.line = (char) line;
+        }
+
+        @Override
+        public int compareTo(@Nonnull LineNumber o) {
+            return Integer.compare(node.bci, o.node.bci);
+        }
+
+        @Override
+        public int compare(LineNumber o1, LineNumber o2) {
+            return Integer.compare(o1.node.bci, o2.node.bci);
         }
     }
 }

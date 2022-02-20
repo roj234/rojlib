@@ -158,10 +158,11 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
         ByteBuffer b = this.wBuf;
         if (b.hasRemaining()) {
             ch.write(b);
-            if (wTimer++ > 1000) {
+            if (wTimer > 1000) {
                 syncPrint(this + " 写出超时!");
                 toState(Logout.LOGOUT);
             }
+            wTimer += elapsed;
             if (b.hasRemaining()) return;
             if (!packets.hasMore())
                 key.interestOps(SelectionKey.OP_READ);

@@ -41,15 +41,10 @@ public abstract class Attribute {
     public final String name;
 
     public final void toByteArray(ConstantPool pool, ByteList w) {
-        w.putShort(pool.getUtfId(name)).putInt(-1);
-
-        int lenIdx = w.wIndex();
+        w.putShort(pool.getUtfId(name)).putInt(0);
+        int i = w.wIndex();
         toByteArray1(pool, w);
-        int cp = w.wIndex();
-
-        w.wIndex(lenIdx - 4);
-        w.putInt(cp - lenIdx)
-         .wIndex(cp);
+        w.putInt(i - 4, w.wIndex() - i);
     }
 
     void toByteArray1(ConstantPool pool, ByteList w) {

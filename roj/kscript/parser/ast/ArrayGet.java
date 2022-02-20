@@ -29,8 +29,8 @@ import roj.asm.Opcodes;
 import roj.asm.tree.insn.IfInsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.tree.insn.LabelInsnNode;
+import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.util.InsnList;
-import roj.asm.util.NodeHelper;
 import roj.config.word.NotStatementException;
 import roj.kscript.asm.CompileContext;
 import roj.kscript.asm.KS_ASM;
@@ -114,7 +114,7 @@ public final class ArrayGet implements LoadExpression {
         index.toVMCode(ctx, false);
         if(index.type() != 2) {
             if(index.type() == -1) {
-                list.add(NodeHelper.npc(Opcodes.DUP));
+                list.add(NPInsnNode.of(Opcodes.DUP));
                 list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/type/KType", "isInt", "()Z"));
                 LabelInsnNode label = new LabelInsnNode();
                 list.add(new IfInsnNode(Opcodes.IFNE, label));

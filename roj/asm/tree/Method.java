@@ -26,39 +26,40 @@
 
 package roj.asm.tree;
 
+import roj.asm.Parser;
 import roj.asm.SharedBuf;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
-import roj.asm.type.*;
+import roj.asm.tree.attr.AttrMethodParameters.MethodParam;
+import roj.asm.type.LocalVariable;
+import roj.asm.type.ParamHelper;
+import roj.asm.type.Signature;
+import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
 import javax.annotation.Nullable;
 import java.util.List;
-import java.util.PrimitiveIterator;
-import java.util.PrimitiveIterator.OfInt;
 
 /**
  * @author Roj234
  * @since 2021/6/18 9:51
  */
 public final class Method implements MethodNode, MoFNode {
-    @Deprecated
     public Method(int accesses, IClass owner, String name, String desc) {
-        this(AccessFlag.of((short) accesses), owner.className(), name, desc);
+        this.accesses = (char) accesses;
+        this.owner = owner.name();
+        this.name = name;
+        this.rawDesc = desc;
+        this.attributes = new AttributeList();
     }
 
-    public Method(FlagList accesses, IClass owner, String name, String desc) {
-        this(accesses, owner.className(), name, desc);
-    }
-
-    public Method(FlagList accesses, String owner, String name, String desc) {
-        this.accesses = accesses;
+    public Method(int accesses, String owner, String name, String desc) {
+        this.accesses = (char) accesses;
         this.owner = owner;
         this.name = name;
         this.rawDesc = desc;
@@ -67,7 +68,7 @@ public final class Method implements MethodNode, MoFNode {
 
 
     public Method(ConstantData data, MethodSimple method) {
-        this.accesses = method.accesses.copy();
+        this.accesses = method.accesses;
         this.owner = data.name;
         this.name = method.name.getString();
         this.rawDesc = method.type.getString();
@@ -94,7 +95,7 @@ public final class Method implements MethodNode, MoFNode {
             }
         }
 
-        if (code == null && !accesses.hasAny(AccessFlag.ABSTRACT | AccessFlag.NATIVE)) {
+        if (code == null && 0 == (accesses & (AccessFlag.ABSTRACT | AccessFlag.NATIVE))) {
             throw new IllegalArgumentException("Non-abstract method " + data.name + '.' + name + ':' + rawDesc + " did not contain Code attribute.");
         }
     }
@@ -170,9 +171,9 @@ public final class Method implements MethodNode, MoFNode {
 
     private String rawDesc;
     private List<Type> params;
-    private Type       returnType;
+    private Type returnType;
 
-    public FlagList accesses;
+    public char accesses;
     public AttributeList attributes;
 
     @Nullable
@@ -219,7 +220,7 @@ public final class Method implements MethodNode, MoFNode {
     }
 
     public void toByteArray(ConstantPool pool, ByteList w) {
-        w.putShort(accesses.flag).putShort(pool.getUtfId(name));
+        w.putShort(accesses).putShort(pool.getUtfId(name));
 
         if (params != null) {
             params.add(returnType);
@@ -247,9 +248,7 @@ public final class Method implements MethodNode, MoFNode {
             sb.append("    ").append(getInvisibleAnnotations()).append('\n');
 
         sb.append("    ");
-        for (PrimitiveIterator.OfInt itr = accesses.iterator(); itr.hasNext(); ) {
-            sb.append(AccessFlag.byIdMethod(itr.nextInt())).append(' ');
-        }
+        AccessFlag.toString(accesses, AccessFlag.TS_METHODS, sb);
         if (signature != null) {
             sb.append(signature.toString().replaceFirst(" ", " " + name));
         } else {
@@ -260,17 +259,14 @@ public final class Method implements MethodNode, MoFNode {
             if (params.size() > 0) {
                 AttrMethodParameters acc = getParameterAccesses();
                 if (acc != null && code != null) {
-                    int i = 0;
                     final List<LocalVariable> list = code.getLVT().list;
                     for (int j = 0; j < params.size(); j++) {
                         Type p = params.get(j);
-                        String name = list.get(i++).name;
+                        String name = list.get(j).name;
 
-                        FlagList ls = acc.flags.get(name);
-                        if (ls != null) {
-                            for (OfInt itr = ls.iterator(); itr.hasNext(); ) {
-                                sb.append(AccessFlag.byIdParameter(itr.nextInt())).append(' ');
-                            }
+                        MethodParam e = acc.flags.size() <= j ? null : acc.flags.get(j);
+                        if (e != null) {
+                            AccessFlag.toString(e.flag, AccessFlag.TS_PARAM, sb);
                         }
                         sb.append(p).append(' ').append(name).append(", ");
                     }
@@ -327,7 +323,10 @@ public final class Method implements MethodNode, MoFNode {
 
     @Override
     public Type getReturnType() {
-        initPar();
+        if (returnType == null) {
+            if (rawDesc == null) initPar();
+            else return returnType = ParamHelper.parseReturn(rawDesc);
+        }
         return returnType;
     }
 
@@ -340,7 +339,7 @@ public final class Method implements MethodNode, MoFNode {
         if (params == null) {
             if (rawDesc == null) { // fallback
                 params = new SimpleList<>();
-                returnType = Type.std(NativeType.VOID);
+                returnType = Type.std(Type.VOID);
                 return;
             }
             params = ParamHelper.parseMethod(rawDesc);
@@ -371,11 +370,16 @@ public final class Method implements MethodNode, MoFNode {
 
     @Override
     public int type() {
-        return 2;
+        return Parser.MTYPE_FULL;
     }
 
     @Override
-    public FlagList accessFlag() {
+    public void accessFlag(int flag) {
+        this.accesses = (char) flag;
+    }
+
+    @Override
+    public char accessFlag() {
         return accesses;
     }
 

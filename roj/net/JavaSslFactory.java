@@ -53,7 +53,6 @@ public class JavaSslFactory implements SocketFactory, Supplier<SSLEngine> {
             engine.setUseClientMode(true);
         } else {
             engine.setUseClientMode(!config.isServerSide());
-            engine.setEnabledProtocols(engine.getSupportedProtocols());
             // false为单向认证，true为双向认证
             engine.setNeedClientAuth(config.isNeedClientAuth());
         }

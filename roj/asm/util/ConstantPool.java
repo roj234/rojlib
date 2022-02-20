@@ -271,14 +271,12 @@ public class ConstantPool {
     }
 
     @Nonnull
-    @Deprecated
     public Constant get(ByteReader r) {
         int id = r.readUnsignedShort();
         // noinspection all
         return id == 0 ? null : constants.get(id - 1);
     }
 
-    @Deprecated
     public String getName(ByteReader r) {
         int id = r.readUnsignedShort() - 1;
 

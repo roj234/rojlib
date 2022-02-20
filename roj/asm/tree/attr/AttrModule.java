@@ -226,7 +226,7 @@ public final class AttrModule extends Attribute {
 
         @Override
         public String toString() {
-            return "Module " + '\'' + name + '\'' + " ver" + version + ", acc='" + AccessFlag.byIdModule(access) + '\'' + '}';
+            return "Module " + '\'' + name + '\'' + " ver" + version + ", acc='" + AccessFlag.toString(access, AccessFlag.TS_MODULE) + '\'' + '}';
         }
     }
 
@@ -257,7 +257,7 @@ public final class AttrModule extends Attribute {
 
         @Override
         public String toString() {
-            return "Export '" + Package + '\'' + ", acc=" + AccessFlag.byIdModule(access) + ", accessibleClasses=" + accessible + '}';
+            return "Export '" + Package + '\'' + ", acc=" + AccessFlag.toString(access, AccessFlag.TS_MODULE) + ", accessibleClasses=" + accessible + '}';
         }
     }
 

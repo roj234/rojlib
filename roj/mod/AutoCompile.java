@@ -5,25 +5,37 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.ui.CmdUtil;
 
-import java.io.IOException;
 import java.util.concurrent.locks.LockSupport;
+
+import static roj.mod.Shared.DEBUG;
 
 /**
  * @author solo6975
  * @since 2022/1/24 20:14
  */
 final class AutoCompile extends Thread {
-    static AutoCompile inst;
-    public static void setEnabled(boolean enabled) {
+    static int Debounce;
+
+    private static AutoCompile inst;
+    private static long lastTime;
+    private static boolean prevEnable;
+
+    static void setEnabled(boolean enabled) {
         if (enabled && inst == null) {
             inst = new AutoCompile();
         }
+        if (inst == null) return;
         inst.enable = enabled;
         LockSupport.unpark(inst);
     }
 
+    public static void notifyIt() {
+        if (inst != null && inst.enable)
+            LockSupport.unpark(inst);
+    }
+
     private AutoCompile() {
-        setName("Auto compiler");
+        setName("自动编译");
         setDaemon(true);
         start();
         tmp1 = new SimpleList<>(100);
@@ -31,32 +43,69 @@ final class AutoCompile extends Thread {
     }
 
     private final SimpleList<String> tmp1, tmp2;
-    private boolean enable;
+    private boolean enable, selfTrigger;
+
+    static void beforeCompile() {
+        if (inst == null) return;
+        if (!inst.selfTrigger) {
+            if (prevEnable = inst.enable) {
+                inst.enable = false;
+                LockSupport.unpark(inst);
+            }
+        }
+    }
+
+    static void afterCompile(int v) {
+        if (inst == null) return;
+        if (!inst.selfTrigger) {
+            if (inst.enable = prevEnable) {
+                LockSupport.unpark(inst);
+            }
+        }
+    }
 
     @Override
     public void run() {
+        while (Shared.project == null) {
+            if (DEBUG) System.out.println("[AC] 等待项目初始化");
+            LockSupport.park();
+        }
+        ext:
         while (true) {
+            LockSupport.park();
             if (!enable) {
-                LockSupport.park(this);
+                if (DEBUG) System.out.println("[AC] 关闭");
             } else {
-                MyHashSet<String> set = Shared.watcher.getModified(Shared.currentProject, IProjectWatcher.ID_SRC);
-                if (set.contains(null)) {
-                    enable = false;
+                Project p = Shared.project;
+                MyHashSet<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
+                if (set.contains(null) || set.isEmpty()) {
+                    if (set.contains(null))
+                        if (DEBUG) System.out.println("[AC] 未注册监听器");
                 } else {
-                    tmp1.clear();
-                    tmp1.addAll(set);
-                    LockSupport.parkNanos(200_000_000L);
-                    set = Shared.watcher.getModified(Shared.currentProject, IProjectWatcher.ID_SRC);
-                    tmp2.clear();
-                    tmp2.addAll(set);
+                    if (Debounce > 0) {
+                        tmp1.clear(); tmp1.addAll(set);
+
+                        LockSupport.parkNanos(Debounce * 1_000_000L);
+                        while (System.currentTimeMillis() < lastTime) {
+                            if (!enable || p != Shared.project) continue ext;
+                            LockSupport.parkUntil(lastTime);
+                        }
+
+                        set = Shared.watcher.getModified(Shared.project, IFileWatcher.ID_SRC);
+                        tmp2.clear(); tmp2.addAll(set);
+                    }
                     if (tmp1.equals(tmp2)) {
                         MyHashMap<String, Object> ojbk = new MyHashMap<>(4);
                         ojbk.put("zl", "");
                         try {
+                            selfTrigger = true;
                             FMDMain.build(ojbk);
-                        } catch (IOException | InterruptedException e) {
+                            if (DEBUG) CmdUtil.success("[AC] Done");
+                        } catch (Throwable e) {
                             CmdUtil.error("自动编译出错", e);
                         }
+                        selfTrigger = false;
+                        lastTime = System.currentTimeMillis() + Debounce;
                     }
                 }
             }

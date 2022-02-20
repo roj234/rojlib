@@ -27,13 +27,11 @@
 package roj.asm.frame;
 
 import roj.asm.OpcodeUtil;
-import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstDynamic;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
-import roj.asm.type.NativeType;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ExceptionEntry;
@@ -51,6 +49,7 @@ import java.util.Map;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.frame.VarType.*;
+
 /**
  * "Interpreter"
  *
@@ -60,6 +59,10 @@ import static roj.asm.frame.VarType.*;
  */
 public class Interpreter {
     public Interpreter() {}
+
+    protected String isAssignable(String a, String b) {
+        return a;
+    }
 
     String clazz;
 
@@ -82,10 +85,12 @@ public class Interpreter {
         this.stack.clear();
 
         this.clazz = owner.ownerClass();
-        this.returnType = owner.getReturnType().type;
+
+        String desc = owner.rawDesc();
+        this.returnType = (byte) desc.charAt(desc.lastIndexOf(')') + 1);
 
         boolean _init_ = owner.name().equals("<init>");
-        if (0 == (owner.accessFlag2() & AccessFlag.STATIC)) { // this
+        if (0 == (owner.accessFlag() & AccessFlag.STATIC)) { // this
             this.local.add(_init_ ? new Var() : obj(owner.ownerClass()));
         } else if(_init_) {
             throw new IllegalArgumentException("static <init>!");
@@ -110,7 +115,7 @@ public class Interpreter {
     // region A
 
     final void pushRefArray(String name) {
-        stack.add(obj("[L" + name + ';'));
+        stack.add(obj(name.startsWith("[") ? "[" + name : "[L" + name + ';'));
     }
 
     final void pushPrimArray(int arrayType) {
@@ -140,9 +145,16 @@ public class Interpreter {
     }
 
     final void loadInArray(Var v) {
-        if (v.owner == null || !v.owner.startsWith("["))
+        if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+        if (!v.owner.startsWith("["))
             throw new IllegalArgumentException("Not an array: " + v);
-        stack.add(obj(v.owner.substring(1)));
+        String s;
+        if (v.owner.charAt(1) == 'L' && v.owner.charAt(v.owner.length() - 1) == ';') {
+            s = v.owner.substring(2, v.owner.length() - 1);
+        } else {
+            s = v.owner.substring(1);
+        }
+        stack.add(obj(s));
     }
 
     static Var obj(String name) {
@@ -261,6 +273,7 @@ public class Interpreter {
     public Frame build(InsnNode node) {
         Frame frame = null;
 
+        local.minus();
         if (local.eq(lastLocal)) {
             switch (stack.size) {
                 case 0:
@@ -287,7 +300,7 @@ public class Interpreter {
             final Var[] n = local.list;
             final Var[] o = lastLocal.list;
             for (int i = 0; i < inCommon; i++) {
-                if(!n[i].eq(o[i])) {
+                if(n[i] == null || !n[i].eq(o[i])) {
                     break chopAppendTest;
                 }
                 if(n[i].type == TOP)
@@ -343,7 +356,7 @@ public class Interpreter {
         Var t1, t2, t3;
         switch (code) {
             case RETURN:
-                checkReturn(NativeType.VOID);
+                checkReturn(Type.VOID);
                 flag = 1;
                 break;
             case GOTO:
@@ -411,7 +424,7 @@ public class Interpreter {
             case LDC2_W:
                 byte type1 = ((LdcInsnNode) node).c.type();
                 if(type1 == Constant.DYNAMIC)
-                    type1 = NativeType.validate(((CstDynamic)((LdcInsnNode) node).c).getDesc().getType().getString().charAt(0));
+                    type1 = Type.validate(((CstDynamic)((LdcInsnNode) node).c).getDesc().getType().getString().charAt(0));
 
                 switch (type1) {
                     case Constant.INT:
@@ -468,14 +481,14 @@ public class Interpreter {
             case SALOAD:
                 pop(INT);
                 {
-                    final Var arr = pop(REFERENCE);
+                    final Var v = pop(REFERENCE);
                     String s;
                     switch (code) {
                         case IALOAD:
                             s = "[I";
                             break;
                         case BALOAD:
-                            s = "[B".equals(arr.owner) ? "[B" : "[Z";
+                            s = "[B".equals(v.owner) ? "[B" : "[Z";
                             break;
                         case CALOAD:
                             s = "[C";
@@ -486,8 +499,9 @@ public class Interpreter {
                         default:
                             s = null;
                     }
-                    if (!s.equals(arr.owner)) {
-                        throw new IllegalStateException("Unable assign " + arr.owner + " to " + s);
+                    if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                    if (!s.equals(v.owner)) {
+                        throw new IllegalStateException("Unable assign " + v.owner + " to " + s);
                     }
                 }
                 stack.add(Var.INT);
@@ -508,9 +522,10 @@ public class Interpreter {
             case LALOAD:
                 pop(INT);
                 {
-                    final Var arr = pop(REFERENCE);
-                    if (!"[J".equals(arr.owner)) {
-                        throw new IllegalStateException("Unable assign " + arr.owner + " to [J");
+                    Var v = pop(REFERENCE);
+                    if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                    if (!"[J".equals(v.owner)) {
+                        throw new IllegalStateException("Unable assign " + v.owner + " to [J");
                     }
                 }
                 stack.add(Var.LONG);
@@ -524,9 +539,10 @@ public class Interpreter {
             case FALOAD:
                 pop(INT);
                 {
-                    final Var arr = pop(REFERENCE);
-                    if (!"[F".equals(arr.owner)) {
-                        throw new IllegalStateException("Unable assign " + arr.owner + " to [F");
+                    Var v = pop(REFERENCE);
+                    if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                    if (!"[F".equals(v.owner)) {
+                        throw new IllegalStateException("Unable assign " + v.owner + " to [F");
                     }
                 }
                 stack.add(Var.FLOAT);
@@ -551,6 +567,7 @@ public class Interpreter {
                 pop(INT);
                 {
                     final Var arr = pop(REFERENCE);
+                    if (arr.owner == null) throw PathClosedException.NULL_ARRAY;
                     if (!"[D".equals(arr.owner)) {
                         throw new IllegalStateException("Unable assign " + arr.owner + " to [D");
                     }
@@ -601,7 +618,7 @@ public class Interpreter {
                 pop(INT);
                 pop(INT);
                 {
-                    final Var iArray = pop(REFERENCE);
+                    Var v = pop(REFERENCE);
                     String s;
                     switch (code) {
                         case IASTORE:
@@ -619,11 +636,12 @@ public class Interpreter {
                         default:
                             s = null;
                     }
-                    if (!s.equals(iArray.owner)) {
+                    if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                    if (!s.equals(v.owner)) {
                         // boolean store
                         // noinspection all
-                        if (!iArray.owner.equals("[Z") || s != "[B") {
-                            throw new IllegalStateException("Unable assign " + iArray.owner + " to " + s);
+                        if (!v.owner.equals("[Z") || s != "[B") {
+                            throw new IllegalStateException("Unable assign " + v.owner + " to " + s);
                         }
                     }
                 }
@@ -631,36 +649,40 @@ public class Interpreter {
             case FASTORE: {
                 pop(FLOAT);
                 pop(INT);
-                final Var fArray = pop(REFERENCE);
-                if (!"[F".equals(fArray.owner)) {
-                    throw new IllegalStateException("Unable assign " + fArray.owner + " to [F");
+                Var v = pop(REFERENCE);
+                if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                if (!"[F".equals(v.owner)) {
+                    throw new IllegalStateException("Unable assign " + v.owner + " to [F");
                 }
                 break;
             }
             case AASTORE: {
                 pop(REFERENCE);
                 pop(INT);
-                final Var aArray = pop(REFERENCE);
-                if ('[' != aArray.owner.charAt(0) || (';' != aArray.owner.charAt(aArray.owner.length() - 1) && '[' != aArray.owner.charAt(1))) {
-                    throw new IllegalStateException("Unable assign " + aArray.owner + " to [L<any>");
+                Var v = pop(REFERENCE);
+                if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                if ('[' != v.owner.charAt(0) || (';' != v.owner.charAt(v.owner.length() - 1) && '[' != v.owner.charAt(1))) {
+                    throw new IllegalStateException("Unable assign " + v.owner + " to [L<any>");
                 }
                 break;
             }
             case LASTORE: {
                 pop(LONG);
                 pop(INT);
-                final Var lArray = pop(REFERENCE);
-                if (!"[J".equals(lArray.owner)) {
-                    throw new IllegalStateException("Unable assign " + lArray.owner + " to [J");
+                Var v = pop(REFERENCE);
+                if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                if (!"[J".equals(v.owner)) {
+                    throw new IllegalStateException("Unable assign " + v.owner + " to [J");
                 }
                 break;
             }
             case DASTORE: {
                 pop(DOUBLE);
                 pop(INT);
-                final Var dArray = pop(REFERENCE);
-                if (!"[D".equals(dArray.owner)) {
-                    throw new IllegalStateException("Unable assign " + dArray.owner + " to [D");
+                Var v = pop(REFERENCE);
+                if (v.type == NULL) throw PathClosedException.NULL_ARRAY;
+                if (!"[D".equals(v.owner)) {
+                    throw new IllegalStateException("Unable assign " + v.owner + " to [D");
                 }
                 break;
             }
@@ -681,16 +703,16 @@ public class Interpreter {
                 break;
             case FRETURN:
                 flag = 1;
-                checkReturn(NativeType.FLOAT);
+                checkReturn(Type.FLOAT);
                 pop(FLOAT);
                 break;
             case IRETURN:
                 flag = 1;
-                checkReturn(NativeType.INT);
+                checkReturn(Type.INT);
                 pop(INT);
                 break;
             case ARETURN:
-                //checkReturn(NativeType.CLASS);
+                //checkReturn(Type.CLASS);
             case ATHROW:
                 pop(REFERENCE);
                 flag = 1;
@@ -717,12 +739,12 @@ public class Interpreter {
                 flag = 2;
                 break;
             case LRETURN:
-                checkReturn(NativeType.LONG);
+                checkReturn(Type.LONG);
                 pop(LONG);
                 flag = 1;
                 break;
             case DRETURN:
-                checkReturn(NativeType.DOUBLE);
+                checkReturn(Type.DOUBLE);
                 pop(DOUBLE);
                 flag = 1;
                 break;
@@ -865,12 +887,12 @@ public class Interpreter {
             case GETFIELD:
                 popRefLike();
             case GETSTATIC:
-                pushType(((FieldInsnNode) node).type);
+                pushType(((FieldInsnNode) node).getType());
                 break;
             case PUTSTATIC:
             case PUTFIELD:
                 // We can do assign check here...
-                popType(((FieldInsnNode) node).type);
+                popType(((FieldInsnNode) node).getType());
                 if(code == PUTFIELD)
                     popRefLike();
                 break;
@@ -886,8 +908,8 @@ public class Interpreter {
                     pop(typeType(type));
                 }
 
-                if (code != Opcodes.INVOKESTATIC) {
-                    if (code == Opcodes.INVOKESPECIAL && inv.name.equals("<init>")) {
+                if (code != INVOKESTATIC) {
+                    if (code == INVOKESPECIAL && inv.name.equals("<init>")) {
                         initialize(pop(UNINITIAL), clazz);
                     } else {
                         pop(REFERENCE);
@@ -940,12 +962,12 @@ public class Interpreter {
 
     final void checkReturn(char type) {
         switch (returnType) {
-            case NativeType.BOOLEAN:
-            case NativeType.BYTE:
-            case NativeType.CHAR:
-            case NativeType.SHORT:
-            case NativeType.INT:
-                if(type != NativeType.INT)
+            case Type.BOOLEAN:
+            case Type.BYTE:
+            case Type.CHAR:
+            case Type.SHORT:
+            case Type.INT:
+                if(type != Type.INT)
                     throw new IllegalArgumentException("return type " + type + " did not satisfy method's " + (char)returnType);
                 break;
             default:
@@ -955,10 +977,10 @@ public class Interpreter {
 
     }
 
-    final static Var fromType(Type type, CharList sb) {
+    static Var fromType(Type type, CharList sb) {
         int arr = type.array;
         if (arr == 0) {
-            final int i = ofType(type);
+            int i = ofType(type);
             switch (i) {
                 case -1: return null;
                 default: return Var.std(i);
@@ -968,6 +990,7 @@ public class Interpreter {
             sb.clear();
             for (int i = 0; i < arr; i++) sb.append('[');
             if (type.owner == null) sb.append((char) type.type);
+            else if (type.owner.startsWith("[")) sb.append(type.owner);
             else sb.append('L').append(type.owner).append(';');
             return obj(sb.toString());
         }
@@ -989,7 +1012,7 @@ public class Interpreter {
         pop(v.type);
     }
 
-    final static byte typeType(Type type) {
+    static byte typeType(Type type) {
         final int t = ofType(type);
         switch (t) {
             case -1:
@@ -1078,16 +1101,7 @@ public class Interpreter {
                                         next.stackBegin.copyFrom(stack);
                                         visit2.add(next);
                                     } else {
-                                        if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
-                                            throw new RuntimeException(
-                                                    "从各点到达同一位置的跳转栈必须相同！\n" +
-                                                            "Block: " + next + "\n" +
-                                                            "ExcL: " + next.localBegin + "\n" +
-                                                            "ExcS: " + next.stackBegin + "\n" +
-                                                            "GotL: " + local + "\n" +
-                                                            "GotS: " + stack);
-                                        }
-                                        next.localBegin.removeTo(local.size);
+                                        checkStackSame(next, local,stack);
                                     }
                                 } else {
                                     assert flg == 1;
@@ -1099,22 +1113,14 @@ public class Interpreter {
                                 break;
                         }
                         if(rg != (rg = byException.findRegion(j))) {
-                            List<Exc> mv = rg.i_value();
+                            List<Exc> mv = rg.value();
                             if(mv.isEmpty()) continue;
                             BasicBlock next = mv.get(mv.size() - 1).bb;
                             if(visited.add(next)) {
                                 next.localBegin.copyFrom(local);
                                 visit2.add(next);
-                                System.out.println(next);
                             } else {
-                                if (!next.localBegin.sw(local)) {
-                                    throw new RuntimeException(
-                                            "[Ex]从各点到达同一位置的跳转栈必须相同！\n" +
-                                                    "Block: " + next + "\n" +
-                                                    "ExcL: " + next.localBegin + "\n" +
-                                                    "GotL: " + local);
-                                }
-                                next.localBegin.removeTo(local.size);
+                                checkStackSame(next, local, null);
                             }
                         }
                     }
@@ -1140,7 +1146,20 @@ public class Interpreter {
         return Helpers.cast(out);
     }
 
-    public List<Frame> compute(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
+    protected void checkStackSame(BasicBlock next, VarList localB, VarList StackB) {
+//        if (!next.localBegin.sw(localB) || !next.stackBegin.eq(StackB)) {
+//            throw new RuntimeException(
+//                    "从各点到达同一位置的跳转栈必须相同！\n" +
+//                            "Block: " + next + "\n" +
+//                            "ExcL: " + next.localBegin + "\n" +
+//                            "ExcS: " + next.stackBegin + "\n" +
+//                            "GotL: " + local + "\n" +
+//                            "GotS: " + stack);
+//        }
+        //next.localBegin.minus(local);
+    }
+
+    public List<Frame> compute(InsnList list, List<ExceptionEntry> exceptionEntries) {
         Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
         Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
         Unioner<Exc> byException = new Unioner<>();
@@ -1167,67 +1186,48 @@ public class Interpreter {
                     local.copyFrom(bb.localBegin);
                     stack.copyFrom(bb.stackBegin);
 
-                    Region rg = byException.findRegion(j);
-                    while (j < list.size()) {
-                        maxStackSize = Math.max(maxStackSize, stack.size);
-                        int flg;
-                        InsnNode node;
-                        switch (flg = visitNode(node = list.get(j++))) {
-                            case 1:
-                            case 2:
-                            case 3:
-                                BasicBlock next = bySource.get(node);
-                                if (next != null) {
-                                    if(visited.add(next)) {
-                                        next.localBegin.copyFrom(local);
-                                        next.stackBegin.copyFrom(stack);
-                                        tmp.add(next);
+                    try {
+                        Region rg = byException.findRegion(j);
+                        while (j < list.size()) {
+                            maxStackSize = Math.max(maxStackSize, stack.size);
+                            int flg;
+                            InsnNode node;
+                            switch (flg = visitNode(node = list.get(j++))) {
+                                case 1:
+                                case 2:
+                                case 3:
+                                    BasicBlock next = bySource.get(node);
+                                    if (next != null) {
+                                        if (visited.add(next)) {
+                                            next.localBegin.copyFrom(local);
+                                            next.stackBegin.copyFrom(stack);
+                                            tmp.add(next);
+                                        } else {
+                                            checkStackSame(next, local, stack);
+                                        }
                                     } else {
-                                        if (!next.localBegin.sw(local) || !next.stackBegin.eq(stack)) {
-                                            throw new RuntimeException(
-                                                    "从各点到达同一位置的跳转栈必须相同！\n" +
-                                                            "Block: " + next + "\n" +
-                                                            "ExcL: " + next.localBegin + "\n" +
-                                                            "ExcS: " + next.stackBegin + "\n" +
-                                                            "GotL: " + local + "\n" +
-                                                            "GotS: " + stack);
-                                        }
-                                        next.localBegin.removeTo(local.size);
-                                        Var[] nlb = next.localBegin.list;
-                                        for (int i = next.localBegin.size - 1; i >= 0; i--) {
-                                            if (nlb[i].type == NULL) {
-                                                nlb[i] = local.list[i];
-                                            }
-                                        }
+                                        assert flg == 1;
                                     }
+                                    // end of basic block
+                                    continue mainCyc;
+                                case 4:
+                                    checkWide(list.get(j).code);
+                                    break;
+                            }
+                            if (rg != (rg = byException.findRegion(j))) {
+                                List<Exc> mv = rg.value();
+                                if (mv.isEmpty()) continue;
+                                BasicBlock next = mv.get(mv.size() - 1).bb;
+                                if (visited.add(next)) {
+                                    next.localBegin.copyFrom(local);
+                                    tmp.add(next);
                                 } else {
-                                    assert flg == 1;
+                                    checkStackSame(next, local, null);
                                 }
-                                // end of basic block
-                                continue mainCyc;
-                            case 4:
-                                checkWide(list.get(j).code);
-                                break;
-                        }
-                        if(rg != (rg = byException.findRegion(j))) {
-                            List<Exc> mv = rg.i_value();
-                            if(mv.isEmpty()) continue;
-                            BasicBlock next = mv.get(mv.size() - 1).bb;
-                            if(visited.add(next)) {
-                                next.localBegin.copyFrom(local);
-                                tmp.add(next);
-                                System.out.println(next);
-                            } else {
-                                if (!next.localBegin.sw(local)) {
-                                    throw new RuntimeException(
-                                            "[Ex]从各点到达同一位置的跳转栈必须相同！\n" +
-                                                    "Block: " + next + "\n" +
-                                                    "ExcL: " + next.localBegin + "\n" +
-                                                    "GotL: " + local);
-                                }
-                                next.localBegin.removeTo(local.size);
                             }
                         }
+                    } catch (PathClosedException ignored) {
+                        // 此路不通
                     }
                 }
             }
@@ -1238,32 +1238,18 @@ public class Interpreter {
         }
 
         List<InsnNode> frames0 = new ArrayList<>(byTarget.keySet());
-        if(pcRev != null)
-            frames0.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
-        else
-            frames0.sort((o1, o2) -> Integer.compare(list.indexOf(o1), list.indexOf(o2)));
+        frames0.sort((o1, o2) -> Integer.compare(o1.bci, o2.bci));
 
         int i;
         for (i = 0; i < frames0.size(); i++) {
             List<BasicBlock> bbs = byTarget.get(frames0.get(i));
             BasicBlock bb = bbs.get(0);
 
-            //System.out.println("Node: " + frames0.get(i));
             for (int j = 0; j < bbs.size(); j++) {
                 BasicBlock next = bbs.get(j);
 
-                //System.out.println(next);
                 if(j > 0) {
-                    if (!next.localBegin.sw(bb.localBegin) || !next.stackBegin.eq(bb.stackBegin)) {
-                        throw new RuntimeException(
-                                "从各点到达同一位置的跳转栈必须相同！\n" +
-                                        "Block: " + next + "\n" +
-                                        "ExcL: " + next.localBegin + "\n" +
-                                        "ExcS: " + next.stackBegin + "\n" +
-                                        "GotL: " + bb.localBegin + "\n" +
-                                        "GotS: " + bb.stackBegin);
-                    }
-                    bb.localBegin.removeTo(next.localBegin.size);
+                    checkStackSame(next, bb.localBegin, bb.stackBegin);
                 }
 
                 if(next.start == -1)
@@ -1354,8 +1340,8 @@ public class Interpreter {
                     il.add(list.indexOf(node = InsnNode.validate(node1.def)));
                     byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
 
-                    for (InsnNode node2 : node1.switcher.values()) {
-                        il.add(list.indexOf(node = InsnNode.validate(node2)));
+                    for (SwitchEntry node2 : node1.switcher) {
+                        il.add(list.indexOf(node = InsnNode.validate((InsnNode) node2.node)));
                         byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
                     }
 

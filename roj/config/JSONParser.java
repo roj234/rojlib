@@ -34,7 +34,6 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -270,7 +269,7 @@ public final class JSONParser extends Parser {
     }
 
     public static class JSONLexer extends AbstLexer {
-        final MyHashSet<String> ipool = new MyHashSet<>();
+        final MyHashSet<CharSequence> ipool = new MyHashSet<>();
         CharList comment;
 
         public byte flag;
@@ -367,16 +366,13 @@ public final class JSONParser extends Parser {
             if(cached == null) {
                 cached = new Word();
             }
-            String word;
             if ((flag & INTERN) != 0) {
-                word = ipool.find(Helpers.cast(s));
+                CharSequence word = ipool.find(s);
                 if (word == s) {
-                    ipool.add(word = s.toString());
+                    ipool.add(s = s.toString());
                 }
-            } else {
-                word = s.toString();
             }
-            return cached.reset(id, index, word);
+            return cached.reset(id, index, s.toString());
         }
 
         @Override

@@ -26,8 +26,6 @@
 package ilib.asm.fasterforge.transformers;
 
 import ilib.api.ContextClassTransformer;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstRef;
@@ -41,6 +39,9 @@ import roj.asm.visitor.AsIsAttributeVisitor;
 import roj.asm.visitor.CodeVisitor;
 import roj.util.ByteList;
 import roj.util.ByteReader;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 
 import java.util.List;
 
@@ -149,7 +150,7 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
 
     private boolean dirty, warn;
 
-    private static final String callbackOwner = ParamHelper.classDescriptor(TerminalTransformer.class);
+    private static final String callbackOwner = ParamHelper.class2asm(TerminalTransformer.class);
 
     public void check(String clsName) {
         warn = (!clsName.equals("net/minecraft/client/Minecraft") && !clsName.equals("net/minecraft/server/dedicated/DedicatedServer") && !clsName

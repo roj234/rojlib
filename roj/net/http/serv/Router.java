@@ -26,6 +26,7 @@
 package roj.net.http.serv;
 
 import roj.net.WrappedSocket;
+import roj.net.http.IllegalRequestException;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -36,7 +37,7 @@ import java.io.IOException;
  */
 @FunctionalInterface
 public interface Router {
-    default int writeTimeout(@Nullable Request request) {
+    default int writeTimeout(@Nullable Request req) {
         return 2000;
     }
 
@@ -44,17 +45,24 @@ public interface Router {
         return 5000;
     }
 
-    Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException;
+    default int postReadTimeout(Request req, int remain) {
+        return remain;
+    }
+
+    Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException;
 
     default int maxLength() {
+        // HTTP headers + path
+        return 8192;
+    }
+
+    default void checkHeader(Request req) throws IllegalRequestException {}
+
+    default int postMaxLength(Request req) {
         return 1048576; // 1MB
     }
 
-    default boolean checkAction(int action) {
-        return action != -1;
-    }
-
-    default int postMaxLength() {
-        return maxLength();
+    default boolean useCompress(Request req, Response reply) {
+        return reply != null && reply.wantCompress();
     }
 }

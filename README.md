@@ -1,13 +1,10 @@
 <pre>  
 ## 写在前面  
-1. 谁教教我md的语法啊 233  
-2. 最近看了不少RFC, 感觉他们比CDSN好一万倍  
-3. 按照忘了哪里看的资料, 如果我想多来点star, 我应该(举例)  
-  把roj.asm拆出去开一个独立的项目叫做EasyASM啥的  
-  把roj.kscript拆出去开一个独立的项目叫做TinyJSEngine啥的  
-  把roj.mapper拆出去开一个独立的项目叫做YetAnotherObfuscator啥的  
-  ...  
-  
+  4. 基本就是想到什么就写什么
+  5. 重构是家常便饭, 我在努力多写一点注释
+  6. 没啥人用, 不用考虑向前兼容
+  7. 还有一点 过早优化是万恶之源: 最近删除了ASM中一个'内存优化', 其提高了程序-3%的速度
+
 ## About this library  
 我的，也许很不好的理念，就是  
   对于功能:  
@@ -16,6 +13,11 @@
   或者等待我会的时候  
   即使这浪费时间，浪费很多时间，用于本无需的debug等  
   但是我坚持  
+  
+  那么，还有依赖么
+    roj.opengl: LWJGL
+    roj.mod.fp.Helper_XX: md_5/SpecialSource lzma/LZMA
+    当然我还是想插个嘴, 如果你不搞我的世界开发你可以把上面那个类的代码注释了
   
 ## 这里都有啥  
 ### roj.asm  
@@ -108,7 +110,7 @@
   ChaCha20 XChaCha20 Poly1305和他们的合体
   
 ### roj.io  
-  多线程下载器 FileUtil.downloadFile / FileUtil.downloadFileAsync  
+  多线程下载 Downloader.download
   BOMInputStream  
   BoxFile 类似那种大型游戏用的，把大量小文件（不压缩）装成个整体  
      哦，electron的asar是个更好的例子  
@@ -159,13 +161,46 @@
   CleanWechat 清除一定时间以前的文件
   
 ### roj.mod  
-  可选前置: md_5:SpecialSource, lzma:LZMA-0.1  
-  本来只是个替代垃圾ForgeGradle的模组开发工具  
-  不过我现在离不开它了  
-  功能：编译java，增量编译，屏蔽警告，热重载  
-  特点：速度很快，体积很小  
+  广告:
+    让java，所见即所得
+    全新的1.6.0版本支持自动增量编辑和代码热重载
+    只需要轻敲Ctrl+S，修改的代码就会瞬间(好吧，100ms左右...)同步到正在运行的程序
   
-### roj.net  
+  这是啥:
+    我自己写的项目编译器
+    考虑到Minecraft开发的需求, 和ForgeGradle那'惊人'的速度
+    我决定制作它
+
+  功能:
+    编译java (需要JDK,  不过相信我,  迟早有一天我会自己做javac的)
+    增量编译
+    屏蔽部分警告
+    自动检测文件更新并编译
+    在程序运行时根据编译修改其代码(热重载)
+
+  特点:
+    我没有做过时间的比较, 除了ForgeGradle
+    在我2019年使用当时所知的最优配置时
+    FG需要30秒
+    FMD则是50ms-1s (增量模式) 4s (全量)
+
+  怎么用:
+    我提供了详细的配置文件和说明
+    你只需要编译本项目并运行roj.mod.FMDMain即可
+    更多使用方法请看mcbbs的发布贴: xxxx
+    哦, 它被锁定了, 那当我没说
+    你还可以在这里下载编译好的版本
+
+  最近更新:
+    自定义启动MC的java
+    外部管理登录
+    Yarn映射表
+    重载config.json/libraries
+    自动编译
+
+### roj.net
+  警告：不支持Java9或更高版本,即使使用了--add-opens
+
   HTTP服务器, 客户端  
   DNS服务器  
   内网穿透工具 AEClient / AEServer / AEHost    roj.net.cross  
@@ -198,7 +233,12 @@
   PE文件格式 (.exe .dll)  
   todo: DOS头,  unix的ELF  
   
-### roj.reflect  
+### roj.reflect
+  警告：不支持Java9或更高版本,即使
+  1. --add-opens java.base/jdk.internal.reflect=ALL-UNNAMED
+  2. 替换MAGIC_ACCESSOR_CLASS为jdk/internal/reflect/MagicAccessorImpl
+  依然不能使用
+
   EnumHelper,  修改Enum字段  
   DirectAccessor, 实现高效率的‘反射’操作  
     不管是新建实例，还是访问字段，还是调用方法，它都可以帮你解决  
@@ -337,4 +377,4 @@ Thirdly, my English score is only 120/150, and the poorest section is compositio
 so I have no heart to write such a big document in English.   
   
 ## 最后吓吓你 (这可不是骗你)  
-我今年高考  
+我今年高考

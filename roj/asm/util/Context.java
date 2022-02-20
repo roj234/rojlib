@@ -31,6 +31,7 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstRef;
 import roj.asm.tree.ConstantData;
+import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -88,7 +89,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
     private static ByteList read0(Object o) {
         if(o instanceof InputStream) {
             try (InputStream in = (InputStream) o) {
-                return new ByteList().readStreamFully(in);
+                return new ByteList(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -123,17 +124,17 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
     public ByteList get(boolean shared) {
         if(this.result == null) {
             if(this.data != null) {
+                getFileName();
                 try {
                     data.verify();
                     if (shared) {
                         return Parser.toByteArrayShared(data);
                     } else {
                         this.result = new ByteList(Parser.toByteArray(data));
+                        clearData();
                     }
                 } catch (Throwable e) {
                     throw new IllegalArgumentException(name + " 写入失败", e);
-                } finally {
-                    clearData();
                 }
             } else {
                 this.result = read0(stream);
@@ -144,7 +145,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
     }
 
     public ByteList get() {
-        return get(false);
+        return get(true);
     }
 
     private void clearData() {
@@ -223,7 +224,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 
     public ByteList getCompressedShared() {
         try {
-            return Parser.toByteArrayShared(Parser.parse(get(true)));
+            return Parser.toByteArrayShared(Parser.parse(get()));
         } catch (Throwable t) {
             try (FileOutputStream fos = new FileOutputStream(getFileName().replace('/', '_'))) {
                 get().writeToStream(fos);
@@ -233,6 +234,6 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
     }
 
     public void compress() {
-        result = new ByteList(Parser.toByteArrayShared(Parser.parse(get(true))).toByteArray());
+        result = new ByteList(Parser.toByteArray(Parser.parse(get())));
     }
 }

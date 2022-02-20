@@ -65,4 +65,19 @@ public final class AnnValArray extends AnnVal {
     public byte type() {
         return ARRAY;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AnnValArray array = (AnnValArray) o;
+
+        return value.equals(array.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return value.hashCode();
+    }
 }

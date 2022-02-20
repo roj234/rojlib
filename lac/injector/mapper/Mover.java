@@ -70,7 +70,7 @@ public class Mover {
 
     public void map(List<Context> ctxs) {
         Map<String, List<Movable>> moved = new MyHashMap<>();
-        Desc checker = new Desc("", "");
+        Desc checker = new Desc();
         for (int i = 0; i < ctxs.size(); i++) {
             ConstantData data = ctxs.get(i).getData();
             List<CstRef> refs = ctxs.get(i).getMethodConstants();

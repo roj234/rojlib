@@ -40,12 +40,17 @@ import java.io.UTFDataFormatException;
  */
 public final class ConstantNamePool {
     public final CharMap<Constant> map;
-    private final int len;
+    private int len;
     private int begin;
 
     public ConstantNamePool(int length) {
         this.map = new CharMap<>();
         this.len = length;
+    }
+
+    public void internalReset(int len) {
+        this.map.clear();
+        this.len = len;
     }
 
     public void skip(ByteReader r) {

@@ -27,35 +27,30 @@ package roj.net.http.serv;
 
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.concurrent.OperationDone;
+import roj.collect.SimpleList;
 import roj.config.ParseException;
-import roj.math.MathUtils;
-import roj.math.MutableInt;
+import roj.io.IOUtil;
 import roj.math.Version;
-import roj.net.SocketSequence;
-import roj.net.WrappedSocket;
-import roj.net.http.*;
+import roj.net.http.Headers;
+import roj.net.http.HttpLexer;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public final class Request {
     private final int action;
     private final String path, version;
-    private final Headers headers;
+    final Headers headers;
 
-    private Object postFields, getFields;
+    Object postFields, getFields;
     private Map<String, String> cookie;
 
-    private Request(int action, String version, String path) {
+    Request(int action, String version, String path) {
         this.action = action;
         this.version = version;
 
@@ -91,20 +86,154 @@ public final class Request {
     }
 
     @Nullable
-    public Map<String, String> postFields() {
+    public Map<String, String> payloadFields() {
         if (postFields instanceof CharSequence) {
             CharSequence pf = (CharSequence) postFields;
+            if (pf instanceof ByteList) {
+                String ct = headers.getOrDefault("Content-Type", "");
+                if (ct.startsWith("multipart")) {
+                    Map<String, Object> fields = convertToFields(payloadMultipart());
+                    for (Iterator<Object> itr = fields.values().iterator(); itr.hasNext(); ) {
+                        Object o = itr.next();
+                        if (!(o instanceof String)) {
+                            itr.remove();
+                        }
+                    }
+                    return Helpers.cast(postFields = fields);
+                } else {
+                    pf = IOUtil.SharedUTFCoder.get().decodeR((ByteList) pf);
+                }
+            }
             postFields = getQueries(pf, "&");
         }
         return Helpers.cast(postFields);
     }
 
+    public static Map<String, Object> convertToFields(List<FormData> data) {
+        UTFCoder uc = IOUtil.SharedUTFCoder.get();
+        Map<String, Object> map = new MyHashMap<>(data.size());
+        for (int i = 0; i < data.size(); i++) {
+            FormData d = data.get(i);
+            String type = d.h.getOrDefault("Content-Type", "text/plain");
+            String nm = d.h.get("Content-Disposition");
+            int j = nm.indexOf("name=\"");
+            if (j < 0) throw new IllegalArgumentException("No name header found");
+            map.put(nm.substring(17, nm.indexOf('"', j+1)), type.startsWith("text") ?
+                    uc.decode(d.data) : d.data);
+        }
+        return map;
+    }
+
+    public List<FormData> payloadMultipart() {
+        st:
+        if (postFields instanceof ByteList) {
+            String ct = headers.get("Content-Type");
+            if (ct == null || !ct.startsWith("multipart")) {
+                throw new IllegalArgumentException("Not multipart environment");
+            } else {
+                // multipart
+                String[] hdr = TextUtil.split(ct, ';');
+                for (int i = 1; i < hdr.length; i++) {
+                    String k = hdr[i].trim();
+                    if (k.startsWith("boundary=")) {
+                        byte[] boundary = IOUtil.SharedUTFCoder.get().encode(k.substring(9));
+                        postFields = decodeBoundary((ByteList) postFields, boundary);
+                        break st;
+                    }
+                }
+                throw new IllegalArgumentException("Not found boundary in Content-Type header: " + ct);
+            }
+        }
+        return Helpers.cast(postFields);
+    }
+
+    private static List<FormData> decodeBoundary(ByteList fields, byte[] boundary) {
+        byte[] b = fields.list;
+        int i = 0, prev = 0;
+        int state = 0;
+        HttpLexer hl = new HttpLexer().init(fields);
+
+        List<FormData> list = new SimpleList<>();
+
+        while (i < fields.wIndex()) {
+            check:
+            if (b[i] == '-' && b[i+1] == '-') {
+                i += 2;
+                for (int j = 0; j < boundary.length; j++) {
+                    if (b[i+j] != boundary[j]) {
+                        i -= 2;
+                        break check;
+                    }
+                }
+                i += boundary.length;
+                if (b[i] == '-' && b[i+1] == '-') {
+                    int end = i - 4 - boundary.length;
+                    if (b[end] != '\r' || b[end+1] != '\n')
+                        throw new IllegalArgumentException("Invalid multipart format");
+                    list.get(list.size() - 1).data = fields.slice(prev, end - prev);
+
+                    // EOF
+                    return list;
+                }
+                if (b[i] != '\r' || b[i+1] != '\n')
+                    throw new IllegalArgumentException("Invalid multipart format");
+                i += 2;
+
+                if (state > 0) {
+                    int end = i - 6 - boundary.length;
+                    if (b[end] != '\r' || b[end+1] != '\n')
+                        throw new IllegalArgumentException("Invalid multipart format");
+                    list.get(list.size() - 1).data = fields.slice(prev, end - prev);
+                }
+
+                FormData data = new FormData();
+                hl.index = i;
+                try {
+                    data.h.readFromLexer(hl);
+                } catch (ParseException e) {
+                    throw new IllegalArgumentException("Invalid multipart format", e);
+                }
+                i = prev = hl.index;
+                list.add(data);
+
+                state = 1;
+            }
+            if (state == 0)
+                throw new IllegalArgumentException("Invalid multipart format");
+            i++;
+        }
+        throw new IllegalArgumentException("Unexpected EOF");
+    }
+
+    public static final class FormData {
+        public Headers h = new Headers();
+        public ByteList data;
+
+        @Override
+        public String toString() {
+            return "FormData{" + "h=" + h + ", data=" + data + '}';
+        }
+    }
+
     @Nullable
-    public String postFieldsRaw() {
+    public String payloadUTF() {
         if (postFields == null) {
             return null;
-        } else if (postFields instanceof String) {
-            return (String) (postFields = postFields.toString());
+        } else if (postFields instanceof CharSequence) {
+            CharSequence pf = (CharSequence) postFields;
+            if (pf instanceof ByteList) {
+                pf = IOUtil.SharedUTFCoder.get().decode((ByteList) pf);
+            }
+            return (String) (postFields = pf.toString());
+        }
+        throw new IllegalStateException("Parsed");
+    }
+
+    public ByteList payload() {
+        if (postFields == null) {
+            return null;
+        } else if (postFields instanceof ByteList) {
+            return (ByteList) postFields;
         }
         throw new IllegalStateException("Parsed");
     }
@@ -139,129 +268,19 @@ public final class Request {
         return map.isEmpty() ? Collections.emptyMap() : map;
     }
 
+    @Nonnull
     public String header(String s) {
-        return headers.get(s);
+        return headers.getOrDefault(s, "");
     }
 
     public Map<String, String> fields() {
         MyHashMap<String, String> map = new MyHashMap<>(getFields());
-        Map<String, String> map1 = postFields();
+        Map<String, String> map1 = payloadFields();
         if (map1 != null) map.putAll(map1);
         return map;
     }
 
     public String toString() {
         return action + ' ' + host() + path;
-    }
-
-    byte state;
-
-    public static Request parse(WrappedSocket ch, Router router, Object[] holder) throws IllegalRequestException, IOException {
-        HttpLexer lexer = (HttpLexer) holder[0];
-
-        if(lexer == null) {
-            SocketSequence seq = new SocketSequence(true);
-            lexer = new HttpLexer().init(seq.init(ch, router.readTimeout(), router.maxLength()));
-            holder[0] = lexer;
-        }
-
-        try {
-            Request req;
-            if (holder[1] == null) {
-                String method = lexer.readHttpWord(),
-                        path = lexer.readHttpWord(),
-                        version = lexer.readHttpWord();
-
-                if (version == null || !version.startsWith("HTTP/"))
-                    throw new IllegalRequestException(Code.BAD_REQUEST, "Illegal header " + version);
-
-                if (path.length() > 1024) {
-                    throw new IllegalRequestException(Code.URI_TOO_LONG);
-                }
-
-                int act = Action.valueOf(method);
-                if (!router.checkAction(act))
-                    throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "Illegal action " + method);
-
-                holder[1] = req = new Request(act, version.substring(version.indexOf('/') + 1), path);
-
-                compact(lexer, ch.buffer());
-            } else {
-                req = (Request) holder[1];
-            }
-
-            Headers headers = req.headers;
-            if (req.state < 1) {
-                headers.clear();
-                try {
-                    headers.readFromLexer(lexer);
-                } catch (ParseException e) {
-                    throw new IllegalRequestException(Code.BAD_REQUEST, e);
-                }
-
-                compact(lexer, ch.buffer());
-                req.state = 1;
-            }
-
-            if (req.action == Action.POST) {
-                if (req.state < 2) {
-                    UTFCoder uc = new UTFCoder();
-                    holder[2] = uc;
-                    uc.charBuf.list = lexer.getBuf();
-                    uc.keep = true;
-
-                    String cl = headers.get("Content-Length");
-                    if (cl != null) {
-                        int len = MathUtils.parseInt(cl);
-                        if (len > router.postMaxLength()) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
-                        req.postFields = new MutableInt(len);
-                        uc.charBuf.ensureCapacity(len);
-                    }
-                    req.state = 2;
-                }
-
-                UTFCoder uc = (UTFCoder) holder[2];
-                if (req.postFields == null) {
-                    // no content length
-                    if (!"close".equalsIgnoreCase(headers.get("Connection")))
-                        throw new IllegalRequestException(411);
-                    int r;
-                    while ((r = ch.read()) > 0) {
-                        ByteBuffer rb = ch.buffer();
-                        rb.flip();
-                        uc.decode(rb, true);
-                        rb.clear();
-                    }
-                    if (r == 0) return null;
-                } else {
-                    MutableInt remain = (MutableInt) req.postFields;
-                    if (ch.read(remain.getValue()) < 0) throw new IOException("Unexpected EOF");
-
-                    ByteBuffer rb = ch.buffer();
-                    int r = rb.position();
-                    rb.flip();
-                    uc.decode(rb, true);
-                    rb.clear();
-
-                    if (remain.addAndGet(-r) > 0) return null;
-                }
-                req.postFields = uc.charBuf;
-            }
-
-            compact(lexer, ch.buffer());
-            holder[0] = holder[1] = holder[2] = null;
-            return req;
-        } catch (OperationDone noDataAvailable) {
-            lexer.index = 0;
-            return null;
-        }
-    }
-
-    private static void compact(HttpLexer lexer, ByteBuffer buf) {
-        if(buf != null)  {
-            buf.flip().position(lexer.index);
-            lexer.index = 0;
-            buf.compact();
-        }
     }
 }

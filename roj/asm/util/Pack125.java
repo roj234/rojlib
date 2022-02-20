@@ -59,7 +59,7 @@ public class Pack125 {
         for (EFile eFile : mzf.getEntries().values()) {
             String name = eFile.getName();
             if (name.endsWith(".class") && !name.startsWith("META-INF/") && !name.startsWith("assets/")) {
-                ByteList in = new ByteList(mzf.getFileData(eFile));
+                ByteList in = new ByteList(mzf.get(eFile));
                 pack125.pack(in);
                 a.add(hashCode(in));
             }
@@ -149,7 +149,7 @@ public class Pack125 {
                     break;
                 case TYP:
                     Type type = new Type((char) r.readByte());
-                    type.array = r.readVarInt(false);
+                    type.array = (char) r.readVarInt(false);
                     if (type.type == 'L') {
                         type.owner = ((CstUTF) cp[r.readVarInt(false)]).getString();
                     }

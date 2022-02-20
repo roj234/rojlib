@@ -42,7 +42,7 @@ public interface ContextClassTransformer extends IClassTransformer {
             return null;
         Context ctx = new Context(name, basicClass);
         transform(transformedName, ctx);
-        return ctx.get(true).toByteArray();
+        return ctx.get().toByteArray();
     }
 
     void transform(String transformedName, Context context);

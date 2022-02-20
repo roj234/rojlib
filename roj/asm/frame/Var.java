@@ -47,23 +47,23 @@ public final class Var {
 
     public static Var std(int type) {
         switch (type) {
-            case 0:
+            case VarType.TOP:
                 return TOP;
-            case 1:
+            case VarType.INT:
                 return INT;
-            case 2:
+            case VarType.FLOAT:
                 return FLOAT;
-            case 3:
+            case VarType.DOUBLE:
                 return DOUBLE;
-            case 4:
+            case VarType.LONG:
                 return LONG;
-            case 5:
+            case VarType.NULL:
                 return NULL;
         }
         throw new ArrayIndexOutOfBoundsException(type);
     }
 
-    private Var(byte type) {
+    public Var(byte type) {
         this.type = type;
     }
 
@@ -87,7 +87,7 @@ public final class Var {
         if(v == null)
             return false;
         if (v.type != this.type) {
-            return !VarType.isPrimitive(v.type) & !VarType.isPrimitive(type);
+            return false;//!VarType.isPrimitive(v.type) & !VarType.isPrimitive(type);
         } else {
             if (this.owner != null) {
                 return this.owner.equals(v.owner);

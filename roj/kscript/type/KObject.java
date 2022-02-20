@@ -193,7 +193,7 @@ public class KObject extends KBase implements IObject {
                     sb.append(' ');
                 }
 
-                sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':').append(' ');
+                AbstLexer.addSlashes(entry.getKey(), sb.append('"')).append('"').append(':').append(' ');
                 entry.getValue().toString0(sb, depth + 4).append(',').append('\n');
             }
             sb.delete(sb.length() - 2, sb.length() - 1);

@@ -28,12 +28,12 @@
  */
 package roj.sound.mp3;
 
-import roj.concurrent.task.ITaskNaCl;
+import roj.concurrent.task.ITask;
 
 /**
  * 由于大量浮点运算，多相合成滤波耗时最多，使用并发运算加速解码
  */
-final class SynthesisTask implements ITaskNaCl, Runnable {
+final class SynthesisTask implements ITask, Runnable {
     private final int ch;
     private final float[] samples;
     private float[][] bufA, bufB; // 调用者无锁双缓冲
@@ -70,7 +70,7 @@ final class SynthesisTask implements ITaskNaCl, Runnable {
     }
 
     @Override
-    public void calculate(Thread thread) {
+    public void calculate() {
         run();
     }
 

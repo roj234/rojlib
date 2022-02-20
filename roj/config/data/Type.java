@@ -34,7 +34,7 @@ package roj.config.data;
 public enum Type {
     LIST, MAP, STRING, NULL, BOOL,
     INTEGER, LONG, DOUBLE, OBJECT,
-    DATE;
+    DATE, UNESCAPED_STRING;
     // todo byte short float and primitive array....
 
     public static final Type[] VALUES = values();

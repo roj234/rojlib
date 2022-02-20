@@ -26,27 +26,23 @@
 
 package roj.asm.tree;
 
+import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.util.FlagList;
 
 /**
  * {@link roj.asm.tree.ConstantData}中的简单字段, 不解析{@link Attribute}
  *
  * @author Roj234
- * @version 2.0
  * @since 2021/5/29 17:16
  */
 public final class FieldSimple extends SimpleComponent {
     public FieldSimple(int accesses, CstUTF name, CstUTF typeName) {
-        super((char) accesses, name, typeName);
-    }
-    public FieldSimple(FlagList accesses, CstUTF name, CstUTF typeName) {
         super(accesses, name, typeName);
     }
 
     @Override
     public int type() {
-        return 4;
+        return Parser.FTYPE_SIMPLE;
     }
 }

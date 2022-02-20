@@ -25,8 +25,6 @@
  */
 package roj.net.http.serv;
 
-import roj.net.WrappedSocket;
-
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -47,13 +45,12 @@ public abstract class StreamResponse implements Response {
 
     protected abstract InputStream getStream() throws IOException;
 
-    public boolean send(WrappedSocket channel) throws IOException {
+    public boolean send(RequestHandler rh) throws IOException {
         if (stream == null) throw new IllegalStateException();
         if (eof) return false;
 
-        int transfer = channel.write(stream, 999999);
-        if (transfer < 0)
-            eof = true;
+        int transfer = rh.write(stream);
+        if (transfer <= 0) eof = true;
 
         return !eof;
     }

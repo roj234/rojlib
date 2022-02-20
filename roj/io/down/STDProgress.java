@@ -25,121 +25,83 @@
  */
 package roj.io.down;
 
-import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
+
+import java.io.PrintStream;
 
 /**
  * @author Roj234
  * @since  2020/9/13 12:33
  */
-public class STDProgress implements IProgressHandler {
-    public static boolean DECR_LOGS = false, DECR_LOGS_2 = false;
+public class STDProgress implements IProgress {
+    public static boolean noAvgSpeed    = false;
+    public static int     printInterval = 1000;
 
     // 进度条粒度
     private static final int PROGRESS_SIZE = 25;
     private static final int BITE = 100 / PROGRESS_SIZE;
 
-    public static String printProgress(double percent) {
-        CharList sb = new CharList();
-
-        int tx = (int) percent / BITE;
-
-        CharList finish = TextUtil.repeat(tx, '█');
-        CharList unFinish = TextUtil.repeat(PROGRESS_SIZE - tx, '─');
-
-        sb.append(TextUtil.toFixed(percent)).append("%├").append(finish);
-        sb.append(unFinish);
-        return sb.append('┤').toString();
-    }
-
-    public void onReturn() {
-        synchronized (System.out) {
-            CmdUtil.clearLine();
-            if(!DECR_LOGS) {
-                CmdUtil.cursorUp(1);
-                CmdUtil.clearLine();
-            }
-            CmdUtil.color("下载完成", CmdUtil.Color.GREEN);
-            CmdUtil.cursorLeft(20);
-            CmdUtil.cursorDown(1);
-        }
-    }
-
-    protected boolean errored;
-
-    @Override
-    public void errorCaught() {
-        errored = true;
-    }
-
-    @Override
-    public boolean continueDownload() {
-        return !errored;
-    }
-
-    long lastTime;
-
-    @Override
-    public void handleProgress(Downloader dn, long downloaded, long speedByByte) {
-        if(DECR_LOGS_2) {
-            long t = System.currentTimeMillis();
-            if(t - lastTime < 5000) {
-                return;
-            }
-            lastTime = t;
-        }
-
-        double temp = (100d * (double) downloaded / (double) dn.length);
-
-        synchronized (System.out) {
+    static void print(double percent, long speed) {
+        PrintStream out = System.out;
+        synchronized (out) {
             CmdUtil.clearLine();
             CmdUtil.fg(CmdUtil.Color.CYAN, false);
 
-            System.out.println(printProgress(temp));
+            int tx = (int) percent / BITE;
 
-            if(!DECR_LOGS) {
+            out.print(TextUtil.toFixed(percent));
+            out.print("%├");
+
+            out.print(TextUtil.repeat(tx, '█'));
+            out.print(TextUtil.repeat(PROGRESS_SIZE - tx, '─'));
+            out.println("┤");
+
+            if(!noAvgSpeed) {
                 CmdUtil.clearLine();
                 CmdUtil.fg(CmdUtil.Color.GREEN, false);
 
-                System.out.print("Avg: " + TextUtil.scaledNumber(speedByByte).toUpperCase() + "B/S");
+                out.println("Avg: " + TextUtil.scaledNumber(speed).toUpperCase() + "B/S");
             }
 
             CmdUtil.reset();
-            if(!DECR_LOGS) {
-                System.out.println();
-            }
 
-            CmdUtil.cursorLeft(200);
+            CmdUtil.cursorLeft(999);
             CmdUtil.cursorUp(2);
         }
     }
 
-    @Override
-    public void handleReconnect(Downloader dn, long downloaded) {
-        pr("速度太慢, 尝试重建链接", CmdUtil.Color.YELLOW, true);
-    }
-
-    public static void pr(String s) {
-        pr(s, null, false);
-    }
-
-    public static void pr(String s, CmdUtil.Color color, boolean hl) {
-        if(DECR_LOGS_2)
-            return;
-
+    public void onFinish() {
         synchronized (System.out) {
-            CmdUtil.cursorLeft(200);
-            CmdUtil.cursorDown(2);
-
             CmdUtil.clearLine();
-            if (color != null) CmdUtil.fg(color, hl);
-            System.out.print(s);
-            if (color != null) CmdUtil.reset();
-            System.out.println();
-
-            CmdUtil.cursorLeft(200);
-            CmdUtil.cursorUp(3);
+            CmdUtil.cursorUp(1);
+            CmdUtil.clearLine();
+            CmdUtil.success("下载完成");
         }
+    }
+
+    boolean kill;
+
+    @Override
+    public boolean wasShutdown() {
+        return kill;
+    }
+
+    @Override
+    public void shutdown() {
+        kill = true;
+    }
+
+    long last;
+
+    @Override
+    public void onChange(IDown dn) {
+        long t = System.currentTimeMillis();
+        if(t - last < printInterval) return;
+        last = t;
+
+        double temp = (100d * (double) dn.getDownloaded() / (double) dn.getTotal());
+
+        print(temp, dn.getAverageSpeed());
     }
 }

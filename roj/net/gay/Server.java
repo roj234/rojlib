@@ -26,7 +26,7 @@
 package roj.net.gay;
 
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.ITaskNaCl;
+import roj.concurrent.task.ITask;
 import roj.crypt.PSKFile;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
@@ -121,7 +121,7 @@ public class Server extends FastLocalThread {
         }
     }
 
-    static final class Task implements ITaskNaCl {
+    static final class Task implements ITask {
         final Server owner;
         final MSSSocket conn;
         public Task(Server owner, MSSSocket conn) {
@@ -130,7 +130,7 @@ public class Server extends FastLocalThread {
         }
 
         @Override
-        public void calculate(Thread thread) throws Exception {
+        public void calculate() throws Exception {
             try {
                 int timeout = 5000;
                 while (!conn.handShake()) {

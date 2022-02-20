@@ -29,7 +29,6 @@ package roj.asm.tree.insn;
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
-import roj.collect.IIntMap;
 import roj.util.ByteList;
 
 import static roj.asm.Opcodes.*;
@@ -85,8 +84,8 @@ public class GotoInsnNode extends InsnNode {
 
     int delta;
 
-    public boolean review(IIntMap<InsnNode> pcRev) {
-        return (code == GOTO) != ((delta = (pcRev.getInt(target = validate(target)) - pcRev.getInt(this))) == ((short) delta));
+    public boolean review() {
+        return (code == GOTO) != ((delta = ((target = validate(target)).bci - bci)) == ((short) delta));
     }
 
     @Override

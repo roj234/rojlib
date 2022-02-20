@@ -80,7 +80,7 @@ public final class UPnPDevice {
         if (addr instanceof Inet4Address) {
             List<UPnPDevice> devices = new ArrayList<>(1);
             Discoverer4 task = new Discoverer4(addr, deviceTypes, devices);
-            task.calculate(null);
+            task.calculate();
             try {
                 task.get();
             } catch (InterruptedException | ExecutionException e) {
@@ -159,7 +159,6 @@ public final class UPnPDevice {
             this.requests = new ArrayList<>(types.size());
 
             UTFCoder coder = IOUtil.SharedUTFCoder.get();
-            coder.keep = false;
             coder.charBuf.clear();
             for (int i = 0; i < types.size(); i++) {
                 String s = types.get(i);
@@ -170,7 +169,7 @@ public final class UPnPDevice {
         }
 
         @Override
-        public void calculate(Thread thread) {
+        public void calculate() {
             executing = true;
 
             HttpLexer hl = new HttpLexer();
@@ -330,7 +329,6 @@ public final class UPnPDevice {
                 }
             }
             sb.append("</m:").append(action).append("></SOAP-ENV:Body></SOAP-ENV:Envelope>");
-            System.out.println(XMLParser.parse(sb).toString());
             ByteList list = ByteList.encodeUTF(XMLParser.parse(sb).toString());
 
             HttpClient hc = new HttpClient();

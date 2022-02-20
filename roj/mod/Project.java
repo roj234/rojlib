@@ -8,11 +8,11 @@ import roj.config.JSONConfiguration;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.CString;
+import roj.dev.Compiler;
 import roj.io.FileUtil;
-import roj.io.IOUtil;
-import roj.io.MutableZipFile;
+import roj.io.ZipOutput;
 import roj.mapper.ConstMapper;
-import roj.mod.compiler.Compiler;
+import roj.mod.FileFilter.CmtATEntry;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
@@ -21,8 +21,6 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
@@ -63,53 +61,57 @@ public final class Project extends JSONConfiguration {
 
     ConstMapper.State state;
     String atConfigPathStr;
-    File source, resource, stamp;
+    File srcPath, resPath, binJar;
 
-    static FileFilter resourceFilter = new FileFilter();
-    MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
+    static final FileFilter resourceFilter = new FileFilter();
+    MyHashMap<String, String> resources = new MyHashMap<>(100);
 
-    MutableZipFile dstZip, stampZip, sourceZip;
+    ZipOutput dstFile, binFile, srcFile;
+    Set<CmtATEntry> atEntryCache = new MyHashSet<>();
 
     private Project(String name) {
         super(new File(BASE, "config/" + name + ".json"), false);
         this.name = name;
 
-        String abs = BASE.getAbsolutePath();
-        resource = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "resources" + File.separatorChar);
-        source = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "java" + File.separatorChar);
-        stamp = new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-dev.jar");
-        try {
-            sourceZip = new MutableZipFile(new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-src.zip"));
-        } catch (IOException e) {
-            CmdUtil.warning("源码备份损坏", e);
-            CmdUtil.warning("为了防止自动操作让我想死，请手动解决问题");
-            LockSupport.parkNanos(3_000_000_000L);
-            System.exit(-2);
+        resPath = new File(BASE, "projects/" + name + "/resources");
+        srcPath = new File(BASE, "projects/" + name + "/java");
+        binJar = new File(BASE, "bin/" + name + "-dev.jar");
+
+        // noinspection all
+        resPath.mkdirs();
+        // noinspection all
+        srcPath.mkdirs();
+        // noinspection all
+        binJar.getParentFile().mkdir();
+
+        if (CONFIG.getBool("自动备份源码")) {
+            try {
+                srcFile = new ZipOutput(new File(BASE, "bin/" + name + "-src.zip"));
+                srcFile.setCompress(true);
+            } catch (Throwable e) {
+                CmdUtil.warning("源码备份损坏", e);
+                CmdUtil.warning("请手动解决问题");
+                LockSupport.parkNanos(3_000_000_000L);
+                System.exit(-2);
+            }
         }
 
         Set<String> ignores = new MyHashSet<>();
         FMDMain.readTextList(ignores::add, "忽略的编译错误码");
-        this.compiler = new Compiler(null, null, ignores, source.getAbsolutePath().replace(File.separatorChar, '/'));
+        this.compiler = new Compiler(null, null, ignores, srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
 
         try {
-            this.stampZip = new MutableZipFile(stamp);
-            if(stamp.length() == 0)
-                if(!stamp.setLastModified(0))
-                    CmdUtil.warning("无法初始化stampFileTime");
-            // 防止有别的进程修改，而本进程又可以修改
-            FileLock lock = stampZip.getFile().getChannel().tryLock(0, 0, true);
-            if(null == lock) {
-                CmdUtil.warning("无法初始化stampFileLock");
-            }
-        } catch (IOException e) {
-            CmdUtil.warning("无法初始化stampFileZip, 请尝试重新启动FMD, 若无效, 请删除 " + stamp.getAbsolutePath(), e);
-            if(stampZip != null) {
-                try {
-                    stampZip.close();
-                } catch (IOException ignored) {}
-            }
-            // noinspection all
-            stamp.delete();
+            if(binJar.length() == 0)
+                if(!binJar.createNewFile() || !binJar.setLastModified(0))
+                    CmdUtil.warning("无法初始化StampFileTime");
+            this.binFile = new ZipOutput(binJar);
+
+            // 已用单例锁替代
+            // FileLock lock = FileChannel.open(binJar.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE)
+            //                            .tryLock(0, Long.MAX_VALUE, true);
+            //if(null == lock) CmdUtil.warning("无法获取StampFile独占锁");
+        } catch (Throwable e) {
+            CmdUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 " + binJar.getAbsolutePath(), e);
             LockSupport.parkNanos(3_000_000_000L);
             System.exit(-2);
         }
@@ -174,7 +176,7 @@ public final class Project extends JSONConfiguration {
 
         String atName = this.atName = map.putIfAbsent("atConfig", "");
 
-        atConfigPathStr = atName.length() > 0 ? resource.getPath() + File.separatorChar + "META-INF" + File.separatorChar + atName + ".cfg" : null;
+        atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/" + atName + ".cfg" : null;
 
         List<String> required = map.getOrCreateList("dependency").asStringList();
         if(!required.isEmpty()) {
@@ -192,37 +194,43 @@ public final class Project extends JSONConfiguration {
         }
     }
 
-    public AbstractExecutionTask getResourceTask() {
+    public AbstractExecutionTask getResourceTask(int i) {
+        if (i == 0) resources.clear();
         return new AbstractExecutionTask() {
             @Override
             public void run() {
-                initForwardMapper();
-
-                MyHashSet<String> set = watcher.getModified(Project.this, ProjectWatcher.ID_RES);
-                if(!resourceCache.isEmpty() && !set.contains(null)) {
-                    int len = resource.getAbsolutePath().length();
-                    for (String s : set) {
-                        File file = new File(s);
-                        if(file.isDirectory()) continue;
+                if (i == 2) {
+                    for (Map.Entry<String, String> entry : resources.entrySet()) {
                         try {
-                            resourceCache.put(s.substring(len + 1).replace('\\', '/'), IOUtil.read(new FileInputStream(file)));
+                            dstFile.set(entry.getKey(), new FileInputStream(entry.getValue()));
                         } catch (IOException e) {
-                            Helpers.athrow(e);
+                            CmdUtil.warning("资源文件", e);
                         }
                     }
-                } else {
-                    resourceCache.clear();
+                    return;
+                }
 
-                    FileUtil.findAndOpenStream(resource, Helpers.cast(resourceCache), resourceFilter);
+                loadMapper();
 
-                    Set<Map.Entry<String, Object>> entrySet = Helpers.cast(resourceCache.entrySet());
-
-                    for (Map.Entry<String, Object> entry : entrySet) {
-                        try {
-                            entry.setValue(IOUtil.read((InputStream) entry.getValue()));
-                        } catch (IOException e) {
-                            Helpers.athrow(e);
+                int len = resPath.getAbsolutePath().length();
+                MyHashSet<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+                if(!resources.isEmpty() && !set.contains(null)) {
+                    synchronized (set) {
+                        for (String s : set) {
+                            String relPath = s.substring(len + 1).replace('\\', '/');
+                            resources.put(relPath, s);
                         }
+                        set.clear();
+                    }
+                } else {
+                    resources.clear();
+
+                    List<File> files = FileUtil.findAllFiles(resPath, resourceFilter);
+                    for (int i = 0; i < files.size(); i++) {
+                        String s = files.get(i).getAbsolutePath();
+                        String relPath = s.substring(len + 1).replace('\\', '/');
+
+                        resources.put(relPath, s);
                     }
                 }
             }

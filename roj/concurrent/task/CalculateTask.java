@@ -36,7 +36,7 @@ public final class CalculateTask<T> extends AbstractCalcTask<T> {
     }
 
     @Override
-    public void calculate(Thread thread) {
+    public void calculate() {
         executing = true;
         try {
             this.out = supplier.call();

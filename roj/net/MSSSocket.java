@@ -35,7 +35,6 @@ import roj.net.mss.MSSException;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 
@@ -233,32 +232,6 @@ public class MSSSocket extends PlainSocket {
 
         dataFlush();
         return src.position() - pos;
-    }
-
-    @Override
-    public int write(InputStream src, int max) throws IOException {
-        if (hsOut != null) throw new MSSException("Not handshake");
-        if (!dataFlush()) return 0;
-
-        int cap = Math.min(WRITE_ONCE, max) << 1;
-        if (wBuf.capacity() < cap) wBuf = ByteBuffer.allocate(cap);
-        else wBuf.clear();
-        int len = src.read(wBuf.array(), 0, cap >> 1);
-        if (len <= 0) return len;
-        wBuf.limit(len);
-
-        try {
-            ByteBuffer clone = wBuf.duplicate();
-            clone.position(len).limit(clone.capacity());
-            e.crypt(wBuf, clone);
-            wBuf.position(len).limit(clone.position());
-        } catch (Throwable e) {
-            wBuf.position(0).limit(0);
-            throw new MSSException("Cipher fault", e);
-        }
-
-        dataFlush();
-        return len;
     }
 
     public boolean shutdown() throws IOException {

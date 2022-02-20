@@ -25,238 +25,412 @@
  */
 package roj.io.down;
 
-import roj.concurrent.WaitingIOFuture;
-import roj.concurrent.task.AbstractCalcTask;
+import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskPool;
+import roj.concurrent.Waitable;
+import roj.io.BoxFile;
 import roj.io.FileUtil;
+import roj.io.FileUtil.ImmediateFuture;
 import roj.net.http.HttpClient;
 import roj.net.http.HttpConnection;
+import roj.net.http.HttpHead;
+import roj.net.misc.FDCLoop;
+import roj.net.misc.FDChannel;
+import roj.util.ByteList;
 
-import javax.annotation.Nullable;
+import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.net.URL;
-import java.util.concurrent.ExecutionException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * @author Roj234
  * @since  2020/9/13 12:28
  */
-public class Downloader extends AbstractCalcTask<Void> implements Runnable, WaitingIOFuture {
-    public static final int UPDATE_FREQUENCY = 1000;
+public final class Downloader extends IDown {
+    static final TaskHandler HELP = new TaskPool(0, 3, 10, 20000, "下载器帮助线程");
+    static final FDCLoop<FDChannel> POOL = new FDCLoop<>(null, "下载器", 0, 4, 60000, 500);
 
-    public final File file;
-    public final HttpConnection conn;
-    public final long startPos, length;
-    private long downloaded;
-    public final int id;
-    private final RandomAccessFile info;
-    private final IProgressHandler progress;
+    public static int chunkStartSize = 1024 * 512;
+    public static int chunkCount     = 16;
+    public static int minChunkSize   = 1024;
+    public static int maxRetryCount  = 3;
+    public static boolean checkETag  = true;
 
-    @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-        boolean done = super.cancel(mayInterruptIfRunning);
-        if(done && info != null) {
-            try {
-                info.close();
-            } catch (IOException ignored) {}
+    public static Waitable download(String url, File file) throws IOException {
+        return download(url, file, new STDProgress());
+    }
+
+    /**
+     * 单线程下载文件
+     */
+    public static Waitable download(String url, File file, IProgress handler) throws IOException {
+        if(file.isFile()) return new ImmediateFuture();
+
+        File parent = file.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs())
+            throw new IOException("无法创建下载目录");
+
+        File info = new File(file.getAbsolutePath() + ".nfo");
+        if(info.isFile() && !FileUtil.checkTotalWritePermission(info)) {
+            throw new IOException("下载进度文件无法写入");
         }
-        return done;
+
+        HttpConnection conn = FileUtil.process302(new URL(url), false);
+        return singleThread0(file, handler, info, conn);
+    }
+
+    private static Waitable singleThread0(File file, IProgress handler, File info, HttpConnection o) throws IOException {
+        File tmp = new File(file.getAbsolutePath() + ".tmp");
+
+        IDown d;
+        long len = o.getContentLengthLong();
+        o.disconnect();
+        if (len < 0) {
+            d = new Streaming(tmp, o.getURL(), handler);
+        } else {
+            d = new Downloader(0, tmp, info, o.getURL(), 0, len, handler);
+        }
+        HELP.pushTask(d);
+        return new D(Collections.singletonList(d), handler, file);
+    }
+
+    public static Waitable downloadMTD(String address, File file) throws IOException {
+        return downloadMTD(address, file, new MTDProgress());
     }
 
     /**
-     * 多线程下载器
-     *
-     * @see Downloader#Downloader(int, File, File, HttpConnection, long, long, IProgressHandler)
+     * 多线程下载文件
      */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len) throws IOException {
-        this(pid, downloadTo, infoFile, new HttpConnection(url), start, len, null);
+    public static Waitable downloadMTD(String address, File file, IProgress pg) throws IOException {
+        if(file.isFile()) {
+            return new ImmediateFuture();
+        }
+
+        File parent = file.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs())
+            throw new IOException("无法创建下载目录");
+
+        File info = new File(file.getAbsolutePath() + ".nfo");
+        if(info.isFile() && !FileUtil.checkTotalWritePermission(info)) {
+            throw new IOException("下载进度文件无法写入");
+        }
+
+        HttpConnection conn = FileUtil.process302(new URL(address), true);
+
+        long remain = conn.getContentLengthLong();
+
+        if(remain < 0 || (conn.getHeaderField("ETag") == null && conn.getHeaderField("Last-Modified") == null)) {
+            return singleThread0(file, pg, info, conn);
+        }
+
+        if (checkETag) {
+            File tagFile = new File(file.getAbsolutePath() + ".tag");
+            BoxFile aoc = new BoxFile(tagFile);
+            aoc.load();
+            if ((aoc.contains("ETag") && !conn.getHeaderField("ETag").equals(aoc.getUTF("ETag"))) ||
+                    !conn.getHeaderField("Last-Modified").equals(aoc.getUTF("Last-Modified"))) {
+                if (aoc.contains("ETag") && !info.delete()) {
+                    throw new IOException("fInfoFile文件已被占用");
+                }
+                if (!conn.getHeaderField("ETag").startsWith("W/"))
+                aoc.append("ETag", ByteList.encodeUTF(conn.getHeaderField("ETag")));
+                aoc.append("Last-Modified", ByteList.encodeUTF(conn.getHeaderField("Last-Modified")));
+            }
+            aoc.close();
+        }
+
+        File tmp = new File(file.getAbsolutePath() + ".tmp");
+        FileUtil.allocSparseFile(tmp, remain);
+
+        conn.disconnect();
+
+        int id = 0;
+        long off = 0;
+
+        List<IDown> tasks = new ArrayList<>(chunkCount);
+        URL url = conn.getURL();
+        if (remain > chunkStartSize) {
+            long each = Math.max(remain / chunkCount, minChunkSize);
+            while (remain >= each) {
+                Downloader dn = new Downloader(id++, tmp, info, url, off, each, pg);
+                if (dn.getRemain() > 0) {
+                    HELP.pushTask(dn);
+                    tasks.add(dn);
+                }
+
+                off += each;
+                remain -= each;
+            }
+        }
+        if (remain > 0) {
+            Downloader dn = new Downloader(id, tmp, info, url, off, remain, pg);
+            if (dn.getRemain() > 0) {
+                HELP.pushTask(dn);
+                tasks.add(dn);
+            }
+        }
+
+        return new D(tasks, pg, file);
     }
 
-    /**
-     * 多线程下载器
-     *
-     * @see Downloader#Downloader(int, File, File, HttpConnection, long, long, IProgressHandler)
-     */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len, IProgressHandler progress) throws IOException {
-        this(pid, downloadTo, infoFile, new HttpConnection(url), start, len, progress);
+    private final RandomAccessFile info;
+
+    private final long beginLen;
+    private long off, len;
+
+    public Downloader(int pid, File file, File info, URL url, long off, long len) throws IOException {
+        this(pid, file, info, url, off, len, null);
     }
 
-    /**
-     * 多线程下载器
-     *
-     * @param pid        多线程ID
-     * @param downloadTo 保存目标
-     * @param infoFile   进度文件 (null: 不使用)
-     * @param conn       下载地址
-     * @param start      起始位置
-     * @param len        文件长度
-     * @param progress   进度条监视器
-     */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, HttpConnection conn, long start, long len, IProgressHandler progress) throws IOException {
-        this.id = pid;
-        this.file = downloadTo;
-        this.conn = conn;
-        this.startPos = start;
-        this.length = len;
+    public Downloader(int pid, File file, File Info, URL url, long off, long len, IProgress progress) throws IOException {
+        this.file = new RandomAccessFile(file, "rw");
+        this.client = new HttpClient();
         this.progress = progress;
-        if (progress != null)
-            progress.handleJoin(this);
+        this.beginLen = len;
+        this.url = url;
+        if (progress != null) progress.onJoin(this);
 
-        if (infoFile != null) {
-            this.info = new RandomAccessFile(infoFile, "rw");
+        if (Info != null) {
+            this.info = new RandomAccessFile(Info, "rw");
             if (this.info.length() < 8 * pid + 8)
                 this.info.setLength(8 * pid + 8);
             info.seek(8 * pid);
-            this.downloaded = info.readLong();
-            if (downloaded >= length)
-                downloaded = -1;
-            if (downloaded == -1) {
-                writePos(-1);
-                info.close();
-                if (progress != null)
-                    progress.handleDone(this);
+            long dt = info.readLong();
+            off += dt; len -= dt;
+            if (len <= 0 || dt < 0) {
+                if (dt > 0) writePos(-1);
+                close();
+                return;
             }
         } else {
             this.info = null;
         }
 
-        HttpClient client = this.conn.getClient();
+        this.file.seek(off);
+        this.off = off;
+        this.len = len;
+
+        this.buf = new byte[Math.min((int) len, 4096)];
+
+        HttpClient client = this.client;
         client.method("GET")
-              .header("User-Agent", FileUtil.USER_AGENT)
-              .connectTimeout(FileUtil.TIMEOUT);
-        client.readTimeout(FileUtil.TIMEOUT);
-    }
-
-    @Override
-    public void calculate(Thread thread) {
-        executing = true;
-        try {
-            waitFor();
-        } catch (Throwable e) {
-            exception = new ExecutionException(e);
-        }
-        executing = false;
-
-        synchronized (this) {
-            notifyAll();
-        }
-    }
-
-    public void run() {
-        try {
-            waitFor();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "Downloader#" + id + " " + startPos + " => " + (startPos + length - 1) + " (downloaded " + downloaded + ")";
+              .header("User-Agent", FileUtil.userAgent)
+              .connectTimeout(FileUtil.timeout);
+        client.readTimeout(FileUtil.timeout);
     }
 
     public long getDownloaded() {
-        return downloaded;
+        return beginLen - len;
     }
 
-    long last;
+    public long getRemain() {
+        return len;
+    }
 
+    public long getTotal() {
+        return beginLen;
+    }
+
+    // Unit: byte per second
+    public long getAverageSpeed() {
+        return (long) ((double) (beginLen - len) / (System.currentTimeMillis() - begin) * 1000);
+    }
+
+    void selected0() throws Exception {
+        ByteBuffer in = ch.buffer();
+        int r = in.position();
+
+        off += r; len -= r;
+
+        in.flip();
+        do {
+            int r2 = Math.min(r, buf.length);
+            in.get(buf, 0, r2);
+            file.write(buf, 0, r2);
+            r -= r2;
+        } while (r > 0);
+        in.clear();
+
+        if (len == 0) {
+            // writePos会限制写入速度, 100ms
+            // 所以这里赋值, 一定让它写入
+            last = 0;
+            writePos(-1);
+            close();
+        } else {
+            writePos(beginLen - len);
+        }
+        if (progress != null) progress.onChange(this);
+    }
+
+    @Override
+    public void close() {
+        if (ch != null) {
+            try {
+                ch.close();
+            } catch (IOException ignored) {}
+        }
+
+        if (file != null) {
+            try {
+                file.close();
+            } catch (IOException ignored) {}
+        }
+
+        if (info != null) {
+            try {
+                writePos(beginLen - len);
+            } catch (IOException ignored) {}
+            try {
+                info.close();
+            } catch (IOException ignored) {}
+        }
+
+        if (key != null) key.cancel();
+
+        idle = -999;
+        synchronized (client) {
+            client.notifyAll();
+        }
+    }
+
+    private long last;
     private void writePos(long i) throws IOException {
         if (info != null) {
             long t = System.currentTimeMillis();
-            if(t - last > 100) {
-                info.seek(8 * id);
+            if(t - last > 50) {
                 info.writeLong(i);
+                info.seek(info.getFilePointer() - 8);
                 last = t;
             }
         }
     }
 
     @Override
-    public void waitFor() throws IOException {
-        if (this.downloaded == -1 || downloaded >= length) {
-            out = null;
-            return;
-        }
-
+    public void calculate() throws Exception {
         try {
-            conn.getClient()
-                .header("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
-            InputStream is = this.conn.getInputStream();
+            if (!client.connected()) {
+                client.header("RANGE", "bytes=" + off + '-' + (off + len - 1));
+                client.url(url).send();
+                ch = client.getChannel();
 
-            try {
-                try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
-                    raf.seek(startPos + downloaded);
-
-                    byte[] data = new byte[FileUtil.BUFFER_SIZE];
-
-                    long deltaRead = 0;
-
-                    int read;
-                    long lastTime = System.currentTimeMillis();
-                    int speedLowCount = 0;
-                    while (downloaded < length && -1 != (read = is.read(data))) {
-                        raf.write(data, 0, read);
-                        downloaded += read;
-                        deltaRead += read;
-
-                        writePos(downloaded);
-
-                        if(progress != null && !progress.continueDownload())
-                            return;
-
-                        double t;
-                        if (read != 0 && (t = System.currentTimeMillis() - lastTime) > UPDATE_FREQUENCY) {
-                            lastTime = System.currentTimeMillis();
-
-                            long speed = (long) (deltaRead * 1000d / t);
-
-                            if (progress != null)
-                                progress.handleProgress(this, downloaded, deltaRead);
-
-                            if (speed < 1024 * 10 && downloaded < length) {
-                                if (++speedLowCount == 3) {
-                                    if (progress != null)
-                                        progress.handleReconnect(this, downloaded);
-
-                                    conn.disconnect();
-
-                                    speedLowCount = 0;
-
-                                    conn.getClient()
-                                        .header("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
-                                    is = conn.getInputStream();
-
-                                    raf.seek(startPos + this.downloaded);
-                                }
-                            } else {
-                                speedLowCount--;
-                            }
-
-                            deltaRead = 0;
-                        }
-                    }
-
-                    writePos(-1);
-                    if (progress != null)
-                        progress.handleDone(this);
+                if (ch.read() == 0) {
+                    init = true;
+                    reg();
+                } else {
+                    HELP.pushTask(this);
                 }
-            } finally {
-                is.close();
+            } else {
+                HttpHead r = client.response();
+                System.out.println(r);
+                if (r.getCode() > 299) {
+                    System.out.println("范围错误 " + off + '-' + (off + len - 1) + " , code=" + r.getCodeString());
+                }
+
+                ByteBuffer buf = ch.buffer();
+                buf.position(buf.limit()).limit(buf.capacity());
+
+                if (key == null) reg();
+
+                // 随着http头接收到的还可能有一些数据,设置为'可写'selected能够被调用
+                // 因为这里不是selector线程所以不能直接调用
+                key.interestOps(buf.position() > 0 ?
+                                    SelectionKey.OP_READ | SelectionKey.OP_WRITE :
+                                    SelectionKey.OP_READ);
+
+                init = false;
             }
         } catch (Throwable e) {
-            if(progress != null)
-                progress.errorCaught();
+            retry();
             throw e;
-        } finally {
-            if (info != null) {
-                try {
-                    info.close();
-                } catch (IOException ignored) {}
+        }
+    }
+
+    private static final class D implements Waitable {
+        private final List<IDown> tasks;
+        private final IProgress        handler;
+        private final File             file;
+
+        D(List<IDown> tasks, IProgress handler, File file) {
+            this.tasks = tasks;
+            this.handler = handler;
+            this.file = file;
+        }
+
+        @Override
+        public void waitFor() throws IOException {
+            for (IDown task : tasks) {
+                synchronized (task) {
+                    try {
+                        task.waitFor();
+                    } catch (InterruptedException ignored) {}
+                }
             }
-            out = null;
+
+            if (handler.wasShutdown()) {
+                throw new EOFException("下载失败");
+            }
+
+            handler.onFinish();
+
+            StringBuilder err = new StringBuilder();
+
+            File tag = new File(file.getAbsolutePath() + ".tag");
+            if(tag.isFile() && !tag.delete()) {
+                tag.deleteOnExit();
+                err.append("; ETag标记删除失败. ");
+            }
+
+            File info = new File(file.getAbsolutePath() + ".nfo");
+            if (info.isFile() && !info.delete()) {
+                info.deleteOnExit();
+                err.append("; 下载进度删除失败. ");
+            }
+
+            File tempFile = new File(file.getAbsolutePath() + ".tmp");
+            if (!tempFile.renameTo(file)) {
+                if(file.isFile()) {
+                    err.append("; 文件已被另一个线程完成.");
+                } else {
+                    err.append("; 文件重命名失败.");
+                }
+            }
+
+            if(err.length() > 0)
+                throw new IOException(err.toString());
+        }
+
+        @Override
+        public boolean isDone() {
+            boolean done = true;
+            for (int i = 0; i < tasks.size(); i++) {
+                IDown task = tasks.get(i);
+                if (task.getRemain() > 0) return false;
+            }
+            return true;
+        }
+
+        @Override
+        public void cancel() {
+            for (int i = 0; i < tasks.size(); i++) {
+                try {
+                    tasks.get(i).close();
+                } catch (IOException e) {
+                    // should not happen
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return tasks.toString();
         }
     }
 }

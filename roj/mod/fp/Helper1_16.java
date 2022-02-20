@@ -28,17 +28,20 @@ package roj.mod.fp;
 import net.md_5.specialsource.*;
 import net.md_5.specialsource.provider.JarProvider;
 import roj.collect.TrieTreeSet;
-import roj.io.ZipUtil;
+import roj.io.IOUtil;
+import roj.io.ZipFileWriter;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Split-out processor
@@ -50,26 +53,25 @@ class Helper1_16 {
     static void remap116_SC(File serverDest, File mcServer, File mcpConfigFile, TrieTreeSet set) throws IOException, NoSuchFieldException, IllegalAccessException {
 
         File tmpFile = new File(System.getProperty("java.io.tmpdir"), System.currentTimeMillis() + ".tmp");
+        tmpFile.deleteOnExit();
+
         int i = 0;
-        ByteList bl = new ByteList();
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tmpFile));
-        try(ZipFile zf = new ZipFile(mcServer)) {
+        ByteList bl = IOUtil.getSharedByteBuf();
+
+        try (ZipFileWriter zos = new ZipFileWriter(tmpFile, false);
+             ZipFile zf = new ZipFile(mcServer)) {
             Enumeration<? extends ZipEntry> es = zf.entries();
             while (es.hasMoreElements()) {
                 ZipEntry ze = es.nextElement();
-                if (!ze.isDirectory() && ze.getName().endsWith(".class") && !set.startsWith(ze.getName())) {
-                    ZipEntry ze1 = new ZipEntry(ze);
-                    ze1.setCompressedSize(-1);
-                    zos.putNextEntry(ze1);
+                if (ze.getName().endsWith(".class") && !set.startsWith(ze.getName())) {
+                    ze.setExtra(null);
+                    zos.beginEntry(ze);
                     bl.readStreamFully(zf.getInputStream(ze)).writeToStream(zos);
                     bl.clear();
                     zos.closeEntry();
                     i++;
                 }
             }
-        } finally {
-            ZipUtil.close(zos);
-            tmpFile.deleteOnExit();
         }
 
         ZipFile zipFile = new ZipFile(mcpConfigFile);

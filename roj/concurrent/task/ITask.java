@@ -26,22 +26,21 @@
 package roj.concurrent.task;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public interface ITask {
-    boolean isCancelled();
+    default boolean isCancelled() {
+        return false;
+    }
 
-    boolean cancel(boolean force);
+    default boolean cancel(boolean force) {
+        return false;
+    }
 
-    void calculate(Thread thread) throws Exception;
+    void calculate() throws Exception;
 
     boolean isDone();
-
-    default void onJoin() {}
 
     default boolean continueExecuting() {
         return false;

@@ -28,12 +28,10 @@ package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.util.ConstantPool;
-import roj.collect.IIntMap;
-import roj.collect.IntMap;
-import roj.collect.LinkedIntMap;
+import roj.collect.BSLowHeap;
 import roj.util.ByteList;
 
-import java.util.PrimitiveIterator;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -42,13 +40,14 @@ import java.util.PrimitiveIterator;
 public final class SwitchInsnNode extends InsnNode {
     public SwitchInsnNode(byte code) {
         super(code);
-        this.switcher = new LinkedIntMap<>();
+        this.switcher = new BSLowHeap<>(null);
     }
 
-    public SwitchInsnNode(byte code, InsnNode def, LinkedIntMap<InsnNode> switcher) {
+    public SwitchInsnNode(byte code, InsnNode def, List<SwitchEntry> switcher) {
         super(code);
         this.def = def;
         this.switcher = switcher;
+        switcher.sort(null);
     }
 
     @Override
@@ -66,16 +65,13 @@ public final class SwitchInsnNode extends InsnNode {
         return T_SWITCH;
     }
 
-    public InsnNode         def;
-    public IntMap<InsnNode> switcher;
-
-    private IIntMap<InsnNode> pcRev;
+    public InsnNode          def;
+    public List<SwitchEntry> switcher;
 
     private byte pad = -1;
 
-    public void pad(int codeLength, IIntMap<InsnNode> pcRev) {
+    public void pad(int codeLength) {
         this.pad = (byte) (3 - (codeLength & 3));
-        this.pcRev = pcRev;
     }
 
     @Override
@@ -94,8 +90,7 @@ public final class SwitchInsnNode extends InsnNode {
             throw new IllegalStateException();
         }
 
-        IIntMap<InsnNode> pcRev = this.pcRev;
-        int self = pcRev.getInt(this);
+        int self = bci;
 
         // 共享... 问题在这
         byte[] data = w.put(code).list;
@@ -105,40 +100,32 @@ public final class SwitchInsnNode extends InsnNode {
             data[pos++] = 0;
         }
         if (this.code == Opcodes.TABLESWITCH) {
-            int lo = Integer.MAX_VALUE;
-            int hi = Integer.MIN_VALUE;
-            for (PrimitiveIterator.OfInt itr = switcher.keySet().iterator(); itr.hasNext(); ) {
-                int val = itr.nextInt();
-                if (val > hi) hi = val;
-                if (val < lo) lo = val;
-            }
+            int lo = switcher.get(0).key;
+            int hi = switcher.get(switcher.size() - 1).key;
 
-            if (hi < lo)
-                throw new IllegalArgumentException(switcher.toString());
-
-            w.putInt(pcRev.getInt(validate(def)) - self)
+            w.putInt(validate(def).bci - self)
              .putInt(lo).putInt(hi);
-            for (InsnNode node : switcher.values()) {
-                w.putInt(pcRev.getInt(validate(node)) - self);
+            for (SwitchEntry e : switcher) {
+                w.putInt(e.getBci() - self);
             }
         } else {
-            w.putInt(pcRev.getInt(validate(def)) - self)
+            w.putInt(validate(def).bci - self)
                     .putInt(switcher.size());
-            for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
-                w.putInt(entry.getKey())
-                        .putInt(pcRev.getInt(validate(entry.getValue())) - self);
+            for (SwitchEntry entry : switcher) {
+                w.putInt(entry.key)
+                        .putInt(entry.getBci() - self);
             }
         }
 
-        this.pcRev = null;
         this.pad = -1;
     }
 
     public String toString() {
         StringBuilder sb = new StringBuilder(super.toString()).append(" {\n");
-        for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
-            sb.append("               ").append(entry.getKey()).append(" : ").append(entry.getValue()).append('\n');
+        for (SwitchEntry entry : switcher) {
+            sb.append("               ").append(entry.key).append(" : ").append(entry.node).append('\n');
         }
         return sb.append("               default: ").append(def).append("\n            }").toString();
     }
+
 }

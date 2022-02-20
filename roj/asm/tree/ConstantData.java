@@ -29,18 +29,16 @@ package roj.asm.tree;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.PrimitiveIterator;
 
 import static roj.asm.util.AccessFlag.*;
 
@@ -53,7 +51,7 @@ import static roj.asm.util.AccessFlag.*;
 public final class ConstantData implements IClass {
     public int version;
 
-    public final FlagList accesses;
+    public char accesses;
 
     public final CstClass nameCst, parentCst;
 
@@ -66,74 +64,48 @@ public final class ConstantData implements IClass {
     public final List<CstClass> interfaces = new ArrayList<>();
     public final AttributeList attributes = new AttributeList();
 
-    static final boolean NOVERIFY = System.getProperty("roj.asm.cst.NoVerify") != null;
-
     public void verify() {
-        if(NOVERIFY) return;
-
-        String tmp = nameCst.getValue().getString();
-        if (tmp.contains(".") || tmp.contains("\\")) {
-            throw new IllegalArgumentException("Illegal ClassName " + tmp);
-        }
-        if (parentCst == null) {
-            if (!nameCst.getValue().getString().equals("java/lang/Object"))
-                throw new IllegalArgumentException("No father found");
-        } else {
-            tmp = parentCst.getValue().getString();
-            if (tmp.contains(".") || tmp.contains("\\")) {
-                throw new IllegalArgumentException("Illegal SuperName " + tmp);
-            }
-        }
-
-        int i = 0;
-        for (int j = 0; j < interfaces.size(); j++) {
-            CstClass itf = interfaces.get(j);
-            tmp = itf.getValue().getString();
-            if (tmp.contains(".") || tmp.contains("\\")) {
-                throw new IllegalArgumentException("Illegal Interface # " + i + ' ' + tmp);
-            }
-            i++;
-        }
-
         int permDesc = 0;
         int typeDesc = 0;
         int fn = -1;
 
-        for (PrimitiveIterator.OfInt itr = accesses.iterator(); itr.hasNext(); ) {
-            int flag = itr.nextInt();
-            switch (flag) {
-                case PUBLIC:
-                case PROTECTED:
-                    permDesc++;
-                    break;
-                case INTERFACE:
-                case ENUM:
-                    typeDesc++;
-                    break;
-                case FINAL:
-                    if (fn == 0) {
-                        throw new IllegalArgumentException("Final and Abstract");
-                    }
-                    fn = 1;
-                    break;
-                case ABSTRACT:
-                    if (fn == 1) {
-                        throw new IllegalArgumentException("Final and Abstract");
-                    }
-                    fn = 0;
-                    break;
-                case ANNOTATION:
-                case SUPER_OR_SYNC:
-                case SYNTHETIC:
-                case STRICTFP:
-                case VOLATILE_OR_BRIDGE:
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unsupported access flag " + flag);
+        for (int i = 0; i < 16; i++) {
+            int v = 1 << i;
+            if ((accesses & v) != 0) {
+                switch (v) {
+                    case PUBLIC:
+                    case PROTECTED:
+                        permDesc++;
+                        break;
+                    case INTERFACE:
+                    case ENUM:
+                        typeDesc++;
+                        break;
+                    case FINAL:
+                        if (fn == 0) {
+                            throw new IllegalArgumentException("Final and Abstract");
+                        }
+                        fn = 1;
+                        break;
+                    case ABSTRACT:
+                        if (fn == 1) {
+                            throw new IllegalArgumentException("Final and Abstract");
+                        }
+                        fn = 0;
+                        break;
+                    case ANNOTATION:
+                    case SUPER_OR_SYNC:
+                    case SYNTHETIC:
+                    case STRICTFP:
+                    case VOLATILE_OR_BRIDGE:
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unsupported access flag " + accesses);
+                }
             }
         }
 
-        int v = accesses.flag & (ANNOTATION | INTERFACE);
+        int v = accesses & (ANNOTATION | INTERFACE);
         if(v == ANNOTATION)
             throw new IllegalArgumentException("Not valid @interface " + accesses);
 
@@ -165,7 +137,7 @@ public final class ConstantData implements IClass {
     public ConstantData(int version, ConstantPool cp, int accesses, int nameIndex, int superNameIndex) {
         this.cp = cp;
         this.version = version;
-        this.accesses = AccessFlag.of((short) accesses);
+        this.accesses = (char) accesses;
         this.nameCst = ((CstClass) cp.array(nameIndex));
         this.name = nameCst.getValue().getString();
         if (superNameIndex == 0) {
@@ -184,7 +156,7 @@ public final class ConstantData implements IClass {
     public ByteList getBytes(ByteList w) {
         ConstantPool cw = this.cp;
 
-        w.putShort(accesses.flag)
+        w.putShort(accesses)
          .putShort(cw.reset(nameCst).getIndex())
          .putShort(parentCst == null ? 0 : cw.reset(parentCst).getIndex())
          .putShort(interfaces.size());
@@ -252,40 +224,29 @@ public final class ConstantData implements IClass {
                 '}';
     }
 
-    public int getMethodByName(String key) {
-        for (int i = 0; i < methods.size(); i++) {
-            MoFNode ms = methods.get(i);
-            if (ms.name().equals(key)) return i;
-        }
-        return -1;
-    }
-
-    public int getFieldByName(String key) {
-        for (int i = 0; i < fields.size(); i++) {
-            MoFNode fs = fields.get(i);
-            if (fs.name().equals(key)) return i;
-        }
-        return -1;
-    }
-
     @Override
-    public String className() {
+    public String name() {
         return nameCst.getValue().getString();
     }
 
     @Override
-    public String parentName() {
+    public String parent() {
         return parentCst == null ? null : parentCst.getValue().getString();
     }
 
     @Override
-    public FlagList accessFlag() {
+    public void accessFlag(int flag) {
+        this.accesses = (char) flag;
+    }
+
+    @Override
+    public char accessFlag() {
         return accesses;
     }
 
     @Override
     public List<String> interfaces() {
-        ArrayList<Object> list = new ArrayList<>(interfaces);
+        SimpleList<Object> list = new SimpleList<>(interfaces);
         for (int i = 0; i < list.size(); i++) {
             list.set(i, ((CstClass)list.get(i)).getValue().getString());
         }
@@ -304,7 +265,7 @@ public final class ConstantData implements IClass {
 
     @Override
     public byte type() {
-        return 1;
+        return Parser.CTYPE_LOD_2;
     }
 
     public void dump() {

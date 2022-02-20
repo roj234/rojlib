@@ -69,29 +69,4 @@ public class TileRegisterHandler {
         Registry.items().add(item.setRegistryName("ilib", "select_tool").setTranslationKey("ilib.select_tool"));
         Registry.model(new ItemModelInfo(item, true));
     }
-
-//    private static AttrCode genClInit(ConstantData data) {
-//        int i = data.getMethodByName("<clinit>");
-//        MethodSimple clinit;
-//        if (i >= 0) {
-//            clinit = data.methods.get(i);
-//        } else {
-//            clinit = new MethodSimple(new FlagList(AccessFlag.PUBLIC | AccessFlag.STATIC),
-//                                      data.cp.getUtf("<clinit>"), data.cp.getUtf("()V"));
-//            data.methods.add(clinit);
-//        }
-//        Attribute code = clinit.attrByName("Code");
-//        if (!(code instanceof AttrCode)) {
-//            AttrCode c;
-//            if (code == null) {
-//                c = new AttrCode(clinit);
-//                c.instructions.add(NPInsnNode.of(Opcodes.RETURN));
-//            } else {
-//                c = new AttrCode(clinit, Parser.reader(code), data.cp);
-//                c.instructions.remove(c.instructions.size() - 1); // END_MARk
-//            }
-//            clinit.attributes.putByName(code = c);
-//        }
-//        return (AttrCode) code;
-//    }
 }

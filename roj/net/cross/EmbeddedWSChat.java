@@ -7,17 +7,10 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.net.WrappedSocket;
 import roj.net.http.Action;
-import roj.net.http.Code;
 import roj.net.http.HttpServer;
 import roj.net.http.WebSockets;
-import roj.net.http.serv.Reply;
-import roj.net.http.serv.Request;
-import roj.net.http.serv.RequestHandler;
-import roj.net.http.serv.Router;
-import roj.net.mychat.Group;
-import roj.net.mychat.Message;
-import roj.net.mychat.User;
-import roj.net.mychat.WSChat;
+import roj.net.http.serv.*;
+import roj.net.mychat.*;
 import roj.util.Helpers;
 import roj.util.SleepingBeauty;
 
@@ -41,12 +34,12 @@ public class EmbeddedWSChat extends WebSockets implements Router {
 
     // 非同寻常的结论需要有非同寻常的证据
     @Override
-    protected void registerNewWorker(RequestHandler handle, boolean zip) {
+    protected void registerNewWorker(Request req, RequestHandler handle, boolean zip) {
         ChatImpl w = new ChatImpl();
         w.ch = handle.ch;
         if (zip) w.enableZip();
 
-        handle.waitAnd(s -> {
+        handle.setPreCloseCallback(s -> {
             synchronized (EmbeddedWSChat.class) {
                 try {
                     if (prev != null) prev.sendExternalLogout("您已在另一窗口登录");
@@ -65,7 +58,7 @@ public class EmbeddedWSChat extends WebSockets implements Router {
     private void test(WSChat w) {
         AsyncTest.delay = 0;
         for (int i = 0; i < 10; i++) {
-            AsyncTest.sched(t -> {
+            AsyncTest.sched(() -> {
                 w.sendMessage(userMap.get(1000000), randomMessage(), false);
             }, 1000);
         }
@@ -82,8 +75,8 @@ public class EmbeddedWSChat extends WebSockets implements Router {
     }
     // endregion test
 
-    static IntMap<User> userMap = new IntMap<>();
-    static ChatImpl prev;
+    static IntMap<AbstractUser> userMap = new IntMap<>();
+    static ChatImpl             prev;
 
     public static void main(String[] args) throws IOException {
         SleepingBeauty.sleep();
@@ -121,11 +114,10 @@ public class EmbeddedWSChat extends WebSockets implements Router {
         Group SL = new Group();
         SL.id = 1000000;
         SL.name = "圣灵之家";
-        SL.username = "";
         SL.desc = "测试JSON数据\n<I>调试模式已经开启!!</I>\n456\n789\nfhdsufygifhsd\nPowered by Async/2.1";
         SL.face = "att/s.png";
-        SL.flag = User.F_ONLINE;
-        SL.userIds.addAll(new int[] {1, 3});
+        SL.addUser(B);
+        SL.addUser(J);
 
         r(A); r(B); r(L); r(J); r(SL);
 
@@ -133,35 +125,39 @@ public class EmbeddedWSChat extends WebSockets implements Router {
         HttpServer server = new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), 1999), 233, man);
         System.out.println("监听 " + server.getSocket().getLocalSocketAddress());
         man.loop = server.getLoop();
-        server.run();
+        server.start();
     }
 
-    private static void r(User b) {
+    private static void r(AbstractUser b) {
         userMap.put(b.id, b);
     }
 
     @Override
-    public Reply response(WrappedSocket ch, Request request, RequestHandler handle) {
+    public Response response(WrappedSocket ch, Request request, RequestHandler rh) {
         if (Action.OPTIONS == request.action()) {
-            Reply r = new Reply(Code.OK);
-            r.getRawHeaders().putAscii("Access-Control-Allow-Headers: x-mc-token\r\n" +
-                                       "Access-Control-Allow-Origin: *\r\n");
-            return r;
+            rh.reply(200)
+              .header("Access-Control-Allow-Headers: MCTK\r\n" +
+                          "Access-Control-Allow-Origin: " + request.header("Origin") + "\r\n" +
+                          "Access-Control-Max-Age: 864000\r\n" +
+                          "Access-Control-Allow-Methods: POST, GET\r\n" +
+                          "Access-Control-Allow-Credentials: true");
+            return null;
         }
 
         if ("websocket".equals(request.header("Upgrade"))) {
             String session = request.path();
             if (!session.startsWith("/ws/") || !session.substring(4).equals("0")) {
-                return new Reply(401);
+                rh.reply(401);
+                return null;
             }
-            return switchToWebsocket(request, handle);
+            return switchToWebsocket(request, rh);
         }
 
         if ("/do.php".equals(request.path())) {
             Map<String, String> $_GET = request.getFields();
             if (!$_GET.isEmpty()) {
                 LinkedMyHashMap<String, String> map = (LinkedMyHashMap<String, String>) $_GET;
-                Reply v = null;
+                Response v = null;
                 switch (map.firstEntry().getKey()) {
                     case "friend":
                         v = friendOp(request);
@@ -173,40 +169,40 @@ public class EmbeddedWSChat extends WebSockets implements Router {
                         v = spaceOp(request);
                         break;
                     case "ping":
-                        v = new Reply("pong");
+                        v = new StringResponse("pong");
                         break;
                 }
                 if (v != null) {
-                    v.header("Access-Control-Allow-Origin", "*");
+                    rh.header("Access-Control-Allow-Origin", "*");
                     return v;
                 }
             }
         }
 
         if ("/LICENSE".equals(request.path())) {
-            return new Reply("null");
+            return new StringResponse("null");
         }
 
-        return new Reply("参数错误");
+        return new StringResponse("参数错误");
     }
 
-    private Reply userOp(Request request) {
+    private Response userOp(Request request) {
         Map<String, String> $_REQUEST = request.fields();
         CMapping m;
         switch ($_REQUEST.getOrDefault("op", "")) {
             case "info":
                 String session = request.header("X-MC-Token");
                 if (!"0".equals(session)) {
-                    return new Reply("{\"ok\":0,\"err\":\"您还没有登录\"}");
+                    return new StringResponse("{\"ok\":0,\"err\":\"您还没有登录\"}");
                 } else {
                     m = new CMapping();
-                    m.put("user", userMap.get(0).cStore());
+                    m.put("user", userMap.get(0).put());
                     m.put("protocol", "WSChat");
                     m.put("address", "ws://127.0.0.1:1999/ws/0");
                     m.put("ok", 1);
                     CList l = m.getOrCreateList("blocked");
                     l.add(3);
-                    return new Reply(m.toJSONb());
+                    return new StringResponse(m.toJSONb());
                 }
             case "set_info":
                 //friend: 0
@@ -216,31 +212,31 @@ public class EmbeddedWSChat extends WebSockets implements Router {
                 //newpass:
                 //desc:
                 //face: data:image/png;base64,iVBO...==
-                return new Reply("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供修改个人资料功能\"}");
+                return new StringResponse("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供修改个人资料功能\"}");
             case "login":
-                return new Reply("{\"ok\":1,\"token\":\"0\"}");
+                return new StringResponse("{\"ok\":1,\"token\":\"0\"}");
             case "logout":
-                return new Reply("{\"ok\":1}");
+                return new StringResponse("{\"ok\":1}");
             case "reg":
-                return new Reply("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供注册功能\"}");
+                return new StringResponse("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供注册功能\"}");
             default:
                 return null;
         }
     }
 
-    private Reply spaceOp(Request request) {
+    private Response spaceOp(Request request) {
         Map<String, String> $_REQUEST = request.fields();
         switch ($_REQUEST.getOrDefault("op", "")) {
             case "list":
-                return new Reply("[]");
+                return new StringResponse("[]");
             case "add":
-                return new Reply("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供空间功能\"}");
+                return new StringResponse("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供空间功能\"}");
             default:
                 return null;
         }
     }
 
-    private Reply friendOp(Request request) {
+    private Response friendOp(Request request) {
         Map<String, String> $_REQUEST = request.fields();
         CMapping m;
         switch ($_REQUEST.getOrDefault("op", "")) {
@@ -256,24 +252,27 @@ public class EmbeddedWSChat extends WebSockets implements Router {
             case "move":
                 // id: id
                 // group: 移动到的分组
+            case "confirm":
+                // 确认添加好友
+                // id: id
             case "flag":
                 // id: id
                 // flag: 安全标志位
                 // (服务端)online=1
                 // no_see_him=2, no_see_me=3, blocked=4, always_offline=5
-                return new Reply("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供好友列表\"}");
+                return new StringResponse("{\"ok\":0,\"err\":\"EmbeddedWSChat不提供好友列表\"}");
             case "list":
                 CList list = new CList();
                 CMapping map = new CMapping();
-                map.getOrCreateList("测试")
-                   .add(userMap.get(0).cStore())
-                   .add(userMap.get(1).cStore())
-                   .add(userMap.get(2).cStore())
-                   .add(userMap.get(3).cStore());
+                map.getOrCreateList("测试分组")
+                   .add(userMap.get(0).put())
+                   .add(userMap.get(1).put())
+                   .add(userMap.get(2).put())
+                   .add(userMap.get(3).put());
                 list.add(map);
                 list.add(new CList());
-                list.add(new CList().add(userMap.get(1000000).cStore()));
-                return new Reply(list.toShortJSONb());
+                list.add(new CList().add(userMap.get(1000000).put()));
+                return new StringResponse(list.toShortJSONb());
             default:
                 return null;
         }

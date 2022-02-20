@@ -392,7 +392,12 @@ public class CMapping extends CEntry {
 
                 for (int i = 0; i < depth; i++) sb.append(' ');
 
-                sb.append((CString.NO_RAW_CHECK && CString.rawSafe(entry.getKey())) ? entry.getKey() : addSlash(entry.getKey())).append(':').append(' ');
+                if (!CString.NO_RAW_CHECK && CString.rawSafe(entry.getKey())) {
+                    sb.append(entry.getKey());
+                } else {
+                    AbstLexer.addSlashes(entry.getKey(), sb).append('"');
+                }
+                sb.append(':').append(' ');
                 entry.getValue().toYAML(sb, depth + 2);
                 if (!itr.hasNext()) break;
                 sb.append('\n');
@@ -410,7 +415,7 @@ public class CMapping extends CEntry {
             if (depth < 0) {
                 while (true) {
                     Map.Entry<String, CEntry> entry = itr.next();
-                    sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':');
+                    AbstLexer.addSlashes(entry.getKey(), sb.append('"')).append('"').append(':');
                     entry.getValue().toJSON(sb, -1);
                     if (!itr.hasNext()) break;
                     sb.append(',');
@@ -427,7 +432,7 @@ public class CMapping extends CEntry {
 
                     for (int i = 0; i < depth + 4; i++) sb.append(' ');
 
-                    sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':').append(' ');
+                    AbstLexer.addSlashes(entry.getKey(), sb.append('"')).append('"').append(':').append(' ');
                     entry.getValue().toJSON(sb, depth + 4);
                     if (!itr.hasNext()) break;
                     sb.append(",\n");
@@ -465,7 +470,7 @@ public class CMapping extends CEntry {
 
                     sb.append('[');
                     if (key.indexOf(']') >= 0) {
-                        sb.append('"').append(AbstLexer.addSlashes(key)).append('"');
+                        AbstLexer.addSlashes(entry.getKey(), sb.append('"')).append('"');
                     } else {
                         sb.append(key);
                     }
@@ -491,7 +496,7 @@ public class CMapping extends CEntry {
                         }
                     }
                     if (i < 0)
-                        sb.append('"').append(AbstLexer.addSlashes(key)).append('"');
+                        AbstLexer.addSlashes(entry.getKey(), sb.append('"')).append('"');
                     else
                         sb.append(key);
                     entry.getValue().toINI(sb.append(' ').append('=').append(' '), 2);
@@ -510,7 +515,7 @@ public class CMapping extends CEntry {
         if (!map.isEmpty()) {
             if (chain.length() > 0 && depth < 2) {
                 if (!CString.rawSafe(chain)) {
-                    sb.append('[').append(AbstLexer.addSlashes(chain)).append("]\n");
+                    AbstLexer.addSlashes(chain, sb.append('[')).append("]\n");
                 } else {
                     sb.append('[').append(chain).append("]\n");
                 }
@@ -536,7 +541,7 @@ public class CMapping extends CEntry {
                         break;
                     default:
                         if (!CString.rawSafe(entry.getKey())) {
-                            sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"');
+                            AbstLexer.addSlashes(chain, sb.append('"')).append('"');
                         } else {
                             sb.append(entry.getKey());
                         }

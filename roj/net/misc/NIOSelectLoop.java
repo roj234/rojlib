@@ -33,7 +33,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
             setDaemon(true);
         }
 
-        private void refresh() {
+        void refresh() {
             Selector old = this.selector;
             if (old.isOpen()) {
                 Selector sel;
@@ -74,6 +74,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
             Selector sel = this.selector;
             NIOSelectLoop<?> loop = this.owner;
             MyKeySet keys = (MyKeySet) sel.selectedKeys();
+            time = System.currentTimeMillis();
             int elapsed;
 
             mainLoop:
@@ -160,6 +161,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                 time = System.currentTimeMillis();
                 if (elapsed == 0) continue;
 
+                if (!sel.isOpen()) break;
                 synchronized (sel.keys()) {
                     for (SelectionKey key : sel.keys()) {
                         Selectable t = ((Att) key.attachment()).t;
@@ -373,6 +375,43 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
         thread.start();
     }
 
+    public final void registerListener(Listener l) throws IOException {
+        FileDescriptorChannel fdc = new FileDescriptorChannel(l.fd);
+
+        SelectThread thread;
+        SelectThread[] ts = this.threads;
+        if ((thread = ts[0]) == null) {
+            synchronized (lock) {
+                if (ts[0] != null) {
+                    thread = ts[0];
+                }
+            }
+        }
+
+        Att att = new Att();
+        att.cb = Helpers.cast(new ShutdownCallback());
+        att.t = l;
+
+        if (thread != null) {
+            thread.wakeupLock = true;
+            thread.selector.wakeup();
+
+            l.key = fdc.register(thread.selector, SelectionKey.OP_READ, att);
+
+            thread.wakeupLock = false;
+            LockSupport.unpark(thread);
+        } else {
+            synchronized (lock) {
+                thread = ts[0] = new SelectThread(this);
+                thread.setDaemon(false);
+
+                l.key = fdc.register(thread.selector, SelectionKey.OP_READ, att);
+
+                thread.start();
+            }
+        }
+    }
+
     public abstract void unregister(T t) throws IOException;
 
     protected abstract void register1(Selector sel, T t, Object att) throws IOException;
@@ -382,5 +421,12 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
     static final class Att {
         Selectable           t;
         Consumer<Selectable> cb;
+    }
+
+    public final class ShutdownCallback implements Consumer<Object> {
+        @Override
+        public void accept(Object x) {
+            NIOSelectLoop.this.shutdown();
+        }
     }
 }

@@ -155,7 +155,7 @@ public final class VarList implements Iterable<Var> {
 
         int size = this.size;
         for (int i = 0; i < size; i++) {
-            if (!list1[i].eq(list2[i])) return false;
+            if (list1[i].type != list2[i].type) return false;
         }
         return true;
     }
@@ -166,8 +166,33 @@ public final class VarList implements Iterable<Var> {
 
         int size = Math.min(this.size, list.size);
         for (int i = 0; i < size; i++) {
-            if (!list1[i].eq(list2[i])) return false;
+            // 因为这里只是ASM，没法检测类的继承关系
+            if (list1[i].type != list2[i].type) return false;
         }
         return true;
+    }
+
+    public void minus() {
+        Var[] list1 = this.list;
+
+        for (int i = 0; i < size; i++) {
+            if (list1[i] == null) {
+                size = i;
+                break;
+            }
+        }
+    }
+
+    public void minus(VarList list) {
+        Var[] list1 = this.list;
+        Var[] list2 = list.list;
+
+        int size = Math.min(this.size, list.size);
+        for (int i = 0; i < size; i++) {
+            if (list1[i].type != list2[i].type) {
+                this.size = i;
+                break;
+            }
+        }
     }
 }

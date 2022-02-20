@@ -52,20 +52,14 @@ public class GotoNode extends Node {
     @Override
     protected void compile() {
         if(target.getClass() == LabelNode.class) {
-            target = target.next;
-            if(target instanceof VarGNode && ((VarGNode) target).name instanceof Node) {
-                target = (Node) ((VarGNode) target).name;
-            } else
-            if(target instanceof IncrNode && ((IncrNode) target).name instanceof Node) {
-                target = (Node) ((IncrNode) target).name;
-            }
+            target = target.next.replacement();
         }
     }
 
     @Override
     protected void genDiff(Unioner<Unioner.Wrap<Variable>> var, IntBiMap<Node> idx) {
-        List<Unioner.Wrap<Variable>> self = var.i_collect(idx.getInt(this)),
-            dest = var.i_collect(idx.getInt(target));
+        List<Unioner.Wrap<Variable>> self = var.collect(idx.getInt(this)),
+            dest = var.collect(idx.getInt(target));
         if(self != dest) {
             diff = NodeUtil.calcDiff(self, dest);
         }

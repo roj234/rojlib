@@ -26,7 +26,7 @@
 package roj.kscript.parser.ast;
 
 import roj.asm.Opcodes;
-import roj.asm.util.NodeHelper;
+import roj.asm.tree.insn.NPInsnNode;
 import roj.config.word.NotStatementException;
 import roj.kscript.asm.CompileContext;
 import roj.kscript.asm.KS_ASM;
@@ -94,7 +94,7 @@ public final class Std implements Expression {
             throw new NotStatementException();
 
         // $this, argList
-        ctx.list.add(NodeHelper.npc(type == 1 ? Opcodes.ALOAD_1 : Opcodes.ALOAD_2));
+        ctx.list.add(NPInsnNode.of(type == 1 ? Opcodes.ALOAD_1 : Opcodes.ALOAD_2));
     }
 
     @Override

@@ -318,6 +318,9 @@ public class ACalendar {
                 case 'm':
                     pad(sb, date[MONTH] + 1, 2);
                     break;
+                case 'x':
+                    sb.append(date[MILLISECOND]);
+                    break;
                 case 'n':
                     sb.append(date[MONTH]);
                     break;

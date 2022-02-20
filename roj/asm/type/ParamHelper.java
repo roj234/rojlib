@@ -27,23 +27,22 @@
 package roj.asm.type;
 
 import roj.collect.SimpleList;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static roj.asm.type.NativeType.*;
+import static roj.asm.type.Type.*;
 
 /**
  * @author Roj234
  * @since 2021/6/18 9:51
  */
 public final class ParamHelper {
-    public static final ThreadLocal<CharList> sharedBuffer = ThreadLocal.withInitial(CharList::new);
-
     /**
-     * Method descriptor
+     * 转换方法asm type字符串为对象
      */
     public static List<Type> parseMethod(String desc) {
         List<Type> params = new SimpleList<>();
@@ -54,11 +53,8 @@ public final class ParamHelper {
     @SuppressWarnings("fallthrough")
     public static void parseMethod(String desc, List<Type> params) {
         int index = desc.indexOf(")");
-        String ret = desc.substring(index + 1); // Output
-        Type returns = parseOne(ret.charAt(0), ret);
 
-        CharList tmp = sharedBuffer.get();
-        tmp.clear();
+        CharList tmp = IOUtil.getSharedCharBuf();
 
         boolean ref = false;
         int arr = 0;
@@ -87,11 +83,7 @@ public final class ParamHelper {
                     if(ref) {
                         tmp.append(c);
                     } else {
-                        try {
-                            NativeType.validate(c);
-                        } catch (IllegalArgumentException e) {
-                            throw new IllegalArgumentException(desc);
-                        }
+                        if (!Type.isValid(c)) throw new IllegalArgumentException(desc);
                         params.add(arr == 0 ? Type.std(c) : new Type(c, arr));
                         arr = 0;
                     }
@@ -99,9 +91,14 @@ public final class ParamHelper {
             }
         }
 
+        Type returns = parseOne(desc, index + 1);
         params.add(returns);
     }
 
+    /**
+     * 方法参数所占空间
+     * @see roj.asm.tree.insn.InvokeItfInsnNode#toByteArray
+     */
     public static int paramSize(String desc) {
         int cnt = 0;
         int end = desc.indexOf(")");
@@ -125,7 +122,7 @@ public final class ParamHelper {
                     break;
                 default:
                     if((clz & 1) == 0) {
-                        if (c == NativeType.DOUBLE || c == NativeType.LONG) {
+                        if (c == Type.DOUBLE || c == Type.LONG) {
                             cnt += 2;
                         } else {
                             cnt ++;
@@ -138,10 +135,60 @@ public final class ParamHelper {
         return cnt;
     }
 
+    /**
+     * 方法返回类型
+     */
+    public static Type parseReturn(String str) {
+        int index = str.indexOf(")");
+        if (index < 0) throw new IllegalArgumentException("不是方法描述");
+        return parseOne(str, index + 1);
+    }
+
+    /**
+     * 转换字段asm type字符串为对象
+     */
+    public static Type parseField(String s) {
+        return parseOne(s, 0);
+    }
+
+    private static Type parseOne(String s, int off) {
+        char c0 = s.charAt(off);
+        if (!Type.isValid(c0)) throw new IllegalArgumentException(s);
+        switch (c0) {
+            case Type.ARRAY:
+                int pos = s.lastIndexOf('[') + 1;
+                Type t = parseOne(s, pos);
+                if(t.owner == null) t = new Type(t.type, pos - off);
+                else t.array = (char) (pos - off);
+                return t;
+            case Type.CLASS:
+                if (!s.endsWith(";")) {
+                    throw new IllegalArgumentException("'类'类型 '" + s + "' 未以';'结束");
+                }
+                return new Type(s.substring(off + 1, s.length() - 1));
+            default:
+                return Type.std(c0);
+        }
+    }
+
+    /**
+     * 转换字段asm type对象为字符串
+     */
+    public static String getField(Type type) {
+        if(type.owner == null && type.array == 0)
+            return Type.toDesc(type.type);
+
+        CharList sb = IOUtil.getSharedCharBuf();
+        getOne(type, sb);
+        return sb.toString();
+    }
+
+    /**
+     * 转换方法asm type对象为字符串
+     */
     public static String getMethod(List<Type> list) {
-        CharList sb = sharedBuffer.get();
-        sb.clear();
-        sb.append("(");
+        CharList sb = IOUtil.getSharedCharBuf().append('(');
+
         for (int i = 0; i < list.size(); i++) {
             if (i == list.size() - 1) { // last
                 sb.append(')');
@@ -152,62 +199,11 @@ public final class ParamHelper {
         return sb.toString();
     }
 
-    public static Type getReturn(String str) {
-        int index = str.indexOf(")");
-        String s1 = str.substring(index + 1); // Output
-
-        return parseOne(s1.charAt(0), s1);
-    }
-
-    /**
-     * Field descriptor
-     */
-    public static Type parseField(String s) {
-        return parseOne(s.charAt(0), s);
-    }
-
-    private static Type parseOne(char c0, String s) {
-        try {
-            NativeType.validate(c0);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(s);
-        }
-        switch (c0) {
-            case ARRAY:
-                int pos = s.lastIndexOf('[') + 1;
-                String p1 = s.substring(pos);
-                Type param = parseOne(p1.charAt(0), p1);
-                if(param.owner == null)
-                    param = new Type((char) param.type, pos);
-                else
-                    param.array = pos;
-                return param;
-            case CLASS:
-                if (!s.endsWith(";")) {
-                    throw new IllegalArgumentException("Class '" + s + "' not endsWith ';'");
-                }
-                return new Type(s.substring(1, s.length() - 1), 0);
-            default:
-                return Type.std(c0);
-        }
-    }
-
-    public static String getField(Type type) {
-        if(type.owner == null && type.array == 0)
-            return NativeType.toDesc(type.type);
-
-        CharList sb = sharedBuffer.get();
-        sb.clear();
-        sb.ensureCapacity(2 + type.array + (type.owner == null ? 0 : type.owner.length() + 2));
-        getOne(type, sb);
-        return sb.toString();
-    }
-
     public static void getOne(Type type, CharList sb) {
         for (int q = type.array; q > 0; q--) {
             sb.append('[');
         }
-        if (type.type == NativeType.CLASS) {
+        if (type.type == Type.CLASS) {
             sb.append('L').append(type.owner).append(';');
         } else {
             sb.append((char) type.type);
@@ -215,16 +211,12 @@ public final class ParamHelper {
     }
 
     /**
-     * ConstantUTF8 / mostly
+     * 转换class为字段的asm type
      */
-    public static String classDescriptor(Class<?> clazz) {
-        CharList sb = sharedBuffer.get();
-        sb.clear();
-
-        return classDescriptor(sb, clazz).toString();
+    public static String class2asm(Class<?> clazz) {
+        return class2asm(IOUtil.getSharedCharBuf(), clazz).toString();
     }
-
-    public static CharList classDescriptor(CharList sb, Class<?> clazz) {
+    public static CharList class2asm(CharList sb, Class<?> clazz) {
         Class<?> tmp;
         while ((tmp = clazz.getComponentType()) != null) {
             clazz = tmp;
@@ -257,84 +249,60 @@ public final class ParamHelper {
         return sb.append('L').append(clazz.getName().replace('.', '/')).append(';');
     }
 
-    public static String classDescriptors(Class<?>[] classes, Class<?> returns) {
-        CharList sb = sharedBuffer.get();
-        sb.clear();
-        sb.append('(');
+    /**
+     * 转换class为方法的asm type
+     */
+    public static String class2asm(Class<?>[] classes, Class<?> returns) {
+        CharList sb = IOUtil.getSharedCharBuf().append('(');
 
         for (Class<?> clazz : classes) {
-            classDescriptor(sb, clazz);
+            class2asm(sb, clazz);
         }
         sb.append(')');
-        return classDescriptor(sb, returns).toString();
+        return class2asm(sb, returns).toString();
     }
 
     /**
-     * ConstantClass
+     * 转换(非基本)字段asm type为class
      */
-    public static Type classType(String s) {
-        try {
-            NativeType.validate(s.charAt(0));
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(s);
-        }
-        if (s.length() == 1)
-            return Type.std(s.charAt(0));
-        if (s.startsWith("[")) {
-            int pos = s.lastIndexOf('[') + 1;
-            String p1 = s.substring(pos);
-            Type param = classType(p1);
-            if(param.owner == null)
-                param = new Type((char) param.type, pos);
-            else
-                param.array = pos;
-            return param;
-        } else {
-            return new Type(s.substring(1, s.length() - 1), 0);
-        }
-    }
-
-    /**
-     * XLOAD / XRETURN 的前缀
-     */
-    public static String XPrefix(Class<?> clazz) {
-        if (clazz.isPrimitive()) {
-            switch (clazz.getName()) {
-                case "int":
-                case "char":
-                case "byte":
-                case "boolean":
-                case "short":
-                    return "I";
-                case "double":
-                    return "D";
-                case "long":
-                    return "L";
-                case "float":
-                    return "F";
-                case "void":
-                    return "";
+    public static String asm2class(String owner, int array) {
+        if(array > 0) {
+            CharList cl = IOUtil.getSharedCharBuf();
+            for (int i = 0; i < array; i++) {
+                cl.append('[');
             }
+            cl.append('L');
+
+            return cl.append(owner).replace('/', '.').append(';').toString();
+        } else {
+            return owner.replace('/', '.');
         }
-        return "A";
     }
 
     /**
-     * @param types (Ljava/lang/String;D)V
+     * 转换方法asm type为人类可读(实际上是mojang用的map)类型
+     * @param types [String, double, void]
      * @param methodName <init>
+     * @param trimPackage 删除包名
      * @return void <init>(java.lang.String, double)
      */
-    public static String humanize(List<Type> types, String methodName) {
+    public static String humanize(List<Type> types, String methodName, boolean trimPackage) {
         Type ret = types.remove(types.size() - 1);
 
-        CharList sb = sharedBuffer.get();
-        sb.clear();
-        sb.append(ret).append(' ').append(methodName).append("(");
+        CharList sb = IOUtil.getSharedCharBuf()
+                            .append(ret).append(' ').append(methodName).append("(");
 
         if (!types.isEmpty()) {
             int i = 0;
             do {
-                sb.append(types.get(i++));
+                Type t = types.get(i++);
+                if (trimPackage && t.owner != null) {
+                    String o = t.owner;
+                    sb.append(o, o.lastIndexOf('/') + 1, o.length());
+                    for (int j = 0; j < t.array; j++) sb.append("[]");
+                } else {
+                    t.appendString(sb, null);
+                }
                 if (i == types.size()) break;
                 sb.append(", ");
             } while (true);
@@ -346,15 +314,14 @@ public final class ParamHelper {
     }
 
     /**
+     * 转换人类可读(实际上是mojang用的map)类型为方法asm type
      * @param in  java.lang.String, double
      * @param out void
      * @return (Ljava/lang/String;D)V
      */
     public static String dehumanize(CharSequence in, CharSequence out) {
-        CharList sb = sharedBuffer.get();
-        sb.clear();
-        sb.ensureCapacity(in.length() + out.length() + 4);
-        sb.append('(');
+        CharList sb = IOUtil.getSharedCharBuf()
+                            .append('(');
 
         List<String> list = TextUtil.split(new ArrayList<>(), in, ',');
         for (int i = 0; i < list.size(); i++) {
@@ -364,7 +331,7 @@ public final class ParamHelper {
         return dehumanize0(out, sb.append(')')).toString();
     }
 
-    public static CharList dehumanize0(CharSequence z, CharList sb) {
+    private static CharList dehumanize0(CharSequence z, CharList sb) {
         if (z.length() == 0)
             return sb;
         CharList sb1 = new CharList().append(z);
@@ -377,23 +344,23 @@ public final class ParamHelper {
 
         switch (sb1.toString()) {
             case "int":
-                return sb.append(NativeType.INT);
+                return sb.append(INT);
             case "short":
-                return sb.append(NativeType.SHORT);
+                return sb.append(Type.SHORT);
             case "double":
-                return sb.append(NativeType.DOUBLE);
+                return sb.append(Type.DOUBLE);
             case "long":
-                return sb.append(NativeType.LONG);
+                return sb.append(Type.LONG);
             case "float":
-                return sb.append(NativeType.FLOAT);
+                return sb.append(Type.FLOAT);
             case "char":
-                return sb.append(NativeType.CHAR);
+                return sb.append(Type.CHAR);
             case "byte":
-                return sb.append(NativeType.BYTE);
+                return sb.append(Type.BYTE);
             case "boolean":
-                return sb.append(NativeType.BOOLEAN);
+                return sb.append(Type.BOOLEAN);
             case "void":
-                return sb.append(NativeType.VOID);
+                return sb.append(Type.VOID);
         }
         for (int i = 0; i < sb1.length(); i++) {
             if (sb1.charAt(i) == '.')
@@ -401,19 +368,5 @@ public final class ParamHelper {
         }
         sb.append('L').append(sb1);
         return sb.append(';');
-    }
-
-    public static String normalize(String owner, int array) {
-        if(array > 0) {
-            CharList cl = new CharList(owner.length() + array + 3);
-            for (int i = 0; i < array; i++) {
-                cl.append('[');
-            }
-            cl.append('L');
-
-            return cl.append(owner).replace('/', '.').append(';').toString();
-        } else {
-            return owner.replace('/', '.');
-        }
     }
 }

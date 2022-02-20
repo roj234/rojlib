@@ -26,7 +26,7 @@
 package roj.mod.fp;
 
 import LZMA.LzmaInputStream;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapping;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -40,7 +40,7 @@ import java.util.zip.ZipFile;
  * @since  2020/8/29 8:54
  */
 final class Helper1_12 {
-    static void forgeInit(File forgeFile, ConstMapper rmp) throws IOException {
+    static void forgeInit(File forgeFile, Mapping rmp) throws IOException {
         ZipFile zf = new ZipFile(forgeFile);
         Enumeration<? extends ZipEntry> en = zf.entries();
         while (en.hasMoreElements()) {

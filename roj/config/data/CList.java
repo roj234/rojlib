@@ -138,6 +138,10 @@ public class CList extends CEntry implements Iterable<CEntry> {
         return new CList(list);
     }
 
+    public boolean isEmpty() {
+        return list.isEmpty();
+    }
+
     public final int size() {
         return list.size();
     }
@@ -308,7 +312,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
             for (int i = 0; i < list.size(); i++) {
                 sb.append("[[");
                 if (!CString.rawSafe(chain)) {
-                    sb.append(AbstLexer.addSlashes(chain));
+                    AbstLexer.addSlashes(chain, sb);
                 } else {
                     sb.append(chain);
                 }
@@ -318,7 +322,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
             return sb.delete(sb.length() - 1, sb.length());
         } else {
             if (!CString.rawSafe(chain)) {
-                sb.append(AbstLexer.addSlashes(chain));
+                AbstLexer.addSlashes(chain, sb);
             } else {
                 sb.append(chain);
             }

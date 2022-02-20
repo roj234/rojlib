@@ -29,13 +29,9 @@ package roj.asm.tree.attr;
 import roj.asm.cst.CstUTF;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
-import roj.collect.LinkedMyHashMap;
+import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-
-import java.util.Map;
-import java.util.PrimitiveIterator;
 
 /**
  * @author Roj234
@@ -53,7 +49,7 @@ public final class AttrMethodParameters extends Attribute {
         initialize(r, pool);
     }
 
-    public final Map<String, FlagList> flags = new LinkedMyHashMap<>();
+    public final SimpleList<MethodParam> flags = new SimpleList<>();
 
     /*
     MethodParameters_attribute {
@@ -69,28 +65,37 @@ public final class AttrMethodParameters extends Attribute {
         short count = r.readUByte();
         for (int i = 0; i < count; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
-            FlagList list = AccessFlag.of(r.readShort());
-            flags.put(name, list);
+            flags.add(new MethodParam(name, r.readChar()));
         }
     }
 
     @Override
     protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.putShort((short) flags.size());
-        for (Map.Entry<String, FlagList> e : flags.entrySet()) {
-            w.putShort(pool.getUtfId(e.getKey())).putShort(e.getValue().flag);
+        for (int i = 0, size = flags.size(); i < size; i++) {
+            MethodParam e = flags.get(i);
+            w.putShort(pool.getUtfId(e.name)).putShort(e.flag);
         }
     }
 
     public String toString() {
         StringBuilder sb = new StringBuilder("MethodParameters: \n");
-        for (Map.Entry<String, FlagList> e : flags.entrySet()) {
-            sb.append("            Name: ").append(e.getKey()).append("\n         Access: ");
-            for (PrimitiveIterator.OfInt itr = e.getValue().iterator(); itr.hasNext(); ) {
-                sb.append(AccessFlag.byIdParameter(itr.nextInt())).append(' ');
-            }
+        for (int i = 0; i < flags.size(); i++) {
+            MethodParam e = flags.get(i);
+            sb.append("    Name: ").append(e.name).append("\n    Access: ");
+            AccessFlag.toString(e.flag, AccessFlag.TS_PARAM, sb);
             sb.append('\n');
         }
         return sb.toString();
+    }
+
+    public static final class MethodParam {
+        public String name;
+        public char flag;
+
+        public MethodParam(String name, char flag) {
+            this.name = name;
+            this.flag = flag;
+        }
     }
 }

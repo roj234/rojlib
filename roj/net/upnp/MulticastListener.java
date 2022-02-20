@@ -37,7 +37,7 @@ class MulticastListener extends Thread implements Shutdownable {
 
         try (DatagramSocket rcv = new DatagramSocket(UPnPUtil.UPNP_ADDRESS)) {
             rcv.setSoTimeout(500);
-            while (true) {
+            while (!Thread.interrupted()) {
                 try {
                     rcv.receive(pkt);
                     UPnPDevice device = new UPnPDevice(null, pkt.getAddress());

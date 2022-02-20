@@ -25,10 +25,9 @@
  */
 package roj.net.http.serv;
 
-import roj.net.WrappedSocket;
+import roj.io.IOUtil;
 import roj.net.http.Code;
 import roj.net.http.IllegalRequestException;
-import roj.text.CharList;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -78,32 +77,30 @@ public class StringResponse implements Response {
         return new StringResponse(sw.toString(), "text/html");
     }
 
-    ByteBuffer buf;
+    private ByteBuffer buf;
 
-    public void prepare() throws IOException {
+    public void prepare() {
         if (buf == null) {
-            ByteList list = new ByteList(content.length());
-            ByteList.writeUTF(list, content, (byte) -1);
-            list.put((byte) '\r');
-            list.put((byte) '\n'); // EOF flag
-            buf = ByteBuffer.wrap(list.list, 0, list.wIndex());
+            buf = ByteBuffer.wrap(IOUtil.SharedUTFCoder.get().encode(content));
         } else {
             buf.position(0);
         }
     }
 
-    public boolean send(WrappedSocket channel) throws IOException {
-        if (buf == null)
-            throw new IllegalStateException("Not prepared");
-        channel.write(buf);
+    public boolean send(RequestHandler rh) throws IOException {
+        if (buf == null) throw new IllegalStateException("Not prepared");
+        rh.write(buf);
         return buf.hasRemaining();
     }
 
-    public void release() {}
+    @Override
+    public boolean wantCompress() {
+        return content.length() > 64;
+    }
 
     @Override
-    public void writeHeader(CharList list) {
-        list.append("Content-Type: ").append(mime).append(CRLF)
-                .append("Content-Length: ").append(Integer.toString(buf.remaining() - 2)).append(CRLF);
+    public void writeHeader(ByteList list) {
+        list.putAscii("Content-Type: ").putAscii(mime).putAscii(CRLF)
+            .putAscii("Content-Length: ").putAscii(Integer.toString(buf.capacity())).putAscii(CRLF);
     }
 }

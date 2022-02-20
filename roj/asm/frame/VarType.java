@@ -25,7 +25,6 @@
  */
 package roj.asm.frame;
 
-import roj.asm.type.NativeType;
 import roj.asm.type.Type;
 import roj.concurrent.OperationDone;
 
@@ -48,28 +47,28 @@ public final class VarType {
         if(type.array > 0)
             return -2;
         switch (type.type) {
-            case NativeType.VOID:
+            case Type.VOID:
                 return -1;
-            case NativeType.BOOLEAN:
-            case NativeType.BYTE:
-            case NativeType.CHAR:
-            case NativeType.SHORT:
-            case NativeType.INT:
-                return 1;
-            case NativeType.FLOAT:
-                return 2;
-            case NativeType.DOUBLE:
-                return 3;
-            case NativeType.LONG:
-                return 4;
-            case NativeType.CLASS:
+            case Type.BOOLEAN:
+            case Type.BYTE:
+            case Type.CHAR:
+            case Type.SHORT:
+            case Type.INT:
+                return INT;
+            case Type.FLOAT:
+                return FLOAT;
+            case Type.DOUBLE:
+                return DOUBLE;
+            case Type.LONG:
+                return LONG;
+            case Type.CLASS:
                 return -2;
         }
         throw OperationDone.NEVER;
     }
 
     static final String[] toString = {
-            "top", "int", "float", "double", "long", "null", "uninitial_this", "object", "uninitial"
+            "top", "int", "long", "float", "double", "null", "uninitial_this", "object", "uninitial"
     };
 
     public static String toString(byte type) {

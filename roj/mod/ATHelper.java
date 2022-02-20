@@ -29,6 +29,7 @@ package roj.mod;
 import roj.asm.AccessTransformer;
 import roj.collect.MyHashSet;
 import roj.io.MutableZipFile;
+import roj.io.ZipFileWriter;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 
@@ -48,21 +49,19 @@ import static roj.mod.Shared.TMP_DIR;
 final class ATHelper {
     static final class Library {
         final MutableZipFile source;
-        final long lastModify;
+        long lastModify;
 
         Library(File file) throws IOException {
-            this.source = new MutableZipFile(file, MutableZipFile.FLAG_READ_ATTR);
+            source = new MutableZipFile(file, MutableZipFile.FLAG_READ_ATTR);
             lastModify = file.lastModified();
         }
     }
 
     private static final List<Library> libraries = new ArrayList<>();
 
-    private File binJar;
-    private ByteList atCfg;
+    public static void init(String name, Map<String, Collection<String>> map) throws IOException {
+        Shared.loadSrg2Mcp();
 
-    public void init(String name, ByteList atCfg, Map<String, Collection<String>> map) throws IOException {
-        Shared.load_S2M_Map();
         if (libraries.isEmpty()) {
             for (File path : new File(BASE, "class").listFiles()) {
                 String fn = path.getName().trim().toLowerCase();
@@ -70,13 +69,12 @@ final class ATHelper {
                     libraries.add(new Library(path));
             }
         }
+        reopen();
 
-        this.atCfg = atCfg;
-        File binJar = this.binJar = new File(TMP_DIR, "at-" + name.hashCode() + ".jar");
+        File binJar = getJar(name);
 
         MyHashSet<String> tmp = new MyHashSet<>();
-        MutableZipFile mzf = new MutableZipFile(binJar);
-        mzf.clear();
+        ZipFileWriter zfw = new ZipFileWriter(binJar);
         for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
             name = entry.getKey().replace('.', '/') + ".class";
 
@@ -86,20 +84,17 @@ final class ATHelper {
             }
             byte[] transform = transform(name, tmp);
             if(transform == null) {
-                CmdUtil.warning("无法转换 " + entry.getKey());
+                CmdUtil.warning("无法转换 " + name);
             } else
-                mzf.setFileData(name, new ByteList(transform));
+                zfw.writeNamed(name, new ByteList(transform));
         }
-        mzf.store();
-        mzf.close();
+        zfw.close();
+
+        close();
     }
 
-    public ByteList getAtCfgBytes() {
-        return atCfg;
-    }
-
-    public String getFakeJarPath() {
-        return binJar.getAbsolutePath();
+    public static File getJar(String name) {
+        return new File(TMP_DIR, "at-" + name.hashCode() + ".jar");
     }
 
     public static void gc() throws IOException {
@@ -109,52 +104,53 @@ final class ATHelper {
         libraries.clear();
     }
 
-    static byte[] transform(String name, Set<String> names) throws IOException {
-        byte[] is = null;
-        IOException ex = null;
-        for (int i = 0; i < libraries.size(); i++) {
-            Library library = libraries.get(i);
-            MutableZipFile zf = library.source;
-            if (zf.file.lastModified() != library.lastModify) {
-                try {
-                    zf.close();
-                } catch (IOException e) {
-                    if (ex == null)
-                        ex = e;
-                    else
-                        ex.addSuppressed(e);
-                }
-
-                if (zf.file.isFile()) {
-                    try {
-                        libraries.set(i, new Library(zf.file));
-                    } catch (IOException e) {
-                        libraries.remove(i--);
-                        if (ex == null)
-                            ex = e;
-                        else
-                            ex.addSuppressed(e);
-                    }
-                } else {
-                    libraries.remove(i--);
-                }
-            }
+    private static void reopen() {
+        for (int i = libraries.size() - 1; i >= 0; i--) {
+            Library lib = libraries.get(i);
+            MutableZipFile zf = lib.source;
 
             try {
-                is = zf.getFileData(name);
-                if (is != null)
-                    break;
+                zf.reopen();
+                if (zf.file.lastModified() != lib.lastModify) {
+                    if (zf.file.isFile()) {
+                        zf.read();
+                        lib.lastModify = zf.file.lastModified();
+                    } else {
+                        zf.close();
+                        libraries.remove(i);
+                    }
+                }
             } catch (IOException e) {
-                if (ex != null)
-                    e.addSuppressed(ex);
-                throw e;
+                e.printStackTrace();
             }
         }
-        if (ex != null)
-            ex.printStackTrace();
-        if(is != null) {
-            is = AccessTransformer.openSome(is, names);
+    }
+
+    private static void close() {
+        for (int i = 0; i < libraries.size(); i++) {
+            try {
+                libraries.get(i).source.tClose();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        return is;
+    }
+
+    private static byte[] transform(String name, Set<String> names) {
+        for (int i = libraries.size() - 1; i >= 0; i--) {
+            Library lib = libraries.get(i);
+            MutableZipFile zf = lib.source;
+
+            try {
+                byte[] is = zf.get(name);
+                if (is != null) {
+                    return AccessTransformer.openSome(is, names);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return null;
     }
 }

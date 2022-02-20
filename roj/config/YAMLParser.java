@@ -79,7 +79,7 @@ public class YAMLParser extends Parser {
      * @param flag COMMENT NO_DUPLICATE_KEY LITERAL_KEY
      */
     public static CEntry parse(YAMLLexer wr, int flag) throws ParseException {
-        CEntry ce = yamlRead(wr, (byte) (flag & (NO_DUPLICATE_KEY | LITERAL_KEY)), Serializers.DEFAULT);
+        CEntry ce = yamlRead(wr, (byte) (flag & (NO_DUPLICATE_KEY | LITERAL_KEY)), null);
         if (wr.nextWord().type() != WordPresets.EOF) {
             throw wr.err("期待 /EOF");
         }

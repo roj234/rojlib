@@ -26,12 +26,12 @@
 package roj.mod;
 
 import roj.asm.AccessTransformer;
-import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.concurrent.Waitable;
 import roj.concurrent.task.AbstractExecutionTask;
 import roj.concurrent.task.ExecutionTask;
 import roj.config.data.CEntry;
@@ -41,20 +41,24 @@ import roj.config.data.Type;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
+import roj.dev.ByteListOutput;
+import roj.dev.Compiler;
 import roj.io.*;
+import roj.io.down.Downloader;
 import roj.mapper.CodeMapper;
 import roj.mapper.ConstMapper;
 import roj.mapper.ConstMapper.State;
+import roj.mapper.Mapping;
 import roj.mapper.Util;
 import roj.mapper.util.ResWriter;
 import roj.math.Version;
+import roj.mod.FileFilter.CmtATEntry;
 import roj.mod.MCLauncher.RunMinecraftTask;
-import roj.mod.compiler.ByteListOutput;
-import roj.mod.compiler.Compiler;
 import roj.mod.fp.Proc1_12;
 import roj.mod.fp.Proc1_16;
 import roj.mod.fp.Processor;
 import roj.mod.util.MappingHelper;
+import roj.mod.util.YarnMapping;
 import roj.text.CharList;
 import roj.text.SimpleLineReader;
 import roj.text.TextUtil;
@@ -64,9 +68,6 @@ import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.*;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -95,11 +96,7 @@ public final class FMDMain {
         long startTime = System.currentTimeMillis();
 
         if(!isCLI) {
-            if (!CONF_INDEX.exists()) {
-                config(new String[]{"config", "select"}, null);
-            }
-
-            Shared.loadConfig(true);
+            Shared.loadProject(true);
             if(args.length == 0) {
                 CmdUtil.error("F", false);
                 CmdUtil.success("M", false);
@@ -132,7 +129,7 @@ public final class FMDMain {
 
             isCLI = true;
             Tokenizer tokenizer = new Tokenizer();
-            Map<String, String> shortcuts = Helpers.cast(MAIN_CONFIG.getOrCreateMap("CLI Shortcuts").unwrap());
+            Map<String, String> shortcuts = Helpers.cast(CONFIG.getOrCreateMap("CLI Shortcuts").unwrap());
             if(shortcuts.isEmpty())
                 shortcuts = Collections.emptyMap();
 
@@ -175,7 +172,7 @@ public final class FMDMain {
                 exitCode = forgeToMcp(args);
                 break;
             case "config":
-                exitCode = config(args, currentProject);
+                exitCode = config(args, project);
                 break;
             case "deobf":
                 exitCode = deobf(args);
@@ -188,14 +185,17 @@ public final class FMDMain {
                 break;
             case "auto":
                 assert isCLI;
+                if (args.length < 2) {
+                    System.out.println("auto <true/false>");
+                    break;
+                }
                 AutoCompile.setEnabled(Boolean.parseBoolean(args[1]));
                 break;
             case "reload":
                 if(isCLI) {
                     CmdUtil.warning("重新加载映射表...");
                     mapperFwd.clear();
-                    initForwardMapper();
-                    mapperRev = null;
+                    loadMapper();
                 }
                 break;
             case "download": {
@@ -203,17 +203,14 @@ public final class FMDMain {
                 String url;
                 if(args.length != 3) {
                     downloadPath = new File(UIUtil.userInput("下载保存位置: "));
-                    FileUtil.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
                     String ua = UIUtil.userInput("UA(可选): ");
                     if(!ua.equals(""))
-                        FileUtil.USER_AGENT = ua;
+                        FileUtil.userAgent = ua;
                     url = UIUtil.userInput("网址: ");
                 } else {
                     downloadPath = new File(args[1]);
                     url = args[2];
                 }
-
-                FileUtil.MIN_ASYNC_SIZE = 1024 * 64;
 
                 if(!downloadPath.isDirectory() && !downloadPath.mkdirs()) {
                     CmdUtil.warning("下载目录不存在且无法创建");
@@ -222,7 +219,7 @@ public final class FMDMain {
                 }
 
                 try {
-                    FileUtil.downloadFileAsync(url, downloadPath).waitFor();
+                    Downloader.downloadMTD(url, downloadPath).waitFor();
                 } catch (IOException e) {
                     CmdUtil.warning("文件下载失败, 您可以重试，断点数据已经保存");
                     exitCode = -1;
@@ -328,7 +325,7 @@ public final class FMDMain {
             files = Collections.singletonList(UIUtil.readFile("文件"));
         }
 
-        ConstMapper rev = getReverseMapper();
+        ConstMapper rev = loadReverseMapper();
 
         MyHashMap<String, byte[]> res = new MyHashMap<>(400);
 
@@ -343,7 +340,7 @@ public final class FMDMain {
             File out = index == -1 ? new File(path + "-结果") : new File(path.substring(0, index) + "-结果.jar");
             ZipFileWriter zfw = new ZipFileWriter(out);
 
-            ExecutionTask task = parallel.pushRunnable(new ResWriter(zfw, res));
+            ExecutionTask task = Task.pushRunnable(new ResWriter(zfw, res));
 
             rev.remap(DEBUG, list);
             rev.getExtendedSuperList().add(rev.snapshot(state));
@@ -360,7 +357,7 @@ public final class FMDMain {
 
             for (int j = 0; j < list.size(); j++) {
                 Context ctx = list.get(j);
-                zfw.writeNamed(ctx.getFileName(), ctx.get(true));
+                zfw.writeNamed(ctx.getFileName(), ctx.get());
             }
             zfw.finish();
 
@@ -411,15 +408,15 @@ public final class FMDMain {
             }
         }
 
-        File jarFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar");
+        File jarFile = new File(BASE, "class/" + MC_BINARY + ".jar");
         File tmpFile;
         if(FileUtil.checkTotalWritePermission(jarFile)) {
             tmpFile = jarFile;
         } else {
-            FileUtil.copyFile(jarFile, tmpFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.tmp"));
+            FileUtil.copyFile(jarFile, tmpFile = new File(BASE, "class/" + MC_BINARY + ".jar.tmp"));
         }
 
-        File backupFile = new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak");
+        File backupFile = new File(BASE, "class/" + MC_BINARY + ".jar.bak");
         if(!backupFile.isFile()) {
             FileUtil.copyFile(jarFile, backupFile);
         }
@@ -434,7 +431,7 @@ public final class FMDMain {
                 continue;
 
             if(clearPkgInfo && ze.getName().endsWith("package-info.class")) {
-                mz.setFileData(ze.getName(), null);
+                mz.put(ze.getName(), null);
                 continue;
             }
 
@@ -445,7 +442,7 @@ public final class FMDMain {
                 if(subs != null)
                     code = AccessTransformer.openSubClass(code, subs);
 
-                mz.setFileData(ze.getName(), new ByteList(code));
+                mz.put(ze.getName(), new ByteList(code));
 
                 CmdUtil.success("转换 " + ze.getName());
             }
@@ -458,7 +455,7 @@ public final class FMDMain {
         }
 
         if(jarFile != tmpFile && ((jarFile.isFile() && !jarFile.delete()) || !tmpFile.renameTo(jarFile)))
-            CmdUtil.warning("请手动重命名 " + MERGED_FILE_NAME + ".jar.tmp为.jar");
+            CmdUtil.warning("请手动重命名 " + MC_BINARY + ".jar.tmp为.jar");
         else
             CmdUtil.success("完毕");
 
@@ -471,12 +468,12 @@ public final class FMDMain {
         if(cfg != null) {
             if (cfg.atConfigPathStr == null)
                 return;
-            CMapping mapping = MAIN_CONFIG.getDot("预AT.编译期+运行期").asMap().get(cfg.name).asMap();
+            CMapping mapping = CONFIG.getDot("预AT.编译期+运行期").asMap().get(cfg.name).asMap();
 
             loadATMap(mapping, false);
         } else {
-            Shared.load_S2M_Map();
-            for(CEntry ce : MAIN_CONFIG.getDot("预AT.编译期+运行期").asMap().values()) {
+            Shared.loadSrg2Mcp();
+            for(CEntry ce : CONFIG.getDot("预AT.编译期+运行期").asMap().values()) {
                 if(ce.getType() == Type.MAP)
                     loadATMap(ce.asMap(), true);
             }
@@ -520,8 +517,8 @@ public final class FMDMain {
 
     // endregion
 
-    public static int config(String[] args, Project project) throws IOException {
-        List<File> files = FileUtil.findAllFiles(PROJ_CONF_DIR, (f) -> !f.getName().equalsIgnoreCase("index.json"));
+    public static int config(String[] args, Project p) throws IOException {
+        List<File> files = FileUtil.findAllFiles(PROJECTS_DIR, (f) -> !f.getName().equalsIgnoreCase("index.json"));
         if(args.length > 2) {
             File path = new File(args[2] + ".json");
             if(!path.isFile()) {
@@ -540,19 +537,19 @@ public final class FMDMain {
                 editConfig(files);
                 break;
             case "select":
-                CmdUtil.info("当前的配置文件: " + (project == null ? "无" : project.getFile()));
+                CmdUtil.info("当前的配置文件: " + (p == null ? "无" : p.getFile()));
                 System.out.println();
 
                 if(files.isEmpty()) {
                     CmdUtil.info("没有配置文件! 创建默认配置...");
                     File file;
-                    editConfig0(file = new File(PROJ_CONF_DIR, "default.json"));
+                    editConfig0(file = new File(PROJECTS_DIR, "default.json"));
                     files = Collections.singletonList(file);
                 }
 
                 File selected = files.get(UIUtil.selectOneFile(files, "配置文件"));
 
-                Shared.setConfig(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
+                Shared.setProject(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
                 CmdUtil.success("配置文件已选择: " + selected);
                 break;
             default:
@@ -628,7 +625,7 @@ public final class FMDMain {
 
     // endregion
 
-    public static int run(Map<String, Object> args) throws IOException, InterruptedException {
+    public static int run(Map<String, Object> args) throws IOException {
         MCLauncher.load();
         if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
             if (UIUtil.readBoolean("MC没有退出,是否结束进程 (注意，热重载需要且只支持build)?")) {
@@ -645,31 +642,47 @@ public final class FMDMain {
         }
 
         File dest = new File(mc_conf.getString("root") + File.separatorChar + "mods" + File.separatorChar);
-        int v = compile(args, currentProject, dest, 1);
+
+        Shared.singletonLock();
+        AutoCompile.beforeCompile();
+        int v = -1;
+        try {
+            v = compile(args, project, dest, 1);
+        } finally {
+            Shared.singletonUnlock();
+            AutoCompile.afterCompile(v);
+        }
+
         if(v >= 0) {
-            dest = new File(dest, currentProject.name + ".jar");
+            dest = new File(dest, project.name + ".jar");
             if(!dest.isFile()) {
                 CmdUtil.warning("目标jar不存在");
                 return -1;
             }
 
-            boolean asyncRun = MAIN_CONFIG.getDot("FMD配置.异步运行MC").asBool();
+            try {
+                executeCommand(dest, 1);
+            } catch (IOException e) {
+                CmdUtil.warning("无法执行指令", e);
+            }
 
-            if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBool()) {
+            boolean asyncRun = CONFIG.getBool("异步运行MC");
+
+            if(CONFIG.getBool("启用热重载")) {
                 asyncRun = true;
 
-                // default 4485
-                char port = (char) MAIN_CONFIG.getDot("FMD配置.重载端口").asInteger();
+                int port = 0xFFFF & CONFIG.getInteger("重载端口");
+                if (port == 0) port = 4485;
 
                 String jvm = mc_conf.getString("jvmArg");
                 mc_conf.put("jvmArg", jvm + " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port);
 
                 if(DEBUG)
-                    CmdUtil.info("重载工具已在端口 4485 上启动");
+                    CmdUtil.info("重载工具已在端口 " + port + " 上启动");
             }
 
             if (asyncRun) {
-                parallel.pushTask(MCLauncher.task = new RunMinecraftTask(true));
+                Task.pushTask(MCLauncher.task = new RunMinecraftTask(true));
                 return 0;
             } else {
                 return MCLauncher.runClient(mc_conf, 3, null);
@@ -679,41 +692,31 @@ public final class FMDMain {
         }
     }
 
-    public static int build(Map<String, Object> args) throws IOException, InterruptedException {
-        if(MAIN_CONFIG.getDot("FMD配置.启用热重载").asBool())
-            args.put("_HOT_RELOAD_ENABLE_", Helpers.cast(new ArrayList<>()));
+    public static int build(Map<String, Object> args) throws IOException {
+        if(hotReload != null) args.put("$$HR$$", new ArrayList<>());
 
-        int v = compile(args, currentProject, BASE, 0);
+        Shared.singletonLock();
+        AutoCompile.beforeCompile();
+        int v = -1;
+        try {
+            v = compile(args, project, BASE, 0);
+        } finally {
+            Shared.singletonUnlock();
+            AutoCompile.afterCompile(v);
+        }
+        if (v > 0) {
+            try {
+                executeCommand(BASE, 0);
+            } catch (IOException e) {
+                CmdUtil.warning("无法执行指令", e);
+            }
+        }
+
         if(v == 1) {
-            hotReload:
-            if(args.containsKey("_HOT_RELOAD_ENABLE_")) {
-                List<ConstantData> modified = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
-                if (modified.isEmpty())
-                    break hotReload;
-
-                ByteList bw = new ByteList().put((byte) 0x66)
-                                                .putShort(modified.size());
-                for (int i = 0; i < modified.size(); i++) {
-                    ConstantData data = modified.get(i);
-                    ByteList buf = Parser.toByteArrayShared(data);
-                    byte[] nb = data.name.replace('/', '.').getBytes(StandardCharsets.UTF_8);
-                    bw.putShort(nb.length)
-                      .put(nb)
-                      .putInt(buf.wIndex())
-                      .put(buf);
-                }
-
-                InetSocketAddress addr = new InetSocketAddress(InetAddress.getLoopbackAddress(), 4485);
-                try (Socket socket = new Socket()) {
-                    socket.setSoTimeout(1000);
-                    socket.connect(addr);
-                    bw.writeToStream(socket.getOutputStream());
-                    if(DEBUG)
-                        CmdUtil.success("发送重载请求");
-                } catch (IOException e) {
-                    CmdUtil.error("工具连接失败");
-                    e.printStackTrace();
-                }
+            List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
+            if(modified != null && !modified.isEmpty()) {
+                hotReload.sendChanges(modified);
+                if(DEBUG) CmdUtil.success("发送重载请求");
             }
 
             return 0;
@@ -721,29 +724,44 @@ public final class FMDMain {
         return v;
     }
 
+    private static void executeCommand(File base, int flag) throws IOException {
+        Project proj = project;
+
+        String jarName = proj.name + ((flag & 1) == 0 ? '-' + proj.version : "") + ".jar";
+        String jarPath = base.getAbsolutePath() + '/' + jarName;
+
+        CMapping cmd = CONFIG.get("编译成功后执行指令").asMap();
+        CList list = cmd.get("**").asList();
+        ex(list, jarPath);
+        list = (cmd.containsKey(proj.name) ? cmd.get(proj.name) : cmd.get("*")).asList();
+        ex(list, jarPath);
+    }
+
+    private static void ex(CList suc, String jarPath) throws IOException {
+        for (int i = 0; i < suc.size(); i++) {
+            Runtime.getRuntime().exec(suc.get(i).asString().replace("%jar", jarPath).replace("%name", project.name));
+        }
+    }
+
     /**
      * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
      */
-    public static int compile(Map<String, ?> args, Project project, File jarDest, int flag) throws IOException, InterruptedException {
-        // 前置
+    private static int compile(Map<String, ?> args, Project p, File jarDest, int flag) throws IOException {
         if((flag & 2) == 0) {
-            if(!args.containsKey("zl"))
-                watcher.reset();
-
-            for (Project proj : project.getAllDependencies()) {
+            for (Project proj : p.getAllDependencies()) {
                 if(compile(args, proj, jarDest, flag | 2) < 0) {
                     CmdUtil.info("前置编译失败");
                     return -1;
                 }
-                proj.registerWatcher();
             }
         }
 
         boolean increment = args.containsKey("zl");
+        long time = System.currentTimeMillis();
 
-        // region 获取所有源文件并(可选的)检测AT
+        // region 检测代码更改
 
-        File source = project.source;
+        File source = p.srcPath;
         if(!source.isDirectory()) {
             CmdUtil.warning("源码目录 " + source.getAbsolutePath() + " 不存在");
             return -1;
@@ -751,140 +769,134 @@ public final class FMDMain {
 
         List<File> files = null;
         if(increment) {
-            MyHashSet<String> set = watcher.getModified(project, ProjectWatcher.ID_SRC);
+            MyHashSet<String> set = watcher.getModified(p, FileWatcher.ID_SRC);
             if(!set.contains(null)) {
                 files = new ArrayList<>(set.size());
-                for (String s : set) {
-                    files.add(new File(s));
+                synchronized (set) {
+                    for (String s : set) {
+                        files.add(new File(s));
+                    }
+                    if (DEBUG) System.out.println("FileWatcher.getSrc(): " + set);
+                    //set.clear();
                 }
-                if (DEBUG)
-                    System.out.println("Use ProjectWatcher.getSrc(): " + set);
             }
         }
 
-        File stampFile = project.stamp;
-        if(!stampFile.isFile()) {
-            if(!stampFile.createNewFile() || !stampFile.setLastModified(0)) {
-                CmdUtil.warning("时间戳设置失败");
-            }
-        }
-        long stamp = stampFile.lastModified();
+        long stamp = p.binJar.lastModified();
 
         if(files == null) {
             files = FileUtil.findAllFiles(source, FileFilter.INST.reset(stamp, increment ? FileFilter.F_SRC_TIME : FileFilter.F_SRC_ANNO));
-            if (DEBUG)
-                System.out.println("Use FileFilter.getSrc(): " + files);
+            if (DEBUG) System.out.println("FileFilter.getSrc(): " + (files.size() < 100 ? files : files.subList(0, 100)));
         }
-        if (MAIN_CONFIG.getBool("自动备份源码") && !files.isEmpty()) {
-            MutableZipFile sourceZip = project.sourceZip;
-            String srcPath = source.getAbsolutePath();
-            if (!increment) {
-                ZipFileWriter zfw = new ZipFileWriter(sourceZip.file);
-                ByteList shared = IOUtil.getSharedByteBuf();
-                for (int i = 0; i < files.size(); i++) {
-                    File file = files.get(i);
-                    shared.clear();
-                    try (InputStream in = new FileInputStream(file)) {
-                        shared.readStreamFully(in);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    zfw.writeNamed(file.getAbsolutePath()
-                                       .substring(srcPath.length() + 1)
-                                       .replace(File.separatorChar, '/'), shared, ZipEntry.STORED);
-                }
 
-                zfw.setComment("");
-                zfw.finish();
+        if(DEBUG)
+            System.out.println("检测更改 " + (System.currentTimeMillis() - time));
 
-                sourceZip.read();
-            } else {
-                for (int i = 0; i < files.size(); i++) {
-                    File file = files.get(i);
-                    sourceZip.setFileData(file.getAbsolutePath()
-                                              .substring(srcPath.length() + 1)
-                                              .replace(File.separatorChar, '/'), new ByteList(IOUtil.read(file))).compress = false;
-                }
-                // compress all ?
-                sourceZip.store();
+        // endregion
+        // region 自动备份源码
+
+        if (CONFIG.getBool("自动备份源码") && !files.isEmpty()) {
+            ZipOutput src = p.srcFile;
+            try {
+                src.begin(!increment);
+            } catch (Throwable e) {
+                CmdUtil.warning("压缩遇到了一些问题", e);
             }
+            String srcPath = source.getAbsolutePath();
+            for (int i = 0; i < files.size(); i++) {
+                File file = files.get(i);
+                src.set(file.getAbsolutePath()
+                            .substring(srcPath.length() + 1)
+                            .replace(File.separatorChar, '/'),
+                        new FileInputStream(file));
+            }
+            try {
+                src.end();
+            } catch (Throwable e) {
+                CmdUtil.warning("压缩遇到了一些问题", e);
+            }
+
+            if(DEBUG)
+                System.out.println("备份源码 " + (System.currentTimeMillis() - time));
         }
 
         // endregion
+        // region 检测权限转换标记
 
         if(increment) {
             for (int i = 0; i < files.size(); i++) {
                 File file = files.get(i);
                 if (FileFilter.checkATComments(file)) {
-                    CmdUtil.warning("找到AT注解, 使用全量编译");
+                    List<CmtATEntry> ent = FileFilter.cmtEntries;
+                    for (int j = 0; j < ent.size(); j++) {
+                        if (!p.atEntryCache.contains(ent.get(j))) {
+                            ent.clear();
 
-                    files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC_ANNO));
-                    increment = false;
-
-                    break;
+                            CmdUtil.warning("找到AT注解, 使用全量编译");
+                            files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC_ANNO));
+                            increment = false;
+                            break;
+                        }
+                    }
+                    ent.clear();
                 }
             }
         }
 
+        // endregion
+
+        File jarFile = new File(jarDest, p.name + ((flag & 1) == 0 ? '-' + p.version : "") + ".jar");
+        if (!ensureWritable(jarFile)) return -1;
+
+        // region 无代码更改
         if(files.isEmpty()) {
+            p.registerWatcher();
             if (increment) {
-                AbstractExecutionTask task = project.getResourceTask();
-                Project.resourceFilter.reset(stamp, FileFilter.F_RES_TIME);
-                task.calculate(null);
-
-                String jarName = project.name + ((flag & 1) == 0 ? '-' + project.version : "") + ".jar";
-                File jarFile = new File(jarDest, jarName);
-
                 if (!jarFile.isFile()) {
-                    CmdUtil.error("输出jar不存在, 请使用全量编译");
+                    CmdUtil.warning("输出jar不存在, 若只有资源文件修改, 请使用全量编译");
                     return -1;
                 }
 
-                int amount = 30 * 20;
-                while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile) && amount > 0) {
-                    if ((amount % 100) == 0) CmdUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
-                    LockSupport.parkNanos(50L * 1000L * 1000L);
-                    amount--;
-                }
-                if (amount == 0) return -1;
+                ZipOutput zo1 = updateDst(p, jarFile);
 
-                Map<String, ByteList> entries = Helpers.cast(project.resourceCache);
-                for (Map.Entry<String, ?> entry : entries.entrySet()) {
-                    if (entry.getValue() instanceof byte[]) entry.setValue(Helpers.cast(new ByteList((byte[]) entry.getValue())));
-                }
-
-                MutableZipFile mz = project.dstZip;
                 try {
-                    if (mz == null) {
-                        mz = project.dstZip = new MutableZipFile(jarFile);
-                    } else {
-                        mz.reopen();
-                    }
-                    mz.setFileDataMore(entries);
-                    mz.store();
-                    mz.tClose();
+                    zo1.begin(false);
+
+                    AbstractExecutionTask task = p.getResourceTask(1);
+                    Project.resourceFilter.reset(stamp, FileFilter.F_RES_TIME);
+                    task.calculate();
+                    task.get();
                 } catch (Throwable e) {
-                    if (e.getCause() instanceof EOFException) { CmdUtil.warning("似乎jar文件不完整 请尝试全量编译", e); } else CmdUtil.warning("MZF 遇到了一些问题, 请尝试删除 " + jarFile, e);
+                    CmdUtil.warning("资源写入失败", e);
                     return -1;
+                } finally {
+                    try {
+                        zo1.close();
+                    } catch (Throwable e) {
+                        CmdUtil.warning("压缩遇到了一些问题", e);
+                    }
                 }
             }
             if ((flag & 3) == 0)
                 CmdUtil.info("无源文件");
             return 0;
         }
+        // endregion
+        // region 应用权限转换
 
-        // OpenAny
-        ATHelper h = null;
         if(!FileFilter.cmtEntries.isEmpty()) {
-            if(project.atName.isEmpty()) {
-                CmdUtil.error(project.name + ": 使用了AT注解系统,却没有设置atConfig");
+            if(p.atName.isEmpty()) {
+                CmdUtil.error(p.name + ": 使用了AT注解系统,却没有设置atConfig");
                 return -1;
             }
+
+            p.atEntryCache.clear();
+            p.atEntryCache.addAll(FileFilter.cmtEntries);
 
             Map<String, Collection<String>> map = AccessTransformer.getTransforms();
 
             map.clear();
-            loadPreAT(project);
+            loadPreAT(p);
 
             CharList atData = new CharList();
             for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
@@ -905,125 +917,128 @@ public final class FMDMain {
                 map.computeIfAbsent(entry.clazz, Helpers.fnMyHashSet()).addAll(entry.value);
             }
 
-            ByteList val = ByteList.encodeUTF(atData);
-
-            try(FileOutputStream fos = new FileOutputStream(project.atConfigPathStr)) {
-                val.writeToStream(fos);
+            try(FileOutputStream fos = new FileOutputStream(p.atConfigPathStr)) {
+                IOUtil.SharedUTFCoder.get().encodeTo(atData, fos);
             }
 
-            h = new ATHelper();
-            h.init(project.name, val, map);
+            ATHelper.init(p.name, map);
         }
 
-        File jarFile = new File(jarDest, project.name + ((flag & 1) == 0 ? '-' + project.version : "") + ".jar");
+        // endregion
 
-        int amount = 30 * 20;
-        while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile) && amount > 0) {
-            if((amount % 100) == 0)
-                CmdUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
-            LockSupport.parkNanos(50L * 1000L * 1000L);
-            amount--;
-        }
-        if(amount == 0)
-            return -1;
+        boolean canIncrementWrite = increment & jarFile.isFile();
 
-        long time = System.currentTimeMillis();
+        ZipOutput zo1 = updateDst(p, jarFile);
 
-        // 反正compile时间绝对够
-
-        boolean canIncrementWrite = increment & project.state != null & jarFile.isFile();
-        if(!canIncrementWrite) {
-            if(project.dstZip != null) {
-                project.dstZip.close();
-                project.dstZip = null;
-            }
+        try {
+            zo1.begin(!canIncrementWrite);
+        } catch (Throwable e) {
+            CmdUtil.warning("压缩遇到了一些问题", e);
         }
 
         // region 更新资源文件
 
-        AbstractExecutionTask task = project.getResourceTask();
+        AbstractExecutionTask writeRes = p.getResourceTask(increment ? 1 : 0);
         Project.resourceFilter.reset(stamp, canIncrementWrite ? FileFilter.F_RES_TIME : FileFilter.F_RES);
-        parallel.pushTask(task);
+        Task.pushTask(writeRes);
+
+        // endregion
+        // region 制备依赖
+
+        CharList libBuf = new CharList(200);
+
+        if(p.binJar.length() > 0 && increment) {
+            libBuf.append(p.binJar.getAbsolutePath()).append(File.pathSeparatorChar);
+        }
+
+        libBuf.append(ATHelper.getJar(p.name).getAbsolutePath()).append(File.pathSeparatorChar);
+
+        List<Project> dependencies = p.getAllDependencies();
+        for (int i = 0; i < dependencies.size(); i++) {
+            libBuf.append(dependencies.get(i).binJar.getAbsolutePath()).append(File.pathSeparatorChar);
+        }
+        libBuf.append(getLibClasses());
 
         // endregion
 
-        // 库文件
-        CharList libBuf = new CharList(200);
-        if(project.stamp.length() > 0 && increment) {
-            libBuf.append(project.stamp.getAbsolutePath()).append(File.pathSeparatorChar);
-        }
-        if(h != null) {
-            libBuf.append(h.getFakeJarPath()).append(File.pathSeparatorChar);
-        }
-        List<Project> dependencies = project.getAllDependencies();
-        for (int i = 0; i < dependencies.size(); i++) {
-            libBuf.append(dependencies.get(i).stamp.getAbsolutePath()).append(File.pathSeparatorChar);
-        }
-        libBuf.append(getLibClasses());
-        if (DEBUG) {
-            System.out.println("ClassPath " + libBuf);
-        }
-
-        SimpleList<String> options = MAIN_CONFIG.get("编译参数").asList().asStringList();
-        options.addAll("-cp", libBuf.toString(), "-encoding", project.charset.name());
+        SimpleList<String> options = CONFIG.get("编译参数").asList().asStringList();
+        options.addAll("-cp", libBuf.toString(), "-encoding", p.charset.name());
 
         Compiler.showErrorCode(args.containsKey("showErrorCode"));
-        if(project.compiler.compile(options, files)) {
+        if(p.compiler.compile(options, files)) {
+            try {
+                writeRes.get();
+            } catch (ExecutionException | InterruptedException e) {
+                CmdUtil.warning("资源读取失败", e);
+            }
+
             if(DEBUG)
                 System.out.println("编译完成 " + (System.currentTimeMillis() - time));
 
-            try {
-                task.get();
-            } catch (ExecutionException e) {
-                e.printStackTrace();
-            }
+            MyHashMap<String, String> resources = p.resources;
 
-            List<ByteListOutput> outputs = project.compiler.getCompiled();
-            List<Context> list = new ArrayList<>(outputs.size());
+            List<ByteListOutput> outputs = p.compiler.getCompiled();
+            List<Context> list = Helpers.cast(outputs);
             for (int i = 0; i < outputs.size(); i++) {
                 ByteListOutput out = outputs.get(i);
-                list.add(new Context(out.getName(), out.getOutput()));
-            }
-            MutableZipFile stampZip = project.stampZip;
-            if (!increment) {
-                ZipFileWriter zfw = new ZipFileWriter(stampZip.file);
-                for (int i = 0; i < outputs.size(); i++) {
-                    ByteListOutput out = outputs.get(i);
-                    zfw.writeNamed(out.getName(), out.getOutput(), ZipEntry.STORED);
+                if (resources.remove(out.getName()) != null) {
+                    CmdUtil.warning("资源与类重复 " + out.getName());
                 }
-                zfw.setComment("This is 'DEV' version of your mod\r\n" +
-                                       "Powered by Roj234's FMDv" + VERSION);
-                zfw.finish();
 
-                stampZip.read();
-            } else {
-                for (int i = 0; i < outputs.size(); i++) {
-                    ByteListOutput out = outputs.get(i);
-                    stampZip.setFileData(out.getName(), out.getOutput()).compress = false;
-                }
-                // compress all ?
-                stampZip.store();
-
-                if(!canIncrementWrite) {
-                    MyHashSet<String> changed = new MyHashSet<>(list.size());
-                    for (int i = 0; i < list.size(); i++) {
-                        changed.add(list.get(i).getFileName());
-                    }
-                    for (MutableZipFile.EFile file : stampZip.getEntries().values()) {
-                        if(!changed.contains(file.getName()))
-                            list.add(new Context(file.getName(), stampZip.getFileData(file.getName())));
-                    }
-                }
+                list.set(i, new Context(out.getName(), out.getOutput()));
             }
 
-            MyHashMap<String, ?> resources = project.resourceCache;
+            writeRes = p.getResourceTask(2);
+            Task.pushTask(writeRes);
 
-            if (h != null) {
-                resources.put("META-INF/" + project.atName + ".cfg", Helpers.cast(h.getAtCfgBytes()));
+            int compiledCount = list.size();
+
+            ZipOutput stampZip = p.binFile;
+            try {
+                stampZip.begin(!increment);
+            } catch (Throwable e) {
+                CmdUtil.warning("压缩遇到了一些问题", e);
+            }
+
+            for (int i = 0; i < list.size(); i++) {
+                Context out = list.get(i);
+                stampZip.set(out.getFileName(), out);
+            }
+
+            if (increment & !canIncrementWrite) {
+                MyHashSet<String> changed = new MyHashSet<>(list.size());
+                for (int i = 0; i < list.size(); i++) {
+                    changed.add(list.get(i).getFileName());
+                }
+
+                MutableZipFile mzf = stampZip.getMZF();
+                boolean isOpen = mzf.isOpen();
+                if (!isOpen) mzf.reopen();
+                ByteList buf = IOUtil.getSharedByteBuf();
+                for (MutableZipFile.EFile file : mzf.getEntries().values()) {
+                    if (!changed.contains(file.getName())) {
+                        Context ctx = new Context(file.getName(), mzf.get(file, buf));
+                        list.add(ctx);
+                        ctx.getData();
+                        buf.clear();
+                    }
+                }
+                if (!isOpen) mzf.tClose();
+            }
+
+            try {
+                stampZip.end();
+            } catch (Throwable e) {
+                CmdUtil.warning("压缩遇到了一些问题", e);
             }
 
             if(DEBUG)
-                System.out.println("资源处理完成 " + (System.currentTimeMillis() - time));
+                System.out.println("代码处理完成 " + (System.currentTimeMillis() - time));
+
+            ZipOutput zo = p.dstFile;
+            zo.setComment("FMD " + VERSION + "\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
+
+            // region 映射
 
             List<State> depStates = mapperFwd.getExtendedSuperList();
             depStates.clear();
@@ -1031,110 +1046,90 @@ public final class FMDMain {
                 depStates.add(dependencies.get(i).state);
             }
 
-            if(canIncrementWrite) {
-                mapperFwd.state(project.state);
+            if (p.state != null) {
+                mapperFwd.state(p.state);
                 mapperFwd.remapIncrement(list);
-                project.state = mapperFwd.snapshot(project.state);
+            } else {
+                mapperFwd.remap(false, list);
+            }
+            p.state = mapperFwd.snapshot(p.state);
 
-                if(!isForgeMap) {
-                    new CodeMapper(mapperFwd).remap(DEBUG, list);
-                }
+            if(!isForgeMap) {
+                new CodeMapper(mapperFwd).remap(false, list);
+            }
 
-                if(DEBUG)
-                    System.out.println("映射完成 " + (System.currentTimeMillis() - time));
+            if(DEBUG)
+                System.out.println("映射完成 " + (System.currentTimeMillis() - time));
 
-                Map<String, ByteList> entries = Helpers.cast(resources);
+            // endregion
+            // region 写入映射结果
 
-                for (Map.Entry<String, ?> entry : entries.entrySet()) {
-                    if(entry.getValue() instanceof byte[])
-                        entry.setValue(Helpers.cast(new ByteList((byte[]) entry.getValue())));
-                }
+            try {
+                // 等待资源写入
+                writeRes.get();
+            } catch (ExecutionException | InterruptedException e) {
+                CmdUtil.warning("资源写入失败", e);
+            }
 
-                MutableZipFile mz = project.dstZip;
-                try {
-                    if(mz == null) {
-                        mz = project.dstZip = new MutableZipFile(jarFile);
-                    } else {
-                        mz.reopen();
-                    }
-                } catch (Throwable e) {
-                    if(e.getCause() instanceof EOFException)
-                        CmdUtil.warning("似乎jar文件不完整 请尝试全量编译", e);
-                    else CmdUtil.warning("MZF 遇到了一些问题, 请尝试删除 " + jarFile, e);
-                    return -1;
-                }
-
-                mz.setFileDataMore(entries);
-                for (int i = 0; i < list.size(); i++) {
-                    Context ctx = list.get(i);
-                    mz.setFileData(ctx.getFileName(), ctx.get());
-                    if(entries.containsKey(ctx.getFileName())) {
-                        CmdUtil.warning("发现重复的文件 " + ctx.getFileName());
-                    }
-                }
-
-                try {
-                    mz.store();
-                    mz.tClose();
-                } catch (Throwable e) {
-                    CmdUtil.warning("MZF 遇到了一些问题", e);
-                }
-
-                if(args.containsKey("_HOT_RELOAD_ENABLE_")) {
-                    List<ConstantData> dst = Helpers.cast(args.get("_HOT_RELOAD_ENABLE_"));
-                    for (Context data : list) {
-                        dst.add(data.getData());
+            if(increment) {
+                List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
+                if(modified != null) {
+                    for (int i = 0; i < compiledCount; i++) {
+                        modified.add(list.get(i).getData());
                     }
                 }
             } else {
-                for (int i = 0; i < list.size(); i++) {
-                    if (resources.remove(list.get(i).getFileName()) != null) {
-                        CmdUtil.warning("发现重复的文件 " + list.get(i).getFileName());
-                    }
-                }
-
-                ZipFileWriter zfw = new ZipFileWriter(jarFile);
-                ExecutionTask rw = parallel.pushRunnable(new ResWriter(zfw, resources));
-
-                mapperFwd.remap(DEBUG, list);
-                project.state = mapperFwd.snapshot(project.state);
-
-                if(!isForgeMap) {
-                    new CodeMapper(mapperFwd).remap(DEBUG, list);
-                }
-
-                if(DEBUG)
-                    System.out.println("映射完成 " + (System.currentTimeMillis() - time));
-
-                try {
-                    rw.get();
-                } catch (ExecutionException e) {
-                    CmdUtil.warning("资源写入失败", e);
-                }
-
-                for (int i = 0; i < list.size(); i++) {
-                    Context ctx = list.get(i);
-                    zfw.writeNamed(ctx.getFileName(), ctx.get(true));
-                }
-                zfw.setComment("Powered by Roj234's FMDv" + VERSION);
-                zfw.finish();
-
-                args.remove("_HOT_RELOAD_ENABLE_");
+                args.remove("$$HR$$");
             }
 
-            CmdUtil.success("编译成功! 耗时: " + ((double) (System.currentTimeMillis() - time) / 1000d));
-
-            if(!args.containsKey("dbg-nots")) {
-                if (!project.stamp.setLastModified(System.currentTimeMillis())) {
-                    throw new IOException("设置时间戳失败!");
-                }
+            for (int i = 0; i < list.size(); i++) {
+                Context ctx = list.get(i);
+                zo.set(ctx.getFileName(), ctx);
             }
 
-            project.registerWatcher();
+            // endregion
+
+            try {
+                zo.end();
+            } catch (Throwable e) {
+                CmdUtil.warning("压缩遇到了一些问题", e);
+            }
+
+            CmdUtil.success("编译成功! " + (System.currentTimeMillis() - time) + "ms");
+
+            if (!p.binJar.setLastModified(args.containsKey("dbg-nots") ? stamp : time)) {
+                throw new IOException("设置时间戳失败!");
+            }
+
+            p.registerWatcher();
             return 1;
         }
 
         return -1;
+    }
+
+    private static ZipOutput updateDst(Project p, File jarFile) throws IOException {
+        ZipOutput zo1 = p.dstFile;
+        if (zo1 == null || !zo1.file.getAbsolutePath().equals(jarFile.getAbsolutePath())) {
+            if (zo1 != null) {
+                zo1.close();
+                System.out.println("neq,change " + zo1.file.getAbsolutePath());
+                System.out.println(jarFile.getAbsolutePath());
+            }
+            p.dstFile = zo1 = new ZipOutput(jarFile);
+            zo1.setCompress(true);
+        }
+        return zo1;
+    }
+
+    private static boolean ensureWritable(File jarFile) {
+        int amount = 30 * 20;
+        while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile) && amount > 0) {
+            if ((amount % 100) == 0) CmdUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
+            LockSupport.parkNanos(50_000_000L);
+            amount--;
+        }
+        return amount != 0;
     }
 
     // region Build.util
@@ -1183,10 +1178,7 @@ public final class FMDMain {
     // endregion
 
     private static int changeVersion() throws IOException {
-        watcher.terminate();
-
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-        CMapping cfgFMD = MAIN_CONFIG.get("FMD配置").asMap();
+        CMapping cfgGen = CONFIG.get("通用").asMap();
 
         File mcRoot = new File(cfgGen.getString("MC目录"));
         if (!mcRoot.isDirectory())
@@ -1201,7 +1193,7 @@ public final class FMDMain {
             CmdUtil.error("没有找到任何MC版本！请确认目录名是.minecraft", true);
             return -1;
         } else {
-            String versionJson = cfgFMD.getString("MC版本JSON");
+            String versionJson = CONFIG.getString("MC版本JSON");
             if(!versionJson.isEmpty()) {
                 for (int i = 0; i < versions.size(); i++) {
                     File file = versions.get(i);
@@ -1222,11 +1214,11 @@ public final class FMDMain {
         watcher.terminate();
         mcRoot = mcRoot.getAbsoluteFile();
 
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-        CMapping cfgFMD = MAIN_CONFIG.get("FMD配置").asMap();
+        CMapping cfgGen = CONFIG.get("通用").asMap();
+        CMapping cfgFMD = CONFIG;
 
         MyHashSet<String> skipped = new MyHashSet<>();
-        readTextList(skipped::add, "FMD配置.忽略的libraries");
+        readTextList(skipped::add, "忽略的libraries");
         final File nativePath = new File(mcJson.getParentFile(), "$natives/");
         Object[] result = MCLauncher.getRunConf(mcRoot, mcJson, nativePath, skipped, true, cfgGen);
         if(result == null)
@@ -1304,7 +1296,7 @@ public final class FMDMain {
         int select = gui.getNumberInRange(0, 5);
 
         isForgeMap = select == 0/* && mcVersion < 1.17*/;
-        Shared.saveForgeMapping();
+        Shared.setProject(null);
 
         switch (select) {
             case 1: {
@@ -1382,7 +1374,7 @@ public final class FMDMain {
             mcpConfigFile = new File(TMP_DIR, "mcp_config-" + mcVersion + ".zip");
 
             try {
-                MCLauncher.downloadAndVerifyMD5(mcpConfUrl, mcpConfigFile, true);
+                MCLauncher.downloadAndVerifyMD5(mcpConfUrl, mcpConfigFile);
             } catch (FileNotFoundException e) {
                 CmdUtil.warning("错误: 404  MCP-Config不存在! 请检查镜像地址, 或者手动下载");
                 return -1;
@@ -1431,7 +1423,7 @@ public final class FMDMain {
                 }
 
                 try {
-                    MCLauncher.downloadAndVerifyMD5(mcpPackUrl, mcpPackFile, true);
+                    MCLauncher.downloadAndVerifyMD5(mcpPackUrl, mcpPackFile);
                 } catch (FileNotFoundException e) {
                     CmdUtil.warning("错误: 404 MCP不存在! 请检查你输入的MCP版本, 或者手动下载");
                     return -1;
@@ -1471,20 +1463,45 @@ public final class FMDMain {
                 break;
             }
             case 2: {
-                CmdUtil.warning("若raw.githubusercontent.com无法访问 请自己加hosts avatar.githubusercontent.com -> raw.githubusercontent.com");
-                // todo Yarn
+                CmdUtil.warning("若raw.githubusercontent.com无法访问 请自己解决");
+
                 File intermediary = new File(TMP_DIR, "/yarn_" + mcVersion + "_intermediary.txt");
-                MCLauncher.downloadAndVerifyMD5("https://github.com/FabricMC/intermediary/raw/master/mappings/" + mcVersion + ".tiny", null, intermediary, true);
+                Waitable w = Downloader.download("https://github.com/FabricMC/intermediary/raw/master/mappings/" + mcVersion + ".tiny", intermediary);
 
                 File map = new File(TMP_DIR, "/yarn_" + mcVersion + "_map.zip");
-                MCLauncher.downloadAndVerifyMD5("https://github.com/FabricMC/yarn/archive/" + mcVersion + ".zip", null, map, true);
+                Waitable w2 = Downloader.download("https://github.com/FabricMC/yarn/archive/" + mcVersion + ".zip", map);
+
+                w.waitFor();
+                w2.waitFor();
 
                 CmdUtil.info("生成MCP-SRG映射表...");
 
-                MappingHelper mh = new MappingHelper(false);
-                MappingHelper.Yarn yarn = mh.new Yarn();
-                yarn.parse(intermediary, map, mcVersion);
-                yarn.extract(mcpSrgPath);
+                // Notch -> Yarn
+                YarnMapping notch2yarn = new YarnMapping();
+                notch2yarn.load(intermediary, map, mcVersion);
+                // Yarn -> Notch
+                notch2yarn.reverse();
+
+                // Notch -> Srg
+                Mapping notch2srg = new Mapping();
+                if (is113andAbove) {
+                    ZipFile mcz = new ZipFile(mcpConfigFile);
+                    ZipEntry ze = mcz.getEntry("config/joined.tsrg");
+                    notch2srg.loadMap(mcz.getInputStream(ze), false);
+                    mcz.close();
+                } else {
+                    for (String pkg : libraries) {
+                        if (pkg.startsWith("net/minecraftforge")) {
+                            Proc1_12.__loadForge(new File(mcRoot, "/libraries/" + pkg), notch2srg);
+                            break;
+                        }
+                    }
+                }
+
+                // Yarn -> Srg
+                notch2srg.extend(notch2yarn);
+
+                notch2srg.saveMap(mcpSrgPath);
 
                 CmdUtil.info("生成完毕...");
             }
@@ -1534,7 +1551,7 @@ public final class FMDMain {
             return code;
 
         try {
-            FileUtil.copyFile(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar"), new File(BASE, "class/" + MERGED_FILE_NAME + ".jar.bak"));
+            FileUtil.copyFile(new File(BASE, "class/" + MC_BINARY + ".jar"), new File(BASE, "class/" + MC_BINARY + ".jar.bak"));
         } catch (IOException e) {
             CmdUtil.warning("备份失败", e);
         }
@@ -1722,7 +1739,7 @@ public final class FMDMain {
     }
 
     public static void readTextList(Consumer<String> set, String key) {
-        CEntry m = MAIN_CONFIG.getDot(key);
+        CEntry m = CONFIG.getDot(key);
         if (m.getType() == Type.LIST) {
             CList list = m.asList();
             List<CEntry> rl = list.raw();

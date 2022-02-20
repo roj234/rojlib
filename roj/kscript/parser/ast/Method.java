@@ -94,29 +94,29 @@ public class Method implements Expression {
 
         InsnList list = ctx.list;
         if(args.isEmpty()) {
-            list.add(NodeHelper.npc(Opcodes.ACONST_NULL));
+            list.add(NPInsnNode.of(Opcodes.ACONST_NULL));
         } else {
             compressArg();
             list.add(NodeHelper.loadInt(args.size()));
-            list.add(NodeHelper.npc(Opcodes.ICONST_0));
+            list.add(NPInsnNode.of(Opcodes.ICONST_0));
             list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/KScriptVM", "retainArgHolder", "(IZ)Ljava/util/List;"));
             for (int i = 0; i < args.size(); i++) {
                 Expression expr = args.get(i);
-                list.add(NodeHelper.npc(Opcodes.DUP));
+                list.add(NPInsnNode.of(Opcodes.DUP));
                 list.add(NodeHelper.loadInt(i));
                 expr.toVMCode(ctx, false);
                 list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"));
-                list.add(NodeHelper.npc(Opcodes.POP));
+                list.add(NPInsnNode.of(Opcodes.POP));
             }
         }
 
         list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/type/KType", "asFunction", "()Lroj/kscript/func/KFunction;"));
-        list.add(NodeHelper.npc(Opcodes.DUP));
+        list.add(NPInsnNode.of(Opcodes.DUP));
 
         int i = ctx.createTmpVar("fn");
         NodeHelper.compress(list, Opcodes.ASTORE, i);
 
-        list.add(NodeHelper.npc(Opcodes.SWAP));
+        list.add(NPInsnNode.of(Opcodes.SWAP));
         list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/KScriptVM", "retainJITArgList", "(Lroj/kscript/func/KFunction;Ljava/util/List;)Lroj/kscript/api/ArgList;"));
 
         int j = ctx.createTmpVar("args");
@@ -131,9 +131,9 @@ public class Method implements Expression {
 
             list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/func/KFunction", "invoke", "(Lroj/kscript/api/IObject;Lroj/kscript/api/ArgList;)Lroj/kscript/type/KType;"));
         } else {
-            list.add(NodeHelper.npc(Opcodes.DUP));
+            list.add(NPInsnNode.of(Opcodes.DUP));
             list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "roj/kscript/func/KFunction", "createInstance", "()Lroj/kscript/type/KType;"));
-            list.add(NodeHelper.npc(Opcodes.DUP));
+            list.add(NPInsnNode.of(Opcodes.DUP));
             list.add(new ClassInsnNode(Opcodes.INSTANCEOF, "roj/kscript/api/IObject"));
 
             LabelInsnNode label = new LabelInsnNode();
@@ -151,7 +151,7 @@ public class Method implements Expression {
             list.add(label);
         }
         if(noRet)
-            list.add(NodeHelper.npc(Opcodes.POP));
+            list.add(NPInsnNode.of(Opcodes.POP));
 
         NodeHelper.compress(list, Opcodes.ALOAD, j);
         list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "roj/kscript/vm/KScriptVM", "releaseArgList", "(Lroj/kscript/api/ArgList;)V"));

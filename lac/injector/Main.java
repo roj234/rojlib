@@ -36,10 +36,10 @@ import roj.asm.tree.FieldSimple;
 import roj.asm.tree.MethodSimple;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
-import roj.asm.util.FlagList;
 import roj.asm.util.Pack125;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.concurrent.TaskExecutor;
 import roj.config.data.CMapping;
 import roj.crypt.SM3;
@@ -50,6 +50,7 @@ import roj.io.ZipFileWriter;
 import roj.mapper.CodeMapper;
 import roj.mapper.Mapping;
 import roj.mapper.SimpleObfuscator;
+import roj.mapper.obf.policy.ClassicABC;
 import roj.mapper.obf.policy.SimpleNamer;
 import roj.mapper.util.Desc;
 import roj.mod.MCLauncher;
@@ -67,10 +68,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.attribute.FileTime;
 import java.util.List;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 import java.util.zip.Inflater;
@@ -79,9 +78,10 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import static lac.server.LACMod.VERSION;
-import static roj.mapper.SimpleObfuscator.*;
+import static roj.mapper.SimpleObfuscator.CLEAR_ATTR;
+import static roj.mapper.SimpleObfuscator.CLEAR_CODE_ATTR;
 import static roj.mod.MCLauncher.error;
-import static roj.mod.Shared.MAIN_CONFIG;
+import static roj.mod.Shared.CONFIG;
 
 /**
  * LAC Main Gui
@@ -94,7 +94,7 @@ public class Main extends JFrame {
 
     JButton jb;
     static JProgressBar stateBar;
-                        File   minecraftDir, modInfo;
+    File   minecraftDir, modInfo;
     public static final String AH_CLASS = AccessHelper.class.getName().replace('.', '/');
 
     public Main(File minecraftDir, File modInfo) {
@@ -188,7 +188,7 @@ public class Main extends JFrame {
         }
 
         try {
-            preInject(mc_conf, ComboRandom.from(config.getString("fdsgh r78e95hf8d89entb90 v bf0fRE%$&UJ")));
+            preInject(mc_conf, ComboRandom.from("fdsgh r78e95hf8d89entb90 v bf0fRE%$&UJ"));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -218,8 +218,6 @@ public class Main extends JFrame {
         System.setProperty("fmd.base_path", ".");
         System.setProperty("fmd.launch_only", "true");
         System.setProperty("roj.asm.ldc.clone", "true");
-        new File("config.json").createNewFile();
-        Shared.TMP_DIR.deleteOnExit();
         MCLauncher.load();
 
         UIUtil.systemLook();
@@ -230,7 +228,7 @@ public class Main extends JFrame {
         if (args.length > 0 || fc.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
             File mcRoot = args.length > 0 ? new File(args[0]) : fc.getSelectedFile();
 
-            MAIN_CONFIG.get("通用").asMap().put("MC目录", mcRoot.getAbsolutePath());
+            CONFIG.get("通用").asMap().put("MC目录", mcRoot.getAbsolutePath());
             List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
 
             File mcJson;
@@ -364,7 +362,8 @@ public class Main extends JFrame {
         List<String> libraries = TextUtil.split(new ArrayList<>(), mc_conf.getString("libraries"), ';');
         libraries.add(mc_conf.getString("jar"));
         for (String file : libraries) {
-            if(file.indexOf("com/mojang/patchy") >= 0) {
+            int li = file.lastIndexOf("libraries");
+            if (file.indexOf("minecraft", li) == -1) {
                 continue;
             }
             File file1 = new File(file);
@@ -394,7 +393,7 @@ public class Main extends JFrame {
         }
         stage(10, "备份class");
         packer.writeCompressed(box.streamAppend("classes.pak"));
-        box.endStream();
+        box.close();
         stage(20, "代码注入");
 
         File lac = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
@@ -415,17 +414,17 @@ public class Main extends JFrame {
         }
         modZip.close();
 
-        Owner owner = new Owner();
-        owner.name = "lac/injector/patch/Insert.class";
-        owner.owner = lac;
-        modClasses.put(owner, new Context(owner.name, IOUtil.read(owner.name)));
+        //Owner owner = new Owner();
+        //owner.name = "lac/injector/patch/Insert.class";
+        //owner.owner = lac;
+        //modClasses.put(owner, new Context(owner.name, IOUtil.read(owner.name)));
 
-        patch(libClasses);
+        //patch(libClasses);
         stage(40, "移动mod方法");
         Mover mover = new Mover();
-        List<Context> ctxs = new ArrayList<>(modClasses.values());
+        SimpleList<Context> ctxs = new SimpleList<>(modClasses.values());
 
-        List<Desc> methodsAll = new ArrayList<>(ctxs.size());
+        SimpleList<Desc> methodsAll = new SimpleList<>(ctxs.size());
         mover.setFallback(desc -> {
             desc = desc.copy();
             desc.name = "func_" + rnd.nextInt(999999) + "_" + (char)TextUtil.digits[rnd.nextInt(TextUtil.digits.length - 10) + 10];
@@ -434,15 +433,15 @@ public class Main extends JFrame {
         });
         for (int i = 0; i < ctxs.size(); i++) {
             ConstantData data = ctxs.get(i).getData();
-            if (!data.name.equals(AH_CLASS) && rnd.nextBoolean())
+            if (!data.name.equals(AH_CLASS) && rnd.nextFloat() > 0.66f)
                 insertAccessHelper(data, rnd);
             List<MethodSimple> ms = data.methods;
             for (int j = 0; j < ms.size(); j++) {
                 MethodSimple m = ms.get(j);
-                FlagList acc = m.accesses;
-                if (acc.hasAny(AccessFlag.STATIC) && !m.name().startsWith("<") && !acc.hasAny(AccessFlag.NATIVE)) {
-                    acc.remove(AccessFlag.PRIVATE | AccessFlag.PROTECTED);
-                    acc.add(AccessFlag.PUBLIC);
+                int acc = m.accesses;
+                if (AccessFlag.STATIC == (acc & (AccessFlag.STATIC | AccessFlag.NATIVE)) &&
+                        !m.name().startsWith("<")) {
+                    m.accesses = (char) (m.accesses & ~(AccessFlag.PRIVATE | AccessFlag.PROTECTED) | AccessFlag.PUBLIC | AccessFlag.SYNTHETIC);
                     Desc desc = new Desc(data.name, m.name(), m.rawDesc());
                     methodsAll.add(desc);
                 }
@@ -450,7 +449,7 @@ public class Main extends JFrame {
             List<FieldSimple> fs = data.fields;
             for (int j = 0; j < fs.size(); j++) {
                 FieldSimple m = fs.get(j);
-                m.accesses.flag = (char) (m.accesses.flag & ~(AccessFlag.PRIVATE | AccessFlag.PROTECTED) | AccessFlag.PUBLIC);
+                m.accesses = (char) (m.accesses & ~(AccessFlag.PRIVATE | AccessFlag.PROTECTED) | AccessFlag.PUBLIC | AccessFlag.SYNTHETIC);
             }
         }
         ArrayUtil.shuffle(methodsAll, rnd);
@@ -463,67 +462,54 @@ public class Main extends JFrame {
         System.out.println("MOD STATIC覆盖率 " + 200f * mover.getMethodMove().size() / methodsAll.size());
         mover.map(ctxs);
         mover.clear();
-        stage(60, "移动lib方法");
-        methodsAll.clear();
-        int sl = ctxs.size();
-        ctxs.addAll(libClasses.values());
-        for (int i = sl; i < ctxs.size(); i++) {
-            ConstantData data = ctxs.get(i).getData();
-            if (!data.name.equals(AH_CLASS) && rnd.nextFloat() > 0.75f)
-                insertAccessHelper(data, rnd);
-            List<MethodSimple> ms = data.methods;
-            for (int j = 0; j < ms.size(); j++) {
-                MethodSimple m = ms.get(j);
-                FlagList acc = m.accesses;
-                if (acc.hasAny(AccessFlag.STATIC) && !m.name().startsWith("<")) {
-                    acc.remove(AccessFlag.PRIVATE | AccessFlag.PROTECTED);
-                    acc.add(AccessFlag.PUBLIC);
-                    Desc desc = new Desc(data.name, m.name(), m.rawDesc());
-                    methodsAll.add(desc);
-                }
-            }
-        }
-        ArrayUtil.shuffle(methodsAll, rnd);
-        size = methodsAll.size();
-        if ((size & 1) != 0)
-            size--;
-        for (int i = 0; i < size; i += 2) {
-            mover.putIfAbsent(methodsAll.get(i), methodsAll.get(i + 1));
-        }
-        System.out.println("LIB STATIC覆盖率 " + 200f * mover.getMethodMove().size() / methodsAll.size());
-        mover.map(ctxs);
-        stage(70, "混淆");
+
         System.out.println("处理文件: " + ctxs.size());
-        for (int i = 0; i < ctxs.size(); i++) {
-            if (ctxs.get(i).getData().name.equals("cbk"))
-            ctxs.get(i).getData().dump();
-        }
+
+        stage(70, "混淆");
+
         SimpleObfuscator so = new SimpleObfuscator(rnd);
         so.method = new SimpleNamer() {
             @Override
             protected String obfName0(Random rand) {
+                if (rand.nextBoolean()) return null;
                 return "func_" + rand.nextInt(999999) + "_" + (char)TextUtil.digits[rand.nextInt(TextUtil.digits.length - 10) + 10];
             }
         };
-        so.field = new SimpleNamer() {
-            @Override
-            protected String obfName0(Random rand) {
-                return "field_" + rand.nextInt(999999) + "_" + (char)TextUtil.digits[rand.nextInt(TextUtil.digits.length - 10) + 10];
-            }
-        };
+        so.field = new ClassicABC();
         so.classExclusions = new MyHashSet<>();
-        so.setFlags(/*FAKE_SIGN | */CLEAR_CODE_ATTR | CLEAR_ATTR | INVALID_VAR_NAME);
+        so.setFlags(/*FAKE_SIGN | */CLEAR_CODE_ATTR | CLEAR_ATTR);
         so.obfuscate(ctxs);
-        System.gc();
 
         stage(90, "写入文件(测试)");
-        try (ZipFileWriter zfw = new ZipFileWriter(new File("test.zip"))) {
-            FileTime time = FileTime.from(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
-            System.out.println(time.toInstant());
-            for (int i = 0; i < 111; i++) {
-                Context ctx = ctxs.get(i);
-                zfw.writeNamed(ctx.getFileName(), ctx.get(true));
+        File path = new File(Shared.TMP_DIR, "ctx_out");
+        path.mkdirs();
+
+        MyHashMap<File, ZipFileWriter> map2 = new MyHashMap<>();
+
+        for (Map.Entry<Owner, Context> entry : libClasses.entrySet()) {
+            Owner o = entry.getKey();
+            ZipFileWriter zfw = map2.get(o.owner);
+            if (zfw == null) {
+                map2.put(o.owner, zfw = new ZipFileWriter(new File(path, o.owner.getName())));
             }
+
+            Context ctx = entry.getValue();
+            zfw.writeNamed(ctx.getFileName(), ctx.get());
+        }
+
+        for (Map.Entry<Owner, Context> entry : modClasses.entrySet()) {
+            Owner o = entry.getKey();
+            ZipFileWriter zfw = map2.get(o.owner);
+            if (zfw == null) {
+                map2.put(o.owner, zfw = new ZipFileWriter(new File(path, o.owner.getName())));
+            }
+
+            Context ctx = entry.getValue();
+            zfw.writeNamed(ctx.getFileName(), ctx.get());
+        }
+
+        for (ZipFileWriter zfw : map2.values()) {
+            zfw.close();
         }
         stage(100, "完成");
     }

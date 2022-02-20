@@ -165,7 +165,6 @@ public class HttpClient extends Connector {
         if (body != null && body.length() != 0) {
             writeUTF(buf, body);
         }
-        buf.put((byte) '\r').put((byte) '\n').put((byte) '\r').put((byte) '\n');
     }
 
     private static void writeUTF(ByteBuffer nio, CharSequence str) {
@@ -199,11 +198,16 @@ public class HttpClient extends Connector {
 
         try {
             HttpHead hdr = HttpHead.parse(lexer);
+            ByteBuffer buf = channel.buffer();
             if (!"HEAD".contentEquals(action)) {
-                in = HttpInputStream.create(hdr, new SocketInputStream(channel, lexer.index).init(hdr.headers.get("Content-Length"), readTimeout));
+                int pos = buf.position();
+                buf.position(lexer.index).limit(pos);
+                buf.compact().flip();
+
+                in = HttpInputStream.create(hdr, new SocketInputStream(channel).init(hdr.headers.get("Content-Length"), readTimeout));
             } else {
                 in = new EmptyInputStream();
-                channel.buffer().clear();
+                buf.clear();
             }
             return hdr;
         } finally {
@@ -222,7 +226,7 @@ public class HttpClient extends Connector {
     }
 
     public InputStream getInputStream() {
-        if (in == null) in = new SocketInputStream(channel, 0).init(null, readTimeout);
+        if (in == null) in = new SocketInputStream(channel).init(null, readTimeout);
         return in;
     }
 

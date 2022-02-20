@@ -34,13 +34,12 @@ import roj.util.ByteList;
 import roj.util.Helpers;
 
 /**
- * QUESTION: native.hashCode好慢？
- */
-/**
  * @author Roj234
  * @since 2021/5/27 1:12
  */
 public abstract class InsnNode implements Helpers.Node {
+    public char bci;
+
     public static final int T_OTHER      = 0;
     public static final int T_LOAD_STORE = 1;
     public static final int T_CLASS      = 2;

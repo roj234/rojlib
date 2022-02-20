@@ -35,38 +35,39 @@ public final class ClassicABC implements NamingFunction {
 
     @Override
     public String obfClass(String origName, Set<String> noDuplicate, Random rand) {
-        params.clear();
         buf.clear();
         if (keepPackage) {
             int i = origName.lastIndexOf('/');
             if(i != -1) {
+                String pkg = origName.substring(0, i);
+                int v = params.getOrDefault(pkg, 0);
+                params.putInt(pkg, v + 1);
                 buf.append(origName, 0, i + 1);
+                return getABC(v);
             }
         }
 
-        return getABC(++i);
+        return getABC(i++);
     }
-
-    private int ld = 0;
 
     @Override
     public String obfName(Set<String> noDuplicate, Desc desc, Random rand) {
-        if (noDuplicate.size() < ld)
-            params.clear();
-        ld = noDuplicate.size();
+        if (noDuplicate.isEmpty() && !desc.param.contains(")")) params.clear();
+        noDuplicate.add("");
 
         String param = desc.param;
-        int v = params.getOrDefault(param, 1);
+        int v = params.getOrDefault(param, 0);
         params.putInt(param, v + 1);
         buf.clear();
         return getABC(v);
     }
 
     private String getABC(int i) {
-        while (i != 0) {
-            buf.append(ABC[i % ABC.length]);
+        i = -i;
+        while (i <= -ABC.length) {
+            buf.append(ABC[-(i%ABC.length)]);
             i /= ABC.length;
         }
-        return buf.toString();
+        return buf.append(ABC[-i]).toString();
     }
 }

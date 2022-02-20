@@ -33,6 +33,7 @@ import roj.concurrent.task.ITask;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.misc.FDCLoop;
+import roj.net.misc.Listener;
 import roj.net.misc.Shutdownable;
 import roj.net.mss.MSSEngineFactory;
 import roj.util.EmptyArrays;
@@ -58,8 +59,9 @@ import static roj.net.cross.Util.*;
  * @author Roj233
  * @since 2021/8/17 22:17
  */
-public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
+public class AEServer extends Listener implements Shutdownable, TaskPool.RejectPolicy {
     static AEServer server;
+
     // 20分钟
     static final int PIPE_TIMEOUT = 1200_000;
 
@@ -77,15 +79,18 @@ public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
 
     private final TaskPool asyncPool;
     private final FDCLoop<Client> man;
-    private final ServerSocket     socket;
     private final MSSEngineFactory factory;
 
     final AtomicInteger remain;
 
     public AEServer(InetSocketAddress addr, int conn, MSSEngineFactory factory) throws IOException {
-        ServerSocket s = this.socket = new ServerSocket();
+        server = this;
+
+        ServerSocket s = new ServerSocket();
         s.setReuseAddress(true);
         s.bind(addr, conn);
+        init(s);
+
         this.remain = new AtomicInteger(conn);
         this.factory = factory;
         this.rnd = new SecureRandom();
@@ -97,7 +102,7 @@ public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
                 thr = Integer.parseInt(p);
             } catch (NumberFormatException ignored) {}
         }
-        this.man = new FDCLoop<>(this, "Client IO", thr, 60000, 100);
+        this.man = new FDCLoop<>(this, "AE 客户端IO", 0, thr, 60000, 100);
 
         thr = 6;
         p = System.getProperty("AE.executors");
@@ -120,30 +125,22 @@ public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
     }
 
     @Override
-    public void run() {
-        server = this;
-        while (true) {
-            Socket c;
-            try {
-                c = socket.accept();
-            } catch (IOException e) {
-                break;
-            }
-            try {
-                if(remain.decrementAndGet() <= 0) {
-                    remain.getAndIncrement();
-                    c.close();
-                } else {
-                    if (rooms.isEmpty()) pipeId = 0;
+    public void selected(int readyOps) throws Exception {
+        Socket c = socket.accept();
+        try {
+            if(remain.decrementAndGet() <= 0) {
+                remain.getAndIncrement();
+                c.close();
+            } else {
+                if (rooms.isEmpty()) pipeId = 0;
 
-                    FileDescriptor fd = NIOUtil.fd(c);
-                    initSocketPref(c);
-                    Client client = new Client(new MSSSocket(c, fd, factory.newEngine()));
-                    man.register(client, client);
-                }
-            } catch (Throwable e) {
-                e.printStackTrace();
+                FileDescriptor fd = NIOUtil.fd(c);
+                initSocketPref(c);
+                Client client = new Client(new MSSSocket(c, fd, factory.newEngine()));
+                man.register(client, client);
             }
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
     }
 
@@ -225,5 +222,9 @@ public class AEServer implements Runnable, Shutdownable, TaskPool.RejectPolicy {
                 itr.remove();
             }
         }
+    }
+
+    public void start() throws IOException {
+        man.registerListener(this);
     }
 }

@@ -47,13 +47,14 @@ public abstract class AnnVal {
     public static final char LONG       = 'J';
     public static final char SHORT      = 'S';
     public static final char BOOLEAN    = 'Z';
+
     public static final char STRING     = 's';
     public static final char ENUM       = 'e';
     public static final char CLASS      = 'c';
     public static final char ANNOTATION = '@';
     public static final char ARRAY      = '[';
 
-    AnnVal() {}
+    public AnnVal() {}
 
     @Deprecated
     public static AnnVal parse(ConstantPool pool, ByteReader r) {

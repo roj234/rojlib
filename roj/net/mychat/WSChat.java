@@ -165,8 +165,8 @@ public abstract class WSChat extends WebSockets.Worker {
     }
 
     protected void init() {}
-    @Override
-    protected void onClosed() {}
+    //@Override
+    //protected void onClosed() {}
 
     protected abstract void message(int to, CharSequence msg);
     protected abstract void requestUserInfo(int id);
@@ -176,7 +176,7 @@ public abstract class WSChat extends WebSockets.Worker {
     protected void requestClearHistory(int id, int timeout) {}
     protected void requestColdHistory(int id) {}
 
-    public final void sendUserInfo(User user) {
+    public final void sendUserInfo(AbstractUser user) {
         known.add(user.id);
         user.addMoreInfo(known);
 
@@ -194,7 +194,7 @@ public abstract class WSChat extends WebSockets.Worker {
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));
     }
-    public final void sendGroupChange(int groupId, User user, boolean add) {
+    public final void sendGroupChange(int groupId, AbstractUser user, boolean add) {
         if (add) known.add(user.id);
 
         UTFCoder asyncUC = WebSockets.getUTFCoder();
@@ -237,12 +237,12 @@ public abstract class WSChat extends WebSockets.Worker {
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));
     }
-    public final void sendOnlineState(int userId, boolean online) {
+    public final void sendOnlineState(int userId, byte online) {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
         if ((flag & USE_BINARY) != 0) {
             b.clear();
-            b.put((byte) P_USER_STATE).putInt(userId).putBool(online);
+            b.put((byte) P_USER_STATE).putInt(userId).put(online);
         } else {
             CMapping map = new CMapping();
             map.put("act", P_USER_STATE);
@@ -273,9 +273,10 @@ public abstract class WSChat extends WebSockets.Worker {
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));
     }
-    public final void sendMessage(User user, Message message, boolean sys) {
+    public final void sendMessage(AbstractUser user, Message message, boolean sys) {
         if (message.text.length() > maxData - 10) throw new IllegalArgumentException("Message too long");
         int userId = user.id;
+        known.add(userId);
 
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
@@ -296,8 +297,6 @@ public abstract class WSChat extends WebSockets.Worker {
             asyncUC.encodeR(map.toShortJSONb());
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));
-
-        if (known.add(userId)) sendUserInfo(user);
     }
     public final void sendNotLogin() {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
@@ -349,6 +348,7 @@ public abstract class WSChat extends WebSockets.Worker {
                 subMap.put("text", msg.text);
                 subMap.put("uid", msg.uid);
             }
+            map.put("data", data);
             asyncUC.encodeR(map.toShortJSONb());
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));

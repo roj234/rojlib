@@ -148,7 +148,7 @@ public final class ZipUtil {
             if (!zn.isDirectory()) {
                 try (InputStream is = zf.getInputStream(zn)) {
                     try (FileOutputStream fos = new FileOutputStream(path + zn.getName())) {
-                        fos.write(IOUtil.read(is));
+                        IOUtil.getSharedByteBuf().readStreamFully(is).writeToStream(fos);
                     }
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to write file data ", e);

@@ -29,9 +29,9 @@ package roj.asm;
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.AttrInnerClasses;
+import roj.asm.tree.attr.AttrInnerClasses.InnerClass;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.FlagList;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.text.SimpleLineReader;
@@ -67,10 +67,8 @@ public class AccessTransformer {
         }
     }
 
-    public static void readAndParseAt(@Nonnull String ATConfig) {
-        if (ATConfig.length() < 1)
-            throw new RuntimeException("AT的配置文件已损坏");
-        SimpleLineReader options = new SimpleLineReader(ATConfig);
+    public static void readAndParseAt(String cfg) {
+        SimpleLineReader options = new SimpleLineReader(cfg);
         List<String> lst = new ArrayList<>(4);
         for (String conf : options) {
             if (conf.length() == 0) continue;
@@ -94,27 +92,25 @@ public class AccessTransformer {
         return openSome(bytecode, list);
     }
 
-    public static void doAT(FlagList list, boolean evenProtected) {
-        list.remove(AccessFlag.PRIVATE | AccessFlag.FINAL);
-        if (!evenProtected && list.hasAll(AccessFlag.PROTECTED)) {
-            return;
+    public static int doAT(int flag, boolean evenProtected) {
+        flag &= ~(AccessFlag.PRIVATE | AccessFlag.FINAL);
+        if (!evenProtected && (flag & AccessFlag.PROTECTED) != 0) {
+            return flag;
         }
-        list.remove(AccessFlag.PROTECTED);
-        list.add(AccessFlag.PUBLIC);
+        return (flag & ~AccessFlag.PROTECTED) | AccessFlag.PUBLIC;
     }
-
 
     public static byte[] openSubClass(final byte[] bytecode, Collection<String> names) {
         ConstantData data = Parser.parseConstants(bytecode);
         Attribute attribute = data.attrByName("InnerClasses");
         AttrInnerClasses ic = new AttrInnerClasses(Parser.reader(attribute), data.cp);
         data.attributes.putByName(ic);
-        for (AttrInnerClasses.InnerClass innerClass : ic.classes) {
-            if (names.contains(innerClass.self)) {
-                FlagList list = new FlagList(innerClass.flags);
-                list.remove(AccessFlag.FINAL | AccessFlag.PRIVATE | AccessFlag.PROTECTED);
-                list.add(AccessFlag.PUBLIC);
-                innerClass.flags = list.flag;
+
+        List<InnerClass> classes = ic.classes;
+        for (int i = 0; i < classes.size(); i++) {
+            InnerClass clz = classes.get(i);
+            if (names.contains(clz.self)) {
+                clz.flags = (char) doAT(clz.flags, true);
             }
         }
         return Parser.toByteArray(data);
@@ -124,10 +120,7 @@ public class AccessTransformer {
         AccessData data = Parser.parseAccessDirect(bytecode);
 
         if (names.contains("<$extend>")) {
-            FlagList list = data.accessFlag();
-            list.remove(AccessFlag.FINAL | AccessFlag.PRIVATE | AccessFlag.PROTECTED);
-            list.add(AccessFlag.PUBLIC);
-            data.accessFlag(list);
+            data.accessFlag(doAT(data.accessFlag(), true));
         }
 
         boolean evenProtected = true;
@@ -142,16 +135,14 @@ public class AccessTransformer {
         for (AccessData.MOF field : data.fields) {
             if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
                 continue;
-            FlagList list = field.accessFlag();
-            doAT(list, evenProtected || !(names instanceof Universe));
-            data.setFlagFor(field, list);
+            int flag = doAT(field.accessFlag(), evenProtected || !(names instanceof Universe));
+            data.setFlagFor(field, flag);
         }
         for (AccessData.MOF field : data.methods) {
             if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
                 continue;
-            FlagList list = field.accessFlag();
-            doAT(list, evenProtected || !(names instanceof Universe));
-            data.setFlagFor(field, list);
+            int flag = doAT(field.accessFlag(), evenProtected || !(names instanceof Universe));
+            data.setFlagFor(field, flag);
         }
         return data.toByteArray();
     }

@@ -39,10 +39,9 @@ import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskHandler;
-import roj.concurrent.WaitingIOFuture;
-import roj.concurrent.task.AbstractCalcTask;
+import roj.concurrent.Waitable;
+import roj.concurrent.task.AbstractExecutionTask;
 import roj.concurrent.task.ITask;
-import roj.concurrent.task.ITaskNaCl;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CCommMap;
@@ -54,11 +53,12 @@ import roj.io.BOMInputStream;
 import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
-import roj.io.down.IProgressHandler;
+import roj.io.down.Downloader;
 import roj.io.down.STDProgress;
 import roj.math.Version;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.UTFCoder;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
@@ -69,15 +69,16 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.*;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.jar.Manifest;
 import java.util.regex.Pattern;
@@ -100,9 +101,7 @@ public class MCLauncher extends JFrame {
         UIUtil.systemLook();
         load();
 
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-
-        File mcRoot = new File(cfgGen.getString("MC目录"));
+        File mcRoot = new File(CONFIG.getString("通用.MC目录"));
 
         if(!mcRoot.isDirectory() && !mcRoot.mkdirs()) {
             error("无法创建minecraft目录");
@@ -197,9 +196,7 @@ public class MCLauncher extends JFrame {
     private static void selectVersion(ActionEvent event) {
         if (checkMCRun()) return;
 
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-
-        File mcRoot = new File(cfgGen.getString("MC目录"));
+        File mcRoot = new File(CONFIG.getString("通用.MC目录"));
         if(!mcRoot.isDirectory() && !mcRoot.mkdirs()) {
             error("无法创建minecraft目录");
             return;
@@ -273,7 +270,7 @@ public class MCLauncher extends JFrame {
     public static final int TIMEOUT_TIME = 60000;
     public static PrintStream waitOut;
 
-    private static void waitFor(List<ITask> tasks) {
+    private static void waitFor(ITask task) {
         if(waiter == null) {
             waiter = new TaskExecutor();
             waiter.setDaemon(true);
@@ -286,57 +283,17 @@ public class MCLauncher extends JFrame {
             waitOut = System.out;
         }
 
-        if(tasks == null) {
-            if (parallel.taskLength() > 0) {
-                waiter.pushTask(new Waiter(waitOut));
-
-                waitFin(str);
-            }
-        } else {
-            int once = MAIN_CONFIG.get("通用").asMap().getInteger("最大线程数");
-            int remain = tasks.size();
-
-            waiter.pushTask(new Waiter(waitOut));
-
-            boolean skip = false;
-            while(remain > 0) {
-                CmdUtil.info("余量: " + remain);
-
-                int t = Math.min(once, remain);
-                for (int j = 0; j < t; j++) {
-                    parallel.pushTask(tasks.get(--remain));
-                }
-
-                while (parallel.taskLength() > once / 2) {
-                    try {
-                        Thread.sleep(50);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-
-                    if(!skip && System.currentTimeMillis() - str > TIMEOUT_TIME) {
-                        int r = ifBreakWait();
-                        if(r == -1) return;
-                        if(r == 1)
-                            skip = true;
-                        str = System.currentTimeMillis();
-                    }
-                }
-            }
-
-            waitFin(str);
-        }
-    }
-
-    private static void waitFin(long str) {
         boolean skip = false;
         do {
-            parallel.waitUntilFinish(TIMEOUT_TIME - (System.currentTimeMillis() - str));
-            if (parallel.taskLength() <= 0) return;
+            Task.waitUntilFinish(TIMEOUT_TIME - (System.currentTimeMillis() - str));
+            if (Task.taskLength() <= 0) return;
 
             if(!skip) {
                 int r = ifBreakWait();
-                if(r == -1) return;
+                if(r == -1) {
+                    if (task != null) task.cancel(true);
+                    return;
+                }
                 if(r == 1)
                     skip = true;
                 str = System.currentTimeMillis();
@@ -346,8 +303,7 @@ public class MCLauncher extends JFrame {
     }
 
     private static int ifBreakWait() {
-        if(activeWindow == null)
-            return 1;
+        if(activeWindow == null) return 1;
 
         Object[] options = { "继续等", "不等了", "不再提示" };
         int m = JOptionPane.showOptionDialog(activeWindow, "等了一分钟了，还没下完", "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
@@ -357,15 +313,14 @@ public class MCLauncher extends JFrame {
                 return 0;
             default:
             case JOptionPane.NO_OPTION: // not
-                parallel.clearTasks();
-                FileUtil.ioPool.clearTasks();
+                Task.clearTasks();
                 return -1;
             case JOptionPane.CANCEL_OPTION: // ignore
                 return 1;
         }
     }
 
-    static final class Waiter implements ITaskNaCl {
+    static final class Waiter implements ITask {
         private final PrintStream out;
 
         public Waiter(PrintStream out) {
@@ -373,11 +328,11 @@ public class MCLauncher extends JFrame {
         }
 
         @Override
-        public void calculate(Thread thread) {
+        public void calculate() {
             try {
                 Thread.sleep(1500);
             } catch (InterruptedException ignored) {}
-            out.println("剩余任务: " + parallel.taskLength());
+            out.println("剩余任务: " + Task.taskLength());
         }
 
         @Override
@@ -387,7 +342,7 @@ public class MCLauncher extends JFrame {
 
         @Override
         public boolean continueExecuting() {
-            return parallel.taskLength() > 0;
+            return Task.taskLength() > 0;
         }
     }
 
@@ -395,10 +350,9 @@ public class MCLauncher extends JFrame {
     // region download MC
 
     private static void download(ActionEvent event) {
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-        CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
+        CMapping cfgLan = CONFIG.get("启动器配置").asMap();
 
-        File mcRoot = new File(cfgGen.getString("MC目录"));
+        File mcRoot = new File(CONFIG.getString("通用.MC目录"));
         if(!mcRoot.isDirectory() && !mcRoot.mkdirs()) {
             error("无法创建minecraft目录");
         }
@@ -479,7 +433,7 @@ public class MCLauncher extends JFrame {
         }
         index = new File(index, '/' + mc_conf.getString("assets") + ".json");
         if(!index.isFile()) {
-            downloadMinecraftFile(mcJson.get("assetIndex").asMap(), index, mirrorA, true);
+            downloadMinecraftFile(mcJson.get("assetIndex").asMap(), index, mirrorA);
         }
         CMapping objects;
         try {
@@ -491,11 +445,11 @@ public class MCLauncher extends JFrame {
         assets = new File(assets, "/objects/");
         CharList tmp = new CharList();
 
-        STDProgress.DECR_LOGS = true;
-        STDProgress.DECR_LOGS_2 = true;
+        STDProgress.noAvgSpeed = true;
 
         MyHashSet<String> hashes = new MyHashSet<>();
-        ArrayList<ITask> missingEntries = new ArrayList<>();
+        DownMcFile manager = new DownMcFile();
+
         for (Map.Entry<String, CEntry> entry : objects.entrySet()) {
             CMapping val = entry.getValue().asMap();
             String hash = val.getString("hash");
@@ -519,33 +473,35 @@ public class MCLauncher extends JFrame {
                 val.remove("size");
                 val.remove("hash");
                 val.put("url", mirrorB + url);
-                missingEntries.add(downMcFileAsTask(val, asset, mirrorB));
+                String url1 = replaceMirror(val, mirrorB);
+
+                manager.add(url, asset, val.getString("sha1"));
             }
         }
 
-        if(!missingEntries.isEmpty())
-            waitFor(missingEntries);
+        int cnt = manager.entries.size();
+        if(cnt > 0) {
+            waitFor(manager);
+        }
 
-        STDProgress.DECR_LOGS_2 = false;
-        STDProgress.DECR_LOGS = false;
+        STDProgress.noAvgSpeed = false;
 
-        return missingEntries.size();
+        return cnt;
     }
 
     public static boolean installMinecraftClient(File mcRoot, File mcJson, boolean doAssets) {
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-        CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
+        CMapping cfgGen = CONFIG.get("通用").asMap();
+        CMapping cfgLan = CONFIG.get("启动器配置").asMap();
 
         Object[] result;
         CMapping jsonDesc, mc_conf;
         try {
             File mcNative = new File(mcJson.getParentFile(), "/$natives/");
-            result = getRunConf(mcRoot, mcJson, mcNative, cfgGen);
+            result = getRunConf(mcRoot, mcJson, mcNative, cfgLan);
             config.put("mc_conf", mc_conf = (CMapping) result[0]);
             mc_conf.put("native_path", mcNative.getAbsolutePath());
             jsonDesc = (CMapping) result[3];
             config.put("mc_version", jsonDesc.getString("id"));
-            mc_conf.put("player_name", cfgGen.getString("玩家名字"));
 
             save();
         } catch (IOException e) {
@@ -556,9 +512,7 @@ public class MCLauncher extends JFrame {
 
         waitFor(null);
 
-        boolean fl = result[4] == Boolean.TRUE;
-        if (fl) CmdUtil.warning("高版本警告");
-        config.put("high_ver", fl);
+        config.put("high_ver", result[4] == Boolean.TRUE);
 
         if(!doAssets)
             return true;
@@ -577,7 +531,7 @@ public class MCLauncher extends JFrame {
     }
 
     public static void onClickInstall(CMapping map, boolean fg) {
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
+        CMapping cfgGen = CONFIG.get("通用").asMap();
 
         if(!fg) {
             String name = map.getString("id");
@@ -595,7 +549,7 @@ public class MCLauncher extends JFrame {
             File target = new File(versionPath, name + ".json.tmp");
             try {
                 if(!json.isFile()) {
-                    FileUtil.downloadFileAsync(url, target).waitFor();
+                    Downloader.downloadMTD(url, target).waitFor();
                 }
                 download = JSONParser.parse(IOUtil.readUTF(new FileInputStream(json.isFile() ? json : target))).asMap().get("downloads").asMap().get("client").asMap();
             } catch (IOException | ParseException e) {
@@ -607,7 +561,7 @@ public class MCLauncher extends JFrame {
             File mcFile = new File(versionPath, name + ".jar");
 
             try {
-                downloadMinecraftFile(download, mcFile, cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, true);
+                downloadMinecraftFile(download, mcFile, cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null);
             } catch (IOException e) {
                 error("下载版本jar出了点错...\n请查看控制台");
                 e.printStackTrace();
@@ -650,7 +604,7 @@ public class MCLauncher extends JFrame {
             File tmpFile = new File(TMP_DIR, tmp0.insert(0, "forge-").append("-installer.jar").toString());
 
             try {
-                downloadAndVerifyMD5(url, md5, tmpFile, true);
+                downloadAndVerifyMD5(url, md5, tmpFile);
             } catch (IOException e) {
                 error("Forge下载失败! \n请看控制台");
                 e.printStackTrace();
@@ -674,7 +628,7 @@ public class MCLauncher extends JFrame {
     }
 
     private static boolean installForge(File fgInstaller, String fgVersion, boolean highVersion) throws IOException {
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
+        CMapping cfgGen = CONFIG.get("通用").asMap();
 
         File mcRoot = new File(cfgGen.getString("MC目录"));
         if(!mcRoot.isDirectory() && !mcRoot.mkdirs()) {
@@ -750,7 +704,7 @@ public class MCLauncher extends JFrame {
                     if (data.getString("name").startsWith("net.minecraftforge:forge:") && data.get("downloads").asMap().get("artifact").asMap().getString("url").isEmpty())
                         continue;
 
-                    detectLibrary(data, versions, libraryPath, null, libraries, libUrl, parallel);
+                    detectLibrary(data, versions, libraryPath, null, libraries, libUrl, Task);
                 }
 
                 String tmp = libraryPath.getAbsolutePath() + File.separatorChar;
@@ -760,7 +714,7 @@ public class MCLauncher extends JFrame {
                 }
                 int cpLen = cpTmp.length();
 
-                Set<String> forced = MAIN_CONFIG.get("启动器配置.作为MC自身lib的key").asList().asStringSet();
+                Set<String> forced = CONFIG.get("启动器配置.作为MC自身lib的key").asList().asStringSet();
                 CMapping data = instConf.get("data").asMap();
                 MyHashMap<String, String> map = new MyHashMap<>(data.size());
                 for (Map.Entry<String, CEntry> entry : data.entrySet()) {
@@ -1226,18 +1180,13 @@ public class MCLauncher extends JFrame {
         }
 
         private void save(ActionEvent event) {
-            final String s = nameInput.getText().trim();
-            if(s.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "名字不能为空", "错误", JOptionPane.WARNING_MESSAGE);
-            } else {
-                final CMapping mc_conf = config.get("mc_conf").asMap();
-                mc_conf.put("player_name", s);
-                mc_conf.put("jvmArg", jvmInput.getText().trim());
-                mc_conf.put("mcArg", mcInput.getText().trim());
-                MCLauncher.save();
-
-                dispose();
-            }
+            CMapping mc_conf = config.get("mc_conf").asMap();
+            String s = nameInput.getText();
+            if (s.isEmpty()) mc_conf.remove("player_name");
+            else mc_conf.put("player_name", s);
+            mc_conf.put("jvmArg", jvmInput.getText().trim());
+            mc_conf.put("mcArg", mcInput.getText().trim());
+            MCLauncher.save();
         }
     }
 
@@ -1282,13 +1231,14 @@ public class MCLauncher extends JFrame {
         Map<String, String> mcEnv = new MyHashMap<>();
 
         String playerName = mc_conf.getString("player_name");
-        if(playerName.equals("")) playerName = "Roj234";
+        if(playerName.equals("")) playerName = CONFIG.getString("");
 
-        String authToken = null, authUUID = null;
-        File def = new File(mc_conf.getString("external_auth_file"));
+        String authName = null, authToken = null, authUUID = null;
+        File def = new File(CONFIG.getString("启动器配置.外部accessToken"));
         if (def.isFile()) {
             try {
                 CMapping map = JSONParser.parse(IOUtil.readUTF(def)).asMap();
+                authName = map.getString("name");
                 authToken = map.getString("token");
                 authUUID = map.getString("uuid");
             } catch (ParseException e) {
@@ -1297,6 +1247,7 @@ public class MCLauncher extends JFrame {
         }
         if (authUUID == null) {
             authToken = authUUID = UUID.nameUUIDFromBytes(playerName.getBytes(StandardCharsets.UTF_8)).toString();
+            authName = playerName;
         }
 
         mcEnv.put("user_type", "Legacy");
@@ -1310,7 +1261,7 @@ public class MCLauncher extends JFrame {
         mcEnv.put("assets_root", '"' + AbstLexer.addSlashes(mc_conf.getString("assets_root") + File.separatorChar + "assets") + '"');
         mcEnv.put("game_directory", mc_conf.getString("root"));
         mcEnv.put("version_name", "FMDv" + VERSION);
-        mcEnv.put("auth_player_name", playerName);
+        mcEnv.put("auth_player_name", authName);
         mcEnv.put("user_properties", "{}");
 
         CmdUtil.info("启动客户端...");
@@ -1336,7 +1287,7 @@ public class MCLauncher extends JFrame {
             return;
         }
 
-        parallel.pushTask(task = new RunMinecraftTask(false));
+        Task.pushTask(task = new RunMinecraftTask(false));
     }
 
     private static void debug(ActionEvent event) {
@@ -1348,27 +1299,25 @@ public class MCLauncher extends JFrame {
             return;
         }
 
-        parallel.pushTask(task = new RunMinecraftTask(true));
+        Task.pushTask(task = new RunMinecraftTask(true));
     }
 
     // endregion
 
     // region prepare MC
 
-    public static Object[] getRunConf(File mcRoot, File mcJson, File mcNative, CMapping general) throws IOException {
-        return getRunConf(mcRoot, mcJson, mcNative, Collections.emptyList(), true, general);
+    public static Object[] getRunConf(File mcRoot, File mcJson, File mcNative, CMapping cfg) throws IOException {
+        return getRunConf(mcRoot, mcJson, mcNative, Collections.emptyList(), true, cfg);
     }
 
-    public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, CMapping general) throws IOException {
-        return getRunConf(mcRoot, mcJson, nativePath, skipped, cleanNatives, general.getBool("版本隔离"), general.getString("libraries地址"), general.getString("附加JVM参数"), general.getString("附加MC参数"));
+    public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, CMapping cfg) throws IOException {
+        return getRunConf(mcRoot, mcJson, nativePath, skipped, cleanNatives, cfg.getBool("版本隔离"), CONFIG.getString("通用.libraries地址"), cfg.getString("附加JVM参数"), cfg.getString("附加MC参数"));
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, boolean insulation, String mirror, String jvmArg, String mcArg) throws IOException {
         CMapping mc_conf = new CCommMap();
         mc_conf.getComments().put("java", "自定义java路径");
         mc_conf.put("java", "");
-        mc_conf.getComments().put("external_auth_file", "自定义authtoken和uuid的来源以便正版登录\n格式json mapping, 键: token,uuid");
-        mc_conf.put("external_auth_file", "./auth.json");
 
         mc_conf.put("assets_root", mcRoot.getAbsolutePath());
         mc_conf.put("root", insulation ? mcJson.getParentFile().getAbsolutePath() : mcRoot.getAbsolutePath());
@@ -1398,7 +1347,7 @@ public class MCLauncher extends JFrame {
             imArgs.put("nativePath", nativePath);
             imArgs.put("libraries", libraries);
             imArgs.put("mirror", mirror);
-            imArgs.put("handler", parallel);
+            imArgs.put("handler", Task);
 
             Object[] arr = parseJsonData(imArgs, new File(mcRoot, "/versions/"), skipped, jsonDesc);
 
@@ -1714,7 +1663,7 @@ public class MCLauncher extends JFrame {
     private static void fixLog4j(File lib) {
         try {
             MutableZipFile mzf = new MutableZipFile(lib);
-            byte[] b = mzf.getFileData("org/apache/logging/log4j/core/lookup/JndiLookup.class");
+            byte[] b = mzf.get("org/apache/logging/log4j/core/lookup/JndiLookup.class");
             if (b != null) {
                 ConstantData data = Parser.parseConstants(b);
                 int i = data.getMethodByName("lookup");
@@ -1727,8 +1676,8 @@ public class MCLauncher extends JFrame {
 
                     insn.add(new LdcInsnNode(new CstString("JNDI功能已关闭")));
                     insn.add(new NPInsnNode(Opcodes.ARETURN));
-                    mzf.setFileData("org/apache/logging/log4j/core/lookup/JndiLookup.class",
-                                    new ByteList(Parser.toByteArray(data)));
+                    mzf.put("org/apache/logging/log4j/core/lookup/JndiLookup.class",
+                            new ByteList(Parser.toByteArray(data)));
                     mzf.store();
                     CmdUtil.success("修补了Log4j2漏洞");
                 } else {
@@ -1762,20 +1711,22 @@ public class MCLauncher extends JFrame {
             artifact = map.get("artifact").asMap();
         }
         if(!artifact.containsKey("url") || artifact.getString("url").isEmpty()) {
-            final CMapping map1 = MAIN_CONFIG.get("通用").asMap();
+            final CMapping map1 = CONFIG.get("通用").asMap();
             artifact.put("url", map1.getString("协议") + (map1.getString("libraries地址").isEmpty() ? map1.getString("forge地址") : map1.getString("libraries地址")) + '/' + libFileName);
         }
 
         if(handler != null) {
-            final DownMcFile task = downMcFileAsTask(artifact, libFile, mirror.isEmpty() ? null : mirror);
-            if(task != null) {
+            if (!libFile.exists()) {
+                String url = replaceMirror(artifact, mirror.isEmpty() ? null : mirror);
+                String sha1 = map.getString("sha1");
+                DownMcFile task = new DownMcFile();
+                task.add(url, libFile, sha1);
                 task.then(cb);
                 handler.pushTask(task);
-                return;
             }
         } else {
             try {
-                downloadMinecraftFile(artifact, libFile, mirror.isEmpty() ? null : mirror, true);
+                downloadMinecraftFile(artifact, libFile, mirror.isEmpty() ? null : mirror);
             } catch (IOException e) {
                 throw new IllegalStateException("下载失败", e);
             }
@@ -1916,7 +1867,7 @@ public class MCLauncher extends JFrame {
         }
 
         @Override
-        public void calculate(Thread thread) throws Exception {
+        public void calculate() throws Exception {
             runClient(config.get("mc_conf").asMap(), log ? 3 : 2, this);
             run = true;
         }
@@ -1966,76 +1917,18 @@ public class MCLauncher extends JFrame {
 
         File tmpFile = new File(TMP_DIR, sha1 + '.' + name);
 
-        downloadMinecraftFile(map, tmpFile, mirror, true);
+        downloadMinecraftFile(map, tmpFile, mirror);
         return tmpFile;
     }
 
-    public static DownMcFile downMcFileAsTask(CMapping map, File targetFile, String mirror) {
+    public static void downloadMinecraftFile(CMapping map, File target, String mirror) throws IOException {
         String url = replaceMirror(map, mirror);
 
-        if (!targetFile.exists()) {
-            //if(DEBUG)
-            //    CmdUtil.info("下载 " + url);
-
-            BigInteger sha1 = map.containsKey("sha1") ? new BigInteger(map.get("sha1").asString(), 16) : null;
-
-            return new DownMcFile(url, targetFile, sha1);
-        } else {
-            return null;
-        }
-    }
-
-    public static void downloadMinecraftFile(CMapping map, File targetFile, String mirror, boolean async) throws IOException {
-        String url = replaceMirror(map, mirror);
-
-        if (!targetFile.exists()) {
+        if (!target.exists()) {
             CmdUtil.info("开始下载 " + url);
-
-            int retry = 0;
-
-            BigInteger lastResl = null;
-            BigInteger sha1 = map.containsKey("sha1") ? new BigInteger(map.get("sha1").asString(), 16) : null;
-            do {
-                try {
-                    if (async) {
-                        FileUtil.downloadFileAsync(url, targetFile).waitFor();
-                    } else {
-                        FileUtil.downloadFile(url, targetFile).waitFor();
-                    }
-                } catch (Throwable e) {
-                    if(!targetFile.isFile()) {
-                        CmdUtil.error(url + "下载失败, 重试", e);
-                        try {
-                            Thread.sleep(2500);
-                        } catch (InterruptedException ignored) {}
-
-                        if (retry++ > 5) {
-                            throw e;
-                        }
-                        continue;
-                    }
-                }
-
-                FileUtil.SHA1.reset();
-                byte[] _sha1 = FileUtil.SHA1.digest(IOUtil.read(new FileInputStream(targetFile)));
-                FileUtil.SHA1.reset();
-                BigInteger sha1Resl = new BigInteger(1, _sha1);
-
-                if (sha1 == null || sha1.equals(sha1Resl)) {
-                    break;
-                } else {
-                    if (sha1Resl.equals(lastResl)) {
-                        CmdUtil.warning("二次SHA1相同,镜像问题? " + url);
-                        return;
-                    }
-
-                    CmdUtil.warning("SHA1效验失败! 预计: " + sha1.toString(16) + " 实际: " + sha1Resl.toString(16) +", 重新下载...");
-                    if (!targetFile.delete()) {
-                        throw new IOException("文件" + targetFile.getName() + "删除失败!");
-                    }
-                    lastResl = sha1Resl;
-                }
-            } while (true);
+            DownMcFile man = new DownMcFile();
+            man.add(url, target, map.getString("sha1"));
+            man.calculate();
         }
     }
 
@@ -2052,230 +1945,176 @@ public class MCLauncher extends JFrame {
         return url;
     }
 
-    public static void downloadAndVerifyMD5(String url, String md5ToCheck, File targetFile, boolean async) throws IOException {
-        if (!targetFile.exists()) {
+    public static void downloadAndVerifyMD5(String url, String md5, File target) throws IOException {
+        if (!target.exists()) {
             CmdUtil.info("开始下载 " + url);
-
-            int retry = 0;
-
-            BigInteger lastResl = null;
-            BigInteger md5 = md5ToCheck == null ? null : new BigInteger(md5ToCheck, 16);
-            do {
-                try {
-                    if (async) {
-                        FileUtil.downloadFileAsync(url, targetFile).waitFor();
-                    } else {
-                        FileUtil.downloadFile(url, targetFile).waitFor();
-                    }
-                } catch (Throwable e) {
-                    if(!targetFile.isFile()) {
-                        CmdUtil.error(url + "下载失败, 重试", e);
-                        try {
-                            Thread.sleep(2500);
-                        } catch (InterruptedException ignored) {}
-
-                        if(retry++ > 5) {
-                            throw e;
-                        }
-                        continue;
-                    }
-                }
-
-                if(md5 == null)
-                    return;
-
-                FileUtil.MD5.reset();
-                byte[] _md5 = FileUtil.MD5.digest(IOUtil.read(new FileInputStream(targetFile)));
-                FileUtil.MD5.reset();
-                BigInteger md5Resl = new BigInteger(1, _md5);
-
-                if (md5.equals(md5Resl)) {
-                    return;
-                } else {
-                    if (md5Resl.equals(lastResl)) {
-                        CmdUtil.warning("二次MD5相同! 可能是镜像问题!");
-                        return;
-                    }
-                    CmdUtil.warning("MD5效验失败! 预计: " + md5.toString(16) + " 实际: " + md5Resl.toString(16) + ", 重新下载...");
-                    if (!targetFile.delete()) {
-                        throw new IOException("文件" + targetFile.getName() + "删除失败!");
-                    }
-                    lastResl = md5Resl;
-                }
-            } while (true);
+            DownMcFile man = new DownMcFile("md5");
+            man.add(url, target, md5);
+            man.calculate();
         }
     }
 
-    public static void downloadAndVerifyMD5(String url, File targetFile, boolean async) throws IOException {
-        if (!targetFile.exists()) {
-            downloadAndVerifyMD5(url, ByteList.readUTF(FileUtil.downloadFileToMemory(url + ".md5")), targetFile, async);
+    public static void downloadAndVerifyMD5(String url, File target) throws IOException {
+        if (!target.exists()) {
+            downloadAndVerifyMD5(url, ByteList.readUTF(FileUtil.downloadFileToMemory(url + ".md5")), target);
         }
     }
 
-    private static class DownMcFile extends AbstractCalcTask<Void> {
-        private final String url;
-        private final File target;
-        private final BigInteger sha1;
+    private static final class DownMcFile extends AbstractExecutionTask {
+        private final List<Entry> entries = new ArrayList<>();
 
-        boolean waitDigest;
-        BigInteger lastResl;
-        WaitingIOFuture future;
-        Runnable callback;
-        int retry;
+        static final class Entry {
+            final String url;
+            final File target;
+            final String digest;
+            String lastDigest;
+            int retry;
 
-        static PrintStream err;
+            Waitable future;
 
-        public DownMcFile(String url, File target, BigInteger sha1) {
-            this.url = url;
-            this.target = target;
-            this.sha1 = sha1;
+            public Entry(String name, File file, String digest) {
+                this.url = name;
+                this.target = file;
+                if (digest != null)
+                    digest = digest.toLowerCase();
+                this.digest = digest;
+            }
+        }
+
+        private final UTFCoder uc;
+        private Runnable onFinish;
+        private MessageDigest DIG;
+        private long except;
+        static final int maxTask = 16;
+
+        public DownMcFile() {
+            this("sha1");
+        }
+
+        public DownMcFile(String alg) {
+            uc = new UTFCoder();
+            try {
+                DIG = MessageDigest.getInstance(alg);
+            } catch (NoSuchAlgorithmException ignored) {}
         }
 
         public void then(Runnable function) {
-            this.callback = function;
+            this.onFinish = function;
+        }
+
+        public void add(String url, File file, String sha1) {
+            entries.add(new Entry(url, file, sha1));
         }
 
         @Override
-        public void calculate(Thread thread) throws Exception {
-            executing = true;
+        public void calculate() {
+            if (except > 0) LockSupport.parkUntil(except);
+            int j = 0;
+            try {
+                for (int i = entries.size() - 1; i >= 0; i--) {
+                    Entry e = entries.get(i);
+                    if (e.future == null) {
+                        if (e.retry > 3) {
+                            CmdUtil.warning(e.url.substring(e.url.lastIndexOf('/') + 1) + " 失败三次, 取消");
+                            entries.remove(i);
+                            continue;
+                        }
+                        try {
+                            if (j++ < maxTask)
+                                e.future = Downloader.downloadMTD(e.url, e.target, null);
+                        } catch (Throwable ex) {
+                            handleError(e, ex);
+                        }
+                        continue;
+                    }
+                    if (e.future.isDone()) {
+                        try {
+                            e.future.waitFor();
+                        } catch (Throwable ex) {
+                            handleError(e, ex);
+                            continue;
+                        }
 
-            if(!waitDigest) {
-                if (future == null) {
-                    try {
-                        future = FileUtil.downloadFileAsync(url, target, IProgressHandler.getNotify(false));
-                        if("unsupported".equals(future.flag()))
-                            CmdUtil.warning("源" + url + "不支持断点续传!");
-                    } catch (Throwable e) {
-                        handleError(e);
-                        return;
+                        if (e.target.isFile()) {
+                            if (e.digest != null && !e.digest.isEmpty()) {
+                                try (FileInputStream in = new FileInputStream(e.target)) {
+                                    int cnt;
+                                    byte[] list = IOUtil.getSharedByteBuf().list;
+                                    do {
+                                        cnt = in.read(list);
+                                        DIG.update(list, 0, cnt);
+                                    } while (cnt == list.length);
+
+                                }
+                                String DIGEST = uc.encodeHex(DIG.digest());
+                                if (!DIGEST.equals(e.digest)) {
+                                    if (DIGEST.equals(e.lastDigest)) {
+                                        CmdUtil.warning("二次SHA1相同,镜像问题? " + e.url);
+                                    } else {
+                                        e.lastDigest = DIGEST;
+                                        e.future = null;
+                                        e.retry++;
+
+                                        if (DEBUG) CmdUtil.warning("SHA1 For " + e.url + " Got: " + DIGEST);
+                                        if (!e.target.delete()) {
+                                            CmdUtil.warning(e.target.getName() + "删除失败!");
+                                        }
+                                        continue;
+                                    }
+                                } else {
+                                    CmdUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕.");
+                                }
+                            }
+                            entries.remove(i);
+                        }
                     }
                 }
-
-                if (!future.isDone()) {
-                    Thread.sleep(5);
-                    return;
-                }
-
-                try {
-                    future.waitFor();
-                } catch (Throwable e) {
-                    handleError(e);
-                    future = null;
-                    return;
-                }
-
-                if (!target.isFile()) {
-                    future = null;
-                    return;
-                }
-
-                waitDigest = true;
-                return;
+                except = System.currentTimeMillis() + 100;
+                if (!entries.isEmpty()) return;
+                if(onFinish != null) onFinish.run();
+            } catch (Throwable e) {
+                exception = new ExecutionException(e);
             }
-
-            waitDigest = false;
-
-            FileUtil.SHA1.reset();
-            byte[] _sha1 = FileUtil.SHA1.digest(IOUtil.read(new FileInputStream(target)));
-            FileUtil.SHA1.reset();
-
-            BigInteger sha1Resl = new BigInteger(1, _sha1);
-
-            if (sha1 == null || sha1.equals(sha1Resl)) {
-                // noinspection all
-                out = null;
-                executing = false;
-                CmdUtil.success(url.substring(url.lastIndexOf('/') + 1) + " 完毕.");
-                if(callback != null)
-                    callback.run();
-            } else {
-                if (sha1Resl.equals(lastResl)) {
-                    CmdUtil.warning("二次SHA1相同,镜像问题? " + url);
-                    // noinspection all
-                    out = null;
-                    executing = false;
-                    if(callback != null)
-                        callback.run();
-                    return;
-                }
-
-                if(DEBUG)
-                    CmdUtil.warning("SHA1 For " + url + " Got: " + sha1Resl.toString(16));
-                if (!target.delete()) {
-                    CmdUtil.warning("文件" + target.getName() + "删除失败!");
-                }
-                future = null;
-
-                lastResl = sha1Resl;
+            synchronized (this) {
+                done = true;
+                notifyAll();
             }
         }
 
-        public void handleError(Throwable e) {
-            executing = false;
+        @Override
+        public void run() {}
 
-            if(e instanceof CancellationException) {
-                CmdUtil.warning(url + " 的下载被取消");
-                // noinspection all
-                out = null;
-                canceled = true;
+        private static void handleError(Entry e, Throwable ex) {
+            e.future = null;
+
+            if(ex instanceof CancellationException) {
+                CmdUtil.warning( "下载被取消");
+                e.retry = 99;
                 return;
             }
 
-            String msg = e.getMessage();
-            if("文件已存在".equals(msg)) {
-                CmdUtil.info(url + " 已被其它线程完成");
-                // noinspection all
-                out = null;
-                return;
+            CmdUtil.error(e.url.substring(e.url.lastIndexOf('/') + 1) + " 下载失败.");
+            ex.printStackTrace();
+
+            e.retry++;
+        }
+
+        @Override
+        public boolean cancel(boolean force) {
+            canceled = true;
+            for (int i = 0; i < entries.size(); i++) {
+                try {
+                    Entry e = entries.get(i);
+                    if (e.future != null) e.future.cancel();
+                } catch (Exception ignored) {}
             }
-
-            if("文件已被占用".equals(msg)) {
-                CmdUtil.warning(url + " 正在被另一个线程下载");
-                // noinspection all
-                out = null;
-                return;
-            }
-
-            if(!"Read timed out".equals(msg)) {
-                if(e instanceof FileNotFoundException) {
-                    CmdUtil.error("网络连接异常: " + e.toString());
-                    // noinspection all
-                    out = null;
-                    return;
-                }
-
-                CmdUtil.error(url.substring(url.lastIndexOf('/') + 1) + " 下载失败.");
-
-                if (err == null) {
-                    try {
-                        err = new PrintStream(new FileOutputStream(new File(BASE, "network_error.log")));
-                    } catch (FileNotFoundException eee) {
-                        err = System.err;
-                    }
-                }
-
-                synchronized (err) {
-                    err.println(System.currentTimeMillis());
-                    err.print(url);
-                    err.println("下载失败");
-                    e.printStackTrace(err);
-                    err.println();
-                }
-
-                if (retry++ > 5) {
-                    CmdUtil.error(url + "错误太多, abort", e);
-                    // noinspection all
-                    out = null;
-                }
-            } else {
-                CmdUtil.warning("下载失败: 网络超时");
-            }
+            entries.clear();
+            return true;
         }
 
         @Override
         public boolean continueExecuting() {
-            // noinspection all
-            return !canceled && ((Object)out == this);
+            return !entries.isEmpty();
         }
     }
 

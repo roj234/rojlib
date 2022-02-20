@@ -32,7 +32,7 @@ import ilib.ImpLib;
 import ilib.util.DimensionHelper;
 import ilib.util.PlayerUtil;
 import roj.concurrent.TaskExecutor;
-import roj.concurrent.task.ITaskNaCl;
+import roj.concurrent.task.ITask;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -125,7 +125,7 @@ public final class WorldSaver {
         }
     }
 
-    public static class BlockIdSaver implements Runnable, ITaskNaCl {
+    public static class BlockIdSaver implements Runnable, ITask {
         public BlockIdSaver(WriteOnlySaveHandler handler, WorldInfo info) {
             this.h = handler;
             this.i = info;
@@ -142,7 +142,7 @@ public final class WorldSaver {
         }
 
         @Override
-        public void calculate(Thread thread) {
+        public void calculate() {
             try {
                 Thread.sleep(1000);
             } catch (Exception ignored) {}

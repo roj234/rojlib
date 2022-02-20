@@ -54,11 +54,11 @@ public class EventSubscriberTransformer implements ContextClassTransformer {
             for (int i = 0; i < annos.size(); i++) {
                 Annotation anno = annos.get(i);
                 if ("net/minecraftforge/fml/common/eventhandler/SubscribeEvent".equals(anno.clazz)) {
-                    if (Modifier.isPrivate(mn.accesses.flag)) {
+                    if (Modifier.isPrivate(mn.accesses)) {
                         String msg = "Cannot apply @SubscribeEvent to private method %s/%s%s";
                         throw new RuntimeException(String.format(msg, cz.name, mn.name.getString(), mn.type.getString()));
                     }
-                    mn.accesses.flag = (char) toPublic(mn.accesses.flag);
+                    mn.accesses = (char) toPublic(mn.accesses);
                     isSubscriber = true;
                     break;
                 }
@@ -66,7 +66,7 @@ public class EventSubscriberTransformer implements ContextClassTransformer {
         }
 
         if (isSubscriber)
-            cz.accesses.flag = (char) toPublic(cz.accesses.flag);
+            cz.accesses = (char) toPublic(cz.accesses);
     }
 
     private static int toPublic(int access) {

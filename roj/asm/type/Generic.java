@@ -27,6 +27,7 @@
 package roj.asm.type;
 
 import roj.asm.util.IGeneric;
+import roj.io.IOUtil;
 import roj.text.CharList;
 
 import javax.annotation.Nonnull;
@@ -54,7 +55,6 @@ public class Generic implements IGeneric {
             EX_EXTENDS = -1;
 
     public final byte type;
-    @Nonnull
     public String owner;
     @Nullable
     public Generic subClass;
@@ -86,11 +86,12 @@ public class Generic implements IGeneric {
         if (owner.equals("*")) {
             sb.append('*');
         } else {
-            sb.append(getCatDesc());
+            appendCategory(sb);
             sb.append(owner);
             if (children != null && !children.isEmpty()) {
                 sb.append('<');
-                for (IGeneric child : children) {
+                for (int i = 0; i < children.size(); i++) {
+                    IGeneric child = children.get(i);
                     child.appendGeneric(sb);
                 }
                 sb.append('>');
@@ -103,47 +104,41 @@ public class Generic implements IGeneric {
         }
     }
 
-    private char[] getCatDesc() {
-        if (type == TYPE_SUB_CLASS)
-            return new char[]{'.'};
-        int arrLen = array + 1 + (type & 1) + (extendType != 0 ? 1 : 0);
-        char[] chars = new char[arrLen];
-
-        int i = 0;
-        if (extendType != 0)
-            chars[i++] = extendType == EX_SUPERS ? '-' : '+';
-        if ((type & 1) != 0)
-            chars[i++] = ':';
-        for (; i < arrLen - 1; i++) {
-            chars[i] = '[';
+    private void appendCategory(CharList sb) {
+        if (type == TYPE_SUB_CLASS) {
+            sb.append('.');
+            return;
         }
+
+        if (extendType != 0) sb.append(extendType == EX_SUPERS ? '-' : '+');
+        if ((type & 1) != 0) sb.append(':');
+        for (int i = 0; i < array; i++) sb.append('[');
 
         switch (type) {
             case TYPE_CLASS:
             case TYPE_INHERIT_CLASS:
-                chars[arrLen - 1] = 'L';
-                return chars;
+                sb.append('L');
+                return;
             case TYPE_TYPE_PARAM:
             case TYPE_INHERIT_TYPE_PARAM:
-                chars[arrLen - 1] = 'T';
-                return chars;
+                sb.append('T');
+                return;
         }
         throw new IllegalArgumentException(String.valueOf(type));
     }
 
-
-    protected void rename(UnaryOperator<String> renameFunction) {
+    public void rename(UnaryOperator<String> fn) {
         if (type != TYPE_TYPE_PARAM && type != TYPE_INHERIT_TYPE_PARAM && type != TYPE_SUB_CLASS)
-            owner = renameFunction.apply(owner);
+            owner = fn.apply(owner);
         if (subClass != null) {
-            String tmp = renameFunction.apply(owner + '$' + subClass.owner);
+            String tmp = fn.apply(owner + '$' + subClass.owner);
             int idx = tmp.indexOf('$');
             owner = tmp.substring(0, idx);
             subClass.owner = tmp.substring(idx + 1);
         }
         if (children != null) {
-            for (IGeneric value : children) {
-                Signature.rename0(renameFunction, value);
+            for (int i = 0; i < children.size(); i++) {
+                Signature.rename0(fn, children.get(i));
             }
         }
     }
@@ -167,11 +162,12 @@ public class Generic implements IGeneric {
         }
         if (children != null && !children.isEmpty()) {
             sb.append('<');
-            for (int i = 0; i < children.size(); i++) {
-                children.get(i).appendString(sb, fn);
+            int i = 0;
+            while (true) {
+                children.get(i++).appendString(sb, fn);
+                if (i == children.size()) break;
                 sb.append(", ");
             }
-            sb.setIndex(sb.length() - 2);
             sb.append('>');
         }
         if (subClass != null) {
@@ -183,7 +179,9 @@ public class Generic implements IGeneric {
     }
 
     public String toString() {
-        CharList cl = new CharList();
+        CharList cl = IOUtil.SharedUTFCoder.get().charBuf;
+        cl.clear();
+
         appendString(cl, null);
         return cl.toString();
     }

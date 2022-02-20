@@ -27,10 +27,8 @@ package roj.asm.tree;
 
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.util.ByteList;
 
 /**
@@ -41,19 +39,14 @@ import roj.util.ByteList;
  * @since 2021/5/29 17:16
  */
 public abstract class SimpleComponent implements MoFNode {
-    SimpleComponent(FlagList accesses, CstUTF name, CstUTF type) {
-        this.accesses = accesses;
-        this.name = name;
-        this.type = type;
-    }
-    SimpleComponent(char accesses, CstUTF name, CstUTF type) {
-        this.accesses = AccessFlag.of(accesses);
+    SimpleComponent(int accesses, CstUTF name, CstUTF type) {
+        this.accesses = (char) accesses;
         this.name = name;
         this.type = type;
     }
 
     public CstUTF name, type;
-    public FlagList accesses;
+    public char accesses;
 
     @Override
     public String name() {
@@ -66,14 +59,19 @@ public abstract class SimpleComponent implements MoFNode {
     }
 
     @Override
-    public FlagList accessFlag() {
+    public void accessFlag(int flag) {
+        this.accesses = (char) flag;
+    }
+
+    @Override
+    public char accessFlag() {
         return accesses;
     }
 
     public final AttributeList attributes = new AttributeList();
 
     public void toByteArray(ConstantPool pool, ByteList w) {
-        w.putShort(accesses.flag).putShort(pool.reset(name).getIndex()).putShort(pool.reset(type).getIndex()).putShort(attributes.size());
+        w.putShort(accesses).putShort(pool.reset(name).getIndex()).putShort(pool.reset(type).getIndex()).putShort(attributes.size());
         for (int i = 0; i < attributes.size(); i++) {
            attributes.get(i).toByteArray(pool, w);
         }

@@ -32,7 +32,7 @@ public class UPnPPingTask extends AbstractCalcTask<Byte> {
     }
 
     @Override
-    public void calculate(Thread thread) throws Exception {
+    public void calculate() throws Exception {
         executing = true;
         try {
             this.out = (byte) asyncPing(ip, port, sec);

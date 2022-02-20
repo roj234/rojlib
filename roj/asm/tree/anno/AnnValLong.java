@@ -53,4 +53,19 @@ public final class AnnValLong extends AnnVal {
     public byte type() {
         return LONG;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        AnnValLong aLong = (AnnValLong) o;
+
+        return value == aLong.value;
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) (value ^ (value >>> 32));
+    }
 }

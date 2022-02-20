@@ -28,9 +28,7 @@ package roj.asm.misc;
 import roj.asm.tree.Field;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MoFNode;
-import roj.asm.type.NativeType;
 import roj.asm.type.Type;
-import roj.asm.util.FlagList;
 import roj.collect.BSLowHeap;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -75,7 +73,7 @@ public class SerialVersion {
                 continue;
             }
 
-            int access = node.accessFlag2() &
+            int access = node.accessFlag() &
                     (PUBLIC | PRIVATE | PROTECTED | STATIC | FINAL | SUPER_OR_SYNC | NATIVE | ABSTRACT | STRICTFP);
             if ((access & PRIVATE) == 0) {
                 ("<init>".equals(name) ? constructors : methods).add(new Item(name, node.rawDesc(), access));
@@ -83,8 +81,8 @@ public class SerialVersion {
         }
 
         ByteList w = new ByteList(128);
-        w.putJavaUTF(cz.className().replace('/', '.'));
-        int access = cz.accessFlag().flag;
+        w.putJavaUTF(cz.name().replace('/', '.'));
+        int access = cz.accessFlag();
         if ((access & INTERFACE) != 0) {
             access = methods.size() > 0 ? access | ABSTRACT : access & -1025;
         }
@@ -98,7 +96,7 @@ public class SerialVersion {
 
         BSLowHeap<Item> fields = new BSLowHeap<>(ITEM_SORTER);
         for (MoFNode node : cz.fields()) {
-            access = node.accessFlag2();
+            access = node.accessFlag();
             if ((access & PRIVATE) == 0 || (access & (STATIC | TRANSIENT_OR_VARARGS)) == 0) {
                 access &= (PUBLIC | PROTECTED | STATIC | FINAL | VOLATILE_OR_BRIDGE);
                 fields.add(new Item(node.name(), node.rawDesc(), access));
@@ -151,7 +149,7 @@ public class SerialVersion {
             svuid = svuid << 8 | (long)(w.list[i] & 255);
         }
 
-        Field fl = new Field(new FlagList(STATIC | FINAL), "serialVersionUID", Type.std(NativeType.LONG));
+        Field fl = new Field(STATIC | FINAL, "serialVersionUID", Type.std(Type.LONG));
         cz.fields().add(Helpers.cast(fl));
         return true;
     }

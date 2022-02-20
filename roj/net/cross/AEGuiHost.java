@@ -35,14 +35,11 @@ import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.cross.AEHost.Client;
-import roj.net.http.Code;
 import roj.net.http.HttpServer;
-import roj.net.http.serv.Reply;
 import roj.net.http.serv.StringResponse;
 import roj.net.misc.Pipe;
 import roj.text.LoggingStream;
 import roj.text.TextUtil;
-import roj.util.FastLocalThread;
 
 import javax.swing.*;
 import java.io.FileInputStream;
@@ -115,10 +112,7 @@ public class AEGuiHost {
 
         if(webPort != -1) {
             try {
-                Thread t = new FastLocalThread(runServer(webPort));
-                t.setDaemon(true);
-                t.setName("AEHost Http");
-                t.start();
+                runServer(webPort).start();
             } catch (BindException e) {
                 System.err.println("HTTP端口(" + webPort + ")已被占用: " + e.getMessage());
             } catch (IOException e) {
@@ -149,11 +143,11 @@ public class AEGuiHost {
                               (socket, request, requestHandler) -> {
             switch (request.path()) {
                 case "/bundle.min.css":
-                    return new Reply(Code.OK, new StringResponse(res("bundle.min.css"), "text/css"));
+                    return new StringResponse(res("bundle.min.css"), "text/css");
                 case "/bundle.min.js":
-                    return new Reply(Code.OK, new StringResponse(res("bundle.min.js"), "text/javascript"));
+                    return new StringResponse(res("bundle.min.js"), "text/javascript");
                 case "/":
-                    return new Reply(Code.OK, new StringResponse(res("client_owner.html"), "text/html"));
+                    return new StringResponse(res("client_owner.html"), "text/html");
                 case "/user_list":
                     CList lx = new CList();
                     for (IntMap.Entry<Client> entry : client.clients.entrySet()) {
@@ -176,16 +170,16 @@ public class AEGuiHost {
                         }
                         lx.add(map);
                     }
-                    return new Reply(Code.OK, new StringResponse(lx.toShortJSONb(), "application/json"));
+                    return new StringResponse(lx.toShortJSONb(), "application/json");
                 case "/kick_user":
                     int count = 0;
-                    String[] arr = request.postFields().get("users").split(",");
+                    String[] arr = request.payloadFields().get("users").split(",");
                     int[] arrs = new int[arr.length];
                     for (int i = 0; i < arr.length; i++) {
                         arrs[i] = Integer.parseInt(arr[i]);
                     }
                     client.kickSome(arrs);
-                    return new Reply(Code.OK, new StringResponse("{\"count\":" + arr.length + "}", "application/json"));
+                    return new StringResponse("{\"count\":" + arr.length + "}", "application/json");
             }
             return null;
         });

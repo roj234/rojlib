@@ -26,6 +26,7 @@
 package roj;
 
 import roj.io.FileUtil;
+import roj.io.down.Downloader;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 
@@ -43,31 +44,33 @@ public final class FileDownloader {
             return;
         }
 
-        FileUtil.CHECK_ETAG = false;
-        FileUtil.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
+        Downloader.checkETag = false;
+        FileUtil.userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36";
 
         int threadCount;
         if (args.length < 3) {
             System.out.print("线程数: ");
-            threadCount = UIUtil.getNumberInRange(0, 501);
+            threadCount = UIUtil.getNumberInRange(0, 256);
             if (threadCount == 0) {
                 threadCount = Runtime.getRuntime().availableProcessors() << 2;
             }
         } else {
             threadCount = Integer.parseInt(args[2]);
         }
-        FileUtil.MIN_ASYNC_SIZE = 0;
+        Downloader.chunkCount = threadCount;
+        Downloader.chunkStartSize = 0;
 
         File saveTo = new File(args[0]);
 
         int retry = 2;
         do {
             try {
-                FileUtil.downloadFileAsync(args[1], saveTo, threadCount).waitFor();
+                Downloader.downloadMTD(args[1], saveTo).waitFor();
                 break;
             } catch (Throwable e) {
-                CmdUtil.warning("Failure downloading " + saveTo.getName() + " - " + e.getLocalizedMessage());
-                CmdUtil.warning("Retry " + (3 - retry) + "/3");
+                if (e.getMessage() == null) e.printStackTrace();
+                else CmdUtil.warning("下载失败 " + saveTo.getName() + " - " + e.getLocalizedMessage());
+                CmdUtil.warning("重试 " + (3 - retry) + "/3");
             }
         } while (retry-- > 0);
     }

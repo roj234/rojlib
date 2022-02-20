@@ -28,7 +28,6 @@ package roj.asm.tree;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.util.ByteList;
 
 /**
@@ -36,17 +35,17 @@ import roj.util.ByteList;
  * @since 2021/5/12 0:23
  */
 public interface MoFNode {
-    void toByteArray(ConstantPool pool, ByteList w);
+    default void toByteArray(ConstantPool pool, ByteList w) {
+        throw new UnsupportedOperationException(getClass().getName() + " does not support encoding");
+    }
 
     String name();
-
     String rawDesc();
 
-    FlagList accessFlag();
-
-    default char accessFlag2() {
-        return accessFlag().flag;
+    default void accessFlag(int flag) {
+        throw new UnsupportedOperationException(getClass().getName() + " does not support set access flag");
     }
+    char accessFlag();
 
     default Attribute attrByName(String name) {
         return (Attribute) attributes().getByName(name);

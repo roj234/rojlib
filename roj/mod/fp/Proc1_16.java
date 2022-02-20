@@ -107,9 +107,9 @@ public final class Proc1_16 extends Processor {
         try {
             forge.setIndex(len);
             String forgeInst = forge.append("-installer.jar").toString();
-            String instUrl = MAIN_CONFIG.get("FMD配置").asMap().getString("ForgeMaven仓库地址") + forgeInst;
+            String instUrl = CONFIG.getString("ForgeMaven仓库地址") + forgeInst;
             MCLauncher.downloadAndVerifyMD5(instUrl, forgeInstaller = new File(TMP_DIR, forgeInst.substring(
-                    forgeInst.lastIndexOf('/') + 1)), true);
+                    forgeInst.lastIndexOf('/') + 1)));
         } catch (IOException e) {
             CmdUtil.warning("文件下载失败, 请检查网络", e);
             System.exit(-4);
@@ -188,7 +188,7 @@ public final class Proc1_16 extends Processor {
         this.serverLzmaInput = (InputStream) files[3];
         this.mcClearSrg = (File) files[4];
 
-        parallel.pushRunnable(this);
+        Task.pushRunnable(this);
     }
 
     public static void handleMCPConfig(File mcpConfigFile) {
@@ -200,7 +200,7 @@ public final class Proc1_16 extends Processor {
         tmp.deleteOnExit();
 
         TrieTreeSet set = new TrieTreeSet();
-        FMDMain.readTextList(set::add, "FMD配置.忽略服务端jar中以以下文件名开头的文件");
+        FMDMain.readTextList(set::add, "忽略服务端jar中以以下文件名开头的文件");
 
         try {
             Helper1_16.remap116_SC(tmp, mcServer, mcpConfigFile, set);
@@ -271,10 +271,10 @@ public final class Proc1_16 extends Processor {
         CodeMapper nameRmp = new CodeMapper(rmp);
         nameRmp.setParamRemappingV2(paramMap);
 
-        threadWait(com(rmp, nameRmp, 1, ctxs),
-                   com(new ConstMapper(rmp), nameRmp, 2, ctxs));
+        async(com(rmp, nameRmp, 1, ctxs),
+              com(new ConstMapper(rmp), nameRmp, 2, ctxs));
 
-        try (ZipFileWriter zfw = new ZipFileWriter(new File(BASE, "class/" + MERGED_FILE_NAME + ".jar"))) {
+        try (ZipFileWriter zfw = new ZipFileWriter(new File(BASE, "class/" + MC_BINARY + ".jar"))) {
             FileTime time = FileTime.from(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
             List<Context> merged = ctxs[1];
             for (int i = 0; i < merged.size(); i++) {

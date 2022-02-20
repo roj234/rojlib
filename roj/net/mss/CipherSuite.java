@@ -37,8 +37,8 @@ public final class CipherSuite {
             SIGN_POLY1305 = Poly1305::new;
 
     public static Supplier<MSSSubKey>
-            SUBKEY_DHE   = DH::new,
-            SUBKEY_ECDHE = ECDH::new;
+            SUBKEY_DHE   = DH::new/*,
+            SUBKEY_ECDHE = ECDH::new*/;
 
     static {
         registerKey(KEY_X509_RSA, X509KeyFormat.RSA);

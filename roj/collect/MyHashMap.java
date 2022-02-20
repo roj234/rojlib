@@ -431,8 +431,8 @@ public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K
         return entry;
     }
 
-    protected Entry<K, V> notUsing = null;
-    protected int removedLength = 0;
+    protected Entry<K, V> notUsing;
+    protected int removedLength;
 
     @SuppressWarnings("unchecked")
     protected Entry<K, V> getCachedEntry(K id) {

@@ -2,6 +2,7 @@ package roj.lavac.parser;
 
 import roj.collect.IBitSet;
 import roj.collect.LongBitSet;
+import roj.collect.SingleBitSet;
 import roj.config.ParseException;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
@@ -16,6 +17,8 @@ import roj.text.CharList;
  */
 public final class JavaLexer extends JSLexer {
     public static final IBitSet JAVA_SPECIAL = LongBitSet.from("+-\\/*()!~`@#$%^&=,<>.?\"':;|[]{}");
+
+    public final SingleBitSet env = new SingleBitSet();
 
     public JavaLexer() {}
 
@@ -65,6 +68,7 @@ public final class JavaLexer extends JSLexer {
     @Override
     protected Word formAlphabetClip(CharSequence s) {
         short kwId = Keyword.indexOf(s);
+        if (env.contains(Keyword.type(kwId))) kwId = WordPresets.LITERAL;
         return formClip(kwId, kwId == WordPresets.LITERAL ? s.toString() : Keyword.byId(kwId));
     }
 

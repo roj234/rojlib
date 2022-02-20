@@ -58,14 +58,16 @@ public abstract class SimpleNamer implements NamingFunction {
     public String obfName(Set<String> noDuplicate, Desc param, Random rand) {
         int i = maxRetryAttempts;
         String s;
-        while (!noDuplicate.add((s = obfName0(rand)) + param))
-            if(i-- == 0) {
-                if(fallback == null) {
+        while (true) {
+            s = obfName0(rand);
+            if (s == null || noDuplicate.add(s + param)) return s;
+            if (i-- == 0) {
+                if (fallback == null) {
                     throw new IllegalArgumentException("Unable to find a not duplicate name after " + maxRetryAttempts + " retry attempts for " + param);
                 } else {
                     return fallback.obfName(noDuplicate, param, rand);
                 }
             }
-        return s;
+        }
     }
 }

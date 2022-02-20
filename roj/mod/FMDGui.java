@@ -29,7 +29,6 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.task.ITask;
-import roj.concurrent.task.ITaskNaCl;
 import roj.io.IOUtil;
 import roj.io.ZipUtil;
 import roj.mod.util.IntCallable;
@@ -194,11 +193,8 @@ public class FMDGui extends JFrame {
                 "FMD - 快速mod开发环境 - 作者 Roj234\n" +
                         VERSION + "\n" +
                         "\n" +
-                        "  修复少量bug\n" +
-                        "  自制HTTP输入流\n" +
-                        "  优化内存使用\n" +
-                        "\n" +
-                        "下一个版本可能会支持1.17的开发", "关于FMD", INFORMATION_MESSAGE, icon);
+                        "  优化处理流程,提高速度\n" +
+                        "  修复部分bug\n", "关于FMD", INFORMATION_MESSAGE, icon);
     }
 
     private static void gc(ActionEvent event) {
@@ -236,7 +232,7 @@ public class FMDGui extends JFrame {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         try {
-            if(!Shared.loadConfig(false)) {
+            if(!Shared.loadProject(false)) {
                 JOptionPane.showMessageDialog(frame, "配置文件不存在或有误, 已恢复默认!", "错误", ERROR_MESSAGE);
                 initDefaultConf();
             }
@@ -247,8 +243,8 @@ public class FMDGui extends JFrame {
     }
 
     private static void initDefaultConf() {
-        Shared.setConfig("default");
-        JFrame frame1 = new ConfigEdit(currentProject, frame);
+        Shared.setProject("default");
+        JFrame frame1 = new ConfigEdit(project, frame);
         frame1.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(false);
     }
@@ -259,13 +255,13 @@ public class FMDGui extends JFrame {
                 "选择",
                 "新建"
         };
-        Project project = Shared.currentProject;
-        switch (JOptionPane.showOptionDialog(frame, "已选择 " + project.getFile().getAbsolutePath().replace(BASE.getAbsolutePath(), ""), "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, availableValue, availableValue[0])) {
+        Project p = project;
+        switch (JOptionPane.showOptionDialog(frame, "已选择 " + p.getFile().getAbsolutePath().replace(BASE.getAbsolutePath(), ""), "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, availableValue, availableValue[0])) {
             case YES_OPTION:
-                new ConfigEdit(project);
+                new ConfigEdit(p);
                 break;
             case NO_OPTION: {
-                JFileChooser fileChooser = new JFileChooser(Shared.PROJ_CONF_DIR);
+                JFileChooser fileChooser = new JFileChooser(Shared.PROJECTS_DIR);
                 fileChooser.setFileFilter(new FileFilter() {
                     @Override
                     public boolean accept(File f) {
@@ -280,7 +276,7 @@ public class FMDGui extends JFrame {
 
                 if (fileChooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
                     File selected = fileChooser.getSelectedFile();
-                    Shared.setConfig(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
+                    Shared.setProject(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
 
                     frame.consoleOutput.setText("已选择 " + selected.getAbsolutePath());
                 }
@@ -391,15 +387,15 @@ public class FMDGui extends JFrame {
     }
 
     private static class ConfigEdit extends JFrame {
-        private final Project project;
+        private final Project p;
         private final JTextField verInp, atInput, charsetInp, dependInp;
         private final Set<String> error = new MyHashSet<>();
 
         private JFrame parent;
 
-        public ConfigEdit(Project project) {
-            super(project.getFile().getName() + " - 配置编辑");
-            this.project = project;
+        public ConfigEdit(Project p) {
+            super(p.getFile().getName() + " - 配置编辑");
+            this.p = p;
 
             UIUtil.setLogo(this, "FMD_logo.png");
 
@@ -411,7 +407,7 @@ public class FMDGui extends JFrame {
             verLab.setBounds(10,10,80,25);
             panel.add(verLab);
 
-            verInp = new JTextField(project.version, 20);
+            verInp = new JTextField(p.version, 20);
             verInp.setBounds(100,10,165,25);
             panel.add(verInp);
 
@@ -420,7 +416,7 @@ public class FMDGui extends JFrame {
             atLab.setToolTipText("AccessTransformer\n不使用留空");
             panel.add(atLab);
 
-            atInput = new JTextField(project.atName, 20);
+            atInput = new JTextField(p.atName, 20);
             atInput.setBounds(100,40,165,25);
             panel.add(atInput);
 
@@ -428,7 +424,7 @@ public class FMDGui extends JFrame {
             charsetLab.setBounds(10,70,80,25);
             panel.add(charsetLab);
 
-            charsetInp = new JTextField(project.charset.name(), 20);
+            charsetInp = new JTextField(p.charset.name(), 20);
             charsetInp.setBounds(100,70,165,25);
             panel.add(charsetInp);
 
@@ -437,7 +433,7 @@ public class FMDGui extends JFrame {
             dependLab.setToolTipText("多个用竖线(|)隔开");
             panel.add(dependLab);
 
-            dependInp = new JTextField(project.dependencyString(), 20);
+            dependInp = new JTextField(p.dependencyString(), 20);
             dependInp.setBounds(100,100,165,25);
             panel.add(dependInp);
 
@@ -468,8 +464,8 @@ public class FMDGui extends JFrame {
             validate();
         }
 
-        public ConfigEdit(Project project, JFrame frame) {
-            this(project);
+        public ConfigEdit(Project p, JFrame frame) {
+            this(p);
             this.parent = frame;
             JOptionPane.showMessageDialog(this, "创建默认配置", "警告", WARNING_MESSAGE);
         }
@@ -479,10 +475,10 @@ public class FMDGui extends JFrame {
             if(atInput.getText().length() > 0 && !FILE_NAME.reset(atInput.getText()).matches()) {
                 error.add("AT文件名不合法");
             } else {
-                project.atName = atInput.getText();
+                p.atName = atInput.getText();
             }
             try {
-                project.charset = Charset.forName(charsetInp.getText());
+                p.charset = Charset.forName(charsetInp.getText());
             } catch (Throwable e1) {
                 error.add("编码不支持");
             }
@@ -490,22 +486,22 @@ public class FMDGui extends JFrame {
             if(!FILE_NAME.reset(verInp.getText()).matches()) {
                 error.add("版本不合法");
             } else {
-                project.version = verInp.getText();
+                p.version = verInp.getText();
             }
 
-            project.setDependencyString(dependInp.getText());
+            p.setDependencyString(dependInp.getText());
 
             if(error.isEmpty()) {
-                project.save();
+                p.save();
 
-                File projPath = new File(BASE.getAbsolutePath() + File.separatorChar + "projects" + File.separatorChar + project.name);
+                File projPath = new File(BASE.getAbsolutePath() + File.separatorChar + "ps" + File.separatorChar + p.name);
 
                 if(!projPath.isDirectory() && projPath.mkdirs()) {
-                    ZipUtil.unzip(BASE.getAbsolutePath() + "/util/default.zip", projPath.getAbsolutePath());
+                    ZipUtil.unzip(BASE.getAbsolutePath() + "/util/default.zip", projPath.getAbsolutePath() + "/");
                 }
 
-                if(project.getFile().equals(Shared.currentProject.getFile())) {
-                    Shared.currentProject.reload();
+                if(p.getFile().equals(project.getFile())) {
+                    project.reload();
                 }
                 dispose();
                 if(parent != null)
@@ -516,7 +512,7 @@ public class FMDGui extends JFrame {
         }
     }
 
-    private static class Task implements ITaskNaCl {
+    private static class Task implements ITask {
         IntCallable fn;
 
         public Task(IntCallable intSupplier) {
@@ -529,7 +525,7 @@ public class FMDGui extends JFrame {
         }
 
         @Override
-        public void calculate(Thread thread) {
+        public void calculate() {
             try {
                 int code = fn.call();
                 fn = null;

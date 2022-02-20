@@ -6,9 +6,6 @@ import roj.config.word.Word;
 import roj.config.word.WordPresets;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- * <p>
  * 符号
  *
  * @author solo6975

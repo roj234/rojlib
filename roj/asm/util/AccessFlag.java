@@ -54,10 +54,6 @@ public class AccessFlag {
         M_TRANSITIVE = 0x0020,
         M_STATIC_PHASE = 0x0040;
 
-    public static FlagList of(int flag) {
-        return new FlagList(flag);
-    }
-
     /**
      * ACC_PUBLIC	    0x0001	Declared public; may be accessed from outside its package.
      * ACC_PRIVATE	    0x0002	Declared private; accessible only within the defining class.
@@ -133,40 +129,46 @@ public class AccessFlag {
             null, null, null, null, null, "open / transitive", "static_phase", null, null, null, null, null, "synthetic", null, null, "mandated"
     };
 
-    public static String byIdMethod(int acc) {
-        return get(acc, METHOD_ACC);
+    public static final int TS_CLASS   = 0;
+    public static final int TS_PARAM   = 1;
+    public static final int TS_METHODS = 2;
+    public static final int TS_FIELD   = 3;
+    public static final int TS_INNER   = 4;
+    public static final int TS_MODULE  = 5;
+
+    public static String toString(int flag, int type) {
+        return toString(flag, type, new StringBuilder()).toString();
     }
 
-    public static String byIdParameter(int acc) {
-        return get(acc, FIELD_ACC);
-    }
+    public static StringBuilder toString(int flag, int type, StringBuilder sb) {
+        String[] accString;
+        switch (type) {
+            case TS_CLASS:
+                accString = CLASS_ACC;
+                break;
+            case TS_FIELD:
+            case TS_PARAM:
+                accString = FIELD_ACC;
+                break;
+            case TS_INNER:
+                accString = INNER_CLASS_ACC;
+                break;
+            case TS_METHODS:
+                accString = METHOD_ACC;
+                break;
+            case TS_MODULE:
+                accString = MODULE_ACC;
+                break;
+            default:
+                return sb;
+        }
 
-    public static String byIdField(int acc) {
-        return get(acc, FIELD_ACC);
-    }
-
-    public static String byIdClass(int acc) {
-        return get(acc, CLASS_ACC);
-    }
-
-    public static String byIdInnerClass(int acc) {
-        return get(acc, INNER_CLASS_ACC);
-    }
-
-    public static String byIdModule(int acc) {
-        return get(acc, MODULE_ACC);
-    }
-
-    public static String get(int val, String[] strings) {
-        for (int i = 0; i < 15; i++) {
-            if (val == 1 << i) {
-                String s = strings[i];
-                if (s == null) {
-                    break;
-                }
-                return s;
+        for (int i = 0; i < accString.length; i++) {
+            if ((flag & (1 << i)) != 0) {
+                String s = accString[i];
+                if (s != null) sb.append(s).append(' ');
             }
         }
-        throw new IllegalArgumentException("Unsupported access flag 0x" + Integer.toHexString(val));
+        return sb;
     }
 }

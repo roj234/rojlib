@@ -26,6 +26,7 @@
 
 package roj.io;
 
+import roj.text.CharList;
 import roj.text.UTFCoder;
 import roj.util.ByteList;
 import roj.util.FastThreadLocal;
@@ -44,6 +45,14 @@ public class IOUtil {
 
     public static ByteList getSharedByteBuf() {
         ByteList o = SharedUTFCoder.get().byteBuf;
+        o.ensureCapacity(1024);
+        o.clear();
+        return o;
+    }
+
+    public static CharList getSharedCharBuf() {
+        CharList o = SharedUTFCoder.get().charBuf;
+        o.ensureCapacity(1024);
         o.clear();
         return o;
     }

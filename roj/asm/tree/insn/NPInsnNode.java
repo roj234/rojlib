@@ -27,7 +27,6 @@
 package roj.asm.tree.insn;
 
 import roj.asm.util.ConstantPool;
-import roj.asm.util.NodeHelper;
 import roj.util.ByteList;
 
 /**
@@ -35,17 +34,16 @@ import roj.util.ByteList;
  * @since 2021/1/2 15:21
  */
 public final class NPInsnNode extends InsnNode {
-    /**
-     * 推荐使用{@link NodeHelper#npc(byte)}
-     *
-     * @param code The code
-     */
     public NPInsnNode(byte code) {
         super(code);
     }
 
     public static NPInsnNode of(byte code) {
         return new NPInsnNode(code);
+    }
+
+    public static NPInsnNode of(int code) {
+        return new NPInsnNode((byte) code);
     }
 
     @Override

@@ -25,8 +25,6 @@
  */
 package roj.net.http;
 
-import roj.collect.ToIntMap;
-
 /**
  * @author Roj234
  * @since  2020/11/28 20:17
@@ -42,20 +40,18 @@ public final class Action {
             TRACE = 7,
             CONNECT = 8;
 
-    static final ToIntMap<String> available = new ToIntMap<>(7, 2);
-
-    static {
-        available.putInt("GET", 1);
-        available.putInt("POST", 2);
-        available.putInt("PUT", 3);
-        available.putInt("HEAD", 4);
-        available.putInt("DELETE", 5);
-        available.putInt("OPTIONS", 6);
-        available.putInt("TRACE", 7);
-        available.putInt("CONNECT", 8);
-    }
-
     public static int valueOf(String name) {
-        return available.getOrDefault(name, -1);
+        if (name == null) return -1;
+        switch (name) {
+            case "GET":     return GET;
+            case "POST":    return POST;
+            case "PUT":     return PUT;
+            case "HEAD":    return HEAD;
+            case "DELETE":  return DELETE;
+            case "OPTIONS": return OPTIONS;
+            case "TRACE":   return TRACE;
+            case "CONNECT": return CONNECT;
+            default:        return -1;
+        }
     }
 }

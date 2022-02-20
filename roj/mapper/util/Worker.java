@@ -29,8 +29,6 @@ import roj.asm.util.Context;
 import roj.concurrent.task.AbstractExecutionTask;
 
 import java.util.List;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
 import java.util.function.Consumer;
 
 /**
@@ -39,30 +37,22 @@ import java.util.function.Consumer;
  */
 public final class Worker extends AbstractExecutionTask {
     private final List<Context> files;
-    private final CyclicBarrier barrier;
+    private final Consumer<Context> action;
 
-    public Consumer<Context> action;
-
-    public Worker(List<Context> files, CyclicBarrier barrier) {
+    public Worker(List<Context> files, Consumer<Context> action) {
         this.files = files;
-        this.barrier = barrier;
+        this.action = action;
     }
 
     public void run() {
         List<Context> f = this.files;
         Consumer<Context> c = this.action;
-        if (c == null) return;
-
         for (int i = 0; i < f.size(); i++) {
-            c.accept(f.get(i));
-        }
-
-        if (barrier == null) return;
-        action = null;
-        try {
-            barrier.await();
-        } catch (InterruptedException | BrokenBarrierException e) {
-            e.printStackTrace();
+            try {
+                c.accept(f.get(i));
+            } catch (Throwable e) {
+                System.out.println(f.get(i).get());
+            }
         }
     }
 }

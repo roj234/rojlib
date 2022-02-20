@@ -35,7 +35,6 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.collect.IntMap;
-import roj.collect.ToIntMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
@@ -48,7 +47,7 @@ import static roj.asm.tree.insn.InsnNode.validate;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class AttrLocalVars extends Attribute implements ICodeAttribute {
+public final class AttrLocalVars extends Attribute {
     public final List<LocalVariable> list;
 
     public AttrLocalVars(String name) {
@@ -111,17 +110,17 @@ public final class AttrLocalVars extends Attribute implements ICodeAttribute {
             } local_variable_table[local_variable_table_length];
         }
     */
-    @Override
-    public void toByteArray(ConstantPool pool, ByteList w, ToIntMap<InsnNode> pcRev) {
+    public void toByteArray(ConstantPool pool, ByteList w, int most) {
         w.putShort(list.size());
-        for (LocalVariable c : list) {
+        for (int i = 0; i < list.size(); i++) {
+            LocalVariable c = list.get(i);
             InsnNode s = validate(c.start);
             InsnNode e = validate(c.end);
-            w.putShort(pcRev.getInt(s))
-                    .putShort(pcRev.getInt(e) - pcRev.getInt(s))
-                    .putShort(pool.getUtfId(c.name))
-                    .putShort(pool.getUtfId(c.type.isGeneric() ? c.type.toGeneric() : ParamHelper.getField((Type) c.type)))
-                    .putShort(c.slot);
+            w.putShort(s.bci)
+             .putShort((e == EndOfInsn.MARKER ? most : e.bci) - s.bci)
+             .putShort(pool.getUtfId(c.name))
+             .putShort(pool.getUtfId(c.type.isGeneric() ? c.type.toGeneric() : ParamHelper.getField((Type) c.type)))
+             .putShort(c.slot);
         }
     }
 

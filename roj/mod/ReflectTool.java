@@ -134,7 +134,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 
     protected void loadData(JLabel label) {
         if(fullClass.isEmpty()) {
-            Shared.initForwardMapper();
+            Shared.loadMapper();
             ConstMapper mapper = Shared.mapperFwd;
             for(String s : mapper.getClassMap().keySet()) {
                 fullClass.add(s);
@@ -163,7 +163,6 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
                     fullClass.remove(s);
                     final String key = s.substring(s.lastIndexOf('/') + 1).toLowerCase();
                     simple2full.remove(key);
-                    System.out.println("Removing " + s);
                 }
             }
 
@@ -196,11 +195,13 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
         Collection<String> entries;
         if (text.startsWith("field_") || text.startsWith("func_")) {
             ConstMapper mapper = Shared.mapperFwd;
-            entries = new ArrayList<>();
+            entries = new ArrayList<>(2);
             for (Map.Entry<Desc, String> entry : (text.startsWith("field_") ? mapper.getFieldMap() :
                     mapper.getMethodMap()).entrySet()) {
-                if (entry.getValue().contains(text)) {
+                if (entry.getValue().equals(text)) {
                     entries.add(entry.getKey().owner);
+                    System.out.println("MCP名: " + entry.getKey().name);
+                    break;
                 }
             }
         } else {
@@ -345,7 +346,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
                     try {
                         if(search == null || md.name.toLowerCase().contains(search)) {
                             List<roj.asm.type.Type> params = ParamHelper.parseMethod(md.param);
-                            JLabel label1 = makeLabel(y, ParamHelper.humanize(params, md.name));
+                            JLabel label1 = makeLabel(y, ParamHelper.humanize(params, md.name, true));
                             methodNames[(y - 25) / 22] = md.owner;
                             pMethod.add(label1);
                             y += 22;

@@ -72,7 +72,7 @@ public class UserFriendlyObfUI {
         System.out.println("!! 注意，本程序仅为FMD提供简易混淆功能 尚未完工");
 
         CMapping json = JSONParser.parse(IOUtil.readUTF(new File(BASE, "obfuscator.json"))).asMap();
-        CMapping set = json.containsKey(args[0]) ? json.getOrCreateMap(args[0]) : json.get("*").asMap();
+        CMapping set = json.get(json.containsKey(args[0]) ? args[0] : "*").asMap();
 
         SimpleObfuscator obf = new SimpleObfuscator();
         obf.setFlags(set.getInteger("flags"));
@@ -105,7 +105,7 @@ public class UserFriendlyObfUI {
 
         // 混淆
         List<Context> contexts = Util.ctxFromZip(src, StandardCharsets.UTF_8);
-        obf.reset(FileUtil.findAllFiles(new File(BASE, "class")));
+        obf.loadLibraries(FileUtil.findAllFiles(new File(BASE, "class")));
         obf.obfuscate(contexts);
 
         // 保存
@@ -113,7 +113,7 @@ public class UserFriendlyObfUI {
         if (set.getString("覆盖现有文件").equals("true")) {
             for (int i = 0; i < contexts.size(); i++) {
                 Context ctx = contexts.get(i);
-                mzf.setFileData(ctx.getFileName(), () -> ctx.get(true), true);
+                mzf.put(ctx.getFileName(), ctx, true);
             }
             mzf.store();
         } else {
@@ -121,7 +121,7 @@ public class UserFriendlyObfUI {
             ZipFileWriter zfw = new ZipFileWriter(dest);
             for (int i = 0; i < contexts.size(); i++) {
                 Context ctx = contexts.get(i);
-                zfw.writeNamed(ctx.getFileName(), ctx.get(true));
+                zfw.writeNamed(ctx.getFileName(), ctx.get());
             }
             for(EFile eFile : mzf.getEntries().values()) {
                 if (eFile.getName().endsWith("/") || eFile.getName().endsWith(".class"))

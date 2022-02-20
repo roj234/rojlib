@@ -6,7 +6,6 @@ import roj.reflect.DirectAccessor;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -23,8 +22,8 @@ public class MySelector {
     private interface H {
         void setSelectedSet(Selector selector, Set<SelectionKey> selectedSet);
         void setPublicSelectedSet(Selector selector, Set<SelectionKey> totalSet);
-        void setSet(Selector selector, HashSet<SelectionKey> selectedSet);
-        HashSet<SelectionKey> getSet(Selector selector);
+        void setSet(Selector selector, Set<SelectionKey> selectedSet);
+        Set<SelectionKey> getSet(Selector selector);
         void setPublicSet(Selector selector, Set<SelectionKey> totalSet);
     }
 

@@ -29,6 +29,7 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
+import roj.io.IOUtil;
 import roj.text.CharList;
 
 import java.util.*;
@@ -46,8 +47,6 @@ public final class Headers extends MyHashMap<CharSequence, String> {
             this.all = Collections.emptyList();
         }
     }
-
-    CharList tmp = new CharList();
 
     public Headers readFromLexer(HttpLexer wr) throws ParseException {
         while (true) {
@@ -142,35 +141,35 @@ public final class Headers extends MyHashMap<CharSequence, String> {
     }
 
     private CharList capitalize(String name) {
-        tmp.clear();
+        CharList tmp = IOUtil.getSharedCharBuf();
 
         int len = name.length();
         if (len == 0) {
             return tmp;
         }
 
-        char[] tmp = this.tmp.list;
-        if (tmp == null || tmp.length < len) {
-            tmp = this.tmp.list = new char[len];
+        char[] cs = tmp.list;
+        if (cs == null || cs.length < len) {
+            cs = tmp.list = new char[len];
         }
 
-        name.getChars(0, len, tmp, 0);
-        this.tmp.setIndex(len);
+        name.getChars(0, len, cs, 0);
+        tmp.setIndex(len);
 
         boolean dlm = true;
         for (int i = 0; i < len; ++i) {
-            char c = tmp[i];
+            char c = cs[i];
             if (dlm) {
                 if (c >= 'a' && c <= 'z') {
-                    tmp[i] = (char) (c - 32);
+                    cs[i] = (char) (c - 32);
                 }
                 dlm = false;
             } else if (c >= 'A' && c <= 'Z') {
-                tmp[i] = (char) (c + 32);
+                cs[i] = (char) (c + 32);
             }
             if (c == '-') dlm = true;
         }
-        return this.tmp;
+        return tmp;
     }
 
     public void encode(StringBuilder sb) {

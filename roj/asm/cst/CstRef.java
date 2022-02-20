@@ -77,7 +77,7 @@ public abstract class CstRef extends Constant {
     }
 
     public final int hashCode() {
-        return (clazz.hashCode() << 16) ^ desc.hashCode() ^ getClass().hashCode();
+        return (clazz.hashCode() << 16) ^ desc.hashCode() ^ type();
     }
 
     public final boolean equals(Object o) {

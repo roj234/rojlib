@@ -26,6 +26,7 @@
 
 package roj.asm.tree;
 
+import roj.asm.Parser;
 import roj.asm.SharedBuf;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
@@ -35,26 +36,22 @@ import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
-import java.util.PrimitiveIterator;
-
 /**
  * @author Roj234
- * @version 1.0
  * @since 2021/6/18 9:51
  */
 public final class Field implements MoFNode {
-    public Field(FlagList accesses, String name, String type) {
-        this.accesses = accesses;
+    public Field(int accesses, String name, String type) {
+        this.accesses = (char) accesses;
         this.name = name;
         this.type = ParamHelper.parseField(type);
     }
 
-    public Field(FlagList accesses, String name, Type type) {
-        this.accesses = accesses;
+    public Field(int accesses, String name, Type type) {
+        this.accesses = (char) accesses;
         this.name = name;
         this.type = type;
     }
@@ -133,12 +130,12 @@ public final class Field implements MoFNode {
 
     public String name;
     public Type type;
-    public FlagList accesses;
+    public char accesses;
     public AttributeList attributes = new AttributeList();
     public Signature signature;
 
     public void toByteArray(ConstantPool pool, ByteList w) {
-        w.putShort(accesses.flag).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(ParamHelper.getField(type)));
+        w.putShort(accesses).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(ParamHelper.getField(type)));
 
         if (signature != null)
             attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
@@ -160,11 +157,16 @@ public final class Field implements MoFNode {
 
     @Override
     public int type() {
-        return 1;
+        return Parser.FTYPE_FULL;
     }
 
     @Override
-    public FlagList accessFlag() {
+    public void accessFlag(int flag) {
+        this.accesses = (char) flag;
+    }
+
+    @Override
+    public char accessFlag() {
         return accesses;
     }
 
@@ -201,9 +203,7 @@ public final class Field implements MoFNode {
             sb.append("    ").append(getInvisibleAnnotations()).append('\n');
 
         sb.append("    ");
-        for (PrimitiveIterator.OfInt itr = accesses.iterator(); itr.hasNext(); ) {
-            sb.append(AccessFlag.byIdField(itr.nextInt())).append(' ');
-        }
+        AccessFlag.toString(accesses, AccessFlag.TS_FIELD, sb);
         sb.append(signature != null ? signature : type).append(' ').append(name);
 
         AttrConstantValue constant = (AttrConstantValue) attributes.getByName("ConstantValue");

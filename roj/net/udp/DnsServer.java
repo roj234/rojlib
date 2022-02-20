@@ -1231,10 +1231,11 @@ public class DnsServer implements Router, Runnable {
     }
 
     @Override
-    public Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException {
+    public Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException {
         switch (req.path()) {
             case "/favicon.ico":
-                return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
+                rh.reply(404);
+                return null;
             case "/":
             case "": {
                 StringBuilder sb = new StringBuilder().append("<head><meta charset='UTF-8' /><title>AsyncDns 1.2</title></head><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.2</h1>");
@@ -1258,25 +1259,26 @@ public class DnsServer implements Router, Runnable {
                   .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by Async/v2.0</h2>Memory: ")
                   .append(TextUtil.scaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
-                return new Reply(Code.OK, new StringResponse(sb, "text/html"));
+                return new StringResponse(sb, "text/html");
             }
             case "/stop": {
                 System.exit(0);
                 return null;
             }
             case "/stat":
-                return new Reply(Code.OK, new StringResponse(dumpIpAddress(), "text/plain"));
+                return new StringResponse(dumpIpAddress(), "text/plain");
             case "/save": {
                 save();
-                Reply reply = new Reply(Code.FOUND);
-                reply.header("Location", dirty.get() ? "/?msg=保存成功" : "/?msg=数据没更改");
-                return reply;
+                rh.reply(302)
+                  .header("Location", dirty.get() ? "/?msg=保存成功" : "/?msg=数据没更改");
+                return null;
             }
             case "/set": {
                 if(req.action() != Action.POST) {
-                    return new Reply(Code.METHOD_NOT_ALLOWED, StringResponse.forError(Code.METHOD_NOT_ALLOWED, "不是POST请求"));
+                    rh.reply(Code.METHOD_NOT_ALLOWED);
+                    return StringResponse.forError(Code.METHOD_NOT_ALLOWED, "不是POST请求");
                 }
-                Map<String, String> postFields = req.postFields();
+                Map<String, String> postFields = req.payloadFields();
                 String url = postFields.get("url");
                 String type = postFields.get("type");
                 String cnt = postFields.get("cnt");
@@ -1327,22 +1329,18 @@ public class DnsServer implements Router, Runnable {
                     }
                 }
 
-                Reply reply = new Reply(Code.FOUND);
-                reply.header("Location", "/?msg=" + msg);
-                return reply;
+                rh.reply(302)
+                  .header("Location", "/?msg=" + msg);
+                return null;
             }
             default:
-                return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, "未定义的路由"));
+                rh.reply(404);
+                return StringResponse.forError(Code.NOT_FOUND, "未定义的路由");
         }
     }
 
     @Override
     public int maxLength() {
         return 8192;
-    }
-
-    @Override
-    public boolean checkAction(int action) {
-        return action == Action.POST || action == Action.GET;
     }
 }

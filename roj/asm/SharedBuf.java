@@ -26,7 +26,13 @@
 package roj.asm;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
+import roj.asm.frame.Interpreter;
 import roj.asm.tree.IClass;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.util.ConstantNamePool;
+import roj.asm.util.ConstantPool;
+import roj.collect.IntMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
@@ -57,8 +63,42 @@ public final class SharedBuf {
         return r;
     }
 
+    private static class MyPCI extends IntMap<InsnNode> {
+        MethodNode owner;
+
+        @Override
+        public InsnNode get(int id) {
+            InsnNode node = super.get(id);
+            if (node == null)
+                throw new NullPointerException("Node is null: " + owner.ownerClass() + "." + owner.name() + " (bci:" + id + ")\n" + entrySet());
+            return node;
+        }
+    }
+
     public static final class Level {
         static final int LEVEL_MAX = 6;
+
+        public final Interpreter iInterp = new Interpreter();
+
+        private final MyPCI pci = new MyPCI();
+        public IntMap<InsnNode> getSharedPCI(MethodNode node) {
+            pci.owner = node;
+            pci.clear();
+            return pci;
+        }
+
+        private final ConstantNamePool namePool = new ConstantNamePool(0);
+        public ConstantNamePool newConstNamePool(int len) {
+            namePool.internalReset(len);
+            return namePool;
+        }
+
+        private final ConstantPool pool = new ConstantPool();
+        public ConstantPool constWriter() {
+            pool.setAddListener(null);
+            pool.clear();
+            return pool;
+        }
 
         ByteReader sharedReader;
         ByteList[] buffers = new ByteList[LEVEL_MAX];

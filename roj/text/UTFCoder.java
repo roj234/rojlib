@@ -4,6 +4,7 @@ import roj.crypt.Base64;
 import roj.util.ByteList;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UTFDataFormatException;
 import java.nio.ByteBuffer;
@@ -254,5 +255,36 @@ public class UTFCoder {
             ob.clear();
         }
         return wrote;
+    }
+
+    public int decodeFrom(InputStream in) throws IOException {
+        charBuf.clear();
+        return decodeFrom(in, charBuf);
+    }
+
+    public int decodeFrom(InputStream in, CharList to) throws IOException {
+        ByteList ob = byteBuf;
+        ob.ensureCapacity(4096);
+        byte[] arr = ob.list;
+
+        int i = 0, read = 0;
+        do {
+            i = in.read(arr, i, arr.length - i);
+            if (i < 0) break;
+            read += i;
+
+            ob.wIndex(i);
+            int i1 = ByteList.decodeUTFPartial(0, i, to, ob);
+            if (i == arr.length) {
+                in.close();
+                if (i1 < i) throw new UTFDataFormatException();
+                break;
+            }
+            System.arraycopy(arr, i1, arr, 0, i - i1);
+            i = i1;
+        } while (true);
+
+        in.close();
+        return read;
     }
 }

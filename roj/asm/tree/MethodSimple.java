@@ -27,11 +27,11 @@
 package roj.asm.tree;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
+import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.FlagList;
 
 import java.util.List;
 
@@ -44,9 +44,6 @@ import java.util.List;
  */
 public final class MethodSimple extends SimpleComponent implements MethodNode {
     public MethodSimple(int accesses, CstUTF name, CstUTF typeName) {
-        super((char) accesses, name, typeName);
-    }
-    public MethodSimple(FlagList accesses, CstUTF name, CstUTF typeName) {
         super(accesses, name, typeName);
     }
 
@@ -69,7 +66,7 @@ public final class MethodSimple extends SimpleComponent implements MethodNode {
 
     @Override
     public Type getReturnType() {
-        return ParamHelper.getReturn(type.getString());
+        return ParamHelper.parseReturn(type.getString());
     }
 
     @Internal
@@ -79,6 +76,6 @@ public final class MethodSimple extends SimpleComponent implements MethodNode {
 
     @Override
     public int type() {
-        return 3;
+        return Parser.MTYPE_SIMPLE;
     }
 }

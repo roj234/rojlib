@@ -29,7 +29,7 @@ import roj.asm.cst.Constant;
 import roj.asm.cst.CstUTF;
 
 /**
- * 空着的ConstWriterr
+ * 空着的ConstWriter
  *
  * @author solo6975
  * @since 2021/10/3 23:02

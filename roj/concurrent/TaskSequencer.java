@@ -27,6 +27,7 @@ package roj.concurrent;
 
 import roj.collect.BSLowHeap;
 import roj.concurrent.task.ITask;
+import roj.concurrent.task.ScheduledTask;
 
 import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,9 +39,9 @@ import java.util.concurrent.locks.LockSupport;
  * @since 2022/2/8 8:00
  */
 public class TaskSequencer implements Runnable {
-    static final Comparator<SchedTask> CPR = (o1, o2) -> Long.compare(o1.nextRun, o2.nextRun);
+    static final Comparator<Scheduled> CPR = (o1, o2) -> Long.compare(o1.nextRun, o2.nextRun);
 
-    private BSLowHeap<SchedTask> tasks, backup;
+    private BSLowHeap<Scheduled> tasks, backup;
     private final AtomicInteger lock;
     private Thread worker;
 
@@ -67,23 +68,21 @@ public class TaskSequencer implements Runnable {
         if (tasks.isEmpty()) {
             return -1L;
         } else {
-            Thread t = Thread.currentThread();
-
             while (!lock.compareAndSet(0, 1)) LockSupport.parkNanos(9999);
 
             long time = System.currentTimeMillis();
-            BSLowHeap<SchedTask> tt = this.tasks;
+            BSLowHeap<Scheduled> tt = this.tasks;
             int i;
             for (i = 0; i < tt.size(); i++) {
-                SchedTask task = tt.get(i);
+                Scheduled task = tt.get(i);
                 if(task.nextRun <= time) {
                     if (!task.isCancelled()) {
                         try {
-                            task.compute(t);
+                            task.compute();
                         } catch (Throwable e) {
                             e.printStackTrace();
                         }
-                        if (--task.remain == 0) {
+                        if (--task.count == 0) {
                             task.nextRun = -1;
                         } else {
                             task.nextRun = task.interval + time;
@@ -102,22 +101,21 @@ public class TaskSequencer implements Runnable {
 
             (backup = tt).clear();
 
-            SchedTask task = tasks.top();
+            Scheduled task = tasks.top();
             return task == null ? -1 : task.nextRun - System.currentTimeMillis();
         }
     }
 
-    public SchedTask register(ITask task, int interval, int delay, int remain) {
-        SchedTask t = new SchedTask(task, interval, delay, remain);
-        register(t);
-        return t;
+    public Scheduled register(ITask task, int interval, int delay, int remain) {
+        return register(new ScheduledTask(interval, delay, remain, task));
     }
 
-    public void register(SchedTask t) {
+    public Scheduled register(Scheduled t) {
         while (!lock.compareAndSet(0, 2)) LockSupport.parkNanos(9999);
-        SchedTask prev = tasks.top();
+        Scheduled prev = tasks.top();
         tasks.add(t);
         if (tasks.top() != prev) LockSupport.unpark(worker);
         lock.set(0);
+        return t;
     }
 }

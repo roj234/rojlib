@@ -25,9 +25,9 @@
  */
 package roj.asm.misc;
 
+import roj.asm.Parser;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MoFNode;
-import roj.asm.util.FlagList;
 import roj.reflect.ReflectionUtils;
 
 import java.lang.reflect.Field;
@@ -78,18 +78,18 @@ public class ReflectClass implements IClass {
     }
 
     @Override
-    public String className() {
+    public String name() {
         return className;
     }
 
     @Override
-    public String parentName() {
+    public String parent() {
         return owner.getSuperclass().getName().replace('.', '/');
     }
 
     @Override
-    public FlagList accessFlag() {
-        return new FlagList(owner.getModifiers());
+    public char accessFlag() {
+        return owner == null ? 0 : (char) owner.getModifiers();
     }
 
     @Override
@@ -114,23 +114,14 @@ public class ReflectClass implements IClass {
     }
 
     @Override
-    public int getMethodByName(String name) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
-    public int getFieldByName(String name) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
     public byte type() {
-        return 12;
+        return Parser.CTYPE_REFLECT;
     }
 
     public List<String> i_superClassAll() {
         if(cs != null) return cs;
         List<Class<?>> t = ReflectionUtils.getFathersAndItfOrdered(owner);
+        t.remove(0);
         List<String> names = Arrays.asList(new String[t.size()]);
         for (int i = 0; i < t.size(); i++) {
             names.set(i, t.get(i).getName().replace('.', '/'));

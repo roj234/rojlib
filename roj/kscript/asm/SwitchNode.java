@@ -63,8 +63,8 @@ public final class SwitchNode extends Node {
 
     @Override
     protected void genDiff(Unioner<Unioner.Wrap<Variable>> var, IntBiMap<Node> idx) {
-        List<Unioner.Wrap<Variable>> self = var.i_collect(idx.getInt(this)),
-            dest = var.i_collect(idx.getInt(def));
+        List<Unioner.Wrap<Variable>> self = var.collect(idx.getInt(this)),
+            dest = var.collect(idx.getInt(def));
         if(self != dest) {
             diff = NodeUtil.calcDiff(self, dest);
         }

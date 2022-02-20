@@ -14,7 +14,10 @@ import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.tree.insn.LdcInsnNode;
 import roj.asm.tree.insn.NPInsnNode;
-import roj.asm.type.*;
+import roj.asm.type.Generic;
+import roj.asm.type.ParamHelper;
+import roj.asm.type.Signature;
+import roj.asm.type.Type;
 import roj.asm.util.*;
 import roj.asm.visitor.CodeVisitor;
 import roj.collect.MyHashMap;
@@ -28,6 +31,7 @@ import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.ZipFileWriter;
 import roj.mapper.CodeMapper.SimpleVar;
+import roj.mapper.obf.MyExcluder;
 import roj.mapper.obf.policy.*;
 import roj.mapper.util.Desc;
 import roj.reflect.ClassDefiner;
@@ -167,7 +171,7 @@ public final class SimpleObfuscator extends Obfuscator {
                     lineLog = args[++i];
                     break;
                 case "libPath":
-                    obf.reset(FileUtil.findAllFiles(new File(args[++i]), file -> file.getName().endsWith(".jar") || file.getName().endsWith(".zip")));
+                    obf.loadLibraries(FileUtil.findAllFiles(new File(args[++i]), file -> file.getName().endsWith(".jar") || file.getName().endsWith(".zip")));
                     break;
                 case "cs":
                     charset = Charset.forName(args[++i]);
@@ -193,7 +197,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
         List<Context> arr = Util.ctxFromZip(new File(args[0]), charset, data);
 
-        ZipFileWriter zfw = new ZipFileWriter(new File(args[1]));
+        ZipFileWriter zfw = new ZipFileWriter(new File(args[1]), false);
 
         Thread writer = Util.writeResourceAsync(zfw, data);
 
@@ -212,11 +216,11 @@ public final class SimpleObfuscator extends Obfuscator {
 
         for (int i = 0; i < arr.size(); i++) {
             Context ctx = arr.get(i);
-            zfw.writeNamed(ctx.getFileName(), ctx.getCompressedShared());
+            zfw.writeNamed(ctx.getFileName(), ctx.get());
         }
         zfw.finish();
 
-        System.out.println("Mem: " + (Runtime.getRuntime().totalMemory() >> 20) + " MB");
+        System.out.println("Mem: " + (roj.manage.SystemInfo.getMemoryUsedO() >> 20) + " MB");
         System.out.println("Time: " + (System.currentTimeMillis() - time) + "ms");
 
         obf.dumpMissingClasses();
@@ -314,10 +318,17 @@ public final class SimpleObfuscator extends Obfuscator {
 
     @Override
     protected void beforeMapCode(List<Context> arr) {
-        if((flags & CLEAR_ATTR) != 0)
+        if((flags & CLEAR_ATTR) != 0) {
             for (int i = 0; i < arr.size(); i++) {
                 clearSign(arr.get(i).getData());
             }
+        }
+        if((flags & (INVALID_VAR_NAME | FAKE_VAR_SIGN | DESTROY_LINE | CLEAR_CODE_ATTR | KEEP_LINES))
+                == CLEAR_CODE_ATTR) {
+            for (int i = 0; i < arr.size(); i++) {
+                codeSign(arr.get(i).getData());
+            }
+        }
     }
 
     static StackTraceElement[] syncStackTrace = new StackTraceElement[2];
@@ -346,7 +357,7 @@ public final class SimpleObfuscator extends Obfuscator {
                 System.out.println("没有找到疑似字符串解密方法");
                 break eva;
             }
-            Desc desc = new Desc("", "");
+            Desc desc = new Desc();
             desc.param = "(Ljava/lang/String;)Ljava/lang/String;";
             for (int i = 0; i < arr.size(); i++) {
                 ConstantData data = arr.get(i).getData();
@@ -439,16 +450,20 @@ public final class SimpleObfuscator extends Obfuscator {
                 done.clear();
             }
         }
-        if((flags & FAKE_SIGN) != 0)
+        if((flags & FAKE_SIGN) != 0) {
             for (int i = 0; i < arr.size(); i++) {
                 fakeSign(arr.get(i).getData());
             }
-        if((flags & (INVALID_VAR_NAME | FAKE_VAR_SIGN | DESTROY_LINE | CLEAR_CODE_ATTR)) != 0)
-            for (int i = 0; i < arr.size(); i++) {
-                if (arr.get(i).getFileName().equals("cbk.class"))
-                    arr.get(i).getData().dump();
-                codeSign(arr.get(i).getData());
+        }
+
+        int v = flags & (INVALID_VAR_NAME | FAKE_VAR_SIGN | DESTROY_LINE | CLEAR_CODE_ATTR | KEEP_LINES);
+        if(v != 0) {
+            if (v != CLEAR_CODE_ATTR && v != KEEP_LINES) {
+                for (int i = 0; i < arr.size(); i++) {
+                    codeSign(arr.get(i).getData());
+                }
             }
+        }
     }
 
     interface Decoder {
@@ -460,7 +475,7 @@ public final class SimpleObfuscator extends Obfuscator {
             //this.bw = new ByteList();
             this.br = new ByteReader();
             this.methods = new MyHashMap<>();
-            this.tmp = new Desc("", "");
+            this.tmp = new Desc();
         }
 
         public void initNil(ByteList data) {
@@ -508,7 +523,7 @@ public final class SimpleObfuscator extends Obfuscator {
         }
     }
 
-    static final List<IGeneric>                   fake  = Collections.singletonList(Type.std(NativeType.INT));
+    static final List<IGeneric> fake = Collections.singletonList(Type.std(Type.INT));
     static final Map<String, List<Generic>> fake2 = new MyHashMap<>();
     static {
         fake2.put("\u0000", Collections.singletonList(new Generic(Generic.TYPE_TYPE_PARAM, "int", 23, Generic.EX_SUPERS)));
@@ -598,7 +613,10 @@ public final class SimpleObfuscator extends Obfuscator {
             int countIdx = w.wIndex();
             w.putShort(0);
 
-            System.out.println(m);
+            if ((flags & (CLEAR_CODE_ATTR | KEEP_LINES)) == CLEAR_CODE_ATTR) {
+                len = 0;
+            }
+
             for (int j = 0; j < len; j++) {
                 String name = ((CstUTF) pool.get(r)).getString();
                 int end = r.readInt() + r.rIndex;
@@ -623,6 +641,7 @@ public final class SimpleObfuscator extends Obfuscator {
                                 v.write(w);
                             }
                         } else if((flags & CLEAR_CODE_ATTR) != 0) {
+                            r.rIndex = end;
                             continue;
                         } else {
                             count++;
@@ -652,6 +671,7 @@ public final class SimpleObfuscator extends Obfuscator {
                                 v.write(w);
                             }
                         } else if((flags & CLEAR_CODE_ATTR) != 0) {
+                            r.rIndex = end;
                             continue;
                         } else {
                             count++;
@@ -679,6 +699,7 @@ public final class SimpleObfuscator extends Obfuscator {
                                 w.putShort(index).putShort(v);
                             }
                         } else if((flags & (CLEAR_CODE_ATTR | KEEP_LINES)) == CLEAR_CODE_ATTR) {
+                            r.rIndex = end;
                             continue;
                         } else {
                             count++;
@@ -686,27 +707,26 @@ public final class SimpleObfuscator extends Obfuscator {
                         }
                         break;
                     default:
-                        count++;
-                        w.put(r.bytes().slice(w.wIndex(), len + 6));
+                        if((flags & CLEAR_CODE_ATTR) == 0) {
+                            count++;
+                            w.put(r.bytes().slice(w.wIndex(), len + 6));
+                        }
                     break;
                 }
                 r.rIndex = end;
             }
-            int pos = w.wIndex();
-            w.wIndex(countIdx);
-            w.putShort(count);
-            w.wIndex(pos);
+            w.putShort(countIdx, count);
 
-            au.setRawData(new ByteList(w.toByteArray()));
+            au.setRawData(w);
         }
     }
 
     private Signature getSign(byte type) {
         Signature sign1 = new Signature(type);
         if((flags & RANDOMIZED_SIGN) == 0) {
-            sign1.throwsException = fake;
+            sign1.Throws = fake;
             sign1.values = fake;
-            sign1.returns = Type.std(NativeType.LONG);
+            sign1.returns = Type.std(Type.LONG);
             sign1.genericTypeMap = fake2;
         } else {
             int len = rand.nextInt(4);
@@ -714,7 +734,7 @@ public final class SimpleObfuscator extends Obfuscator {
             for (int i = 0; i < len; i++) {
                 gens.add(randAny());
             }
-            sign1.throwsException = gens;
+            sign1.Throws = gens;
 
             len = rand.nextInt(7);
             gens = new ArrayList<>(len);
@@ -741,30 +761,30 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     private Generic randGen() {
-        return new Generic((byte) rand.nextInt(2), rand.nextFloat() > 0.233 ? NativeType.toString(randType().type) : Integer.toString(rand.nextInt(1000000), 36), rand.nextInt(MAX_LEN), (byte) (rand.nextInt(3) - 1));
+        return new Generic((byte) rand.nextInt(2), rand.nextFloat() > 0.233 ? Type.toString(randType().type) : Integer.toString(rand.nextInt(1000000), 36), rand.nextInt(MAX_LEN), (byte) (rand.nextInt(3) - 1));
     }
 
     private Type randType() {
         switch (rand.nextInt(9)) {
             case 0:
-                return Type.std(NativeType.LONG);
+                return Type.std(Type.LONG);
             case 1:
-                return Type.std(NativeType.DOUBLE);
+                return Type.std(Type.DOUBLE);
             case 2:
-                return Type.std(NativeType.VOID);
+                return Type.std(Type.VOID);
             case 3:
-                return Type.std(NativeType.ARRAY);
+                return Type.std(Type.ARRAY);
             case 4:
-                return Type.std(NativeType.BOOLEAN);
+                return Type.std(Type.BOOLEAN);
             case 5:
-                return Type.std(NativeType.BYTE);
+                return Type.std(Type.BYTE);
             case 6:
-                return Type.std(NativeType.CHAR);
+                return Type.std(Type.CHAR);
             case 7:
-                return Type.std(NativeType.FLOAT);
+                return Type.std(Type.FLOAT);
             case 8:
             default:
-                return Type.std(NativeType.SHORT);
+                return Type.std(Type.SHORT);
         }
     }
 
@@ -773,25 +793,29 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     @Override
-    public String obfClass(String origin) {
+    public String obfClass(IClass cls) {
+        String origin = cls.name();
         if(packageExclusions.startsWith(origin) || classExclusions.contains(origin))
             return TREMINATE_THIS_CLASS;
-        if(clazz == null)
-            return origin;
 
         tempF.clear();
         tempM.clear();
+
+        if(clazz == null)
+            return origin;
 
         return clazz.obfClass(origin, classes, rand);
     }
 
     @Override
-    public String obfMethodName(Desc desc) {
-        return method == null ? null : method.obfName(tempM, desc, rand);
+    public String obfMethodName(IClass cls, Desc entry) {
+        if (MyExcluder.isClassExclusive(cls, entry)) return null;
+        return method == null ? null : method.obfName(tempM, entry, rand);
     }
 
     @Override
-    public String obfFieldName(Desc desc) {
-        return field == null ? null : field.obfName(tempF, desc, rand);
+    public String obfFieldName(IClass cls, Desc entry) {
+        if (MyExcluder.isClassExclusive(cls, entry)) return null;
+        return field == null ? null : field.obfName(tempF, entry, rand);
     }
 }

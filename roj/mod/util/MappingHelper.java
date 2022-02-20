@@ -26,7 +26,6 @@
 package roj.mod.util;
 
 import roj.asm.type.ParamHelper;
-import roj.asm.util.FlagList;
 import roj.collect.FilterList;
 import roj.collect.HashBiMap;
 import roj.collect.MyHashMap;
@@ -60,7 +59,8 @@ public class MappingHelper {
     public static PrintStream OUT = System.out;
     // 4mb
     private static final int MINIMUM_CAPACITY = 512 * 1024 * 4;
-    private static final FlagList NONNULL = new FlagList();
+
+    private static final int NONNULL = 0;
 
     public final Map<String, String> classes;
 
@@ -91,27 +91,25 @@ public class MappingHelper {
 
         for(Map.Entry<Desc, String> entry : mapping.getFieldMap().entrySet()) {
             Desc descriptor = entry.getKey().copy();
-            descriptor.flags = null;
+            descriptor.flags = Desc.NULL_FLAG;
             fields.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(descriptor);
         }
 
         for(Map.Entry<Desc, String> entry : mapping.getMethodMap().entrySet()) {
             Desc descriptor = entry.getKey().copy();
-            descriptor.flags = null;
+            descriptor.flags = Desc.NULL_FLAG;
             methods.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(descriptor);
         }
 
         this.flag = 32768;
     }
 
-    // section MCP 解析
+    // region MCP 解析
 
     private void parseCSVMethods(String csv) {
         SimpleLineReader slr = new SimpleLineReader(csv);
-        String[] currentClass = null;
 
         slr.skipLines(1);
-        CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
         int i = 2;
         while (slr.hasNext()) {
@@ -138,10 +136,8 @@ public class MappingHelper {
 
     private void parseCSVFields(String csv) {
         SimpleLineReader slr = new SimpleLineReader(csv);
-        String[] currentClass = null;
 
         slr.skipLines(1);
-        CharList cl = new CharList();
         List<String> tmp = new ArrayList<>(4);
         int i = 2;
         while (slr.hasNext()) {
@@ -223,9 +219,12 @@ public class MappingHelper {
         parseMCP(mcpFile, null);
     }
 
-    // section MCP 结果导出
+    // endregion
+    // region MCP 结果导出
 
     public void extractMcp2Srg_MCP(File result) throws IOException {
+        Util U = Util.getInstance();
+
         if((flag & 32768) == 0 || (flag & 8192) == 0) {
             throw new IllegalStateException("Not done yet or not read MCP");
         }
@@ -241,7 +240,7 @@ public class MappingHelper {
                 String cn = classes.get(descriptor.owner);
                 String k = entry.getKey();
 
-                if (descriptor.flags == null) {
+                if (descriptor.flags == Desc.NULL_FLAG) {
                     if (!NTR.contains(descriptor.owner)) // forge 自己搞的
                         if (k.startsWith("field_") && failed.add(k)) OUT.println("缺少 " + k + " 的MCP名");
                     continue;
@@ -263,13 +262,13 @@ public class MappingHelper {
                 String cn = classes.get(descriptor.owner);
                 String k = entry.getKey();
 
-                if (descriptor.flags == null) {
+                if (descriptor.flags == Desc.NULL_FLAG) {
                     if (!NTR.contains(descriptor.owner)) // forge 自己搞的
                         if (k.startsWith("field_") && failed.add(k)) OUT.println("缺少 " + k + " 的MCP名");
                     continue;
                 }
 
-                String param = Util.transformMethodParam(classes, descriptor.param);
+                String param = U.transformMethodParam(classes, descriptor.param);
                 CharList cl = classFos.get(cn);
                 if (cl == null) {
                     classFos.put(cn, cl = new CharList(100));
@@ -298,7 +297,8 @@ public class MappingHelper {
         }
     }
 
-    // section McpConfig 解析
+    // endregion
+    // region McpConfig 解析
 
     public boolean readMcpConfig(File mapFile) throws IOException {
         if((flag & 32768) != 0)
@@ -404,9 +404,12 @@ public class MappingHelper {
         return true;
     }
 
-    // section McpConfig 结果导出
+    // endregion
+    // region McpConfig 结果导出
 
     public void extractNotch2Srg_McpConf(File output) throws IOException {
+        Util U = Util.getInstance();
+
         if((flag & 32768) == 0 || (flag & 16384) == 0) {
             throw new IllegalStateException("Not done yet or not reverse function");
         }
@@ -421,7 +424,7 @@ public class MappingHelper {
                 if (descriptor.length == 2) {
                     ob.append("FL: ").append(descriptor[0]).append(' ').append(descriptor[1]).append('\n');
                 } else {
-                    String param = Util.transformMethodParam(classes, (String) descriptor[1]);
+                    String param = U.transformMethodParam(classes, (String) descriptor[1]);
 
                     ob.append("ML: ").append(descriptor[0]).append(' ').append(descriptor[1]).append(' ').append(descriptor[2]).append(' ').append(param.equals(descriptor[1]) ? "~" : param).append('\n');
 
@@ -433,10 +436,12 @@ public class MappingHelper {
         //CmdUtil.success("成功: 文件已保存为 " + output.getAbsolutePath());
     }
 
-
-    // section 共用方法
+    // endregion
+    // region 共用方法
 
     void extractMcp2Srg(File result, int flagId, Map<String, String> forge2dest, Map<String, String> mcClz) throws IOException {
+        Util U = Util.getInstance();
+
         if((flag & (32768 | 4096 | flagId)) != (32768 | 4096)) {
             throw new IllegalStateException("Done, not read MCP or not read YARN");
         }
@@ -466,8 +471,8 @@ public class MappingHelper {
                     classFos.put(key, cl = new CharList(100));
                 }
 
-                String mcParam = Util.transformMethodParam(mcClz, descriptor.param);
-                String forgeParam = Util.transformMethodParam(classes, descriptor.param);
+                String mcParam = U.transformMethodParam(mcClz, descriptor.param);
+                String forgeParam = U.transformMethodParam(classes, descriptor.param);
 
                 cl.append("ML: ").append(descriptor.name).append(' ').append(mcParam).append(' ').append(entry.getKey()).append(' ').append(forgeParam).append('\n');
             }
@@ -487,6 +492,8 @@ public class MappingHelper {
     }
 
     public void MCP_optimizeParamMap(Map<String, String> paramNameMap, Map<String, Map<String, List<String>>> paramClassMap) {
+        Util U = Util.getInstance();
+
         if((flag & 32768) == 0 || (flag & 8192) == 0) {
             throw new IllegalStateException("Not done yet or not read MCP");
         }
@@ -514,9 +521,7 @@ public class MappingHelper {
                 Desc descriptor = it.next();
 
                 ds.put(tmp.get(1), new String[]{
-                        /*classes.get(*/descriptor.owner, descriptor.name /* newName */ + '|' + Util.transformMethodParam(classes, descriptor.param),
-                        // Damn it, 型参会死么, or 用 slot?
-                        //__indexer(descriptor.param, true/*descriptor.flags.contains(AccessFlag.STATIC)*/)
+                        descriptor.owner, descriptor.name + '|' + U.transformMethodParam(classes, descriptor.param),
                 });
             }
         }
@@ -541,245 +546,9 @@ public class MappingHelper {
             }
             list.set(entryId, entry.getValue());
         }
-
-        //if(DEBUG)
-        //    OUT.println("[Debug] paramClassMap=" + paramClassMap);
     }
 
-    /*private static int getRealId(byte[] datum, int i) {
-        int j = 0;
-        while (j < datum.length) {
-            if(datum[j] >= i)
-                return j;
-            j++;
-            // 0 2 4 for static DDD
-            // 1 3 5 for non-static DDD
-            // LDDD: 1,3,5
-        }
-        return i;
-    }
-
-    private static byte[] __indexer(String param, boolean stc) {
-        List<Type> types = ParamHelper.parseMethod(param);
-        byte[] data = new byte[types.size()];
-        for (int i = 0; i < types.size(); i++) {
-            Type type = types.get(i);
-            data[i] = (byte) (type.length() + (i == 0 ? (stc ? 1 : 0) : data[i - 1]));
-        }
-        return data;
-    }*/
-
-    // section Yarn映射解析, requires McpConfig
-    public final class Yarn {
-        final HashBiMap<String, String> mcClz = new HashBiMap<>(2000);
-        final MyHashMap<String, String> forge2yarn = new MyHashMap<>();
-
-        public Yarn() {}
-
-        public boolean parse(File intermediary, File mapping, String version) throws IOException {
-            if((flag & 32768) == 0 || (flag & 65536) != 0) {
-                throw new IllegalStateException("Not done yet or already read YARN");
-            }
-
-            /*
-            final Map<String, Map<String, String>> elementMap = new MyHashMap<>(2000);
-
-            ZipFile zf = new ZipFile(mapping);
-            Enumeration<? extends ZipEntry> e = zf.entries();
-            String fp = "yarn-" + version + "/mappings/";
-            while (e.hasMoreElements()) {
-                ZipEntry ze = e.nextElement();
-                final String s = ze.getName();
-                if(s.startsWith(fp) && s.endsWith(".mapping")) {
-                    String yarnName = s.substring(fp.length(), s.length() - 8);
-                    String intermediaryName = readYarnMap(zf.getInputStream(ze), elementMap);
-                }
-            }
-
-            SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(new FileInputStream(intermediary)));
-            slr.index(1);
-
-            String[] ctx = null;
-
-            int same = 0;
-            boolean maybeSame = false;
-
-            int i = 2;
-
-            CharList tmp = new CharList();
-            List<String> list = new ArrayList<>();
-            for (String line : slr) {
-                if (line.length() == 0 || line.startsWith("#")) continue;
-
-                list.clear();
-                TextUtil.splitStringF(list, tmp, line, '\t', 5);
-                switch (list.size()) {
-                    case 3:
-                        if (!list.get(0).equals("CLASS")) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 未知标记类型.");
-                            return false;
-                        }
-
-                        if (maybeSame) {
-                            same++;
-                            classes.remove(ctx[0]);
-                        }
-
-                        ctx = new String[] {list.get(1), list.get(2)};
-                        maybeSame = ctx[0].equals(ctx[1]);
-
-                        // a => class_xxx
-                        classes.put(ctx[0], ctx[1]);
-                    case 4:
-                        if (!list.get(0).equals("FIELD")) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 未知标记类型.");
-                            return false;
-                        }
-                        if (ctx == null) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 无效的元素开始.");
-                            return false;
-                        }
-
-                        // FIELD owner type original dest
-
-                        if (maybeSame) {
-                            if (!list.get(2).equals(list.get(0))) {
-                                maybeSame = false;
-                                NTR.add(ctx[0]);
-                            } else {
-                                continue;
-                            }
-                        }
-
-                        fields.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
-                        if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
-
-                        break;
-                    case 5:
-                        if (!list.get(0).equals("METHOD")) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 未知标记类型.");
-                            return false;
-                        }
-                        if (ctx == null) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 无效的元素开始.");
-                            return false;
-                        }
-
-                        // METHOD owner orig_desc original dest
-
-                        if (maybeSame) {
-                            if (!list.get(2).equals(list.get(0))) {
-                                maybeSame = false;
-                                NTR.add(ctx[0]);
-                            } else {
-                                continue;
-                            }
-                        }
-
-                        methods.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
-                        if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
-                        break;
-                    default:
-                        CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 未知标记类型.");
-                        return false;
-                }
-                i++;
-            }
-
-            if (same > 0) CmdUtil.info("忽略了 " + same + " 个相同的映射");
-
-            flag |= 65536;*/
-            throw new UnsupportedOperationException("Not implemented yet");
-
-            //return true;
-        }
-
-        private String readYarnMap(InputStream in, Map<String, Map<String, String>> elementMap) {
-            /*SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(in));
-            int i = 1;
-
-            String cls = null;
-
-            CharList tmp = new CharList();
-            List<String> list = new ArrayList<>();
-            for (String line : slr) {
-                if (line.length() == 0 || line.startsWith("#")) continue;
-
-                list.clear();
-                TextUtil.splitStringF(list, tmp, line, ' ', 5);
-                switch (list.size()) {
-                    case 3:
-                        if (list.get(0).equals("CLASS")) {
-                            if(cls != null)
-                                return ":" + i + ": 重复的CLASS标记.";
-                            cls =
-                            return ":" + i + ": 未知标记类型.";
-                        }
-
-                        // a => class_xxx
-                        classes.put(ctx[0], ctx[1]);
-                    case 4:
-                        if (!list.get(0).equals("\tFIELD")) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 未知标记类型.");
-                            return false;
-                        }
-                        if (ctx == null) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 无效的元素开始.");
-                            return false;
-                        }
-
-                        // FIELD owner type original dest
-
-                        if (maybeSame) {
-                            if (!list.get(2).equals(list.get(0))) {
-                                maybeSame = false;
-                                NTR.add(ctx[0]);
-                            } else {
-                                continue;
-                            }
-                        }
-
-                        fields.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
-                        if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
-
-                        break;
-                    case 5:
-                        if (!list.get(0).equals("METHOD")) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 未知标记类型.");
-                            return false;
-                        }
-                        if (ctx == null) {
-                            CmdUtil.error(intermediary.getAbsolutePath() + ":" + i + ": 无效的元素开始.");
-                            return false;
-                        }
-
-                        // METHOD owner orig_desc original dest
-
-                        if (maybeSame) {
-                            if (!list.get(2).equals(list.get(0))) {
-                                maybeSame = false;
-                                NTR.add(ctx[0]);
-                            } else {
-                                continue;
-                            }
-                        }
-
-                        methods.computeIfAbsent(list.get(2), Helpers.fnArrayList()).add(new Desc(ctx[0], list.get(0), list.get(1)));
-                        if (revAll != null) revAll.computeIfAbsent(ctx[0], Helpers.fnArrayList()).add(list.toArray());
-                        break;
-                    default:
-                        return ":" + i + ": 未知标记类型.";
-                }
-                i++;
-            }*/
-            return "";
-        }
-
-        public void extract(File result) throws IOException {
-            MappingHelper.this.extractMcp2Srg(result, 262144, forge2yarn, mcClz);
-        }
-    }
-
+    // endregion
     // section Mojang映射解析, requires McpConfig
     public final class Mojang {
         final HashBiMap<String, String> mcClz = new HashBiMap<>(2000);
@@ -862,6 +631,8 @@ public class MappingHelper {
         }
 
         private boolean readMojangMap(File map, Map<String, Map<String, String>> elementMap) throws IOException {
+            Util U = Util.getInstance();
+
             SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(new FileInputStream(map)));
 
             String[] currentClass = null;
@@ -933,7 +704,7 @@ public class MappingHelper {
                         int j = arr20.indexOf('(');
 
                         String param = ParamHelper.dehumanize(arr20.substring(j + 1, arr20.length() - 1), arr.get(0));
-                        param = Util.transformMethodParam(mcClz.flip(), param);
+                        param = U.transformMethodParam(mcClz.flip(), param);
                         // ' -> '.length
                         String targetName = s.substring(index + 4);
 

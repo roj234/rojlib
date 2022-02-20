@@ -44,7 +44,16 @@ public final class  Base64 {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', '='
     };
 
+    public static final byte[] B64_URL_SAFE = {
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+            'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_',  0
+    };
+
     public static final byte[] B64_CHAR_REV = reverseOf(B64_CHAR, new byte[128]);
+    public static final byte[] B64_URL_SAFE_REV = reverseOf(B64_URL_SAFE, new byte[128]);
 
     public static byte[] reverseOf(byte[] in, byte[] out) {
         Arrays.fill(out, (byte) -1);

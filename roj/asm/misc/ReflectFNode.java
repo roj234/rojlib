@@ -25,10 +25,10 @@
  */
 package roj.asm.misc;
 
+import roj.asm.Parser;
 import roj.asm.tree.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
 import roj.util.ByteList;
 
 import java.lang.reflect.Field;
@@ -56,17 +56,17 @@ public final class ReflectFNode implements MoFNode {
 
     @Override
     public String rawDesc() {
-        return ParamHelper.classDescriptor(field.getType());
+        return ParamHelper.class2asm(field.getType());
     }
 
     @Override
-    public FlagList accessFlag() {
-        return new FlagList(field.getModifiers());
+    public char accessFlag() {
+        return (char) field.getModifiers();
     }
 
     @Override
     public int type() {
-        return 11;
+        return Parser.FTYPE_REFLECT;
     }
 
     @Override

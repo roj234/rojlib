@@ -27,9 +27,8 @@ package roj.net.http.serv;
 
 import roj.net.WrappedSocket;
 import roj.net.http.Code;
-import roj.text.CharList;
+import roj.util.ByteList;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.ZipEntry;
@@ -47,17 +46,7 @@ public class ZipRouter implements Router {
     }
 
     @Override
-    public int readTimeout() {
-        return 3000;
-    }
-
-    @Override
-    public int writeTimeout(@Nullable Request request) {
-        return 5000;
-    }
-
-    @Override
-    public Reply response(WrappedSocket ch, Request req, RequestHandler handle) throws IOException {
+    public Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException {
         String url = req.path().substring(1);
 
         boolean flag = url.endsWith("/");
@@ -65,12 +54,16 @@ public class ZipRouter implements Router {
         if(ze == null) {
             if(flag) {
                 ZipEntry dir = zipFs.getEntry(url);
-                if(dir != null && dir.isDirectory())
-                    return new Reply(Code.FORBIDDEN, StringResponse.forError(Code.FORBIDDEN, null));
+                if(dir != null && dir.isDirectory()) {
+                    rh.reply(403);
+                    return StringResponse.forError(Code.FORBIDDEN, null);
+                }
             }
-            return new Reply(Code.NOT_FOUND, StringResponse.forError(Code.NOT_FOUND, null));
+            rh.reply(404);
+            return StringResponse.forError(Code.NOT_FOUND, null);
         }
-        return new Reply(Code.OK, new ZipResponse(url, zipFs.getInputStream(ze)));
+        rh.reply(200).header("Cache-Control: max-age=86400");
+        return new ZipResponse(url, zipFs.getInputStream(ze));
     }
 
     private static class ZipResponse extends StreamResponse {
@@ -84,15 +77,15 @@ public class ZipRouter implements Router {
         }
 
         @Override
-        public void writeHeader(CharList list) {
+        public void writeHeader(ByteList list) {
             String type;
             if (url.endsWith(".html"))
                 type = "text/html; charset=UTF-8";
             else
                 type = "application/octet-stream";
 
-            list.append("Content-Type: ").append(type).append(CRLF)
-                    .append("Content-Length: ").append(Long.toString(length)).append(CRLF);
+            list.putAscii("Content-Type: ").putAscii(type).putAscii(CRLF)
+                .putAscii("Content-Length: ").putAscii(Long.toString(length)).putAscii(CRLF);
         }
 
         @Override

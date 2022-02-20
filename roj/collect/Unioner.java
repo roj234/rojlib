@@ -25,11 +25,14 @@
  */
 package roj.collect;
 
-import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.collect.Unioner.Range;
+import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * Union Finder
@@ -41,15 +44,22 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
     private static final Region[] EMPTY_DATA = new Region[0];
 
     public Unioner() {
-        data = EMPTY_DATA;
+        this(0, true, 15);
     }
 
-    public Unioner(int initialCapacity) {
-        data = new Region[initialCapacity << 1];
+    public Unioner(int capacity) {
+        this(capacity, true, 15);
     }
 
-    Region[] data;
-    int size, arrSize;
+    public Unioner(int capacity, boolean careContent, int points) {
+        data = capacity == 0 ? EMPTY_DATA : new Region[capacity << 1];
+        care = careContent;
+        pointBinSize = points;
+    }
+
+    private Region[] data;
+    private int size, arrSize;
+    private boolean care;
 
     private int binarySearch(long key) {
         int low = 0;
@@ -74,15 +84,67 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
         return -(low + 1);  // key not found.
     }
 
-    public void reuseClear() {
-        for (int i = 0; i < arrSize; i++) {
-            data[i] = null;
+    private final int pointBinSize;
+    private Point pointBin;
+    private int   pointCnt;
+
+    protected final Point retain(T owner, boolean end) {
+        Point p = pointBin;
+
+        if (p != null) {
+            p.owner = owner;
+            p.end = end;
+
+            pointBin = p.next;
+            p.next = null;
+            pointCnt--;
+        } else {
+            p = new Point(owner, end);
         }
-        arrSize = size = 0;
+        return p;
+    }
+
+    protected final void release(Point p) {
+        if (pointBin != null && pointCnt > pointBinSize) {
+            return;
+        }
+        p.owner = null;
+        p.next = pointBin;
+        pointCnt++;
+        pointBin = p;
+    }
+
+    public void setCare(boolean care) {
+        if (arrSize != 0) throw new IllegalStateException("Not empty");
+        this.care = care;
+    }
+
+    public boolean getCare() {
+        return care;
     }
 
     public void clear() {
-        data = EMPTY_DATA;
+        int i = 0;
+        for (; i < arrSize; i++) {
+            Region r = data[i];
+
+            r.value.clear();
+            Point p = r.node;
+            r.node = null;
+
+            while (p != null) {
+                Point next = p.next;
+                release(p);
+                p = next;
+            }
+
+            if (pointCnt == pointBinSize) break;
+        }
+        for (; i < arrSize; i++) {
+            Region r = data[i];
+            r.node = null;
+            r.value.clear();
+        }
         arrSize = size = 0;
     }
 
@@ -91,65 +153,18 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
         if(sp >= t.endPos())
             throw new IndexOutOfBoundsException("start >= end: " + t);
 
-        int nearest = binarySearch(sp);
-        Point start = new Point(t, false);
-        if(nearest >= 0) {
-            // already contains
-            Region h = this.data[nearest];
-            if(h == null) {
-                this.data[nearest] = h = new Region();
-                if(nearest > 0) {
-                    h.value.addAll(this.data[nearest - 1].value);
-                }
-            }
-            Point point = h.node;
+        int begin = binarySearch(sp);
+        begin = addPoint(begin, t, false);
+        if (begin == -1) return false;
 
-            while (true) {
-                if(t.equals(point.owner))
-                    return false;
-                if(point.next == null) {
-                    point.next = start;
-                    break;
-                }
-                point = point.next;
-            }
-        } else {
-            Region h = new Region();
-            h.node = start;
-            if((nearest = -nearest - 1) > 0) {
-                h.value.addAll(this.data[nearest - 1].value);
-            }
-            insertAt(nearest, h);
-        }
+        int end = binarySearch(t.endPos());
+        end = addPoint(end, t, true);
 
-        int endPos = binarySearch(t.endPos());
-        Point end = new Point(t, true);
-        if(endPos >= 0) {
-            Region h = this.data[endPos];
-            if(h == null) {
-                this.data[endPos] = h = new Region();
-                if(endPos > 0) {
-                    h.value.addAll(this.data[endPos - 1].value);
-                }
+        if (care) {
+            Region[] d = data;
+            for (; begin < end; begin++) {
+                d[begin].value.add(t);
             }
-            Point point = h.node;
-
-            while (point.next != null) {
-                // Don't need to check twice
-                point = point.next;
-            }
-            point.next = end;
-        } else {
-            Region h = new Region();
-            h.node = end;
-            if((endPos = -endPos - 1) > 0) {
-                h.value.addAll(this.data[endPos - 1].value);
-            }
-            insertAt(endPos, h);
-        }
-
-        for (; nearest < endPos; nearest++) {
-            data[nearest].value.add(t);
         }
 
         size++;
@@ -157,73 +172,91 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
         return true;
     }
 
+    private int addPoint(int pos, T val, boolean end) {
+        Point start = retain(val, end);
+        if(pos >= 0) {
+            Point point = data[pos].node;
+            while (true) {
+                if(val.equals(point.owner))
+                    return -1;
+                if(point.next == null) {
+                    point.next = start;
+                    break;
+                }
+                point = point.next;
+            }
+        } else {
+            // 上次clear剩下的
+            Region h = arrSize == data.length ? null : data[arrSize];
+            if (h == null) h = new Region(care);
+            else h.init(care);
+            h.node = start;
+
+            pos = -pos - 1;
+            if (care && pos > 0) {
+                h.value.addAll(data[pos - 1].value);
+            }
+            insertAt(pos, h);
+        }
+        return pos;
+    }
+
     public boolean remove(T t) {
         long startPos = t.startPos();
         if(startPos >= t.endPos())
             throw new IndexOutOfBoundsException("start >= end");
 
-        int nearest = binarySearch(startPos);
-
-        k:
-        if(nearest >= 0) {
-            Point prev = null;
-            Point point = this.data[nearest].node;
-            while (point != null) {
-                if(t.equals(point.owner)) {
-                    if(prev == null) {
-                        if(point.next == null)
-                            removeId(nearest);
-                        else
-                            this.data[nearest].node = point.next;
-                    } else {
-                        prev.next = point.next;
-                    }
-                    break k;
-                }
-                prev = point;
-                point = point.next;
-            }
-            return false;
-        } else {
-            return false;
-        }
+        int begin = binarySearch(startPos);
+        if (begin < 0 || !removePoint(begin, t)) return false;
 
         int endPos = binarySearch(t.endPos());
-        l:
-        if(endPos >= 0) {
-            Point prev = null;
-            Point point = this.data[endPos].node;
-            while (point != null) {
-                if(t.equals(point.owner)) {
-                    if(prev == null) {
-                        if(point.next == null)
-                            removeId(endPos);
-                        else
-                            this.data[endPos].node = point.next;
-                    } else {
-                        prev.next = point.next;
-                    }
-                    break l;
-                }
-                prev = point;
-                point = point.next;
-            }
-            throw new IllegalStateException("Unable to find endPos for " + t.endPos());
-        } else {
-            System.out.println(this);
-            throw new IllegalStateException("Unable to find endPos for " + t.endPos());
-        }
+        if (endPos < 0 || !removePoint(endPos, t))
+            throw new IllegalStateException("我猜到了开始,却没猜到结局... " + t.startPos() + "," + t.endPos() + ": " + t);
 
         if(data[endPos] == null)
             endPos--;
 
-        for (; nearest < endPos; nearest++) {
-            data[nearest].value.remove(t);
+        if (care) {
+            for (; begin < endPos; begin++) {
+                data[begin].value.remove(t);
+            }
         }
 
         size--;
 
         return true;
+    }
+
+    private boolean removePoint(int pos, T val) {
+        Point prev = null;
+        Point point = data[pos].node;
+        while (point != null) {
+            if(val.equals(point.owner)) {
+                if(prev == null) {
+                    if(point.next == null) removeId(pos);
+                    else this.data[pos].node = point.next;
+                } else {
+                    prev.next = point.next;
+                }
+                release(point);
+                return true;
+            }
+            prev = point;
+            point = point.next;
+        }
+        return false;
+//        int[] arr;
+//
+//        // 从arr中删除一位
+//        int j = 1 + (i >>> 5);
+//
+//        int data = arr[i>>>5], mask = (1 << 31-(i&31)) - 1;
+//        arr[i>>>5] = (data & mask) | ((data & ~mask) << 1) | (arr[j] >>> 31);
+//
+//        while (j < arr.length - 1) {
+//            arr[j] = (arr[j++] << 1) | (arr[j] >>> 31);
+//        }
+//        arr[j] <<= 1;
     }
 
     public int size() {
@@ -234,8 +267,8 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
         return arrSize;
     }
 
-    public Region findRegion(int pos) {
-        pos = binarySearch(pos);
+    public Region findRegion(long key) {
+        int pos = binarySearch(key);
         if(pos < 0) {
             // array id now
             if((pos = -pos - 2) < 0) return null;
@@ -243,30 +276,31 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
         return data[pos];
     }
 
-    @SuppressWarnings("unchecked")
-    @Internal
-    public List<T> i_collect(int pos) {
-        Region region = findRegion(pos);
-        return region == null ? Collections.emptyList() : (List<T>) region.value;
+    public int search(long key) {
+        int pos = binarySearch(key);
+        return pos < 0 ? -pos - 2 : pos;
     }
 
     @SuppressWarnings("unchecked")
     public List<T> collect(int pos) {
         Region region = findRegion(pos);
-        return region == null ? Collections.emptyList() : Collections.unmodifiableList((List<T>) region.value);
+        return region == null ? Collections.emptyList() : (List<T>) region.value;
     }
 
     @SuppressWarnings("unchecked")
-    public <COLLECTION extends Collection<T>> COLLECTION collect(int pos, COLLECTION target) {
+    public <C extends Collection<T>> C collectTo(int pos, C target) {
         Region region = findRegion(pos);
-        if(region != null)
-            target.addAll((Collection<T>) region.value);
+        if(region != null) target.addAll((Collection<T>) region.value);
         return target;
     }
 
     @Nonnull
     public Iterator<Region> iterator() {
         return new ArrayIterator<>(data, 0, arrSize);
+    }
+
+    public Region[] dataArray() {
+        return data;
     }
 
     /**
@@ -279,32 +313,23 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
     private void insertAt(int index, Region data) {
         ensureCapacity(arrSize + 1);
         final Region[] data1 = this.data;
-        // [0, 1, 2] insert A at 1
-        // [0, A, 1, 2]
-        // copy i to 2, length = 2
         if(arrSize - index > 0)
             System.arraycopy(data1, index, data1, index + 1, arrSize - index);
-        //else if(data1[arrSize] != null)
-        //    data1[arrSize].region = new ArrayList<>();
         data1[index] = data;
         arrSize++;
     }
 
     private void removeId(int index) {
         Region[] data1 = this.data;
-        // [0, 1, 2, 3] remove 1
-        // [0, 2, 3]
-        // copy 2 to 1 len = 2
         if(arrSize - index - 1 > 0)
             System.arraycopy(data1, index + 1, data1, index, arrSize - index - 1);
         data1[--arrSize] = null;
-        if(arrSize > 0)
-            data1[arrSize - 1].value.clear();
+        if(arrSize > 0) data1[arrSize - 1].value.clear();
     }
 
     void ensureCapacity(int cap) {
         if(data.length < cap) {
-            Region[] newArr = new Region[cap + 8];
+            Region[] newArr = new Region[cap + 10];
             if(arrSize > 0)
                 System.arraycopy(data, 0, newArr, 0, arrSize);
             data = newArr;
@@ -312,20 +337,7 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
     }
 
     public String toString() {
-        StringBuilder sb = new StringBuilder("Unioner[");
-        for (int i = 0; i < arrSize; i++) {
-            Unioner.Point d = data[i].node;
-            sb.append("\n  Values: ").append(data[i].value).append("\n  Points: {\n   ");
-            if(d != null) {
-                while (d != null) {
-                    sb.append(d.owner).append('-').append(d.pos()).append(d.end ? ",E\n   " : ",S\n   ");
-                    d = d.next;
-                }
-                sb.setLength(sb.length() - 4);
-            }
-            sb.append("}");
-        }
-        return sb.append(']').toString();
+        return "Unioner" + ArrayUtil.toString(data, 0, arrSize);
     }
 
     /**
@@ -363,11 +375,25 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
     }
 
     public static final class Region {
-        final ArrayList<Range> value = new ArrayList<>();
+        List<Range> value;
         Point node;
+
+        public Region(boolean care) {
+            value = care ? new SimpleList<>() : Collections.emptyList();
+        }
+
+        void init(boolean care) {
+            if ((value == Collections.EMPTY_LIST) == care) {
+                value = care ? new SimpleList<>() : Collections.emptyList();
+            }
+        }
 
         public Point node() {
             return node;
+        }
+
+        public long pos() {
+            return node.pos();
         }
 
         @Override
@@ -377,12 +403,6 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
 
         @SuppressWarnings("unchecked")
         public <T extends Range> List<T> value() {
-            return (List<T>) Collections.unmodifiableList(value);
-        }
-
-        @SuppressWarnings("unchecked")
-        @Internal
-        public <T extends Range> List<T> i_value() {
             return (List<T>) value;
         }
     }
@@ -397,7 +417,7 @@ public class Unioner<T extends Range> implements Iterable<Unioner.Region> {
             owner = data;
         }
 
-        public long pos() {
+        long pos() {
             return end ? owner.endPos() : owner.startPos();
         }
 

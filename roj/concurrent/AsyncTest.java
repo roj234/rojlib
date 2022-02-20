@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.concurrent.task.ITaskNaCl;
+import roj.concurrent.task.ScheduledRunnable;
 
 /**
  * @author Roj234
@@ -16,15 +16,7 @@ public final class AsyncTest extends TaskSequencer {
         seqWorker.start();
     }
 
-    @FunctionalInterface
-    public interface MyTask extends ITaskNaCl {
-        @Override
-        default boolean isDone() {
-            return false;
-        }
-    }
-
-    public static void sched(MyTask task, long then) {
-        inst.register(task, 0, delay += then, 1);
+    public static void sched(Runnable task, long then) {
+        inst.register(new ScheduledRunnable(0, delay += then, 1, task));
     }
 }
