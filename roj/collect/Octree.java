@@ -194,7 +194,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
 
         int level = 0;
         int next = 0b1000;
-        Node prev, node = null;
+        Node node = null;
         do {
             if (key.x < cx) {
                 next += 4;
@@ -214,7 +214,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
             } else {
                 cz += unit >>> level;
             }
-            prev = node;
+            Node prev = node;
             node = getOrCreateEntry(next);
             if (node.v == null) {
                 if (prev != null) // may be first node [0b1xxx]
@@ -266,6 +266,15 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
         }
         vCount++;
         list.add(v);
+        return true;
+    }
+
+    /**
+     * 移动一个node
+     */
+    public boolean move(Vec3i pos, Vec3i to) {
+        if (true)
+            throw new IllegalStateException("未完成");
         return true;
     }
 
@@ -325,7 +334,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
 
         int sunit = unit;
         int next = 0b1000;
-        Node prev, node = null;
+        Node node = null;
         do {
             if (key.x < cx) {
                 next += 4;
@@ -345,7 +354,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
             } else {
                 cz += sunit;
             }
-            prev = node;
+            Node prev = node;
             node = getEntry(next);
             if (node == null) return null;
             if (node.v instanceof ArrayList) break;
@@ -377,7 +386,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
             V v = list.get(i);
             if (v.getPos().equals(key)) {
                 list.remove(i);
-                // 它注孤身
+                // 此node不可能有child
                 return v;
             }
         }
@@ -393,6 +402,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
         int mask = n.mask & 0xFF;
         int j = 1;
 
+        int listId = -1;
         int n1Dist = Integer.MAX_VALUE;
         Node n1 = null;
         V granted = null;
@@ -400,10 +410,11 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
         for (int i = 0; i < 8; i++) {
             if ((mask & j) != 0) {
                 Node node = getEntry(key | i);
+                // mask存在即确定会有entry在
+                // noinspection all
                 if (node.v instanceof ArrayList) {
                     // 下面没了
                     ArrayList<V> list = (ArrayList<V>) node.v;
-                    int fp = -1;
                     for (int k = 0; k < list.size(); k++) {
                         V v = list.get(k);
                         if (v.getPos().len2() < n1Dist) {
@@ -411,11 +422,9 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
                             n1 = node;
                             granted = v;
                             n1Dir = j;
-                            fp = k;
+                            listId = k;
                         }
                     }
-                    // todo should change here
-                    if (fp >= 0) list.remove(fp);
                 } else {
                     V v = (V) node.v;
                     if (v.getPos().len2() < n1Dist) {
@@ -423,20 +432,24 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
                         n1 = node;
                         granted = v;
                         n1Dir = j;
+                        listId = -1;
                     }
                 }
             }
             j <<= 1;
         }
+
         if (n1 == null) {
-            // 我是最后一层了
+            // n没有child
             removeNode(n);
             return false;
         } else {
-            n.v = granted; // 把最近的拉上来
-            // 然后让最近的把第二近的拉上来
+            if (n.v instanceof ArrayList) ((ArrayList<?>) n.v).remove(listId);
+
+            n.v = granted; // 把最近的child拉上来
+            // 重复此过程...
             if (!graft(n1)) {
-                // 下面拉不上来就没了，更新flag
+                // 直到没有child，更新flag
                 n.mask ^= n1Dir;
             }
             return true;
@@ -664,7 +677,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
     }
 
     public Node child(Node node, int dir) {
-        if ((node.mask & (1 << dir)) == 0) return null;
+        // 没必要判断dir和mask，反正不存在也是null
         return getEntry((node.k << 3) | dir);
     }
 

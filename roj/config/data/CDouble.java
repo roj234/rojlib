@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.util.ByteList;
 
@@ -107,5 +108,10 @@ public final class CDouble extends CEntry {
     @Override
     public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.DOUBLE.ordinal()).putDouble(value);
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.value(value);
     }
 }

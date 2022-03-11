@@ -137,7 +137,7 @@ public class AEServer extends Listener implements Shutdownable, TaskPool.RejectP
                 FileDescriptor fd = NIOUtil.fd(c);
                 initSocketPref(c);
                 Client client = new Client(new MSSSocket(c, fd, factory.newEngine()));
-                man.register(client, client);
+                man.register(client, null);
             }
         } catch (Throwable e) {
             e.printStackTrace();

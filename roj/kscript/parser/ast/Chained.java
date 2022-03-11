@@ -106,7 +106,7 @@ public final class Chained implements Expression {
         for (int i = 0; i < par.size(); i++) {
             sb.append(par.get(i).toString()).append(", ");
         }
-        sb.setIndex(sb.length() - 2);
+        sb.setLength(sb.length() - 2);
         return sb.toString();
     }
 

@@ -85,7 +85,7 @@ public class TextUtil {
         if(num <= 0) return new CharList();
         CharList sb = new CharList(num);
         Arrays.fill(sb.list, ch);
-        sb.setIndex(num);
+        sb.setLength(num);
         return sb;
     }
 
@@ -367,6 +367,7 @@ public class TextUtil {
             tmp[j++] = b2h(bb >>> 4);
             tmp[j++] = b2h(bb & 0xf);
         }
+        sb.setLength(j);
         return sb;
     }
 
@@ -637,5 +638,22 @@ public class TextUtil {
         }
 
         return list;
+    }
+
+    public static boolean safeEquals(CharSequence a, CharSequence b) {
+        if (a.length() != b.length()) return false;
+        int r = 0;
+        for (int i = a.length() - 1; i >= 0; i--) {
+            r |= a.charAt(i) ^ b.charAt(i);
+        }
+        return r == 0;
+    }
+
+    public static boolean safeEqualsWithLen(CharSequence a, CharSequence b) {
+        int r = a.length() == b.length() ? 1 : 0;
+        for (int i = a.length() - 1; i >= 0; i--) {
+            r |= a.charAt(i) ^ b.charAt(i % b.length());
+        }
+        return r == 0;
     }
 }

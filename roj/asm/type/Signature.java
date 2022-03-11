@@ -160,7 +160,7 @@ public class Signature implements IType {
                     values.get(i).appendString(sb, this);
                     sb.append(", ");
                 }
-                sb.setIndex(sb.length() - 2);
+                sb.setLength(sb.length() - 2);
                 sb.append(')');
             } else {
                 for (int i = 0; i < values.size(); i++) {

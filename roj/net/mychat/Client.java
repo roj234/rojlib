@@ -1,6 +1,5 @@
 package roj.net.mychat;
 
-import roj.net.WrappedSocket;
 import roj.net.http.HttpServer;
 import roj.net.http.serv.*;
 import roj.util.SleepingBeauty;
@@ -29,7 +28,7 @@ public class Client implements Router {
     static final DirRouter dir = new DirRouter(new File("D:\\S\\Server\\htdocs\\chat"));
 
     @Override
-    public Response response(WrappedSocket ch, Request request, RequestHandler rh) throws IOException {
-        return dir.response(ch, request, rh);
+    public Response response(Request request, RequestHandler rh) throws IOException {
+        return dir.response(request, rh);
     }
 }

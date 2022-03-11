@@ -577,7 +577,7 @@ public class YAMLParser extends Parser {
                                 }
 
                                 while (temp.length() > 0 && WHITESPACE.contains(temp.charAt(temp.length() - 1))) {
-                                    temp.setIndex(temp.length() - 1);
+                                    temp.setLength(temp.length() - 1);
                                     i--;
                                 }
 
@@ -638,7 +638,7 @@ public class YAMLParser extends Parser {
             }
 
             while (WHITESPACE.contains(temp.charAt(temp.length() - 1))) {
-                temp.setIndex(temp.length() - 1);
+                temp.setLength(temp.length() - 1);
                 i--;
             }
 
@@ -755,7 +755,7 @@ public class YAMLParser extends Parser {
                 case multiline: // 缩成一个
                 case multiline_trim: // 全部去掉
                     while (v.length() > 0 && v.charAt(v.length() - 1) == '\n') {
-                        v.setIndex(v.length() - 1);
+                        v.setLength(v.length() - 1);
                         i--;
                     }
                     if(v.length() == 0)

@@ -1,5 +1,6 @@
 package roj.config.data;
 
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.util.ByteList;
 
@@ -48,11 +49,16 @@ public final class CUnescapedString extends CEntry {
 
     @Override
     public Object unwrap() {
-        throw new IllegalStateException();
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public void toBinary(ByteList w, Structs struct) {
-        throw new IllegalStateException();
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        throw new UnsupportedOperationException();
     }
 }

@@ -25,12 +25,10 @@
  */
 package roj.net.http.serv;
 
+import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
-import roj.concurrent.Waitable;
 import roj.config.ParseException;
-import roj.math.MathUtils;
-import roj.math.MutableInt;
-import roj.net.NetworkUtil;
+import roj.io.PooledBuf;
 import roj.net.PlainSocket;
 import roj.net.SocketSequence;
 import roj.net.WrappedSocket;
@@ -39,14 +37,15 @@ import roj.net.misc.FDChannel;
 import roj.text.ACalendar;
 import roj.util.ByteList;
 import roj.util.FastThreadLocal;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-import java.text.SimpleDateFormat;
+import java.util.Map;
 import java.util.TimeZone;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
@@ -54,24 +53,23 @@ public final class RequestHandler extends FDChannel {
     public static final int KEEP_ALIVE_TIMEOUT = 300;
     private static final int SRCBUF_CAPACITY = 3072;
 
-    public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
-    public static final ACalendar        RFC_DATE    = new ACalendar(TimeZone.getTimeZone("GMT"));
+    public static final ACalendar RFC_DATE = new ACalendar(TimeZone.getTimeZone("GMT"));
 
     public static final class Local {
         public ACalendar date = RFC_DATE.copy();
-        public RequestHandler active;
-        public Object[] misc;
+        public MyHashMap<String, Object> ctx = new MyHashMap<>();
     }
     public static final FastThreadLocal<Local> LocalShared = FastThreadLocal.withInitial(Local::new);
 
     private final Router router;
 
-    private static final byte INITIAL = 0, HANDSHAKE = 1, PARSING_REPLY = 2,
-            SENDING_HEAD = 3, SENDING_REPLY = 4, FLUSHING = 5, HANGING = 6, PRE_CLOSE = 7,
-            CLOSING = 8, CLOSED = 9, EXCEPTION_CLOSED = 10, ASYNC_WAITING = 11;
+    private static final byte INITIAL = 0, HANDSHAKE = 1, PARSING_REQUEST = 2,
+            PROCESS_REQUEST = 3, PREPARE_REQUEST = 4, SENDING_HEAD = 5, SENDING_REPLY = 6,
+            FLUSHING = 7, HANGING = 8, PRE_CLOSE = 9, CLOSING = 10, CLOSED = 11,
+            EXCEPTION_CLOSED = 12, ASYNC_WAITING = 13;
 
     private static final int KEPT_ALIVE = 1, CLOSE_CONN = 2, HAS_DATE = 4, CHUNKED = 8,
-            HAS_REPLY                   = 16;
+            HAS_REPLY = 16, DEF_NOWARP = 32;
 
     private byte state, reqState, encoding, flag;
 
@@ -79,26 +77,34 @@ public final class RequestHandler extends FDChannel {
 
     private Request request;
     private Response reply;
-    private Consumer<WrappedSocket> cb;
-    private Waitable w;
+    private RequestFinishHandler cb;
 
     private HttpLexer hl;
+    private StreamPostHandler ph;
 
-    private final ByteList uc;
+    private ByteList uc;
     private ByteBuffer hdr;
 
     public RequestHandler(WrappedSocket ch, Router router) {
         super(ch);
         this.router = router;
-        this.uc = new ByteList(128);
+        this.uc = PooledBuf.alloc().retain();
+        this.uc.ensureCapacity(128);
         this.tmp = PlainSocket.EMPTY;
     }
 
     @Override
     public void tick(int elapsed) {
         switch (state) {
+            case PARSING_REQUEST:
+                if (System.currentTimeMillis() > time) {
+                    reply(Code.TIMEOUT).connClose();
+                    reply = StringResponse.httpErr(Code.TIMEOUT);
+                    state = PREPARE_REQUEST;
+                    interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                }
+                break;
             case HANDSHAKE:
-            case PARSING_REPLY:
             case HANGING:
                 // exceeded time, no readable
             case SENDING_HEAD:
@@ -113,31 +119,49 @@ public final class RequestHandler extends FDChannel {
                 }
                 break;
             case ASYNC_WAITING:
-                if (w.isDone()) {
+                if (System.currentTimeMillis() > time) {
                     time += router.writeTimeout(request);
-                    state = SENDING_REPLY;
-                    w = null;
-                    interestOps(SelectionKey.OP_WRITE);
-                } else if (System.currentTimeMillis() > time) {
-                    time += router.writeTimeout(request);
-                    state = SENDING_REPLY;
-                    w.cancel();
-                    w = null;
+                    state = PARSING_REQUEST;
+                    reply(504);
+                    state = SENDING_HEAD;
                     interestOps(SelectionKey.OP_WRITE);
                 }
+                break;
         }
     }
 
-    public void setPreCloseCallback(Consumer<WrappedSocket> o) {
+    public void setPreCloseCallback(RequestFinishHandler o) {
         cb = o;
     }
 
-    public void waitFor(Waitable w, int timeout) {
-        if (state != SENDING_REPLY) throw new IllegalStateException();
+    public void setAsyncProcess(int timeout) {
+        if (state != PROCESS_REQUEST) throw new IllegalStateException();
         state = ASYNC_WAITING;
+        time = System.currentTimeMillis() + timeout;
         interestOps(0);
-        this.w = w;
-        this.time = System.currentTimeMillis() + timeout;
+    }
+
+    public void setAsyncProcessDone(Response resp) {
+        if (state != ASYNC_WAITING) throw new IllegalStateException();
+        state = SENDING_HEAD;
+        reply = resp;
+        time = System.currentTimeMillis() + router.writeTimeout(request);
+        interestOps(SelectionKey.OP_WRITE);
+    }
+
+    public void setPostHandler(StreamPostHandler ph) {
+        this.ph = ph;
+    }
+
+    public void setTimeout(int timeout) {
+        time = System.currentTimeMillis() + timeout;
+    }
+
+    public void setReply(Response resp) {
+        if (state != PARSING_REQUEST && state != PROCESS_REQUEST) {
+            throw new IllegalStateException();
+        }
+        this.reply = resp;
     }
 
     @Override
@@ -146,7 +170,15 @@ public final class RequestHandler extends FDChannel {
 
         try {
             clear();
-        } catch (IOException ignored) {}
+        } catch (Throwable ignored) {}
+
+        if (def != null) def.end();
+        def = null;
+
+        if (uc.list.length < 9999) {
+            PooledBuf.alloc().release(uc);
+        }
+        uc = null;
 
         state = CLOSED;
         key.cancel();
@@ -183,39 +215,58 @@ public final class RequestHandler extends FDChannel {
                     interestOps(SelectionKey.OP_READ);
 
                     reqState = 0;
-                    state = PARSING_REPLY;
-                case PARSING_REPLY:
-                    Response resp;
+                    state = PARSING_REQUEST;
+                case PARSING_REQUEST:
                     try {
-                        if(!parse()) return;
-                        LocalShared.get().active = this;
-                        try {
-                            resp = router.response(ch, request, this);
-                            // 默认200
-                            if ((flag & HAS_REPLY) == 0 && resp != null) reply(200);
-                            // 压缩
-                            if (router.useCompress(request, this.reply = resp)) setEncoder();
-                        } catch (Throwable e) {
-                            e.printStackTrace();
-                            reply(500).connClose();
-                            resp = StringResponse.forError(0, e);
+                        if (!parse()) return;
+                        if (ph != null) {
+                            ph.onSuccess();
+                            if (ph.visibleToRequest()) request.ctx().put(Request.CTX_POST_HANDLER, ph);
                         }
                     } catch (IllegalRequestException e) {
                         reply(e.code).connClose();
-                        resp = StringResponse.forError(0, e);
+                        reply = StringResponse.forError(e.code, e.getMessage());
+                        state = PREPARE_REQUEST;
+                        selected(0);
+                        return;
+                    } catch (IOException e) {
+                        throw e;
+                    } catch (Throwable e) {
+                        reply = router.errorCaught(e, this, "PARSING_REQUEST");
+                        state = PREPARE_REQUEST;
+                        selected(0);
+                        return;
+                    }
+                    state = PROCESS_REQUEST;
+                case PROCESS_REQUEST:
+                    Response resp;
+                    try {
+                        resp = router.response(request, this);
+                        // 默认200
+                        if ((flag & HAS_REPLY) == 0 && resp != null) reply(200);
+                        // 压缩
+                        if (router.useCompress(request, this.reply = resp)) setCompress();
+                    } catch (Throwable e) {
+                        resp = router.errorCaught(e, this, "PROCESS_REQUEST");
                     }
 
+                    this.reply = resp;
+
+                    state = PREPARE_REQUEST;
+                case PREPARE_REQUEST:
+                    resp = this.reply;
                     try {
                         if (resp != null) resp.prepare();
                         prepare();
                     } catch (Throwable e) {
-                        e.printStackTrace();
-                        reply(500).connClose();
-                        resp = StringResponse.forError(0, e);
-                        resp.prepare();
-                    }
+                        try {
+                            if (resp != null) resp.release();
+                        } catch (IOException ignored) {}
 
-                    this.reply = resp;
+                        reply = resp = router.errorCaught(e, this, "PREPARE_REQUEST");
+                        resp.prepare();
+                        prepare();
+                    }
 
                     // 没有调用reply并返回null且未发生异常
                     if ((flag & HAS_REPLY) == 0 && resp == null) {
@@ -232,6 +283,8 @@ public final class RequestHandler extends FDChannel {
                         forWrite();
                         return;
                     }
+                    hdr = null;
+                    if (chunked != null) chunked.enableOut();
                     state = SENDING_REPLY;
                 case SENDING_REPLY:
                     resp = this.reply;
@@ -245,15 +298,16 @@ public final class RequestHandler extends FDChannel {
                         forWrite();
                         return;
                     } else {
-                        if (cb != null) {
-                            cb.accept(ch);
+                        if (cb != null && cb.onRequestFinish(this, true)) {
                             key.cancel();
                             ch = null;
+                            cb = null;
+                            clear();
                             state = CLOSED;
                             return;
                         }
 
-                        if (!request.headers().get("Connection").equals("close")) {
+                        if (request != null && !request.headers().get("Connection").equals("close")) {
                             state = HANGING;
                             clear();
                             interestOps(SelectionKey.OP_READ);
@@ -266,12 +320,12 @@ public final class RequestHandler extends FDChannel {
                     }
                 case HANGING:
                     int r = ch.read();
-                    if (r > 0 || ch.buffer().position() > 0) {
+                    if (r > 0 || (r == 0 && ch.buffer().position() > 0)) {
                         flag = KEPT_ALIVE;
 
                         reqState = 0;
-                        state = PARSING_REPLY;
                         time = System.currentTimeMillis() + router.readTimeout();
+                        state = PARSING_REQUEST;
                         selected(0);
                         return;
                     } else if (r == 0) return;
@@ -296,7 +350,8 @@ public final class RequestHandler extends FDChannel {
                     throw new IllegalStateException();
             }
         } catch (Throwable e) {
-             e.printStackTrace();
+            if (e.getClass() != IOException.class) e.printStackTrace();
+            else System.out.println("异常 " + e.getMessage());
 
             try {
                 close();
@@ -307,43 +362,10 @@ public final class RequestHandler extends FDChannel {
     }
 
     private void forWrite() throws Exception {
-        if (w != null) return;
         interestOps(SelectionKey.OP_WRITE);
         if (System.currentTimeMillis() > time) {
             state = PRE_CLOSE;
             selected(0);
-        }
-    }
-
-    private void prepare() {
-        if (reply != null) reply.writeHeader(uc);
-        else uc.putAscii("Content-Length: 0\r\n");
-        if ((flag & (KEPT_ALIVE|CLOSE_CONN)) == 0)
-            uc.putAscii("Connection: keep-alive\r\n");
-        uc.putAscii("\r\n");
-
-        if ((flag & CHUNKED) != 0) removeLength();
-        hdr = ByteBuffer.wrap(uc.list, 0, uc.wIndex());
-    }
-
-    private void removeLength() {
-        ByteList h = uc;
-        byte[] b = h.list;
-        byte[] b1 = "Content-Length:".getBytes();
-        find:
-        for (int i = 0; i < h.wIndex(); i++) {
-            if (b[i] == 'C' && h.wIndex() - i > 15) {
-                int i1 = i;
-                for (int j = 0; j < b1.length; j++) {
-                    if (b1[j] != b[i+j]) {
-                        continue find;
-                    }
-                }
-                while (b[i++] != '\n');
-                System.arraycopy(b, i, b, i1, h.wIndex() - i);
-                h.wIndex(h.wIndex() - (i - i1));
-                break;
-            }
         }
     }
 
@@ -352,20 +374,45 @@ public final class RequestHandler extends FDChannel {
             key.interestOps(ops);
     }
 
-    private void clear() throws IOException {
-        hex = null;
-        if (def != null) def.end();
-        def = null;
+    private void clear() throws Exception {
+        if (def != null) def.reset();
         request = null;
         hl = null;
         hdr = null;
         encoding = 0;
         reqState = 0;
         flag &= 1;
+
+        setChunked0(false);
+
+        Throwable e = null;
         if (reply != null) {
-            reply.release();
+            try {
+                reply.release();
+            } catch (Throwable e1) {
+                e = e1;
+            }
             reply = null;
         }
+        if (ph != null) {
+            try {
+                ph.onComplete();
+            } catch (Throwable e1) {
+                if (e == null) e = e1;
+                else e.addSuppressed(e1);
+            }
+            ph = null;
+        }
+        if (cb != null) {
+            try {
+                cb.onRequestFinish(this, false);
+            } catch (Throwable e1) {
+                if (e == null) e = e1;
+                else e.addSuppressed(e1);
+            }
+            cb = null;
+        }
+        if (e != null) Helpers.athrow(e);
     }
 
     private boolean parse() throws Exception {
@@ -377,8 +424,8 @@ public final class RequestHandler extends FDChannel {
             hl = lexer;
         }
 
+        Request req = request;
         try {
-            Request req = request;
             if (req == null) {
                 String method = lexer.readHttpWord(),
                         path = lexer.readHttpWord(),
@@ -387,7 +434,8 @@ public final class RequestHandler extends FDChannel {
                 if (version == null || !version.startsWith("HTTP/"))
                     throw new IllegalRequestException(Code.BAD_REQUEST, "无效请求头 " + version);
 
-                if (path.length() > 1024) {
+                // 浏览器限制2048
+                if (path.length() > 2000) {
                     throw new IllegalRequestException(Code.URI_TOO_LONG);
                 }
 
@@ -396,12 +444,14 @@ public final class RequestHandler extends FDChannel {
                     throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "无效请求类型 " + method);
 
                 request = req = new Request(act, version.substring(version.indexOf('/') + 1), path);
+                req.local = LocalShared.get();
+                req.handler = this;
 
                 compact(lexer, ch.buffer());
             }
 
-            Headers headers = req.headers;
             if (reqState < 1) {
+                Headers headers = req.headers;
                 headers.clear();
                 try {
                     headers.readFromLexer(lexer);
@@ -413,61 +463,98 @@ public final class RequestHandler extends FDChannel {
                 reqState = 1;
 
                 router.checkHeader(req);
-            }
 
-            if (req.action() == Action.POST) {
-                ByteList uc = this.uc;
-                if (reqState < 2) {
-                    uc.clear();
-
-                    String cl = headers.get("Content-Length");
-                    if (cl != null) {
-                        int len = MathUtils.parseInt(cl);
-                        if (len > router.postMaxLength(req))
-                            throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
-                        req.postFields = new MutableInt(len);
-                        uc.ensureCapacity(len);
-                    }
-                    reqState = 2;
-                    time = router.postReadTimeout(req, (int) (time - System.currentTimeMillis()));
+                if ((flag & HAS_REPLY) != 0) {
+                    state = PREPARE_REQUEST;
+                    selected(0);
+                    return false;
                 }
 
-                if (req.postFields == null) {
-                    // no content length
-                    if (!"close".equalsIgnoreCase(headers.get("Connection")))
-                        throw new IllegalRequestException(411);
-                    int r;
-                    while ((r = ch.read()) > 0) {
-                        ByteBuffer rb = ch.buffer();
-                        rb.flip();
-                        uc.put(rb);
-                        if (uc.wIndex() > router.postMaxLength(req))
-                            throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
-                        rb.clear();
-                    }
-                    if (r == 0) return false;
-                } else {
-                    MutableInt remain = (MutableInt) req.postFields;
-                    if (ch.read(remain.getValue()) < 0) throw new IOException("Unexpected EOF");
-
-                    ByteBuffer rb = ch.buffer();
-                    int r = rb.position();
-                    rb.flip();
-                    uc.put(rb);
-                    rb.clear();
-
-                    if (remain.addAndGet(-r) > 0) return false;
-                }
-                req.postFields = uc;
+                boolean c = req.header("Transfer-Encoding").equalsIgnoreCase("chunked");
+                setChunked0(c);
             }
-
-            compact(lexer, ch.buffer());
-            hl = null;
-            return true;
         } catch (OperationDone noDataAvailable) {
             lexer.index = 0;
             return false;
         }
+
+        if (req.action() == Action.POST) {
+            Headers headers = req.headers;
+            ByteList uc = this.uc;
+
+            if (reqState < 2) {
+                uc.clear();
+
+                String cl = headers.get("Content-Length");
+                if (cl != null) {
+                    long len = Long.parseLong(cl);
+                    if (len > router.postMaxLength(req))
+                        throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+                    req.postFields = new AtomicLong(len);
+
+                    if (ph == null) {
+                        if (len > 1024 * 1024 * 1024)
+                            throw new IllegalRequestException(Code.INTERNAL_ERROR,
+                            "对于大小超过8MB的post请求,必须使用StreamPostHandler");
+                        uc.ensureCapacity((int) len);
+                    }
+                } else {
+                    req.postFields = new AtomicLong(router.postMaxLength(req));
+                }
+
+                reqState = 2;
+                time = System.currentTimeMillis() +
+                        router.postTimeout(req, (int) (time - System.currentTimeMillis()));
+
+                if ((flag & HAS_REPLY) != 0) {
+                    state = PREPARE_REQUEST;
+                    selected(0);
+                    return false;
+                }
+            }
+
+            AtomicLong len = (AtomicLong) req.postFields;
+            StreamPostHandler ph = this.ph;
+            int r = ch.buffer().position();
+            if (!headers.containsKey("Content-Length")) {
+                do {
+                    ByteBuffer rb = ch.buffer();
+                    int pos = rb.position();
+                    if (pos == 0) continue;
+
+                    rb.flip();
+                    if (ph != null) ph.onData(rb);
+                    else uc.put(rb);
+
+                    if (rb.hasRemaining()) rb.compact();
+                    else rb.clear();
+
+                    if (len.addAndGet(r) < 0) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+                } while ((r = ch.read()) > 0);
+                if (r == 0) return false;
+            } else {
+                do {
+                    ByteBuffer rb = ch.buffer();
+                    int pos = rb.position();
+                    if (pos == 0) continue;
+
+                    rb.flip();
+                    if (ph != null) ph.onData(rb);
+                    else uc.put(rb);
+
+                    if (rb.hasRemaining()) rb.compact();
+                    else rb.clear();
+
+                    if (len.addAndGet(-r) == 0) break;
+                } while ((r = ch.read((int) Math.min(len.get(), 10000))) > 0);
+                if (r < 0) throw new IOException("Unexpected EOF");
+                if (len.get() > 0) return false;
+            }
+            req.postFields = uc;
+        }
+
+        hl = null;
+        return true;
     }
 
     private static void compact(HttpLexer lexer, ByteBuffer buf) {
@@ -478,50 +565,41 @@ public final class RequestHandler extends FDChannel {
         }
     }
 
-    @SuppressWarnings("fallthrough")
-    private boolean finish() throws IOException {
-        switch (encoding) {
-            default:
-            case ENC_PLAIN:
-                if (hex != null) {
-                    tmp.clear();
-                    tmp.putInt(0x300D0A0D).put((byte) 0x0A).flip();
-                    ch.write(tmp);
-                }
-                return true;
-            case ENC_GZIP:
-                def.finish();
-                if (!writePend()) return false;
+    // region Processing Request
 
-                tmp.clear();
-                tmp.put((byte) 0x38).putChar((char) 0x0D0A)
-                   .putInt(Integer.reverseBytes((int) crc.getValue()))
-                   .putInt(Integer.reverseBytes(def.getTotalIn()))
-                   .putInt(0x0D0A300D).putChar((char) 0x0A0D).put((byte) 0x0A)
-                   .flip();
+    public void setChunked() {
+        if ((flag & CHUNKED) == 0) {
+            flag |= CHUNKED;
+            setChunked0(true);
+        }
+    }
 
-                def.end();
-                return flush();
-            case ENC_DEFLATE:
-                def.finish();
-                if (!writePend()) return false;
-                tmp.clear();
-                tmp.put((byte) 0x30).putInt(0x0D0A0D0A).flip();
-
-                def.end();
-                return flush();
+    private ChunkedSocket chunked;
+    private void setChunked0(boolean on) {
+        if (on) {
+            if (!(ch instanceof ChunkedSocket)) {
+                ch = chunked = chunked == null ? new ChunkedSocket(ch) : chunked;
+                chunked.resetSelf();
+                chunked.enableIn();
+                if (tmp.capacity() == 0 || chunked.buffer().capacity() > tmp.capacity())
+                    tmp = chunked.getBuffer(SRCBUF_CAPACITY);
+            }
+        } else if (ch instanceof ChunkedSocket) {
+            chunked = (ChunkedSocket) ch;
+            ch = ch.parent();
         }
     }
 
     public RequestHandler reply(int code) {
-        if (state != PARSING_REPLY) throw new IllegalStateException();
+        if (state < PARSING_REQUEST || state > PREPARE_REQUEST) throw new IllegalStateException();
         flag |= HAS_REPLY;
+        if (code == 408)
+            new Throwable().printStackTrace();
 
         uc.clear();
         uc.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ')
                .putAscii(Code.getDescription(code)).putAscii("\r\nServer: Async/2.0\r\n");
 
-        // if (code >= 400) connClose();
         return this;
     }
 
@@ -532,6 +610,7 @@ public final class RequestHandler extends FDChannel {
         flag |= CLOSE_CONN;
 
         // mark to close
+        if (request != null)
         request.headers.put("Connection", "close");
         uc.putAscii("Connection: close\r\n");
         return this;
@@ -564,35 +643,65 @@ public final class RequestHandler extends FDChannel {
         return uc;
     }
 
-    public Response nullResponse() {
+    public <T> T returnNull() {
         return null;
     }
 
+    public <T> T returns(T t) {
+        return t;
+    }
+
+    private void prepare() {
+        if (reply != null) reply.writeHeader(uc);
+        else uc.putAscii("Content-Length: 0\r\n");
+        if (cb == null && (flag & (KEPT_ALIVE|CLOSE_CONN)) == 0)
+            uc.putAscii("Connection: keep-alive\r\n");
+
+        boolean on = (flag & CHUNKED) != 0;
+        setChunked0(on);
+        if (on) {
+            if (encoding != ENC_PLAIN) removeLength();
+            uc.putAscii("Transfer-Encoding: chunked\r\n");
+        }
+
+        uc.putAscii("\r\n");
+
+        hdr = ByteBuffer.wrap(uc.list, 0, uc.wIndex());
+    }
+
+    private void removeLength() {
+        ByteList h = uc;
+        byte[] b = h.list;
+        byte[] b1 = "Content-Length: ".getBytes();
+        find:
+        for (int i = 0; i < h.wIndex(); i++) {
+            if (b[i] == 'C' && h.wIndex() - i > 15) {
+                int i1 = i;
+                for (int j = 0; j < b1.length; j++) {
+                    if (b1[j] != b[i+j]) {
+                        continue find;
+                    }
+                }
+                while (b[i++] != '\n');
+                System.arraycopy(b, i, b, i1, h.wIndex() - i);
+                h.wIndex(h.wIndex() - (i - i1));
+                break;
+            }
+        }
+    }
+
+    // endregion
+    // region Send Reply
+
     public int write(ByteBuffer buf) throws IOException {
+        if (state != SENDING_REPLY) throw new IllegalStateException();
         if (!writePend()) return 0;
 
         switch (encoding) {
             default:
             case ENC_PLAIN:
                 if (!buf.hasRemaining()) return 0;
-
-                ByteBuffer tmp = this.tmp;
-                if (hex != null) {
-                    tmp.clear();
-                    makeChunkHead(buf.remaining(), tmp);
-                    tmp.flip();
-                    ch.write(tmp);
-                }
-
-                int x = buf.remaining();
-                ch.write(buf);
-                if (buf.hasRemaining()) {
-                    if (tmp.capacity() < buf.remaining())
-                        tmp = this.tmp = ByteBuffer.allocate(buf.remaining());
-                    else tmp.clear();
-                    tmp.put(buf).flip();
-                }
-                return x;
+                return ch.write(buf);
             case ENC_DEFLATE:
                 int r1 = 0;
                 byte[] b = uc.list;
@@ -622,6 +731,7 @@ public final class RequestHandler extends FDChannel {
     }
 
     public int write(InputStream in) throws IOException {
+        if (state != SENDING_REPLY) throw new IllegalStateException();
         if (!writePend()) return 0;
 
         switch (encoding) {
@@ -630,24 +740,17 @@ public final class RequestHandler extends FDChannel {
                 ByteBuffer tmp = this.tmp;
                 if (tmp.capacity() < SRCBUF_CAPACITY)
                     tmp = this.tmp = ByteBuffer.allocate(SRCBUF_CAPACITY);
+                else tmp.clear();
 
-                byte[] b = tmp.array();
-                int r = in.read(b, 10, b.length - 12);
+                int r = in.read(tmp.array());
                 if (r <= 0) return r;
 
-                if (hex != null) {
-                    tmp.clear();
-                    makeChunkHead(r, tmp);
-                    tmp.flip();
-                    ch.write(tmp);
-                }
-
-                tmp.position(10).limit(b.length - 12);
+                tmp.limit(r);
                 flush();
 
                 return r;
             case ENC_DEFLATE:
-                b = uc.list;
+                byte[] b = uc.list;
                 r = in.read(b);
                 if (r > 0) {
                     def.setInput(b, 0, r);
@@ -675,15 +778,8 @@ public final class RequestHandler extends FDChannel {
         byte[] b = t.array();
 
         int r;
-        while ((r = def.deflate(b, 10, b.length - 12)) > 0) {
-            t.clear();
-            makeChunkHead(r, t);
-            t.flip();
-            ch.write(t);
-            if (t.hasRemaining()) throw new IOException("Should not happen");
-
-            t.limit(12 + r).position(10);
-            t.putChar(10 + r, (char) 0x0D0A);
+        while ((r = def.deflate(b)) > 0) {
+            t.limit(r).position(0);
             if (!flush()) return false;
             if (r < b.length) break;
         }
@@ -696,6 +792,33 @@ public final class RequestHandler extends FDChannel {
         }
         return true;
     }
+
+    @SuppressWarnings("fallthrough")
+    private boolean finish() throws IOException {
+        switch (encoding) {
+            default:
+            case ENC_PLAIN:
+                if (!writePend()) return false;
+                return (flag & CHUNKED) == 0 || ch.write(null) < 0;
+            case ENC_GZIP:
+                def.finish();
+                if (!writePend()) return false;
+
+                tmp.clear();
+                tmp.putInt(Integer.reverseBytes((int) crc.getValue()))
+                   .putInt(Integer.reverseBytes(def.getTotalIn())).flip();
+
+                encoding = ENC_PLAIN;
+                return finish();
+            case ENC_DEFLATE:
+                def.finish();
+
+                encoding = ENC_PLAIN;
+                return finish();
+        }
+    }
+
+    // endregion
 
     private static final int ENC_PLAIN = 0, ENC_DEFLATE = 1, ENC_GZIP = 2;
     private static int isTypeSupported(String type) {
@@ -715,24 +838,23 @@ public final class RequestHandler extends FDChannel {
     private CRC32 crc;
     private Deflater def;
     private ByteBuffer tmp;
-    private void setEncoder() {
+    public void setCompress() {
         int enc = ENC_PLAIN;
         float maxQ = 0;
 
         String header = request.header("Accept-Encoding");
-        for (String type : header.split(",")) {
+        for (Map.Entry<String, String> type : Headers.decodeValue(header, true).entrySet()) {
             float Q = 1;
-            int i = (type = type.trim()).indexOf('=');
-            if (i >= 0) {
+            if (type.getValue() != null) {
                 try {
-                    Q = Float.parseFloat(type.substring(i + 1));
+                    Q = Float.parseFloat(type.getValue());
                 } catch (NumberFormatException e) {
                     Q = 0;
                 }
             }
 
             if (Q > maxQ) {
-                int sup = isTypeSupported(i < 0 ? type : type.substring(0, i));
+                int sup = isTypeSupported(type.getKey());
                 if (sup >= 0) {
                     enc = sup;
                     maxQ = Q;
@@ -744,7 +866,13 @@ public final class RequestHandler extends FDChannel {
             case ENC_PLAIN:
                 break;
             case ENC_GZIP:
-                def = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+                if ((flag & DEF_NOWARP) == 0) {
+                    if (def != null) def.end();
+                    def = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+                } else {
+                    def.reset();
+                }
+                flag |= DEF_NOWARP;
                 if (crc == null) crc = new CRC32();
                 else crc.reset();
                 uc.ensureCapacity(SRCBUF_CAPACITY);
@@ -753,12 +881,17 @@ public final class RequestHandler extends FDChannel {
                 setChunked();
 
                 tmp.clear();
-                makeChunkHead(10, tmp);
                 tmp.putShort((short) 0x1f8b).putLong((long) Deflater.DEFLATED << 56)
-                   .putChar((char) 0x0D0A).flip();
+                   .flip();
                 break;
             case ENC_DEFLATE:
-                def = new Deflater(Deflater.DEFAULT_COMPRESSION, false);
+                if ((flag & DEF_NOWARP) != 0 || def == null) {
+                    if (def != null) def.end();
+                    def = new Deflater(Deflater.DEFAULT_COMPRESSION, false);
+                } else {
+                    def.reset();
+                }
+                flag &= ~DEF_NOWARP;
                 uc.ensureCapacity(SRCBUF_CAPACITY);
 
                 uc.putAscii("Content-Encoding: deflate\r\n");
@@ -766,24 +899,5 @@ public final class RequestHandler extends FDChannel {
                 break;
         }
         encoding = (byte) enc;
-    }
-
-    private byte[] hex;
-    public void setChunked() {
-        if ((flag & CHUNKED) == 0) {
-            flag |= CHUNKED;
-            hex = new byte[8];
-            if (tmp.capacity() == 0) {
-                tmp = ByteBuffer.allocate(SRCBUF_CAPACITY);
-                tmp.flip();
-            }
-
-            uc.putAscii("Transfer-Encoding: Chunked\r\n");
-        }
-    }
-    private void makeChunkHead(int len, ByteBuffer tmp) {
-        byte[] hex = this.hex;
-        int off = NetworkUtil.number2hex(len, hex);
-        tmp.put(hex, off, 8 - off).putChar((char) 0x0D0A);
     }
 }

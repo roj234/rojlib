@@ -158,7 +158,7 @@ public final class UPnPDevice {
             this.addr = addr;
             this.requests = new ArrayList<>(types.size());
 
-            UTFCoder coder = IOUtil.SharedUTFCoder.get();
+            UTFCoder coder = IOUtil.SharedCoder.get();
             coder.charBuf.clear();
             for (int i = 0; i < types.size(); i++) {
                 String s = types.get(i);
@@ -245,7 +245,6 @@ public final class UPnPDevice {
 
         SocketSequence chars = new SocketSequence(false).init(hc.getChannel(), 1000, 0);
 
-        // todo test
         HttpLexer hl = new HttpLexer();
         HttpHead.parse(hl.init(chars));
         ByteBuffer bb = hc.getChannel().buffer();

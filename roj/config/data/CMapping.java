@@ -27,6 +27,7 @@ package roj.config.data;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.text.CharList;
@@ -607,7 +608,7 @@ public class CMapping extends CEntry {
         w.put((byte) Type.MAP.ordinal()).putVarInt(map.size(), false);
         if (map.isEmpty()) return;
         for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-            entry.getValue().toBinary(w.putVarIntUTF(entry.getKey()), struct);
+            entry.getValue().toBinary(w.putVIVIC(entry.getKey()), struct);
         }
     }
 
@@ -624,5 +625,17 @@ public class CMapping extends CEntry {
     @Override
     public int hashCode() {
         return map.hashCode();
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.valueMap();
+        if (!map.isEmpty()) {
+            for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+                ser.key(entry.getKey());
+                entry.getValue().serialize(ser);
+            }
+        }
+        ser.pop();
     }
 }

@@ -179,7 +179,7 @@ public class Generic implements IGeneric {
     }
 
     public String toString() {
-        CharList cl = IOUtil.SharedUTFCoder.get().charBuf;
+        CharList cl = IOUtil.SharedCoder.get().charBuf;
         cl.clear();
 
         appendString(cl, null);

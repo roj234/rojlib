@@ -31,7 +31,6 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.math.MathUtils;
 import roj.net.NetworkUtil;
-import roj.net.WrappedSocket;
 import roj.net.http.Action;
 import roj.net.http.Code;
 import roj.net.http.serv.*;
@@ -531,7 +530,7 @@ public class DnsServer implements Router, Runnable {
                         while (r.remaining() > 0) {
                             sb.append(readCharacter(r)).append(", ");
                         }
-                        sb.setIndex(sb.length() - 2);
+                        sb.setLength(sb.length() - 2);
                         sb.append(']');
                     } catch (Throwable e) {
                         e.printStackTrace();
@@ -1148,9 +1147,9 @@ public class DnsServer implements Router, Runnable {
     }
 
     /**
-     * todo merge better？
+     * 合并Dns消息
      */
-    private DnsResponse mergeResponse(DnsResponse[] responses) {
+    protected DnsResponse mergeResponse(DnsResponse[] responses) {
         return responses[0];
     }
 
@@ -1181,7 +1180,7 @@ public class DnsServer implements Router, Runnable {
             }
             sb.append(r.readUTF(len)).append(".");
         } while (len > 0);
-        sb.setIndex(sb.length() - 2);
+        sb.setLength(sb.length() - 2);
     }
 
     public static void readDomain(ByteList r, CharList sb) throws UTFDataFormatException {
@@ -1192,7 +1191,7 @@ public class DnsServer implements Router, Runnable {
                 throw new IllegalArgumentException("Illegal label length " + len);
             sb.append(r.readUTF(len)).append(".");
         } while (len > 0);
-        sb.setIndex(sb.length() - 2);
+        sb.setLength(sb.length() - 2);
     }
 
     public static void writeDomain(ByteList w, CharSequence sb) {
@@ -1231,7 +1230,7 @@ public class DnsServer implements Router, Runnable {
     }
 
     @Override
-    public Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException {
+    public Response response(Request req, RequestHandler rh) throws IOException {
         switch (req.path()) {
             case "/favicon.ico":
                 rh.reply(404);

@@ -131,12 +131,11 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                         closedOn = t.isClosedOn(key);
                     } catch (Throwable e) {
                         if (e instanceof ThreadDeath) break mainLoop;
-                        owner.exception.accept("T_IS_CLOSED_ON", e);
+                        loop.exception.accept("T_IS_CLOSED_ON", e);
                         closedOn = true;
                     }
 
-                    if (closedOn) {
-                        key.cancel();
+                    if (closedOn || !key.isValid()) {
                         call(att);
                         continue;
                     }
@@ -145,13 +144,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                         t.selected(key.readyOps());
                     } catch (Throwable e) {
                         if (e instanceof ThreadDeath) break mainLoop;
-                        owner.exception.accept("T_SELECTED", e);
-                        try {
-                            t.close();
-                        } catch (IOException ignored) {}
-                        try {
-                            loop.unregister(Helpers.cast(t));
-                        } catch (IOException ignored) {}
+                        loop.exception.accept("T_SELECTED", e);
                         call(att);
                     }
                 }
@@ -169,7 +162,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
                             t.tick(elapsed);
                         } catch (Throwable e) {
                             if (e instanceof ThreadDeath) break mainLoop;
-                            owner.exception.accept("T_TICK", e);
+                            loop.exception.accept("T_TICK", e);
                         }
                     }
                 }
@@ -177,10 +170,10 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
             try {
                 sel.close();
             } catch (IOException e) {
-                owner.exception.accept("S_CLOSE", e);
+                loop.exception.accept("S_CLOSE", e);
             }
-            synchronized (owner.lock) {
-                SelectThread[] t = owner.threads;
+            synchronized (loop.lock) {
+                SelectThread[] t = loop.threads;
                 for (int i = 0; i < t.length; i++) {
                     if (t[i] == this) {
                         int len = t.length - i - 1;
@@ -192,12 +185,25 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
             }
         }
 
-        static void call(Att att) {
-            if (att.cb != null) {
-                try {
-                    att.cb.accept(att.t);
-                } catch (Throwable ignored) {}
-                att.cb = null;
+        private void call(Att att) {
+            try {
+                att.t.close();
+            } catch (Throwable e1) {
+                owner.exception.accept("T_CLOSE", e1);
+            }
+            try {
+                if (!((Object) att.cb instanceof ShutdownCallback))
+                    owner.unregister(Helpers.cast(att.t));
+            } catch (Throwable e1) {
+                owner.exception.accept("T_UNREGISTER", e1);
+            }
+            synchronized (att) {
+                if (att.cb != null) {
+                    try {
+                        att.cb.accept(att.t);
+                    } catch (Throwable ignored) {}
+                    att.cb = null;
+                }
             }
         }
     }
@@ -227,6 +233,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
         if (minThreads < 0) throw new IllegalArgumentException("minThreads < 0");
         if (maxThreads < 1) throw new IllegalArgumentException("maxThreads < 1");
         if (idleKill < 1000) throw new IllegalArgumentException("idleKill < 1000");
+        if (threshold > 1024) throw new IllegalArgumentException("threshold > 1024");
 
         this.prefix = prefix;
         this.minThreads = minThreads;
@@ -389,7 +396,7 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
         }
 
         Att att = new Att();
-        att.cb = Helpers.cast(new ShutdownCallback());
+        att.cb = Helpers.cast(new ShutdownCallback(this));
         att.t = l;
 
         if (thread != null) {
@@ -423,10 +430,16 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
         Consumer<Selectable> cb;
     }
 
-    public final class ShutdownCallback implements Consumer<Object> {
+    public static final class ShutdownCallback implements Consumer<Object> {
+        private final NIOSelectLoop<?> loop;
+
+        ShutdownCallback(NIOSelectLoop<?> loop) {
+            this.loop = loop;
+        }
+
         @Override
         public void accept(Object x) {
-            NIOSelectLoop.this.shutdown();
+            loop.shutdown();
         }
     }
 }

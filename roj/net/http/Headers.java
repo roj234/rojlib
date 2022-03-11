@@ -26,6 +26,7 @@
 package roj.net.http;
 
 import roj.collect.IntMap;
+import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
@@ -48,17 +49,107 @@ public final class Headers extends MyHashMap<CharSequence, String> {
         }
     }
 
+    public static void encodeValue(Map<String, String> kvMap, StringBuilder sb) {
+        Iterator<Map.Entry<String, String>> itr = kvMap.entrySet().iterator();
+        while (true) {
+            Map.Entry<String, String> entry = itr.next();
+            sb.append(entry.getKey());
+            String v = entry.getValue();
+
+            f:
+            if (v != null) {
+                sb.append('=');
+                for (int i = 0; i < v.length(); i++) {
+                    switch (v.charAt(i)) {
+                        case ' ':
+                        case ',':
+                        case '=':
+                            sb.append('"').append(v).append('"');
+                            break f;
+                        case '"':
+                            throw new IllegalArgumentException("'\"' Should not occur");
+                    }
+                }
+                sb.append(v);
+            }
+
+            if (!itr.hasNext()) break;
+            sb.append(',');
+        }
+    }
+
+    public static MyHashMap<String, String> decodeValue(CharSequence field, boolean ordered) {
+        MyHashMap<String, String> kvs = ordered ? new LinkedMyHashMap<>() : new MyHashMap<>();
+        String k = null;
+        int i = 0, j = 0;
+        int flag = 0;
+        while (i < field.length()) {
+            char c = field.charAt(i++);
+            if (flag == 1) {
+                if (c == '"') {
+                    if (k == null) throw new IllegalArgumentException("Escaped key");
+                    kvs.put(k, Sub(field, j, i - 1));
+                    j = i;
+                    k = null;
+                    flag = 2;
+                }
+            } else {
+                switch (c) {
+                    case '=':
+                        if (k != null) throw new IllegalArgumentException("Unexpected '='");
+                        k = Sub(field, j, i-1).toLowerCase();
+                        j = i;
+                        flag = 0;
+                        break;
+                    case '"':
+                        flag = 1;
+                        j = i;
+                        break;
+                    case ',':
+                    case ';':
+                    case ' ':
+                        if (k != null) {
+                            kvs.put(k, Sub(field, j, i - 1));
+                            k = null;
+                        } else {
+                            if (i-1 > j) kvs.put(Sub(field, j, i - 1).toLowerCase(), null);
+                            else if (c != ' ' && (flag & 2) == 0)
+                                throw new IllegalArgumentException("'" + c + "' on empty");
+                        }
+                        flag = 0;
+                        j = i;
+                        break;
+                }
+            }
+        }
+
+        if (k != null) {
+            kvs.put(k, Sub(field, j, i));
+        } else if (i > j) {
+            kvs.put(Sub(field, j, i).toLowerCase(), null);
+        }
+
+        return kvs;
+    }
+
+    private static String Sub(CharSequence c, int s, int e) {
+        return c.subSequence(s, e).toString();
+    }
+
     public Headers readFromLexer(HttpLexer wr) throws ParseException {
         while (true) {
-            String t = wr.readHttpWord();
-            if (t == HttpLexer._ERROR) {
+            String k = wr.readHttpWord();
+            if (k == HttpLexer._ERROR) {
                 throw wr.err("Unexpected header error");
-            } else if (t == HttpLexer._SHOULD_EOF) {
+            } else if (k == HttpLexer._SHOULD_EOF) {
                 break;
-            } else if (t == null) {
+            } else if (k == null) {
                 break;
             } else {
-                add(t, wr.readHttpWord());
+                String v = wr.readHttpWord();
+                if (k.length() > 100 || v.length() > 500 || size > 100)
+                    throw wr.err("Header too long");
+                add(k, v);
             }
         }
         return this;
@@ -154,7 +245,7 @@ public final class Headers extends MyHashMap<CharSequence, String> {
         }
 
         name.getChars(0, len, cs, 0);
-        tmp.setIndex(len);
+        tmp.setLength(len);
 
         boolean dlm = true;
         for (int i = 0; i < len; ++i) {

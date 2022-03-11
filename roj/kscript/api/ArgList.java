@@ -115,7 +115,7 @@ public abstract class ArgList implements IObject {
         }
 
         int[] arr = KScriptVM.retainNumParseTmp(10);
-        if(MathUtils.parseIntErrorable(key, arr)) {
+        if(MathUtils.parseIntOptional(key, arr)) {
             int i = arr[0];
             return i < 0 || i >= argv.size() ? KUndefined.UNDEFINED : argv.get(i);
         }

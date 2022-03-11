@@ -299,14 +299,20 @@ public final class NIOUtil {
 
     public static void close(FileDescriptor fd) throws IOException {
         if(!fd.valid()) return;
-        SCN.close(fd);
-        UTIL.fdFd(fd, -1);
+        synchronized (fd) {
+            if(!fd.valid()) return;
+            SCN.close(fd);
+            UTIL.fdFd(fd, -1);
+        }
     }
 
     public static void closeF(FileDescriptor fd) throws IOException {
         if(!fd.valid()) return;
-        FCN.close(fd);
-        UTIL.fdFd(fd, -1);
+        synchronized (fd) {
+            if(!fd.valid()) return;
+            FCN.close(fd);
+            UTIL.fdFd(fd, -1);
+        }
     }
 
     public static boolean available() {

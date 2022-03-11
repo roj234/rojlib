@@ -29,12 +29,11 @@ import roj.config.word.AbstLexer;
 import roj.io.NIOUtil;
 import roj.net.MSSSocket;
 import roj.net.WrappedSocket;
-import roj.net.misc.Pipe;
-import roj.net.misc.PipeIOThread;
-import roj.net.misc.Shutdownable;
+import roj.net.misc.*;
 import roj.util.Helpers;
 
 import java.io.EOFException;
+import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -64,6 +63,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
     public int clientId;
 
     protected FakeServer[] servers;
+    final FDCLoop<FakeServer> serverLoop;
 
     final    TransferQueue<Object> lock;
     volatile Object                msgbox;
@@ -71,6 +71,7 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
     public AEClient(SocketAddress server, String id, String token) {
         super(server, id, token);
         this.lock = new LinkedTransferQueue<>();
+        this.serverLoop = new FDCLoop<>(this, "AE 本地监听", 1, 30000, 1);
     }
 
     public final void awaitLogin() throws InterruptedException {
@@ -214,11 +215,13 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                                                 try {
                                                     cn.local.close();
                                                 } catch (IOException ignored) {}
+                                                serverLoop.unregister(servers[j]);
                                                 servers[j] = null;
                                             }
                                         }
                                         if (servers[j] == null && port > 0) {
-                                            (servers[j] = new FakeServer(port, j)).start();
+                                            servers[j] = new FakeServer(port, j);
+                                            serverLoop.register(servers[j], null);
                                         }
                                     }
                                     lock.poll();
@@ -491,14 +494,12 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
         int    clientId;
     }
 
-    final class FakeServer extends Thread implements Consumer<Pipe> {
+    final class FakeServer extends FDChannel implements Consumer<Pipe> {
         final ServerSocket local;
         final int portId;
         final char port;
 
         public FakeServer(char port, int portId) throws IOException {
-            setDaemon(true);
-            setName("AE本地监听器 #" + (int)port + ":" + portId);
             ServerSocket s = this.local = new ServerSocket();
             s.setReuseAddress(true);
             s.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 100);
@@ -507,31 +508,8 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
         }
 
         @Override
-        public void run() {
-            while (!shutdown) {
-                Socket c;
-                try {
-                    c = local.accept();
-                } catch (IOException ignored) {
-                    break;
-                }
-
-                try {
-                    initSocketPref(c);
-                    Pipe pair = requestSocketPair(portId);
-                    pair.setClient(NIOUtil.fd(c));
-                    PipeIOThread.syncRegister(AEClient.this, pair, this);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    try {
-                        c.close();
-                    } catch (IOException ignored) {}
-                }
-            }
-
-            try {
-                local.close();
-            } catch (IOException ignored) {}
+        public FileDescriptor fd() throws IOException {
+            return NIOUtil.fd(local);
         }
 
         @Override
@@ -546,6 +524,26 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                 System.out.println("管道回收失败 " + pair.att);
                 e.printStackTrace();
             }
+        }
+
+        @Override
+        public void tick(int elapsed) throws IOException {
+            if (shutdown) close();
+        }
+
+        @Override
+        public void close() throws IOException {
+            local.close();
+        }
+
+        @Override
+        public void selected(int readyOps) throws Exception {
+            if (local.isClosed()) return;
+            Socket c = local.accept();
+            initSocketPref(c);
+            Pipe pair = requestSocketPair(portId);
+            pair.setClient(NIOUtil.fd(c));
+            PipeIOThread.syncRegister(AEClient.this, pair, this);
         }
     }
 }

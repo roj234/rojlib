@@ -151,7 +151,7 @@ public final class Project extends JSONConfiguration {
             for (int i = 0; i < dependencies.size(); i++) {
                 cl.append(dependencies.get(i).name).append('|');
             }
-            cl.setIndex(cl.length() - 1);
+            cl.setLength(cl.length() - 1);
         }
         return cl.toString();
     }

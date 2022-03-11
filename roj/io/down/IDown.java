@@ -4,13 +4,11 @@ import roj.concurrent.task.ITask;
 import roj.io.FileUtil;
 import roj.net.http.HttpClient;
 import roj.net.misc.FDChannel;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.URL;
 import java.nio.channels.SelectionKey;
-import java.util.function.Consumer;
 
 import static roj.io.down.Downloader.*;
 
@@ -18,7 +16,7 @@ import static roj.io.down.Downloader.*;
  * @author Roj233
  * @since 2022/2/28 21:49
  */
-public abstract class IDown extends FDChannel implements ITask, Consumer<IDown> {
+public abstract class IDown extends FDChannel implements ITask {
     IDown() {}
 
     RandomAccessFile file;
@@ -112,16 +110,9 @@ public abstract class IDown extends FDChannel implements ITask, Consumer<IDown> 
         }
     }
 
-    @Override
-    public final void accept(IDown x) {
-        try {
-            close();
-        } catch (IOException ignored) {}
-    }
-
     final void reg() throws Exception {
         try {
-            POOL.register(this, Helpers.cast(this));
+            POOL.register(this, null);
         } catch (Exception e) {
             if (progress != null) progress.shutdown();
             throw e;

@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.util.ByteList;
 
@@ -97,5 +98,10 @@ public final class CBoolean extends CEntry {
     @Override
     public int hashCode() {
         return this == TRUE ? 432895 : 1278;
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.value(this == TRUE);
     }
 }

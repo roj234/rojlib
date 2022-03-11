@@ -48,6 +48,11 @@ public class StringResponse implements Response {
         this(c, "text/plain");
     }
 
+    public static StringResponse httpErr(int code) {
+        String desc = code + " " + Code.getDescription(code);
+        return new StringResponse("<title>" + desc + "</title><center><h1>" + desc + "</h1><hr/><div>Async 2.0.1</div></center>", "text/html");
+    }
+
     public static StringResponse forError(int code, Object e) {
         if(code == 0) {
             code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : Code.INTERNAL_ERROR;
@@ -71,7 +76,7 @@ public class StringResponse implements Response {
         }
 
         sw.write("</font></h3></p><p>您可以点击<a href='javascript:location.reload();'>重试</a>.</p><br/><hr/>" +
-                "<div>Asyncorized_MC's HTTP(S) Server 1.2.0</div></div><!-- padding for ie --><!-- padding for ie -->" +
+                "<div>AsyncHttp 2.0.1</div></div><!-- padding for ie --><!-- padding for ie -->" +
                 "<!-- padding for ie --><!-- padding for ie --></body></html>");
 
         return new StringResponse(sw.toString(), "text/html");
@@ -81,7 +86,7 @@ public class StringResponse implements Response {
 
     public void prepare() {
         if (buf == null) {
-            buf = ByteBuffer.wrap(IOUtil.SharedUTFCoder.get().encode(content));
+            buf = ByteBuffer.wrap(IOUtil.SharedCoder.get().encode(content));
         } else {
             buf.position(0);
         }
@@ -95,7 +100,7 @@ public class StringResponse implements Response {
 
     @Override
     public boolean wantCompress() {
-        return content.length() > 64;
+        return content.length() > 100;
     }
 
     @Override

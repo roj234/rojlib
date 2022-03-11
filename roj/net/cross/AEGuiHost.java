@@ -139,8 +139,7 @@ public class AEGuiHost {
     }
 
     private static HttpServer runServer(int port) throws IOException {
-        return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64,
-                              (socket, request, requestHandler) -> {
+        return new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (request, requestHandler) -> {
             switch (request.path()) {
                 case "/bundle.min.css":
                     return new StringResponse(res("bundle.min.css"), "text/css");

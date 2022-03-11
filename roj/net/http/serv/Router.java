@@ -25,7 +25,6 @@
  */
 package roj.net.http.serv;
 
-import roj.net.WrappedSocket;
 import roj.net.http.IllegalRequestException;
 
 import javax.annotation.Nullable;
@@ -45,20 +44,32 @@ public interface Router {
         return 5000;
     }
 
-    default int postReadTimeout(Request req, int remain) {
+    default int postTimeout(Request req, int remain) {
         return remain;
     }
 
-    Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException;
+    default Response errorCaught(Throwable e, RequestHandler rh, String where) {
+        e.printStackTrace();
+        rh.reply(500);
+        if (where.equals("PARSING_REQUEST")) rh.connClose();
+        return StringResponse.forError(0, e);
+    }
+
+    Response response(Request req, RequestHandler rh) throws IOException;
 
     default int maxLength() {
         // HTTP headers + path
         return 8192;
     }
 
-    default void checkHeader(Request req) throws IllegalRequestException {}
+    default void checkHeader(Request req) throws IllegalRequestException {
+        //if (req.action() == Action.POST && !acceptsLengthlessPost) {
+        //    // length required
+        //    throw new IllegalRequestException(411);
+        //}
+    }
 
-    default int postMaxLength(Request req) {
+    default long postMaxLength(Request req) {
         return 1048576; // 1MB
     }
 

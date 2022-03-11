@@ -30,6 +30,11 @@ public abstract class StreamSerializer {
     }
 
     public final void value(String l) {
+        if (l == null) {
+            valueNull();
+            return;
+        }
+
         int f = this.flag;
         if ((f & END) != 0) throw new IllegalStateException("EOF");
         if (f == (NEXT|LIST)) listNext();
@@ -106,6 +111,10 @@ public abstract class StreamSerializer {
 
     public final StringBuilder getValue() {
         while (level > 0) pop();
+        return sb;
+    }
+
+    public final StringBuilder getHalfValue() {
         return sb;
     }
 

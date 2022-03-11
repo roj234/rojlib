@@ -25,7 +25,6 @@
  */
 package roj.net.http.serv;
 
-import roj.net.WrappedSocket;
 import roj.net.http.Code;
 import roj.util.ByteList;
 
@@ -46,7 +45,7 @@ public class ZipRouter implements Router {
     }
 
     @Override
-    public Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException {
+    public Response response(Request req, RequestHandler rh) throws IOException {
         String url = req.path().substring(1);
 
         boolean flag = url.endsWith("/");
@@ -56,11 +55,11 @@ public class ZipRouter implements Router {
                 ZipEntry dir = zipFs.getEntry(url);
                 if(dir != null && dir.isDirectory()) {
                     rh.reply(403);
-                    return StringResponse.forError(Code.FORBIDDEN, null);
+                    return StringResponse.httpErr(Code.FORBIDDEN);
                 }
             }
             rh.reply(404);
-            return StringResponse.forError(Code.NOT_FOUND, null);
+            return StringResponse.httpErr(Code.NOT_FOUND);
         }
         rh.reply(200).header("Cache-Control: max-age=86400");
         return new ZipResponse(url, zipFs.getInputStream(ze));

@@ -54,4 +54,18 @@ public final class Action {
             default:        return -1;
         }
     }
+
+    public static String toString(int name) {
+        switch (name) {
+            case GET:     return "GET";
+            case POST:    return "POST";
+            case PUT:     return "PUT";
+            case HEAD:    return "HEAD";
+            case DELETE:  return "DELETE";
+            case OPTIONS: return "OPTIONS";
+            case TRACE:   return "TRACE";
+            case CONNECT: return "CONNECT";
+            default:      return null;
+        }
+    }
 }

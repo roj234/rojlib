@@ -25,7 +25,6 @@
  */
 package roj.net.http.serv;
 
-import roj.net.WrappedSocket;
 import roj.net.http.Code;
 
 import javax.annotation.Nullable;
@@ -54,16 +53,16 @@ public class DirRouter implements Router {
     }
 
     @Override
-    public Response response(WrappedSocket ch, Request req, RequestHandler rh) throws IOException {
+    public Response response(Request req, RequestHandler rh) throws IOException {
         String url = req.path();
         File f = new File(dir, url.endsWith("/") ? url + "index.html" : url);
         if(!f.isFile()) {
             if(url.endsWith("/")) {
                 rh.reply(403);
-                return StringResponse.forError(Code.FORBIDDEN, null);
+                return StringResponse.httpErr(Code.FORBIDDEN);
             }
             rh.reply(404);
-            return StringResponse.forError(Code.NOT_FOUND, null);
+            return StringResponse.httpErr(Code.NOT_FOUND);
         }
         return new FileResponse(f);
     }

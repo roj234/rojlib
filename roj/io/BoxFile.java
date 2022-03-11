@@ -78,7 +78,7 @@ public class BoxFile implements Closeable {
     private final RandomAccessFile rf;
     private long freeBytes;
 
-    static final int MAGIC = 0x27462DE8;
+    static final int MAGIC = 0x59594453;// ByteList.FOURCC("YYDS");
     static final class F implements Range {
         long offset;
         int length;

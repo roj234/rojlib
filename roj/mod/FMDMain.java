@@ -918,7 +918,7 @@ public final class FMDMain {
             }
 
             try(FileOutputStream fos = new FileOutputStream(p.atConfigPathStr)) {
-                IOUtil.SharedUTFCoder.get().encodeTo(atData, fos);
+                IOUtil.SharedCoder.get().encodeTo(atData, fos);
             }
 
             ATHelper.init(p.name, map);
@@ -997,7 +997,8 @@ public final class FMDMain {
             try {
                 stampZip.begin(!increment);
             } catch (Throwable e) {
-                CmdUtil.warning("压缩遇到了一些问题", e);
+                CmdUtil.warning("压缩文件有错误,请尝试全量", e);
+                return -1;
             }
 
             for (int i = 0; i < list.size(); i++) {
@@ -1171,7 +1172,7 @@ public final class FMDMain {
             sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
         }
         lastLibHash = Util.libHash(fs);
-        sb.setIndex(sb.length() - 1);
+        sb.setLength(sb.length() - 1);
         return sb;
     }
 

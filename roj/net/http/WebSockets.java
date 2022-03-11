@@ -29,11 +29,10 @@ import roj.collect.MyHashSet;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
+import roj.io.PooledBuf;
+import roj.net.PlainSocket;
 import roj.net.WrappedSocket;
-import roj.net.http.serv.Request;
-import roj.net.http.serv.RequestHandler;
-import roj.net.http.serv.Response;
-import roj.net.http.serv.StringResponse;
+import roj.net.http.serv.*;
 import roj.net.misc.FDCLoop;
 import roj.net.misc.FDChannel;
 import roj.text.CharList;
@@ -108,22 +107,19 @@ public class WebSockets {
     public final Response switchToWebsocket(Request req, RequestHandler handle) {
         String ver = req.header("Sec-WebSocket-Version");
         String protocol = req.header("Sec-WebSocket-Protocol");
-        if(!ver.equals("13") || !validProtocol.contains(protocol == null ? "" : protocol)) {
+        if(!ver.equals("13") || !validProtocol.contains(protocol)) {
             handle.reply(503);
             return new StringResponse("Unsupported protocol \"" + protocol + "\"");
         }
 
         String key = req.header("Sec-WebSocket-Key");
-        ByteList b = handle.reply(101).getRawHeaders();
-        b.clear();
-        b.putAscii("HTTP/1.1 101 Switching Protocols\r\n" +
-                           "Server: Async/1.2\r\n" +
-                           "Upgrade: websocket\r\n" +
-                           "Connection: Upgrade\r\n" +
-                           "Sec-WebSocket-Version: 13\r\n" +
-                           "Sec-WebSocket-Accept: ");
+        ByteList b = handle.reply(101).getRawHeaders()
+        .putAscii("Upgrade: websocket\r\n" +
+                  "Connection: Upgrade\r\n" +
+                  "Sec-WebSocket-Version: 13\r\n" +
+                  "Sec-WebSocket-Accept: ");
         calcKey(key, b);
-        if (protocol != null) {
+        if (!protocol.isEmpty()) {
             b.putAscii("\r\nSec-WebSocket-Protocol: ").putAscii(protocol);
         }
 
@@ -148,28 +144,26 @@ public class WebSockets {
         w.ch = handle.ch;
         if (zip) w.enableZip();
 
-        handle.setPreCloseCallback(s -> {
+        handle.setPreCloseCallback(loopRegisterW(w));
+    }
+
+    protected final RequestFinishHandler loopRegisterW(Worker w) {
+        return (rh, ok) -> {
+            if (!ok) return false;
             try {
                 loop.register(Helpers.cast(w), Helpers.cast(closeCallback));
             } catch (Exception e) {
                 Helpers.athrow(e);
             }
-        });
+            return true;
+        };
     }
-
-//    public final void setWorkerClass(Class<?> cls) {
-//        if (!Worker.class.isAssignableFrom(cls))
-//            throw new ClassCastException("Not inherit Worker");
-//        ClassPoet poet = new ClassPoet(new Clazz(52 << 16, AccessFlag.PUBLIC, "", ""));
-//    }
 
     public static UTFCoder getUTFCoder() {
-        return IOUtil.SharedUTFCoder.get();
+        return IOUtil.SharedCoder.get();
     }
 
-    public static class Worker extends FDChannel {
-        public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
-
+    public static abstract class Worker extends FDChannel {
         /**
          关闭握手异常代号
          代号	描述	使用场景
@@ -203,30 +197,35 @@ public class WebSockets {
 
         // flag的可选位
         public static final int
-                REMOTE_NO_CTX = 1,
-                LOCAL_NO_CTX = 2,
-                LOCAL_SIMPLE_MASK = 4,
-                ACCEPT_PARTIAL_MSG = 8,
-                I_SEND_COMPRESS = 16,
-                REMOTE_MASK = 0x80; // 标志为服务端
+                REMOTE_NO_CTX      = 0x01, // 对等端压缩无上下文 (跨消息复用字典)
+                LOCAL_NO_CTX       = 0x02, // 本地压缩无上下文
+                LOCAL_SIMPLE_MASK  = 0x04, // 作为客户端时,跳过mask步骤
+                ACCEPT_PARTIAL_MSG = 0x08, // 允许处理组合之前的分片 (此时onPacket函数的ph参数将会有0x80位,并可以通过cf字段获取)
+                I_SEND_COMPRESS    = 0x10, // 发送需要压缩 (独立于方法调用时的opcode)
+                CONTINUOUS_SENDING = 0x20, // 正在发送分片帧
+                COMPRESS_AVAILABLE = 0x40, // 对等端允许压缩 (permessage-deflate)
+                REMOTE_MASK        = 0x80; // 标志为服务端
+
+        private static final int ZIP_BUFFER_CAPACITY = 256;
 
         private Deflater def;
         private Inflater inf;
-        private byte[] zipIn;
         private ByteBuffer zipOut;
 
         private final byte[] mask = new byte[4];
         private int except = 2;
 
-        private Fragments cf;
-        private ByteBuffer sending;
+        // 分片接收缓冲
+        protected Fragments rcvFrag;
+        // 分片发送缓冲
+        private ByteBuffer  sending;
 
         // 最大数据长度
         protected int maxData;
-        // 空置时间 ms
+        // 空置时间 ms (注意: 你不应因发送操作而将其重置, 因为其目的是检测对等端是否还存活)
         protected int idle;
         protected byte flag;
-        // 发送分片大小
+        // (自动)发送分片大小
         protected int fragmentSize;
 
         public int errCode;
@@ -242,14 +241,13 @@ public class WebSockets {
             if (def != null) return;
             this.def = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
             this.inf = new Inflater(true);
-            this.zipIn = new byte[256];
-            this.zipOut = ByteBuffer.allocate(256);
+            this.zipOut = ByteBuffer.allocate(ZIP_BUFFER_CAPACITY);
+            this.flag |= COMPRESS_AVAILABLE;
         }
 
         public void setMaxData(int maxData) {
             this.maxData = maxData;
         }
-
         public int getMaxData() {
             return maxData;
         }
@@ -257,7 +255,6 @@ public class WebSockets {
         protected static CharList decodeToUTF(ByteBuffer in) {
             return getUTFCoder().decodeR(in, true);
         }
-
         protected static ByteBuffer encodeUTF(CharSequence seq) {
             ByteList b = getUTFCoder().encodeR(seq);
             return ByteBuffer.wrap(b.list, 0, b.wIndex());
@@ -276,6 +273,7 @@ public class WebSockets {
 
         @Override
         public void close() throws IOException {
+            onClosed();
             key.cancel();
             try {
                 ch.shutdown();
@@ -289,7 +287,7 @@ public class WebSockets {
 
         @Override
         public final void selected(int readyOps) throws Exception {
-            idle = 0;
+            if ((readyOps & SelectionKey.OP_READ) != 0) idle = 0;
             if (flush != null) {
                 if (ch.write(flush) < 0) {
                     close();
@@ -395,72 +393,89 @@ public class WebSockets {
 
                 int head = rb.get(0) & 0xFF;
 
-                if (cf == null) {
+                if (rcvFrag == null) {
                     if ((head & 0xF) == 0) {
                         error(ERR_PROTOCOL, "Unexpected continuous frame");
                         return;
                     } else if ((head & 0x80) == 0) {
-                        cf = new Fragments(head);
+                        rcvFrag = new Fragments(head);
                     }
                 } else if ((head & 0xF) != 0 && (head & 0xF) < 8) {
                     error(ERR_PROTOCOL, "Receive new message in continuous frame");
                     return;
                 } else {
-                    head = (head & 0x80) | (cf.data & 0x7F);
+                    head = (head & 0x80) | (rcvFrag.data & 0x7F);
                 }
 
                 if ((head & RSV_COMPRESS) != 0) {
-                    byte[] zi = this.zipIn;
-                    if (zi == null) {
+                    if (inf == null) {
                         error(ERR_PROTOCOL, "Illegal rsv bits");
                         return;
                     }
-                    int rem = rb.remaining();
-                    if (zi.length < rem + 4) {
-                        zipIn = zi = new byte[zi.length + rem + 4];
-                    }
-                    rb.get(zi, 0, rem).clear();
-                    if ((head & 0x80) != 0) {
-                        zi[rem++] = 0; zi[rem++] = 0;
-                        zi[rem++] = -1; zi[rem++] = -1;
-                    }
-                    inf.setInput(zi, 0, rem);
+
+                    ByteList buf = IOUtil.getSharedByteBuf();
+                    buf.ensureCapacity(ZIP_BUFFER_CAPACITY);
+                    byte[] zi = buf.list;
 
                     ByteBuffer zo = this.zipOut;
                     zo.clear();
 
-                    do {
-                        int cnt = inf.inflate(zo.array(), zo.position(), zo.remaining());
-                        zo.position(zo.position() + cnt);
-                        if (!zo.hasRemaining()) {
-                            ByteBuffer zb1 = this.zipOut = ByteBuffer.allocate(zo.capacity() << 1);
-                            zo.position(0);
-                            zb1.put(zo);
-                            zo = zb1;
+                    while (rb.limit() > 0) {
+                        int $len = Math.min(rb.remaining(), zi.length);
+                        rb.get(zi, 0, $len);
+
+                        pushEOS:
+                        if (!rb.hasRemaining()) {
+                            if ((head & 0x80) != 0) {
+                                // not enough space, process input data first
+                                if (zi.length - $len < 4) break pushEOS;
+
+                                zi[$len++] = 0; zi[$len++] = 0;
+                                zi[$len++] = -1; zi[$len++] = -1;
+
+                                // break on next cycle
+                                rb.limit(0);
+                            } else {
+                                break;
+                            }
                         }
-                    } while (!inf.needsInput());
+
+                        inf.setInput(zi, 0, $len);
+
+                        do {
+                            int cnt = inf.inflate(zo.array(), zo.position(), zo.remaining());
+                            zo.position(zo.position() + cnt);
+                            if (!zo.hasRemaining()) {
+                                ByteBuffer zo1 = this.zipOut = ByteBuffer.allocate(zo.capacity() << 1);
+                                zo.position(0);
+                                zo1.put(zo);
+                                zo = zo1;
+                            }
+                        } while (!inf.needsInput());
+                    }
 
                     // not continuous
                     if ((head & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
                         inf.reset();
                     }
 
+                    rb.clear();
                     (rb = zo).flip();
                 }
 
-                if (cf != null) {
+                if (rcvFrag != null) {
                     if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
                         onPacket(0x80 | (head & 15), rb);
-                        cf.fragments++;
+                        rcvFrag.fragments++;
                     } else {
-                        cf.append(rb);
-                        if (cf.length > maxData) {
+                        rcvFrag.append(rb);
+                        if (rcvFrag.length > maxData) {
                             error(ERR_TOO_LARGE, null);
                         }
 
                         if ((head & 0x80) != 0) {
-                            onPacket(cf.data & 0xF, cf.payload());
-                            cf = null;
+                            onPacket(rcvFrag.data & 0xF, rcvFrag.payload());
+                            rcvFrag = null;
                         }
                     }
                 } else {
@@ -500,7 +515,6 @@ public class WebSockets {
                         errCode = in.getChar();
                         errMsg = in.hasRemaining() ? getUTFCoder().decode(in, false) : "";
                     }
-                    onClosed();
                     send(FRAME_CLOSE, in);
                     assert flush == null;
                     close();
@@ -517,14 +531,9 @@ public class WebSockets {
             }
         }
 
-        protected void onData(int ph, ByteBuffer in) throws IOException {
-            //System.out.println("Data " + NIOUtil.dumpClean(in));
-            //send(ph & 15, in);
-        }
+        protected abstract void onData(int ph, ByteBuffer in) throws IOException;
 
-        protected void onClosed() {
-            //System.out.println("Closed via " + errCode + "@" + errMsg);
-        }
+        protected void onClosed() {}
 
         public final boolean hasDataPending() {
             return flush != null || sending != null;
@@ -549,7 +558,6 @@ public class WebSockets {
             bb.ensureCapacity(bb.wIndex() + 2);
             ByteList.writeUTF(bb, msg, -1);
 
-            onClosed();
             ByteBuffer buf = ByteBuffer.wrap(bb.list, 0, bb.wIndex());
             send(FRAME_CLOSE, buf);
             assert flush == null;
@@ -584,14 +592,15 @@ public class WebSockets {
         }
 
         private ByteBuffer flush;
-        public void send(int opcode, ByteBuffer data) throws IOException {
-            if (sending != null) throw new IllegalStateException("Continuous frame is sending");
+        public final boolean send(int opcode, ByteBuffer data) throws IOException {
+            if (sending != null || flush != null || (flag & CONTINUOUS_SENDING) != 0) return false;
+            if ((opcode & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
             opcode |= 0x80;
 
-            if (data == null) data = EMPTY;
+            if (data == null) data = PlainSocket.EMPTY;
             int rem = data.remaining();
             boolean comp = rem > 0 && (opcode & RSV_COMPRESS) != 0;
-            if (rem > fragmentSize) {
+            if (fragmentSize > 0 && rem > fragmentSize) {
                 // frame[0]: continuous flag + original opcode
                 data.limit(data.position() + fragmentSize);
                 send0(opcode ^ 0x80, data, comp);
@@ -603,27 +612,61 @@ public class WebSockets {
             } else {
                 send0(opcode, data, comp);
             }
+            return true;
+        }
+
+        public final boolean sendContinuous(int opcode, ByteBuffer data, boolean endOfFrame) throws IOException {
+            if (sending != null || flush != null) return false;
+
+            boolean first = (flag & CONTINUOUS_SENDING) == 0;
+            if (first) {
+                if (endOfFrame) {
+                    return send(opcode, data);
+                } else {
+                    if ((opcode & RSV_COMPRESS) > (flag & RSV_COMPRESS))
+                        throw new IOException("Invalid compress state");
+
+                    opcode &= ~0x80;
+                    if ((opcode & RSV_COMPRESS) != 0)
+                        flag |= I_SEND_COMPRESS;
+                    flag |= CONTINUOUS_SENDING;
+                }
+            } else if (endOfFrame) {
+                opcode = 0;
+                flag &= ~CONTINUOUS_SENDING;
+            } else {
+                opcode = 0x80;
+            }
+            send0(opcode, data, (flag & I_SEND_COMPRESS) != 0);
+            return true;
         }
 
         private void send0(int opcode, ByteBuffer data, boolean compressed) throws IOException {
             int $len = data.remaining();
 
             if (compressed) {
-                byte[] ucl = getUTFCoder().byteBuf.list;
-
                 if (data.hasArray()) {
                     def.setInput(data.array(), data.position(), data.remaining());
                     data.position(data.limit());
                 } else {
-                    byte[] zb = zipIn.length >= ucl.length ? zipIn : ucl;
+                    ByteList buf = IOUtil.getSharedByteBuf();
+                    buf.ensureCapacity($len);
+                    byte[] zb = buf.list;
+
+                    // input is promised to used up
                     data.get(zb, 0, $len);
                     def.setInput(zb, 0, $len);
                 }
 
+                ByteList zbh;
                 byte[] zb;
-                if (data == zipOut) {
-                    zb = zipIn.length >= ucl.length ? zipIn : ucl;
+                // should not use ThreadLocal: if buffer not used up in one method call
+                if (true || data == zipOut) {
+                    zbh = PooledBuf.alloc().retain();
+                    zbh.ensureCapacity(ZIP_BUFFER_CAPACITY);
+                    zb = zbh.list;
                 } else {
+                    zbh = null;
                     zb = zipOut.array();
                 }
                 int zbo = 0;
@@ -640,6 +683,7 @@ public class WebSockets {
                         byte[] zb1 = new byte[zb.length << 1];
                         System.arraycopy(zb, 0, zb1, 0, zbo);
                         zb = zb1;
+                        if (zbh != null) zbh.list = zb1;
                     } else if (d == 0) {
                         if (!def.needsInput()) {
                             System.out.println("WS: def.needsInput() returns 0");
@@ -669,6 +713,8 @@ public class WebSockets {
                         zb[zbo++] = 0;
                     }
                 }
+
+                if (zbh != null) PooledBuf.alloc().release(zbh);
 
                 data = ByteBuffer.wrap(zb, 0, $len = zbo);
             }
@@ -735,10 +781,18 @@ public class WebSockets {
         }
 
         public final byte data;
-        public int fragments;
+        int fragments;
         private ArrayList<ByteBuffer> payloads;
         private ByteBuffer payload;
         long length;
+
+        public int fragments() {
+            return fragments;
+        }
+
+        public long length() {
+            return length;
+        }
 
         public void append(ByteBuffer b) {
             ByteBuffer one = ByteBuffer.allocate(b.remaining());

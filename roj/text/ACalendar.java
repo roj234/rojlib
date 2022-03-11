@@ -278,11 +278,11 @@ public class ACalendar {
         sb.append(number);
     }
 
-    private static final String[]
-            UTCWEEK = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"},
+    public static final String[]
+            UTCWEEK = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"},
             UTCMONTH = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
-    public StringBuilder formatDate(String format, long stamp) {
+    public StringBuilder formatDate(CharSequence format, long stamp) {
         int[] date = get(stamp);
         StringBuilder sb = new StringBuilder(format.length());
         char c;
@@ -295,7 +295,7 @@ public class ACalendar {
                     sb.append(date[YEAR]);
                     break;
                 case 'y':
-                    sb.append(date[YEAR]).delete(sb.length() - 4, sb.length() - 2);
+                    sb.append(date[YEAR] % 100);
                     break;
                 case 'd':
                     pad(sb, date[DAY], 2);
@@ -307,26 +307,26 @@ public class ACalendar {
                     sb.append("星期").append(MathUtils.CHINA_NUMERIC[date[DAY_OF_WEEK]]);
                     break;
                 case 'W':
-                    sb.append(UTCWEEK[date[DAY_OF_WEEK]]);
+                    sb.append(UTCWEEK[date[DAY_OF_WEEK] - 1]);
                     break;
                 case 'w':
-                    sb.append(date[DAY_OF_WEEK]);
+                    sb.append(date[DAY_OF_WEEK] - 1);
                     break;
                 case 'N':
-                    sb.append(date[DAY_OF_WEEK] + 1);
+                    sb.append(date[DAY_OF_WEEK]);
                     break;
                 case 'm':
-                    pad(sb, date[MONTH] + 1, 2);
+                    pad(sb, date[MONTH], 2);
                     break;
                 case 'x':
-                    sb.append(date[MILLISECOND]);
+                    pad(sb, date[MILLISECOND], 3);
                     break;
                 case 'n':
                     sb.append(date[MONTH]);
                     break;
                 case 't': // 本月有几天
                     int mth = date[MONTH];
-                    if (mth++ == 1) {
+                    if (mth == 2) {
                         sb.append(28 + date[REN_YEAR]);
                     } else {
                         sb.append(((mth & 1) != 0) == mth < 8 ? 31 : 30);
@@ -374,7 +374,7 @@ public class ACalendar {
                       .insert(tzoff(stamp, sb) + 2, ':');
                     break;
                 case 'M':
-                    sb.append(UTCMONTH[date[MONTH]]);
+                    sb.append(UTCMONTH[date[MONTH] - 1]);
                     break;
                 case 'U':
                     sb.append(stamp / 1000);

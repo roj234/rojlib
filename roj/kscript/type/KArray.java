@@ -66,7 +66,7 @@ public final class KArray extends KBase implements roj.kscript.api.IArray {
     @Override
     public void put(@Nonnull String key, KType entry) {
         int[] arr = KScriptVM.retainNumParseTmp(10);
-        if(!MathUtils.parseIntErrorable(key, arr))
+        if(!MathUtils.parseIntOptional(key, arr))
             throw new JavaException("无效索引 " + key);
         set(arr[0], entry);
     }
@@ -84,7 +84,7 @@ public final class KArray extends KBase implements roj.kscript.api.IArray {
     @Override
     public KType getOr(String key, KType def) {
         int[] arr = KScriptVM.retainNumParseTmp(10);
-        return MathUtils.parseIntErrorable(key, arr) ? get(arr[0]) : def;
+        return MathUtils.parseIntOptional(key, arr) ? get(arr[0]) : def;
     }
 
     @Override

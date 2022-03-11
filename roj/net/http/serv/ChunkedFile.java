@@ -2,12 +2,11 @@ package roj.net.http.serv;
 
 import roj.crypt.SM3;
 import roj.io.IOUtil;
-import roj.net.WrappedSocket;
 import roj.net.http.Headers;
+import roj.text.RFCDate;
 import roj.text.TextUtil;
 
 import java.io.File;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,17 +18,23 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ChunkedFile implements Router {
     private static final AtomicLong identity = new AtomicLong();
 
-    final File file;
-    String eTag;
+    private final File file;
+    private String eTag;
 
     public ChunkedFile(File file) {
+        this(file, false);
+    }
+
+    public ChunkedFile(File file, boolean eTag) {
         this.file = file;
-        this.eTag = '"' + IOUtil.SharedUTFCoder.get().encodeHex(new SM3().digest(file.getAbsolutePath().getBytes())) +
-            Long.toUnsignedString(identity.getAndIncrement(), 36) + '"';
+        if (eTag)
+        this.eTag = '"' +
+                IOUtil.SharedCoder.get().encodeHex(new SM3().digest(file.getAbsolutePath().getBytes())) +
+                Long.toUnsignedString(identity.getAndIncrement(), 36) + '"';
     }
 
     @Override
-    public Response response(WrappedSocket ch, Request req, RequestHandler rh) {
+    public Response response(Request req, RequestHandler rh) {
         Headers h = req.headers();
 
         // 当与  If-Modified-Since  一同使用的时候，If-None-Match 优先级更高（假如服务器支持的话）。
@@ -37,39 +42,38 @@ public class ChunkedFile implements Router {
             List<String> tags = TextUtil.split(new ArrayList<>(), h.get("If-Match"), ", ");
             if (!tags.contains(eTag)) {
                 // Cache-Control、Content-Location、Date、ETag、Expires 和 Vary 。
-                return plus(304, rh);
+                return plus(304, req);
             }
         } else if (h.containsKey("If-None-Match")) {
             // 当且仅当服务器上没有任何资源的 ETag 属性值与这个首部中列出的相匹配的时候，服务器端才会返回所请求的资源
             List<String> tags = TextUtil.split(new ArrayList<>(), h.get("If-None-Match"), ", ");
             if (tags.contains(eTag)) {
-                rh.reply(416).connClose();
-                return null;
+                return plus(304, req);
             }
         }
 
         if (h.containsKey("If-Modified-Since")) {
             long time;
             try {
-                time = RequestHandler.DATE_FORMAT.parse(h.get("If-Modified-Since")).getTime();
-            } catch (ParseException e) {
+                time = RFCDate.parse(h.get("If-Modified-Since")) / 1000;
+            } catch (Exception e) {
                 rh.reply(400);
                 return null;
             }
 
-            if (file.lastModified() <= time) {
-                return plus(304, rh);
+            if (file.lastModified() / 1000 <= time) {
+                return plus(304, req);
             }
         } else if (h.containsKey("If-Unmodified-Since")) {
             long time;
             try {
-                time = RequestHandler.DATE_FORMAT.parse(h.get("If-Unmodified-Since")).getTime();
-            } catch (ParseException e) {
+                time = RFCDate.parse(h.get("If-Unmodified-Since")) / 1000;
+            } catch (Exception e) {
                 rh.reply(400);
                 return null;
             }
             // 当资源在指定的时间之后没有修改，服务器才会返回请求的资源
-            if (file.lastModified() > time) {
+            if (file.lastModified() / 1000 > time) {
                 rh.reply(412);
                 return null;
             }
@@ -79,50 +83,56 @@ public class ChunkedFile implements Router {
             String s = h.get("If-Range");
             if (s.endsWith("\"")) {
                 if (!eTag.equals(s)) {
-                    plus(200, rh);
+                    plus(200, req);
                     return new FileResponse(file);
                 }
             } else {
                 long time;
                 try {
-                    time = RequestHandler.DATE_FORMAT.parse(s).getTime();
-                } catch (ParseException e) {
+                    time = RFCDate.parse(s) / 1000;
+                } catch (Exception e) {
                     rh.reply(400);
                     return null;
                 }
-                if (file.lastModified() > time) {
-                    plus(200, rh);
+                if (file.lastModified() / 1000 > time) {
+                    plus(200, req);
                     return new FileResponse(file);
                 }
             }
         }
 
         if (!h.containsKey("Range")) {
-            plus(200, rh);
+            plus(200, req);
             return new FileResponse(file);
         }
 
         String s = h.get("Range");
         if (!s.startsWith("bytes=")) {
             rh.reply(400);
-            return null;
+            return StringResponse.forError(0, "range not in bytes");
         }
         List<String> ranges = TextUtil.split(new ArrayList<>(), s.substring(6), ", ");
         long[] data = new long[ranges.size() << 1];
         for (int i = 0; i < ranges.size(); i++) {
             s = ranges.get(i);
             int j = s.indexOf('-');
+            // start, end
             long o = data[ i<<1   ] = Long.parseLong(s.substring(0, j));
-                     data[(i<<1)+1] = j == s.length() - 1 ? file.length() - o : Long.parseLong(s.substring(j+1));
+                     data[(i<<1)+1] = j == s.length() - 1 ? file.length() - 1 : Long.parseLong(s.substring(j+1));
         }
         rh.reply(206).withDate();
         return new PartialContentMulti(file, data);
     }
 
-    private Response plus(int r, RequestHandler h) {
-        h.reply(r).withDate().getRawHeaders()
-         .putAscii("Last-Modified: ").putAscii(RequestHandler.LocalShared.get().date.toRFCDate(file.lastModified())).putAscii("\r\n")
-         .putAscii("Accept-Ranges: bytes\r\n");
+    private Response plus(int r, Request req) {
+        RequestHandler h = req.handler;
+        h.reply(r).withDate();
+        if (r != 304) {
+            h.getRawHeaders()
+             .putAscii("Last-Modified: ").putAscii(req.local.date.toRFCDate(file.lastModified()))
+             .putAscii("\r\n");
+            if (eTag != null) h.header("ETag", eTag);
+        }
         return null;
     }
 }

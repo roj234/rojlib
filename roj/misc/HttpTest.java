@@ -27,7 +27,7 @@ public class HttpTest {
         HttpClient c = new HttpClient();
         c.readTimeout(2000);
         c.method("GET").headers(headers);
-        c.url(new URL("http://127.0.0.1:1999/"));
+        c.url(new URL("http://127.0.0.1:1999/att/1"));
 
         int i = 0;
         while (true) {

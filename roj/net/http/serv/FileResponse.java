@@ -25,14 +25,39 @@
  */
 package roj.net.http.serv;
 
+import roj.collect.MyHashMap;
+import roj.text.SimpleLineReader;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 
 public class FileResponse extends StreamResponse {
+    static MyHashMap<String, Mime> mimeTypes = new MyHashMap<>();
+    static final class Mime {
+        String type;
+        boolean zip;
+
+        public Mime(String type) {
+            this.type = type;
+        }
+    }
+    public static synchronized void loadMimeMap(CharSequence text) {
+        ArrayList<String> arr = new ArrayList<>();
+        for (String line : new SimpleLineReader(text)) {
+            arr.clear();
+            TextUtil.split(arr, line, ' ');
+            Mime mime = new Mime(arr.get(1).toLowerCase());
+            mime.zip = arr.size() > 2 && arr.get(2).equalsIgnoreCase("gz");
+            mimeTypes.put(arr.get(0).toLowerCase(), mime);
+        }
+        mimeTypes.putIfAbsent("*", new Mime("text/plain"));
+    }
+
     protected final File file;
 
     public FileResponse(File absolute) {
@@ -41,21 +66,15 @@ public class FileResponse extends StreamResponse {
 
     @Override
     public void writeHeader(ByteList list) {
-        String mime = file.getName();
-        mime = mime.substring(mime.lastIndexOf('.') + 1).toLowerCase();
-        String type;
-        switch (mime) {
+        String ext = file.getName();
+        ext = ext.substring(ext.lastIndexOf('.') + 1).toLowerCase();
+        String type = mimeTypes.getOrDefault(ext, mimeTypes.get("*")).type;
+        switch (ext) {
             case "html":
-                type = "text/html; charset=UTF-8";
-                break;
             case "css":
-                type = "text/css; charset=UTF-8";
-                break;
             case "js":
-                type = "text/javascript; charset=UTF-8";
+                type += "; charset=UTF-8";
                 break;
-            default:
-                type = "application/octet-stream";
         }
 
         //list.putAscii("Content-Disposition: attachment; filename=\"" + file.getName() + '"').putAscii(CRLF)
@@ -70,6 +89,8 @@ public class FileResponse extends StreamResponse {
 
     @Override
     public boolean wantCompress() {
-        return file.length() > 100;
+        String ext = file.getName();
+        ext = ext.substring(ext.lastIndexOf('.') + 1).toLowerCase();
+        return file.length() > 100 && mimeTypes.getOrDefault(ext, mimeTypes.get("*")).zip;
     }
 }

@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.math.MathUtils;
 import roj.util.ByteList;
@@ -108,5 +109,10 @@ public final class CInteger extends CEntry {
     @Override
     public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.INTEGER.ordinal()).putInt(value);
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.value(value);
     }
 }

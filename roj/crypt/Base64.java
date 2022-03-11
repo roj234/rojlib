@@ -147,8 +147,8 @@ public final class  Base64 {
     public static ByteList decode(CharSequence s, int i, int len, ByteList out, byte[] bytesRev) {
         do {
             int bits = bytesRev[s.charAt(i++)] << 18 | bytesRev[s.charAt(i++)] << 12;
-            int h3 = bytesRev[s.charAt(i++)];
-            int h4 = bytesRev[s.charAt(i++)];
+            int h3 = i >= len ? 64 : bytesRev[s.charAt(i++)];
+            int h4 = i >= len ? 64 : bytesRev[s.charAt(i++)];
             bits |= h3 << 6 | h4;
 
             int o1 = bits >> 16 & 0xff;
@@ -176,9 +176,9 @@ public final class  Base64 {
         int i = 0;
         do {
             // 适配无padding情况
-            int bits = bytesRev[in.get0(i++)] << 18 | bytesRev[in.get0(i++)] << 12;
-            int h3 = bytesRev[in.get0(i++)];
-            int h4 = bytesRev[in.get0(i++)];
+            int bits = bytesRev[in.getU(i++)] << 18 | bytesRev[in.getU(i++)] << 12;
+            int h3 = i >= in.wIndex() ? 64 : bytesRev[in.getU(i++)];
+            int h4 = i >= in.wIndex() ? 64 : bytesRev[in.getU(i++)];
             bits |= h3 << 6 | h4;
 
             int o1 = bits >> 16 & 0xff;
@@ -195,35 +195,6 @@ public final class  Base64 {
                 out.put((byte) bits);
             }
         } while (i < in.wIndex());
-        return out;
-    }
-
-    public static CharList decode(CharSequence in, CharList out) {
-        return decode(in, out, B64_CHAR_REV);
-    }
-
-    public static CharList decode(CharSequence in, CharList out, byte[] bytesRev) {
-        int i = 0;
-        do {
-            int bits = bytesRev[in.charAt(i++)] << 18 | bytesRev[in.charAt(i++)] << 12;
-            int h3 = bytesRev[in.charAt(i++)];
-            int h4 = bytesRev[in.charAt(i++)];
-            bits |= h3 << 6 | h4;
-
-            int o1 = bits >> 16 & 0xff;
-            int o2 = bits >> 8 & 0xff;
-
-            if (h3 == 64) {
-                out.append((char) o1);
-            } else if (h4 == 64) {
-                out.append((char) o1);
-                out.append((char) o2);
-            } else {
-                out.append((char) o1);
-                out.append((char) o2);
-                out.append((char) bits);
-            }
-        } while (i < in.length()); // support not pad
         return out;
     }
 }

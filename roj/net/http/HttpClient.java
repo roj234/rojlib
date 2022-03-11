@@ -202,7 +202,7 @@ public class HttpClient extends Connector {
             if (!"HEAD".contentEquals(action)) {
                 int pos = buf.position();
                 buf.position(lexer.index).limit(pos);
-                buf.compact().flip();
+                buf.compact();
 
                 in = HttpInputStream.create(hdr, new SocketInputStream(channel).init(hdr.headers.get("Content-Length"), readTimeout));
             } else {

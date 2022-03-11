@@ -11,7 +11,9 @@ import java.nio.channels.SelectionKey;
 public interface Selectable extends Closeable {
     default void tick(int elapsed) throws IOException {}
 
-    boolean isClosedOn(SelectionKey key);
+    default boolean isClosedOn(SelectionKey key) {
+        return !key.isValid();
+    }
     default void close() throws IOException {}
 
     void selected(int readyOps) throws Exception;

@@ -52,7 +52,6 @@ final class Layer1 extends Layer {
      */
     private float requantization(int ch, int sb, int nb) {
         int samplecode = data.get3(nb);
-        // todo test layeri
         /*int*/float nlevels = (1 << nb);
         float requ = 2.0f * samplecode / nlevels - 1.0f;    //s'''
         requ += (float) Math.pow(2, 1 - nb);

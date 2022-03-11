@@ -33,6 +33,7 @@ import roj.text.TextUtil;
 import javax.annotation.Nonnull;
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * @author Roj234
@@ -97,9 +98,6 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     }
 
     public final ByteList readStreamFully(InputStream stream) throws IOException {
-        if (getClass() != ByteList.class)
-            throw new IllegalStateException();
-
         int i = stream.available();
         if(i <= 0)
             i = 127;
@@ -118,9 +116,6 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     }
 
     public final int readStream(InputStream in, int max) throws IOException {
-        if (getClass() != ByteList.class)
-            throw new IllegalStateException();
-
         ensureCapacity(wIndex + max);
         int real = in.read(list, wIndex, max);
         if (real > 0)
@@ -134,9 +129,7 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         }
     }
 
-    public final ByteList setArray(byte[] array) {
-        if (getClass() != ByteList.class)
-            throw new IllegalStateException();
+    public ByteList setArray(byte[] array) {
         if (array == null)
             array = EmptyArrays.BYTES;
 
@@ -227,73 +220,75 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     }
     private int readIndex(int i) {
         int ri = rIndex;
-        if (ri + i + arrayOffset() > wIndex) throw new ArrayIndexOutOfBoundsException();
+        if (ri + i + arrayOffset() > wIndex)
+            throw new ArrayIndexOutOfBoundsException("rindex="+ri+",require="+i+",length="+(wIndex-arrayOffset()));
         rIndex = ri + i;
         return ri;
     }
     private int ci(int i) {
-        if ((i += arrayOffset()) > wIndex) throw new ArrayIndexOutOfBoundsException();
+        if ((i += arrayOffset()) > wIndex)
+            throw new ArrayIndexOutOfBoundsException("require="+i+",length="+(wIndex-arrayOffset()));
         return i;
     }
 
     // region DataOutput (non-chainable) PUT methods
     @Override
-    public void write(int b) {
+    public final void write(int b) {
         put((byte) b);
     }
 
     @Override
-    public void write(@Nonnull byte[] b) {
+    public final void write(@Nonnull byte[] b) {
         put(b, 0, b.length);
     }
 
     @Override
-    public void write(@Nonnull byte[] b, int off, int len) {
+    public final void write(@Nonnull byte[] b, int off, int len) {
         put(b, off, len);
     }
 
     @Override
-    public void writeBoolean(boolean v) {
+    public final void writeBoolean(boolean v) {
         put((byte) (v ? 1 : 0));
     }
 
     @Override
-    public void writeByte(int v) {
+    public final void writeByte(int v) {
         put((byte) v);
     }
 
     @Override
-    public void writeShort(int s) {
+    public final void writeShort(int s) {
         put((byte) (s >>> 8)).put((byte) s);
     }
 
     @Override
-    public void writeChar(int c) {
+    public final void writeChar(int c) {
         writeShort(c);
     }
 
     @Override
-    public void writeInt(int i) {
+    public final void writeInt(int i) {
         putInt(i);
     }
 
     @Override
-    public void writeLong(long l) {
+    public final void writeLong(long l) {
         putLong(l);
     }
 
     @Override
-    public void writeFloat(float v) {
+    public final void writeFloat(float v) {
         putInt(Float.floatToIntBits(v));
     }
 
     @Override
-    public void writeDouble(double v) {
+    public final void writeDouble(double v) {
         putLong(Double.doubleToLongBits(v));
     }
 
     @Override
-    public void writeBytes(@Nonnull String s) {
+    public final void writeBytes(@Nonnull String s) {
         int len = s.length();
         for (int i = 0; i < len; i++) {
             put((byte) s.charAt(i));
@@ -301,12 +296,12 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     }
 
     @Override
-    public void writeChars(@Nonnull String s) {
+    public final void writeChars(@Nonnull String s) {
         putChars(s);
     }
 
     @Override
-    public void writeUTF(@Nonnull String str) throws UTFDataFormatException {
+    public final void writeUTF(@Nonnull String str) throws UTFDataFormatException {
         try {
             ByteList.writeUTF(this, str, 0);
         } catch (ArrayIndexOutOfBoundsException e) {
@@ -347,7 +342,7 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList put(ByteList b) {
+    public final ByteList put(ByteList b) {
         if (b.getClass() == Streamed.class) {
             int i = ((Streamed) b).fakeWriteIndex;
             if (i > 0) throw new IllegalArgumentException("Unable to put STREAMED byte list");
@@ -363,19 +358,19 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return (i & Long.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
     }
 
-    public ByteList putVarInt(int i) {
+    public final ByteList putVarInt(int i) {
         return putVarLong(i, true);
     }
 
-    public ByteList putVarInt(int i, boolean canBeNegative) {
+    public final ByteList putVarInt(int i, boolean canBeNegative) {
         return putVarLong(i, canBeNegative);
     }
 
-    public ByteList putVarLong(long i) {
+    public final ByteList putVarLong(long i) {
         return putVarLong(i, true);
     }
 
-    public ByteList putVarLong(long i, boolean canBeNegative) {
+    public final ByteList putVarLong(long i, boolean canBeNegative) {
         putVarLong(this, canBeNegative ? zig(i) : i);
         return this;
     }
@@ -387,7 +382,7 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         list.list[list.wIndex - 1] &= 0x7F;
     }
 
-    public ByteList putVLUI(int i) {
+    public final ByteList putVLUI(int i) {
         long v = i & 0xFFFFFFFFL;
         byte[] l;
         int wi = wIndex;
@@ -429,10 +424,10 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putIntLE(int i) {
+    public final ByteList putIntLE(int i) {
         return putIntLE(putIndex(4), i);
     }
-    public ByteList putIntLE(int wi, int i) {
+    public final ByteList putIntLE(int wi, int i) {
         byte[] list = this.list;
         list[wi++] = (byte) i;
         list[wi++] = (byte) (i >>> 8);
@@ -441,10 +436,10 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putInt(int i) {
+    public final ByteList putInt(int i) {
         return putInt(putIndex(4), i);
     }
-    public ByteList putInt(int wi, int i) {
+    public final ByteList putInt(int wi, int i) {
         byte[] list = this.list;
         list[wi++] = (byte) (i >>> 24);
         list[wi++] = (byte) (i >>> 16);
@@ -453,10 +448,10 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putLongLE(long l) {
+    public final ByteList putLongLE(long l) {
         return putLongLE(putIndex(8), l);
     }
-    public ByteList putLongLE(int wi, long l) {
+    public final ByteList putLongLE(int wi, long l) {
         byte[] list = this.list;
         list[wi++] = (byte) l;
         list[wi++] = (byte) (l >>> 8);
@@ -469,10 +464,10 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putLong(long l) {
+    public final ByteList putLong(long l) {
         return putLong(putIndex(8), l);
     }
-    public ByteList putLong(int wi, long l) {
+    public final ByteList putLong(int wi, long l) {
         byte[] list = this.list;
         list[wi++] = (byte) (l >>> 56);
         list[wi++] = (byte) (l >>> 48);
@@ -485,44 +480,44 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putFloat(float f) {
+    public final ByteList putFloat(float f) {
         return putFloat(putIndex(4), f);
     }
-    public ByteList putFloat(int wi, float f) {
+    public final ByteList putFloat(int wi, float f) {
         return putInt(wi, Float.floatToIntBits(f));
     }
 
-    public ByteList putDouble(double d) {
+    public final ByteList putDouble(double d) {
         return putDouble(putIndex(8), d);
     }
-    public ByteList putDouble(int wi, double d) {
+    public final ByteList putDouble(int wi, double d) {
         return putLong(wi, Double.doubleToLongBits(d));
     }
 
-    public ByteList putShort(int s) {
+    public final ByteList putShort(int s) {
         return putShort(putIndex(2), s);
     }
-    public ByteList putShort(int wi, int s) {
+    public final ByteList putShort(int wi, int s) {
         byte[] list = this.list;
         list[wi++] = (byte) (s >>> 8);
         list[wi  ] = (byte) s;
         return this;
     }
 
-    public ByteList putShortLE(int s) {
+    public final ByteList putShortLE(int s) {
         return putShortLE(putIndex(2), s);
     }
-    public ByteList putShortLE(int wi, int s) {
+    public final ByteList putShortLE(int wi, int s) {
         byte[] list = this.list;
         list[wi++] = (byte) s;
         list[wi  ] = (byte) (s >>> 8);
         return this;
     }
 
-    public ByteList putMedium(int m) {
+    public final ByteList putMedium(int m) {
         return putShort(putIndex(3), m);
     }
-    public ByteList putMedium(int wi, int m) {
+    public final ByteList putMedium(int wi, int m) {
         byte[] list = this.list;
         list[wi++] = (byte) (m >>> 16);
         list[wi++] = (byte) (m >>> 8);
@@ -530,10 +525,10 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putChars(CharSequence s) {
+    public final ByteList putChars(CharSequence s) {
         return putChars(putIndex(s.length() << 1), s);
     }
-    public ByteList putChars(int wi, CharSequence s) {
+    public final ByteList putChars(int wi, CharSequence s) {
         byte[] list = this.list;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
@@ -543,7 +538,7 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putIntUTF(CharSequence s) {
+    public final ByteList putIntUTF(CharSequence s) {
         if (s == null) {
             putInt(-1);
             return this;
@@ -560,7 +555,7 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putVarIntUTF(CharSequence s) {
+    public final ByteList putVarIntUTF(CharSequence s) {
         if (s == null) {
             throw new NullPointerException("s");
         }
@@ -568,16 +563,58 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList putUTFData(CharSequence s) {
+    public final ByteList putUTFData(CharSequence s) {
         writeUTF(this, s, -1);
         return this;
     }
 
-    public ByteList putAscii(CharSequence s) {
+    public final ByteList putVIVIC(CharSequence s) {
+        ensureCapacity(wIndex + s.length());
+        int len = s.length();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == 0 || c >= 0x80) {
+                if (c > 0x8000) {
+                    len += 2;
+                } else {
+                    len ++;
+                }
+            }
+        }
+        putVarLong(this, len);
+        return putVICData(s);
+    }
+
+    public final ByteList putVICData(CharSequence s) {
+        ensureCapacity(wIndex + s.length());
+        byte[] list = this.list;
+        int wi = wIndex;
+        for (int i = 0; i < s.length(); i++) {
+            if (wi + 2 >= list.length) {
+                list = this.list = Arrays.copyOf(list, list.length + s.length());
+            }
+
+            char c = s.charAt(i);
+            if (c > 0x8000) {
+                list[wi++] = 0;
+                list[wi++] = (byte) (c >>> 8);
+                list[wi++] = (byte) c;
+            } else if (c == 0 || c >= 0x80) {
+                list[wi++] = (byte) ((c >>> 8) | 0x80);
+                list[wi++] = (byte) c;
+            } else {
+                list[wi++] = (byte) c;
+            }
+        }
+        wIndex = wi;
+        return this;
+    }
+
+    public final ByteList putAscii(CharSequence s) {
         return putAscii(putIndex(s.length()), s);
     }
     @SuppressWarnings("deprecation")
-    public ByteList putAscii(int wi, CharSequence s) {
+    public final ByteList putAscii(int wi, CharSequence s) {
         if (s.getClass() == String.class) {
             s.toString().getBytes(0, s.length(), list, wi);
         } else {
@@ -589,16 +626,16 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return this;
     }
 
-    public ByteList put(ByteBuffer buf) {
+    public final ByteList put(ByteBuffer buf) {
         return put(putIndex(buf.remaining()), buf);
     }
-    public ByteList put(int wi, ByteBuffer buf) {
+    public final ByteList put(int wi, ByteBuffer buf) {
         int rem = buf.remaining();
         buf.get(list, wi, rem);
         return this;
     }
 
-    public void putJavaUTF(CharSequence s) {
+    public final void putJavaUTF(CharSequence s) {
         writeUTF(this, s, 0);
     }
 
@@ -785,8 +822,13 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         int value = 0;
         int i = 0;
 
+        byte[] list = this.list;
+        int off = arrayOffset() + rIndex;
         while (i <= 28) {
-            int chunk = readByte();
+            if (off >= wIndex) throw new ArrayIndexOutOfBoundsException();
+
+            int chunk = list[off++];
+            rIndex++;
             value |= (chunk & 0x7F) << i;
             i += 7;
             if ((chunk & 0x80) == 0) {
@@ -998,6 +1040,39 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return new Slice(list, off + arrayOffset(), len);
     }
 
+    public final String readVIVIC() {
+        return readVIC(readVarInt(false));
+    }
+
+    public final String readVIC(int len) {
+        int off = arrayOffset() + readIndex(len);
+
+        CharList tmp = IOUtil.getSharedCharBuf();
+        tmp.clear();
+        tmp.ensureCapacity(len / 2);
+
+        byte[] list = this.list;
+
+        while (len > 0) {
+            byte b = list[off++];
+
+            if (b == 0) {
+                tmp.append((char) ((list[off++] & 0xFF) << 8 | (list[off++] & 0xFF)));
+                len -= 3;
+            } else if ((b & 0x80) != 0) {
+                tmp.append((char) (((b & 0x7F) << 8) | (list[off++] & 0xFF)));
+                len -= 2;
+            } else {
+                tmp.append((char) b);
+                len -= 1;
+            }
+        }
+
+        if (len < 0) throw new IllegalStateException();
+
+        return tmp.toString();
+    }
+
     @Nonnull
     @Override
     public final String readUTF() throws UTFDataFormatException {
@@ -1185,6 +1260,14 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     }
     // endregion
     // region Ascii Sequence
+
+    public static int FOURCC(CharSequence x) {
+        return ((x.charAt(0) & 0xFF) << 24) |
+                ((x.charAt(1) & 0xFF) << 16) |
+                ((x.charAt(2) & 0xFF) << 8) |
+                ((x.charAt(3) & 0xFF));
+    }
+
     @Override
     public int length() {
         return wIndex - arrayOffset();
@@ -1291,6 +1374,11 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         public void trim() {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public ByteList setArray(byte[] array) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     /**
@@ -1342,6 +1430,11 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         }
 
         @Override
+        public ByteList setArray(byte[] array) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public byte[] toByteArray() {
             byte[] b = new byte[len - off];
             System.arraycopy(list, off, b, 0, b.length);
@@ -1352,7 +1445,9 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     private final class AsInputStream extends InputStream {
         private int pos;
 
-        AsInputStream() {}
+        AsInputStream() {
+            pos = arrayOffset();
+        }
 
         @Override
         public int read() {

@@ -139,4 +139,9 @@ public abstract class BufferedDigest extends MessageDigest implements Cloneable 
             throw new IllegalStateException("Should not happen", e);
         }
     }
+
+    @Override
+    public String toString() {
+        return getAlgorithm() + " Message Digest from RojLib";
+    }
 }

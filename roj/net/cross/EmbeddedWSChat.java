@@ -2,10 +2,8 @@ package roj.net.cross;
 
 import roj.collect.IntMap;
 import roj.collect.LinkedMyHashMap;
-import roj.concurrent.AsyncTest;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.net.WrappedSocket;
 import roj.net.http.Action;
 import roj.net.http.HttpServer;
 import roj.net.http.WebSockets;
@@ -19,8 +17,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author solo6975
@@ -39,44 +37,21 @@ public class EmbeddedWSChat extends WebSockets implements Router {
         w.ch = handle.ch;
         if (zip) w.enableZip();
 
-        handle.setPreCloseCallback(s -> {
-            synchronized (EmbeddedWSChat.class) {
-                try {
-                    if (prev != null) prev.sendExternalLogout("您已在另一窗口登录");
-                    prev = w;
-                    loop.register(Helpers.cast(w), null);
-                    test(w);
-                } catch (Exception e) {
-                    prev = null;
-                    Helpers.athrow(e);
-                }
+        handle.setPreCloseCallback((rh, ok) -> {
+            try {
+                ChatImpl old = prev.getAndSet(w);
+                if (old != null) old.sendExternalLogout("您已在另一窗口登录");
+                loop.register(Helpers.cast(w), null);
+            } catch (Exception e) {
+                prev.set(null);
+                Helpers.athrow(e);
             }
+            return true;
         });
     }
 
-    // region test
-    private void test(WSChat w) {
-        AsyncTest.delay = 0;
-        for (int i = 0; i < 10; i++) {
-            AsyncTest.sched(() -> {
-                w.sendMessage(userMap.get(1000000), randomMessage(), false);
-            }, 1000);
-        }
-    }
-
-    static Random rnd = new Random();
-    static Message randomMessage() {
-        int user = 1 + rnd.nextInt(3);
-        Message m = new Message();
-        m.uid = user;
-        m.text = "bug里怎么有一个程序？";
-        m.time = System.currentTimeMillis();
-        return m;
-    }
-    // endregion test
-
     static IntMap<AbstractUser> userMap = new IntMap<>();
-    static ChatImpl             prev;
+    static AtomicReference<ChatImpl> prev = new AtomicReference<>();
 
     public static void main(String[] args) throws IOException {
         SleepingBeauty.sleep();
@@ -116,8 +91,8 @@ public class EmbeddedWSChat extends WebSockets implements Router {
         SL.name = "圣灵之家";
         SL.desc = "测试JSON数据\n<I>调试模式已经开启!!</I>\n456\n789\nfhdsufygifhsd\nPowered by Async/2.1";
         SL.face = "att/s.png";
-        SL.addUser(B);
-        SL.addUser(J);
+        SL.joinGroup(B);
+        SL.joinGroup(J);
 
         r(A); r(B); r(L); r(J); r(SL);
 
@@ -133,7 +108,7 @@ public class EmbeddedWSChat extends WebSockets implements Router {
     }
 
     @Override
-    public Response response(WrappedSocket ch, Request request, RequestHandler rh) {
+    public Response response(Request request, RequestHandler rh) {
         if (Action.OPTIONS == request.action()) {
             rh.reply(200)
               .header("Access-Control-Allow-Headers: MCTK\r\n" +

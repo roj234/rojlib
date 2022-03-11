@@ -420,7 +420,7 @@ public class TOMLParser extends Parser {
                     } else {
                         if (end3Amount >= 3) {
                             quoted = false;
-                            v.setIndex(v.length() - 3);
+                            v.setLength(v.length() - 3);
                             break;
                         }
                         end3Amount = 0;

@@ -13,11 +13,10 @@
   或者等待我会的时候  
   即使这浪费时间，浪费很多时间，用于本无需的debug等  
   但是我坚持  
-  
-  那么，还有依赖么
-    roj.opengl: LWJGL
-    roj.mod.fp.Helper_XX: md_5/SpecialSource lzma/LZMA
-    当然我还是想插个嘴, 如果你不搞我的世界开发你可以把上面那个类的代码注释了
+
+  ...
+  但是
+  其实啊，还不是不用恰饭，我才高三
   
 ## 这里都有啥  
 ### roj.asm  
@@ -159,6 +158,7 @@
   Stripper 截取小说，或者用CRLF换行文件的指定几行  
   MSSProxier MSS协议代理
   CleanWechat 清除一定时间以前的文件
+  Websocketed 用Websocket执行任意脚本
   
 ### roj.mod  
   广告:
@@ -230,8 +230,7 @@
     其实不如说是个测试工具，math里的不少算法就用它测试，直观极了  
   
 ### roj.pe  
-  PE文件格式 (.exe .dll)  
-  todo: DOS头,  unix的ELF  
+  PE文件格式 (.exe .dll)
   
 ### roj.reflect
   警告：不支持Java9或更高版本,即使

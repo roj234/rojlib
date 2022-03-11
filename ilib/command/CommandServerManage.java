@@ -28,7 +28,6 @@ package ilib.command;
 
 import ilib.command.sub.AbstractSubCommand;
 import io.netty.channel.ChannelHandler;
-import roj.net.WrappedSocket;
 import roj.net.http.serv.*;
 
 import net.minecraft.command.ICommandSender;
@@ -138,7 +137,7 @@ public final class CommandServerManage extends AbstractSubCommand {
 
     private static class ServerManageRouter implements Router {
         @Override
-        public Response response(WrappedSocket ch, Request req, RequestHandler rh) {
+        public Response response(Request req, RequestHandler rh) {
             switch (req.path()) {
                 case "status":
                 case "tps":

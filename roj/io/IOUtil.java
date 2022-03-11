@@ -41,17 +41,17 @@ import java.nio.charset.UnsupportedCharsetException;
  * @since 2021/5/26 0:13
  */
 public class IOUtil {
-    public static final FastThreadLocal<UTFCoder> SharedUTFCoder = FastThreadLocal.withInitial(UTFCoder::new);
+    public static final FastThreadLocal<UTFCoder> SharedCoder = FastThreadLocal.withInitial(UTFCoder::new);
 
     public static ByteList getSharedByteBuf() {
-        ByteList o = SharedUTFCoder.get().byteBuf;
+        ByteList o = SharedCoder.get().byteBuf;
         o.ensureCapacity(1024);
         o.clear();
         return o;
     }
 
     public static CharList getSharedCharBuf() {
-        CharList o = SharedUTFCoder.get().charBuf;
+        CharList o = SharedCoder.get().charBuf;
         o.ensureCapacity(1024);
         o.clear();
         return o;
@@ -93,7 +93,7 @@ public class IOUtil {
     }
 
     public static String readUTF(Class<?> jar, String path) throws IOException {
-        UTFCoder x = SharedUTFCoder.get();
+        UTFCoder x = SharedCoder.get();
         x.keep = false;
         x.byteBuf.clear();
         read1(jar, path, x.byteBuf);
@@ -109,7 +109,7 @@ public class IOUtil {
     }
 
     public static String readUTF(InputStream in) throws IOException {
-        UTFCoder x = SharedUTFCoder.get();
+        UTFCoder x = SharedCoder.get();
         x.keep = false;
         x.byteBuf.clear();
         x.byteBuf.readStreamFully(in);

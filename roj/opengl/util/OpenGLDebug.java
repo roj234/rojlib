@@ -313,7 +313,7 @@ public class OpenGLDebug {
             getPropertyAsString(i, sb);
             sb.append('\n').append(" (").append(properties[i].description).append(")");
             arr[i] = sb.toString();
-            sb.setIndex(0);
+            sb.setLength(0);
         }
         return arr;
     }

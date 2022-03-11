@@ -170,7 +170,7 @@ public final class NetworkUtil {
         for (int i = 0; i < 8; i ++) {
             sb.append(Integer.toHexString((0xFF & bytes[off++]) << 8 | (bytes[off++] & 0xFF))).append(':');
         }
-        sb.setIndex(sb.length() - 1);
+        sb.setLength(sb.length() - 1);
 
         return sb.toString();
     }

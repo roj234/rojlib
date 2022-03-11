@@ -43,7 +43,7 @@ class HttpInputStream {
 
         String TE = header.headers.get("Transfer-Encoding");
         if ("chunked".equalsIgnoreCase(TE)) {
-            in = new ChunkedInputStream(sin, header.headers);
+            in = new ChunkedInputStream(sin, /*header.headers*/null);
         }
 
         String CE = (header.headers.getOrDefault("Content-Encoding", "identity")).toLowerCase();

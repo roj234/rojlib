@@ -911,7 +911,9 @@ public abstract class MathUtils {
         return (int) result;
     }
 
-    public static boolean parseIntErrorable(CharSequence s, int[] radixAndReturn) {
+    public static boolean parseIntOptional(CharSequence s, int[] radixAndReturn) {
+        if (s == null) return false;
+
         long result = 0;
         int radix = radixAndReturn[0];
 

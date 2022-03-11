@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.util.ByteList;
 
@@ -116,5 +117,10 @@ public final class CNull extends CEntry {
     @Override
     public int hashCode() {
         return 348764;
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.valueNull();
     }
 }

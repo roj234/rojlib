@@ -362,7 +362,6 @@ public class NiximSystem {
                 if (s.assignId != null) {
                     int size = insn2.size();
                     for (Int2IntMap.Entry entry : s.assignId.entrySet()) {
-                        // todo check key index?
                         int tKey = entry.getKey() - 1 + pl;
                         NodeHelper.compress(insn2, (byte) (entry.v - (ISTORE - ILOAD)), tKey);
                         NodeHelper.compress(insn2, (byte) entry.v, entry.getKey());

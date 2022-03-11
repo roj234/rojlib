@@ -86,7 +86,7 @@ public final class Proc1_16 extends Processor {
                 }
 
                 forge.append(s);
-                forge.setIndex(forge.length() - 4);
+                forge.setLength(forge.length() - 4);
                 break;
             }
         }
@@ -105,7 +105,7 @@ public final class Proc1_16 extends Processor {
 
         File forgeInstaller;
         try {
-            forge.setIndex(len);
+            forge.setLength(len);
             String forgeInst = forge.append("-installer.jar").toString();
             String instUrl = CONFIG.getString("ForgeMaven仓库地址") + forgeInst;
             MCLauncher.downloadAndVerifyMD5(instUrl, forgeInstaller = new File(TMP_DIR, forgeInst.substring(
@@ -116,9 +116,9 @@ public final class Proc1_16 extends Processor {
             return null;
         }
 
-        forge.setIndex(len);
+        forge.setLength(len);
         File forgeNormal = new File(librariesPath, forge.append(".jar").toString());
-        forge.setIndex(len);
+        forge.setLength(len);
         File forgeUniversal = new File(librariesPath, forge.append("-universal.jar").toString());
 
         InputStream server_lzma;

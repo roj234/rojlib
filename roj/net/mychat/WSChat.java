@@ -5,6 +5,7 @@ import roj.concurrent.PacketBuffer;
 import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
+import roj.config.serial.ToJson;
 import roj.net.http.WebSockets;
 import roj.text.CharList;
 import roj.text.UTFCoder;
@@ -32,6 +33,7 @@ public abstract class WSChat extends WebSockets.Worker {
     static final int USE_BINARY = 32, FIRST_HEART = 64;
 
     private JSONParser.JSONLexer jl;
+    private byte flag2;
 
     protected final IntSet known = new IntSet();
     protected final PacketBuffer pb = new PacketBuffer(true, 0);
@@ -54,7 +56,8 @@ public abstract class WSChat extends WebSockets.Worker {
                     suchLarge.flip();
                 }
 
-                send((flag & USE_BINARY) != 0 ? FRAME_BINARY : FRAME_TEXT, suchLarge);
+                send(((flag2 & COMPRESS_AVAILABLE) != 0 && suchLarge.limit() > 100 ? RSV_COMPRESS : 0) |
+                     ((flag2 & USE_BINARY) != 0 ? FRAME_BINARY : FRAME_TEXT), suchLarge);
             }
         } else if (shutdownInProgress) error(ERR_OK, null);
     }
@@ -68,7 +71,7 @@ public abstract class WSChat extends WebSockets.Worker {
         if (ph == FRAME_TEXT) {
             jsonPacket(in);
         } else {
-            flag |= USE_BINARY;
+            flag2 |= USE_BINARY;
             binaryPacket(in);
         }
     }
@@ -81,9 +84,9 @@ public abstract class WSChat extends WebSockets.Worker {
             case P_HEARTBEAT:
                 in.rewind();
                 send(FRAME_BINARY, in);
-                if ((flag & FIRST_HEART) == 0) {
+                if ((flag2 & FIRST_HEART) == 0) {
                     init();
-                    flag |= FIRST_HEART;
+                    flag2 |= FIRST_HEART;
                 }
                 break;
             case P_USER_INFO:
@@ -128,9 +131,9 @@ public abstract class WSChat extends WebSockets.Worker {
                 case P_HEARTBEAT:
                     in.rewind();
                     send(FRAME_TEXT, in);
-                    if ((flag & FIRST_HEART) == 0) {
+                    if ((flag2 & FIRST_HEART) == 0) {
                         init();
-                        flag |= FIRST_HEART;
+                        flag2 |= FIRST_HEART;
                     }
                     break;
                 case P_USER_INFO:
@@ -182,15 +185,18 @@ public abstract class WSChat extends WebSockets.Worker {
 
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             user.put(b.put((byte) P_USER_INFO));
         } else {
-            CMapping map = new CMapping();
-            map.put("act", P_USER_INFO);
-            user.cStore();
-            map.merge(user, true, false);
-            b = asyncUC.encodeR(map.toShortJSONb());
+            ToJson ser = new ToJson();
+            ser.valueMap();
+
+            ser.key("act");
+            ser.value(P_USER_INFO);
+
+            user.put(ser);
+            asyncUC.encodeR(ser.getValue());
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));
     }
@@ -199,25 +205,34 @@ public abstract class WSChat extends WebSockets.Worker {
 
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             b.put((byte) P_ROOM_STATE).putInt(groupId);
             if (add) {
                 user.put(b);
             } else {
-                b.putInt(user.getInteger("id"));
+                b.putInt(user.id);
             }
         } else {
-            CMapping map = new CMapping();
-            map.put("act", P_ROOM_STATE);
-            map.put("id", groupId);
+            ToJson ser = new ToJson();
+            ser.valueMap();
+
+            ser.key("act");
+            ser.value(P_ROOM_STATE);
+
+            ser.key("id");
+            ser.value(groupId);
+
             if (add) {
-                user.cStore();
-                map.put("user", user);
+                ser.key("user");
+                ser.valueMap();
+                user.put(ser);
+                ser.pop();
             } else {
-                map.put("uid", user.getInteger("id"));
+                ser.key("uid");
+                ser.value(user.id);
             }
-            asyncUC.encodeR(map.toShortJSONb());
+            asyncUC.encodeR(ser.getValue());
         }
         pb.offer(ByteBuffer.wrap(b.list, 0, b.wIndex()));
     }
@@ -226,7 +241,7 @@ public abstract class WSChat extends WebSockets.Worker {
 
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             b.put((byte) P_DATA_CHANGED).putInt(userId);
         } else {
@@ -240,7 +255,7 @@ public abstract class WSChat extends WebSockets.Worker {
     public final void sendOnlineState(int userId, byte online) {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             b.put((byte) P_USER_STATE).putInt(userId).put(online);
         } else {
@@ -262,7 +277,7 @@ public abstract class WSChat extends WebSockets.Worker {
     private void sendUTF(String utf, int id) {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             ByteList.writeUTF(b.put((byte) id), utf, -1);
         } else {
@@ -280,7 +295,7 @@ public abstract class WSChat extends WebSockets.Worker {
 
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             ByteList.writeUTF(b.put((byte) (sys ? P_SYS_MESSAGE : P_MESSAGE))
                                .putInt(userId).putInt(message.uid).putLong(message.time), message.text, -1);
@@ -301,7 +316,7 @@ public abstract class WSChat extends WebSockets.Worker {
     public final void sendNotLogin() {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             b.put((byte) P_LOGIN);
         } else {
@@ -314,7 +329,7 @@ public abstract class WSChat extends WebSockets.Worker {
     public final void sendSpaceChanged() {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             b.put((byte) P_SPACE_NEW);
         } else {
@@ -327,7 +342,7 @@ public abstract class WSChat extends WebSockets.Worker {
     public final void sendHistory(int userId, int total, List<Message> msgs) {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             b.put((byte) P_GET_HISTORY).putInt(userId).putInt(total).putInt(msgs.size());
             for (int i = 0; i < msgs.size(); i++) {
@@ -356,7 +371,7 @@ public abstract class WSChat extends WebSockets.Worker {
     public final void sendNewFriend(int userId, String text) {
         UTFCoder asyncUC = WebSockets.getUTFCoder();
         ByteList b = asyncUC.byteBuf;
-        if ((flag & USE_BINARY) != 0) {
+        if ((flag2 & USE_BINARY) != 0) {
             b.clear();
             ByteList.writeUTF(b.put((byte) P_NEW_FRIEND), text, -1);
             b.putInt(userId);

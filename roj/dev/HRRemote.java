@@ -19,7 +19,6 @@ import java.nio.channels.SelectionKey;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 
 /**
  * 热重载,支持一对多
@@ -133,7 +132,6 @@ public class HRRemote extends FDCLoop<HRRemote.Client> {
     }
 
     public void start() throws IOException {
-        Consumer<Client> remove = clients::remove;
         registerListener(new Listener(socket) {
             @Override
             public void selected(int readyOps) throws Exception {
@@ -141,7 +139,7 @@ public class HRRemote extends FDCLoop<HRRemote.Client> {
                 Client t = new Client();
                 t.ch = new PlainSocket(soc, NIOUtil.fd(soc));
                 try {
-                    register(t, remove);
+                    register(t, null);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

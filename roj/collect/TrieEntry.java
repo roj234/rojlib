@@ -316,7 +316,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable {
         public boolean computeNext() {
             boolean v = super._computeNextDepthFirst();
             if (v) {
-                seq.setIndex(i);
+                seq.setLength(i);
                 // j = 1: skip root entry
                 for (int j = 1; j < a.size; j++) {
                     a.get(j).append(seq);

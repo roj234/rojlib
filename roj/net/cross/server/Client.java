@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.Iterator;
-import java.util.function.Consumer;
 
 import static roj.net.cross.Util.*;
 import static roj.net.cross.server.AEServer.server;
@@ -23,7 +22,7 @@ import static roj.net.cross.server.AEServer.server;
  * @author Roj233
  * @since 2022/1/24 3:21
  */
-public final class Client extends FDChannel implements Selectable, Consumer<Client> {
+public final class Client extends FDChannel implements Selectable {
     Room room;
     int  clientId;
 
@@ -146,7 +145,7 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
                 synchronized (pipes) {
                     for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
                         PipeGroup pair = itr.next();
-                        if (pair.pairRef.idleTime > AEServer.PIPE_TIMEOUT) {
+                        if (pair.pairRef == null || pair.pairRef.idleTime > AEServer.PIPE_TIMEOUT) {
                             itr.remove();
                             pair.close(-2);
                         }
@@ -215,12 +214,6 @@ public final class Client extends FDChannel implements Selectable, Consumer<Clie
         if (key != null) key.cancel();
         ch = null;
         server.remain.getAndIncrement();
-    }
-
-    @Override
-    public void accept(Client client) {
-        assert client == this;
-        close();
     }
 
     private final PacketBuffer packets = new PacketBuffer();

@@ -248,13 +248,11 @@ public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K
     @SuppressWarnings("unchecked")
     protected void resize() {
         Entry<?, ?>[] newEntries = new Entry<?, ?>[length];
-        Entry<K, V> entry;
-        Entry<K, V> next;
         int i = 0, j = entries.length;
         for (; i < j; i++) {
-            entry = (Entry<K, V>) entries[i];
+            Entry<K, V> entry = (Entry<K, V>) entries[i];
             while (entry != null) {
-                next = entry.next;
+                Entry<K, V> next = entry.next;
                 int newKey = indexFor(entry.k);
                 Entry<K, V> old = (Entry<K, V>) newEntries[newKey];
                 newEntries[newKey] = entry;
@@ -378,11 +376,13 @@ public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K
 
     public Entry<K, V> getEntry(K id) {
         Entry<K, V> entry = getEntryFirst(id, false);
+        //int i = 99;
         while (entry != null) {
             if (Objects.equals(id, entry.k)) {
                 return entry;
             }
             entry = entry.next;
+            //if (i-- == 0) throw new ConcurrentModificationException();
         }
         return null;
     }
@@ -391,12 +391,14 @@ public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K
         Entry<K, V> entry = getEntryFirst(id, true);
         if (entry.v == NOT_USING)
             return entry;
+        //int i = 99;
         while (true) {
             if (Objects.equals(id, entry.k))
                 return entry;
             if (entry.next == null)
                 break;
             entry = entry.next;
+            //if (i-- == 0) throw new ConcurrentModificationException();
         }
         Entry<K, V> firstUnused = getCachedEntry(id);
         entry.next = firstUnused;
@@ -417,17 +419,10 @@ public class MyHashMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K
             entries = new Entry<?, ?>[length];
         }
         Entry<K, V> entry;
-        //try {
-            if ((entry = (Entry<K, V>) entries[i]) == null) {
-                if (!create) return null;
-                entries[i] = entry = getCachedEntry(id);
-            }
-        //} catch (ArrayIndexOutOfBoundsException e) {
-        //    System.err.println("Note " + i + " of " + id +  " at " + length);
-        //    System.out.println(this);
-        //    System.exit(-1);
-        //    throw e;
-        //}
+        if ((entry = (Entry<K, V>) entries[i]) == null) {
+            if (!create) return null;
+            entries[i] = entry = getCachedEntry(id);
+        }
         return entry;
     }
 

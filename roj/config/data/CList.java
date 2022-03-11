@@ -31,6 +31,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.serial.Serializer;
 import roj.config.serial.Serializers;
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.util.ByteList;
@@ -63,12 +64,12 @@ public class CList extends CEntry implements Iterable<CEntry> {
         return CEntry.wrap(objects).asList();
     }
 
-    static CList _fromBinary(int type, ByteList r, Structs s) {
+    static CList _fromBinary(int type, ByteList r, Structs s, Serializers ser) {
         int cap = r.readVarInt(false);
         List<CEntry> list = new ArrayList<>(cap);
         if (type == 0) {
             while (cap-- > 0)
-                list.add(fromBinary(r, s));
+                list.add(fromBinary(r, s, ser));
         } else {
             switch (Type.VALUES[--type]) {
                 case BOOL:
@@ -93,7 +94,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
                         if (s != null) {
                             int rid = r.readUnsignedByte();
                             if (rid != Type.MAP.ordinal()) {
-                                CMapping m = s.fromBinary(rid, r);
+                                CMapping m = s.fromBinary(rid, r, ser);
                                 if (m == null)
                                     throw new IllegalArgumentException("Illegal struct descriptor");
                                 list.add(m);
@@ -104,7 +105,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
                         int cap1 = r.readVarInt(false);
                         Map<String, CEntry> map = new MyHashMap<>(cap1);
                         while (cap1-- > 0) {
-                            map.put(r.readVarIntUTF(), fromBinary(r, s));
+                            map.put(r.readVIVIC(), fromBinary(r, s, ser));
                         }
 
                         CEntry x = map.get("==");
@@ -128,7 +129,19 @@ public class CList extends CEntry implements Iterable<CEntry> {
                     break;
                 case STRING:
                     while (cap-- > 0)
-                        list.add(CString.valueOf(r.readVarIntUTF()));
+                        list.add(CString.valueOf(r.readVIVIC()));
+                    break;
+                case Int1:
+                    while (cap-- > 0)
+                        list.add(CByte.valueOf(r.readByte()));
+                    break;
+                case Int2:
+                    while (cap-- > 0)
+                        list.add(CShort.valueOf(r.readShort()));
+                    break;
+                case Float4:
+                    while (cap-- > 0)
+                        list.add(CFloat.valueOf(r.readFloat()));
                     break;
                 case LIST:
                 default:
@@ -409,6 +422,15 @@ public class CList extends CEntry implements Iterable<CEntry> {
                 case STRING:
                     w.putVarIntUTF(el.asString());
                     break;
+                case Int1:
+                    w.put((byte) el.asInteger());
+                    break;
+                case Int2:
+                    w.putShort(el.asInteger());
+                    break;
+                case Float4:
+                    w.putFloat((float) el.asDouble());
+                    break;
             }
         }
         if (bvi != 8) {
@@ -429,5 +451,15 @@ public class CList extends CEntry implements Iterable<CEntry> {
     @Override
     public final int hashCode() {
         return list != null ? list.hashCode() : 0;
+    }
+
+    @Override
+    public final void serialize(StreamSerializer ser) {
+        ser.valueList();
+        List<CEntry> l = this.list;
+        for (int i = 0; i < l.size(); i++) {
+            l.get(i).serialize(ser);
+        }
+        ser.pop();
     }
 }

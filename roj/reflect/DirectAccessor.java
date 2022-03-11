@@ -432,7 +432,7 @@ public final class DirectAccessor<T> {
                 sb.append(names[i]).append(" (").append(ParamHelper.class2asm(
                         tm.getParameterTypes(), void.class)).append(")").append("\n    ");
             }
-            sb.setIndex(sb.length() - 5);
+            sb.setLength(sb.length() - 5);
         }
 
         String tName = target.getName().replace('.', '/');
@@ -673,7 +673,7 @@ public final class DirectAccessor<T> {
                 sb.append(tm).append(" => ").append(selfNames[i]).append(" (").append(ParamHelper.class2asm(
                         tm.getParameterTypes(), tm.getReturnType())).append(")").append("\n    ");
             }
-            sb.setIndex(sb.length() - 5);
+            sb.setLength(sb.length() - 5);
         }
 
         String tName = target.getName().replace('.', '/');
@@ -837,7 +837,7 @@ public final class DirectAccessor<T> {
                 Field tf = fieldFs[i];
                 sb.append(tf.getName()).append(' ').append(tf.getType().getName()).append(" => [").append(getterMs[i]).append(", ").append(setterMs[i]).append("\n    ");
             }
-            sb.setIndex(sb.length() - 5);
+            sb.setLength(sb.length() - 5);
         }
 
         String tName = target.getName().replace('.', '/');

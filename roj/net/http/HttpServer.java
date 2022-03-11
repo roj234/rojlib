@@ -78,7 +78,11 @@ public class HttpServer extends Listener {
     }
 
     public void start() throws IOException {
-        loop.registerListener(this);
+        try {
+            loop.registerListener(this);
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
     }
 
     public void stop() throws IOException {

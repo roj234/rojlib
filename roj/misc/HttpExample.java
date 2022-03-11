@@ -48,13 +48,12 @@ public class HttpExample {
         ChunkedFile pt = new ChunkedFile(new File("E:/1.bin"));
 
         SleepingBeauty.sleep();
-        HttpServer server = new HttpServer(new InetSocketAddress(2333), 2048,
-                                           (ch, request, handle) -> {
+        HttpServer server = new HttpServer(new InetSocketAddress(2333), 2048, (request, handle) -> {
             int action = request.action();
 
             switch (request.path()) {
                 case "/favicon.ico":
-                    return handle.reply(404).nullResponse();
+                    return handle.reply(404).returnNull();
                 case "/":
                 case "":
                     StringBuilder sb = new StringBuilder().append("<h1>Server: Async/2.0</h1>");
@@ -69,7 +68,7 @@ public class HttpExample {
                 case "/file":
                     return gzc;
                 case "/pt":
-                    return pt.response(ch, request, handle);
+                    return pt.response(request, handle);
                 case "/mem":
                     return new StringResponse(getMemory(), "text/plain");
                 default:

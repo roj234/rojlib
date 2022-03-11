@@ -560,7 +560,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
         for (TrieEntry entry : parent) {
             entry.append(sb);
             recursionEntry((Entry) entry, consumer, sb);
-            sb.setIndex(sb.length() - entry.length());
+            sb.setLength(sb.length() - entry.length());
         }
     }
 

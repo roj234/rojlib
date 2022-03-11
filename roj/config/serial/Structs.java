@@ -212,7 +212,7 @@ public class Structs {
         return true;
     }
 
-    public CMapping fromBinary(int rid, ByteList r) {
+    public CMapping fromBinary(int rid, ByteList r, Serializers ser) {
         if (mask != 0) throw new IllegalStateException("Not at read state");
         if (rid != 255 && DECODE_MAP[rid] == 0) return null;
 
@@ -240,7 +240,7 @@ public class Structs {
         MyHashMap<String, CEntry> ent = (MyHashMap<String, CEntry>) dst.raw();
         ent.ensureCapacity(s.length);
         for (String value : s) {
-            ent.put(value, CEntry.fromBinary(r, this));
+            ent.put(value, CEntry.fromBinary(r, this, ser));
         }
 
         return dst;

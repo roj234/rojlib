@@ -32,7 +32,7 @@ import java.util.concurrent.*;
  * @author solo6975
  * @since 2021/7/24 10:25
  */
-public abstract class AbstractExecutionTask implements ITask, Future<Void>, Runnable {
+public abstract class AbstractExecutionTask implements ITask, Future<Void> {
     protected boolean done, canceled;
     protected ExecutionException exception;
 
@@ -65,7 +65,7 @@ public abstract class AbstractExecutionTask implements ITask, Future<Void>, Runn
         }
     }
 
-    public abstract void run();
+    public abstract void run() throws Throwable;
 
     @Override
     public boolean isDone() {

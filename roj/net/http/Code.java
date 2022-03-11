@@ -56,7 +56,7 @@ public final class Code {
         return codes.get((char) code);
     }
 
-    private static final CharMap<String> codes = new CharMap<>();
+    public static final CharMap<String> codes = new CharMap<>();
 
     static {
         codes.put((char) 100, "Continue");
@@ -94,6 +94,7 @@ public final class Code {
         codes.put((char) 415, "Unsupported Media Type");
         codes.put((char) 416, "Requested Range Not Satisfiable");
         codes.put((char) 417, "Expectation Failed");
+        codes.put((char) 426, "Upgrade Required");
         codes.put((char) 500, "Internal Server Error");
         codes.put((char) 501, "Not Implemented");
         codes.put((char) 502, "Bad Gateway");

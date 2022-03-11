@@ -485,35 +485,6 @@ public class MethodPoet extends Interpreter {
         return this;
     }
 
-    public MethodPoet if1() {
-        /**
-         *
-         LCMP = (byte) 0X94,
-         FCMPL = (byte) 0X95,
-         FCMPG = (byte) 0X96,
-         DCMPL = (byte) 0X97,
-         DCMPG = (byte) 0X98,
-
-         // Condition / Jump
-         IFEQ = (byte) 0x99,
-         IFNE = (byte) 0x9a,
-         IFLT = (byte) 0x9b,
-         IFGE = (byte) 0x9c,
-         IFGT = (byte) 0x9d,
-         IFLE = (byte) 0x9e,
-         IF_icmpeq = (byte) 0x9f,
-         IF_icmpne = (byte) 0xa0,
-         IF_icmplt = (byte) 0xa1,
-         IF_icmpge = (byte) 0xa2,
-         IF_icmpgt = (byte) 0xa3,
-         IF_icmple = (byte) 0xa4,
-         IF_acmpeq = (byte) 0xa5,
-         IF_acmpne = (byte) 0xa6,
-         */
-        // todo
-        throw new UnsupportedOperationException();
-    }
-
     public MethodPoet goto1(LabelInsnNode label) {
         insn.add(new GotoInsnNode(label));
         return this;

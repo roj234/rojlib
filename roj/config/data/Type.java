@@ -34,8 +34,9 @@ package roj.config.data;
 public enum Type {
     LIST, MAP, STRING, NULL, BOOL,
     INTEGER, LONG, DOUBLE, OBJECT,
-    DATE, UNESCAPED_STRING;
-    // todo byte short float and primitive array....
+    DATE, UNESCAPED_STRING,
+    Int1, Int2, Float4, ARRAY;
+    // 15个了，还差一个...
 
     public static final Type[] VALUES = values();
 
@@ -51,7 +52,22 @@ public enum Type {
             case LONG:
             case DOUBLE:
             case DATE:
-                return type == DOUBLE || type == INTEGER || type == BOOL || type == STRING || type == LONG;
+            case Int1:
+            case Int2:
+            case Float4:
+                switch (type) {
+                    case STRING:
+                    case BOOL:
+                    case INTEGER:
+                    case LONG:
+                    case DOUBLE:
+                    case Int1:
+                    case Int2:
+                    case Float4:
+                        return true;
+                    default:
+                        return false;
+                }
             case NULL:
                 return false;
             case MAP:

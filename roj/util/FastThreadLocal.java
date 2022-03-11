@@ -61,7 +61,7 @@ public class FastThreadLocal<T> {
         }
     }
 
-    private final int seqNum;
+    public final int seqNum;
 
     public FastThreadLocal() {
         synchronized (slowGetter) {
@@ -141,7 +141,7 @@ public class FastThreadLocal<T> {
         getDataHolder(seqNum)[seqNum] = v;
     }
 
-    protected static Object[] getDataHolder(int seqNum) {
+    public static Object[] getDataHolder(int seqNum) {
         Thread t = Thread.currentThread();
         if(t instanceof FastLocalThread) {
             FastLocalThread t1 = (FastLocalThread) t;

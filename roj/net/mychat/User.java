@@ -1,12 +1,12 @@
 package roj.net.mychat;
 
-import roj.collect.IntMap;
-import roj.collect.IntSet;
-import roj.collect.RingBuffer;
+import roj.collect.*;
+import roj.config.serial.StreamSerializer;
 import roj.io.BoxFile;
 import roj.util.ByteList;
 
 import java.util.PrimitiveIterator.OfInt;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
@@ -14,16 +14,33 @@ import java.util.PrimitiveIterator.OfInt;
  */
 public class User extends AbstractUser {
     public String username;
+    public byte[] salt = new byte[16];
+    public long since, amount;
 
-    // 存储最近的一百条未接收消息
-    public RingBuffer<Message> c2c = new RingBuffer<>(100);
+    // 存储最近的N条未接收消息
+    public RingBuffer<Message> c2c = new RingBuffer<>(100, true);
 
-    public IntSet friendsSet = new IntSet(), managedGroups, blocked;
-    public IntMap<String> pendingAdd = new IntMap<>();
-    public WSChat worker;
-    public IntSet joinedGroups = new IntSet(), manageGroups;
+    // friends由friendsGroup反序列化时顺便填充
+    private MyHashMap<String, IntSet> friendsGroup = new MyHashMap<>();
+    public IntSet friends = new IntSet(),
+                  joinedGroups = new IntSet(),
+                  manageGroups = new IntSet();
+
+    // flag为有关在线状态的,且共享给所有用户
+    // flag2为其他状态位,如隐身,是否允许加好友等
+    public int flag2;
+
+    public TimeCounter   attachCounter = new TimeCounter(60000);
+    public AtomicInteger largeConn     = new AtomicInteger();
+    public TimeCounter   imgCounter    = new TimeCounter(30000);
+
+    // 对于其他用户的标志
+    private Int2IntMap userProp = new Int2IntMap();
+    private IntMap<String> pendingAdd = new IntMap<>();
 
     private BoxFile history;
+
+    public volatile WSChat worker;
 
     public User() {
         //try {
@@ -34,23 +51,27 @@ public class User extends AbstractUser {
     }
 
     public void onLogon(Context c, WSChat w) {
-        if (worker != null) {
-            worker.sendExternalLogout("您已在另一窗口登录");
+        synchronized (this) {
+            if (worker != null) {
+                worker.sendExternalLogout("您已在另一窗口登录");
+            }
+            worker = w;
         }
-        worker = w;
 
         for (IntMap.Entry<String> friendNew : pendingAdd.entrySet()) {
-
+            String v = friendNew.getValue();
+            if (v == null) continue;
+            w.sendNewFriend(friendNew.getKey(), v);
+            friendNew.setValue(null);
         }
-        pendingAdd.clear();
 
-        flag |= User.F_ONLINE;
-        for (OfInt itr = friendsSet.iterator(); itr.hasNext(); ) {
-            int i = itr.nextInt();
-            User u1 = (User) c.getUser(i);
-            if (u1.worker != null) {
-                u1.worker.sendOnlineState(id, flag);
-            }
+        for (Message msg : c2c) {
+            w.sendMessage(c.getUser(msg.uid), msg, false);
+        }
+
+        if ((flag & F_HIDDEN) == 0) {
+            flag |= User.F_ONLINE;
+            updateOnlineState(c);
         }
 
         for (OfInt itr = joinedGroups.iterator(); itr.hasNext(); ) {
@@ -61,15 +82,14 @@ public class User extends AbstractUser {
     }
 
     public void onLogout(Context c, WSChat w) {
-        worker = null;
+        synchronized (this) {
+            if (w != worker) return;
+            worker = null;
+        }
 
-        flag &= ~User.F_ONLINE;
-        for (OfInt itr = friendsSet.iterator(); itr.hasNext(); ) {
-            int i = itr.nextInt();
-            User u1 = (User) c.getUser(i);
-            if (u1.worker != null) {
-                u1.worker.sendOnlineState(id, flag);
-            }
+        if ((flag & F_HIDDEN) == 0) {
+            flag &= ~User.F_ONLINE;
+            updateOnlineState(c);
         }
 
         for (OfInt itr = joinedGroups.iterator(); itr.hasNext(); ) {
@@ -79,8 +99,51 @@ public class User extends AbstractUser {
         }
     }
 
+    public void onDataChanged(Context c) {
+        for (OfInt itr = friends.iterator(); itr.hasNext(); ) {
+            int uid = itr.nextInt();
+            User u1 = (User) c.getUser(uid);
+            if (u1.worker != null) {
+                u1.worker.sendDataChanged(id);
+            }
+        }
+    }
+
+    public void setUserState(int state, String text) {
+
+    }
+
+    private void updateOnlineState(Context c) {
+        for (OfInt itr = friends.iterator(); itr.hasNext(); ) {
+            int uid = itr.nextInt();
+            // 在线对其隐身
+            if ((userProp.getOrDefault(uid, 0) & P_HIDDEN) != 0)
+                return;
+            User u1 = (User) c.getUser(uid);
+            if (u1.worker != null) {
+                u1.worker.sendOnlineState(id, flag);
+            }
+        }
+        if (worker != null) {
+            worker.sendOnlineState(id, flag);
+        }
+    }
+
     public void postMessage(Context c, Message m, boolean s) {
         if (m.uid == id) return;
+        if (!s && (flag & F_ANYCHAT) == 0 && !friends.contains(m.uid)) {
+            c.getUser(m.uid)
+             .postMessage(c, new Message(id, "[Tr]not_friend[/Tr]"), true);
+            return;
+        }
+
+        int oFlg = userProp.getOrDefault(m.uid, 0);
+        // 忽略ta发来的消息
+        if ((oFlg & P_IGNORE) != 0) return;
+        // 特别关心
+        //if ((oFlg & P_CARE) != 0) {
+        //
+        //}
 
         WSChat w = worker;
         if (w != null) {
@@ -90,7 +153,33 @@ public class User extends AbstractUser {
         }
     }
 
-    public static final byte F_ONLINE = 1, F_ALWAYS_OFFLINE = 2, F_NOT_SEE_ME = 4, F_NOT_SEE_HIM = 8, F_BLOCKED = 16;
+    public String addFriend(int fr, String reason) {
+        if (friends.contains(fr)) return "already_friend";
+        int oFlg = userProp.getOrDefault(fr, 0);
+        if ((oFlg & P_BLOCKED) != 0) return "blocked";
+        if (pendingAdd.containsKey(fr)) return "add_pending";
+        if (pendingAdd.size() > 50) return "too_many_adding";
+
+        WSChat w = worker;
+        if (w != null) {
+            w.sendNewFriend(fr, reason);
+            pendingAdd.put(fr, null);
+        } else {
+            pendingAdd.put(fr, reason);
+        }
+
+        return null;
+    }
+
+    public static final byte F_ONLINE = 1, F_HIDDEN = 2, F_ANYCHAT = 4;
+    // P_BLOCKED: checkBySelf
+    // P_NOT_SEE_IT: checkBySelf
+    // P_CARE: checkBySelf
+    // P_IGNORE: checkByBoth
+    // P_NOT_SEE_ME: checkByOther
+    // P_HIDDEN: checkByOther
+    public static final byte P_BLOCKED = 1, P_NOT_SEE_IT = 2, P_NOT_SEE_ME = 4, P_HIDDEN = 8,
+                             P_CARE = 16, P_IGNORE = 32;
 
     @Override
     public void put(ByteList b) {
@@ -102,14 +191,24 @@ public class User extends AbstractUser {
     }
 
     @Override
-    public AbstractUser cStore() {
-        put("id", id);
-        put("name", name);
-        put("username", "");
-        put("face", face);
-        put("desc", desc);
-        put("online", flag);
-        return this;
+    public void put(StreamSerializer ser) {
+        ser.key("id");
+        ser.value(id);
+
+        ser.key("name");
+        ser.value(name);
+
+        ser.key("username");
+        ser.value("");
+
+        ser.key("face");
+        ser.value(face);
+
+        ser.key("desc");
+        ser.value(desc);
+
+        ser.key("online");
+        ser.value(flag);
     }
 
     @Override

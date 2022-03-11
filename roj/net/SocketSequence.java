@@ -86,6 +86,7 @@ public final class SocketSequence implements CharSequence {
                 }
 
                 int read = ch.read();
+                buf = ch.buffer();
                 if (read == 0) {
                     if(async) throw OperationDone.INSTANCE;
                     LockSupport.parkNanos(10000);

@@ -26,6 +26,7 @@
 package roj.config.data;
 
 import roj.config.YAMLParser;
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.config.word.AbstLexer;
 import roj.math.MathUtils;
@@ -165,6 +166,11 @@ public final class CString extends CEntry {
 
     @Override
     public void toBinary(ByteList w, Structs struct) {
-        w.put((byte) Type.STRING.ordinal()).putVarIntUTF(value);
+        w.put((byte) Type.STRING.ordinal()).putVIVIC(value);
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.value(value);
     }
 }

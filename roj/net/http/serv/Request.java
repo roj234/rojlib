@@ -25,30 +25,55 @@
  */
 package roj.net.http.serv;
 
-import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.io.IOUtil;
 import roj.math.Version;
+import roj.net.http.Action;
 import roj.net.http.Headers;
 import roj.net.http.HttpLexer;
+import roj.security.SipHashMap;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public final class Request {
+    public static final String CTX_POST_HANDLER = "PH";
+
     private final int action;
     private final String path, version;
     final Headers headers;
 
     Object postFields, getFields;
     private Map<String, String> cookie;
+
+    private Map<String, Object> ctx;
+    RequestHandler.Local local;
+    RequestHandler handler;
+
+    public Map<String, Object> ctx() {
+        if (ctx == null) ctx = new MyHashMap<>(4);
+        return ctx;
+    }
+
+    public Map<String, Object> threadLocalCtx() {
+        return local.ctx;
+    }
+
+    public RequestHandler.Local threadLocal() {
+        return local;
+    }
+
+    public RequestHandler handler() {
+        return handler;
+    }
 
     Request(int action, String version, String path) {
         this.action = action;
@@ -60,7 +85,7 @@ public final class Request {
             this.getFields = path.substring(qo+1);
         } else {
             this.path = path;
-            this.getFields = Collections.emptyMap();
+            this.getFields = new MyHashMap<>();
         }
         this.headers = new Headers();
     }
@@ -85,63 +110,49 @@ public final class Request {
         return headers;
     }
 
-    @Nullable
     public Map<String, String> payloadFields() {
-        if (postFields instanceof CharSequence) {
-            CharSequence pf = (CharSequence) postFields;
-            if (pf instanceof ByteList) {
-                String ct = headers.getOrDefault("Content-Type", "");
-                if (ct.startsWith("multipart")) {
-                    Map<String, Object> fields = convertToFields(payloadMultipart());
-                    for (Iterator<Object> itr = fields.values().iterator(); itr.hasNext(); ) {
-                        Object o = itr.next();
-                        if (!(o instanceof String)) {
-                            itr.remove();
-                        }
-                    }
-                    return Helpers.cast(postFields = fields);
-                } else {
-                    pf = IOUtil.SharedUTFCoder.get().decodeR((ByteList) pf);
-                }
+        if (postFields instanceof ByteList) {
+            ByteList pf = (ByteList) postFields;
+
+            String ct = headers.getOrDefault("Content-Type", "");
+            if (ct.startsWith("multipart")) {
+                return Helpers.cast(postFields = convertToFields(payloadMultipart()));
+            } else {
+                postFields = getQueries(IOUtil.SharedCoder.get().decodeR(pf), "&");
             }
-            postFields = getQueries(pf, "&");
         }
         return Helpers.cast(postFields);
     }
 
     public static Map<String, Object> convertToFields(List<FormData> data) {
-        UTFCoder uc = IOUtil.SharedUTFCoder.get();
-        Map<String, Object> map = new MyHashMap<>(data.size());
+        UTFCoder uc = IOUtil.SharedCoder.get();
+        Map<String, Object> map = new SipHashMap<>(data.size());
         for (int i = 0; i < data.size(); i++) {
             FormData d = data.get(i);
             String type = d.h.getOrDefault("Content-Type", "text/plain");
-            String nm = d.h.get("Content-Disposition");
-            int j = nm.indexOf("name=\"");
-            if (j < 0) throw new IllegalArgumentException("No name header found");
-            map.put(nm.substring(17, nm.indexOf('"', j+1)), type.startsWith("text") ?
-                    uc.decode(d.data) : d.data);
+            String cp = d.h.get("Content-Disposition");
+            if (cp == null) throw new IllegalArgumentException("No Content-Disposition header");
+            MyHashMap<String, String> map1 = Headers.decodeValue(cp, false);
+            String name = map1.get("name");
+            if (name == null) throw new IllegalArgumentException("No name in Content-Disposition header");
+            map.put(name, type.startsWith("text") ? uc.decode(d.data) : d.data);
         }
         return map;
     }
 
     public List<FormData> payloadMultipart() {
-        st:
         if (postFields instanceof ByteList) {
             String ct = headers.get("Content-Type");
             if (ct == null || !ct.startsWith("multipart")) {
                 throw new IllegalArgumentException("Not multipart environment");
             } else {
                 // multipart
-                String[] hdr = TextUtil.split(ct, ';');
-                for (int i = 1; i < hdr.length; i++) {
-                    String k = hdr[i].trim();
-                    if (k.startsWith("boundary=")) {
-                        byte[] boundary = IOUtil.SharedUTFCoder.get().encode(k.substring(9));
-                        postFields = decodeBoundary((ByteList) postFields, boundary);
-                        break st;
-                    }
-                }
-                throw new IllegalArgumentException("Not found boundary in Content-Type header: " + ct);
+                MyHashMap<String, String> hdr = Headers.decodeValue(ct, false);
+                String b = hdr.get("boundary");
+                if (b == null)
+                    throw new IllegalArgumentException("Not found boundary in Content-Type header: " + ct);
+                byte[] boundary = IOUtil.SharedCoder.get().encode(b);
+                postFields = decodeBoundary((ByteList) postFields, boundary);
             }
         }
         return Helpers.cast(postFields);
@@ -215,16 +226,13 @@ public final class Request {
         }
     }
 
-    @Nullable
     public String payloadUTF() {
         if (postFields == null) {
             return null;
-        } else if (postFields instanceof CharSequence) {
-            CharSequence pf = (CharSequence) postFields;
-            if (pf instanceof ByteList) {
-                pf = IOUtil.SharedUTFCoder.get().decode((ByteList) pf);
-            }
-            return (String) (postFields = pf.toString());
+        } else if (postFields instanceof ByteList) {
+            String pf;
+            postFields = pf = IOUtil.SharedCoder.get().decode((ByteList) postFields);
+            return pf;
         }
         throw new IllegalStateException("Parsed");
     }
@@ -245,16 +253,24 @@ public final class Request {
         return Helpers.cast(getFields);
     }
 
+    public String getFieldsRaw() {
+        if (getFields == null) {
+            return null;
+        } else if (getFields instanceof String) {
+            return (String) getFields;
+        }
+        throw new IllegalStateException("Parsed");
+    }
+
     public Map<String, String> cookie() {
         if (cookie == null) {
-            String cookie = headers.get("Cookie");
-            this.cookie = cookie == null ? Collections.emptyMap() : getQueries(cookie, "; ");
+            this.cookie = getQueries(headers.get("Cookie"), "; ");
         }
         return cookie;
     }
 
     private static Map<String, String> getQueries(CharSequence query, String delimiter) {
-        Map<String, String> map = new LinkedMyHashMap<>();
+        SipHashMap<String, String> map = new SipHashMap<>();
         List<String> queries = TextUtil.split(new ArrayList<>(), query, delimiter);
         for (int i = 0; i < queries.size(); i++) {
             String member = queries.get(i);
@@ -265,7 +281,7 @@ public final class Request {
                 map.put(member.substring(0, po), member.substring(po + 1));
             }
         }
-        return map.isEmpty() ? Collections.emptyMap() : map;
+        return map;
     }
 
     @Nonnull
@@ -274,13 +290,13 @@ public final class Request {
     }
 
     public Map<String, String> fields() {
-        MyHashMap<String, String> map = new MyHashMap<>(getFields());
+        SipHashMap<String, String> map = new SipHashMap<>(getFields());
         Map<String, String> map1 = payloadFields();
         if (map1 != null) map.putAll(map1);
         return map;
     }
 
     public String toString() {
-        return action + ' ' + host() + path;
+        return Action.toString(action) + ' ' + host() + path;
     }
 }

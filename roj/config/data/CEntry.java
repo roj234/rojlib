@@ -29,6 +29,7 @@ import org.jetbrains.annotations.ApiStatus;
 import roj.collect.MyHashMap;
 import roj.config.serial.Serializer;
 import roj.config.serial.Serializers;
+import roj.config.serial.StreamSerializable;
 import roj.config.serial.Structs;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -44,7 +45,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2021/5/31 21:17
  */
-public abstract class CEntry {
+public abstract class CEntry implements StreamSerializable {
     protected CEntry() {}
 
     public abstract Type getType();
@@ -253,12 +254,12 @@ public abstract class CEntry {
     public abstract void toBinary(ByteList w, Structs struct);
 
     public static CEntry fromBinary(ByteList r) {
-        return fromBinary(r, null);
+        return fromBinary(r, null, null);
     }
-    public static CEntry fromBinary(ByteList r, Structs struct) {
+    public static CEntry fromBinary(ByteList r, Structs struct, Serializers ser) {
         int b = r.readUnsignedByte();
         if (struct != null) {
-            CMapping m = struct.fromBinary(b, r);
+            CMapping m = struct.fromBinary(b, r, ser);
             if (m != null) return m;
         }
 
@@ -274,25 +275,31 @@ public abstract class CEntry {
                 int cap = r.readVarInt(false);
                 Map<String, CEntry> map = new MyHashMap<>(cap);
                 while (cap-- > 0) {
-                    map.put(r.readVarIntUTF(), fromBinary(r, struct));
+                    map.put(r.readVIVIC(), fromBinary(r, struct, ser));
                 }
 
                 CEntry x = map.get("==");
-                if ((b & 0xF) == Type.OBJECT.ordinal() && x != null) {
-                    Serializer<?> deser = Serializers.DEFAULT.find(x.asString());
+                if (ser != null && (b & 0xF) == Type.OBJECT.ordinal() && x != null) {
+                    Serializer<?> deser = ser.find(x.asString());
                     if (deser != null) {
                         return new CObject<>(map, deser);
                     }
                 }
                 return new CMapping(map);
             case LIST:
-                return CList._fromBinary(b >>> 4, r, struct);
+                return CList._fromBinary(b >>> 4, r, struct, ser);
             case LONG:
                 return CLong.valueOf(r.readLong());
             case DOUBLE:
                 return CDouble.valueOf(r.readDouble());
             case STRING:
-                return CString.valueOf(r.readVarIntUTF());
+                return CString.valueOf(r.readVIVIC());
+            case Int1:
+                return CByte.valueOf(r.readByte());
+            case Int2:
+                return CShort.valueOf(r.readShort());
+            case Float4:
+                return CFloat.valueOf(r.readFloat());
             default:
                 throw new IllegalArgumentException("Unexpected id " + b);
         }

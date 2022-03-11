@@ -1214,7 +1214,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
         }
 
         public void setComment(String comment) {
-            this.comment = comment == null || comment.isEmpty() ? EmptyArrays.BYTES : IOUtil.SharedUTFCoder.get().encode(comment);
+            this.comment = comment == null || comment.isEmpty() ? EmptyArrays.BYTES : IOUtil.SharedCoder.get().encode(comment);
             if (this.comment.length > 65535) {
                 this.comment = Arrays.copyOf(this.comment, 65535);
                 throw new IllegalArgumentException("Comment too long");

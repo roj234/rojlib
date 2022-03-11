@@ -719,7 +719,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         for (TrieEntry entry : parent) {
             entry.append(sb);
             recursionEntry((Entry<V>) entry, consumer, sb);
-            sb.setIndex(sb.length() - entry.length());
+            sb.setLength(sb.length() - entry.length());
         }
     }
 

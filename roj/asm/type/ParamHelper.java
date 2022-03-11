@@ -338,7 +338,7 @@ public final class ParamHelper {
 
         // Array filter
         while (sb1.length() > 2 && sb1.charAt(sb1.length() - 1) == ']' && sb1.charAt(sb1.length() - 2) == '[') {
-            sb1.setIndex(sb1.length() - 2);
+            sb1.setLength(sb1.length() - 2);
             sb.append('[');
         }
 

@@ -32,7 +32,7 @@ public final class YarnMapping extends Mapping {
     }
 
     public void load(File intermediary, File mapping, String version) throws IOException {
-        UTFCoder uc = IOUtil.SharedUTFCoder.get();
+        UTFCoder uc = IOUtil.SharedCoder.get();
         SimpleList<String> tmp = new SimpleList<>();
         readIntermediaryMap(new SimpleLineReader(new FileInputStream(intermediary)), tmp);
 

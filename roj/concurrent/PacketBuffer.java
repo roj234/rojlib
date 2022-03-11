@@ -40,15 +40,13 @@ import java.util.concurrent.locks.LockSupport;
 public final class PacketBuffer {
     static final AtomicIntegerFieldUpdater<PacketBuffer> BAR = AtomicIntegerFieldUpdater.newUpdater(PacketBuffer.class, "barrier");
     static final AtomicReferenceFieldUpdater<Buf, Thread> OWN = AtomicReferenceFieldUpdater.newUpdater(Buf.class, Thread.class, "owner");
-    //static final AtomicReferenceFieldUpdater<Buf, Buf> NEXT = AtomicReferenceFieldUpdater.newUpdater(Buf.class, Buf.class, "next");
-    //static final AtomicReferenceFieldUpdater<PacketBuffer, Buf> TAIL = AtomicReferenceFieldUpdater.newUpdater(PacketBuffer.class, Buf.class, "tail");
 
     public PacketBuffer() {
         this(false, 10);
     }
 
-    public PacketBuffer(boolean fifo, int capacity) {
-        if (fifo) {
+    public PacketBuffer(boolean filo, int capacity) {
+        if (filo) {
             head = new Buf();
         } else {
             head = null;

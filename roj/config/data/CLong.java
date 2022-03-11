@@ -25,6 +25,7 @@
  */
 package roj.config.data;
 
+import roj.config.serial.StreamSerializer;
 import roj.config.serial.Structs;
 import roj.util.ByteList;
 
@@ -50,17 +51,17 @@ public class CLong extends CEntry {
     }
 
     @Override
-    public double asDouble() {
+    public final double asDouble() {
         return value;
     }
 
     @Override
-    public int asInteger() {
+    public final int asInteger() {
         return (int) value;
     }
 
     @Override
-    public long asLong() {
+    public final long asLong() {
         return value;
     }
 
@@ -72,7 +73,7 @@ public class CLong extends CEntry {
 
     @Nonnull
     @Override
-    public String asString() {
+    public final String asString() {
         return String.valueOf(value);
     }
 
@@ -107,5 +108,10 @@ public class CLong extends CEntry {
     @Override
     public void toBinary(ByteList w, Structs struct) {
         w.put((byte) Type.LONG.ordinal()).putLong(value);
+    }
+
+    @Override
+    public void serialize(StreamSerializer ser) {
+        ser.value(value);
     }
 }

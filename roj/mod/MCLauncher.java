@@ -813,7 +813,7 @@ public class MCLauncher extends JFrame {
                     keys.add("java");
                     keys.add("-cp");
                     keys.add(cpTmp.append(path.getAbsolutePath()).toString());
-                    cpTmp.setIndex(cpLen);
+                    cpTmp.setLength(cpLen);
 
                     String mainCls;
                     try (ZipFile zf1 = new ZipFile(path)) {

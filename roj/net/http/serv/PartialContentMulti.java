@@ -65,14 +65,12 @@ public final class PartialContentMulti implements Response {
                 }
 
                 raf.seek(array[i]);
-                remain = array[i + 1];
+                remain = array[i + 1] - array[i] + 1;
                 i += 2;
             }
 
             int read = raf.read(arr, p, (int) Math.min(arr.length - p, remain));
             remain -= read;
-            if (p+read>9999 || p+read<0)
-            System.out.println(p + "," + read+","+remain+","+i);
             t.position(0).limit(p + read);
         }
         ch.write(t);
@@ -91,14 +89,16 @@ public final class PartialContentMulti implements Response {
         int i = 0;
         long l = 0;
         while (i < array.length) {
-            l += array[i+1];
+            l += array[i+1] - array[i] + 1;
             i += 2;
         }
 
         list.putAscii("Last-Modified: ").putAscii(RequestHandler.LocalShared.get().date.toRFCDate(file.lastModified())).putAscii(CRLF)
             .putAscii("Content-Length: ").putAscii(Long.toString(l)).putAscii(CRLF);
         if (array.length == 2) {
-            list.putAscii("Content-Range: ").putAscii(Long.toString(array[i])).put((byte) '-').putAscii(Long.toString(array[i] + array[i+1] - 1))
+            list.putAscii("Content-Range: bytes ").putAscii(Long.toString(array[0]))
+                .put((byte) '-').putAscii(Long.toString(array[1]))
+                .put((byte) '/').putAscii(Long.toString(file.length()))
                 .putAscii(CRLF);
         }
         if (array.length > 2)

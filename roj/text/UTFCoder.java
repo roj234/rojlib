@@ -16,7 +16,11 @@ import java.nio.ByteBuffer;
 public class UTFCoder {
     public final CharList charBuf = new CharList();
     public final ByteList byteBuf = new ByteList();
+    private final ByteList shell = new ByteList();
+
     public boolean keep;
+
+    public byte[] baseChars, baseCharsRev;
 
     private void readBuf(ByteBuffer buf, boolean eatData) {
         ByteList b = byteBuf;
@@ -77,7 +81,7 @@ public class UTFCoder {
     }
 
     public String decode(byte[] b) {
-        return decode(new ByteList(b));
+        return decode(shell.setArray(b));
     }
 
     public String decode(ByteBuffer buf, boolean eatData) {
@@ -150,7 +154,7 @@ public class UTFCoder {
     }
 
     public String encodeHex(byte[] b) {
-        return encodeHex(new ByteList(b));
+        return encodeHex(shell.setArray(b));
     }
 
     public CharList encodeHexR() {
@@ -169,7 +173,8 @@ public class UTFCoder {
     public byte[] decodeBase64() {
         ByteList b = byteBuf;
         if (!keep) b.clear();
-        byte[] bb = Base64.decode(charBuf, b).toByteArray();
+        if (baseCharsRev == null) baseCharsRev = Base64.B64_CHAR_REV;
+        byte[] bb = Base64.decode(charBuf, 0, charBuf.length(), b, baseCharsRev).toByteArray();
         charBuf.clear();
         return bb;
     }
@@ -183,7 +188,8 @@ public class UTFCoder {
     public ByteList decodeBase64R() {
         ByteList b = byteBuf;
         if (!keep) b.clear();
-        Base64.decode(charBuf, b);
+        if (baseCharsRev == null) baseCharsRev = Base64.B64_CHAR_REV;
+        Base64.decode(charBuf, 0, charBuf.length(), b, baseCharsRev);
         charBuf.clear();
         return b;
     }
@@ -191,37 +197,42 @@ public class UTFCoder {
     public ByteList decodeBase64R(CharSequence c) {
         ByteList b = byteBuf;
         if (!keep) b.clear();
-        Base64.decode(c, b);
+        if (baseCharsRev == null) baseCharsRev = Base64.B64_CHAR_REV;
+        Base64.decode(c, 0, c.length(), b, baseCharsRev);
         return b;
     }
 
     public String encodeBase64() {
         if (!keep) charBuf.clear();
-        Base64.encode(byteBuf, charBuf);
+        if (baseChars == null) baseChars = Base64.B64_CHAR;
+        Base64.encode(byteBuf, charBuf, baseChars);
         byteBuf.clear();
         return charBuf.toString();
     }
 
     public String encodeBase64(ByteList b) {
         if (!keep) charBuf.clear();
-        Base64.encode(b, charBuf);
+        if (baseChars == null) baseChars = Base64.B64_CHAR;
+        Base64.encode(b, charBuf, baseChars);
         return charBuf.toString();
     }
 
     public String encodeBase64(byte[] b) {
-        return encodeBase64(new ByteList(b));
+        return encodeBase64(shell.setArray(b));
     }
 
     public CharList encodeBase64R() {
         if (!keep) charBuf.clear();
-        Base64.encode(byteBuf, charBuf);
+        if (baseChars == null) baseChars = Base64.B64_CHAR;
+        Base64.encode(byteBuf, charBuf, baseChars);
         byteBuf.clear();
         return charBuf;
     }
 
     public CharList encodeBase64R(ByteList b) {
         if (!keep) charBuf.clear();
-        Base64.encode(b, charBuf);
+        if (baseChars == null) baseChars = Base64.B64_CHAR;
+        Base64.encode(b, charBuf, baseChars);
         return charBuf;
     }
 
@@ -286,5 +297,9 @@ public class UTFCoder {
 
         in.close();
         return read;
+    }
+
+    public ByteList wrap(byte[] b) {
+        return shell.setArray(b);
     }
 }

@@ -2,7 +2,7 @@ package roj.net.mychat;
 
 import roj.collect.*;
 import roj.concurrent.SimpleSpinLock;
-import roj.config.data.CList;
+import roj.config.serial.StreamSerializer;
 import roj.util.ByteList;
 
 import java.util.List;
@@ -17,22 +17,58 @@ public class Group extends AbstractUser {
     public List<User> users = new SimpleList<>();
 
     public final RingBuffer<Message> history = new RingBuffer<>(100);
-    public final MyHashSet<User> onlineUsers = new MyHashSet<>();
-    public final Int2IntMap userFlags = new Int2IntMap();
-    final SimpleSpinLock lock = new SimpleSpinLock();
+
+    private final MyHashSet<User> online = new MyHashSet<>();
+
+    private final IntMap<String> userNames = new IntMap<>();
+    private final Int2IntMap userProps = new Int2IntMap();
+
+    private final SimpleSpinLock lock = new SimpleSpinLock();
 
     public int owner;
     public final IntSet operators = new IntSet();
 
-    public void addUser(User b) {
+    public void joinGroup(User b) {
         users.add(b);
+        onlineHook(b);
+        if (online.isEmpty()) return;
+
+        lock.enqueueReadLock();
+        try {
+            Message newJoin = new Message(id, "[Tr]group_join|" + b.id + "[/Tr]");
+            for (User entry : online) {
+                WSChat w = entry.worker;
+                if (w == null) continue;
+                w.sendMessage(this, newJoin, true);
+            }
+        } finally {
+            lock.releaseReadLock();
+        }
+    }
+
+    public void exitGroup(User b, int reason) {
+        users.remove(b);
+        offlineHook(b);
+        if (online.isEmpty()) return;
+
+        lock.enqueueReadLock();
+        try {
+            Message exit = new Message(id, "[Tr]group_exit|" + b.id + "|" + reason + "[/Tr]");
+            for (User entry : online) {
+                WSChat w = entry.worker;
+                if (w == null || !operators.contains(entry.id)) continue;
+                w.sendMessage(this, exit, true);
+            }
+        } finally {
+            lock.releaseReadLock();
+        }
     }
 
     public void postMessage(Context c, Message m, boolean sys) {
         history.addLast(m);
         lock.enqueueReadLock();
         try {
-            for (User entry : onlineUsers) {
+            for (User entry : online) {
                 WSChat w = entry.worker;
                 if (w == null || entry.id == m.uid) continue;
                 w.sendMessage(this, m, sys);
@@ -43,9 +79,10 @@ public class Group extends AbstractUser {
     }
 
     public void onlineHook(User entry) {
+        if (entry.worker == null) return;
         lock.enqueueWriteLock();
         try {
-            onlineUsers.add(entry);
+            online.add(entry);
         } finally {
             lock.releaseWriteLock();
         }
@@ -54,7 +91,7 @@ public class Group extends AbstractUser {
     public void offlineHook(User entry) {
         lock.enqueueWriteLock();
         try {
-            onlineUsers.remove(entry);
+            online.remove(entry);
         } finally {
             lock.releaseWriteLock();
         }
@@ -86,29 +123,39 @@ public class Group extends AbstractUser {
     }
 
     @Override
-    public AbstractUser cStore() {
-        CList list = getOrCreateList("users");
-        list.clear();
+    public void put(StreamSerializer ser) {
+        ser.key("users");
+        ser.valueList();
+
         if (initialSendUserInfo) {
-            remove("raw");
             for (int i = 0; i < users.size(); i++) {
-                AbstractUser user = users.get(i);
-                user.cStore();
-                list.add(user);
+                ser.valueMap();
+                users.get(i).put(ser);
+                ser.pop();
             }
+            ser.pop();
         } else {
-            put("raw", 1);
             for (int i = 0; i < users.size(); i++) {
-                list.add(users.get(i).id);
+                ser.value(users.get(i).id);
             }
+            ser.pop();
+            ser.key("raw");
+            ser.value(1);
         }
-        put("id", id);
-        put("name", name);
-        // todo
-        put("username", "");
-        put("face", face);
-        put("desc", desc);
-        return this;
+        ser.key("id");
+        ser.value(id);
+
+        ser.key("name");
+        ser.value(name);
+
+        ser.key("username");
+        ser.value("");
+
+        ser.key("face");
+        ser.value(face);
+
+        ser.key("desc");
+        ser.value(desc);
     }
 
     @Override

@@ -26,7 +26,7 @@ public class FDCLoop<T extends FDChannel> extends NIOSelectLoop<T> {
 
     @Override
     protected void register1(Selector sel, T h, Object att) throws IOException {
-        FileDescriptorChannel fdc = new FileDescriptorChannel(h.ch.fd());
+        FileDescriptorChannel fdc = new FileDescriptorChannel(h.fd());
         h.key = fdc.register(sel, SelectionKey.OP_READ, att);
     }
 }

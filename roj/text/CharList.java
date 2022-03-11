@@ -27,9 +27,8 @@
 package roj.text;
 
 import javax.annotation.Nonnull;
-import java.util.Comparator;
+import java.util.Arrays;
 import java.util.Spliterator;
-import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
@@ -37,7 +36,7 @@ import java.util.stream.StreamSupport;
  * @author Roj234
  * @since 2021/6/19 1:28
  */
-public class CharList implements CharSequence {
+public class CharList implements CharSequence, Appendable {
     public char[] list;
     protected int ptr;
 
@@ -82,28 +81,28 @@ public class CharList implements CharSequence {
         }
     }
 
-    public void append(char[] array) {
-        if(array.length == 0) return;
-        append(array, 0, array.length);
+    public CharList append(char[] array) {
+        return append(array, 0, array.length);
     }
 
-    public void append(char[] c, int start, int end) {
+    public CharList append(char[] c, int start, int end) {
         if (start < 0 || end > c.length || c.length < end - start) {
-            throw new ArrayIndexOutOfBoundsException();
+            throw new StringIndexOutOfBoundsException("len="+c.length+",str="+start+",end="+end);
         }
         int length = end - start;
+        if (length == 0) return this;
         ensureCapacity(ptr + length);
         System.arraycopy(c, start, list, ptr, length);
         ptr += length;
+        return this;
     }
 
-    public void append(CharList array) {
-        if(array.length() == 0) return;
-        append(array.list, 0, array.ptr);
+    public CharList append(CharList list) {
+        return append(list.list, 0, list.ptr);
     }
 
-    public void append(CharList array, int start, int end) {
-        append(array.list, start, end);
+    public CharList append(CharList list, int start, int end) {
+        return append(list.list, start, end);
     }
 
     public CharList append(Object cs) {
@@ -123,8 +122,11 @@ public class CharList implements CharSequence {
 
     public CharList append(CharSequence cs, int start, int end) {
         if (cs instanceof CharList) {
-            append(((CharList) cs).list, start, end);
-            return this;
+            return append(((CharList) cs).list, start, end);
+        }
+        if (cs instanceof Slice) {
+            Slice s = (Slice) cs;
+            return append(s.array, s.off + start, s.off + end);
         }
 
         ensureCapacity(ptr + end - start);
@@ -144,20 +146,20 @@ public class CharList implements CharSequence {
         list[index] = e;
     }
 
-    public char charAt(int _id) {
-        if (_id >= ptr)
-            throw new StringIndexOutOfBoundsException("Required " + _id + " Current " + ptr);
-        return list[_id]; // 2
+    public char charAt(int i) {
+        if (i >= ptr)
+            throw new StringIndexOutOfBoundsException("len="+ptr+",off="+i);
+        return list[i]; // 2
     }
 
-    public void setIndex(int id) {
+    public void setLength(int i) {
         if(list == null) {
-            if(id == 0) return;
-            throw new ArrayIndexOutOfBoundsException(id);
+            if(i == 0) return;
+            throw new StringIndexOutOfBoundsException("len=0,off="+i);
         }
-        if (id > list.length)
-            throw new ArrayIndexOutOfBoundsException("Required " + id + " Current " + list.length);
-        this.ptr = id;
+        if (i > list.length)
+            throw new StringIndexOutOfBoundsException("len="+list.length+",off="+i);
+        this.ptr = i;
     }
 
     @Override
@@ -190,21 +192,21 @@ public class CharList implements CharSequence {
 
     @Nonnull
     public String toString() {
-        return formString(0, ptr);
+        return toString(0, ptr);
     }
 
     @Override
-    public CharList subSequence(int start, int end) {
-        int len = length();
+    public CharSequence subSequence(int start, int end) {
+        int len = ptr;
 
         if (start == 0 && end == len) {
             return this;
         }
 
         if (0 <= start && start <= end && end <= len) {
-            return new ReadOnlySubList(list, start + getOffset(), end - start);
+            return end == start ? "" : new Slice(list, start, end - start);
         } else {
-            throw new StringIndexOutOfBoundsException(start);
+            throw new StringIndexOutOfBoundsException("len="+len+",str="+start+",end="+end);
         }
     }
 
@@ -213,18 +215,12 @@ public class CharList implements CharSequence {
     }
 
     public CharList replace(char a, char b) {
-        char[] list = this.list;
-        for (int i = getOffset(); i < ptr; i++) {
-            if (list[i] == a) {
-                list[i] = b;
-            }
-        }
-        return this;
+        return replace(a, b, 0, ptr);
     }
 
     public CharList replace(char o, char n, int i, int len) {
         char[] list = this.list;
-        for (i += getOffset(); i < len; i++) {
+        for (; i < len; i++) {
             if (list[i] == o) {
                 list[i] = n;
             }
@@ -234,10 +230,10 @@ public class CharList implements CharSequence {
 
     public void replace(int start, int end, CharSequence s) {
         if (start < 0) {
-            throw new StringIndexOutOfBoundsException(start);
+            throw new StringIndexOutOfBoundsException("len="+s.length()+",str="+start+",end="+end);
         } else {
             if (start > end) {
-                throw new StringIndexOutOfBoundsException();
+                throw new StringIndexOutOfBoundsException("len="+s.length()+",str="+start+",end="+end);
             } else {
                 if(end > this.ptr)
                     end = this.ptr;
@@ -263,23 +259,24 @@ public class CharList implements CharSequence {
         }
     }
 
-    public CharList replace(CharSequence source, CharSequence target) {
+    public CharList replace(CharSequence str, CharSequence target) {
         int pos = 0;
-        while ((pos = indexOf(source, pos)) != -1) {
-            replace(pos, pos + source.length(), target);
+        while ((pos = indexOf(str, pos)) != -1) {
+            replace(pos, pos + str.length(), target);
             pos += target.length();
         }
         return this;
     }
 
-    public int indexOf(CharSequence sequence, int offset) {
-        int i = offset + getOffset();
+    public int indexOf(CharSequence str, int from) {
+        int i = from;
 
+        char[] list = this.list;
         o:
         for (; i < ptr; i++) {
-            if (list[i] == sequence.charAt(0)) {
-                for (int j = 0; j < sequence.length(); j++) {
-                    if(list[i + j] != sequence.charAt(j)) {
+            if (list[i] == str.charAt(0)) {
+                for (int j = 0; j < str.length(); j++) {
+                    if(list[i + j] != str.charAt(j)) {
                         continue o;
                     }
                 }
@@ -291,42 +288,33 @@ public class CharList implements CharSequence {
     }
 
     public char[] toCharArray() {
-        char[] dest = new char[ptr - getOffset()];
-        System.arraycopy(list, getOffset(), dest, 0, ptr - getOffset());
-        return dest;
+        return Arrays.copyOf(list, ptr);
     }
 
-    public int getOffset() {
-        return 0;
-    }
-
-    public String formString(int start, int length) {
-        return length == 0 ? "" : new String(list, start + getOffset(), start - getOffset() + length);
+    public String toString(int start, int length) {
+        return length == 0 ? "" : new String(list, start, start + length);
     }
 
     @Override
     public IntStream chars() {
-        return StreamSupport.intStream(spliterator(), false);
+        return StreamSupport.intStream(new CharArraySpliterator(list, 0, ptr, Spliterator.ORDERED), false);
     }
 
-    public Spliterator.OfInt spliterator() {
-        return new CharArraySpliterator(list, getOffset(), ptr, 0);
+    public boolean regionMatches(int index, CharSequence str) {
+        return regionMatches(index, str, 0, str.length());
     }
 
-    public boolean regionMatches(int index, CharSequence sequence) {
-        return regionMatches(index, sequence, 0, sequence.length());
+    public boolean regionMatches(int index, CharSequence str, int offset) {
+        return regionMatches(index, str, offset, str.length());
     }
 
-    public boolean regionMatches(int index, CharSequence sequence, int offset) {
-        return regionMatches(index, sequence, offset, sequence.length());
-    }
-
-    public boolean regionMatches(int index, CharSequence sequence, int offset, int length) {
+    public boolean regionMatches(int index, CharSequence str, int off, int length) {
         if (index + length > ptr)
             return false;
 
-        for (int i = index + getOffset(); offset < length; i++, offset++) {
-            if (list[i] != sequence.charAt(offset))
+        char[] list = this.list;
+        for (int i = index; off < length; i++, off++) {
+            if (list[i] != str.charAt(off))
                 return false;
         }
 
@@ -335,10 +323,10 @@ public class CharList implements CharSequence {
 
     public void delete(int start, int end) {
         if (start < 0) {
-            throw new StringIndexOutOfBoundsException(start);
+            throw new StringIndexOutOfBoundsException("len="+ptr+",str="+start+",end="+end);
         } else {
             if (start > end) {
-                throw new StringIndexOutOfBoundsException();
+                throw new StringIndexOutOfBoundsException("len="+ptr+",str="+start+",end="+end);
             } else {
                 if(end > this.ptr)
                     end = this.ptr;
@@ -389,6 +377,7 @@ public class CharList implements CharSequence {
     public CharList insert(int pos, CharSequence s, int str, int end) {
         int len = end - str;
         ensureCapacity(len + ptr);
+        char[] list = this.list;
         if(ptr - pos > 0 && len > 0)
             System.arraycopy(list, pos, list, pos + len, ptr - pos);
         while (str < end) {
@@ -407,134 +396,52 @@ public class CharList implements CharSequence {
         return indexOf(s, 0) != -1;
     }
 
-    static final class CharArraySpliterator implements Spliterator.OfInt {
-        private final char[] array;
-        private int index;        // current index, modified on advance/split
-        private final int fence;  // one past last index
-        private final int characteristics;
-
-        public CharArraySpliterator(char[] array, int addChar) {
-            this(array, 0, array.length, addChar);
-        }
-
-        public CharArraySpliterator(char[] array, int origin, int fence, int addChar) {
-            this.array = array;
-            this.index = origin;
-            this.fence = fence;
-            this.characteristics = addChar | Spliterator.SIZED | Spliterator.SUBSIZED;
-        }
-
-        @Override
-        public OfInt trySplit() {
-            int lo = index, mid = (lo + fence) >>> 1;
-            return (lo >= mid)
-                    ? null
-                    : new CharArraySpliterator(array, lo, index = mid, characteristics);
-        }
-
-        @Override
-        public void forEachRemaining(IntConsumer action) {
-            if (action == null)
-                throw new NullPointerException();
-            char[] a;
-            int i, hi; // hoist accesses and checks from loop
-            if ((a = array).length >= (hi = fence) &&
-                    (i = index) >= 0 && i < (index = hi)) {
-                do {
-                    action.accept(a[i]);
-                } while (++i < hi);
-            }
-        }
-
-        @Override
-        public boolean tryAdvance(IntConsumer action) {
-            if (action == null)
-                throw new NullPointerException();
-            if (index >= 0 && index < fence) {
-                action.accept(array[index++]);
-                return true;
-            }
-            return false;
-        }
-
-        @Override
-        public long estimateSize() {
-            return fence - index;
-        }
-
-        @Override
-        public int characteristics() {
-            return characteristics;
-        }
-
-        @Override
-        public Comparator<? super Integer> getComparator() {
-            if (hasCharacteristics(Spliterator.SORTED))
-                return null;
-            throw new IllegalStateException();
-        }
-    }
-
     /**
      * 只读
      */
-    public final static class ReadOnlySubList extends CharList {
-        private final int offset;
+    public final static class Slice implements CharSequence {
+        private final char[] array;
+        private final int off, len;
 
-        public ReadOnlySubList(char[] array, int start, int length) {
-            super(array);
-            this.ptr = start + length;
-            this.offset = start;
+        public Slice(char[] array, int start, int length) {
+            this.array = array;
+            this.off = start;
+            this.len = length;
         }
 
         @Override
-        public int getOffset() {
-            return offset;
+        public CharSequence subSequence(int start, int end) {
+            if (start == 0 && end == len) {
+                return this;
+            }
+
+            if (0 <= start && start <= end && end <= len) {
+                return end == start ? "" : new Slice(array, off + start, end - start);
+            } else {
+                throw new StringIndexOutOfBoundsException("len="+len+",str="+start+",end="+end);
+            }
         }
 
         @Override
-        public void clear() {
-            throw new UnsupportedOperationException("Readonly");
+        public String toString() {
+            return new String(array, off, len);
+        }
+
+        @Override
+        public IntStream chars() {
+            return StreamSupport.intStream(new CharArraySpliterator(array, off, off+len, Spliterator.ORDERED), false);
         }
 
         @Override
         public int length() {
-            return ptr - offset;
+            return len;
         }
 
         @Override
-        public void delete(int e) {
-            throw new UnsupportedOperationException("Readonly");
-        }
-
-        @Override
-        public CharList append(char e) {
-            throw new UnsupportedOperationException("Readonly");
-        }
-
-        public void ensureCapacity(int required) {
-            if (required > list.length) {
-                throw new ArrayIndexOutOfBoundsException("Required " + required + " Current " + list.length);
-            }
-        }
-
-        public void setIndex(int id) {
-            throw new UnsupportedOperationException("Readonly");
-        }
-
-        @Override
-        public char charAt(int index) {
-            return super.charAt(index + offset);
-        }
-
-        @Override
-        public void append(char[] c, int start, int length) {
-            throw new UnsupportedOperationException("Readonly");
-        }
-
-        @Override
-        public CharList append(CharSequence cs, int start, int length) {
-            throw new UnsupportedOperationException("Readonly");
+        public char charAt(int i) {
+            if (i - off > len)
+                throw new StringIndexOutOfBoundsException("len="+len+",off="+i);
+            return array[off + i];
         }
 
         @Override
@@ -544,9 +451,10 @@ public class CharList implements CharSequence {
 
             CharSequence cs = (CharSequence) o;
 
-            if (ptr - offset != cs.length()) return false;
-            final char[] list = this.list;
-            for (int i = offset; i < ptr; i++) {
+            if (len != cs.length()) return false;
+            char[] list = this.array;
+            int len = this.len + off;
+            for (int i = off; i < len; i++) {
                 if(list[i] != cs.charAt(i)) {
                     return false;
                 }
@@ -558,8 +466,9 @@ public class CharList implements CharSequence {
         public int hashCode() {
             int hash = 0;
 
-            final char[] list = this.list;
-            for (int i = offset; i < ptr; i++) {
+            char[] list = this.array;
+            int len = this.len + off;
+            for (int i = off; i < len; i++) {
                 hash = 31 * hash + list[i];
             }
             return hash;

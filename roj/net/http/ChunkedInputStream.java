@@ -26,6 +26,7 @@
 package roj.net.http;
 
 import roj.config.ParseException;
+import roj.config.word.AbstLexer;
 import roj.math.MathUtils;
 import roj.net.SocketSequence;
 
@@ -54,7 +55,7 @@ class ChunkedInputStream extends InputStream {
 
     @Override
     public int available() throws IOException {
-        return Math.min(in.available(), chunkSize - chunkPos);
+        return chunkSize - chunkPos;
     }
 
     @Override
@@ -102,15 +103,11 @@ class ChunkedInputStream extends InputStream {
         SocketSequence plain = (SocketSequence)data[0];
         HttpLexer lexer = ((HttpLexer)data[1]).init(plain.init(in.socket, in.readTimeout, (int) in.dataRemain));
 
-        lexer.index = in.buf.position();
-        in.buf.position(in.buf.limit());
+        lexer.index = in.pos;
         try {
             switch (stage) {
                 case CHUNK_END:
-                    String eof = lexer.readLine();
-                    if (!eof.isEmpty()) {
-                        throw new EOFException("Content overflow? got " + eof);
-                    }
+                    endOfChunk(lexer);
                 case CHUNK_LENGTH: {
                     String size = lexer.readLine();
                     try {
@@ -128,12 +125,16 @@ class ChunkedInputStream extends InputStream {
                         break;
                     }
 
+                    endOfChunk(lexer);
+
                     // read tail header
                     stage = EOF;
-                    try {
-                        tailHeader.readFromLexer(lexer);
-                    } catch (ParseException e) {
-                        throw new IOException(e);
+                    if (tailHeader != null) {
+                        try {
+                            tailHeader.readFromLexer(lexer);
+                        } catch (ParseException e) {
+                            throw new IOException(e);
+                        }
                     }
                     break;
                 }
@@ -141,6 +142,14 @@ class ChunkedInputStream extends InputStream {
         } finally {
             plain.release();
             in.pass(lexer.index);
+        }
+    }
+
+    private static void endOfChunk(HttpLexer lexer) throws EOFException {
+        String eof;
+        eof = lexer.readLine();
+        if (!eof.isEmpty()) {
+            throw new EOFException("Content overflow? got '" + AbstLexer.addSlashes(eof) + "'");
         }
     }
 
