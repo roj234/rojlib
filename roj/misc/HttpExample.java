@@ -44,8 +44,8 @@ import java.security.GeneralSecurityException;
  */
 public class HttpExample {
     public static void main(String[] args) throws IOException, GeneralSecurityException {
-        Response gzc = new FileResponse(new File("E:/章节修复.txt"));
-        ChunkedFile pt = new ChunkedFile(new File("E:/1.bin"));
+        Response gzc = new FileResponse(new File("E:/2"));
+        ChunkedFile pt = new ChunkedFile(new File("E:/1"));
 
         SleepingBeauty.sleep();
         HttpServer server = new HttpServer(new InetSocketAddress(2333), 2048, (request, handle) -> {

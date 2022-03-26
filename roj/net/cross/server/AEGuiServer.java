@@ -210,7 +210,7 @@ public class AEGuiServer {
                             }
                             return new StringResponse(json.toShortJSONb(), "application/json");
                         case "users":
-                            Room room = server.rooms.get(TextUtil.unescapeBytes(request.getFields().get("r")));
+                            Room room = server.rooms.get(TextUtil.decodeURI(request.getFields().get("r")));
                             if(room == null) {
                                 return new StringResponse("\"房间不存在\"", "application/json");
                             }
@@ -224,7 +224,7 @@ public class AEGuiServer {
                         case "cfg":
                             String r = request.getFields().get("r");
                             if(r != null) {
-                                room = server.rooms.get(TextUtil.unescapeBytes(r));
+                                room = server.rooms.get(TextUtil.decodeURI(r));
                                 if (room == null) {
                                     r = "\"房间不存在\"";
                                 } else {

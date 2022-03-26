@@ -706,6 +706,21 @@ public class TrieTree<V> implements Map<CharSequence, V> {
         return Collections.unmodifiableSet(set);
     }
 
+    public void forEachSince(CharSequence s, BiConsumer<? super CharSequence, ? super V> consumer) {
+        forEachSince(s, 0, s.length(), consumer);
+    }
+
+    public void forEachSince(CharSequence s, int len, BiConsumer<? super CharSequence, ? super V> consumer) {
+        forEachSince(s, 0, len, consumer);
+    }
+
+    public void forEachSince(CharSequence s, int i, int len, BiConsumer<? super CharSequence, ? super V> consumer) {
+        CharList base = new CharList();
+        Entry<V> entry = matches(s, i, len, base);
+        if (entry == null) return;
+        recursionEntry(root, consumer, base);
+    }
+
     @Override
     public void forEach(BiConsumer<? super CharSequence, ? super V> consumer) {
         recursionEntry(root, consumer, new CharList());

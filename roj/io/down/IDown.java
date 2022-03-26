@@ -84,6 +84,8 @@ public abstract class IDown extends FDChannel implements ITask {
         if (retry++ < maxRetryCount) {
             retry0();
             // reconnect
+            HttpClient client = this.client;
+            if (client == null) return;
             client.disconnect();
             // 这个不会, 因为无效的SelectionKey会在下次循环被删除
             POOL.unregister(this);
@@ -105,6 +107,8 @@ public abstract class IDown extends FDChannel implements ITask {
     }
 
     public final void waitFor() throws InterruptedException {
+        HttpClient client = this.client;
+        if (client == null) return;
         synchronized (client) {
             if (idle >= 0) client.wait();
         }

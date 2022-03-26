@@ -437,7 +437,6 @@ public class AEHost extends IAEClient implements GuiChat.ChatDispatcher {
                     rb.get(infoBytes);
                     String info = new String(infoBytes, StandardCharsets.UTF_8);
                     syncPrint("MOTD: " + info);
-                    ch.poll();
 
                     return true;
                 case P_LOGOUT:

@@ -136,7 +136,7 @@ final class FileWatcher extends IFileWatcher implements Runnable {
                                 shouldReload = true;
                             }
                         } else if (id.equals("config.json")) {
-                            if (reloadCfgTask != null) reloadCfgTask.cancel();
+                            if (reloadCfgTask != null && reloadCfgTask.getNextRun() > 0) reloadCfgTask.cancel();
                             reloadCfgTask = Shared.PeriodicTask.register(
                             new ScheduledRunnable(0, 1000, 1, Shared::loadConfig));
                             break;

@@ -27,18 +27,17 @@
 package ilib.tile;
 
 import ilib.autoreg.TileRegister;
-import roj.collect.Int2IntMap;
-
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import roj.collect.Int2IntMap;
 
 import javax.annotation.Nonnull;
 
-@TileRegister("mi:storage")
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
+@TileRegister("ilib:storage")
 public class TileStorage extends TileBase {
     private final Int2IntMap data = new Int2IntMap();
     private String type = DEFAULT_TYPE;

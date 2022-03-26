@@ -239,27 +239,21 @@ public class CMapping extends CEntry {
         CEntry entry = this;
         int i = 0;
         do {
-            do {
-                char c = keys.charAt(i++);
-                if (c == '.') break;
-                tmp.append(c);
-            } while (i < keys.length());
+            i = _name(keys, tmp, i);
 
-            if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
-                Map<String, CEntry> map = entry.asMap().map;
-                // noinspection all
-                entry = map.getOrDefault(tmp, CNull.NULL);
-                if (i == keys.length()) {
-                    if ((flag & F_REPLACE) != 0 || !entry.isSimilar(value)) {
-                        map.put(tmp.toString(), entry = value);
-                    }
-                } else {
-                    if (entry.getType() == Type.NULL) {
-                        map.put(tmp.toString(), entry = new CMapping());
-                    }
+            Map<String, CEntry> map = entry.asMap().map;
+            // noinspection all
+            entry = map.getOrDefault(tmp, CNull.NULL);
+            if (i == keys.length()) {
+                if ((flag & F_REPLACE) != 0 || !entry.isSimilar(value)) {
+                    map.put(tmp.toString(), entry = value);
                 }
-                tmp.clear();
+            } else {
+                if (entry.getType() == Type.NULL) {
+                    map.put(tmp.toString(), entry = new CMapping());
+                }
             }
+            tmp.clear();
         } while (i < keys.length());
         return entry == CNull.NULL ? value : entry;
     }
@@ -273,22 +267,33 @@ public class CMapping extends CEntry {
         CEntry entry = this;
         int i = 0;
         do {
-            do {
-                char c = keys.charAt(i++);
-                if (c == '.') break;
-                tmp.append(c);
-            } while (i < keys.length());
+            i = _name(keys, tmp, i);
 
-            if (i == 1 || '\\' != tmp.charAt(tmp.length() - 1) || i == keys.length()) {
-                Map<String, CEntry> map = entry.asMap().map;
-                // equal is content-equal
-                // noinspection all
-                entry = map.get(tmp);
-                tmp.clear();
-                if (entry == null || entry.getType() == Type.NULL) return def;
-            }
+            // 为啥这里有个i=1
+            Map<String, CEntry> map = entry.asMap().map;
+            // equal is content-equal
+            // noinspection all
+            entry = map.get(tmp);
+            tmp.clear();
+            if (entry == null || entry.getType() == Type.NULL) return def;
         } while (i < keys.length());
         return entry;
+    }
+
+    private static int _name(String keys, CharList tmp, int i) {
+        while (i < keys.length()) {
+            char c = keys.charAt(i++);
+            if (c == '.') {
+                int l = tmp.length();
+                if (l == 0 || tmp.list[l - 1] != '\\') {
+                    break;
+                } else {
+                    tmp.setLength(l - 1);
+                }
+            }
+            tmp.append(c);
+        }
+        return i;
     }
 
     /**

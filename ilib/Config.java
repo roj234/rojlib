@@ -54,7 +54,7 @@ public final class Config extends JSONConfiguration {
             noSoManyBlockPos, fastLightCheck, fastMethod, lootR, otherWorldChange, cacheBox2, miscPickaxeOptimize,
             showDPS, moreEggs, portalCache, betterRenderGlobal, disableGlobalTESR, enablePinyinSearch, searchNameOnly, entityAabbCache,
             noAdvancement, eventInvoker, removePatchy, slabHelper, eventInvokerMost, packetBufferInfinity, IwantLight, noRecipeBook,
-            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax, betterF3;
+            fixNaNHealth, fixThreadIssues, IwantConnect, noCollision, noAttackCD, noEnchantTax, noAnvilTax, betterF3, injectLWP;
     public static int aabbCache, reduceFPSWhenNotActive, clientNetworkTimeout, chatLength, debug, maxParticleCountPerLayer,
             maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, autoFlipTooltip, tooltipFlag;
     public static byte threadPriority, subThreadPriority, packetDelay, dynamicViewDistance, changeWorldSpeed;

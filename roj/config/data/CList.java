@@ -60,8 +60,12 @@ public class CList extends CEntry implements Iterable<CEntry> {
         this.list = (List<CEntry>) list;
     }
 
-    public static CList of(Object... objects) {
-        return CEntry.wrap(objects).asList();
+    public static CList of(Object... arr) {
+        CList dst = new CList(arr.length);
+        for (Object o1 : arr) {
+            dst.add(wrap(o1));
+        }
+        return dst;
     }
 
     static CList _fromBinary(int type, ByteList r, Structs s, Serializers ser) {

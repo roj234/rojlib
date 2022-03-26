@@ -15,12 +15,12 @@ import roj.crypt.SM3;
 import roj.io.IOUtil;
 import roj.io.PooledBuf;
 import roj.math.MathUtils;
+import roj.math.MutableInt;
 import roj.net.PlainSocket;
 import roj.net.http.Action;
 import roj.net.http.HttpServer;
 import roj.net.http.WebSockets;
 import roj.net.http.serv.*;
-import roj.net.mychat.ChatDAO.Result;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
@@ -71,7 +71,7 @@ public class Server extends WebSockets implements Router, Context {
 
     public static void main(String[] args) throws IOException {
         File path = new File("mychat");
-        dao = new LocalStorage(path);
+        dao = new ChatDAO(path);
 
         headDir = new File(path, "head");
         if (!headDir.isDirectory() && !headDir.mkdirs()) {
@@ -202,6 +202,8 @@ public class Server extends WebSockets implements Router, Context {
                      "Access-Control-Allow-Methods: *").returnNull();
         }
 
+        // Strict-Transport-Security: max-age=1000; includeSubDomains
+
         // IM
         if ("websocket".equals(req.header("Upgrade"))) {
             int id = verifyHash(req.path().substring(1), rh);
@@ -262,6 +264,7 @@ public class Server extends WebSockets implements Router, Context {
                     return rh.reply(404).returns(StringResponse.httpErr(404));
 
                 v = new ChunkedFile(file).response(req, rh);
+                //使用 'Vary: Origin' 告知浏览器根据Origin的变化重新匹配缓存
                 rh.header("Access-Control-Allow-Origin: *");
                 return v;
             }
@@ -287,6 +290,8 @@ public class Server extends WebSockets implements Router, Context {
                     break;
                 } else if (lst.get(1).equals("token")) {
                     if (u == null) break;
+                    // bit2: attachment, expire: 30 minutes
+                    return new StringResponse("{\"ok\":1,\"code\":\"" + token(u, 1, 180000) + "\"}");
                 }
 
                 if (lst.size() < 4) break;
@@ -320,6 +325,7 @@ public class Server extends WebSockets implements Router, Context {
                 if (u.largeConn.get() > 4 ||
                     (u.attachCounter.plus() > 5 && file.length() > 2048)) {
                     v = jsonErr("系统繁忙,请稍后再试");
+                    //Retry-After: 120
                     break;
                 }
                 u.largeConn.getAndIncrement();
@@ -395,7 +401,7 @@ public class Server extends WebSockets implements Router, Context {
 
                 Map<String, ?> x = req.payloadFields();
                 String newpass = x.getOrDefault("newpass", Helpers.cast("")).toString();
-                Result rs = dao.changePassword(uid, x.get("pass").toString(), newpass.isEmpty() ? null : newpass);
+                ChatDAO.Result rs = dao.changePassword(uid, x.get("pass").toString(), newpass.isEmpty() ? null : newpass);
                 if (rs.error != null) return jsonErr(rs.error);
 
                 ByteList face = (ByteList) x.get("face");
@@ -418,14 +424,25 @@ public class Server extends WebSockets implements Router, Context {
 
                 rs = dao.setUserData(u);
                 return rs.error == null ? new StringResponse("{\"ok\":1}") : jsonErr(rs.error);
+            case "code":
+//                req.handler().setAsyncProcess(100);
+//                POOL.pushTask(new AbstractExecutionTask() {
+//                    @Override
+//                    public void run() throws Throwable {
+//                        req.handler().setAsyncProcessDone();
+//                    }
+//                });
+                // bit1: login
+                return new StringResponse("{\"ok\":1,\"code\":\"" + token(null, 1, 300000) + "\"}");
             case "login":
                 Map<String, String> posts = req.payloadFields();
                 if (posts == null) return jsonErr("数据错误");
 
                 String name = posts.get("name");
                 String pass = posts.get("pass");
-                //String code = posts.get("code");
-                rs = dao.login(name, pass);
+                String challenge = posts.get("chag");
+                String code = posts.get("code");
+                rs = dao.login(name, pass, challenge);
                 if (rs.error != null) {
                     return jsonErr(rs.error);
                 }
@@ -457,7 +474,6 @@ public class Server extends WebSockets implements Router, Context {
 
                 name = posts.get("name");
                 pass = posts.get("pass");
-                //code = posts.get("code");
                 rs = dao.register(name, pass);
                 if (rs.error == null) {
                     return new StringResponse("{\"ok\":1}");
@@ -578,7 +594,54 @@ public class Server extends WebSockets implements Router, Context {
     // region Misc
 
     private static Response jsonErr(String s) {
-        return new StringResponse("{\"ok\":0,\"err\":\"" + AbstLexer.addSlashes(s) + "\"}");
+        return new StringResponse("{\"ok\":0,\"err\":\"" + AbstLexer.addSlashes(s) + "\"}", "application/json");
+    }
+
+    private boolean verifyToken(User u, int action, String token) {
+        UTFCoder uc = IOUtil.SharedCoder.get();
+        ByteList bb = uc.decodeBase64R(token);
+        // action not same
+        if ((action & bb.readInt()) == 0) return false;
+        // expired
+        if (System.currentTimeMillis() > bb.readLong()) return false;
+
+        SM3 sm3 = (SM3) initLocal().get("SM3");
+        sm3.reset();
+
+        byte[] secKey = u == null ? this.secKey : u.salt;
+        byte[] d0 = bb.list;
+        for (int i = 0; i < 10; i++) {
+            sm3.update(secKey);
+            sm3.update(d0, 0, 20);
+        }
+
+        int ne = 0;
+        byte[] d1 = sm3.digest();
+        for (int i = 0; i < 32; i++) {
+            ne |= d1[i] ^ d0[20 + i];
+        }
+        return ne == 0;
+    }
+
+    // action(usage) | timestamp | random | hash
+    private String token(User u, int action, int expire) {
+        UTFCoder uc = IOUtil.SharedCoder.get();
+        ByteList bb = uc.byteBuf;
+        bb.clear();
+        bb.putInt(action)
+          .putLong(expire < 0 ? -expire : System.currentTimeMillis() + expire)
+          .putLong(rnd.nextLong());
+
+        SM3 sm3 = (SM3) initLocal().get("SM3");
+        sm3.reset();
+
+        byte[] secKey = u == null ? this.secKey : u.salt;
+        for (int i = 0; i < 10; i++) {
+            sm3.update(secKey);
+            sm3.update(bb.list, 0, 20);
+        }
+
+        return uc.encodeBase64(bb.put(sm3.digest()));
     }
 
     private static int verifyHash(Request req) {
@@ -651,8 +714,12 @@ public class Server extends WebSockets implements Router, Context {
         @Override
         protected void init() {
             owner.onLogon(get, this);
-            sendMessage(userMap.get(1000000), new Message(0, "欢迎使用MyChat2!"), true);
-            sendMessage(userMap.get(1000000), new Message(0, "欢迎使用MyChat2 (下称\"软件\")\n" +
+            AbstractUser g = userMap.get(1000000);
+
+            sendMessage(g, new Message(Message.STYLE_SUCCESS, "欢迎使用MyChat2!"), true);
+            sendMessage(g, new Message(Message.STYLE_WARNING | Message.STYLE_BAR, "欢迎使用MyChat2!"), true);
+            sendMessage(g, new Message(Message.STYLE_ERROR, "欢迎使用MyChat2!"), true);
+            sendMessage(g, new Message(0, "欢迎使用MyChat2 (下称\"软件\")\n" +
                     "本软件由Roj234独立开发并依法享有其知识产权\n\n" +
                     "软件以MIT协议开源,并\"按原样提供\", 不包含任何显式或隐式的担保,\n" +
                     "上述担保包括但不限于可销售性, 对于特定情况的适应性和安全性\n" +
@@ -718,8 +785,14 @@ public class Server extends WebSockets implements Router, Context {
                 }
                 sendHistory(id, his.size(), msgs);
             } else {
+                if (len == 0) {
+                    sendHistory(id, dao.getHistoryCount(id), Collections.emptyList());
+                    return;
+                }
 
-                sendHistory(id, 0, Collections.emptyList());
+                MutableInt mi = new MutableInt();
+                List<Message> msg = dao.getHistory(id, filter, off, len, mi);
+                sendHistory(id, mi.getValue(), msg);
             }
         }
 
@@ -727,7 +800,10 @@ public class Server extends WebSockets implements Router, Context {
         protected void requestClearHistory(int id, int timeout) {
             AbstractUser u = userMap.get(id);
             if (!(u instanceof User)) return;
-            System.out.println("请求清除" + id + "历史纪录");
+            ChatDAO.Result r = dao.delHistory(owner.id, id);
+            if (r.error != null) {
+                sendAlert("无法清除历史纪录: " + r.error);
+            }
         }
 
         @Override

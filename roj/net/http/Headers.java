@@ -187,6 +187,12 @@ public final class Headers extends MyHashMap<CharSequence, String> {
         return (index == 0) ? e.v : e.all.get(index - 1);
     }
 
+    public int getCount(String key) {
+        E e = (E) getEntry(key);
+        if (e == null) return 0;
+        return 1 + e.all.size();
+    }
+
     public void add(String key, String value) {
         E e = (E) getOrCreateEntry(key);
         if (e.v == IntMap.NOT_USING) {

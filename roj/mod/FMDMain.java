@@ -191,6 +191,12 @@ public final class FMDMain {
                 }
                 AutoCompile.setEnabled(Boolean.parseBoolean(args[1]));
                 break;
+            case "kill":
+                assert isCLI;
+                if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
+                    MCLauncher.task.cancel(true);
+                }
+                break;
             case "reload":
                 if(isCLI) {
                     CmdUtil.warning("重新加载映射表...");
@@ -628,7 +634,7 @@ public final class FMDMain {
     public static int run(Map<String, Object> args) throws IOException {
         MCLauncher.load();
         if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
-            if (UIUtil.readBoolean("MC没有退出,是否结束进程 (注意，热重载需要且只支持build)?")) {
+            if (UIUtil.readBoolean("MC没有退出,是否结束进程?")) {
                 MCLauncher.task.cancel(true);
             } else {
                 return -1;
@@ -637,59 +643,74 @@ public final class FMDMain {
 
         CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
         if(mc_conf.size() == 0) {
-            CmdUtil.error("配置丢失，无法启动，请重新安装或在启动器内重新选择版本");
+            CmdUtil.error("启动配置不存在，无法启动，请重新安装或在启动器内选择版本");
             return -1;
         }
 
-        File dest = new File(mc_conf.getString("root") + File.separatorChar + "mods" + File.separatorChar);
+        File dest = new File(mc_conf.getString("root") + "/mods/");
 
-        Shared.singletonLock();
-        AutoCompile.beforeCompile();
-        int v = -1;
-        try {
-            v = compile(args, project, dest, 1);
-        } finally {
-            Shared.singletonUnlock();
-            AutoCompile.afterCompile(v);
-        }
+        System.out.println("来自1.6.2版本的提示：因为自动编译，现在runClient zl已不会编译而是仅复制build的文件启动客户端\n" +
+                               "runClient不变");
 
-        if(v >= 0) {
-            dest = new File(dest, project.name + ".jar");
-            if(!dest.isFile()) {
-                CmdUtil.warning("目标jar不存在");
-                return -1;
-            }
-
+        if (!args.containsKey("zl")) {
+            Shared.singletonLock();
+            AutoCompile.beforeCompile();
+            int v = -1;
             try {
-                executeCommand(dest, 1);
-            } catch (IOException e) {
-                CmdUtil.warning("无法执行指令", e);
+                v = compile(args, project, BASE, 0);
+            } finally {
+                Shared.singletonUnlock();
+                AutoCompile.afterCompile(v);
             }
 
-            boolean asyncRun = CONFIG.getBool("异步运行MC");
-
-            if(CONFIG.getBool("启用热重载")) {
-                asyncRun = true;
-
-                int port = 0xFFFF & CONFIG.getInteger("重载端口");
-                if (port == 0) port = 4485;
-
-                String jvm = mc_conf.getString("jvmArg");
-                mc_conf.put("jvmArg", jvm + " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port);
-
-                if(DEBUG)
-                    CmdUtil.info("重载工具已在端口 " + port + " 上启动");
-            }
-
-            if (asyncRun) {
-                Task.pushTask(MCLauncher.task = new RunMinecraftTask(true));
-                return 0;
+            if (v > 0) {
+                try {
+                    executeCommand(BASE);
+                } catch (IOException e) {
+                    CmdUtil.warning("无法执行指令", e);
+                }
             } else {
-                return MCLauncher.runClient(mc_conf, 3, null);
+                return v;
             }
-        } else {
-            return v;
         }
+
+        for (Project proj : project.getAllDependencies()) {
+            copy4run(dest, proj);
+        }
+        copy4run(dest, project);
+
+        boolean asyncRun = CONFIG.getBool("异步运行MC");
+
+        if(CONFIG.getBool("启用热重载")) {
+            asyncRun = true;
+
+            int port = 0xFFFF & CONFIG.getInteger("重载端口");
+            if (port == 0) port = 4485;
+
+            CEntry jvm = mc_conf.get("jvmArg");
+            if (jvm.getType() == Type.STRING) {
+                CList list = new CList(2);
+                list.add(jvm.asString());
+                list.add("-javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port);
+
+                mc_conf.put("jvmArg", list);
+
+                if(DEBUG) CmdUtil.info("重载工具已在端口 " + port + " 上启动");
+            }
+        }
+
+        if (asyncRun) {
+            Task.pushTask(MCLauncher.task = new RunMinecraftTask(true));
+            return 0;
+        } else {
+            return MCLauncher.runClient(mc_conf, 3, null);
+        }
+    }
+
+    private static void copy4run(File dest, Project p) throws IOException {
+        File src = new File(BASE, p.name + '-' + p.version + ".jar");
+        File dst = new File(dest, p.name + ".jar");
+        FileUtil.copyFile(src, dst);
     }
 
     public static int build(Map<String, Object> args) throws IOException {
@@ -706,7 +727,7 @@ public final class FMDMain {
         }
         if (v > 0) {
             try {
-                executeCommand(BASE, 0);
+                executeCommand(BASE);
             } catch (IOException e) {
                 CmdUtil.warning("无法执行指令", e);
             }
@@ -724,10 +745,10 @@ public final class FMDMain {
         return v;
     }
 
-    private static void executeCommand(File base, int flag) throws IOException {
+    private static void executeCommand(File base) throws IOException {
         Project proj = project;
 
-        String jarName = proj.name + ((flag & 1) == 0 ? '-' + proj.version : "") + ".jar";
+        String jarName = proj.name + '-' + proj.version + ".jar";
         String jarPath = base.getAbsolutePath() + '/' + jarName;
 
         CMapping cmd = CONFIG.get("编译成功后执行指令").asMap();
@@ -845,7 +866,7 @@ public final class FMDMain {
 
         // endregion
 
-        File jarFile = new File(jarDest, p.name + ((flag & 1) == 0 ? '-' + p.version : "") + ".jar");
+        File jarFile = new File(jarDest, p.name + '-' + p.version + ".jar");
         if (!ensureWritable(jarFile)) return -1;
 
         // region 无代码更改
@@ -1114,8 +1135,6 @@ public final class FMDMain {
         if (zo1 == null || !zo1.file.getAbsolutePath().equals(jarFile.getAbsolutePath())) {
             if (zo1 != null) {
                 zo1.close();
-                System.out.println("neq,change " + zo1.file.getAbsolutePath());
-                System.out.println(jarFile.getAbsolutePath());
             }
             p.dstFile = zo1 = new ZipOutput(jarFile);
             zo1.setCompress(true);

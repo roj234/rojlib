@@ -83,7 +83,8 @@ public final class FileUtil {
         // noinspection all
         Thread.interrupted();
         FileChannel src = FileChannel.open(source.toPath(), StandardOpenOption.READ);
-        FileChannel dst = FileChannel.open(target.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        FileChannel dst = FileChannel.open(target.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        dst.truncate(source.length()).position(0);
         src.transferTo(0, source.length(), dst);
         src.close();
         dst.close();
@@ -164,7 +165,7 @@ public final class FileUtil {
 
         HttpClient client = conn.getClient();
         client.header("User-Agent", userAgent)
-              .header("Range", "bytes=0-")
+              //.header("Range", "bytes=0-")
               .method(headOnly ? "HEAD" : "GET")
               .readTimeout(timeout);
         client.connectTimeout(timeout);

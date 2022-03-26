@@ -303,8 +303,12 @@ public abstract class WSChat extends WebSockets.Worker {
             CMapping map = new CMapping();
             map.put("act", sys ? P_SYS_MESSAGE : P_MESSAGE);
             map.put("id", userId);
-            if (userId != message.uid && !sys) {
-                map.put("uid", message.uid);
+            if (!sys) {
+                if (userId != message.uid) {
+                    map.put("uid", message.uid);
+                }
+            } else {
+                map.put("style", message.uid);
             }
             CMapping subMap = map.getOrCreateMap("msg");
             subMap.put("time", message.time);

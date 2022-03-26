@@ -54,6 +54,7 @@ import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.io.down.Downloader;
+import roj.io.down.MTDProgress;
 import roj.io.down.STDProgress;
 import roj.math.Version;
 import roj.text.CharList;
@@ -69,7 +70,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -176,8 +179,8 @@ public class MCLauncher extends JFrame {
         }
 
         File basePath = new File(config.getString("mc_conf.root"));
-        if(e != null) {
-            File debugLog = new File(basePath, "debug.log");
+        File debugLog = new File(basePath, "minecraft.log");
+        if(e != null || debugLog.length() > 8388608) {
             FileUtil.deleteFile(debugLog);
         }
         File logs = new File(basePath, "logs");
@@ -185,10 +188,7 @@ public class MCLauncher extends JFrame {
         File crashes = new File(basePath, "crash-reports");
         FileUtil.deletePath(crashes);
 
-        if(e != null)
-            info("清除了没啥用的日志文件!");
-        else
-            CmdUtil.warning("清除了没啥用的日志文件!");
+        CmdUtil.warning("清除了没啥用的日志文件!");
     }
 
     // region Select version
@@ -1231,7 +1231,7 @@ public class MCLauncher extends JFrame {
         Map<String, String> mcEnv = new MyHashMap<>();
 
         String playerName = mc_conf.getString("player_name");
-        if(playerName.equals("")) playerName = CONFIG.getString("");
+        if(playerName.equals("")) playerName = CONFIG.getString("启动器配置.玩家名字");
 
         String authName = null, authToken = null, authUUID = null;
         File def = new File(CONFIG.getString("启动器配置.外部accessToken"));
@@ -1268,13 +1268,24 @@ public class MCLauncher extends JFrame {
 
         String java = mc_conf.getString("java");
         if (java.isEmpty()) java = "java";
-        SimpleList<String> list = new SimpleList<>();
-        list.add(java);
-        TextUtil.replaceVariable(env, mc_conf.getString("jvmArg"), list);
-        list.add(mc_conf.getString("mainClass"));
-        TextUtil.replaceVariable(mcEnv, mc_conf.getString("mcArg"), list);
+        SimpleList<String> args = new SimpleList<>();
+        args.add(java);
+        replace(mc_conf.get("jvmArg"), env, args);
+        args.add(mc_conf.getString("mainClass"));
+        replace(mc_conf.get("mcArg"), mcEnv, args);
 
-        return runProcess(list, new File(mc_conf.getString("root")), processFlags, consumer);
+        return runProcess(args, new File(mc_conf.getString("root")), processFlags, consumer);
+    }
+
+    private static void replace(CEntry ent, Map<String, String> env, SimpleList<String> args) {
+        if (ent.getType() == roj.config.data.Type.STRING) {
+            TextUtil.replaceVariable(env, ent.asString(), args);
+        } else {
+            CList argList = ent.asList();
+            for (int i = 0; i < argList.size(); i++) {
+                TextUtil.replaceVariable(env, argList.get(i).asString(), args);
+            }
+        }
     }
 
     // region UI
@@ -1928,7 +1939,7 @@ public class MCLauncher extends JFrame {
             CmdUtil.info("开始下载 " + url);
             DownMcFile man = new DownMcFile();
             man.add(url, target, map.getString("sha1"));
-            man.calculate();
+            man.run();
         }
     }
 
@@ -1950,7 +1961,7 @@ public class MCLauncher extends JFrame {
             CmdUtil.info("开始下载 " + url);
             DownMcFile man = new DownMcFile("md5");
             man.add(url, target, md5);
-            man.calculate();
+            man.run();
         }
     }
 
@@ -1985,6 +1996,7 @@ public class MCLauncher extends JFrame {
         private Runnable onFinish;
         private MessageDigest DIG;
         private long except;
+
         static final int maxTask = 16;
 
         public DownMcFile() {
@@ -2009,63 +2021,37 @@ public class MCLauncher extends JFrame {
         @Override
         public void calculate() {
             if (except > 0) LockSupport.parkUntil(except);
-            int j = 0;
+            int count = 0;
             try {
                 for (int i = entries.size() - 1; i >= 0; i--) {
                     Entry e = entries.get(i);
-                    if (e.future == null) {
+                    if (e.future != null) {
+                        if (e.future.isDone()) {
+                            try {
+                                e.future.waitFor();
+                                if (verifyFile(e)) entries.remove(i);
+                            } catch (Throwable ex) {
+                                handleError(e, ex);
+                            }
+                        } else {
+                            count++;
+                        }
+                    }
+                }
+
+                for (int i = entries.size() - 1; i >= 0; i--) {
+                    Entry e = entries.get(i);
+                    if (count < maxTask && e.future == null) {
+                        count++;
                         if (e.retry > 3) {
                             CmdUtil.warning(e.url.substring(e.url.lastIndexOf('/') + 1) + " 失败三次, 取消");
                             entries.remove(i);
                             continue;
                         }
                         try {
-                            if (j++ < maxTask)
-                                e.future = Downloader.downloadMTD(e.url, e.target, null);
+                            e.future = Downloader.downloadMTD(e.url, e.target, null);
                         } catch (Throwable ex) {
                             handleError(e, ex);
-                        }
-                        continue;
-                    }
-                    if (e.future.isDone()) {
-                        try {
-                            e.future.waitFor();
-                        } catch (Throwable ex) {
-                            handleError(e, ex);
-                            continue;
-                        }
-
-                        if (e.target.isFile()) {
-                            if (e.digest != null && !e.digest.isEmpty()) {
-                                try (FileInputStream in = new FileInputStream(e.target)) {
-                                    int cnt;
-                                    byte[] list = IOUtil.getSharedByteBuf().list;
-                                    do {
-                                        cnt = in.read(list);
-                                        DIG.update(list, 0, cnt);
-                                    } while (cnt == list.length);
-
-                                }
-                                String DIGEST = uc.encodeHex(DIG.digest());
-                                if (!DIGEST.equals(e.digest)) {
-                                    if (DIGEST.equals(e.lastDigest)) {
-                                        CmdUtil.warning("二次SHA1相同,镜像问题? " + e.url);
-                                    } else {
-                                        e.lastDigest = DIGEST;
-                                        e.future = null;
-                                        e.retry++;
-
-                                        if (DEBUG) CmdUtil.warning("SHA1 For " + e.url + " Got: " + DIGEST);
-                                        if (!e.target.delete()) {
-                                            CmdUtil.warning(e.target.getName() + "删除失败!");
-                                        }
-                                        continue;
-                                    }
-                                } else {
-                                    CmdUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕.");
-                                }
-                            }
-                            entries.remove(i);
                         }
                     }
                 }
@@ -2082,7 +2068,64 @@ public class MCLauncher extends JFrame {
         }
 
         @Override
-        public void run() {}
+        public void run() {
+            while (!entries.isEmpty()) {
+                Entry e = entries.remove(entries.size() - 1);
+                while (true) {
+                    if (e.retry > 3) {
+                        CmdUtil.warning(e.url.substring(e.url.lastIndexOf('/') + 1) + " 失败三次, 取消");
+                        break;
+                    }
+
+                    try {
+                        e.future = Downloader.downloadMTD(e.url, e.target, new MTDProgress());
+                        e.future.waitFor();
+                        if (verifyFile(e)) break;
+                    } catch (Throwable ex) {
+                        handleError(e, ex);
+                    }
+                }
+            }
+        }
+
+        private boolean verifyFile(Entry e) throws IOException {
+            if (e.target.isFile()) {
+                if (e.digest != null && !e.digest.isEmpty()) {
+                    try (FileInputStream in = new FileInputStream(e.target)) {
+                        ByteList bb = IOUtil.getSharedByteBuf();
+                        bb.ensureCapacity(4096);
+                        byte[] list = bb.list;
+
+                        do {
+                            int r = in.read(list);
+                            if (r < 0) break;
+                            DIG.update(list, 0, r);
+                        } while (true);
+                    }
+
+                    String DIGEST = uc.encodeHex(DIG.digest());
+                    if (!DIGEST.equalsIgnoreCase(e.digest)) {
+                        if (DIGEST.equals(e.lastDigest)) {
+                            CmdUtil.warning("二次SHA1相同,镜像问题? " + e.url);
+                        } else {
+                            e.lastDigest = DIGEST;
+                            e.future = null;
+                            e.retry++;
+
+                            if (DEBUG) CmdUtil.warning("DIG For " + e.url + " : " + DIGEST);
+                            if (!e.target.delete()) {
+                                CmdUtil.warning(e.target.getName() + "删除失败!");
+                            }
+                            return false;
+                        }
+                    } else {
+                        CmdUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕.");
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
 
         private static void handleError(Entry e, Throwable ex) {
             e.future = null;
@@ -2130,7 +2173,7 @@ public class MCLauncher extends JFrame {
             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
                     .redirectError(ProcessBuilder.Redirect.INHERIT);
         else {
-            File debug = (flag & 4) == 0 ? new File(dir, "debug.log") : (File) obj;
+            File debug = (flag & 4) == 0 ? new File(dir, "minecraft.log") : (File) obj;
             pb.redirectOutput(ProcessBuilder.Redirect.appendTo(debug))
                     .redirectError(ProcessBuilder.Redirect.appendTo(debug));
         }

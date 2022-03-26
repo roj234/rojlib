@@ -467,7 +467,6 @@ public class AEClient extends IAEClient implements Shutdownable, GuiChat.ChatDis
                     for (int i = 0; i < portLen; i++) {
                         ports[i] = rb.getChar();
                     }
-                    ch.poll();
 
                     LoginResult logon = new LoginResult();
                     logon.clientId = clientId;

@@ -59,6 +59,9 @@ public class CmdUtil {
         ENABLE = e || System.getProperty("cmd.forceColor") != null;
     }
 
+    public static boolean enabled() {
+        return ENABLE;
+    }
 
     /**
      * Pn

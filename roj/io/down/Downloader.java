@@ -38,7 +38,6 @@ import roj.net.misc.FDCLoop;
 import roj.net.misc.FDChannel;
 import roj.util.ByteList;
 
-import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -126,7 +125,9 @@ public final class Downloader extends IDown {
 
         long remain = conn.getContentLengthLong();
 
-        if(remain < 0 || (conn.getHeaderField("ETag") == null && conn.getHeaderField("Last-Modified") == null)) {
+        if(remain < 0 || (conn.getHeaderField("ETag") == null
+            && conn.getHeaderField("Last-Modified") == null)
+            && !"bytes".equals(conn.getHeaderField("Accept-Ranges"))) {
             return singleThread0(file, pg, info, conn);
         }
 
@@ -160,13 +161,20 @@ public final class Downloader extends IDown {
             long each = Math.max(remain / chunkCount, minChunkSize);
             while (remain >= each) {
                 Downloader dn = new Downloader(id++, tmp, info, url, off, each, pg);
+
+                off += each;
+                remain -= each;
+
+                if (remain < each && remain < minChunkSize) {
+                    // 如果下载完毕
+                    if (dn.len > 0) dn.len += remain;
+                    remain = 0;
+                }
+
                 if (dn.getRemain() > 0) {
                     HELP.pushTask(dn);
                     tasks.add(dn);
                 }
-
-                off += each;
-                remain -= each;
             }
         }
         if (remain > 0) {
@@ -190,12 +198,7 @@ public final class Downloader extends IDown {
     }
 
     public Downloader(int pid, File file, File Info, URL url, long off, long len, IProgress progress) throws IOException {
-        this.file = new RandomAccessFile(file, "rw");
-        this.client = new HttpClient();
-        this.progress = progress;
         this.beginLen = len;
-        this.url = url;
-        if (progress != null) progress.onJoin(this);
 
         if (Info != null) {
             this.info = new RandomAccessFile(Info, "rw");
@@ -206,12 +209,18 @@ public final class Downloader extends IDown {
             off += dt; len -= dt;
             if (len <= 0 || dt < 0) {
                 if (dt > 0) writePos(-1);
-                close();
+                info.close();
                 return;
             }
         } else {
             this.info = null;
         }
+
+        this.file = new RandomAccessFile(file, "rw");
+        this.client = new HttpClient();
+        this.progress = progress;
+        this.url = url;
+        if (progress != null) progress.onJoin(this);
 
         this.file.seek(off);
         this.off = off;
@@ -258,7 +267,7 @@ public final class Downloader extends IDown {
         } while (r > 0);
         in.clear();
 
-        if (len == 0) {
+        if (len <= 0) {
             // writePos会限制写入速度, 100ms
             // 所以这里赋值, 一定让它写入
             last = 0;
@@ -306,8 +315,8 @@ public final class Downloader extends IDown {
         if (info != null) {
             long t = System.currentTimeMillis();
             if(t - last > 50) {
-                info.writeLong(i);
                 info.seek(info.getFilePointer() - 8);
+                info.writeLong(i);
                 last = t;
             }
         }
@@ -329,13 +338,11 @@ public final class Downloader extends IDown {
                 }
             } else {
                 HttpHead r = client.response();
-                System.out.println(r);
                 if (r.getCode() > 299) {
                     System.out.println("范围错误 " + off + '-' + (off + len - 1) + " , code=" + r.getCodeString());
                 }
 
                 ByteBuffer buf = ch.buffer();
-                buf.position(buf.limit()).limit(buf.capacity());
 
                 if (key == null) reg();
 
@@ -374,11 +381,11 @@ public final class Downloader extends IDown {
                 }
             }
 
-            if (handler.wasShutdown()) {
-                throw new EOFException("下载失败");
+            if (handler != null) {
+                if (handler.wasShutdown())
+                    throw new IOException("下载失败");
+                handler.onFinish();
             }
-
-            handler.onFinish();
 
             StringBuilder err = new StringBuilder();
 

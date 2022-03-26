@@ -798,10 +798,9 @@ public class NiximSystem {
                             gotos.add(gt);
                             insn.set(i, gt);
                             break;
-                        case PUTFIELD:
                         case PUTSTATIC:
                             FieldInsnNode fin = (FieldInsnNode) node;
-                            if (!fin.name.equals(field.name) || !fin.rawType.equals(field.rawDesc())) {
+                            if (fin.owner.equals(data.name) && (!fin.name.equals(field.name) || !fin.rawType.equals(field.rawDesc()))) {
                                 System.out.println("NiximWarn: 在static{}修改了不属于自己的字段 " + fin);
                             }
                             break;

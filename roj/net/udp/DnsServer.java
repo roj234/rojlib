@@ -202,7 +202,7 @@ public class DnsServer implements Router, Runnable {
             this.addr = packet.getAddress();
             this.port = (char) packet.getPort();
             byte[] buf = packet.getData();
-            this.id = (char) (((buf[0] & 0xFF) << 8) | (buf[1] & 0xFF));
+            this.id = (char) (((buf[packet.getOffset()] & 0xFF) << 8) | (buf[packet.getOffset() + 1] & 0xFF));
             return this;
         }
 
@@ -906,8 +906,8 @@ public class DnsServer implements Router, Runnable {
                     forwardDnsRequest(query, w);
                     return false;
                 } else {
-                    System.out.println("[Warn]Unresolved resolved: " + key);
-                    setRCode(query, w, RCODE_SERVER_ERROR);
+                    System.out.println("[Warn]上级无解析: " + key);
+                    setRCode(query, w, RCODE_NAME_ERROR);
                     continue;
                 }
             }
@@ -1023,7 +1023,14 @@ public class DnsServer implements Router, Runnable {
         try {
             for (int i = 0; i < target.size(); i++) {
                 pkt.setSocketAddress(target.get(i));
-                waiting.put(new XAddr(target.get(i), query.sessionId), request);
+                XAddr addr = new XAddr(target.get(i), query.sessionId);
+                if (null != waiting.putIfAbsent(addr, request)) {
+                    do {
+                        int myId = (int) System.nanoTime() & 65535;
+                        addr.id = (char) myId;
+                        clientRequest.putShort(0, myId);
+                    } while (null != waiting.putIfAbsent(addr, request));
+                }
                 forwardRcv.send(pkt);
             }
             if(fakeDns != null) {
@@ -1154,11 +1161,10 @@ public class DnsServer implements Router, Runnable {
     }
 
     void handleUnknown(DatagramPacket pkt, XAddr addr) {
-        DnsResponse response;
         try {
-            response = readDnsResponse(pkt, new ByteList(pkt.getData()));
+            DnsResponse resp = readDnsResponse(pkt, new ByteList(pkt.getData()));
             System.out.println("[Warn] 接受未被处理的数据包 " + addr);
-            resolved.putAll(response.response);
+            resolved.putAll(resp.response);
         } catch (Throwable e) {
             System.err.println("[Error] 未被处理的'可信'数据包无效 " + addr);
             e.printStackTrace();
@@ -1242,7 +1248,7 @@ public class DnsServer implements Router, Runnable {
                 String msg = req.getFields().get("msg");
                 if (msg != null) {
                     sb.append("<div style='background: 0xAA8888; margin: 16px; padding: 16px; border: #000 1px dashed; font-size: 24px; text-align: center;'>")
-                      .append(TextUtil.unescapeBytes(msg))
+                      .append(TextUtil.decodeURI(msg))
                       .append("</div>");
                 }
 
@@ -1269,7 +1275,7 @@ public class DnsServer implements Router, Runnable {
             case "/save": {
                 save();
                 rh.reply(302)
-                  .header("Location", dirty.get() ? "/?msg=保存成功" : "/?msg=数据没更改");
+                  .header("Location", dirty.get() ? "/?msg=%u4FDD%u5B58%u6210%u529F" : "/?msg=%u6570%u636E%u6CA1%u66F4%u6539");
                 return null;
             }
             case "/set": {
@@ -1329,7 +1335,7 @@ public class DnsServer implements Router, Runnable {
                 }
 
                 rh.reply(302)
-                  .header("Location", "/?msg=" + msg);
+                  .header("Location", "/?msg=" + TextUtil.encodeURI(msg));
                 return null;
             }
             default:

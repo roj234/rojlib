@@ -8,8 +8,8 @@ import java.util.Random;
 
 /**
  * Diffie–Hellman Key Exchange
- // 听说啥 '为了防止应用优化算法计算上述问题，质数p不是随便选择的，需要符合一定的条件'
- // 那么这条件是啥捏
+ * 草，我还真TM就是偶然看到了索菲·热尔曼质数
+ * '安全素数也叫Sophie Germain素数,如果 p1 是素数,p2 = p1*2+1 也是素数,那么 p2 就是安全素数,反之则是不安全的。'
  * @author Roj233
  * @since 2022/2/12 17:25
  */

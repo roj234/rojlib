@@ -18,7 +18,7 @@ public class User extends AbstractUser {
     public long since, amount;
 
     // 存储最近的N条未接收消息
-    public RingBuffer<Message> c2c = new RingBuffer<>(100, true);
+    public RingBuffer<Message> c2c = new RingBuffer<>(100, false);
 
     // friends由friendsGroup反序列化时顺便填充
     private MyHashMap<String, IntSet> friendsGroup = new MyHashMap<>();

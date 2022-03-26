@@ -111,12 +111,16 @@ public class AdGuard {
         }
         if (!tree.isEmpty()) {
             dns.blocked = s -> {
-                for (int i = 0; i < s.length(); i++) {
+                int i = 0;
+                do {
+                    // e.qq.com does not matches image.qq.com
+                    // but matches abc.e.qq.com
                     if (tree.contains(s, i, s.length())) {
                         if (i != 0) System.out.println("Matched partial at " + i + " of " + s);
                         return true;
                     }
-                }
+                    i = s.indexOf('.', i) + 1;
+                } while (i > 0);
                 return false;
             };
         }

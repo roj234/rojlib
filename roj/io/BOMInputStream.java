@@ -76,7 +76,7 @@ public class BOMInputStream extends PushbackInputStream {
         }
 
         byte[] bom = buffer;
-        int n = in.read(bom, 0, 4);
+        int n = bLen = in.read(bom, 0, 4);
 
         int rev = 0;
 

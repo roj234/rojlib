@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
+import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicLong;
@@ -307,7 +308,7 @@ public final class RequestHandler extends FDChannel {
                             return;
                         }
 
-                        if (request != null && !request.headers().get("Connection").equals("close")) {
+                        if (request != null && !"close".equals(request.headers().get("Connection"))) {
                             state = HANGING;
                             clear();
                             interestOps(SelectionKey.OP_READ);
@@ -462,6 +463,7 @@ public final class RequestHandler extends FDChannel {
                 compact(lexer, ch.buffer());
                 reqState = 1;
 
+                validateHeader(headers);
                 router.checkHeader(req);
 
                 if ((flag & HAS_REPLY) != 0) {
@@ -557,6 +559,19 @@ public final class RequestHandler extends FDChannel {
         return true;
     }
 
+    private static void validateHeader(Headers h) throws IllegalRequestException {
+        int c = h.getCount("Content-Length");
+        if (c > 1) {
+            List<String> list = h.getAll("Content-Length");
+            for (int i = 0; i < list.size(); i++) {
+                if (!list.get(i).equals(list.get(0)))
+                    throw new IllegalRequestException(400);
+            }
+        }
+        if (c > 0 && h.containsKey("Transfer-Encoding"))
+            throw new IllegalRequestException(400);
+    }
+
     private static void compact(HttpLexer lexer, ByteBuffer buf) {
         if(buf != null)  {
             buf.flip().position(lexer.index);
@@ -593,8 +608,6 @@ public final class RequestHandler extends FDChannel {
     public RequestHandler reply(int code) {
         if (state < PARSING_REQUEST || state > PREPARE_REQUEST) throw new IllegalStateException();
         flag |= HAS_REPLY;
-        if (code == 408)
-            new Throwable().printStackTrace();
 
         uc.clear();
         uc.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ')

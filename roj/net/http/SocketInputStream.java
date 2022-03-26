@@ -52,12 +52,12 @@ public class SocketInputStream extends InputStream {
 
     public SocketInputStream(WrappedSocket socket) {
         this.socket = socket;
-        dataRemain = socket.buffer().remaining();
+        dataRemain = socket.buffer().position();
     }
 
     public SocketInputStream init(String s, int readTimeout) {
         this.readTimeout = readTimeout <= 0 ? 5000 : readTimeout;
-        dataRemain = (s == null ? Integer.MAX_VALUE : (dataRemain + Long.parseLong(s)));
+        dataRemain = (s == null ? Long.MAX_VALUE : Long.parseLong(s) - dataRemain);
         return this;
     }
 

@@ -42,6 +42,11 @@ public class STDProgress implements IProgress {
     private static final int PROGRESS_SIZE = 25;
     private static final int BITE = 100 / PROGRESS_SIZE;
 
+    // 线程A进入同步块时CmdUtil没有初始化，获取的System.out就是本来的out
+    // 线程A打印数据时CmdUtil初始化替换System.out为AnsiOutputStream
+    // 线程B进入同步块，此时System.out已被替换为AnsiOutputStream
+    static { CmdUtil.enabled(); }
+
     static void print(double percent, long speed) {
         PrintStream out = System.out;
         synchronized (out) {

@@ -182,7 +182,8 @@ public abstract class CEntry implements StreamSerializable {
             for (Object o1 : arr) {
                 dst.add(wrap(o1));
             }
-        } if (o.getClass().getComponentType() != null) {
+            return dst;
+        } else if (o.getClass().getComponentType() != null) {
             switch (o.getClass().getComponentType().getName()) {
                 case "int":
                     return Serializers.wArray((int[]) o);
@@ -201,9 +202,9 @@ public abstract class CEntry implements StreamSerializable {
                 case "double":
                     return Serializers.wArray((double[]) o);
                 default:
-                    throw new UnsupportedOperationException("void[] ???");
+                    throw new UnsupportedOperationException("void[] ??? " + o.getClass());
             }
-        } if(o instanceof Map) {
+        } else if (o instanceof Map) {
             Map<String, Object> map = Helpers.cast(o);
             CMapping dst = new CMapping(map.size());
             try {

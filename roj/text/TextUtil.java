@@ -32,10 +32,12 @@ import roj.config.ParseException;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
+import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.util.ByteList;
 
 import java.io.UTFDataFormatException;
+import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -115,7 +117,7 @@ public class TextUtil {
 
     public static final IBitSet ASCII_CHARACTERS = LongBitSet.from(digits).addAll("*@-_+./");
 
-    public static StringBuilder escape(CharSequence src) {
+    public static StringBuilder encodeURI(CharSequence src) {
         StringBuilder tmp = new StringBuilder(src.length() * 3);
         for (int i = 0; i < src.length(); i++) {
             char j = src.charAt(i);
@@ -133,37 +135,56 @@ public class TextUtil {
         return tmp;
     }
 
-    public static String unescapeBytes(final CharSequence src) {
-        int len;
-        ByteList tmp = new ByteList((len = src.length()) >> 1);
-        int i = 0, pos;
+    public static String decodeURI(CharSequence src) throws MalformedURLException {
+        UTFCoder uc = IOUtil.SharedCoder.get();
+
+        CharList cb = uc.charBuf; cb.clear();
+        ByteList bb = uc.byteBuf; bb.clear();
+
+        int len = src.length();
+        int i = 0;
 
         while (i < len) {
-            pos = limitedIndexOf(src, '%', i, len);
+            int pos = limitedIndexOf(src, '%', i, len);
             if (pos == i) {
                 if (src.charAt(pos + 1) == 'u') {
-                    throw new IllegalStateException();
+                    try {
+                        ByteList.decodeUTFPartial(0, 0, cb, bb);
+                        bb.clear();
+                    } catch (UTFDataFormatException e) {
+                        throw new MalformedURLException("Malformed URI in '" + src + "' near " + i);
+                    }
+
+                    int ch = MathUtils.parseInt(src, pos + 2, pos + 6, 16);
+                    cb.append((char) ch);
+                    i = pos + 6;
                 } else {
                     byte ch = (byte) MathUtils.parseInt(src, pos + 1, pos + 3, 16);
-                    tmp.put(ch);
+                    bb.put(ch);
                     i = pos + 3;
                 }
             } else {
-                if(pos == -1) {
-                    pos = len;
+                try {
+                    ByteList.decodeUTFPartial(0, 0, cb, bb);
+                    bb.clear();
+                } catch (UTFDataFormatException e) {
+                    throw new MalformedURLException("Malformed URI in '" + src + "' near " + i);
                 }
-                while (i < pos) {
-                    tmp.put((byte) src.charAt(i));
-                    i++;
-                }
+
+                if(pos == -1) pos = len;
+                cb.append(src, i, pos);
+                i = pos;
             }
         }
+
         try {
-            return ByteList.readUTF(tmp);
+            ByteList.decodeUTFPartial(0, 0, cb, bb);
+            bb.clear();
         } catch (UTFDataFormatException e) {
-            e.printStackTrace();
+            throw new MalformedURLException("Malformed URI in '" + src + "' near " + i);
         }
-        return "-";
+
+        return cb.toString();
     }
 
     public static int lastMatches(CharSequence a, int aIndex, CharSequence b, int bIndex, int max) {

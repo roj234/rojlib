@@ -261,13 +261,7 @@ public class SSLSocket extends PlainSocket {
         return engine.getHandshakeStatus();
     }
 
-    @Override
-    public void poll() {
-        rBuf.position(rBuf.position() + pushback);
-        pushback = 0;
-    }
-
-    int pushback;
+    private ByteBuffer pushback = EMPTY;
     /*
      * Read the channel for more information, then unwrap the
      * (hopefully application) data we get.
@@ -278,35 +272,37 @@ public class SSLSocket extends PlainSocket {
      * Each call to this method will perform at most one underlying read().
      */
     public int read(int max) throws IOException {
-        SSLEngineResult result;
-
         if (!hsDone) {
             throw new SSLException("Not handshake");
         }
 
         int nread;
-        if(pushback > 0) {
-            nread = Math.min(pushback, max);
-            rBuf.position(rBuf.position() + nread);
-            pushback -= nread;
-            if (nread == max) {
-                return max;
-            }
+        if(pushback.hasRemaining()) {
+            ByteBuffer pb = this.pushback;
+            nread = Math.min(pb.remaining(), max);
+
+            int ol = pb.limit();
+            pb.limit(pb.position() + nread);
+            rBuf.put(pb);
+            pb.limit(ol);
+
+            if (nread == max) return max;
         } else {
             nread = 0;
         }
 
         int read = _read(networkIn);
         if (read < 0) {
-            System.err.println("!! Read Closed " + read);
-            engine.closeInbound();  // probably throws exception
+            try {
+                engine.closeInbound();
+            } catch (SSLException ignored) {}
             return -1;
         }
 
         read = 0;
         vw:
         do {
-            result = _readNetworkIn(max - read);
+            SSLEngineResult result = _readNetworkIn(max - read);
             read += result.bytesProduced();
 
             /*
@@ -349,13 +345,21 @@ public class SSLSocket extends PlainSocket {
     private SSLEngineResult _readNetworkIn(int mx) throws SSLException {
         networkIn.flip();
         SSLEngineResult result = engine.unwrap(networkIn, rBuf);
-        if (mx > 0) {
-            int more = pushback = result.bytesProduced() - mx;
-            if (more > 0) {
-                rBuf.position(rBuf.position() - more);
-            }
-        }
         networkIn.compact();
+
+        int more = result.bytesProduced() - mx;
+        if (more > 0) {
+            ByteBuffer pb = pushback;
+            if (pb.remaining() < more) {
+                ByteBuffer bb = ByteBuffer.allocate(pb.remaining() + more);
+                bb.put(pb).flip();
+                pushback = pb = bb;
+            }
+
+            rBuf.flip().position(mx);
+            pb.compact().put(rBuf).flip();
+            rBuf.limit(rBuf.capacity()).position(mx);
+        }
         return result;
     }
 

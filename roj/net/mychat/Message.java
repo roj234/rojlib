@@ -8,6 +8,9 @@ import roj.config.serial.StreamSerializer;
  * @since 2022/2/7 19:56
  */
 public class Message implements StreamSerializable {
+    public static final int STYLE_DEFAULT = 0, STYLE_ERROR = 1, STYLE_WARNING = 2, STYLE_SUCCESS = 3, STYLE_NONE = 4,
+        STYLE_BAR = 8;
+
     public int uid;
     public String text;
     public long time;

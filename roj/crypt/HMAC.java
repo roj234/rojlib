@@ -85,4 +85,9 @@ public final class HMAC extends MessageDigest {
         md.reset();
         md.update(ipad);
     }
+
+    @Override
+    public String toString() {
+        return getAlgorithm() + " Message Digest from RojLib";
+    }
 }
