@@ -25,8 +25,7 @@
  */
 package roj.config;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.data.*;
 import roj.config.serial.Serializer;
@@ -177,7 +176,7 @@ public class YAMLParser extends Parser {
         if (ser != null && map.containsKey("==", Type.STRING)) {
             Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
-                return new CObject<>(map.raw(), des);
+                return new CObject<>(map.raw(), ser, des);
             }
         }
 
@@ -312,7 +311,7 @@ public class YAMLParser extends Parser {
         if (ser != null && map.containsKey("==", Type.STRING)) {
             Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
-                return new CObject<>(map.raw(), des);
+                return new CObject<>(map.raw(), ser, des);
             }
         }
 
@@ -474,8 +473,8 @@ public class YAMLParser extends Parser {
     }
 
     public static class YAMLLexer extends AbstLexer {
-        static final IBitSet SPECIAL = LongBitSet.from(YAML_SPEC_CHARS),
-                             SPECIAL_0 = LongBitSet.from(YAML_ESCAPE_MULTI);
+        static final MyBitSet SPECIAL  = MyBitSet.from(YAML_SPEC_CHARS),
+                             SPECIAL_0 = MyBitSet.from(YAML_ESCAPE_MULTI);
 
         byte flag;
         protected final MyHashMap<String, CEntry> anchors = new MyHashMap<>();

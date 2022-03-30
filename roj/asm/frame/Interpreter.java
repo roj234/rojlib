@@ -30,7 +30,6 @@ import roj.asm.OpcodeUtil;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstDynamic;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
@@ -46,6 +45,7 @@ import roj.util.Helpers;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.frame.VarType.*;
@@ -1032,8 +1032,8 @@ public class Interpreter {
                 id++;
                 break;
         }
-        if(load && local.size < id)
-            throw new IllegalArgumentException("Access #" + id + " before assign");
+        //if(load && local.size < id)
+        //    throw new IllegalArgumentException("Access #" + id + " before assign");
         maxLocalSize = Math.max(maxLocalSize, id + 1);
     }
 
@@ -1054,98 +1054,11 @@ public class Interpreter {
         }
     }
 
-    public List<CodeBlock> gather(AttrCode code) {
-        return gather(code.instructions, code.exceptions, null);
-    }
+    Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
+    Map<InsnNode, Target> byTarget = new MyHashMap<>();
+    Unioner<Exc> byException = new Unioner<>();
 
-    // todo
-    public List<CodeBlock> gather(InsnList list, List<ExceptionEntry> exceptionEntries, ToIntMap<InsnNode> pcRev) {
-        Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
-        Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
-        Unioner<Exc> byException = new Unioner<>();
-
-        collectJumpNodes(list, exceptionEntries, bySource, byTarget, byException);
-
-        LongBitSet routines = new LongBitSet();
-
-        BasicBlock first = new BasicBlock(0);
-        first.targets = new int[] {0};
-        first.localBegin = new VarList().copyFrom(local);
-        first.stackBegin = new VarList().copyFrom(stack);
-        MyHashSet<BasicBlock> visit1 = new MyHashSet<>();
-        visit1.add(first);
-
-        MyHashSet<BasicBlock> visited = new MyHashSet<>();
-        MyHashSet<BasicBlock> visit2 = new MyHashSet<>();
-        while (!visit1.isEmpty()) {
-            for (BasicBlock bb : visit1) {
-                mainCyc:
-                for (int j : bb.targets) {
-                    if(!routines.add(j)) continue;
-
-                    local.copyFrom(bb.localBegin);
-                    stack.copyFrom(bb.stackBegin);
-
-                    Region rg = byException.findRegion(j);
-                    while (j < list.size()) {
-                        int flg;
-                        InsnNode node;
-                        switch (flg = visitNode(node = list.get(j++))) {
-                            case 1:
-                            case 2:
-                            case 3:
-                                BasicBlock next = bySource.get(node);
-                                if (next != null) {
-                                    if(visited.add(next)) {
-                                        next.localBegin.copyFrom(local);
-                                        next.stackBegin.copyFrom(stack);
-                                        visit2.add(next);
-                                    } else {
-                                        checkStackSame(next, local,stack);
-                                    }
-                                } else {
-                                    assert flg == 1;
-                                }
-                                // end of basic block
-                                continue mainCyc;
-                            case 4:
-                                checkWide(list.get(j).code);
-                                break;
-                        }
-                        if(rg != (rg = byException.findRegion(j))) {
-                            List<Exc> mv = rg.value();
-                            if(mv.isEmpty()) continue;
-                            BasicBlock next = mv.get(mv.size() - 1).bb;
-                            if(visited.add(next)) {
-                                next.localBegin.copyFrom(local);
-                                visit2.add(next);
-                            } else {
-                                checkStackSame(next, local, null);
-                            }
-                        }
-                    }
-                }
-            }
-            MyHashSet<BasicBlock> tmp1 = visit2;
-            visit2 = visit1;
-            visit2.clear();
-            visit1 = tmp1;
-        }
-
-        List<InsnNode> out = new ArrayList<>(byTarget.keySet());
-        if(pcRev != null)
-            out.sort((o1, o2) -> Integer.compare(pcRev.getInt(o1), pcRev.getInt(o2)));
-        else
-            out.sort((o1, o2) -> Integer.compare(list.indexOf(o1), list.indexOf(o2)));
-
-        for (int i = 0; i < out.size(); i++) {
-            BasicBlock bb = byTarget.get(out.get(i)).get(0);
-            assert bb.done;
-            out.set(i, Helpers.cast(new CodeBlock(list, bb)));
-        }
-        return Helpers.cast(out);
-    }
-
+    // 算了，没人会帮我的
     protected void checkStackSame(BasicBlock next, VarList localB, VarList StackB) {
 //        if (!next.localBegin.sw(localB) || !next.stackBegin.eq(StackB)) {
 //            throw new RuntimeException(
@@ -1156,17 +1069,22 @@ public class Interpreter {
 //                            "GotL: " + local + "\n" +
 //                            "GotS: " + stack);
 //        }
-        //next.localBegin.minus(local);
+        if (next.localBegin == null) {
+            next.localBegin = new VarList().copyFrom(localB);
+        } else {
+            next.localBegin.minus(localB);
+            localB.minus(next.localBegin);
+        }
     }
 
     public List<Frame> compute(InsnList list, List<ExceptionEntry> exceptionEntries) {
-        Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
-        Map<InsnNode, List<BasicBlock>> byTarget = new MyHashMap<>();
-        Unioner<Exc> byException = new Unioner<>();
+        Map<InsnNode, BasicBlock> bySource = this.bySource; bySource.clear();
+        Map<InsnNode, Target> byTarget = this.byTarget; byTarget.clear();
+        Unioner<Exc> byException = this.byException; byException.clear();
 
         collectJumpNodes(list, exceptionEntries, bySource, byTarget, byException);
 
-        LongBitSet routines = new LongBitSet();
+        MyBitSet routines = new MyBitSet();
 
         BasicBlock first = new BasicBlock(0);
         first.targets = new int[] {0};
@@ -1190,9 +1108,21 @@ public class Interpreter {
                         Region rg = byException.findRegion(j);
                         while (j < list.size()) {
                             maxStackSize = Math.max(maxStackSize, stack.size);
+                            InsnNode node = list.get(j++);
+
+                            Target target = byTarget.get(node);
+                            if (target != null) {
+                                if (target.local == null) {
+                                    target.local = new VarList().copyFrom(local);
+                                    target.stack = new VarList().copyFrom(stack);
+                                } else {
+                                    target.local.minus(local);
+                                    target.stack.minus(stack);
+                                }
+                            }
+
                             int flg;
-                            InsnNode node;
-                            switch (flg = visitNode(node = list.get(j++))) {
+                            switch (flg = visitNode(node)) {
                                 case 1:
                                 case 2:
                                 case 3:
@@ -1220,6 +1150,7 @@ public class Interpreter {
                                 BasicBlock next = mv.get(mv.size() - 1).bb;
                                 if (visited.add(next)) {
                                     next.localBegin.copyFrom(local);
+                                    //stack.copyFrom(next.stackBegin);
                                     tmp.add(next);
                                 } else {
                                     checkStackSame(next, local, null);
@@ -1242,8 +1173,15 @@ public class Interpreter {
 
         int i;
         for (i = 0; i < frames0.size(); i++) {
-            List<BasicBlock> bbs = byTarget.get(frames0.get(i));
+            Target target = byTarget.get(frames0.get(i));
+            List<BasicBlock> bbs = target.bbs;
             BasicBlock bb = bbs.get(0);
+
+            if (target.local != null) {
+                checkStackSame(bb, target.local, target.stack);
+            } else {
+             //   System.err.println(target);
+            }
 
             for (int j = 0; j < bbs.size(); j++) {
                 BasicBlock next = bbs.get(j);
@@ -1252,15 +1190,15 @@ public class Interpreter {
                     checkStackSame(next, bb.localBegin, bb.stackBegin);
                 }
 
-                if(next.start == -1)
-                    continue;
-                List<BasicBlock> new1 = byTarget.get(list.get(next.start));
+                if(next.start < 0) continue;
+
+                Target new1 = byTarget.get(list.get(next.start));
                 if(new1 != null) {
-                    for (int k = 0; k < new1.size(); k++) {
-                        BasicBlock new2 = new1.get(k);
-                        if(!bbs.contains(new2)) {
+                    List<BasicBlock> bbs2 = new1.bbs;
+                    for (int k = 0; k < bbs2.size(); k++) {
+                        BasicBlock new2 = bbs2.get(k);
+                        if(!bbs.contains(new2))
                             bbs.add(new2);
-                        }
                     }
                 }
             }
@@ -1269,7 +1207,7 @@ public class Interpreter {
         lastLocal = first.localBegin;
         lastStack = first.stackBegin;
         for (i = 0; i < frames0.size(); i++) {
-            BasicBlock bb = byTarget.get(frames0.get(i)).get(0);
+            BasicBlock bb = byTarget.get(frames0.get(i)).bbs.get(0);
             assert bb.done;
 
             local.copyFrom(bb.localBegin);
@@ -1325,7 +1263,9 @@ public class Interpreter {
         return max;
     }
 
-    private static void collectJumpNodes(InsnList list, List<ExceptionEntry> exceptionEntries, Map<InsnNode, BasicBlock> bySource, Map<InsnNode, List<BasicBlock>> byTarget, Unioner<Exc> byException) {
+    private static void collectJumpNodes(InsnList list,
+        List<ExceptionEntry> exceptions,
+        Map<InsnNode, BasicBlock> bySource, Map<InsnNode, Target> byTarget, Unioner<Exc> byException) {
         int i = 0;
         IntList il = new IntList(4);
         while (i < list.size()) {
@@ -1337,12 +1277,21 @@ public class Interpreter {
                     BasicBlock pt = new BasicBlock(i - 1);
 
                     List<InsnNode> lst1 = new ArrayList<>();
-                    il.add(list.indexOf(node = InsnNode.validate(node1.def)));
-                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
 
-                    for (SwitchEntry node2 : node1.switcher) {
-                        il.add(list.indexOf(node = InsnNode.validate((InsnNode) node2.node)));
-                        byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+                    int id;
+                    il.add(id = list.indexOf(node = InsnNode.validate(node1.def)));
+                    if (id < 0) throw new IllegalArgumentException(node1 + " (bci:" + (int)node1.bci + ")的默认分支跳转的目标 " +
+                                                                       " (bci:" + (int)node.bci + ")无法找到");
+
+                    byTarget.computeIfAbsent(node, fnTarget()).bbs.add(pt);
+
+                    List<SwitchEntry> switcher = node1.switcher;
+                    for (int j = 0; j < switcher.size(); j++) {
+                        SwitchEntry node2 = switcher.get(j);
+                        il.add(id = list.indexOf(node = InsnNode.validate((InsnNode) node2.node)));
+                        if (id < 0) throw new IllegalArgumentException(node1 + " (bci:" + (int) node1.bci + ")的分支" + j + "跳转的目标" +
+                                                                           " (bci:" + (int) node.bci + ")无法找到");
+                        byTarget.computeIfAbsent(node, fnTarget()).bbs.add(pt);
                     }
 
                     pt.targets = il.toArray();
@@ -1351,20 +1300,24 @@ public class Interpreter {
                     GotoInsnNode node1 = (GotoInsnNode) node;
 
                     BasicBlock pt = new BasicBlock(i - 1);
-                    il.add(list.indexOf(node = InsnNode.validate(node1.getTarget())));
+                    int id;
+                    il.add(id = list.indexOf(node = InsnNode.validate(node1.getTarget())));
+                    if (id < 0) throw new IllegalArgumentException(node1 + " (bci:" + (int) node1.bci + ")跳转的目标 " +
+                                                                       " (bci:" + (int) node.bci + ")无法找到");
                     if (node1 instanceof IfInsnNode) {
                         il.add(i);
                     }
                     pt.targets = il.toArray();
 
-                    byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+                    byTarget.computeIfAbsent(node, fnTarget()).bbs.add(pt);
                     bySource.put(node1, pt);
                 }
                 il.clear();
             }
         }
-        for (i = 0; i < exceptionEntries.size(); i++) {
-            ExceptionEntry entry = exceptionEntries.get(i);
+        if (exceptions == null) return;
+        for (i = 0; i < exceptions.size(); i++) {
+            ExceptionEntry entry = exceptions.get(i);
             Exc exc = new Exc();
             exc.start = list.indexOf(InsnNode.validate(entry.start));
             exc.end = list.indexOf(InsnNode.validate(entry.end));
@@ -1372,11 +1325,17 @@ public class Interpreter {
 
             InsnNode node = InsnNode.validate(entry.handler);
             BasicBlock pt = exc.bb = new BasicBlock(-1);
-            pt.targets = new int[] {list.indexOf(node)};
-            byTarget.computeIfAbsent(node, Helpers.fnArrayList()).add(pt);
+            int id = list.indexOf(node);
+            if (id < 0) throw new IllegalArgumentException("异常catcher#" + i + "跳转的目标 " + node + " (bci:" + (int) node.bci + ")无法找到");
+            pt.targets = new int[] { id };
+            byTarget.computeIfAbsent(node, fnTarget()).bbs.add(pt);
             // noinspection all
             pt.stackBegin.add(obj(entry.type == ExceptionEntry.ANY_TYPE ? "java/lang/Throwable" : entry.type));
         }
+    }
+
+    private static <T> T fnTarget() {
+        return Helpers.cast((Function<InsnNode, Target>) (n) -> new Target());
     }
 
     public static void checkWide(byte code) {
@@ -1397,5 +1356,10 @@ public class Interpreter {
             default:
                 throw new IllegalStateException("Unable wide " + OpcodeUtil.toString0(code));
         }
+    }
+
+    static final class Target {
+        VarList stack, local;
+        final SimpleList<BasicBlock> bbs = new SimpleList<>(2);
     }
 }

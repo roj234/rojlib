@@ -29,19 +29,18 @@ import ilib.Config;
 import ilib.asm.util.MCHooks;
 import ilib.client.CreativeTabsDynamic;
 import ilib.client.api.IContainerCreative;
-import ilib.client.api.ISearchHandler;
-import ilib.client.util.RenderUtils;
+import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
-import ilib.gui.comp.BaseComponent;
-import ilib.util.PinyinUtil;
+import ilib.gui.comp.Component;
+import ilib.util.MCTexts;
 import org.lwjgl.input.Mouse;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
 import roj.collect.FilterList;
+import roj.collect.SimpleList;
 
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainerCreative;
 import net.minecraft.client.renderer.GlStateManager;
@@ -54,10 +53,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.MathHelper;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 
@@ -72,7 +70,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     @Shadow("field_147058_w")
     static int selectedTabIndex;
 
-    @Shadow("field_147006_u")
+    @Shadow(value = "field_147006_u",owner = "net.minecraft.client.gui.inventory.GuiContainer")
     Slot hoveredSlot;
 
     @Shadow("field_147067_x")
@@ -82,7 +80,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     private GuiTextField searchField;
 
     @Copy
-    static List<BaseComponent> components;
+    static List<Component> components;
 
     public CustomCreativeTab(EntityPlayer player) {
         super(player);
@@ -93,13 +91,6 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         ((GuiContainerCreative.ContainerCreative) inventorySlots).scrollTo(pos);
     }
 
-    @Nonnull
-    @Override
-    @Copy
-    public FontRenderer getFontRenderer() {
-        return fontRenderer;
-    }
-
     @Copy
     public TileEntity getTileEntity() {
         return null;
@@ -108,61 +99,91 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     @Override
     @Copy
     public ResourceLocation getTexture() {
-        return BaseComponent.COMPONENTS_TEXTURE;
+        return Component.TEXTURE;
     }
 
     @Override
     @Inject("func_73864_a")
-    protected void mouseClicked(int mouseX1, int mouseY1, int mouseButton) throws IOException {
-        super.mouseClicked(mouseX1, mouseY1, mouseButton);
+    protected void mouseClicked(int x, int y, int mouseButton) throws IOException {
+        super.mouseClicked(x, y, mouseButton);
         if (components == null) return;
-        final int mouseX = mouseX1 - guiLeft;
-        final int mouseY = mouseY1 - guiTop;
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX, mouseY)) {
-                component.mouseDown(mouseX, mouseY, mouseButton);
+
+        x -= guiLeft;
+        y -= guiTop;
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            if (com.isMouseOver(x, y)) {
+                com.mouseDown(x, y, mouseButton);
             }
         }
     }
 
     @Override
     @Inject("func_146286_b")
-    protected void mouseReleased(int mouseX1, int mouseY1, int state) {
-        super.mouseReleased(mouseX1, mouseY1, state);
+    protected void mouseReleased(int x, int y, int state) {
+        super.mouseReleased(x, y, state);
         if (components == null) return;
-        final int mouseX = mouseX1 - guiLeft;
-        final int mouseY = mouseY1 - guiTop;
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX, mouseY)) {
-                component.mouseUp(mouseX, mouseY, state);
+
+        x -= guiLeft;
+        y -= guiTop;
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            if (com.isMouseOver(x, y)) {
+                com.mouseUp(x, y, state);
             }
         }
     }
 
+    @Shadow(value = "func_146273_a", owner = "net.minecraft.client.gui.inventory.GuiContainer")
+    private void shadow0(int a, int b, int c, long d) {}
+
     @Override
     @Copy(newName = "func_146273_a")
-    protected void mouseClickMove(int mouseX1, int mouseY1, int clickedMouseButton, long timeSinceLastClick) {
-        super.mouseClickMove(mouseX1, mouseY1, clickedMouseButton, timeSinceLastClick);
+    protected void mouseClickMove(int x, int y, int button, long time) {
+        shadow0(x, y, button, time);
+
         if (components == null) return;
-        final int mouseX = mouseX1 - guiLeft;
-        final int mouseY = mouseY1 - guiTop;
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX, mouseY)) {
-                component.mouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
+
+        x -= guiLeft;
+        y -= guiTop;
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            if (com.isMouseOver(x, y)) {
+                com.mouseDrag(x, y, button, time);
             }
         }
     }
+
+    @Shadow(value = "func_147055_p")
+    private boolean needsScrollBars() {
+        return false;
+    }
+
+    @Shadow(value = "func_146274_d", owner = "net.minecraft.client.gui.inventory.GuiContainer")
+    private void handleMouseInput1() throws IOException {}
 
     @Override
     @Inject("func_146274_d")
     public void handleMouseInput() throws IOException {
-        super.handleMouseInput();
+        handleMouseInput1();
+
         if (components == null) return;
-        int scrollDirection = Mouse.getEventDWheel();
-        if (scrollDirection != 0) {
-            int x = Mouse.getX(), y = Mouse.getY();
-            for (BaseComponent component : components) {
-                component.mouseScrolled(x, y, scrollDirection > 0 ? 1 : -1);
+
+        int dir = Mouse.getEventDWheel() / 120;
+        if (dir != 0) {
+            if (this.needsScrollBars()) {
+                int j = (((GuiContainerCreative.ContainerCreative)inventorySlots).itemList.size() + 9 - 1) / 9 - 5;
+
+                this.currentScroll = MathHelper.clamp((float)(currentScroll - (dir / (double)j)), 0.0F, 1.0F);
+                ((GuiContainerCreative.ContainerCreative)inventorySlots).scrollTo(currentScroll);
+            }
+
+            int x = Mouse.getEventX() * width / mc.displayWidth - guiLeft;
+            int y = height - Mouse.getEventY() * height / mc.displayHeight - 1 - guiTop;
+
+            for (int i = 0; i < components.size(); i++) {
+                Component com = components.get(i);
+                com.mouseScrolled(x, y, dir);
             }
         }
     }
@@ -172,50 +193,31 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     protected void keyTyped(char typedChar, int keyCode) throws IOException {
         super.keyTyped(typedChar, keyCode);
         if (components == null) return;
-        for (BaseComponent component : components) {
-            component.keyTyped(typedChar, keyCode);
+
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            com.keyTyped(typedChar, keyCode);
         }
     }
 
     @Inject("func_146979_b")
-    protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        //GlStateManager.pushMatrix();
-        super.drawGuiContainerForegroundLayer(mouseX, mouseY);
-        //GlStateManager.popMatrix();
+    protected void drawGuiContainerForegroundLayer(int x, int y) {
+        super.drawGuiContainerForegroundLayer(x, y);
+
         if (components == null) return;
-        //GlStateManager.pushMatrix();
-
-        RenderUtils.bindTexture(BaseComponent.COMPONENTS_TEXTURE);
-        for (BaseComponent component : components) {
-            RenderUtils.prepareRenderState();
-            component.renderOverlay(guiLeft, guiTop, mouseX - guiLeft, mouseY - guiTop);
-            RenderUtils.restoreRenderState();
-        }
-
-        //GlStateManager.popMatrix();
+        GuiHelper.renderForeground(x - guiLeft, x - guiTop, components);
     }
 
     @Inject("func_146976_a")
-    protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        //GlStateManager.pushMatrix();
-        super.drawGuiContainerBackgroundLayer(partialTicks, mouseX, mouseY);
-        //GlStateManager.popMatrix();
+    protected void drawGuiContainerBackgroundLayer(float partialTicks, int x, int y) {
+        super.drawGuiContainerBackgroundLayer(partialTicks, x, y);
+
         if (components == null) return;
+
         GlStateManager.pushMatrix();
-
-        RenderUtils.prepareRenderState();
-
         GlStateManager.translate(guiLeft, guiTop, 0);
-        RenderUtils.bindTexture(BaseComponent.COMPONENTS_TEXTURE);
 
-        for (BaseComponent component : components) {
-            GlStateManager.pushMatrix();
-            component.render(guiLeft, guiTop, mouseX - guiLeft, mouseY - guiTop);
-            GlStateManager.popMatrix();
-        }
-
-        //RenderUtils.restoreRenderState();
-        //RenderUtils.restoreColor();
+        GuiHelper.renderBackground(x - guiLeft, x - guiTop, components);
 
         GlStateManager.popMatrix();
     }
@@ -225,27 +227,31 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         super.setCurrentCreativeTab(tab);
 
         if (tab != CreativeTabs.SEARCH) {
-            //this.searchField.setFocused(true);
-            this.searchField.setCanLoseFocus(true);
+            searchField.setFocused(false);
+            searchField.setCanLoseFocus(true);
         }
 
+        if (components == null) components = new SimpleList<>();
+        else components.clear();
+
         if (tab instanceof CreativeTabsDynamic) {
-            components = components == null ? new ArrayList<>() : new ArrayList<>(components.size());
             ((CreativeTabsDynamic) tab).addComponents(this, components);
-        } else {
-            if (components != null)
-                components = null;
         }
     }
 
     @Copy(newName = "func_191948_b")
-    protected void drawHoveredTooltip(int mouseX, int mouseY) {
-        if (this.mc.player.inventory.getItemStack().isEmpty() && this.hoveredSlot != null && this.hoveredSlot.getHasStack()) {
-            this.renderToolTip(this.hoveredSlot.getStack(), mouseX, mouseY);
+    protected void drawHoveredTooltip(int x, int y) {
+        if (this.mc.player.inventory.getItemStack().isEmpty() &&
+                this.hoveredSlot != null &&
+                this.hoveredSlot.getHasStack()) {
+            this.renderToolTip(this.hoveredSlot.getStack(), x, y);
         } else {
             if (components == null) return;
-            for (BaseComponent component : components) {
-                if (component.isMouseOver(mouseX - guiLeft, mouseY - guiTop)) component.renderToolTip(mouseX, mouseY);
+
+            for (int i = 0; i < components.size(); i++) {
+                Component com = components.get(i);
+                if (com.isMouseOver(x - guiLeft, y - guiTop))
+                    com.renderToolTip(x, y);
             }
         }
     }
@@ -262,31 +268,29 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         final String text = this.searchField.getText().toLowerCase();
 
         if (tab != CreativeTabs.SEARCH) {
-            if (tab instanceof ISearchHandler) {
-                ((ISearchHandler) tab).search(list, text);
+            if (!text.isEmpty()) {
+                NonNullList<ItemStack> checker = new NonNullList<>(new FilterList<>((old, latest) -> {
+                    boolean matches = false;
+
+                    List<String> inf = MCHooks.makeBetterInformation(latest);
+                    for (int i = 0; i < inf.size(); i++) {
+                        String line = inf.get(i);
+                        if (containsPinyin(line.toLowerCase(), text)) {
+                            matches = true;
+                            break;
+                        }
+                    }
+
+                    if (matches) {
+                        list.add(latest);
+                    }
+
+                    return false;
+                }), null);
+
+                tab.displayAllRelevantItems(checker);
             } else {
-                if (!text.isEmpty()) {
-                    NonNullList<ItemStack> checker = new NonNullList<>(new FilterList<>((old, latest) -> {
-                        boolean matches = false;
-
-                        for (String line : MCHooks.makeBetterInformation(latest)) {
-                            if (containsPinyin(line.toLowerCase(), text)) {
-                                matches = true;
-                                break;
-                            }
-                        }
-
-                        if (matches) {
-                            list.add(latest);
-                        }
-
-                        return false;
-                    }), null);
-
-                    tab.displayAllRelevantItems(checker);
-                } else {
-                    tab.displayAllRelevantItems(list);
-                }
+                tab.displayAllRelevantItems(list);
             }
         } else {
             if (text.isEmpty()) {
@@ -303,10 +307,10 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
     }
 
     @Copy
-    private boolean containsPinyin(String line, String text) {
+    private static boolean containsPinyin(String line, String text) {
         if (!Config.enablePinyinSearch)
             return line.contains(text);
-        return line.contains(text) || PinyinUtil.pinyin().toPinyin(line).contains(text);
+        return line.contains(text) || MCTexts.pinyin().toPinyin(line).contains(text);
     }
 
     @Override
@@ -317,35 +321,26 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
 
     @Override
     @Copy
-    public int getGuiLeft() {
+    public int getLeft() {
         return guiLeft;
     }
 
     @Override
     @Copy
-    public int getGuiTop() {
+    public int getTop() {
         return guiTop;
     }
 
     @Override
     @Copy
-    public int getXSize() {
+    public int getWidth() {
         return xSize;
     }
 
     @Override
     @Copy
-    public int getYSize() {
+    public int getHeight() {
         return ySize;
     }
 
-    @Copy
-    public int getImgXSize() {
-        return 256;
-    }
-
-    @Copy
-    public int getImgYSize() {
-        return 256;
-    }
 }

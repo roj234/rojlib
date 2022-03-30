@@ -117,4 +117,8 @@ public abstract class CstRef extends Constant {
             slf.desc = desc.clone();
         return slf;
     }
+
+    public boolean matches(String clazz, String name, String desc) {
+        return this.clazz.getValue().getString().equals(clazz) && this.desc.getName().getString().equals(name) && this.desc.getType().getString().equals(desc);
+    }
 }

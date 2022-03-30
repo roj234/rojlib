@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.Unioner;
 import roj.collect.Unioner.Point;
 import roj.collect.Unioner.Range;
@@ -17,12 +17,12 @@ import java.util.List;
  * @since 2022/2/22 23:55
  */
 public class VarMapper {
-    final Unioner<IVar> union = new Unioner<>(10, false, 100);
-    final LongBitSet freeIds = new LongBitSet();
-    final List<IVar> tmp = new ArrayList<>();
+    final Unioner<IVar> union   = new Unioner<>(10, false, 100);
+    final MyBitSet      freeIds = new MyBitSet();
+    final List<IVar>    tmp     = new ArrayList<>();
 
     public final void dump(List<? extends IVar> list, int width) {
-        LongBitSet free = freeIds;
+        MyBitSet free = freeIds;
         free.clear();
         Unioner<IVar> union = this.union;
         union.clear();
@@ -83,7 +83,7 @@ public class VarMapper {
     }
 
     public int map(List<? extends IVar> list) {
-        LongBitSet free = freeIds;
+        MyBitSet free = freeIds;
         Unioner<IVar> union = this.union;
         List<IVar> tmp = this.tmp;
 

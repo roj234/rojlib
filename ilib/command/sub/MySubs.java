@@ -27,36 +27,38 @@ package ilib.command.sub;
 
 import ilib.Config;
 import ilib.ImpLib;
-import ilib.asm.Transformer;
+import ilib.asm.util.MCHooks;
 import ilib.client.TextureHelper;
+import ilib.misc.ps.Cheat;
 import ilib.util.Colors;
 import ilib.util.DimensionHelper;
 import ilib.util.ItemUtils;
 import ilib.util.PlayerUtil;
-import ilib.util.internal.ItemSpecialRenderer;
-import roj.collect.LongMap;
-import roj.collect.MyHashSet;
-import roj.opengl.util.OpenGLDebug;
-import roj.text.TextUtil;
-
+import ilib.util.internal.TileasBe;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
+import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerChunkMap;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.gen.ChunkProviderServer;
 import net.minecraft.world.gen.IChunkGenerator;
-
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
+import roj.collect.LongMap;
+import roj.collect.MyHashSet;
+import roj.opengl.util.OpenGLDebug;
+import roj.text.TextUtil;
 
 import java.util.Iterator;
 import java.util.List;
@@ -88,7 +90,7 @@ public abstract class MySubs extends AbstractSubCommand {
             final ChunkProviderServer provider = (ChunkProviderServer) world.getChunkProvider();
             final IChunkGenerator generator = provider.chunkGenerator;
             for (Chunk chunk : provider.getLoadedChunks()) {
-                if (generatedChunks.put(((long) chunk.x << 32) | chunk.z, true) == Boolean.TRUE)
+                if (generatedChunks.put(((long) chunk.x << 32) | (long)chunk.z, true) == Boolean.TRUE)
                     continue;
                 generator.populate(chunk.x, chunk.z);
                 GameRegistry.generateWorld(chunk.x, chunk.z, world, generator, provider);
@@ -112,17 +114,16 @@ public abstract class MySubs extends AbstractSubCommand {
     public static final MySubs TPS_CHANGE = new MySubs("tps") {
         public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
             if (!Config.enableTPSChange) {
-                throw new WrongUsageException("This command is not enabled yet.");
+                throw new WrongUsageException("你需要在配置文件中启用它.");
             }
-            if (args.length == 0)
-                throw new WrongUsageException("/il tps <tps>");
-            if (TextUtil.isNumber(args[0]) != 0)
-                throw new WrongUsageException("/il tps <tps>");
+            if (args.length == 0) throw new WrongUsageException("/il tps <tps>");
+            if (TextUtil.isNumber(args[0]) != 0) throw new WrongUsageException("/il tps <tps>");
             int i = Integer.parseInt(args[0]);
-            if (i <= 0 || i > 500) {
-                throw new WrongUsageException("Tps must in [1, 500]");
+            if (i < 0 || i > 1000) {
+                throw new WrongUsageException("Tps 必须在1-1000或者为0(不限制)");
             }
-            Transformer.MSpT = 1000 / i;
+            MCHooks.MSpT = i != 0 ? 1000 / i : 0;
+            PlayerUtil.sendTo(sender, Colors.GREY + "已将TPS设为 " + Colors.ORANGE + args[0]);
         }
     };
 
@@ -194,7 +195,7 @@ public abstract class MySubs extends AbstractSubCommand {
     };
     public static final MySubs RENDER_INFO = new MySubs("info") {
         public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-            ItemSpecialRenderer.onRender();
+            TileasBe.onRender();
         }
     };
     public static final MySubs TILE_TEST = new MySubs("test") {
@@ -211,9 +212,32 @@ public abstract class MySubs extends AbstractSubCommand {
             }
         }
     };
+    public static final MySubs BLOCK_UPDATE = new MySubs("update") {
+        public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
+            if (args.length < 1) {
+                sender.sendMessage(new TextComponentString("/il update <radius>"));
+                return;
+            }
 
-    public static MySubs DUMP_GL_INFO;
-    public static MySubs RELOAD_TEXTURE;
+            int r = Integer.parseInt(args[0]);
+            World world = sender.getEntityWorld();
+
+            int counter = 0;
+            for (BlockPos pos : BlockPos.getAllInBoxMutable(sender.getPosition().add(-r,-r,-r), sender.getPosition().add(r,r,r))) {
+                IBlockState state = world.getBlockState(pos);
+
+                if (state.getBlock() != Blocks.AIR) {
+                    world.notifyBlockUpdate(pos, state, state, 4);
+                    world.updateBlockTick(pos, state.getBlock(), 0, 1);
+                    counter++;
+                }
+            }
+
+            sender.sendMessage(new TextComponentString(Integer.toString(counter)));
+        }
+    };
+
+    public static MySubs DUMP_GL_INFO, RELOAD_TEXTURE, PACKAGE_SIMULATOR;
 
     static {
         if (ImpLib.isClient)
@@ -225,7 +249,7 @@ public abstract class MySubs extends AbstractSubCommand {
         DUMP_GL_INFO = new MySubs("dump_gl_info") {
             public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
                 for (String s : OpenGLDebug.dumpStrings())
-                    ItemSpecialRenderer.b(s);
+                    PlayerUtil.sendTo(null, s);
             }
         };
 
@@ -235,6 +259,10 @@ public abstract class MySubs extends AbstractSubCommand {
                 sender.sendMessage(new TextComponentString("材质已经重新加载."));
             }
         };
+
+        if ((Config.debug & 128) == 0) return;
+
+        PACKAGE_SIMULATOR = Cheat.getPrimaryCommand();
     }
 
     private final String name, help;

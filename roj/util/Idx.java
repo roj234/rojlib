@@ -26,10 +26,8 @@
 
 package roj.util;
 
-import roj.collect.IBitSet;
 import roj.collect.IntIterator;
-import roj.collect.LongBitSet;
-import roj.collect.SingleBitSet;
+import roj.collect.MyBitSet;
 
 /**
  * Idx 槽位筛选器
@@ -38,12 +36,12 @@ import roj.collect.SingleBitSet;
  * @since 2021/4/21 22:51
  */
 public final class Idx {
-    private IBitSet list;
-    private short size, len;
+    private MyBitSet list;
+    private short    size, len;
     private byte str = 0;
 
     public Idx(int length) {
-        list = length >= 64 ? new LongBitSet(length) : new SingleBitSet();
+        list =new MyBitSet(length);
         list.fill(length);
         len = (short) length;
     }
@@ -54,8 +52,8 @@ public final class Idx {
     }
 
     public void reset(int length) {
-        if(length >= 64 && !(list instanceof LongBitSet))
-            list = new LongBitSet(length);
+        if(length >= 64 && !(list instanceof MyBitSet))
+            list = new MyBitSet(length);
         list.fill(length);
         len = (short) length;
         size = 0;

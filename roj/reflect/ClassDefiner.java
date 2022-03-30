@@ -105,7 +105,9 @@ public final class ClassDefiner extends ClassLoader {
 
     public Class<?> defineClassC(String name, byte[] bytes, int off, int len) throws ClassFormatError {
         if (debug) {
-            try (FileOutputStream fos = new FileOutputStream(new File(name + ".class"))) {
+            File f = new File("./class_Definer_out");
+            f.mkdir();
+            try (FileOutputStream fos = new FileOutputStream(new File(f, name + ".class"))) {
                 fos.write(bytes, off, len);
             } catch (IOException ignored) {}
         }

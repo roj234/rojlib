@@ -37,7 +37,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 public class FileResponse extends StreamResponse {
-    static MyHashMap<String, Mime> mimeTypes = new MyHashMap<>();
+    static MyHashMap<String, Mime> mimeTypes;
     static final class Mime {
         String type;
         boolean zip;
@@ -46,8 +46,15 @@ public class FileResponse extends StreamResponse {
             this.type = type;
         }
     }
+
+    static {
+        mimeTypes = new MyHashMap<>();
+        mimeTypes.put("*", new Mime("text/plain"));
+    }
+
     public static synchronized void loadMimeMap(CharSequence text) {
         ArrayList<String> arr = new ArrayList<>();
+        mimeTypes.clear();
         for (String line : new SimpleLineReader(text)) {
             arr.clear();
             TextUtil.split(arr, line, ' ');

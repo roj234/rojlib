@@ -298,6 +298,24 @@ public class SimpleList<E> implements List<E>, RandomAccess {
         Arrays.sort(list, 0, size, (Comparator<? super Object>) c);
     }
 
+    @SuppressWarnings("unchecked")
+    public <X extends Comparable<E>> int binarySearch(int fromIndex, int toIndex, X key) {
+        Object[] list = this.list;
+        int low = fromIndex;
+        int high = toIndex - 1;
+
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            X midVal = (X) list[mid];
+
+            int v = midVal.compareTo((E) key);
+            if (v < 0) low = mid + 1;
+            else if (v > 0) high = mid - 1;
+            else return mid; // key found
+        }
+        return -(low + 1);
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public boolean removeIf(Predicate<? super E> filter) {
@@ -367,6 +385,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     }
 
     public void removeRange(int begin, int end) {
+        if (begin >= end) return;
         // will throw exceptions if out of bounds...
         System.arraycopy(list, end, list, begin, size - end);
 

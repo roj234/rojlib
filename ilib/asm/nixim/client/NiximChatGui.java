@@ -26,19 +26,16 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.Shadow;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ChatLine;
 import net.minecraft.client.gui.GuiNewChat;
 import net.minecraft.client.gui.GuiUtilRenderComponents;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.text.ITextComponent;
+import org.apache.logging.log4j.Logger;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
 
 import java.util.Iterator;
 import java.util.List;
@@ -53,7 +50,7 @@ public abstract class NiximChatGui extends GuiNewChat {
         super(_lvt_1_);
     }
 
-    @Copy
+    @Shadow("field_146249_a")
     static Logger xxLOGGER;
 
     @Shadow("field_146252_h")
@@ -99,14 +96,11 @@ public abstract class NiximChatGui extends GuiNewChat {
         }
     }
 
-    @Shadow("func_146234_a")
+    @Inject("func_146234_a")
     public void printChatMessageWithOptionalDeletion(ITextComponent text, int id) {
         this.setChatLine(text, id, this.mc.ingameGUI.getUpdateCounter(), false);
 
-        if (xxLOGGER == null)
-            xxLOGGER = LogManager.getLogger("CHAT");
-
         if (Config.logChat)
-            xxLOGGER.info(text.getFormattedText().replaceAll("\r", "\\\\r").replaceAll("\n", "\\\\n"));
+            xxLOGGER.info("[聊天] {}", text.getFormattedText().replaceAll("\r", "\\\\r").replaceAll("\n", "\\\\n"));
     }
 }

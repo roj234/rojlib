@@ -28,25 +28,23 @@ package ilib.asm;
 
 import ilib.Config;
 import ilib.api.ContextClassTransformer;
-import ilib.client.api.ClientChangeWorldEvent;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodSimple;
+import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
+import roj.asm.type.ParamHelper;
+import roj.asm.type.Type;
+import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
 import roj.asm.util.InsnList;
+import roj.asm.util.NodeHelper;
 import roj.collect.IntBiMap;
-import roj.collect.WeakHashSet;
 import roj.util.Helpers;
 
-import net.minecraft.entity.Entity;
-
-import net.minecraftforge.common.MinecraftForge;
-
 import java.util.List;
-import java.util.Set;
 
 import static ilib.asm.Loader.logger;
 
@@ -57,22 +55,18 @@ import static ilib.asm.Loader.logger;
  * @since 2021/5/29 17:16
  */
 public class Transformer implements ContextClassTransformer {
-    public static long MSpT = 50L;
-
     @Override
     public void transform(String trName, Context ctx) {
-        /*if(trName.contains(".Entity")) {
-            return transformEntityDataManager(data);
-        }*/
         switch (trName) {
             case "net.minecraft.util.math.MathHelper":
                 MathOptimizer.optimizeMathHelper(ctx);
                 break;
             case "net.minecraft.client.multiplayer.WorldClient":
-                if (Config.replaceEntityList) transformWorldClient(ctx);
+                if (Config.replaceEntityList || Config.noShitSound)
+                    transformWorldClient(ctx);
                 break;
             case "net.minecraft.entity.item.EntityMinecart":
-                if (Config.fixMinecart) transformMinecart(ctx);
+                if (Config.fixMinecart) onlySteveOnCart(ctx);
                 break;
             case "net.minecraft.client.Minecraft":
                 transformMinecraft(ctx);
@@ -81,13 +75,33 @@ public class Transformer implements ContextClassTransformer {
                 if (Config.noAnvilTax) transformAnvilSlot(ctx);
                 break;
             case "net.minecraft.server.MinecraftServer":
-                if (Config.enableTPSChange) transformServer(ctx);
+                if (Config.enableTPSChange) changeTPS(ctx);
                 break;
             case "net.minecraft.server.management":
                 transformPlayerChunkMap(ctx);
                 break;
             case "org.apache.logging.log4j.core.lookup.JndiLookup":
                 transformLOG4J2(ctx);
+                break;
+            case "net.minecraft.stats.RecipeBookServer":
+                if (Config.noRecipeBook) noRecipeBook(ctx);
+                break;
+            case "net.minecraft.advancements.AdvancementManager":
+                if (Config.noAdvancement) noAdvancement(ctx);
+                break;
+            case "net.minecraft.entity.player.EntityPlayer":
+                if (Config.attackCD == 0) noAttackCD(ctx);
+                break;
+            case "net.minecraft.entity.EntityLivingBase":
+                if (Config.noCollision) noEntityCollision(ctx);
+                if (Config.fastDismount) fastDismount(ctx);
+                break;
+            case "net.minecraft.server.management.PlayerInteractionManager":
+                if (Config.noGhostBlock) noGhostBlock(ctx);
+                break;
+            case "net.minecraft.block.BlockPistonBase":
+            case "net.minecraft.block.BlockRedstoneWire":
+                if (Config.noSoManyBlockPos) fastEnumFacing(ctx);
                 break;
         }
     }
@@ -162,7 +176,7 @@ public class Transformer implements ContextClassTransformer {
             logger.error("[PlayerChunkMap.Transform] Node not found!");
     }
 
-    private static void transformServer(Context ctx) {
+    private static void changeTPS(Context ctx) {
         ConstantData data = ctx.getData();
         int i = data.getMethodByName("run");
         Method mn = new Method(data, data.methods.get(i));
@@ -174,34 +188,10 @@ public class Transformer implements ContextClassTransformer {
             if (node.getOpcode() == Opcodes.LDC2_W) {
                 LdcInsnNode node1 = (LdcInsnNode) node;
                 if (node1.c.type() == Constant.LONG && ((CstLong) node1.c).value == 50L) {
-                    insn.set(i, new FieldInsnNode(Opcodes.GETSTATIC, "ilib/asm/transformers/Transformer.MSpT:J"));
-                    return;
+                    insn.set(i, new FieldInsnNode(Opcodes.GETSTATIC, "ilib/asm/util/MCHooks.MSpT:J"));
                 }
             }
         }
-        logger.error("[TPSChange.Transform] Node not found!");
-    }
-
-    private static Method beginLoading(Method method) {
-        InsnList insn = method.code.instructions;
-        for (int i = 0; i < insn.size(); i++) {
-            InsnNode node = insn.get(i);
-            if (node.getOpcode() == Opcodes.INVOKEVIRTUAL) {
-                InvokeInsnNode node1 = (InvokeInsnNode) node;
-                if (node1.name.equals("beginMinecraftLoading")) {
-                    insn.add(i, new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/ImpLib", "onPreInitDone", "()V"));
-                    logger.debug("beginLoad: done.");
-                    break;
-                }
-            }
-        }
-        return method;
-    }
-
-    public static void redirectGC() {
-        if (Config.changeWorldSpeed < 3)
-            System.gc();
-        MinecraftForge.EVENT_BUS.post(new ClientChangeWorldEvent());
     }
 
     /**
@@ -239,7 +229,7 @@ public class Transformer implements ContextClassTransformer {
         for (int i = 0; i < methodRef.size(); i++) {
             CstRef ref = methodRef.get(i);
             if (ref.getClassName().equals("java/lang/System") && ref.desc().getName().getString().equals("gc")) {
-                ref.setClazz(data.cp.getClazz("ilib/asm/transformers/Transformer"));
+                ref.setClazz(data.cp.getClazz("ilib/asm/util/MCHooks"));
                 ref.desc(data.cp.getDesc("redirectGC", "()V"));
                 logger.debug("redirectGC: done.");
                 break;
@@ -254,10 +244,26 @@ public class Transformer implements ContextClassTransformer {
         }
     }
 
+    private static Method beginLoading(Method method) {
+        InsnList insn = method.code.instructions;
+        for (int i = 0; i < insn.size(); i++) {
+            InsnNode node = insn.get(i);
+            if (node.getOpcode() == Opcodes.INVOKEVIRTUAL) {
+                InvokeInsnNode node1 = (InvokeInsnNode) node;
+                if (node1.name.equals("beginMinecraftLoading")) {
+                    insn.add(i+1, new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/ImpLib", "onPreInitDone", "()V"));
+                    logger.debug("beginLoad: done.");
+                    break;
+                }
+            }
+        }
+        return method;
+    }
+
     /**
      * 矿车只坐人
      */
-    private static void transformMinecart(Context ctx) {
+    private static void onlySteveOnCart(Context ctx) {
         ConstantData data = ctx.getData();
         int i = data.getMethodByName("func_180460_a");
         Method mn = new Method(data, data.methods.get(i));
@@ -282,33 +288,158 @@ public class Transformer implements ContextClassTransformer {
         throw new RuntimeException("出错了");
     }
 
-    public static Set<Entity> createEntityList() {
-        return new WeakHashSet<>();
-    }
-
     /**
      * 客户端实体列表
      */
     private static void transformWorldClient(Context ctx) {
         ConstantData data = ctx.getData();
-        int i = data.getMethodByName("<init>");
+
+        _trans:
+        if (Config.replaceEntityList) {
+            int i = data.getMethodByName("<init>");
+            Method mn = new Method(data, data.methods.get(i));
+            data.methods.set(i, Helpers.cast(mn));
+
+            InsnList list = mn.code.instructions;
+
+            i = 4;
+            do {
+                InsnNode node = list.get(i++);
+                if (node.getOpcode() == Opcodes.INVOKESTATIC) {
+                    InvokeInsnNode node1 = (InvokeInsnNode) node;
+                    if (node1.name.equals("newHashSet")) {
+                        node1.rawDesc("ilib/asm/util/MCHooks.createEntityList:()Ljava/util/Set;");
+                        break _trans;
+                    }
+                }
+            } while (i <= 20);
+            logger.warn("replaceEntityList failed.");
+        }
+
+        if (Config.noShitSound) {
+            // playMoodSoundAndCheckLight
+            int i = data.getMethodByName("func_147467_a");
+            data.methods.remove(i);
+        }
+    }
+
+    private static void noRecipeBook(Context ctx) {
+        ConstantData data = ctx.getData();
+
+        // sendPacket
+        replaceWithEmpty(data, "func_194081_a");
+        // read
+        replaceWithEmpty(data, "func_192825_a");
+
+        Method write = replaceWithEmpty(data, "func_192824_e");
+        AttrCode code = write.code;
+        code.stackSize = 2;
+        InsnList list = code.instructions;
+        list.clear();
+        list.add(new ClassInsnNode(Opcodes.NEW, "net/minecraft/nbt/NBTTagCompound"));
+        list.add(NPInsnNode.of(Opcodes.DUP));
+        list.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "net/minecraft/nbt/NBTTagCompound", "<init>", "()V"));
+        list.add(NPInsnNode.of(Opcodes.ARETURN));
+    }
+
+    private static void noAdvancement(Context ctx) {
+        ConstantData data = ctx.getData();
+
+        // reload
+        replaceWithEmpty(data, "func_192779_a");
+    }
+
+    private static void noAttackCD(Context ctx) {
+        ConstantData data = ctx.getData();
+
+        Method getCooledAttackStrength = replaceWithEmpty(data, "func_184825_o");
+        AttrCode code = getCooledAttackStrength.code;
+        code.stackSize = 1;
+        InsnList list = code.instructions;
+        list.clear();
+        list.add(NPInsnNode.of(Opcodes.FCONST_1));
+        list.add(NPInsnNode.of(Opcodes.FRETURN));
+    }
+
+    private static void noEntityCollision(Context ctx) {
+        ConstantData data = ctx.getData();
+
+        // collideWithNearbyEntities
+        replaceWithEmpty(data, "func_85033_bc");
+    }
+
+    private static void fastDismount(Context ctx) {
+        ConstantData data = ctx.getData();
+
+        Method dismountEntity = replaceWithEmpty(data, "func_110145_l");
+        AttrCode code = dismountEntity.code;
+        code.stackSize = 2;
+        InsnList list = code.instructions;
+        list.clear();
+        list.add(NPInsnNode.of(Opcodes.ALOAD_0));
+        list.add(NPInsnNode.of(Opcodes.ALOAD_1));
+        list.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, "ilib/util/EntityHelper", "dismountEntity",
+                                    "(Lnet/minecraft/entity/EntityLivingBase;Lnet/minecraft/entity/Entity;)V"));
+        list.add(NPInsnNode.of(Opcodes.RETURN));
+    }
+
+    private static void noGhostBlock(Context ctx) {
+        ConstantData data = ctx.getData();
+
+        // onBlockClicked
+        int i = data.getMethodByName("func_180784_a");
         Method mn = new Method(data, data.methods.get(i));
         data.methods.set(i, Helpers.cast(mn));
 
-        InsnList list = mn.code.instructions;
+        AttrCode code = mn.code;
+        InsnList list = code.instructions;
+        InsnNode ARETURN = list.remove(list.size() - 1);
+        // this.player.connection.sendPacket(new SPacketBlockChange(world, pos));
+        list.add(NPInsnNode.of(Opcodes.ALOAD_0));
+        list.add(new FieldInsnNode(Opcodes.GETFIELD, "net/minecraft/server/management/PlayerInteractionManager",
+                                   "field_73090_b", new Type("net/minecraft/entity/player/EntityPlayerMP")));
+        list.add(new FieldInsnNode(Opcodes.GETFIELD, "net/minecraft/entity/player/EntityPlayerMP",
+                                   "field_71135_a", new Type("net/minecraft/network/NetHandlerPlayServer")));
+        list.add(new ClassInsnNode(Opcodes.NEW, "net/minecraft/network/play/server/SPacketBlockChange"));
+        list.add(NPInsnNode.of(Opcodes.DUP));
+        list.add(NPInsnNode.of(Opcodes.ALOAD_0));
+        list.add(new FieldInsnNode(Opcodes.GETFIELD, "net/minecraft/server/management/PlayerInteractionManager",
+                                   "field_73092_a", new Type("net/minecraft/world/World")));
+        list.add(NPInsnNode.of(Opcodes.ALOAD_1));
+        list.add(new InvokeInsnNode(Opcodes.INVOKESPECIAL, "net/minecraft/network/play/server/SPacketBlockChange",
+                                    "<init>", "(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)V"));
+        list.add(new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, "net/minecraft/network/NetHandlerPlayServer",
+                                    "func_147359_a", "(Lnet/minecraft/network/Packet;)V"));
+        list.add(ARETURN);
+    }
 
-        i = 4;
-        do {
-            InsnNode node = list.get(i++);
-            if (node.getOpcode() == Opcodes.INVOKESTATIC) {
-                InvokeInsnNode node1 = (InvokeInsnNode) node;
-                if (node1.name.equals("newHashSet")) {
-                    node1.rawDesc("ilib/asm/transformers/Transformer.createEntityList:()Ljava/util/Set;");
-                    logger.debug("'WorldClient' transformed.");
-                    return;
-                }
+    // Utilities
+
+    private static void fastEnumFacing(Context ctx) {
+        ConstantData data = ctx.getData();
+        List<CstRef> methods = ctx.getMethodConstants();
+        for (int i = 0; i < methods.size(); i++) {
+            CstRef ref = methods.get(i);
+            if (ref.matches("net/minecraft/util/EnumFacing", "values", "[Lnet/minecraft/util/EnumFacing;")) {
+                ref.setClazz(data.cp.getClazz("ilib/asm/util/MCHooks"));
+                ref.desc(data.cp.getDesc("identityFacings", "[Lnet/minecraft/util/EnumFacing;"));
             }
-        } while (i <= 20);
-        logger.info("'WorldClient' transform failed.");
+        }
+    }
+
+    private static Method replaceWithEmpty(ConstantData data, String name) {
+        int i = data.getMethodByName(name);
+
+        MethodSimple ms = data.methods.get(i);
+        Method mn = new Method(ms.accesses, data, ms.name.getString(), ms.rawDesc());
+        Object code = ms.attributes.getByName("Code");
+        if (code != null) {
+            AttrCode c = mn.code = new AttrCode(ms);
+            c.localSize = (char) ParamHelper.paramSize(ms.rawDesc());
+            if ((AccessFlag.STATIC & mn.accesses) == 0) c.localSize++;
+            c.instructions.add(NodeHelper.X_RETURN(ms.getReturnType().nativeName()));
+        }
+        data.methods.set(i, Helpers.cast(mn));
+        return mn;
     }
 }

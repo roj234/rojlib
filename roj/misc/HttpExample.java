@@ -25,12 +25,10 @@
  */
 package roj.misc;
 
+import roj.io.IOUtil;
 import roj.net.http.Code;
 import roj.net.http.HttpServer;
-import roj.net.http.serv.ChunkedFile;
-import roj.net.http.serv.FileResponse;
-import roj.net.http.serv.Response;
-import roj.net.http.serv.StringResponse;
+import roj.net.http.serv.*;
 import roj.util.SleepingBeauty;
 
 import java.io.File;
@@ -46,6 +44,8 @@ public class HttpExample {
     public static void main(String[] args) throws IOException, GeneralSecurityException {
         Response gzc = new FileResponse(new File("E:/2"));
         ChunkedFile pt = new ChunkedFile(new File("E:/1"));
+        DirRouter r = args.length > 0 ? new DirRouter(new File(args[0])) : null;
+        FileResponse.loadMimeMap(IOUtil.readUTF(new File("mychat/mime.ini")));
 
         SleepingBeauty.sleep();
         HttpServer server = new HttpServer(new InetSocketAddress(2333), 2048, (request, handle) -> {
@@ -72,6 +72,9 @@ public class HttpExample {
                 case "/mem":
                     return new StringResponse(getMemory(), "text/plain");
                 default:
+                    if (request.path().startsWith("/f")) {
+                        return r.response(request.subPath(2), handle);
+                    }
                     handle.reply(404);
                     return StringResponse.forError(Code.NOT_FOUND, "未定义的路由");
             }

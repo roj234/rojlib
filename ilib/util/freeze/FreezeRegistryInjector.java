@@ -26,49 +26,55 @@
 package ilib.util.freeze;
 
 import com.google.common.collect.BiMap;
+import com.google.common.collect.ListMultimap;
 import ilib.Config;
+import ilib.ImpLib;
 import ilib.util.ForgeUtil;
 import ilib.util.Registries;
-import roj.reflect.FieldAccessor;
-import roj.reflect.ReflectionUtils;
-
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
-
+import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 import net.minecraftforge.fml.common.registry.EntityRegistry.EntityRegistration;
 import net.minecraftforge.registries.ForgeRegistry;
 import net.minecraftforge.registries.IForgeRegistry.MissingFactory;
 import net.minecraftforge.registries.IForgeRegistryEntry;
+import roj.reflect.DirectAccessor;
+import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
+
+import java.util.Map;
 
 /**
  * @author Roj233
  * @since 2021/8/26 20:03
  */
 public class FreezeRegistryInjector {
-    static BiMap<Class<? extends Entity>, EntityRegistration> entityClassRegistrations;
+    static int uniq;
+    private interface H {
+        ListMultimap<ModContainer, EntityRegistration>                    entityRegistrations(EntityRegistry inst);
+        BiMap<Class<? extends Entity>, EntityRegistry.EntityRegistration> entityClassRegistrations(EntityRegistry inst);
+        Map<Class<? extends Entity>, EntityEntry>                         entityClassEntries(EntityRegistry inst);
+    }
+    static H helper = DirectAccessor.builder(H.class)
+                                    .access(EntityRegistry.class, new String[] {
+                                        "entityRegistrations", "entityClassRegistrations", "entityClassEntries"
+                                    }, new String[] {
+                                        "entityRegistrations", "entityClassRegistrations", "entityClassEntries"
+                                    }, null)
+                                    .build();
 
     /**
      * @see ilib.asm.nixim.FastTileConst#create(World, NBTTagCompound)
      */
-    @SuppressWarnings("unchecked")
     public static void inject() {
-        FieldAccessor accessor, a2;
+        FieldAccessor accessor;
         try {
             accessor = ReflectionUtils.access(ForgeRegistry.class.getDeclaredField("missing"));
-            if(entityClassRegistrations == null) {
-                a2 = ReflectionUtils.access(EntityRegistry.class.getDeclaredField("entityClassRegistrations"));
-                a2.setInstance(EntityRegistry.instance());
-                entityClassRegistrations = (BiMap<Class<? extends Entity>, EntityRegistration>) a2.getObject();
-                entityClassRegistrations.put(FreezedEntity.class, EntityRegistry.instance().
-                        new EntityRegistration(ForgeUtil.getCurrentMod(), new ResourceLocation("armor_stand"),
-                                               FreezedEntity.class, "armor_stand_1", 12580,
-                                               32, 999999, false, null));
-                a2.clearInstance();
-            }
         } catch (NoSuchFieldException e) {
             e.printStackTrace();
             return;
@@ -83,10 +89,16 @@ public class FreezeRegistryInjector {
             accessor.setObject(new Injector<>(1));
 
         accessor.setInstance(Registries.entity()); // Entity inject
-        if(Config.freezeUnknownEntries.contains("entity"))
+        if(Config.freezeUnknownEntries.contains("entity")) {
+            registerEntity();
             accessor.setObject(new Injector<>(2));
+        }
 
         accessor.clearInstance();
+
+        if(Config.freezeUnknownEntries.contains("tile")) {
+            TileEntity.register("ilib:freezed", FreezedTileEntity.class);
+        }
     }
 
     static final class Injector<T extends IForgeRegistryEntry<T>> implements MissingFactory<T> {
@@ -100,9 +112,10 @@ public class FreezeRegistryInjector {
         public T createMissing(ResourceLocation reg, boolean b) {
             switch (type) {
                 case 0:
-                    return (T) new FreezedBlock().setRegistryName(reg);
-                case 1:
                     return (T) new FreezedItem().setRegistryName(reg);
+                case 1:
+                    new Throwable().printStackTrace();
+                    return (T) new FreezedBlock().setRegistryName(reg);
                 case 2:
                     return (T) new EntityEntry(FreezedEntity.class, "freezed") {
                         @Override
@@ -118,5 +131,14 @@ public class FreezeRegistryInjector {
             }
             throw new InternalError("Unknown type " + type);
         }
+    }
+
+    private static void registerEntity() {
+        ModContainer ilContainer = ForgeUtil.findModById(ImpLib.MODID);
+        EntityRegistration entry = EntityRegistry.instance()
+            .new EntityRegistration(ilContainer, new ResourceLocation("armor_stand"), FreezedEntity.class,
+                                    "freezed", 12580, 64, 999999, false, null);
+        helper.entityRegistrations(EntityRegistry.instance()).put(ilContainer, entry);
+        helper.entityClassRegistrations(EntityRegistry.instance()).put(FreezedEntity.class, entry);
     }
 }

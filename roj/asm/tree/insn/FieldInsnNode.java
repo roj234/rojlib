@@ -59,6 +59,8 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     public FieldInsnNode(byte code, String owner, String name, String type) {
         super(code);
 
+        if (!Type.isValid(type.charAt(0))) throw new IllegalArgumentException("别把class name当type!");
+
         this.owner = owner;
         this.name = name;
         this.rawType = type;

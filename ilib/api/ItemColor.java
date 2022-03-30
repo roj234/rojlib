@@ -37,6 +37,6 @@ import net.minecraft.item.ItemStack;
 
 public interface ItemColor {
 
-    int getColorFromItemstack(ItemStack stack, int tintIndex);
+    int getColor(ItemStack stack, int tintIndex);
 
 }

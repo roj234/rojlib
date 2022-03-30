@@ -25,14 +25,11 @@
  */
 package ilib.fluid;
 
-import com.google.common.collect.BiMap;
-
 import net.minecraft.item.ItemStack;
 
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
-import net.minecraftforge.fluids.IFluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 
@@ -41,22 +38,6 @@ import net.minecraftforge.fluids.capability.IFluidHandlerItem;
  * @since 2021/4/21 22:51
  */
 public class FluidTankHelper {
-    public static BiMap<Fluid, Integer> FLUID_NAME_IDS;//IntBiMap<Fluid> FLUID_NAME_IDS = new IntBiMap<>();
-    public static final ThreadLocal<FluidTank> TANKSFACTORY = ThreadLocal.withInitial(() -> new FluidTank(0));
-
-    /**
-     * 真让人充满*号
-     */
-    public static FluidTank concurrentTankCopy(FluidTank tank) {
-        FluidTank tank1 = TANKSFACTORY.get();
-        tank1.setCapacity(tank.getCapacity());
-        tank1.setCanDrain(tank.canDrain());
-        tank1.setCanFill(tank.canFill());
-        FluidStack fl = tank.getFluid();
-        tank1.setFluid(fl == null ? null : fl.copy());
-        return tank1;
-    }
-
     public static ItemStack fillOrDrainFluid(FluidTank machine, ItemStack item) {
         IFluidHandlerItem handler = item.getCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY, null);
         if (handler == null) {
@@ -156,23 +137,5 @@ public class FluidTankHelper {
             machine.getFluid().amount -= handler.fill(selfFluidStack, true);
         }
         return handler.getContainer();
-    }
-
-    public static int fluidIdSafe(IFluidTank tank) {
-        FluidStack stack = tank.getFluid();
-        Integer i = stack == null ? findNonExistId() : FLUID_NAME_IDS.get(stack.getFluid());
-        return i == null ? findNonExistId() : i;
-    }
-
-    private static int findNonExistId() {
-        /*int i = 0;
-        while(FLUID_NAME_IDS.inverse().get(i) != null) {
-            i += 2333;
-        }*/
-        return -1;
-    }
-
-    public static Fluid getFluidById(int value) {
-        return FLUID_NAME_IDS.inverse().get(value);
     }
 }

@@ -31,7 +31,7 @@ import roj.text.TextUtil;
 import roj.util.NativeException;
 import roj.util.OS;
 
-import java.awt.event.*;
+import java.awt.event.KeyEvent;
 
 /**
  * Native functions to register combo keys
@@ -232,7 +232,7 @@ public final class ComboKeys {
      * example: CTRL+ALT+F3, CTRL+ALT+[
      */
     public void register(int identifier, String key) {
-        String[] split = TextUtil.split(key, '+');
+        String[] split = TextUtil.split1(key, '+');
         int mask = 0;
 
         for (int i = split.length - 2; i >= 0; i--) {

@@ -25,15 +25,16 @@
  */
 package ilib.api.registry;
 
-import ilib.network.IMessage;
-import ilib.network.IMessageHandler;
-import ilib.network.MessageContext;
+import ilib.net.IMessage;
+import ilib.net.IMessageHandler;
+import ilib.net.MessageContext;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToIntMap;
-import roj.util.ByteList;
 import roj.util.Helpers;
+
+import net.minecraft.network.PacketBuffer;
 
 import net.minecraftforge.fml.relauncher.Side;
 
@@ -114,7 +115,7 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
         }
 
         @Override
-        public void fromBytes(ByteList buf) {
+        public void fromBytes(PacketBuffer buf) {
             id = buf.readVarIntUTF();
             int len = buf.readVarInt(false);
             mapping.ensureCapacity(len);
@@ -124,7 +125,7 @@ public class RegistryStored<T extends Indexable> extends Registry<T> {
         }
 
         @Override
-        public void toBytes(ByteList buf) {
+        public void toBytes(PacketBuffer buf) {
             buf.putVarIntUTF(id).putVarInt(mapping.size(), false);
             for(ToIntMap.Entry<String> entry : mapping.selfEntrySet()) {
                 buf.putVarInt(entry.v, false).putVarIntUTF(entry.k);

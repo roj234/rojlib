@@ -25,13 +25,12 @@
  */
 package ilib.fluid.handler;
 
+import net.minecraftforge.fluids.capability.IFluidHandler;
+
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public interface IFluidProvider {
-    FluidHandler getFluidHandler();
+    IFluidHandler getFluidHandler();
 }

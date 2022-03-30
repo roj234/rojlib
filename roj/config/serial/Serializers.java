@@ -84,6 +84,7 @@ public final class Serializers {
         Serializer<?> ser = registry.get(name);
         if (ser == null) {
             if ((defaultFlag & AUTOGEN) == 0) {
+                System.out.println("Not serialize due to not AUTOGEN flag");
                 return null;
             }
             Class<?> cls;
@@ -167,7 +168,7 @@ public final class Serializers {
     }
 
     public Serializers() {
-        WrapSerializer s = WrapSerializer.INSTANCE;
+        WrapSerializer s = new WrapSerializer(this);
         register(Object.class, s);
         register(Integer.class, s);
         register(Long.class, s);
@@ -178,11 +179,11 @@ public final class Serializers {
         register(Character.class, new CharSerializer());
         register(Byte.class, new ByteSerializer());
         register(Short.class, new ShortSerializer());
-        register(Map.class, new MapSerializer());
+        register(Map.class, new MapSerializer(this));
 
         register(List.class, s);
         register(Collection.class, s);
-        register(Set.class, new SetSerializer());
+        register(Set.class, new SetSerializer(this));
     }
 
     private static final AtomicInteger ordinal = new AtomicInteger();
@@ -234,7 +235,7 @@ public final class Serializers {
         DirectAccessor.makeHeader("roj/config/serial/GenSer$" + ordinal.getAndIncrement(),
                                   "roj/config/serial/Serializer",
                                   cz);
-        cz.interfaces.add("java/lang/Init");
+        cz.interfaces.add("roj/config/serial/Serializers$Init");
         cz.parent = "roj/config/serial/GenSer";
         DirectAccessor.addInit(cz);
 
@@ -261,23 +262,9 @@ public final class Serializers {
         m0 = new Method(PUBLIC, cz, "deserializeRc", "(Lroj/config/data/CEntry;)Ljava/lang/Object;");
         cz.methods.add(m0);
         c0 = m0.code = new AttrCode(m0);
-        c0.interpretFlags = AttrCode.COMPUTE_SIZES;
-        InsnList rcDes = c0.instructions;
-        try {
-            owner.getDeclaredConstructor(EmptyArrays.CLASSES);
-        } catch (NoSuchMethodException e) {
-            if ((flag & LENIENT) == 0) throw new IllegalArgumentException("警告: 没有无参构造器 " + owner.getName());
-            else {
-                InsnList err = (m0.code = new AttrCode(m0)).instructions;
-                m0.code.localSize = 2; m0.code.stackSize = 3;
+        c0.stackSize = c0.localSize = 3;
 
-                err.add(new ClassInsnNode(NEW, "java/lang/AssertionError"));
-                err.add(NPInsnNode.of(DUP));
-                err.add(new LdcInsnNode(new CstString(owner.getName() + " 没有无参构造器")));
-                err.add(new InvokeInsnNode(INVOKESPECIAL, "java/lang/AssertionError", "<init>", "(Ljava/lang/String;)V"));
-                err.add(NPInsnNode.of(ATHROW));
-            }
-        }
+        InsnList rcDes = c0.instructions;
 
         rcDes.add(NPInsnNode.of(ALOAD_1));
         rcDes.add(new ClassInsnNode(CHECKCAST, "roj/config/data/CMapping"));
@@ -285,8 +272,27 @@ public final class Serializers {
         rcDes.add(NPInsnNode.of(ASTORE_1));
 
         rcDes.add(new ClassInsnNode(NEW, className));
-        rcDes.add(NPInsnNode.of(DUP));
-        rcDes.add(new InvokeInsnNode(INVOKESPECIAL, className, "<init>", "()V"));
+
+        try {
+            owner.getDeclaredConstructor(EmptyArrays.CLASSES);
+
+            rcDes.add(NPInsnNode.of(DUP));
+            rcDes.add(new InvokeInsnNode(INVOKESPECIAL, className, "<init>", "()V"));
+        } catch (NoSuchMethodException e) {
+            if ((flag & LENIENT) == 0) throw new IllegalArgumentException("没有无参构造器 " + owner.getName());
+            else {
+//                InsnList err = (m0.code = new AttrCode(m0)).instructions;
+//                err.clear();
+//                m0.code.localSize = 2; m0.code.stackSize = 3;
+//
+//                err.add(new ClassInsnNode(NEW, "java/lang/AssertionError"));
+//                err.add(NPInsnNode.of(DUP));
+//                err.add(new LdcInsnNode(new CstString(owner.getName() + " 没有无参构造器")));
+//                err.add(new InvokeInsnNode(INVOKESPECIAL, "java/lang/AssertionError", "<init>", "(Ljava/lang/String;)V"));
+//                err.add(NPInsnNode.of(ATHROW));
+            }
+        }
+
         rcDes.add(NPInsnNode.of(ASTORE_2));
 
         ToIntMap<Type> storedSer = new ToIntMap<>(4);
@@ -441,7 +447,7 @@ public final class Serializers {
         Class<?> cType;
         try {
             cType = type.toJavaClass();
-            register(cType, flag); // 前向递归
+            register(cType, flag & 0x00FFFFFF); // 前向递归
         } catch (ClassNotFoundException e) {
             throw new IllegalArgumentException("A necessary class can not be found: " + type, e);
         }
@@ -487,7 +493,8 @@ public final class Serializers {
         DirectAccessor.makeHeader("roj/config/serial/GenArraySer$" + ordinal.getAndIncrement(),
                                   "roj/config/serial/Serializer",
                                   cz);
-        cz.interfaces.add("java/lang/Init");
+        cz.version = 51 << 16;
+        cz.interfaces.add("roj/config/serial/Serializers$Init");
         cz.parent = "roj/config/serial/GenArraySer";
         DirectAccessor.addInit(cz);
 
@@ -501,14 +508,14 @@ public final class Serializers {
                                "serialize0", "(Ljava/lang/Object;)Lroj/config/data/CList;");
         cz.methods.add(m0);
         c0 = m0.code = new AttrCode(m0);
-        c0.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
+        c0.stackSize = c0.localSize = 4;
         InsnList rcSer = c0.instructions;
 
 
         m0 = new Method(PUBLIC, cz, "deserializeRc", "(Lroj/config/data/CEntry;)Ljava/lang/Object;");
         cz.methods.add(m0);
         c0 = m0.code = new AttrCode(m0);
-        c0.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
+        c0.stackSize = c0.localSize = 4;
         InsnList rcDes = c0.instructions;
 
         // 初始化 SER

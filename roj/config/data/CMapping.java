@@ -41,8 +41,8 @@ import java.util.*;
  * @since 2021/5/31 21:17
  */
 public class CMapping extends CEntry {
-    final   Map<String, CEntry> map;
-    private CharList            dot;
+    final Map<String, CEntry> map;
+    CharList dot;
 
     public CMapping() {
         this.map = new /*Linked*/MyHashMap<>();
@@ -280,7 +280,7 @@ public class CMapping extends CEntry {
         return entry;
     }
 
-    private static int _name(String keys, CharList tmp, int i) {
+    static int _name(String keys, CharList tmp, int i) {
         while (i < keys.length()) {
             char c = keys.charAt(i++);
             if (c == '.') {
@@ -377,6 +377,8 @@ public class CMapping extends CEntry {
     public boolean isCommentSupported() { return false; }
 
     public Map<String, String> getComments() { return Collections.emptyMap(); }
+
+    public void putCommentDotted(String key, String val) { throw new UnsupportedOperationException(); }
 
     public CMapping withComments() {
         if (getType() != Type.MAP) throw new UnsupportedOperationException();

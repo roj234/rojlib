@@ -274,5 +274,6 @@ public class Player implements Closeable, AutoCloseable {
             if (cutPos > l)
                 cutPos = l;
         }
+        header.frames = (int) targetFrame;
     }
 }

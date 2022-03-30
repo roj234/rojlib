@@ -36,17 +36,13 @@ package ilib.util;
 import java.awt.*;
 
 public enum EnumIO {
-    DEFAULT(255, 255, 255, 0),
-    INPUT(0, 102, 255, 150),
-    OUTPUT(255, 102, 0, 150),
-    ALL(0, 150, 0, 150),
-    DISABLED(180, 180, 180, 150);
-
-    public static final byte DEFAULT_ID = 0;
-    public static final byte INPUT_ID = 1;
-    public static final byte OUTPUT_ID = 2;
-    public static final byte ALL_ID = 3;
-    public static final byte DISABLED_ID = 4;
+    DEFAULT(0),
+    INPUT(0x960066FF),
+    OUTPUT(0x96FF6600),
+    //OUTPUT_A(0), OUTPUT_B(0), OUTPUT_C(0),
+    ALL(0x96009600),
+    @Deprecated
+    DISABLED(0x96b4b4b4);
 
     public static final int TYPE_ITEM = 0;
     public static final int TYPE_ENERGY = 1;
@@ -54,15 +50,13 @@ public enum EnumIO {
 
     public static final EnumIO[] VALUES = values();
 
-    // Color
-    private final Color  color;
-    private final String name;
+    private final Color color;
 
-    EnumIO(int r, int g, int b, int a) {
-        color = new Color(r, g, b, a);
-        name = name().toLowerCase();
+    EnumIO(int c) {
+        color = new Color(c, true);
     }
 
+    @Deprecated
     public enum Tube implements net.minecraft.util.IStringSerializable {
         normal, none;
 
@@ -75,8 +69,12 @@ public enum EnumIO {
         }
     }
 
-    public String getName() {
-        return name;
+    public boolean canOutput() {
+        return this == OUTPUT || this == ALL;
+    }
+
+    public boolean canInput() {
+        return this == INPUT || this == ALL;
     }
 
     public static EnumIO byId(int id) {

@@ -30,7 +30,7 @@ import ilib.ImpLib;
 import ilib.api.registry.IRegistry;
 import ilib.api.registry.Localized;
 import ilib.util.Hook;
-import ilib.util.TextHelper;
+import ilib.util.MCTexts;
 
 import net.minecraft.item.ItemStack;
 
@@ -72,7 +72,7 @@ public class ItemMetaNamed<T extends Localized> extends ItemMeta<T> {
         if (displayName == null)
             initDisplayName();
         T t = getTypeByStack(stack);
-        if (t == null) return TextHelper.translate("mi.invalid");
+        if (t == null) return MCTexts.format("mi.invalid");
         if (needReplace)
             return this.displayName.replace("{}", t.getLocalizedName());
         else
@@ -80,7 +80,7 @@ public class ItemMetaNamed<T extends Localized> extends ItemMeta<T> {
     }
 
     void initDisplayName() {
-        this.displayName = TextHelper.translate(cache);
+        this.displayName = MCTexts.format(cache);
         if (displayName.indexOf("{}") > 0) {
             needReplace = true;
         }

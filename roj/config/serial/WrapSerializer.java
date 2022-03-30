@@ -33,7 +33,13 @@ import roj.config.data.CObject;
  * @since 2022/1/11 17:45
  */
 public class WrapSerializer implements Serializer<Object> {
-    public static final WrapSerializer INSTANCE = new WrapSerializer();
+    private Serializers owner;
+
+    public WrapSerializer(Serializers owner) {
+        this.owner = owner;
+    }
+
+    WrapSerializer() {}
 
     @Override
     public Object deserialize(CObject<?> o) {
@@ -47,11 +53,11 @@ public class WrapSerializer implements Serializer<Object> {
 
     @Override
     public CEntry serializeRc(Object t) {
-        return CEntry.wrap(t);
+        return CEntry.wrap(t, owner);
     }
 
     @Override
     public void serialize(CObject<?> o, Object t) {
-        o.put("", CEntry.wrap(t));
+        o.put("", CEntry.wrap(t, owner));
     }
 }

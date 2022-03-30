@@ -362,6 +362,7 @@ public class ConstMapper extends Mapping {
         List<Desc> filled = new ArrayList<>();
         MyHashMap<String, IClass> methods = new MyHashMap<>(ctxs.size());
         MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(ctxs, this, methods);
+        System.out.println("SubImpl " + subs);
         for (SubImpl impl : subs) {
             String targetName = null, foundClass = null;
             Desc desc = impl.type;
@@ -704,7 +705,7 @@ public class ConstMapper extends Mapping {
         //  会使用 getstatic B.x
         //  所以字段的访问需要筛选
         // 1. 子类拥有同名同类型字段: 筛选掉
-        LongBitSet visited = new LongBitSet();
+        MyBitSet visited = new MyBitSet();
         Desc m = new Desc("", "", "");
         for(IClass data : classes) {
             List<String> parents = libSupers.get(data.name());
@@ -898,7 +899,8 @@ public class ConstMapper extends Mapping {
     public final void initSelfSuperMap() {
         Map<String, List<String>> universe = new MyHashMap<>(this.libSupers);
         for (int i = 0; i < extendedSuperList.size(); i++) {
-            universe.putAll(extendedSuperList.get(i).map);
+            State state = extendedSuperList.get(i);
+            if (state != null) universe.putAll(state.map);
         }
         universe.putAll(this.selfSupers); // replace lib class
         this.selfSupers = universe;
@@ -921,14 +923,9 @@ public class ConstMapper extends Mapping {
             state = new State();
         }
 
-        if(selfSupers == null)
-            throw new IllegalStateException();
-        if(selfSupers.getClass() == MyHashMap.class) {
-            state.map.copyFrom((MyHashMap<String, List<String>>) this.selfSupers);
-        } else {
-            state.map.clear();
-            state.map.putAll(selfSupers);
-        }
+        if(selfSupers == null) throw new IllegalStateException();
+        state.map.clear();
+        state.map.putAll(selfSupers);
         return state;
     }
 
@@ -946,7 +943,7 @@ public class ConstMapper extends Mapping {
     }
 
     public static final class State {
-        private final MyHashMap<String, List<String>> map = new MyHashMap<>();
+        final MyHashMap<String, List<String>> map = new MyHashMap<>();
     }
 
     private final class FileReader implements ZipUtil.ICallback {

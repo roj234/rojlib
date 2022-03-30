@@ -39,8 +39,7 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.Context;
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.mapper.util.Desc;
 import roj.util.ByteList;
@@ -61,12 +60,12 @@ public final class CodeMapper extends Mapping {
     // 没有BUG了，有的话也是ASM的问题
     public static final boolean DEBUG = false;
 
-    public static final IBitSet HUMAN_READABLE_TOKENS = LongBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
+    public static final MyBitSet HUMAN_READABLE_TOKENS = MyBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
 
     private Map<String, ?> paramNameMap;
     private byte paramNameType;
 
-    private IBitSet validVarChars = HUMAN_READABLE_TOKENS;
+    private MyBitSet validVarChars = HUMAN_READABLE_TOKENS;
 
     private final UnaryOperator<String> NAME_REMAPPER = (old) -> {
         String now = Util.getInstance().mapOwner(classMap, old, false);
@@ -88,7 +87,7 @@ public final class CodeMapper extends Mapping {
         super(mapping);
     }
 
-    public void setValidVarChars(IBitSet valid) {
+    public void setValidVarChars(MyBitSet valid) {
         this.validVarChars = valid == null ? HUMAN_READABLE_TOKENS : valid;
     }
 

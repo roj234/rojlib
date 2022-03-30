@@ -98,31 +98,14 @@ public final class FMDMain {
         if(!isCLI) {
             Shared.loadProject(true);
             if(args.length == 0) {
-                CmdUtil.error("F", false);
-                CmdUtil.success("M", false);
-                CmdUtil.fg(CmdUtil.Color.BLUE, true);
-                System.out.print("D");
-                CmdUtil.fg(CmdUtil.Color.WHITE, true);
-                System.out.print("   更快的MOD开发环境 ");
-                CmdUtil.reset();
-                System.out.print("Ver ");
-                CmdUtil.fg(CmdUtil.Color.GREEN, true);
-                System.out.println(VERSION);
-                CmdUtil.fg(CmdUtil.Color.WHITE, true);
-                CmdUtil.bg(CmdUtil.Color.BLUE, true);
-                System.out.print("    Powered");
-                CmdUtil.fg(CmdUtil.Color.WHITE, false);
-                System.out.print(" by ");
-                CmdUtil.fg(CmdUtil.Color.YELLOW, true);
-                System.out.println("Roj234");
-                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload, auto");
+                System.out.println("FMD 更快的mod开发环境 " + VERSION + " By Roj234");
+                CmdUtil.info("CLI可用指令: build, run, config, reflect, deobf, gc, reload, auto");
                 System.out.println();
             }
         }
 
         if(args.length == 0) {
             if(isCLI) {
-                CmdUtil.info("指令: build, run, changeVersion, f2m, config, reflect, deobf, download, gc, reload, auto");
                 System.out.println();
                 return;
             }
@@ -159,30 +142,41 @@ public final class FMDMain {
         int exitCode = 0;
 
         switch (args[0]) {
+            case "b":
             case "build":
                 exitCode = build(buildArgs(args));
                 break;
+            case "r":
             case "run":
                 exitCode = run(buildArgs(args));
                 break;
             case "changeVersion":
-                exitCode = changeVersion();
+                try {
+                    exitCode = changeVersion();
+                } finally {
+                    Shared.singletonUnlock();
+                }
                 break;
             case "f2m":
                 exitCode = forgeToMcp(args);
                 break;
+            case "c":
             case "config":
                 exitCode = config(args, project);
                 break;
+            case "d":
             case "deobf":
                 exitCode = deobf(args);
                 break;
+            case "ref":
             case "reflect":
                 ReflectTool.start(!isCLI);
                 break;
+            case "at":
             case "preAT":
                 exitCode = preAT(new UIWarp());
                 break;
+            case "a":
             case "auto":
                 assert isCLI;
                 if (args.length < 2) {
@@ -191,11 +185,16 @@ public final class FMDMain {
                 }
                 AutoCompile.setEnabled(Boolean.parseBoolean(args[1]));
                 break;
+            case "k":
             case "kill":
                 assert isCLI;
                 if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
                     MCLauncher.task.cancel(true);
                 }
+                break;
+            case "re":
+                main(new String[] {"kill"});
+                main(new String[] {"run zl"});
                 break;
             case "reload":
                 if(isCLI) {
@@ -377,6 +376,7 @@ public final class FMDMain {
 
     public static int preAT(UIWarp helper) throws IOException {
         watcher.reset();
+        ATHelper.gc();
 
         Map<String, Collection<String>> map = AccessTransformer.getTransforms();
         map.clear();
@@ -425,6 +425,8 @@ public final class FMDMain {
         File backupFile = new File(BASE, "class/" + MC_BINARY + ".jar.bak");
         if(!backupFile.isFile()) {
             FileUtil.copyFile(jarFile, backupFile);
+        } else {
+            FileUtil.copyFile(backupFile, tmpFile);
         }
 
         MutableZipFile mz = new MutableZipFile(tmpFile);
@@ -636,6 +638,7 @@ public final class FMDMain {
         if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
             if (UIUtil.readBoolean("MC没有退出,是否结束进程?")) {
                 MCLauncher.task.cancel(true);
+                MCLauncher.task = null;
             } else {
                 return -1;
             }
@@ -649,30 +652,17 @@ public final class FMDMain {
 
         File dest = new File(mc_conf.getString("root") + "/mods/");
 
-        System.out.println("来自1.6.2版本的提示：因为自动编译，现在runClient zl已不会编译而是仅复制build的文件启动客户端\n" +
-                               "runClient不变");
-
-        if (!args.containsKey("zl")) {
-            Shared.singletonLock();
-            AutoCompile.beforeCompile();
-            int v = -1;
-            try {
-                v = compile(args, project, BASE, 0);
-            } finally {
-                Shared.singletonUnlock();
-                AutoCompile.afterCompile(v);
-            }
-
-            if (v > 0) {
-                try {
-                    executeCommand(BASE);
-                } catch (IOException e) {
-                    CmdUtil.warning("无法执行指令", e);
-                }
-            } else {
-                return v;
-            }
+        Shared.singletonLock();
+        AutoCompile.beforeCompile();
+        int v = -1;
+        try {
+            v = compile(args, project, BASE, 0);
+        } finally {
+            Shared.singletonUnlock();
+            AutoCompile.afterCompile(v);
         }
+
+        if (v < 0) return v;
 
         for (Project proj : project.getAllDependencies()) {
             copy4run(dest, proj);
@@ -699,6 +689,7 @@ public final class FMDMain {
             }
         }
 
+        MCLauncher.clearLogs(null);
         if (asyncRun) {
             Task.pushTask(MCLauncher.task = new RunMinecraftTask(true));
             return 0;
@@ -725,29 +716,17 @@ public final class FMDMain {
             Shared.singletonUnlock();
             AutoCompile.afterCompile(v);
         }
-        if (v > 0) {
-            try {
-                executeCommand(BASE);
-            } catch (IOException e) {
-                CmdUtil.warning("无法执行指令", e);
-            }
+
+        List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
+        if(modified != null && !modified.isEmpty()) {
+            hotReload.sendChanges(modified);
+            if(DEBUG) CmdUtil.success("发送重载请求");
         }
 
-        if(v == 1) {
-            List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
-            if(modified != null && !modified.isEmpty()) {
-                hotReload.sendChanges(modified);
-                if(DEBUG) CmdUtil.success("发送重载请求");
-            }
-
-            return 0;
-        }
         return v;
     }
 
-    private static void executeCommand(File base) throws IOException {
-        Project proj = project;
-
+    private static void executeCommand(Project proj, File base) throws IOException {
         String jarName = proj.name + '-' + proj.version + ".jar";
         String jarPath = base.getAbsolutePath() + '/' + jarName;
 
@@ -900,6 +879,11 @@ public final class FMDMain {
             }
             if ((flag & 3) == 0)
                 CmdUtil.info("无源文件");
+            try {
+                executeCommand(p, BASE);
+            } catch (IOException e) {
+                CmdUtil.warning("无法执行指令", e);
+            }
             return 0;
         }
         // endregion
@@ -947,7 +931,7 @@ public final class FMDMain {
 
         // endregion
 
-        boolean canIncrementWrite = increment & jarFile.isFile();
+        boolean canIncrementWrite = increment & jarFile.isFile() & p.state != null;
 
         ZipOutput zo1 = updateDst(p, jarFile);
 
@@ -1039,9 +1023,8 @@ public final class FMDMain {
                 ByteList buf = IOUtil.getSharedByteBuf();
                 for (MutableZipFile.EFile file : mzf.getEntries().values()) {
                     if (!changed.contains(file.getName())) {
-                        Context ctx = new Context(file.getName(), mzf.get(file, buf));
+                        Context ctx = new Context(file.getName(), mzf.get(file, buf).toByteArray());
                         list.add(ctx);
-                        ctx.getData();
                         buf.clear();
                     }
                 }
@@ -1057,8 +1040,7 @@ public final class FMDMain {
             if(DEBUG)
                 System.out.println("代码处理完成 " + (System.currentTimeMillis() - time));
 
-            ZipOutput zo = p.dstFile;
-            zo.setComment("FMD " + VERSION + "\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
+            zo1.setComment("FMD " + VERSION + "\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
 
             // region 映射
 
@@ -1068,7 +1050,7 @@ public final class FMDMain {
                 depStates.add(dependencies.get(i).state);
             }
 
-            if (p.state != null) {
+            if (canIncrementWrite) {
                 mapperFwd.state(p.state);
                 mapperFwd.remapIncrement(list);
             } else {
@@ -1106,13 +1088,13 @@ public final class FMDMain {
 
             for (int i = 0; i < list.size(); i++) {
                 Context ctx = list.get(i);
-                zo.set(ctx.getFileName(), ctx);
+                zo1.set(ctx.getFileName(), ctx);
             }
 
             // endregion
 
             try {
-                zo.end();
+                zo1.end();
             } catch (Throwable e) {
                 CmdUtil.warning("压缩遇到了一些问题", e);
             }
@@ -1124,6 +1106,13 @@ public final class FMDMain {
             }
 
             p.registerWatcher();
+
+            try {
+                executeCommand(p, BASE);
+            } catch (IOException e) {
+                CmdUtil.warning("无法执行指令", e);
+            }
+
             return 1;
         }
 
@@ -1198,6 +1187,8 @@ public final class FMDMain {
     // endregion
 
     private static int changeVersion() throws IOException {
+        Shared.singletonLock();
+
         CMapping cfgGen = CONFIG.get("通用").asMap();
 
         File mcRoot = new File(cfgGen.getString("MC目录"));

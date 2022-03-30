@@ -25,11 +25,7 @@
  */
 package ilib.client.renderer.mirror.render.world.chunk;
 
-import ilib.client.util.RenderUtils;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.collect.MyHashSet;
-
+import ilib.client.RenderUtils;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.BlockRendererDispatcher;
@@ -49,10 +45,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.ChunkCache;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraftforge.fml.client.FMLClientHandler;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.collect.MyHashSet;
 
 import javax.annotation.Nullable;
 import java.util.Iterator;

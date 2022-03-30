@@ -31,5 +31,6 @@ import net.minecraftforge.fml.common.eventhandler.Event;
  * @author Roj234
  * @since  2020/9/25 23:55
  */
+@Deprecated
 public class ClientChangeWorldEvent extends Event {
 }

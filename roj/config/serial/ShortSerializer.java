@@ -26,6 +26,7 @@
 package roj.config.serial;
 
 import roj.config.data.CEntry;
+import roj.config.data.CInteger;
 import roj.config.data.CObject;
 
 /**
@@ -45,11 +46,11 @@ class ShortSerializer implements Serializer<Short> {
 
     @Override
     public CEntry serializeRc(Short t) {
-        return CEntry.wrap(t);
+        return CInteger.valueOf(t);
     }
 
     @Override
     public void serialize(CObject<?> o, Short t) {
-        o.put("", CEntry.wrap(t));
+        o.put("", CInteger.valueOf(t));
     }
 }

@@ -26,7 +26,7 @@
 package ilib.asm.nixim;
 
 import ilib.Config;
-import ilib.util.PinyinUtil;
+import ilib.util.MCTexts;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
@@ -80,7 +80,7 @@ public class FastSearchTree<T> extends SearchTree<T> {
                 if (Config.searchNameOnly)
                     throw OperationDone.INSTANCE;
                 if (Config.enablePinyinSearch) {
-                    this.tree.put(PinyinUtil.pinyin().toPinyin(x, sb, 24).toString(), t);
+                    this.tree.put(MCTexts.pinyin().toPinyin(x, sb, 24).toString(), t);
                     sb.delete(0, sb.length());
                 }
             });

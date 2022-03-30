@@ -29,13 +29,12 @@ package ilib.api.item;
 import net.minecraft.item.ItemStack;
 
 import java.util.List;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
+@Deprecated
 public interface ITooltip {
-    void getTooltip(List<String> list, List<String> color, ItemStack is);
+    void addTooltip(ItemStack is, List<String> list);
 }

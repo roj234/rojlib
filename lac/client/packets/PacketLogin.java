@@ -1,7 +1,7 @@
 package lac.client.packets;
 
 import ilib.ClientProxy;
-import ilib.client.GuiHelper;
+import ilib.gui.GuiHelper;
 import lac.client.ui.GuiLogin;
 
 import net.minecraft.client.Minecraft;

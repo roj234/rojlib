@@ -25,7 +25,7 @@
  */
 package roj.util;
 
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.reflect.DirectAccessor;
 
 import java.util.function.BiConsumer;
@@ -39,8 +39,8 @@ import java.util.function.Supplier;
 public class FastThreadLocal<T> {
     private static final ThreadLocal<Object[]> slowGetter = new ThreadLocal<>();
 
-    private static int registrations;
-    private static final LongBitSet reusable = new LongBitSet();
+    private static       int      registrations;
+    private static final MyBitSet reusable = new MyBitSet();
 
     private static Thread[] threads;
     private static BiFunction<Object, Object, Object> getMap;

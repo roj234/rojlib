@@ -36,18 +36,16 @@ package ilib.util;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSyntaxException;
 import ilib.ImpLib;
+import ilib.misc.DummyRecipe;
 import roj.collect.*;
 
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
-import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.*;
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.world.World;
 
 import net.minecraftforge.common.crafting.CraftingHelper;
 import net.minecraftforge.common.crafting.IShapedRecipe;
@@ -57,9 +55,12 @@ import net.minecraftforge.oredict.ShapelessOreRecipe;
 import net.minecraftforge.registries.IForgeRegistry;
 import net.minecraftforge.registries.IForgeRegistryModifiable;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.PrimitiveIterator.OfInt;
 
 /**
  * RecipeUtil supplies several methods for easing the process of removing existing recipes,
@@ -70,7 +71,7 @@ import java.util.*;
  */
 public class RecipeUtil {
     private static final char SPACE = ' ';
-    private static CharMap<Ingredient>           ingMap        = new CharMap<>();
+    private static CharMap<Ingredient> ingMap = new CharMap<>();
     private static Map<String, ResourceLocation> resourceCache = new MyHashMap<>();
 
     public static void afterInit() {
@@ -188,10 +189,12 @@ public class RecipeUtil {
             primer.height = pattern.size();
             primer.mirrored = mirrored;
             primer.input = NonNullList.withSize(primer.width * primer.height, Ingredient.EMPTY);
-            Set<Character> remain = new MyHashSet<>(keys.size());
-            remain.addAll(keys.keySet());
 
-            remain.remove(' ');
+            IntSet remain = new IntSet(keys.size());
+            for (OfInt it = keys.selfKeySet().iterator(); it.hasNext(); ) {
+                int i = it.nextInt();
+                if (i != ' ') remain.add(i);
+            }
 
             int x = 0;
             for (String line : pattern) {
@@ -208,7 +211,7 @@ public class RecipeUtil {
             }
 
             if (!remain.isEmpty()) {
-                throw new JsonSyntaxException("Symbols not used in pattern: " + remain);
+                throw new JsonSyntaxException("Symbols not used in pattern" + pattern + ": " + remain);
             } else {
                 return new ShapedOreRecipe(resourceCache.computeIfAbsent(group, (r) -> r == null ? null : new ResourceLocation(r)), result, primer);
             }
@@ -236,9 +239,11 @@ public class RecipeUtil {
 
             NonNullList<Ingredient> input = NonNullList.withSize(width * height, Ingredient.EMPTY);
 
-            Set<Character> remain = new MyHashSet<>(keys.size());
-            remain.addAll(keys.keySet());
-            remain.remove(' ');
+            IntSet remain = new IntSet(keys.size());
+            for (OfInt it = keys.selfKeySet().iterator(); it.hasNext(); ) {
+                int i = it.nextInt();
+                if (i != ' ') remain.add(i);
+            }
 
             int x = 0;
             for (String line : pattern) {
@@ -255,7 +260,7 @@ public class RecipeUtil {
             }
 
             if (!remain.isEmpty()) {
-                throw new JsonSyntaxException("Symbols not used in pattern: " + remain);
+                throw new JsonSyntaxException("Symbols not used in pattern" + pattern + ": " + remain);
             } else {
                 return new ShapedRecipes(group == null ? "" : group, width, height, input, result);
             }
@@ -452,7 +457,7 @@ public class RecipeUtil {
      */
     @Nullable
     public static IRecipe getRecipeVariant(IShapedRecipe tpl, ItemStack original, ItemStack variant) {
-        IBitSet matches = new SingleBitSet();
+        MyBitSet matches = new MyBitSet(9);
         NonNullList<Ingredient> ingredients = tpl.getIngredients();
         for (int i = 0; i < ingredients.size(); i++) {
             Ingredient ing = ingredients.get(i);
@@ -522,73 +527,5 @@ public class RecipeUtil {
             return ((IShapedRecipe) r).getRecipeHeight();
         }
         return 0;
-    }
-
-    public static class DummyRecipe implements IRecipe {
-        public static final ItemStack missingNo;
-
-        static {
-            NBTTagCompound tag = new NBTTagCompound();
-            NBTTagCompound display = new NBTTagCompound();
-            display.setString("Name", "此合成已被删除");
-            tag.setTag("display", display);
-            ItemStack stack = new ItemStack(Blocks.BEDROCK, 1);
-            stack.setTagCompound(tag);
-            missingNo = stack;
-        }
-
-        private final ItemStack output;
-        private ResourceLocation name;
-
-        public DummyRecipe() {
-            this.output = missingNo;
-        }
-
-        public DummyRecipe(ItemStack output) {
-            this.output = output;
-        }
-
-        public Class<IRecipe> getRegistryType() {
-            return IRecipe.class;
-        }
-
-        public static IRecipe from(IRecipe other) {
-            return new DummyRecipe(other.getRecipeOutput()).setRegistryName(other.getRegistryName());
-        }
-
-        public IRecipe setRegistryName(ResourceLocation name) {
-            this.name = name;
-            return this;
-        }
-
-        public ResourceLocation getRegistryName() {
-            return this.name;
-        }
-
-        @Override
-        public boolean matches(@Nonnull InventoryCrafting inv, @Nonnull World worldIn) {
-            return false;
-        }
-
-        @Nonnull
-        @Override
-        public ItemStack getCraftingResult(@Nonnull InventoryCrafting inv) {
-            return output;
-        }
-
-        @Override
-        public boolean canFit(int width, int height) {
-            return false;
-        }
-
-        public boolean isDynamic() {
-            return true;
-        }
-
-        @Nonnull
-        @Override
-        public ItemStack getRecipeOutput() {
-            return output;
-        }
     }
 }

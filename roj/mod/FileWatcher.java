@@ -144,11 +144,16 @@ final class FileWatcher extends IFileWatcher implements Runnable {
                     }
                 }
                 if (shouldReload) {
-                    if (reloadMapTask != null) reloadMapTask.cancel();
+                    if (reloadMapTask != null && reloadMapTask.getNextRun() > 0) reloadMapTask.cancel();
                     reloadMapTask = Shared.PeriodicTask.register(
                     new ScheduledRunnable(0, 2000, 1, () -> {
                         CmdUtil.warning("重新加载映射表");
                         Shared.mapperFwd.clear();
+                        try {
+                            ATHelper.gc();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                         Shared.loadMapper();
                     }));
                 }

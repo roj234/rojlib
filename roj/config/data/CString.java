@@ -149,14 +149,14 @@ public final class CString extends CEntry {
 
     @Override
     protected StringBuilder toXML(StringBuilder sb, int depth) {
-        return !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ?
+        return value == null ? sb.append(value) : !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ?
                 sb.append("<![CDATA[").append(value).append("]]>") :
                 sb.append(value);
     }
 
     @Override
     public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return AbstLexer.addSlashes(value, sb.append('"')).append('"');
+        return value == null ? sb.append(value) : AbstLexer.addSlashes(value, sb.append('"')).append('"');
     }
 
     @Override
@@ -166,7 +166,11 @@ public final class CString extends CEntry {
 
     @Override
     public void toBinary(ByteList w, Structs struct) {
-        w.put((byte) Type.STRING.ordinal()).putVIVIC(value);
+        if (value == null) {
+            w.put((byte) Type.NULL.ordinal());
+        } else {
+            w.put((byte) Type.STRING.ordinal()).putVIVIC(value);
+        }
     }
 
     @Override

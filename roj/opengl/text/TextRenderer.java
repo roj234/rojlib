@@ -26,9 +26,8 @@
 package roj.opengl.text;
 
 import org.lwjgl.opengl.GL11;
-import roj.collect.IBitSet;
 import roj.collect.IntList;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.opengl.text.FontTex.Tex;
 import roj.opengl.util.Util;
 import roj.opengl.util.VboUtil;
@@ -46,9 +45,9 @@ import java.util.Random;
  */
 public class TextRenderer {
     public static final int[]   COLOR_CODE;
-    public static final Random  FONT_RND;
-    public static final IBitSet COLOR_CODE_TEXT = LongBitSet.from('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'k', 'l', 'm', 'n', 'o', 'r');
-    public static final IBitSet HEX_CHAR        = LongBitSet.from('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
+    public static final Random   FONT_RND;
+    public static final MyBitSet COLOR_CODE_TEXT = MyBitSet.from('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'k', 'l', 'm', 'n', 'o', 'r');
+    public static final MyBitSet HEX_CHAR        = MyBitSet.from('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
 
     static {
         COLOR_CODE = new int[32];
@@ -76,7 +75,8 @@ public class TextRenderer {
     private final VertexBuilder vb;
     private final int[] colorCode;
 
-    public float alpha = 1.0f, scale = 1.0f;
+    public float scale = 1.0f;
+    public int color;
 
     public int lastTexture, lineHeight;
 
@@ -97,19 +97,25 @@ public class TextRenderer {
     }
 
     public void renderString(String text, float posX, float posY) {
-        GL11.glPushMatrix();
-        GL11.glScaled(scale, scale, scale);
-        posX *= 1f / scale;
-        posY *= 1f / scale;
-        i_render(text, false, posX, posY);
-        GL11.glPopMatrix();
+        if (scale != 1) {
+            GL11.glPushMatrix();
+            GL11.glScaled(scale, scale, scale);
+            posX *= 1f / scale;
+            posY *= 1f / scale;
+            i_render(text, false, posX, posY);
+            GL11.glPopMatrix();
+        } else {
+            i_render(text, false, posX, posY);
+        }
     }
 
     public void renderStringWithShadow(String text, float posX, float posY) {
         GL11.glPushMatrix();
-        GL11.glScaled(scale, scale, scale);
-        posX *= 1f / scale;
-        posY *= 1f / scale;
+        if (scale != 1) {
+            GL11.glScaled(scale, scale, scale);
+            posX *= 1f / scale;
+            posY *= 1f / scale;
+        }
         i_render(text, true, posX + 0.5f, posY - 0.5f);
         GL11.glTranslatef(0, 0, 0.05f);
         i_render(text, false, posX, posY);
@@ -119,15 +125,13 @@ public class TextRenderer {
     public final float i_render(String text, boolean shadow, float posX, float posY) {
         lastTexture = -1;
         lineHeight = font.preRender(text, 0, text.length());
-        int color = 0xFFFFFF;
-        Util.color(color, alpha);
-
-        int flag = 0, lastFlag = 0;
-        float lastX = 0;
 
         VertexBuilder vb = this.vb;
         vb.begin(VertexFormats.POSITION_TEX);
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
+
+        int color = this.color;
+        int flag = 0, lastFlag = 0;
+        float lastX = 0;
 
         for(int i = 0; i < text.length(); ++i) {
             if(lastFlag != (flag & 6)) { // flag does changed
@@ -192,7 +196,7 @@ public class TextRenderer {
                         }
 
                         vb.begin(VertexFormats.POSITION_TEX);
-                        Util.color(color = tColor, alpha);
+                        Util.color(color = tColor);
                     }
                     ++i;
                     continue;
@@ -223,7 +227,6 @@ public class TextRenderer {
 
         vb.end();
         VboUtil.drawVertexes(GL11.GL_QUADS, vb);
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
         return posX;
     }
 
@@ -256,13 +259,15 @@ public class TextRenderer {
                 lastTexture = tex.textureId;
             }
 
-            vb.yOffset += tex.bottom / 2f;
+            int h = (lineHeight - tex.height - tex.bottom) / 2;
+            vb.yOffset += h;
             float width = (float) tex.width / 2F;
             float height = (float) tex.height / 2F;
-            vb.pos(italic, height, 0).tex(tex.u1, tex.v1).endVertex();
-            vb.pos(italic + width, height, 0).tex(tex.u2, tex.v1).endVertex();
-            vb.pos(-italic + width, 0, 0).tex(tex.u2, tex.v2).endVertex();
-            vb.pos(-italic, 0, 0).tex(tex.u1, tex.v2).endVertex();
+            vb.pos(italic, height, 0).tex(tex.u1, tex.v2).endVertex();
+            vb.pos(italic + width, height, 0).tex(tex.u2, tex.v2).endVertex();
+            vb.pos(-italic + width, 0, 0).tex(tex.u2, tex.v1).endVertex();
+            vb.pos(-italic, 0, 0).tex(tex.u1, tex.v1).endVertex();
+            vb.yOffset -= h;
             return width;
         }
     }
@@ -277,7 +282,7 @@ public class TextRenderer {
 
         // 删除线
         if ((flag & 2) != 0) {
-            float fhDiv2 = (float) lineHeight / 4;
+            float fhDiv2 = lineHeight / 4f;
             vb.pos(posX, posY + fhDiv2, 0).endVertex();
             vb.pos(posX + len, posY + fhDiv2, 0).endVertex();
             vb.pos(posX + len, posY + fhDiv2 - 1, 0).endVertex();
@@ -286,7 +291,7 @@ public class TextRenderer {
 
         // 下划线
         if ((flag & 4) != 0) {
-            float fhDiv2 = 0;
+            float fhDiv2 = lineHeight / 2f;
             vb.pos(posX - 1, posY + fhDiv2 , 0).endVertex();
             vb.pos(posX + len, posY + fhDiv2, 0).endVertex();
             vb.pos(posX + len, posY + fhDiv2 - 1, 0).endVertex();

@@ -3,7 +3,6 @@ package roj.dev;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
-import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.net.InetAddress;
@@ -17,15 +16,29 @@ import java.util.HashMap;
  * @since 2022/2/21 15:08
  */
 public class HRAgent extends Thread {
+    private static boolean loaded;
+    private static Instrumentation instInst;
+
+    public static boolean isLoaded() {
+        return loaded;
+    }
+
     // 限制, 只能使用java的类, 不能使用rojlib的类
     // 因为‘我编译我自己’
     // 只允许本地连接, 因为数据明文传输
     public static void premain(String agentArgs, Instrumentation inst) {
+        if (inst != null) instInst = inst;
+        else inst = instInst;
+
         if (!inst.isRedefineClassesSupported()) {
             System.out.println("[HR] VM不允许类的重定义");
             return;
         }
         new HRAgent(inst, agentArgs == null || agentArgs.isEmpty() ? HRRemote.DEFAULT_PORT : Integer.parseInt(agentArgs)).start();
+    }
+
+    public static void agentmain(String agentArgs, Instrumentation inst) {
+        premain(agentArgs, inst);
     }
 
     private final Instrumentation inst;
@@ -40,16 +53,17 @@ public class HRAgent extends Thread {
 
     @Override
     public void run() {
+        loaded = true;
         System.out.println("[HR] Agent已启动");
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 100);
+            socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 1000);
 
             DataInputStream in = new DataInputStream(socket.getInputStream());
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             HashMap<String, Class<?>> byName = new HashMap<>();
 
             while (in.read() == 0x66) {
-                socket.setSoTimeout(500);
+                socket.setSoTimeout(1000);
                 int count = in.readUnsignedShort();
                 int found = 0;
 
@@ -94,8 +108,9 @@ public class HRAgent extends Thread {
                 }
                 socket.setSoTimeout(0);
             }
-        } catch (IOException e) {
+        } catch (Throwable e) {
             System.out.println("[HR] Agent断开连接 " + e.getMessage());
         }
+        loaded = false;
     }
 }

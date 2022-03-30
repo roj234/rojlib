@@ -44,13 +44,18 @@ public final class Instantiator {
                 InvocationTargetException;
     }
 
-    private static H H;
+    private static H U;
+    private static boolean ok;
 
-    public static synchronized void tryCache() throws Exception {
-        if(H != null) return;
-        H = DirectAccessor.builder(H.class)
-            .delegate(Class.forName("sun.reflect.NativeConstructorAccessorImpl"), "newInstance0")
-            .delegate(Class.class, "getDeclaredConstructors0").build();
+    public static void tryCache() throws Exception {
+        if(ok) return;
+        synchronized (H.class) {
+            if (ok) return;
+            U = DirectAccessor.builder(H.class)
+                .delegate(Class.forName("sun.reflect.NativeConstructorAccessorImpl"), "newInstance0")
+                .delegate(Class.class, "getDeclaredConstructors0").build();
+            ok = true;
+        }
     }
 
     public static Object _new(Class<?> clazz) throws ReflectiveOperationException {
@@ -58,19 +63,25 @@ public final class Instantiator {
     }
 
     public static Object _new(Class<?> clazz, Class<?>[] p1, Object... o1) throws ReflectiveOperationException {
+        try {
+            tryCache();
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+
         Constructor<?> c = findConstructor(clazz, p1);
 
-        if (H == null) {
+        if (U == null) {
             c.setAccessible(true);
             return c.newInstance(o1);
         } else {
-            return H.newInstance0(c, o1);
+            return U.newInstance0(c, o1);
         }
     }
 
     static Constructor<?> findConstructor(Class<?> clazz, Class<?>... pt) throws NoSuchMethodException {
-        if (H != null) {
-            for (Constructor<?> c : H.getDeclaredConstructors0(clazz, false)) {
+        if (U != null) {
+            for (Constructor<?> c : U.getDeclaredConstructors0(clazz, false)) {
                 if (c.getParameterCount() == pt.length &&
                    (pt.length == 0 || Arrays.equals(pt, c.getParameterTypes()))) {
                     return c;

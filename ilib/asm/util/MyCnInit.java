@@ -26,13 +26,16 @@
 package ilib.asm.util;
 
 import ilib.Config;
+import ilib.net.mock.*;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
-
-import net.minecraft.network.*;
+import net.minecraft.network.EnumPacketDirection;
+import net.minecraft.network.NettyPacketDecoder;
+import net.minecraft.network.NettyPacketEncoder;
+import net.minecraft.network.NetworkManager;
 
 /**
  * @author Roj234
@@ -48,15 +51,28 @@ public class MyCnInit extends ChannelInitializer<Channel> {
     protected void initChannel(Channel channel) {
         try {
             channel.config().setOption(ChannelOption.TCP_NODELAY, true);
-        } catch (ChannelException ignored) {
-        }
+        } catch (ChannelException ignored) {}
 
-        channel.pipeline()
-                .addLast("timeout", new ReadTimeoutHandler(Config.clientNetworkTimeout))
-                .addLast("splitter", new NettyVarint21FrameDecoder())
-                .addLast("decoder", new NettyPacketDecoder(EnumPacketDirection.CLIENTBOUND))
-                .addLast("prepender", new NettyVarint21FrameEncoder())
-                .addLast("encoder", new NettyPacketEncoder(EnumPacketDirection.SERVERBOUND))
-                .addLast("packet_handler", man);
+        PacketAdapter pa = MockingUtil.getPacketAdapter();
+        if (pa != null) {
+            channel.pipeline()
+                   .addLast("timeout", new ReadTimeoutHandler(Config.clientNetworkTimeout))
+                   .addLast("splitter", new VarIntDecoder())
+                   .addLast("decoder", new ILInboundMocker(pa))
+                   .addLast("real_decoder", new NettyPacketDecoder(EnumPacketDirection.CLIENTBOUND))
+                   .addLast("prepender", new VarIntEncoder())
+                   .addLast("encoder", new ILOutboundMocker(pa))
+                   .addLast("real_encoder", new NettyPacketEncoder(EnumPacketDirection.SERVERBOUND))
+                   .addLast("packet_handler", new ILStateSniffer(pa))
+                   .addLast("real_packet_handler", man);
+        } else {
+            channel.pipeline()
+                   .addLast("timeout", new ReadTimeoutHandler(Config.clientNetworkTimeout))
+                   .addLast("splitter", new VarIntDecoder())
+                   .addLast("decoder", new NettyPacketDecoder(EnumPacketDirection.CLIENTBOUND))
+                   .addLast("prepender", new VarIntEncoder())
+                   .addLast("encoder", new NettyPacketEncoder(EnumPacketDirection.SERVERBOUND))
+                   .addLast("packet_handler", man);
+        }
     }
 }

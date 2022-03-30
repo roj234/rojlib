@@ -57,10 +57,12 @@ public class JavaAudio implements IAudio {
     }
 
     public void mute(boolean mute) {
+        if (out == null) return;
         ((BooleanControl) out.getControl(BooleanControl.Type.MUTE)).setValue(mute);
     }
 
     public void setVolume(float vol) {
+        if (out == null) return;
         ((FloatControl) out.getControl(Type.MASTER_GAIN)).setValue(vol);
     }
 

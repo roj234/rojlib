@@ -31,7 +31,7 @@ import ilib.api.registry.BlockPropTyped;
 import ilib.api.registry.Localized;
 import ilib.api.registry.Propertied;
 import ilib.util.Hook;
-import ilib.util.TextHelper;
+import ilib.util.MCTexts;
 
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemStack;
@@ -64,7 +64,7 @@ public class ItemMetaBlockNamed<T extends Propertied<T>> extends ItemMetaBlock<T
         if (displayName == null)
             initDisplayName();
         Localized t = (Localized) getTypeByStack(stack);
-        if (t == null) return TextHelper.translate("mi.invalid");
+        if (t == null) return MCTexts.format("mi.invalid");
         if (needReplace)
             return this.displayName.replace("{}", t.getLocalizedName());
         else
@@ -72,7 +72,7 @@ public class ItemMetaBlockNamed<T extends Propertied<T>> extends ItemMetaBlock<T
     }
 
     public void initDisplayName() {
-        this.displayName = TextHelper.translate(cache);
+        this.displayName = MCTexts.format(cache);
         if (displayName.indexOf("{}") > 0) {
             needReplace = true;
         }

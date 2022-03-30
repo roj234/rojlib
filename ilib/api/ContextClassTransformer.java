@@ -25,9 +25,8 @@
  */
 package ilib.api;
 
-import roj.asm.util.Context;
-
 import net.minecraft.launchwrapper.IClassTransformer;
+import roj.asm.util.Context;
 
 /**
  * 更高效的transform方案
@@ -42,6 +41,9 @@ public interface ContextClassTransformer extends IClassTransformer {
             return null;
         Context ctx = new Context(name, basicClass);
         transform(transformedName, ctx);
+        if (ctx.isFresh()) {
+            return ctx.get().list;
+        }
         return ctx.get().toByteArray();
     }
 

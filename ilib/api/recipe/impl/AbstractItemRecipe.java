@@ -29,7 +29,7 @@ import ilib.api.recipe.BaseRecipe;
 import ilib.api.recipe.IRecipe;
 import ilib.fluid.handler.IFluidProvider;
 import ilib.util.InventoryUtil;
-import roj.collect.IBitSet;
+import roj.collect.MyBitSet;
 import roj.util.Helpers;
 import roj.util.Idx;
 
@@ -46,7 +46,7 @@ import java.util.PrimitiveIterator;
  */
 public abstract class AbstractItemRecipe extends BaseRecipe implements IRecipe {
     public final List<ItemStack> output;
-    protected IBitSet keepInputIds;
+    protected    MyBitSet        keepInputIds;
 
     public AbstractItemRecipe(String name, int mePerTick, int tickCost, boolean shaped) {
         super(name, mePerTick, tickCost, shaped);

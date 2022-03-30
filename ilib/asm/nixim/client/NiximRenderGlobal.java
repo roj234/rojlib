@@ -26,13 +26,8 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
+import ilib.client.DisplayListRenderer;
 import ilib.client.renderer.mirror.render.world.RenderGlobalProxy;
-import ilib.client.util.DisplayListRenderer;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.math.MathUtils;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -51,8 +46,11 @@ import net.minecraft.util.ClassInheritanceMultiMap;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.Chunk;
-
 import net.minecraftforge.client.MinecraftForgeClient;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.math.MathUtils;
 
 import java.util.ArrayList;
 import java.util.List;

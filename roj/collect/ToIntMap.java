@@ -45,6 +45,16 @@ public class ToIntMap<K> implements MapLike<ToIntMap.Entry<K>>, Map<K, Integer>,
         return entry == null ? l : entry.v;
     }
 
+
+    public int getAndAdd(K key, int i) {
+        Entry<K> entry = getOrCreateEntry(key);
+        if (entry.k == NOT_USING) {
+            size++;
+            entry.k = key;
+        }
+        return entry.v += i;
+    }
+
     @Override
     public int applyAsInt(K value) {
         return getOrDefault(value, -1);
@@ -528,6 +538,4 @@ public class ToIntMap<K> implements MapLike<ToIntMap.Entry<K>>, Map<K, Integer>,
             return Spliterators.spliterator(iterator(), size(), 0);
         }
     }
-
-
 }

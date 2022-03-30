@@ -26,8 +26,8 @@
 
 package ilib.util.energy;
 
-import ilib.api.energy.IMEnergy;
-import ilib.api.energy.IMEnergyCap;
+import ilib.api.energy.MEItem;
+import ilib.api.energy.METile;
 import ilib.api.mark.MInIntractable;
 import ilib.capabilities.Capabilities;
 import ilib.util.ItemNBT;
@@ -52,7 +52,7 @@ public class EnergyHelper {
     private EnergyHelper() {
     }
 
-    public static final IMEnergyCap EMPTYCAP = new IMEnergyCap() {
+    public static final MEItem EMPTYCAP = new MEItem() {
         @Override
         public NBTTagCompound serializeNBT() {
             throw new UnsupportedOperationException();
@@ -63,19 +63,19 @@ public class EnergyHelper {
             throw new UnsupportedOperationException();
         }
 
-        public IMEnergyCap setMaxME(int i) {
+        public MEItem setMaxME(int i) {
             return this;
         }
 
-        public IMEnergyCap setReceiveSpeed(int i) {
+        public MEItem setReceiveSpeed(int i) {
             return this;
         }
 
-        public IMEnergyCap setExtractSpeed(int i) {
+        public MEItem setExtractSpeed(int i) {
             return this;
         }
 
-        public IMEnergyCap setVolRequired(int volRequired) {
+        public MEItem setVolRequired(int volRequired) {
             return this;
         }
 
@@ -95,7 +95,7 @@ public class EnergyHelper {
             return false;
         }
 
-        public IMEnergyCap setME(int count) {
+        public MEItem setME(int count) {
             return this;
         }
 
@@ -107,7 +107,7 @@ public class EnergyHelper {
             return 0;
         }
 
-        public int volRequired() {
+        public int voltage() {
             return -1;
         }
 
@@ -122,7 +122,7 @@ public class EnergyHelper {
 
     /* NBT TAG HELPER */
     public static void addEnergyInformation(@Nonnull ItemStack stack, @Nonnull List<String> list) {
-        IMEnergyCap cap = stack.getCapability(Capabilities.MENERGY, null);
+        MEItem cap = stack.getCapability(Capabilities.MENERGY, null);
         if (cap != null) {
             list.add(I18n.format("tooltip.mi.energy") +
                     TextUtil.scaledNumber(getEnergyStored(stack)) +
@@ -139,7 +139,7 @@ public class EnergyHelper {
 
     @Nonnull
     public static String addEnergyInformation(@Nonnull TileEntity te) {
-        IMEnergy cap = te.getCapability(Capabilities.MENERGY_TILE, null);
+        METile cap = te.getCapability(Capabilities.MENERGY_TILE, null);
         if (cap != null) {
             return I18n.format("tooltip.mi.energy") +
                     TextUtil.scaledNumber(cap.currentME()) + " / " +
@@ -160,10 +160,10 @@ public class EnergyHelper {
         return getCapabilityDefault(stack).receiveME(maxReceive, simulate);
     }
 
-    public static IMEnergyCap getFirstUsableBattery(EntityPlayer player) {
+    public static MEItem getFirstUsableBattery(EntityPlayer player) {
         final int LAST = InventoryPlayer.getHotbarSize();
 
-        IMEnergyCap cap;
+        MEItem cap;
         for (int i = 0; i < LAST; i++) {
             ItemStack stack = player.inventory.getStackInSlot(i);
             if ((cap = stack.getCapability(Capabilities.MENERGY, null)) != null) {
@@ -174,14 +174,14 @@ public class EnergyHelper {
         return null;
     }
 
-    private static final List<IMEnergyCap> tempList = new SimpleList<>(15);
+    private static final List<MEItem> tempList = new SimpleList<>(15);
 
     public static void batteryTick(EntityPlayer player, int searchBatterySlot, int searchItemSlot) {
         final int LAST = Math.max(searchBatterySlot, searchItemSlot);
         tempList.clear();
 
-        IMEnergyCap capr;
-        IMEnergyCap battery = null;
+        MEItem capr;
+        MEItem battery = null;
 
         InventoryPlayer inv = player.inventory;
         for (int i = 0; i < LAST; i++) {
@@ -205,14 +205,14 @@ public class EnergyHelper {
 
         int maxExtract = Math.min(battery.currentME(), battery.extractSpeed());
         int forEach = maxExtract / len;
-        for (IMEnergyCap cap : tempList) {
+        for (MEItem cap : tempList) {
             if (!battery.canExtract())
                 return;
             EnergyHelper.safeTransfer(battery, cap, forEach);
         }
     }
 
-    public static boolean isBattery(IMEnergyCap cap) {
+    public static boolean isBattery(MEItem cap) {
         int me = cap.currentME();
         if (me != 0) return false;
         cap.setME(1);
@@ -223,7 +223,7 @@ public class EnergyHelper {
         return false;
     }
 
-    public static int safeTransfer(IMEnergyCap from, IMEnergyCap to, int count) {
+    public static int safeTransfer(MEItem from, MEItem to, int count) {
         return from.extractME(to.receiveME(from.extractME(count, true), false), false);
     }
 
@@ -232,7 +232,7 @@ public class EnergyHelper {
     }
 
     public static int getEnergyStored(ItemStack stack) {
-        IMEnergyCap cap = getCapabilityDefault(stack);
+        MEItem cap = getCapabilityDefault(stack);
         NBTTagCompound tag = stack.getTagCompound();
         if (cap.currentME() != 0) {
             return cap.currentME();
@@ -243,8 +243,8 @@ public class EnergyHelper {
         }
     }
 
-    public static IMEnergyCap getCapabilityDefault(ItemStack stack) {
-        IMEnergyCap cap = stack.getCapability(Capabilities.MENERGY, null);
+    public static MEItem getCapabilityDefault(ItemStack stack) {
+        MEItem cap = stack.getCapability(Capabilities.MENERGY, null);
         return stack.isEmpty() ? EMPTYCAP : (cap == null ? EMPTYCAP : cap);
     }
 }

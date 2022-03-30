@@ -35,6 +35,8 @@ package ilib.item.handler;
 
 import net.minecraft.item.ItemStack;
 
+import net.minecraftforge.items.IItemHandler;
+
 public interface InvChangeListener {
     void onInventoryChanged(IItemHandler i, int slot, ItemStack old, ItemStack now);
 

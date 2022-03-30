@@ -25,6 +25,8 @@
  */
 package ilib.util.freeze;
 
+import ilib.util.MCTexts;
+
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 
@@ -42,12 +44,17 @@ public final class FreezedItem extends Item {
 
     @Override
     public String getTranslationKey(ItemStack stack) {
-        return "item.implib.freezed";
+        return "item.ilib.freezed";
     }
 
     @Override
     public String getTranslationKey() {
-        return "item.implib.freezed";
+        return "item.ilib.freezed";
+    }
+
+    @Override
+    public String getItemStackDisplayName(ItemStack stack) {
+        return MCTexts.format(this.getTranslationKey(stack)).trim();
     }
 
     @Override

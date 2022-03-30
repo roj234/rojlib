@@ -25,7 +25,7 @@
  */
 package roj.config;
 
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
 import roj.config.data.*;
@@ -92,7 +92,7 @@ public class XMLParser extends Parser {
                     unexpected(wr, w.val(), "?");
                 wr.index = begin;
                 XHeader h = new XHeader();
-                h.appendChild(xmlElement(wr, flag));
+                h.append(xmlElement(wr, flag));
                 return h;
             }
             w = wr.nextWord();
@@ -335,8 +335,8 @@ public class XMLParser extends Parser {
     }
 
     public static final class XMLexer extends AbstLexer {
-        static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
-        static final LongBitSet XML_LITERAL = LongBitSet.from("+<>/=?;!\r\n \t");
+        static final MyBitSet XML_SPECIAL = MyBitSet.from("+-<>/=?;!:");
+        static final MyBitSet XML_LITERAL = MyBitSet.from("+<>/=?;!\r\n \t");
 
         public Predicate<String> hasCloseTags = Helpers.alwaysTrue();
         String errorTag;

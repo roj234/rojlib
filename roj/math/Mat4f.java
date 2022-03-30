@@ -34,7 +34,9 @@ import roj.util.Hasher;
  * @author Maximilian Luz
  */
 public class Mat4f implements Cloneable {
-    public Mat4f() {}
+    public Mat4f() {
+        m00 = m11 = m22 = m33 = 1;
+    }
 
     public float m00, m01, m02, m03,
             m10, m11, m12, m13,
@@ -445,17 +447,39 @@ public class Mat4f implements Cloneable {
         return this;
     }
 
+    public Vec4f mul(Vec4f v) {
+        return mul(v, new Vec4f());
+    }
+
+    public Vec3f mul(Vec3f v) {
+        return mul(v, new Vec3f());
+    }
+
     /**
      * Multiplies this matrix with the specified vector.
      *
      * @param v the vector to multiply with.
      * @return the product of this matrix and the specified vectors.
      */
-    public Vec4f mul(Vec4f v) {
-        return new Vec4f(m00 * v.x + m01 * v.y + m02 * v.z + m03 * v.w,
-                m10 * v.x + m11 * v.y + m12 * v.z + m13 * v.w,
-                m20 * v.x + m21 * v.y + m22 * v.z + m23 * v.w,
-                m30 * v.x + m31 * v.y + m32 * v.z + m33 * v.w);
+    public Vec4f mul(Vec4f v, Vec4f to) {
+        float x = v.x, y = v.y, z = v.z, w = v.w;
+        return to.set(m00 * x + m01 * y + m02 * z + m03 * w,
+                      m10 * x + m11 * y + m12 * z + m13 * w,
+                      m20 * x + m21 * y + m22 * z + m23 * w,
+                      m30 * x + m31 * y + m32 * z + m33 * w);
+    }
+
+    /**
+     * Multiplies this matrix with the specified vector.
+     *
+     * @param v the vector to multiply with.
+     * @return the product of this matrix and the specified vectors.
+     */
+    public Vec3f mul(Vec3f v, Vec3f to) {
+        float x = v.x, y = v.y, z = v.z;
+        return to.set(m00 * x + m01 * y + m02 * z,
+                      m10 * x + m11 * y + m12 * z,
+                      m20 * x + m21 * y + m22 * z);
     }
 
     /**
@@ -1288,5 +1312,13 @@ public class Mat4f implements Cloneable {
                 .add(m20).add(m21).add(m22).add(m23)
                 .add(m30).add(m31).add(m32).add(m33)
                 .getHash();
+    }
+
+    @Override
+    public String toString() {
+        return "Mat4f{" + m00 + "," + m01 + "," + m02 + "," + m03 + ",\n" +
+            m10 + "," + m11 + "," + m12 + "," + m13 + ",\n" +
+            m20 + "," + m21 + "," + m22 + "," + m23 + ",\n" +
+            m30 + "," + m31 + "," + m32 + "," + m33 + '}';
     }
 }

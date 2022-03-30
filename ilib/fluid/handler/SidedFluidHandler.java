@@ -56,7 +56,7 @@ public abstract class SidedFluidHandler implements IFluidHandler {
         private final int[] outputs;
 
         public StdSidedFluidHandler(EnumFacing face, T tile, int[] inputs, int[] outputs) {
-            super(tile.getFluidHandler());
+            super((FluidHandler) tile.getFluidHandler());
             this.tile = tile;
             this.face = face;
             this.inputs = inputs;

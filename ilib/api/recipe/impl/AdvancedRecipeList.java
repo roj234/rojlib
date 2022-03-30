@@ -30,14 +30,13 @@ import ilib.api.recipe.IDisplayableRecipeList;
 import ilib.api.recipe.IModifiableRecipeList;
 import ilib.api.recipe.IRecipe;
 import ilib.api.recipe.MultiInputRecipe;
+import ilib.collect.StackComparator;
 import ilib.fluid.handler.IFluidProvider;
-import ilib.util.CraftingMap;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import roj.collect.UnsortedMultiKeyMap;
 import roj.math.MathUtils;
 import roj.math.MutableBoolean;
-
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -54,7 +53,7 @@ public class AdvancedRecipeList implements IDisplayableRecipeList, IModifiableRe
     private final List<IRecipe> display = new ArrayList<>();
 
     public AdvancedRecipeList(int machineInventorySize) {
-        this.recipes = UnsortedMultiKeyMap.create(CraftingMap.StackComparator.INSTANCE, machineInventorySize);
+        this.recipes = UnsortedMultiKeyMap.create(StackComparator.INSTANCE, machineInventorySize);
     }
 
     public void addRecipe(IRecipe recipe) {

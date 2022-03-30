@@ -29,8 +29,7 @@ import com.google.common.base.Predicates;
 import ilib.command.sub.AbstractSubCommand;
 import ilib.math.Arena;
 import ilib.math.Section;
-import ilib.misc.SelectionCache;
-
+import ilib.math.SelectionCache;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.*;

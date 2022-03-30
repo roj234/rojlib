@@ -26,11 +26,11 @@
 
 package ilib.util;
 
-import com.google.common.collect.Sets;
+import ilib.ImpLib;
+import roj.collect.MyHashSet;
 import roj.text.TextUtil;
 
 import net.minecraft.block.Block;
-import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.BlockStateContainer;
 import net.minecraft.block.state.IBlockState;
@@ -46,6 +46,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraft.world.chunk.Chunk;
 
 import net.minecraftforge.registries.GameData;
 
@@ -54,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * @author Roj234
@@ -293,18 +295,14 @@ public final class BlockHelper {
      */
     public static int getSolidBlockY(World world, int x, int z) {
         BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain(x, 0, z);
-        int y = world.getChunk(pos).getTopFilledSegment() + 16;
+        Chunk c = world.getChunk(pos);
+        int y = c.getTopFilledSegment() + 16;
 
         IBlockState state;
-        Block block;
         do {
-            if (--y < 0) {
-                break;
-            }
-            state = world.getBlockState(pos.setPos(x, y, z));
-            block = state.getBlock();
-        }
-        while (block.isAir(state, world, pos) || block.isReplaceable(world, pos) || block.isLeaves(state, world, pos) || block.isFoliage(world, pos) || block.canBeReplacedByLeaves(state, world, pos) || block instanceof BlockLiquid);
+            if (--y < 0) break;
+            state = c.getBlockState(pos.setPos(x, y, z));
+        } while (!state.isSideSolid(world, pos, EnumFacing.UP));
         pos.release();
         return y;
     }
@@ -314,18 +312,17 @@ public final class BlockHelper {
      */
     public static int getSurfaceBlockY(World world, int x, int z) {
         BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain(x, 0, z);
-        int y = world.getChunk(pos).getTopFilledSegment() + 16;
+        Chunk c = world.getChunk(pos);
+        int y = c.getTopFilledSegment() + 16;
 
         IBlockState state;
         Block block;
         do {
-            if (--y < 0) {
-                break;
-            }
-            state = world.getBlockState(pos.setPos(x, y, z));
+            if (--y < 0) break;
+
+            state = c.getBlockState(pos.setPos(x, y, z));
             block = state.getBlock();
-        }
-        while (block.isAir(state, world, pos) || block.isReplaceable(world, pos) || block.isLeaves(state, world, pos) || block.isFoliage(world, pos) || block.canBeReplacedByLeaves(state, world, pos));
+        } while (block.isAir(state, world, pos) || block.isReplaceable(world, pos) || block.isLeaves(state, world, pos) || block.isFoliage(world, pos) || block.canBeReplacedByLeaves(state, world, pos));
         pos.release();
         return y;
     }
@@ -335,17 +332,15 @@ public final class BlockHelper {
      */
     public static int getTopBlockY(World world, int x, int z) {
         BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain(x, 0, z);
-        int y = world.getChunk(pos.setPos(x, 0, z)).getTopFilledSegment() + 16;
+        Chunk c = world.getChunk(pos);
+        int y = c.getTopFilledSegment() + 16;
 
         IBlockState state;
         do {
-            if (--y < 0) {
-                break;
-            }
-
+            if (--y < 0) break;
             pos.setY(y);
 
-            state = world.getBlockState(pos);
+            state = c.getBlockState(pos);
         } while (state.getBlock().isAir(state, world, pos));
         pos.release();
         return y;
@@ -445,7 +440,7 @@ public final class BlockHelper {
         }
     }
 
-    public static void updateBlockData(@Nonnull TileEntity tile) {
+    public static void sendTileUpdate(@Nonnull TileEntity tile) {
         World world = tile.getWorld();
         if (!world.isRemote) {
             BlockPos pos = tile.getPos();
@@ -476,79 +471,67 @@ public final class BlockHelper {
     }
 
     /* BLOCK WALKER */
-    public interface IWalker {
-        boolean walk(BlockPos pos);
+    public static abstract class BlockWalker implements Predicate<BlockPos> {
+        public final MyHashSet<BlockPos> t1 = new MyHashSet<>(), t2 = new MyHashSet<>();
+        public final MyHashSet<BlockPos> traveled = new MyHashSet<>();
 
-        Set<BlockPos> getWalkResult();
-
-        void setParam(Object obj);
-    }
-
-    @Deprecated
-    public static abstract class BlockWalker implements IWalker {
-        public Object obj;
-
-        public final Set<BlockPos> unTravel = Sets.newHashSet();
-        final Set<BlockPos> traveled = Sets.newHashSet();
-        public final Set<BlockPos> toTravel = Sets.newHashSet();
+        protected long startTime;
 
         public boolean walk(BlockPos startPos) {
-            long startTime = System.currentTimeMillis();
-            unTravel.clear();
-            traveled.clear();
-            toTravel.clear();
+            startTime = System.currentTimeMillis();
 
-            unTravel.add(startPos);
-            addNear(unTravel, startPos);
+            MyHashSet<BlockPos> curr = this.t1;
+            curr.clear();
+            MyHashSet<BlockPos> next = this.t2;
+            next.clear();
+
+            traveled.clear();
+
+            curr.add(startPos);
 
             int i = 0;
-            while (canWalk(i)) {
-                i++;
-                removeTraveled();
-                if (unTravel.isEmpty()) {
+            while (canWalk(i++)) {
+                if (curr.isEmpty()) {
                     return true;
                 }
-                for (BlockPos pos : unTravel) {
-                    if (isValidPos(pos)) {
-                        addNear(toTravel, pos);
-                    }
+                for (BlockPos pos : curr) {
+                    addNear(next, pos);
                 }
-                unTravel.addAll(toTravel);
-                toTravel.clear();
+                next.removeIf(this);
+
+                MyHashSet<BlockPos> tmp = curr;
+                curr = next;
+
+                next = tmp;
+                next.clear();
             }
-            return canWalk(i);
+            return false;
         }
 
-        public Set<BlockPos> getWalkResult() {
-            //MI.logger().debug("[BlockWalker]" + this.traveled.size() + " blocks walked");
-            //MI.logger().debug("[BlockWalker] Time cost: " + (System.currentTimeMillis() - this.startTime));
+        public MyHashSet<BlockPos> getWalkResult() {
+            ImpLib.logger().info("[BlockWalker]" + this.traveled.size() + " blocks walked");
+            ImpLib.logger().info("[BlockWalker] Time cost: " + (System.currentTimeMillis() - this.startTime));
             return this.traveled;
         }
 
-        public void setParam(Object obj) {
-            this.obj = obj;
+        @Override
+        public boolean test(BlockPos pos) {
+            return !traveled.add(pos);
         }
 
-        void removeTraveled() {
-            unTravel.removeIf(pos -> !traveled.add(pos));
-        }
-
-        protected void v(Set<BlockPos> list, BlockPos pos) {
-            if (isValidPos(pos)) list.add(pos);
-        }
-
-        public void addNear(Set<BlockPos> list, BlockPos pos) {
-            v(list, pos.up());
-            v(list, pos.down());
-            v(list, pos.east());
-            v(list, pos.west());
-            v(list, pos.south());
-            v(list, pos.north());
+        protected void addNear(Set<BlockPos> list, BlockPos pos) {
+            BlockPos.PooledMutableBlockPos tmp = BlockPos.PooledMutableBlockPos.retain();
+            for (EnumFacing facing : EnumFacing.VALUES) {
+                if (isValidPos(tmp.setPos(pos).move(facing), facing)) {
+                    list.add(tmp.toImmutable());
+                }
+            }
+            tmp.release();
         }
 
         public abstract boolean canWalk(int cycle);
 
-        public abstract boolean isValidPos(BlockPos pos);
+        public abstract boolean isValidPos(BlockPos pos, EnumFacing from);
     }
 
     /**

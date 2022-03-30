@@ -34,7 +34,9 @@ import roj.util.Hasher;
  * @author Maximilian Luz
  */
 public class Mat4d implements Cloneable {
-    public Mat4d() {}
+    public Mat4d() {
+        m00 = m11 = m22 = m33 = 1;
+    }
 
     public double m00, m01, m02, m03,
             m10, m11, m12, m13,
@@ -456,6 +458,18 @@ public class Mat4d implements Cloneable {
                 m10 * v.x + m11 * v.y + m12 * v.z + m13 * v.w,
                 m20 * v.x + m21 * v.y + m22 * v.z + m23 * v.w,
                 m30 * v.x + m31 * v.y + m32 * v.z + m33 * v.w);
+    }
+
+    /**
+     * Multiplies this matrix with the specified vector.
+     *
+     * @param v the vector to multiply with.
+     * @return the product of this matrix and the specified vectors.
+     */
+    public Vec3d mul(Vec3d v) {
+        return new Vec3d(m00 * v.x + m01 * v.y + m02 * v.z,
+                         m10 * v.x + m11 * v.y + m12 * v.z,
+                         m20 * v.x + m21 * v.y + m22 * v.z);
     }
 
     /**

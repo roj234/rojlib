@@ -40,6 +40,7 @@ import roj.asm.util.InsnList;
 import roj.collect.IIntMap;
 import roj.collect.IntBiMap;
 import roj.collect.IntMap;
+import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteList.Streamed;
 import roj.util.ByteReader;
@@ -69,7 +70,7 @@ public class AttrCode extends Attribute {
 
     public byte interpretFlags;
     public List<Frame> frames;
-    public final ArrayList<ExceptionEntry> exceptions = new ArrayList<>();
+    public SimpleList<ExceptionEntry> exceptions;
 
     public final AttributeList attributes = new AttributeList();
 
@@ -95,18 +96,26 @@ public class AttrCode extends Attribute {
         IntMap<InsnNode> pc = parseCode(cp, r, largestIndex);
 
         int len = r.readUnsignedShort();
-        exceptions.ensureCapacity(len);
-        // start_pc,end_pc,handler_pc中的值都表示的是PC计数器中的指令地址
-        //exception_table表示的意思是：
-        //如果字节码从第start_pc行到第end_pc行之间出现了catch_type所描述的异常类型，那么将跳转到handler_pc行继续处理。
-        // catchType => ConstantClass extends Throwable
-        for (int i = 0; i < len; i++) {
-            int pci;
-            this.exceptions.add(new ExceptionEntry(
+        if (len > 0) {
+            SimpleList<ExceptionEntry> ex = exceptions;
+            if (ex == null) ex = exceptions = new SimpleList<>(len);
+            else {
+                ex.ensureCapacity(len);
+                ex.clear();
+            }
+
+            // start_pc,end_pc,handler_pc中的值都表示的是PC计数器中的指令地址
+            //exception_table表示的意思是：
+            //如果字节码从第start_pc行到第end_pc行之间出现了catch_type所描述的异常类型，那么将跳转到handler_pc行继续处理。
+            // catchType => ConstantClass extends Throwable
+            for (int i = 0; i < len; i++) {
+                int pci;
+                ex.add(new ExceptionEntry(
                     pc.get(r.readUnsignedShort()), // start
                     (pci = r.readUnsignedShort()) == largestIndex ? EndOfInsn.MARKER : pc.get(pci), // end
                     pc.get(r.readUnsignedShort()), // handler
                     (CstClass) cp.get(r)));      // type
+            }
         }
 
         len = r.readUnsignedShort();
@@ -168,18 +177,22 @@ public class AttrCode extends Attribute {
 
         w.putInt(lenIdx - 4, w.wIndex() - lenIdx);
 
-        w.putShort(this.exceptions.size());
-        ArrayList<ExceptionEntry> exs = this.exceptions;
+        SimpleList<ExceptionEntry> exs = exceptions;
+        if (exs == null) {
+            w.putShort(0);
+        } else {
+            w.putShort(exs.size());
 
-        for (int i = 0; i < exs.size(); i++) {
-            ExceptionEntry ex = exs.get(i);
-            ex.start  = InsnNode.validate(ex.start);
-            ex.end    = InsnNode.validate(ex.end);
-            ex.handler= InsnNode.validate(ex.handler);
-            w.putShort(ex.start.bci)
-             .putShort(EndOfInsn.MARKER == ex.end ? most : ex.end.bci)
-             .putShort(ex.handler.bci)
-             .putShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : cw.getClassId(ex.type));
+            for (int i = 0; i < exs.size(); i++) {
+                ExceptionEntry ex = exs.get(i);
+                ex.start  = InsnNode.validate(ex.start);
+                ex.end    = InsnNode.validate(ex.end);
+                ex.handler= InsnNode.validate(ex.handler);
+                w.putShort(ex.start.bci)
+                 .putShort(EndOfInsn.MARKER == ex.end ? most : ex.end.bci)
+                 .putShort(ex.handler.bci)
+                 .putShort(ex.type == ExceptionEntry.ANY_TYPE ? 0 : cw.getClassId(ex.type));
+            }
         }
 
         final AttributeList attrs = this.attributes;
@@ -830,7 +843,7 @@ public class AttrCode extends Attribute {
                 sb.append("    #").append(i).append(' ').append(n).append('\n');
             }
         }
-        if (!exceptions.isEmpty()) {
+        if (exceptions != null && !exceptions.isEmpty()) {
             sb.append("    Exception Handlers: \n");
             for (ExceptionEntry ex : exceptions) {
                 sb.append("        ").append(ex).append('\n');

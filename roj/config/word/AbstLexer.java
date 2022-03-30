@@ -25,8 +25,7 @@
  */
 package roj.config.word;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.config.ParseException;
 import roj.math.MathUtils;
 import roj.text.ACalendar;
@@ -37,11 +36,11 @@ import roj.text.CharList;
  * @since  2020/10/31 14:22
  */
 public abstract class AbstLexer {
-    public static final IBitSet
-            NUMBER = LongBitSet.from("0123456789"),
-            WHITESPACE = LongBitSet.from(" \r\n\t"),
-            SPECIAL = LongBitSet.from("+-\\/*()!~`@#$%^&_=,<>.?\"':;|[]{}"),
-            SPECIAL_CHARS = LongBitSet.from(
+    public static final MyBitSet
+            NUMBER = MyBitSet.from("0123456789"),
+            WHITESPACE = MyBitSet.from(" \r\n\t"),
+            SPECIAL = MyBitSet.from("+-\\/*()!~`@#$%^&_=,<>.?\"':;|[]{}"),
+            SPECIAL_CHARS = MyBitSet.from(
                     32, 33,
                     // "
                     35, 36, 37, 38,
@@ -50,7 +49,7 @@ public abstract class AbstLexer {
                     58, 59, 60, 61, 62, 63,
                     91, 93, 94, 95, 96,
                     123, 124, 125, 126);
-    public static final IBitSet HEX_Alphabet = LongBitSet.from("ABCDEFabcdef");
+    public static final MyBitSet HEX_Alphabet = MyBitSet.from("ABCDEFabcdef");
 
     /**
      * 暂存

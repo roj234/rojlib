@@ -1030,4 +1030,11 @@ public class Mat4x3f implements Cloneable {
                 .add(m20).add(m21).add(m22).add(m23)
                 .getHash();
     }
+
+    @Override
+    public String toString() {
+        return "Mat4x4f{" + m00 + "," + m01 + "," + m02 + "," + m03 + ",\n" +
+            m10 + "," + m11 + "," + m12 + "," + m13 + ",\n" +
+            m20 + "," + m21 + "," + m22 + "," + m23 + '}';
+    }
 }

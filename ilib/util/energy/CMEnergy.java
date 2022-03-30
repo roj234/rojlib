@@ -33,21 +33,21 @@
  */
 package ilib.util.energy;
 
-import ilib.api.energy.IMEnergy;
-import ilib.api.energy.IMEnergyStorage;
+import ilib.api.energy.MEStorage;
+import ilib.api.energy.METile;
 
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 
 public final class CMEnergy {
-    public final IMEnergy e;
-    private IMEnergyStorage s;
+    public final METile    e;
+    private      MEStorage s;
     public final TileEntity te;
 
-    public CMEnergy(TileEntity te, IMEnergy me) {
+    public CMEnergy(TileEntity te, METile me) {
         e = me;
-        if (me instanceof IMEnergyStorage)
-            s = (IMEnergyStorage) me;
+        if (me instanceof MEStorage)
+            s = (MEStorage) me;
         this.te = te;
     }
 

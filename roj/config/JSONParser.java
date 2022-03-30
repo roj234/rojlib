@@ -192,7 +192,7 @@ public final class JSONParser extends Parser {
         if (ser != null && map.containsKey("==", Type.STRING)) {
             Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
-                return new CObject<>(map.raw(), des);
+                return new CObject<>(map.raw(), ser, des);
             }
         }
 

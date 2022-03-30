@@ -37,6 +37,12 @@ import java.util.Map;
  * @since 2022/1/11 17:45
  */
 class MapSerializer implements Serializer<Map<?, ?>> {
+    private final Serializers owner;
+
+    public MapSerializer(Serializers owner) {
+        this.owner = owner;
+    }
+
     @Override
     public Map<?, ?> deserialize(CObject<?> object) {
         MyHashMap<String, Object> caster = Helpers.cast(new MyHashMap<>(object.raw()));
@@ -50,13 +56,13 @@ class MapSerializer implements Serializer<Map<?, ?>> {
     public void serialize(CObject<?> base, Map<?, ?> object) {
         Map<String, CEntry> map = base.raw();
         for (Map.Entry<?, ?> entry : object.entrySet()) {
-            map.put(entry.getKey().toString(), CEntry.wrap(entry.getValue()));
+            map.put(entry.getKey().toString(), CEntry.wrap(entry.getValue(), owner));
         }
     }
 
     @Override
     public CEntry serializeRc(Map<?, ?> t) {
-        return CEntry.wrap(t);
+        return CEntry.wrap(t, owner);
     }
 
     @Override

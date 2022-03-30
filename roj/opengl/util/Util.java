@@ -42,7 +42,7 @@ import java.nio.FloatBuffer;
  * @since 2021/9/18 15:42
  */
 public class Util {
-    public static VertexBuilder sharedVertexBuilder;
+    public static VertexBuilder sharedVertexBuilder = new VertexBuilder(4096);
 
     public static void color(float red, float green, float blue) {
         GL11.glColor4f(red, green, blue, 1);
@@ -52,6 +52,14 @@ public class Util {
         float red = (color >> 16 & 0xFF) / 255F;
         float green = (color >> 8 & 0xFF) / 255F;
         float blue = (color & 0xFF) / 255F;
+        GL11.glColor4f(red, green, blue, alpha);
+    }
+
+    public static void color(int color) {
+        float red = ((color >>> 16) & 0xFF) / 255F;
+        float green = ((color >>> 8) & 0xFF) / 255F;
+        float blue = (color & 0xFF) / 255F;
+        float alpha = ((color >>> 24) & 0xFF) / 255F;
         GL11.glColor4f(red, green, blue, alpha);
     }
 

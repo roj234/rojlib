@@ -26,14 +26,12 @@
 package lac.injector.misc;
 
 import lac.client.AccessHelper;
-import roj.util.ByteList;
-
 import net.minecraft.launchwrapper.Launch;
-
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
+import roj.util.ByteList;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -45,7 +43,7 @@ import java.util.List;
  * @author Roj233
  * @since 2021/10/16 12:50
  */
-@Mod(modid = "lac_helper", name = "LaoAntiCheat Helper", version = "1.0.0")
+//@Mod(modid = "lac_helper", name = "LaoAntiCheat Helper", version = "1.0.0")
 public class LACDetector implements Runnable {
     @Mod.EventHandler
     public void onLoadComplete(FMLLoadCompleteEvent e) throws IOException {

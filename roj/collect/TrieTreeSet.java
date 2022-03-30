@@ -325,7 +325,7 @@ public final class TrieTreeSet implements Set<CharSequence> {
             if (curr.size > 1 || curr.isValid()) {
                 curr.removeChild(prev);
 
-                if (curr.size == 1 && i >= COMPRESS_START_DEPTH) {
+                if (curr.size == 1 && !curr.isEnd && i >= COMPRESS_START_DEPTH) {
                     CharList sb = new CharList(16);
 
                     do {

@@ -28,11 +28,10 @@ package ilib.item;
 
 import ilib.api.Ownable;
 import ilib.api.item.ILostThing;
-import ilib.api.item.IShiftTooltip;
 import ilib.api.item.ITooltip;
 import ilib.util.Colors;
 import ilib.util.ItemNBT;
-import ilib.util.TextHelper;
+import ilib.util.MCTexts;
 import ilib.util.energy.EnergyHelper;
 
 import net.minecraft.block.Block;
@@ -53,9 +52,6 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import javax.annotation.Nonnull;
 import java.util.List;
 
-import static ilib.item.ItemBase.color;
-import static ilib.item.ItemBase.tips;
-
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
@@ -65,45 +61,30 @@ public class ItemBlockMI extends ItemBlock {
         super(block);
     }
 
+    protected void addTooltip(ItemStack stack, List<String> list) {}
+
     @Override
     @SideOnly(Side.CLIENT)
-    public final void addInformation(ItemStack itemstack, World world, @Nonnull List<String> list, @Nonnull ITooltipFlag flag) {
-        ItemBlockMI i = (ItemBlockMI) itemstack.getItem();
+    public final void addInformation(ItemStack stack, World world, @Nonnull List<String> list, @Nonnull ITooltipFlag flag) {
+        ItemBlockMI i = (ItemBlockMI) stack.getItem();
+
         ITooltip tooltip = null;
         if (i.block instanceof ITooltip) {
             tooltip = (ITooltip) i.block;
-        } else if (i instanceof ITooltip) {
-            tooltip = (ITooltip) i;
         }
 
         if (tooltip != null) {
-            color.clear();
-            tips.clear();
-            tooltip.getTooltip(tips, color, itemstack);
-
-            if (i instanceof IShiftTooltip) {
-                String z = I18n.format(tips.get(0));
-                TextHelper.shiftLore(list, color.size() > 0 ? I18n.format(color.get(0)) + z : z);
-            } else {
-                String s, s2;
-                for (int j = 0; j < tips.size(); j++) {
-                    s = tips.get(j);
-                    s = s == null ? "" : I18n.format(s);
-                    if (color.size() > j && (s2 = color.get(j)) != null) {
-                        list.add(I18n.format(s2) + s);
-                    } else {
-                        list.add(s);
-                    }
-                }
-            }
+            tooltip.addTooltip(stack, list);
         }
+
+        addTooltip(stack, list);
 
         if (i instanceof ILostThing) {
             ILostThing t = (ILostThing) i;
             EntityPlayer clientPlayer = Minecraft.getMinecraft().player;
             if (clientPlayer != null) {
-                if (t.isOwned(itemstack))
-                    if (t.isOwner(itemstack, clientPlayer))
+                if (t.isOwned(stack))
+                    if (t.isOwner(stack, clientPlayer))
                         list.add(Colors.ORANGE + I18n.format("tooltip.ilib.lstd.bound") + clientPlayer.getName());
                     else
                         list.add(Colors.DARK_RED + I18n.format("tooltip.ilib.lstd.notu"));
@@ -112,10 +93,10 @@ public class ItemBlockMI extends ItemBlock {
             }
         }
 
-        NBTTagCompound tag = ItemNBT.getRootTagNullable(itemstack);
+        NBTTagCompound tag = ItemNBT.getRootTagNullable(stack);
         if (tag != null) {
             if (tag.getInteger("MaxME") != 0)
-                EnergyHelper.addEnergyInformation(itemstack, list);
+                EnergyHelper.addEnergyInformation(stack, list);
             if (tag.hasKey("Owner")) {
                 if (!(tag.getTag("Owner") instanceof NBTTagCompound)) {
                     tag.removeTag("Owner");
@@ -137,7 +118,7 @@ public class ItemBlockMI extends ItemBlock {
     }
 
     public String getItemStackDisplayName(ItemStack stack) {
-        return TextHelper.translate(this.getTranslationKey(stack)).trim();
+        return MCTexts.format(this.getTranslationKey(stack)).trim();
     }
 
     @Override

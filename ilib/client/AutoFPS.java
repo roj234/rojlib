@@ -25,18 +25,15 @@
  */
 package ilib.client;
 
-import ilib.ClientProxy;
-import org.lwjgl.input.Keyboard;
-import org.lwjgl.input.Mouse;
-import org.lwjgl.opengl.Display;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.SoundCategory;
-
 import net.minecraftforge.client.event.GuiScreenEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.Display;
 
 /**
  * @author Roj234
@@ -44,6 +41,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
  */
 public class AutoFPS {
     private static int waitingTime = -1;
+    private static int targetFPS;
+    private static float targetVol;
 
     private static long lastActive;
 
@@ -60,10 +59,12 @@ public class AutoFPS {
 
     public static final Minecraft mc = Minecraft.getMinecraft();
 
-    public static void init(int time) {
+    public static void init(int time, int targetFPS1, float targetVol1) {
         if (waitingTime == -1) {
             MinecraftForge.EVENT_BUS.register(AutoFPS.class);
             waitingTime = time * 1000;
+            targetFPS = targetFPS1;
+            targetVol = targetVol1;
             lastActive = System.currentTimeMillis();
         }
     }
@@ -90,7 +91,7 @@ public class AutoFPS {
 
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.START) {
+        if (event.phase == TickEvent.Phase.END) {
             boolean curWindowStatus = Display.isActive();
             if (!curWindowStatus) {
                 if (windowActive) {
@@ -104,25 +105,12 @@ public class AutoFPS {
                 windowActive = true;
             }
 
-            if (mc.world == null) {
-                recoveryFPS();
-                return;
-            }
-
             long currentKeyEventNanoSec = Keyboard.getEventNanoseconds();
             if (currentKeyEventNanoSec != prevKeyTime) {
                 prevKeyTime = currentKeyEventNanoSec;
                 recoveryFPS();
                 return;
             }
-/*
-            try {
-                MovementInput input = mc.player.movementInput;
-                if (input.forwardKeyDown || input.backKeyDown || input.rightKeyDown || input.leftKeyDown || input.jump || input.sneak) {
-                    recoveryFPS();
-                    return;
-                }
-            } catch (NullPointerException ignored) {}*/
 
             long currMouseTime = Mouse.getEventNanoseconds();
             if (currMouseTime != prevMouseTime) {
@@ -130,15 +118,6 @@ public class AutoFPS {
                 recoveryFPS();
                 return;
             }
-
-//            if (!ignoreHoldButton)
-//                for (int bc = 0; bc < Mouse.getButtonCount(); bc++) {
-//                    if (Mouse.isButtonDown(bc)) {
-//                        resetWaitingTimer();
-//                        recoverFPS();
-//                        break;
-//                    }
-//                }
 
             if (checkMovingSimply() || checkRotation()) {
                 recoveryFPS();
@@ -156,7 +135,7 @@ public class AutoFPS {
             double my = mc.player.posY - prevY;
             double mz = mc.player.posZ - prevZ;
             double movement = mx * mx + my * my + mz * mz;
-            //ImpLib.logger().debug("movement:" + Math.sqrt(movement));
+
             prevX = mc.player.posX;
             prevY = mc.player.posY;
             prevZ = mc.player.posZ;
@@ -189,20 +168,18 @@ public class AutoFPS {
     }
 
     private static void checkWaitingTimer() {
-        if (!reduceFPS &&
-                System.currentTimeMillis() - lastActive > (waitingTime))
+        if (!reduceFPS && System.currentTimeMillis() - lastActive > (waitingTime))
             action();
     }
 
     private static void action() {
-        if (!reduceFPS && ClientProxy.mc.world != null) {
+        if (!reduceFPS) {
             backupFPS = mc.gameSettings.limitFramerate;
-            mc.gameSettings.limitFramerate = 10;
+            mc.gameSettings.limitFramerate = Display.isVisible() ? targetFPS : 2;
             reduceFPS = true;
 
             backupVolume = mc.gameSettings.getSoundLevel(SoundCategory.MASTER);
-            final float newVolume = 0.2f;
-            mc.gameSettings.setSoundLevel(SoundCategory.MASTER, newVolume);
+            mc.gameSettings.setSoundLevel(SoundCategory.MASTER, targetVol);
         }
     }
 

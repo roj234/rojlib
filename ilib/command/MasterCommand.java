@@ -28,13 +28,12 @@ package ilib.command;
 
 import ilib.command.sub.AbstractSubCommand;
 import ilib.command.sub.ISubCommand;
-import roj.collect.MyHashMap;
-
 import net.minecraft.command.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
+import roj.collect.MyHashMap;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -149,9 +148,10 @@ public final class MasterCommand extends CommandBase {
         }
     }
 
-    public MasterCommand register(@Nonnull ISubCommand command) {
-        subCommands.put(command.getName(), command);
-        command.setParent(this);
+    public MasterCommand register(ISubCommand cmd) {
+        if (cmd == null) return this;
+        subCommands.put(cmd.getName(), cmd);
+        cmd.setParent(this);
         return this;
     }
 

@@ -29,8 +29,7 @@ package ilib.world.structure;
 import ilib.ImpLib;
 import ilib.util.BlockHelper;
 import ilib.world.structure.schematic.Schematic;
-
-import net.minecraft.block.Block;
+import net.minecraft.block.BlockAir;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -55,41 +54,32 @@ public abstract class AbstractStructure {
 
             int x;
             int y;
-            BlockPos.MutableBlockPos schematicPos = new BlockPos.MutableBlockPos();
-            BlockPos.MutableBlockPos worldPos = new BlockPos.MutableBlockPos();
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-            out:
             for (x = 0; x < schematic.width(); x++) {
-                for (y = 0; y < schematic.height(); y++) {
-                    for (int z = 0; z < schematic.length(); ++z) {
-                        int worldX = xCoord + x;
-                        int worldY = yCoord + y;
-                        if (worldY > 255) {
-                            ImpLib.logger().warn("Build height limit reached!");
-                            break out;
-                        }
-                        int worldZ = zCoord + z;
-
-                        Block block = schematic.getBlock(schematicPos.setPos(x, y, z));
-                        IBlockState state = schematic.getBlockState(schematicPos);
-                        if (block != null) {
-                            if (!block.isAir(state, world, worldPos.setPos(worldX, worldY, worldZ))) {
-                                world.setBlockState(worldPos, state, 2);
-                                if (block.hasTileEntity(state)) {
-                                    NBTTagCompound tileData = schematic.getTileData(x, y, z, worldX, worldY, worldZ);
-                                    if (tileData != null) {
-                                        TileEntity tile = world.getTileEntity(worldPos);
+                for (int z = 0; z < schematic.length(); ++z) {
+                    Chunk c = world.getChunk(xCoord + x, zCoord + z);
+                    for (y = 0; y < schematic.height(); y++) {
+                        IBlockState state = schematic.getBlockState(pos.setPos(x, y, z));
+                        if (state != null) {
+                            pos.setPos(xCoord + x, yCoord + y, zCoord + z);
+                            if (!(state.getBlock() instanceof BlockAir)) {
+                                c.setBlockState(pos, state);
+                                if (state.getBlock().hasTileEntity(state)) {
+                                    NBTTagCompound tag = schematic.getTileData(x, y, z, xCoord + x, yCoord + y, zCoord + z);
+                                    if (tag != null) {
+                                        TileEntity tile = world.getTileEntity(pos);
                                         if (tile == null) {
-                                            ImpLib.logger().warn("Couldn't found request tileentity at " + worldX + ',' + worldY + ',' + worldZ + ", NBT tag: " + tileData);
+                                            ImpLib.logger().warn("Couldn't found request tileentity at " + x + ',' + y + ',' + z + ", tag: " + tag);
                                             continue;
                                         }
-                                        tile.readFromNBT(tileData);
-                                        BlockHelper.updateBlock(world, worldPos);
+                                        tile.readFromNBT(tag);
+                                        BlockHelper.updateBlock(world, pos);
                                     }
                                 }
-                            } else if (!world.isAirBlock(worldPos)) {
-                                world.setBlockState(worldPos, BlockHelper.AIR_STATE, 2);
-                                world.removeTileEntity(worldPos);
+                            } else if (!world.isAirBlock(pos)) {
+                                c.setBlockState(pos, BlockHelper.AIR_STATE);
+                                world.removeTileEntity(pos);
                             }
                         }
                     }

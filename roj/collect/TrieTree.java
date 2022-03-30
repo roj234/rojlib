@@ -352,7 +352,7 @@ public class TrieTree<V> implements Map<CharSequence, V> {
 
                 // 压缩剩余的entry
                 // root <== a <== b (curr) <== def <== ghi
-                if (curr.size == 1 && i >= COMPRESS_START_DEPTH) {
+                if (curr.size == 1 && curr.value == NOT_USING && i >= COMPRESS_START_DEPTH) {
                     CharList sb = new CharList(16);
 
                     do {

@@ -31,6 +31,8 @@ import ilib.api.item.IShiftTooltip;
 import ilib.api.tile.ToolTarget;
 import ilib.api.tile.ToolTarget.Type;
 import ilib.util.Colors;
+import ilib.util.MCTexts;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -39,13 +41,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import java.util.List;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
+@Deprecated
 public class ItemTool extends ItemRightClickBlock implements IShiftTooltip {
     private final Type type;
 
@@ -109,8 +110,7 @@ public class ItemTool extends ItemRightClickBlock implements IShiftTooltip {
     }
 
     @Override
-    public void getTooltip(List<String> tooltip, List<String> color, ItemStack stack) {
-        color.add(Colors.DARK_BLUE.toString());
-        tooltip.add("tooltip.mi.tool." + type.getName());
+    public void addTooltip(ItemStack stack, List<String> tooltip) {
+        tooltip.add(Colors.DARK_BLUE.toString() + MCTexts.format("tooltip.mi.tool." + type.getName()));
     }
 }

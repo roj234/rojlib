@@ -33,7 +33,6 @@ import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-
 import net.minecraftforge.common.util.ITeleporter;
 
 import javax.annotation.Nullable;
@@ -94,6 +93,7 @@ public final class FreezedEntity extends Entity {
             this.setNoGravity(true);
             this.setGlowing(true);
             this.updateBlocked = true;
+            this.tag = compound.copy();
         } catch (Throwable var8) {
             new RuntimeException("无法加载实体NBT数据 " + compound.getString("id"), var8).printStackTrace();
         }
@@ -112,26 +112,14 @@ public final class FreezedEntity extends Entity {
 
     @Override
     public boolean writeToNBTAtomically(NBTTagCompound compound) {
-        String s = this.getEntityString();
-        if (s != null) {
-            compound.setString("id", s);
-            this.writeToNBT(compound);
-            return true;
-        } else {
-            return false;
-        }
+        this.writeToNBT(compound);
+        return true;
     }
 
     @Override
     public boolean writeToNBTOptional(NBTTagCompound compound) {
-        String s = this.getEntityString();
-        if (s != null && !this.isRiding()) {
-            compound.setString("id", s);
-            this.writeToNBT(compound);
-            return true;
-        } else {
-            return false;
-        }
+        this.writeToNBT(compound);
+        return true;
     }
 
     @Nullable

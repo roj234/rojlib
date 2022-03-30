@@ -82,11 +82,9 @@ public abstract class InsnNode implements Helpers.Node {
         while (node.next != null) {
             node = node.next;
 
-            if(i++ > 10) {
+            if(i++ == 10) {
                 if(Helpers.hasCircle(node)) {
                     throw new IllegalStateException("Circular reference: " + node);
-                } else {
-                    i = Integer.MIN_VALUE;
                 }
             }
         }

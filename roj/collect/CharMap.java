@@ -171,10 +171,13 @@ public final class CharMap<V> implements MapLike<CharMap.Entry<V>>, Map<Characte
         return new KeySet<>(this);
     }
 
+    /**
+     * @return Set<Integer>
+     */
     @Nonnull
     @Override
     public Set<Character> keySet() {
-        return Helpers.cast(selfEntrySet());
+        return Helpers.cast(selfKeySet());
     }
 
     @Nonnull

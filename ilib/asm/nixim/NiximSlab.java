@@ -25,20 +25,20 @@
  */
 package ilib.asm.nixim;
 
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-
 import net.minecraft.block.BlockSlab;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
 
 import java.util.Random;
 
@@ -64,12 +64,14 @@ abstract class NiximSlab extends BlockSlab {
         if (isDouble()) {
             RayTraceResult result = player.rayTrace(6, 0);
             if (result != null) {
+                System.out.println(result);
                 boolean side = getSide(player, result);
+                System.out.println(side);
 
                 try {
                     int meta = getMetaFromState(state) & 7;
 
-                    BlockSlab slab = (BlockSlab) ((ItemBlock) getItemDropped(state, null, 0)).getBlock();
+                    BlockSlab slab = (BlockSlab) ((ItemBlock) Item.getItemFromBlock(this)).getBlock();
 
                     breaking = true;
 
@@ -78,12 +80,14 @@ abstract class NiximSlab extends BlockSlab {
                     } else { // set top
                         state1 = slab.getStateFromMeta(meta | 8);
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable e) {
+                    e.printStackTrace();
                     breaking = false;
                 }
             }
         }
 
+        System.out.println("setstate: " + state1);
         return world.setBlockState(pos, state1, world.isRemote ? 11 : 3);
     }
 

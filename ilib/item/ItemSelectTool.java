@@ -26,17 +26,21 @@
 
 package ilib.item;
 
-import ilib.misc.SelectionCache;
+import ilib.math.Arena;
+import ilib.math.SelectionCache;
+import ilib.util.MCTexts;
 import ilib.util.PlayerUtil;
 
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.SoundEvents;
 import net.minecraft.item.EnumAction;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.world.World;
 
 import javax.annotation.Nonnull;
@@ -45,7 +49,7 @@ import javax.annotation.Nonnull;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class ItemSelectTool extends ItemRightClickBlock {
+public class ItemSelectTool extends ItemRightClick {
     public static Item INSTANCE;
 
     public ItemSelectTool() {
@@ -65,26 +69,38 @@ public class ItemSelectTool extends ItemRightClickBlock {
     }
 
     @Override
-    public boolean canDestroyBlockInCreative(@Nonnull World world, @Nonnull BlockPos pos, @Nonnull ItemStack stack, @Nonnull EntityPlayer player) {
+    public boolean canDestroyBlockInCreative(World world, BlockPos pos, ItemStack stack, EntityPlayer player) {
         return false;
     }
 
     @Override
-    protected ItemStack onRightClick(World world, BlockPos targetPos, BlockPos clickPos, EntityPlayer player, ItemStack stack, EnumFacing sideHit) {
-        if (world.isRemote) return stack;
+    protected ItemStack onRightClick(World world, EntityPlayer player, ItemStack stack, EnumHand hand) {
         long UUID = player.getUniqueID().getMostSignificantBits();
         if (player.isSneaking()) {
-            SelectionCache.remove(UUID);
-            PlayerUtil.sendTo(player, "command.ilib.sel.clear");
-        } else {
-            int count = SelectionCache.set(UUID, 2, clickPos).getSelectionSize();
-
-            PlayerUtil.sendTo(player, "command.ilib.sel.pos2");
-
-            if (count != -1) {
-                PlayerUtil.sendTo(player, "command.ilib.sel.size", count);
+            if (SelectionCache.remove(UUID) && world.isRemote) {
+                PlayerUtil.sendTo(player, "command.ilib.sel.clear");
+                player.playSound(SoundEvents.BLOCK_NOTE_PLING, 1, 0);
+                return stack;
             }
+            return null;
+        }
 
+        RayTraceResult mop = this.rayTrace(world, player, false);
+
+        if (mop == null || mop.typeOfHit != RayTraceResult.Type.BLOCK) {
+            return null;
+        }
+
+        BlockPos pos = mop.getBlockPos();
+        Arena arena = SelectionCache.get(UUID);
+        if (arena != null && pos.equals(arena.getP2())) return null;
+
+        int count = SelectionCache.set(UUID, 2, pos).getSelectionSize();
+
+        if (world.isRemote) {
+            PlayerUtil.sendTo(player, MCTexts.format("command.ilib.sel.pos2") + ": " + pos.getX() + ',' + pos.getY() + ',' + pos.getZ());
+            if (count > 0) PlayerUtil.sendTo(player, "command.ilib.sel.size", count);
+            player.playSound(SoundEvents.BLOCK_NOTE_PLING, 1, 1);
         }
 
         return stack;

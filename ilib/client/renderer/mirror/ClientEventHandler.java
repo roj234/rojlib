@@ -25,7 +25,6 @@
  */
 package ilib.client.renderer.mirror;
 
-import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.client.api.ClientChangeWorldEvent;
 import ilib.client.renderer.mirror.render.PortalRenderer;
@@ -66,10 +65,10 @@ public class ClientEventHandler {
     @SubscribeEvent
     public static void onChangeWorld(ClientChangeWorldEvent event) {
         if (proxy == null) {
-            proxy = new RenderGlobalProxy(ClientProxy.mc);
-            proxy.updateDestroyBlockIcons();
+            //proxy = new RenderGlobalProxy(ClientProxy.mc);
+            //proxy.updateDestroyBlockIcons();
         }
-        proxy.setWorldAndLoadRenderers(ClientProxy.mc.world);
+        //proxy.setWorldAndLoadRenderers(ClientProxy.mc.world);
         PortalRenderer.renderLevel = 0;
         PortalRenderer.renderCount = 0;
     }

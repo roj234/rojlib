@@ -53,24 +53,6 @@ public class FluidHelper {
             WATER_STILL = new ResourceLocation(ImpLib.MODID, "fluid/base_water"),
             WATER_FLOW = new ResourceLocation(ImpLib.MODID, "fluid/base_water_flow");
 
-    public static void completeLoad() {
-        FluidTankHelper.FLUID_NAME_IDS = FluidRegistry.fluidIDs;
-        /*
-        BiMap<Fluid, Integer> fluidIDs = FluidRegistry.fluidIDs;
-        for(Map.Entry<Fluid,Integer> entry : fluidIDs.entrySet()) {
-            // hashCode: 如果++客户端少了一个那就乐呵了
-            // 重复倒也是个问题...
-            Fluid f = FluidTankHelper.FLUID_NAME_IDS.put(entry.getValue(), entry.getKey());
-            if(f != null) {
-                String s = ("The fluid " + f.getName() + " has same hashCode(" + entry.getKey().hashCode() + ") with " + entry.getValue().getName() + " which may cause some bugs.");
-                for (int i = 0; i < 10; i++) {
-                    ImpLib.logger().warn(s);
-                }
-            }
-        }
-        */
-    }
-
     /**
      * Forge具有化神奇为腐朽的能力 <br>
      * 神说,要有FluidBuilder <br>

@@ -32,12 +32,10 @@ import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
+@Deprecated
 public class CustomRTResult extends RayTraceResult {
     public final AxisAlignedBB box;
 

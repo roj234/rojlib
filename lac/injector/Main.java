@@ -589,7 +589,7 @@ public class Main extends JFrame {
                 if (target == null)
                     throw new NiximException("无法找到 " + check.name);
             }
-            NiximSystem.nixim(target, entry.getValue());
+            NiximSystem.nixim(target, entry.getValue(), 0);
         }
 
         Map<String, String> replace = new MyHashMap<>();

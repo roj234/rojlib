@@ -17,7 +17,6 @@ final class AutoCompile extends Thread {
     static int Debounce;
 
     private static AutoCompile inst;
-    private static long lastTime;
     private static boolean prevEnable;
 
     static void setEnabled(boolean enabled) {
@@ -85,28 +84,30 @@ final class AutoCompile extends Thread {
                     if (Debounce > 0) {
                         tmp1.clear(); tmp1.addAll(set);
 
-                        LockSupport.parkNanos(Debounce * 1_000_000L);
-                        while (System.currentTimeMillis() < lastTime) {
+                        long lastTime = System.currentTimeMillis() + Debounce;
+                        do {
                             if (!enable || p != Shared.project) continue ext;
                             LockSupport.parkUntil(lastTime);
-                        }
+                        } while (System.currentTimeMillis() < lastTime);
 
                         set = Shared.watcher.getModified(Shared.project, IFileWatcher.ID_SRC);
                         tmp2.clear(); tmp2.addAll(set);
-                    }
-                    if (tmp1.equals(tmp2)) {
-                        MyHashMap<String, Object> ojbk = new MyHashMap<>(4);
-                        ojbk.put("zl", "");
-                        try {
-                            selfTrigger = true;
-                            FMDMain.build(ojbk);
-                            if (DEBUG) CmdUtil.success("[AC] Done");
-                        } catch (Throwable e) {
-                            CmdUtil.error("自动编译出错", e);
+                        if (!tmp1.equals(tmp2)) {
+                            LockSupport.unpark(this);
+                            continue;
                         }
-                        selfTrigger = false;
-                        lastTime = System.currentTimeMillis() + Debounce;
                     }
+
+                    MyHashMap<String, Object> ojbk = new MyHashMap<>(4);
+                    ojbk.put("zl", "");
+                    try {
+                        selfTrigger = true;
+                        FMDMain.build(ojbk);
+                        if (DEBUG) CmdUtil.success("[AC] Done");
+                    } catch (Throwable e) {
+                        CmdUtil.error("自动编译出错", e);
+                    }
+                    selfTrigger = false;
                 }
             }
         }

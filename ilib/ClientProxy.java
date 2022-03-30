@@ -28,21 +28,21 @@ package ilib;
 
 import ilib.api.BlockColor;
 import ilib.api.ItemColor;
+import ilib.client.GeneratedModelRepo;
+import ilib.client.KeyRegister;
 import ilib.client.TextureHelper;
-import ilib.client.register.BlockModelInfo;
-import ilib.client.register.ItemModelInfo;
-import ilib.client.register.ModelInfo;
+import ilib.client.model.BlockModelInfo;
+import ilib.client.model.BlockStateBuilder;
+import ilib.client.model.ItemModelInfo;
+import ilib.client.model.ModelInfo;
 import ilib.client.renderer.entity.RenderLightningBoltMI;
 import ilib.client.renderer.entity.RenderTNTMy;
 import ilib.client.renderer.mirror.MirrorSubSystem;
-import ilib.client.resource.GeneratedModelRepo;
 import ilib.command.MasterCommand;
 import ilib.command.sub.CommandPixelPainting;
 import ilib.command.sub.MySubs;
 import ilib.entity.EntityLightningBoltMI;
 import ilib.event.ClientEvent;
-import ilib.misc.model.BlockStateBuilder;
-import ilib.misc.model.BlockStateBuilderCached;
 import ilib.util.*;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
@@ -58,6 +58,7 @@ import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
 
+import net.minecraftforge.client.ClientCommandHandler;
 import net.minecraftforge.client.event.ColorHandlerEvent;
 import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.client.model.ModelLoader;
@@ -123,15 +124,18 @@ public final class ClientProxy extends ServerProxy {
         man.entityRenderMap.put(EntityTNTPrimed.class, new RenderTNTMy(man));
 
         MirrorSubSystem.initClient();
+
+        KeyRegister.init();
     }
 
     @Override
     void postInit() {
         TextureHelper.postInit();
 
-        ImpLib.COMMANDS.add(new MasterCommand("il_client", 0)
+        ClientCommandHandler.instance.registerCommand(new MasterCommand("il_client", 0)
                 .register(MySubs.DUMP_GL_INFO)
                 .register(MySubs.RELOAD_TEXTURE)
+                .register(MySubs.PACKAGE_SIMULATOR)
                 .register(MySubs.GC)
                 .register(new CommandPixelPainting())
         );
@@ -182,20 +186,16 @@ public final class ClientProxy extends ServerProxy {
 
     static {
         try {
-            itemMergedModel = BlockStateBuilderCached.from("il_item", new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), StandardCharsets.UTF_8), true);
+            itemMergedModel = new BlockStateBuilder(new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), StandardCharsets.UTF_8), true);
         } catch (IOException e) {
             itemMergedModel = new BlockStateBuilder(true);
         }
         try {
-            blockMergedModel = BlockStateBuilderCached.from("il_block", new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), StandardCharsets.UTF_8), false);
+            blockMergedModel = new BlockStateBuilder(new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), StandardCharsets.UTF_8), false);
         } catch (IOException e) {
             blockMergedModel = new BlockStateBuilder(false);
         }
-        try {
-            fluidMergedModel = BlockStateBuilderCached.from("il_fluid", new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/fluids.json"), StandardCharsets.UTF_8), false);
-        } catch (IOException e) {
-            fluidMergedModel = new BlockStateBuilder(false);
-        }
+        fluidMergedModel = new BlockStateBuilder(false).setDefaultModel("forge:fluid");
     }
 
     private static void registerGenModel() {
@@ -203,10 +203,8 @@ public final class ClientProxy extends ServerProxy {
         GeneratedModelRepo.register(fluidPath, fluidMergedModel.build());
         fluidMergedModel = null;
 
-        //models/item/generated/items
         String itemPath = "assets/" + ImpLib.MODID + "/blockstates/generated/items.json";
         GeneratedModelRepo.register(itemPath, itemMergedModel.build());
-        //System.out.println(itemMergedModel.build());
         itemMergedModel = null;
 
         String blockPath = "assets/" + ImpLib.MODID + "/blockstates/generated/blocks.json";
@@ -222,7 +220,7 @@ public final class ClientProxy extends ServerProxy {
                 COLOR_BLOCKS.add(entry.getValue());
             }
         }
-        event.getBlockColors().registerBlockColorHandler(new BlockTinter(), COLOR_BLOCKS.toArray(new Block[COLOR_BLOCKS.size()]));
+        event.getBlockColors().registerBlockColorHandler(new Tinter(), COLOR_BLOCKS.toArray(new Block[COLOR_BLOCKS.size()]));
     }
 
     @SubscribeEvent
@@ -234,7 +232,7 @@ public final class ClientProxy extends ServerProxy {
             }
         }
         // 第二个参数代表“所有需要使用此 IItemColor 的物品”，是一个 var-arg Item。
-        event.getItemColors().registerItemColorHandler(new ItemTinter(), COLOR_ITEMS.toArray(new Item[COLOR_ITEMS.size()]));
+        event.getItemColors().registerItemColorHandler(new Tinter(), COLOR_ITEMS.toArray(new Item[COLOR_ITEMS.size()]));
     }
 
     @Override
@@ -244,7 +242,7 @@ public final class ClientProxy extends ServerProxy {
         CMapping modelMap = new CMapping();
         modelMap.put("fluid", ForgeUtil.getCurrentModId() + ':' + fluid);
 
-        fluidMergedModel.setVariantNonTypeModel(fluid, "forge:fluid").setVariantNonType(fluid, "custom", modelMap);
+        fluidMergedModel.setVariantNonType(fluid, "custom", modelMap);
 
         final ModelResourceLocation path = new ModelResourceLocation(fluidId, fluid);
 

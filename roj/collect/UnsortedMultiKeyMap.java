@@ -44,9 +44,9 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
          * @param holder 装t的容器，空列表
          * @return holder, 非强制
          */
-        List<T> getKeysFor(K key, List<T> holder);
+        List<T> getKeys(K key, List<T> holder);
 
-        T getMostFamous(K k);
+        T getPrimaryKey(K k);
     }
 
     public static final class REntry<T, V> implements Iterable<REntry<T, V>> {
@@ -278,16 +278,18 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
         List<T>[] tHolder;
         REntry<T, V>[] pending, next;
         int[] source, source_next;
+        MyBitSet traversed;
 
         Finder(int cap) {
             this.pending = Helpers.cast(new REntry<?, ?>[16]);
             this.next = Helpers.cast(new REntry<?, ?>[16]);
             this.tHolder = Helpers.cast(new List<?>[cap]);
             for (int i = 0; i < cap; i++) {
-                this.tHolder[i] = new ArrayList<>(10);
+                this.tHolder[i] = new SimpleList<>(10);
             }
             this.source = new int[16];
             this.source_next = new int[16];
+            this.traversed = new MyBitSet(128);
         }
     }
 
@@ -316,7 +318,7 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
 
         REntry<T, V> entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(comparator.getMostFamous(s.get(i)));
+            entry = entry.getChild(comparator.getPrimaryKey(s.get(i)));
             if (entry == null) {
                 return null;
             }
@@ -344,7 +346,7 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
         REntry<T, V> prev;
         for (int i = 0; i < keys.size(); i++) {
             prev = entry;
-            T t = comparator.getMostFamous(keys.get(i));
+            T t = comparator.getPrimaryKey(keys.get(i));
             entry = entry.getChild(t);
             if (entry == null) {
                 prev.putChild(entry = new REntry<>(t));
@@ -435,7 +437,7 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
 
         REntry<T, V> entry = root;
         for (; i < len; i++) {
-            entry = entry.getChild(comparator.getMostFamous(s.get(i)));
+            entry = entry.getChild(comparator.getPrimaryKey(s.get(i)));
             if (entry == null)
                 return null;
 
@@ -496,11 +498,15 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
     }
 
     public List<V> getMulti(List<K> s, int limit) {
-        return getMulti(s, limit, new SimpleList<>());
+        return getMulti(s, limit, new SimpleList<>(), 0);
+    }
+
+    public List<V> getMulti(List<K> s, int limit, List<V> dest) {
+        return getMulti(s, limit, dest, 0);
     }
 
     @SuppressWarnings("unchecked")
-    public List<V> getMulti(List<K> s, int limit, List<V> dest) {
+    public <X extends Collection<V>> X getMulti(List<K> s, int limit, X dest, int flag) {
         Finder<T, V> f = (Finder<T, V>) BufUpdater.getAndSet(this, null);
         if(f == null)
             f = new Finder<>(averageLength);
@@ -508,47 +514,57 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
         List<T>[] tss = f.tHolder;
         for (int i = 0; i < s.size(); i++) {
             tss[i].clear();
-            tss[i] = comparator.getKeysFor(s.get(i), tss[i]);
+            tss[i] = comparator.getKeys(s.get(i), tss[i]);
         }
 
+        MyBitSet traversed = f.traversed;
         REntry<T, V>[] pend = f.pending;
-        int pendUsed = 1;
         REntry<T, V>[] next = f.next;
-        int nextUsed = 0;
         int[] src = f.source;
         int[] src_nx = f.source_next;
 
         pend[0] = root;
+        if (root.children.length == 0) return dest;
         src[0] = 0;
 
-        int vx = 0, mask;
+        int vx = 0;
         int remain = s.size();
-        int ae = 0, from;
-        REntry<?, ?>[] children;
-        REntry<T, V> eee;
-        List<T> ts;
-        T t;
+        int ae = 0;
+
+        int nextUsed = 0;
+        int pendUsed = 1;
+        mainCycle:
         while (remain-- > 0) {
             for (int i = 0; i < s.size(); i++) {
-                ts = tss[i];
+                List<T> ts = tss[i];
                 if((ae & (1L << i)) != 0) continue;
                 for (int j = 0; j < pendUsed; j++) {
-                    from = src[j];
+                    int from = src[j];
                     if((from & (1L << i)) != 0) {
                         vx++;
                         continue;
                     }
                     from |= (1L << i);
+                    if (!traversed.add(from)) break;
 
-                    children = pend[j].children;
+                    REntry<?, ?>[] children = pend[j].children;
 
-                    mask = children.length - 1;
+                    int mask = children.length - 1;
 
                     for (int k = 0; k < ts.size(); k++) {
-                        t = ts.get(k);
-                        eee = (REntry<T, V>) children[t.hashCode() & mask];
+                        T t = ts.get(k);
+                        REntry<T, V> eee = (REntry<T, V>) children[t.hashCode() & mask];
                         while (eee != null) {
                             if (t.equals(eee.k)) {
+                                if ((flag & 1) != 0) {
+                                    if(eee.v != NOT_USING) {
+                                        dest.add(eee.v);
+                                        if (dest.size() >= limit) {
+                                            break mainCycle;
+                                        }
+                                    }
+                                }
+
                                 if(src_nx.length <= nextUsed) {
                                     int[] nx_1 = new int[nextUsed + 16];
                                     if(src_nx.length > 0)
@@ -594,12 +610,14 @@ public class UnsortedMultiKeyMap<K, T, V> implements Map<List<K>, V> {
         f.next = next;
         f.source = src;
         f.source_next = src_nx;
+        f.traversed.clear();
 
         int i = 0;
         for (; i < pendUsed; i++) {
             REntry<T, V> entry = pend[i];
-            if(entry.v != NOT_USING && dest.size() < limit) {
+            if(entry.v != NOT_USING) {
                 dest.add(entry.v);
+                if (dest.size() >= limit) break;
             }
         }
         for (; i < pend.length; i++) {

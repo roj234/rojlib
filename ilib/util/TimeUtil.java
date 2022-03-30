@@ -33,8 +33,6 @@
  */
 package ilib.util;
 
-import net.minecraft.util.ITickable;
-
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -47,7 +45,6 @@ import java.util.ArrayList;
 public class TimeUtil {
     public static long tick = 0;
     public static final ArrayList<String>    beginText = new ArrayList<>();
-    public static final ArrayList<ITickable> handlers  = new ArrayList<>();
 
     public static int seconds() {
         return (int) (tick / 20);
@@ -96,10 +93,6 @@ public class TimeUtil {
                     PlayerUtil.sendTo(null, s);
                 beginText.clear();
             }
-
-            for (int i = 0; i < handlers.size(); i++) {
-                handlers.get(i).update();
-            }
         }
     }
 
@@ -108,17 +101,10 @@ public class TimeUtil {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             tick = DimensionManager.getWorld(0).getTotalWorldTime();
-            for (int i = 0; i < handlers.size(); i++) {
-                handlers.get(i).update();
-            }
         }
     }
 
     static {
         MinecraftForge.EVENT_BUS.register(TimeUtil.class);
-    }
-
-    public static void registerTickHandler(ITickable t) {
-        handlers.add(t);
     }
 }

@@ -26,33 +26,22 @@
 
 package ilib.api;
 
-import ilib.collect.UUIDList;
+import ilib.tile.OwnerManager;
+
 import net.minecraft.entity.player.EntityPlayer;
-/**
- * No description provided
- *
+
+import javax.annotation.Nullable;
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public interface Ownable {
-    String UNKNOWN = "\000UN";
-
-    long getOwnerUUIDL();
-
-    long getOwnerUUIDH();
-
-    String getOwner();
-
+    void setOwnType(int type);
     int getOwnType();
-
-    default boolean unOwned() {
-        return getOwnerUUIDL() == 0L || getOwnerUUIDH() == 0L;
-    }
-
-    UUIDList getTrustList();
 
     void setOwner(EntityPlayer player);
 
-    void setOwnType(int type);
+    @Nullable
+    OwnerManager getOwnerManager();
 }

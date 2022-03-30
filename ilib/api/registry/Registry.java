@@ -25,6 +25,7 @@
  */
 package ilib.api.registry;
 
+import ilib.api.registry.Indexable.Impl;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 
@@ -59,6 +60,7 @@ public class Registry<T extends Indexable> implements IRegistry<T> {
         int i;
         this.values.put(i = values.size(), t);
         this.nameIndex.put(t.getName(), t);
+        if (t instanceof Impl) ((Impl) t).index = i;
         this.arr = null;
         return i;
     }

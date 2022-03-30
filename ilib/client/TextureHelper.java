@@ -31,19 +31,16 @@ import ilib.ClientProxy;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.util.Hook;
-import ilib.util.Reflection;
-import roj.collect.SimpleList;
-
+import ilib.util.ReflectionClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.*;
-
 import net.minecraftforge.fml.client.FMLClientHandler;
+import roj.collect.SimpleList;
 
 import javax.annotation.Nonnull;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 
 //!!AT [["net.minecraft.client.resources.SimpleReloadableResourceManager", ["field_110548_a"]], ["net.minecraft.client.resources.FallbackResourceManager", ["field_110540_a"]]]
 /**
@@ -52,12 +49,12 @@ import java.util.Queue;
  */
 public final class TextureHelper implements IResourceManagerReloadListener {
     public static SimpleReloadableResourceManager resourceManager;
-    private static Queue<IResourcePack> packLoad = new LinkedList<>();
+    private static ArrayList<IResourcePack> packLoad = new ArrayList<>();
 
     public static void preInit() {
         resourceManager = (SimpleReloadableResourceManager) Minecraft.getMinecraft().getResourceManager();
         while (packLoad.size() > 0) {
-            register(packLoad.poll());
+            register(packLoad.remove(packLoad.size() - 1));
         }
         packLoad = null;
     }
@@ -80,7 +77,7 @@ public final class TextureHelper implements IResourceManagerReloadListener {
     }
 
     private static void register(IResourcePack pack) {
-        Reflection.HELPER.getResourcePackList(FMLClientHandler.instance()).add(pack);
+        ReflectionClient.HELPER.getResourcePackList(FMLClientHandler.instance()).add(pack);
         resourceManager.reloadResourcePack(pack);
     }
 

@@ -26,39 +26,26 @@
 
 package ilib.gui;
 
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public interface IGui {
-    @Nonnull
-    FontRenderer getFontRenderer();
-
     @Nullable
     ResourceLocation getTexture();
 
+    @Nullable
     TileEntity getTileEntity();
 
-    int getXSize();
-
-    int getYSize();
-
-    int getImgXSize();
-
-    int getImgYSize();
-
-    int getGuiTop();
-
-    int getGuiLeft();
+    int getWidth();
+    int getHeight();
+    int getTop();
+    int getLeft();
 
     default void componentRequestUpdate() {}
 }

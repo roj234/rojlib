@@ -296,6 +296,7 @@ public class HashBiMap<K, V> implements Flippable<K, V>, MapLike<MyHashMap.Entry
     }
 
     protected int indexFor(Object v) {
+        if (v == null) return 216378912 & mask;
         int h = v.hashCode();
         return (h ^ (h >>> 16)) & mask;
     }

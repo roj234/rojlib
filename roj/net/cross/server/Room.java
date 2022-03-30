@@ -1,7 +1,7 @@
 package roj.net.cross.server;
 
 import roj.collect.IntMap;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.RingBuffer;
 import roj.config.data.CMapping;
 import roj.net.misc.Pipe;
@@ -28,8 +28,8 @@ public final class Room {
     int index;
 
     // 重置锁
-    private final LongBitSet resetLock;
-    private int resetOffset, lastRem;
+    private final MyBitSet resetLock;
+    private       int      resetOffset, lastRem;
 
     boolean isPending(int k) {
         return resetLock.contains(k - resetOffset);
@@ -68,9 +68,9 @@ public final class Room {
     // region 聊天相关
     public boolean muted, p2pChat;
     // 启用聊天功能的
-    final LongBitSet chatEnabled;
+    final MyBitSet            chatEnabled;
     // 禁言的
-    final LongBitSet chatBanned;
+    final MyBitSet            chatBanned;
     // 最近的消息
     final RingBuffer<Message> recentMessage;
     // 可用的消息[缓冲]
@@ -94,11 +94,11 @@ public final class Room {
         this.clients.put(0, owner);
         this.index = 1;
         this.creation = System.currentTimeMillis() / 1000;
-        this.resetLock = new LongBitSet();
+        this.resetLock = new MyBitSet();
         owner.room = this;
 
-        this.chatEnabled = new LongBitSet();
-        this.chatBanned = new LongBitSet();
+        this.chatEnabled = new MyBitSet();
+        this.chatBanned = new MyBitSet();
         this.recentMessage = new RingBuffer<>(ChatUtil.RECENT_MESSAGE_COUNT);
         this.buffer = new ArrayList<>(10);
     }

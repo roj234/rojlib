@@ -81,7 +81,7 @@ public class AEGuiHost {
         }
         CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(cfgFile)), JSONParser.LITERAL_KEY).asMap();
 
-        String[] text = TextUtil.split(serv, ':');
+        String[] text = TextUtil.split1(serv, ':');
 
         InetAddress host;
         try {

@@ -29,6 +29,7 @@ import roj.config.word.AbstLexer;
 
 import net.minecraft.nbt.*;
 
+import java.util.Arrays;
 import java.util.Set;
 
 /**
@@ -112,5 +113,15 @@ public class NBTType {
             default:
                 throw new IllegalStateException("Unexpected value: " + tag.getId());
         }
+    }
+
+    public static int[] getFixedArray(int[] array, int length) {
+        if (array.length == length) return array;
+        return Arrays.copyOf(array, length);
+    }
+
+    public static byte[] getFixedArray(byte[] array, int length) {
+        if (array.length == length) return array;
+        return Arrays.copyOf(array, length);
     }
 }

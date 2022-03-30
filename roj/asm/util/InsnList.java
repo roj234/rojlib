@@ -29,16 +29,16 @@ import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.collect.IntBiMap;
+import roj.collect.SimpleList;
 
 import java.util.ArrayList;
-
-import static roj.asm.tree.insn.EndOfInsn.MARKER;
+import java.util.Collection;
 
 /**
  * @author Roj234
  * @since 2021/5/24 23:21
  */
-public final class InsnList extends ArrayList<InsnNode> {
+public final class InsnList extends SimpleList<InsnNode> {
     static final long serialVersionUID = 0L;
 
     ArrayList<InsnNode> labels = new ArrayList<>();
@@ -47,7 +47,7 @@ public final class InsnList extends ArrayList<InsnNode> {
     public boolean add(InsnNode node) {
         if(node instanceof LabelInsnNode) {
             labels.add(node);
-            return false;
+            return true;
         } else {
             for (int i = 0; i < labels.size(); i++) {
                 labels.get(i)._i_replace(node);
@@ -57,16 +57,28 @@ public final class InsnList extends ArrayList<InsnNode> {
         }
     }
 
-    public InsnNode set(int pos, InsnNode node) {
-        InsnNode node1 = get(pos);
-        node1._i_replace(node);
-        return super.set(pos, node);
+    @Override
+    public void add(int i, InsnNode node) {
+        if(node instanceof LabelInsnNode) {
+            throw new IllegalArgumentException("Label insert not rewindable");
+        } else {
+            if (i == size) {
+                for (int j = 0; j < labels.size(); j++) {
+                    labels.get(j)._i_replace(node);
+                }
+                labels.clear();
+            }
+            super.add(i, node);
+        }
     }
 
-    public InsnNode remove(int pos) {
-        InsnNode node = super.remove(pos);
-        node._i_replace(pos != size() ? get(pos) : MARKER);
-        return node;
+    @Override
+    @Deprecated
+    public boolean addAll(int i, Collection<? extends InsnNode> c) {
+        for (InsnNode node : c) {
+            add(i++, node);
+        }
+        return !c.isEmpty();
     }
 
     public IntBiMap<InsnNode> getPCMap() {

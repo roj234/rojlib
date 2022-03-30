@@ -51,7 +51,7 @@ public final class Worker extends AbstractExecutionTask {
             try {
                 c.accept(f.get(i));
             } catch (Throwable e) {
-                System.out.println(f.get(i).get());
+                throw new RuntimeException(f.get(i).getFileName(), e);
             }
         }
     }

@@ -467,10 +467,8 @@ public final class Util {
 
         boolean changed = false;
 
-        CharList out = sharedCL;
+        CharList out = sharedCL2;
         out.clear();
-        CharList tmp = sharedCL2;
-        tmp.clear();
 
         for (int i = 0; i < md.length(); ) {
             char c = md.charAt(i++);
@@ -478,14 +476,13 @@ public final class Util {
             if (c == 'L') {
                 int j = md.indexOf(';', i);
                 if (j == -1) throw new IllegalStateException("Illegal descriptor");
-                tmp.clear(); tmp.append(md, i, j);
 
-                String s = classMap.get(tmp);
+                String s = mapClassName(classMap, md, false, i, j);
                 if (s != null) {
                     changed = true;
                     out.append(s);
                 } else {
-                    out.append(tmp);
+                    out.append(md, i, j);
                 }
                 i = j;
             }

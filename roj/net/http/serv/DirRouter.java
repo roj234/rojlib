@@ -26,6 +26,7 @@
 package roj.net.http.serv;
 
 import roj.net.http.Code;
+import roj.text.TextUtil;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -54,7 +55,7 @@ public class DirRouter implements Router {
 
     @Override
     public Response response(Request req, RequestHandler rh) throws IOException {
-        String url = req.path();
+        String url = TextUtil.decodeURI(req.path());
         File f = new File(dir, url.endsWith("/") ? url + "index.html" : url);
         if(!f.isFile()) {
             if(url.endsWith("/")) {

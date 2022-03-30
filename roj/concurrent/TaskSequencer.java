@@ -101,8 +101,7 @@ public class TaskSequencer implements Runnable {
 
             (backup = tt).clear();
 
-            Scheduled task = tasks.top();
-            return task == null ? -1 : task.nextRun - System.currentTimeMillis();
+            return tasks.isEmpty() ? -1 : tasks.top().nextRun - System.currentTimeMillis();
         }
     }
 
@@ -112,7 +111,7 @@ public class TaskSequencer implements Runnable {
 
     public Scheduled register(Scheduled t) {
         while (!lock.compareAndSet(0, 2)) LockSupport.parkNanos(9999);
-        Scheduled prev = tasks.top();
+        Scheduled prev = tasks.isEmpty() ? null : tasks.top();
         tasks.add(t);
         if (tasks.top() != prev) LockSupport.unpark(worker);
         lock.set(0);

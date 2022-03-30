@@ -25,8 +25,7 @@
  */
 package roj.config;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.config.data.*;
 import roj.config.serial.Serializers;
 import roj.config.word.AbstLexer;
@@ -45,9 +44,9 @@ import static roj.config.JSONParser.*;
  * @since 2022/1/6 13:46
  */
 public class IniParser extends Parser {
-    public static final int UNESCAPE = 4;
-    static final short eq = 14;
-    static final IBitSet LB = LongBitSet.from(']'), LN = LongBitSet.from("\r\n");
+    public static final int      UNESCAPE = 4;
+    static final        short    eq       = 14;
+    static final        MyBitSet LB       = MyBitSet.from(']'), LN = MyBitSet.from("\r\n");
 
     public static void main(String[] args) throws ParseException, IOException {
         System.out.print(parse(IOUtil.readUTF(new File(args[0]))).toINI());
@@ -284,7 +283,7 @@ public class IniParser extends Parser {
             return formClip(id, v);
         }
 
-        public String readTill(IBitSet terminate) throws ParseException {
+        public String readTill(MyBitSet terminate) throws ParseException {
             CharSequence in = this.input;
             int i = this.index;
 

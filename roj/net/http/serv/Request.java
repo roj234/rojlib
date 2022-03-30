@@ -48,7 +48,8 @@ public final class Request {
     public static final String CTX_POST_HANDLER = "PH";
 
     private final int action;
-    private final String path, version;
+    private final String opath, version;
+    private String path;
     final Headers headers;
 
     Object postFields, getFields;
@@ -81,10 +82,10 @@ public final class Request {
 
         int qo = path.indexOf('?');
         if (qo >= 0) {
-            this.path = path.substring(0, qo);
+            this.path = opath = path.substring(0, qo);
             this.getFields = path.substring(qo+1);
         } else {
-            this.path = path;
+            this.path = opath = path;
             this.getFields = new MyHashMap<>();
         }
         this.headers = new Headers();
@@ -102,8 +103,17 @@ public final class Request {
         return headers.get("Host");
     }
 
+    public String originPath() {
+        return opath;
+    }
+
     public String path() {
         return path;
+    }
+
+    public Request subPath(int i) {
+        path = path.substring(i);
+        return this;
     }
 
     public Headers headers() {

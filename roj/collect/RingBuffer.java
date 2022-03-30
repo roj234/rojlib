@@ -37,6 +37,17 @@ import java.util.*;
  * @since  2021/4/13 23:25
  */
 public final class RingBuffer<T> implements Iterable<T> {
+    public static void main(String[] args) {
+        RingBuffer<Object> test = new RingBuffer<>(100);
+        for (int i = 0; i < 200; i++) {
+            test.addFirst(i);
+        }
+        for (Iterator<Object> it = test.descendingIterator(); it.hasNext(); ) {
+            Object o = it.next();
+            System.out.println(o);
+        }
+    }
+
     private final class Itr extends AbstractIterator<T> {
         int i;
         int dir;
@@ -46,9 +57,9 @@ public final class RingBuffer<T> implements Iterable<T> {
         public Itr(boolean rev) {
             if (size == arraySize) {
                 if (rev) {
-                    i = tail;
+                    i = (tail == 0 ? arraySize : tail) - 1;
                     dir = -1;
-                    fence = head;
+                    fence = (head == 0 ? arraySize : head) - 1;
                 } else {
                     i = head;
                     dir = 1;
@@ -74,16 +85,24 @@ public final class RingBuffer<T> implements Iterable<T> {
         @Override
         @SuppressWarnings("unchecked")
         public boolean computeNext() {
-            if (i == fence) return false;
             if (i == -1) {
                 if (size < arraySize) return false;
                 i = arraySize - 1;
             } else if (i == arraySize) {
                 i = 0;
             }
+
+            if (i == fence) return false;
             result = (T) array[i];
             i += dir;
             return true;
+        }
+
+        @Override
+        public String toString() {
+            return "Itr{" + i +
+                "+" + dir +
+                " => " + fence + '}';
         }
     }
 

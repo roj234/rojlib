@@ -28,21 +28,20 @@ package ilib.world.structure.schematic;
 
 import ilib.ImpLib;
 import ilib.util.BlockHelper;
+import roj.collect.LongMap;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.math.BlockPos;
-import roj.collect.LongMap;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
 import java.util.List;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class Schematic {
@@ -95,27 +94,37 @@ public class Schematic {
         }
     }
 
+    @Deprecated
     public Block getBlock(int x, int y, int z) {
         return this.blocks[this.getIndexFromCoordinates(x, y, z)];
     }
 
+    @Deprecated
     public Block getBlock(BlockPos pos) {
         return getBlock(pos.getX(), pos.getY(), pos.getZ());
     }
 
+    @Deprecated
     public int getMetadata(int x, int y, int z) {
         return this.data[this.getIndexFromCoordinates(x, y, z)] & 0xff;
     }
 
+    @Deprecated
     public int getMetadata(BlockPos pos) {
         return getMetadata(pos.getX(), pos.getY(), pos.getZ());
     }
 
     public IBlockState getBlockState(BlockPos pos) {
+        return getBlockState(pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    public IBlockState getBlockState(int x, int y, int z) {
         try {
-            return getBlock(pos).getStateFromMeta(getMetadata(pos));
+            int idx = this.getIndexFromCoordinates(x, y, z);
+            Block block = this.blocks[idx];
+            return block == null ? null : block.getStateFromMeta(data[idx]);
         } catch (Exception e) {
-            ImpLib.logger().catching(new RuntimeException("Could not get block state at " + pos, e));
+            ImpLib.logger().catching(new RuntimeException("Could not get block state at " + x + ',' + y + ',' + z, e));
         }
         return BlockHelper.AIR_STATE;
     }

@@ -44,6 +44,7 @@ import roj.collect.MyHashSet;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
+import roj.io.ZipFileWriter;
 import roj.mapper.Util;
 import roj.util.ByteList;
 import roj.util.ByteList.Streamed;
@@ -52,7 +53,7 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.io.FileOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
@@ -68,7 +69,14 @@ import static roj.asm.Opcodes.*;
 public class NiximSystem {
     protected final Map<String, NiximData> registry = new MyHashMap<>();
 
+    private static ZipFileWriter debugZFW;
     public static boolean debug = false;
+
+    public static final int
+        NO_FIELD_MODIFIER_CHECK = 1,
+        NO_METHOD_MODIFIER_CHECK = 2,
+        SHADOW_OPTIONAL = 4,
+        INJECT_OPTIONAL = 2;
 
     public Map<String, NiximData> getRegistry() {
         return registry;
@@ -124,13 +132,15 @@ public class NiximSystem {
         NiximData data = registry.remove(className);
         if (data != null) {
             Context ctx = new Context(className, in);
-            nixim(ctx, data);
+            nixim(ctx, data, 0);
             return ctx.get(false);
         }
         return in;
     }
 
-    public static void nixim(Context ctx, NiximData nx) throws NiximException {
+    public static void nixim(Context ctx, NiximData nx, int flag) throws NiximException {
+        if (debug) zipClass(ctx, "in");
+
         System.out.println("NiximClass " + ctx.getFileName());
 
         while (nx != null) {
@@ -155,6 +165,7 @@ public class NiximSystem {
                     // noinspection all
                     if (t instanceof ShadowCheck) {
                         nx.shadowChecks.remove(t);
+                        if ((flag & NO_FIELD_MODIFIER_CHECK) != 0) continue;
                         // noinspection all
                         ShadowCheck sc = (ShadowCheck) t;
                         if ((sc.flag & ~AccessFlag.PRIVATE) != (fs.accesses & (AccessFlag.STATIC | AccessFlag.FINAL))) {
@@ -172,6 +183,7 @@ public class NiximSystem {
                     // noinspection all
                     if (t instanceof ShadowCheck) {
                         nx.shadowChecks.remove(t);
+                        if ((flag & NO_METHOD_MODIFIER_CHECK) != 0) continue;
                         // noinspection all
                         ShadowCheck sc = (ShadowCheck) t;
                         if ((sc.flag & ~AccessFlag.FINAL) != (fs.accesses & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
@@ -183,8 +195,8 @@ public class NiximSystem {
                     }
                 }
                 // region 检查存在性
-                if (!nx.shadowChecks.isEmpty()) {
-                    throw new NiximException("以下Shadow对象没有在目标找到, 源: " + nx.self + ": " + nx.shadowChecks + ", 目标的方法: " + data.methods);
+                if (!nx.shadowChecks.isEmpty() && (flag & SHADOW_OPTIONAL) == 0) {
+                    throw new NiximException("以下Shadow对象没有在目标找到, 源: " + nx.self + ": " + nx.shadowChecks + ", 目标的方法: " + data.methods + ", 目标的字段: " + data.fields);
                 }
                 // endregion
             }
@@ -231,11 +243,13 @@ public class NiximSystem {
                     for (Iterator<InjectState> itr = nx.injectMethod.values().iterator(); itr.hasNext(); ) {
                         InjectState state = itr.next();
                         // FLAG_OPTIONAL
-                        if ((state.flags & 1) != 0) {
+                        if ((state.flags & Inject.FLAG_OPTIONAL) != 0) {
                             itr.remove();
                         }
                     }
-                    throw new NiximException("以下Inject方法没有在目标找到, 源: " + nx.self + ": " + nx.injectMethod.keySet() + ", 目标的方法: " + data.methods);
+                    if (!nx.injectMethod.isEmpty() && (flag & INJECT_OPTIONAL) == 0) {
+                        throw new NiximException("以下Inject方法没有在目标找到, 源: " + nx.self + ": " + nx.injectMethod.keySet() + ", 目标的方法: " + data.methods);
+                    }
                 }
                 // endregion
             }
@@ -245,43 +259,40 @@ public class NiximSystem {
                 methods.addAll(Helpers.cast(nx.copyMethod));
             if (!nx.copyField.isEmpty()) {
                 fields.addAll(Helpers.cast(nx.copyField.keySet()));
-                for (Iterator<FieldInit> itr = nx.copyField.values().iterator(); itr.hasNext(); ) {
-                    FieldInit val = itr.next();
-                    if (val != null) {
-                        Method clinit;
-                        int clinitid = data.getMethodByName("<clinit>");
-                        if (clinitid >= 0) {
-                            MethodSimple msClinit = methods.get(clinitid);
-                            clinit = new Method(data, msClinit);
-                        } else {
-                            clinit = new Method(AccessFlag.PUBLIC | AccessFlag.STATIC, data, "<clinit>", "()V");
-                            clinit.code = new AttrCode(clinit);
-                            methods.add(Helpers.cast(clinit));
-                        }
-                        AttrCode code = clinit.code;
-                        code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
-                        o:
-                        do {
-                            code.localSize = (char) Math.max(val.localSize, code.localSize);
-                            code.stackSize = (char) Math.max(val.stackSize, code.stackSize);
-                            code.instructions.addAll(val.insn);
-                            List<GotoInsnNode> gotos = val.gotos;
-                            if (!gotos.isEmpty()) {
-                                LabelInsnNode label = new LabelInsnNode();
-                                for (int i = 0; i < gotos.size(); i++) {
-                                    GotoInsnNode gotox = gotos.get(i);
-                                    gotox.setTarget(label);
-                                }
-                                code.instructions.add(label);
-                            }
-                            do {
-                                if (!itr.hasNext()) break o;
-                                val = itr.next();
-                            } while (val == null);
-                        } while (true);
-                        code.instructions.add(new NPInsnNode(RETURN));
-                        break;
+                for (Iterator<Method> itr = nx.copyField.values().iterator(); itr.hasNext(); ) {
+                    Method val = itr.next();
+                    if (val == null) continue;
+
+                    Method clinit;
+                    int m_id = data.getMethodByName("<clinit>");
+                    if (m_id >= 0) {
+                        MethodNode msClinit = methods.get(m_id);
+                        // noinspection all
+                        if (msClinit instanceof Method) clinit = (Method) msClinit;
+                        else methods.set(m_id, Helpers.cast(clinit = new Method(data, (MethodSimple) msClinit)));
+                    } else {
+                        clinit = new Method(AccessFlag.PUBLIC | AccessFlag.STATIC, data, "<clinit>", "()V");
+                        clinit.code = new AttrCode(clinit);
+                        clinit.code.instructions.add(NPInsnNode.of(RETURN));
+                        methods.add(Helpers.cast(clinit));
                     }
+                    AttrCode code = clinit.code;
+
+                    NPInsnNode _return = (NPInsnNode) code.instructions.remove(code.instructions.size() - 1);
+
+                    o:
+                    do {
+                        String n = "^" + Integer.toString(data.methods.size(), 36);
+                        val.name = n;
+                        data.methods.add(Helpers.cast(val));
+                        code.instructions.add(new InvokeInsnNode(INVOKESTATIC, data.name, n, "()V"));
+                        do {
+                            if (!itr.hasNext()) break o;
+                            val = itr.next();
+                        } while (val == null);
+                    } while (true);
+
+                    code.instructions.add(_return);
                 }
             }
             // endregion
@@ -298,12 +309,16 @@ public class NiximSystem {
 
         ctx.set(new ByteList(ctx.get().toByteArray()));
 
-        if (debug) {
-            try (FileOutputStream fos = new FileOutputStream(ctx.getFileName().replace('/', '.'))) {
-                ctx.get().writeToStream(fos);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        if (debug) zipClass(ctx, "out");
+    }
+
+    private static void zipClass(Context ctx, String id) {
+        try {
+            if (debugZFW == null)
+                debugZFW = new ZipFileWriter(new File("nixim_debug." + System.currentTimeMillis() + ".zip"), false);
+            debugZFW.writeNamed(id + '/' + ctx.getFileName(), ctx.get(true));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -332,6 +347,8 @@ public class NiximSystem {
                         if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.rawDesc()))
                             throw new NiximException("覆盖的构造器不存在:O");
                     }
+                    s.method.code.interpretFlags = AttrCode.COMPUTE_FRAMES;
+                    s.method.owner = data.name;
                     iin.name = "<init>";
                 }
                 methods.set(index, Helpers.cast(s.method));
@@ -368,7 +385,7 @@ public class NiximSystem {
                     }
                     entryPoint = insn2.get(size);
                 } else {
-                    entryPoint = insn.get(0);
+                    entryPoint = insn.get(superBegin);
                 }
 
                 List<GotoInsnNode> gotos = s.gotos();
@@ -404,8 +421,9 @@ public class NiximSystem {
 
                 String ret = ParamHelper.parseReturn(tm.rawDesc()).nativeName();
                 byte base = ret.isEmpty() ? RETURN : NodeHelper.X_LOAD(ret.charAt(0));
-                byte type;
                 InsnList targetInsn = s.method.code.instructions;
+                targetInsn.removeRange(0, s.superCallEnd + 1);
+                byte type;
                 if (base != RETURN) {
                     List<Integer> retVal = s.retVal();
                     if (retVal.size() == 0) {
@@ -425,7 +443,7 @@ public class NiximSystem {
                     }
                     retVal.clear();
                 } else {
-                    type = -1;
+                    type = 1;
                 }
 
                 InsnNode FIRST = targetInsn.get(0);
@@ -450,19 +468,19 @@ public class NiximSystem {
                         }
                         accessedMax = Math.max(accessedMax, i2);
                     } else if (i > 0 && NodeHelper.isReturn(node.code)) {
-                        if (type == -1) continue;
+                        GotoInsnNode Goto = new GotoInsnNode();
+                        Goto.setTarget(FIRST);
                         // 将返回值（如果存在）存放到指定的变量
                         // 将目标方法中return替换成goto开头
                         switch (type & 3) {
                             case 0: // 没有使用的
                                 insn.set(i, NPInsnNode.of(POP));
+                                insn.add(i, Goto);
                                 break;
                             case 1: // 只有一个，而且是第一个使用了
                                 if (i == insn.size() - 1) {
                                     insn.remove(i)._i_replace(FIRST);
                                 } else {
-                                    GotoInsnNode Goto = new GotoInsnNode();
-                                    Goto.setTarget(FIRST);
                                     insn.set(i, Goto);
                                 }
                                 if (type == 5) { // todo 测试
@@ -473,8 +491,6 @@ public class NiximSystem {
                                 if (i == insn.size() - 1) {
                                     _compress(pl, base, insn, i);
                                 } else {
-                                    GotoInsnNode Goto = new GotoInsnNode();
-                                    Goto.setTarget(FIRST);
                                     insn.add(_compress(pl, base, insn, i), Goto);
                                 }
                                 break;
@@ -561,7 +577,7 @@ public class NiximSystem {
         ConstantData data = ctx.getData();
 
         NiximData nx = new NiximData(data.name);
-        
+
         Boolean keepBridge = checkNiximFlag(data, data.attrByName(A_BASE), nx);
         if (keepBridge == null) {
             throw new NiximException(data.name + " 不是有效的Nixim class （没有找到注解）");
@@ -633,6 +649,8 @@ public class NiximSystem {
                     if(id == -1)
                         throw new NiximException("字段的staticInitializer不存在: 名称 " + val.value + " 位置: " + data.name + '.' + field.name);
                     staticInitializer = methods.get(id);
+                    if (!"()V".equals(staticInitializer.rawDesc()) || (staticInitializer.accesses & AccessFlag.STATIC) == 0)
+                        throw new NiximException("字段的staticInitializer签名/权限不合法: 名称 " + val.value + " 位置: " + data.name + '.' + field.name);
                 }
                 AnnValInt boolFlag = (AnnValInt) copy.get("targetIsFinal");
                 if (boolFlag != null && boolFlag.value == 1)
@@ -747,6 +765,8 @@ public class NiximSystem {
         for (Iterator<ShadowCheck> itr = nx.shadowChecks.iterator(); itr.hasNext(); ) {
             ShadowCheck sc = itr.next();
             itr.remove();
+            // 不检查不是owner的shadow
+            if (!sc.toClass.equals(nx.dest)) continue;
             sc.name = sc.toName;
             nx.shadowChecks.add(sc);
         }
@@ -779,40 +799,27 @@ public class NiximSystem {
 
             copyMethod.set(i, method);
         }
-        Map<Field, FieldInit> copyField = nx.copyField;
+        Map<Field, Method> copyField = nx.copyField;
         for (Map.Entry<FieldSimple, MethodSimple> entry : tmpCopyFields.entrySet()) {
             Field field = new Field(data, entry.getKey());
             MethodSimple ms = entry.getValue();
-            FieldInit iz = null;
-            AttrCode code = ms == null ? null : new AttrCode(ms, Parser.reader(ms.attrByName("Code")), data.cp);
-            if (code != null) {
-                InsnList insn = code.instructions;
-                // noinspection all
-                while (insn.remove(insn.size() - 1).code != RETURN);
-                List<GotoInsnNode> gotos = new ArrayList<>();
-                for (int i = 0; i < insn.size(); i++) {
-                    InsnNode node = insn.get(i);
-                    switch (node.code) {
-                        case RETURN:
-                            GotoInsnNode gt = new GotoInsnNode();
-                            gotos.add(gt);
-                            insn.set(i, gt);
-                            break;
-                        case PUTSTATIC:
-                            FieldInsnNode fin = (FieldInsnNode) node;
-                            if (fin.owner.equals(data.name) && (!fin.name.equals(field.name) || !fin.rawType.equals(field.rawDesc()))) {
-                                System.out.println("NiximWarn: 在static{}修改了不属于自己的字段 " + fin);
-                            }
-                            break;
+
+            Method m = ms == null ? null : new Method(data, ms);
+            copyField.put(field, m);
+
+            if (m == null) continue;
+
+            InsnList insn = m.code.instructions;
+            for (int i = 0; i < insn.size(); i++) {
+                InsnNode node = insn.get(i);
+                if (node.code == PUTSTATIC) {
+                    FieldInsnNode fin = (FieldInsnNode) node;
+                    if (fin.owner.equals(data.name) && (!fin.name.equals(field.name) || !fin.rawType.equals(
+                        field.rawDesc()))) {
+                        System.out.println("NiximWarn: 在static{}修改了不属于自己的字段 " + fin);
                     }
                 }
-                iz = new FieldInit();
-                iz.insn = insn;
-                iz.stackSize = code.stackSize;
-                iz.localSize = code.localSize;
-                iz.gotos = gotos;
             }
-            copyField.put(field, iz);
         }
         tmpCopyFields.clear();
         // endregion
@@ -827,14 +834,15 @@ public class NiximSystem {
 
             InjectState state = new InjectState(remap, map);
 
+            state.superCallEnd = 0;
             InsnList insn = remap.code.instructions;
             for (int i = 0; i < insn.size(); i++) {
                 InsnNode node = insn.get(i);
                 switch (node.code) {
                     case INVOKESPECIAL: {
                         InvokeInsnNode inv = (InvokeInsnNode) node;
-                        if (remap.name.equals("<init>") && inv.owner.equals("//MARKER")) {
-                            state.superCallEnd = i + 1;
+                        if (remap.name.equals("<init>") && (inv.owner.equals("//MARKER") || inv.owner.equals(data.parent))) {
+                            state.superCallEnd = i;
                         }
                     }
                     // not check fallthrough
@@ -865,6 +873,9 @@ public class NiximSystem {
             }
 
             processInject(state, data.parent);
+
+            if (state.superCallEnd < 0 && state.name.equals("<init>"))
+                throw new NiximException("没有找到 superCallEnd");
 
             nx.injectMethod.put(new DescEntry(remap), state);
         }
@@ -913,8 +924,7 @@ public class NiximSystem {
         Method method = s.method;
         sw:
         switch (s.at) {
-            case "REMOVE": // 删除的话就节省点空间吧
-                s.method = null;
+            case "REMOVE":
             break;
             case "REPLACE":
                 if (method.name.equals("<init>")) {
@@ -1100,7 +1110,7 @@ public class NiximSystem {
                 ShadowCheck check = new ShadowCheck(obj);
 
                 AnnValString owner = (AnnValString) shadow.get("owner");
-                check.toClass = owner == null ? targetDef : owner.value;
+                check.toClass = owner == null ? targetDef : unifyClassName(owner.value);
                 check.toName = ((AnnValString) shadow.get("value")).value;
 
                 check.flag = (byte) (obj.accesses & (AccessFlag.FINAL | AccessFlag.STATIC | AccessFlag.PRIVATE));
@@ -1109,6 +1119,10 @@ public class NiximSystem {
                 target.remove(j);
             }
         }
+    }
+
+    private static String unifyClassName(String t) {
+        return t.replace('.', '/');
     }
 
     private static boolean postProcNxMd(String dst, Method m) throws NiximException {
@@ -1158,7 +1172,7 @@ public class NiximSystem {
             if (ann.clazz.equals(A_NIXIM_CLASS_FLAG)) {
                 if (ann.values != null) {
                     AnnVal av = ann.values.get("value");
-                    nx.dest = ((AnnValString) av).value.replace('.', '/');
+                    nx.dest = unifyClassName(((AnnValString) av).value);
                     av = ann.values.get("copyItf");
                     if (av != null) {
                         if (((AnnValInt) av).value == 1) {
@@ -1280,7 +1294,7 @@ public class NiximSystem {
         public final Map<DescEntry, InjectState> injectMethod;
 
         // Copy
-        public final MyHashMap<Field, FieldInit> copyField;
+        public final MyHashMap<Field, Method> copyField;
         public final List<Method> copyMethod;
 
         // Shadow
@@ -1347,9 +1361,7 @@ public class NiximSystem {
 
         private void checkInvokeTarget(CstRef ref) {
             if (ref.getClassName().equals(destClass) && tester.read(ref).equals(tester2)) {
-                int id = data.cp.getMethodRefId("//MARKER", ref.desc().getName().getString(), ref.desc().getType().getString());
-                br.bytes().put(br.rIndex - 2, (byte) (id >> 8));
-                br.bytes().put(br.rIndex - 1, (byte) id);
+                ref.setClazz(data.cp.getClazz("//MARKER"));
             }
         }
 
@@ -1362,12 +1374,6 @@ public class NiximSystem {
             br.refresh(code);
             visit(data.cp);
         }
-    }
-
-    static class FieldInit {
-        int stackSize, localSize;
-        InsnList insn;
-        List<GotoInsnNode> gotos;
     }
 
     // endregion

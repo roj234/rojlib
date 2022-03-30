@@ -26,7 +26,7 @@
 package ilib.client.renderer.mirror;
 
 import ilib.ImpLib;
-import ilib.network.ILChannel;
+import ilib.net.MyChannel;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -44,7 +44,7 @@ public class MirrorSubSystem {
     public static int maxRender = 0;
     public static int stencilValue = 1;
 
-    public static ILChannel PORTAL = new ILChannel("prt");
+    public static MyChannel PORTAL = new MyChannel("prt");
 
     public static void init() {
         // config("maxRecursion", "stencilValue", "renderDistanceChunks", "maxRendersPerTick");

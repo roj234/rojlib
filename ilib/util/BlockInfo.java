@@ -29,25 +29,14 @@ package ilib.util;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-
-import java.util.Objects;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
+@Deprecated
 public class BlockInfo {
-    public static final BlockInfo AIR = new BlockInfo(BlockHelper.AIR_STATE);
-
     public IBlockState state;
-    public NBTTagCompound tag;
-    private boolean anyMeta;
-
-    public BlockInfo(IBlockState state, NBTTagCompound tag) {
-        this(state);
-        this.tag = tag;
-    }
 
     public BlockInfo(IBlockState state) {
         this.state = state;
@@ -56,10 +45,6 @@ public class BlockInfo {
     @Deprecated
     public BlockInfo(Block block, int meta) {
         this(block.getStateFromMeta(meta));
-    }
-
-    public static BlockInfo get(ItemStack stack) {
-        return new BlockInfo(Block.getBlockFromItem(stack.getItem()), stack.getItemDamage());
     }
 
     @Deprecated
@@ -76,29 +61,11 @@ public class BlockInfo {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         BlockInfo blockInfo = (BlockInfo) o;
-        return state == blockInfo.state &&
-                Objects.equals(tag, blockInfo.tag);
+        return state == blockInfo.state;
     }
 
     @Override
     public int hashCode() {
-        return state.hashCode() * 31 + (tag == null ? 0 : tag.hashCode());
-    }
-
-    @Override
-    public String toString() {
-        return this.getClass().getName() + "{" + state + "@" + tag + "}";
-    }
-
-    public Block getBlock() {
-        return state.getBlock();
-    }
-
-    public boolean anyMeta() {
-        return anyMeta;
-    }
-
-    public int getMeta() {
-        return state.getBlock().getMetaFromState(state);
+        return state.hashCode();
     }
 }

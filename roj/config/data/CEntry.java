@@ -174,13 +174,17 @@ public abstract class CEntry implements StreamSerializable {
     public abstract Object unwrap();
 
     public static CEntry wrap(Object o) {
+        return wrap(o, Serializers.DEFAULT);
+    }
+
+    public static CEntry wrap(Object o, Serializers ser) {
         if (o == null) {
             return CNull.NULL;
         } else if (o instanceof Object[]) {
             Object[] arr = (Object[]) o;
             CList dst = new CList(arr.length);
             for (Object o1 : arr) {
-                dst.add(wrap(o1));
+                dst.add(wrap(o1, ser));
             }
             return dst;
         } else if (o.getClass().getComponentType() != null) {
@@ -209,10 +213,10 @@ public abstract class CEntry implements StreamSerializable {
             CMapping dst = new CMapping(map.size());
             try {
                 for (Map.Entry<String, Object> entry : map.entrySet()) {
-                    dst.put(entry.getKey(), wrap(entry.getValue()));
+                    dst.put(entry.getKey(), wrap(entry.getValue(), ser));
                 }
             } catch (ClassCastException e) {
-                return new CObject<>(map);
+                return new CObject<>(map, ser);
                 //throw new UnsupportedOperationException("序列化的map必须使用string做key!");
             }
             return dst;
@@ -220,14 +224,14 @@ public abstract class CEntry implements StreamSerializable {
             List<Object> list = Helpers.cast(o);
             CList dst = new CList(list.size());
             for (int i = 0; i < list.size(); i++) {
-                dst.add(wrap(list.get(i)));
+                dst.add(wrap(list.get(i), ser));
             }
             return dst;
         } else if (o instanceof Collection) {
             Collection<Object> list = Helpers.cast(o);
             CList dst = new CList(list.size());
             for (Object o1 : list) {
-                dst.add(wrap(o1));
+                dst.add(wrap(o1, ser));
             }
             return dst;
         } else if (o instanceof CharSequence) {
@@ -245,7 +249,7 @@ public abstract class CEntry implements StreamSerializable {
         } else if (o instanceof CEntry) {
             return (CEntry) o;
         } else {
-            return new CObject<>(o);
+            return new CObject<>(o, ser);
         }
     }
 
@@ -283,7 +287,7 @@ public abstract class CEntry implements StreamSerializable {
                 if (ser != null && (b & 0xF) == Type.OBJECT.ordinal() && x != null) {
                     Serializer<?> deser = ser.find(x.asString());
                     if (deser != null) {
-                        return new CObject<>(map, deser);
+                        return new CObject<>(map, ser, deser);
                     }
                 }
                 return new CMapping(map);

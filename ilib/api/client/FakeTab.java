@@ -26,10 +26,7 @@
 package ilib.api.client;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/9/13 10:28
  */
 public interface FakeTab {

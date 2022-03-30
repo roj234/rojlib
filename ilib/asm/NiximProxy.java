@@ -30,6 +30,7 @@ import ilib.api.ContextClassTransformer;
 import roj.asm.nixim.NiximException;
 import roj.asm.nixim.NiximSystem;
 import roj.asm.util.Context;
+import roj.text.CharList;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -40,7 +41,7 @@ import javax.annotation.Nonnull;
  */
 public final class NiximProxy extends NiximSystem implements ContextClassTransformer {
     public static final NiximProxy instance = new NiximProxy();
-    public static boolean alreadyAtDeobfEnv;
+    private final CharList replacer = new CharList(48);
 
     public static void read(@Nonnull final byte[] basicClass) {
         try {
@@ -59,9 +60,16 @@ public final class NiximProxy extends NiximSystem implements ContextClassTransfo
     @Override
     public void transform(String transformedName, Context context) {
         try {
-            NiximData data = registry.remove(transformedName);
+            CharList r = replacer;
+
+            r.clear();
+            r.append(transformedName);
+            r.replace('.', '/');
+
+            NiximData data = registry.remove(r);
             if (data != null) {
-                nixim(context, data);
+                // 历史遗留问题+让代码保持简洁
+                nixim(context, data, NO_FIELD_MODIFIER_CHECK | NO_METHOD_MODIFIER_CHECK);
             }
         } catch (NiximException e) {
             Helpers.athrow(e);

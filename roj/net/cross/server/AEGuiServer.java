@@ -106,7 +106,7 @@ public class AEGuiServer {
             return;
         }
 
-        String[] text = TextUtil.split(port, ':');
+        String[] text = TextUtil.split1(port, ':');
 
         InetAddress host;
         try {

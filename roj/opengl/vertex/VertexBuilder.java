@@ -58,14 +58,17 @@ public class VertexBuilder {
     }
 
     public void grow(int plus) {
-        if(buf.capacity() - getBufferSize() - offset - plus < 0 && buf.capacity() < MAX_BUFFER_CAPACITY) {
-            int newCap = buf.capacity() + roundUp(plus, 262144);
-            int pos = buf.position();
-            ByteBuffer newBuf = ByteBuffer.allocateDirect(newCap).order(ByteOrder.nativeOrder());
-            buf.position(0);
-            newBuf.put(buf).position(pos);
-            NIOUtil.clean(buf);
-            buf = newBuf;
+        if (buf.capacity() - getBufferSize() - offset - plus < 0) {
+            if (buf.capacity() < MAX_BUFFER_CAPACITY) {
+                int newCap = buf.capacity() + roundUp(plus, 262144);
+                ByteBuffer newBuf = ByteBuffer.allocateDirect(newCap).order(ByteOrder.nativeOrder());
+                buf.flip();
+                newBuf.put(buf);
+                NIOUtil.clean(buf);
+                buf = newBuf;
+            } else {
+                vertexCount = 0;
+            }
         }
     }
 
@@ -149,6 +152,34 @@ public class VertexBuilder {
         return this;
     }
 
+    public VertexBuilder pos(double x, double y) {
+        int i = this.vertexCount * this.format.getSize() + offset;
+        switch (this.entry.type()) {
+            case FLOAT:
+                buf.putFloat(i, (float) (x + this.xOffset));
+                buf.putFloat(i + 4, (float) (y + this.yOffset));
+                break;
+            case UINT:
+            case INT:
+                buf.putInt(i, (int) (x + this.xOffset));
+                buf.putInt(i + 4, (int) (y + this.yOffset));
+                break;
+            case USHORT:
+            case SHORT:
+                buf.putShort(i, (short) (x + this.xOffset));
+                buf.putShort(i + 2, (short) (y + this.yOffset));
+                break;
+            case UBYTE:
+            case BYTE:
+                buf.put(i, (byte) (x + this.xOffset));
+                buf.put(i + 1, (byte) (y + this.yOffset));
+                break;
+        }
+
+        this.next();
+        return this;
+    }
+
     public VertexBuilder tex(double u, double v) {
         int i = this.vertexCount * this.format.getSize() + offset;
         switch (this.entry.type()) {
@@ -218,6 +249,35 @@ public class VertexBuilder {
                         buf.put(i + 2, (byte) green);
                         buf.put(i + 3, (byte) red);
                     }
+                    break;
+            }
+        }
+        this.next();
+        return this;
+    }
+
+    public VertexBuilder alpha(float alpha) {
+        return this.alpha((int) (alpha * 255.0F));
+    }
+
+    public VertexBuilder alpha(int alpha) {
+        if (!this.noColor) {
+            int i = this.vertexCount * this.format.getSize() + offset;
+            switch (this.entry.type()) {
+                case FLOAT:
+                    buf.putFloat(i, (float) alpha / 255.0F);
+                    break;
+                case UINT:
+                case INT:
+                    buf.putInt(i, alpha);
+                    break;
+                case USHORT:
+                case SHORT:
+                    buf.putShort(i, (short) alpha);
+                    break;
+                case UBYTE:
+                case BYTE:
+                    buf.put(i, (byte) alpha);
                     break;
             }
         }

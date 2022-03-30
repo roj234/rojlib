@@ -58,16 +58,19 @@ public class HRRemote extends FDCLoop<HRRemote.Client> {
             }
 
             if ((readyOps & SelectionKey.OP_READ) != 0) {
+                ByteBuffer buf = ch.buffer();
+
                 try {
-                    ch.read(3);
+                    ch.read(buf.position() - 3);
                 } catch (IOException e) {
                     close();
                     return;
                 }
 
-                ByteBuffer buf = ch.buffer();
+                if (buf.position() < 3) return;
+
                 int data = buf.get(0) & 0xFF;
-                //int count = buf.getShort(1) & 0xFFFF;
+                int count = buf.getShort(1) & 0xFFFF;
                 buf.clear();
                 //System.out.println("重载结果: " + data + " 重载数量 " + count);
                 if (data == R_CRITICAL) close();

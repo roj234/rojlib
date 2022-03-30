@@ -27,7 +27,10 @@ package roj.opengl.text;
 
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
-import roj.collect.*;
+import roj.collect.CharMap;
+import roj.collect.Int2IntMap;
+import roj.collect.IntList;
+import roj.collect.MyBitSet;
 import roj.io.NIOUtil;
 import roj.opengl.texture.TextureManager;
 import roj.opengl.util.Util;
@@ -78,7 +81,7 @@ public class FontTex {
         DEFAULT_FONT = new Font(null, Font.PLAIN, 24);
     }
 
-    private static final Color TRANSPARENT = new Color(1, 1, 1, 0);
+    private static final Color TRANSPARENT = new Color(255, 255, 255, 0);
     private static final IntFunction<IntList> WII = value -> new IntList();
 
     private static BufferedImage charTmpImg = new BufferedImage(1, 1, BufferedImage.TYPE_BYTE_GRAY);
@@ -208,7 +211,7 @@ public class FontTex {
     public int preRender(CharSequence chars, int start, int length) {
         length += start;
         final CharMap<Tex> done = this.charTexture;
-        IBitSet tmp = new LongBitSet();
+        MyBitSet tmp = new MyBitSet();
 
         CharList noDuplicate = new CharList();
         for (int i = start; i < length; i++) {
@@ -354,7 +357,9 @@ public class FontTex {
         glTexParameteri(GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, 0);
         glTexParameteri(GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, 4);
         // 上传空图像, alpha8: 256级透明度
+        glEnable(GL_ALPHA);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA8, TEXTURE_SIZE, TEXTURE_SIZE, 0, GL12.GL_BGRA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+        glDisable(GL_ALPHA);
 
         Util.bindTexture(prevTexture);
 

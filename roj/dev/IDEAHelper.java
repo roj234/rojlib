@@ -64,13 +64,13 @@ public final class IDEAHelper {
 
         if(!remove) {
             XElement el = new XElement("sourceFolder");
-            el.setAttribute("isTestSource", "false");
-            el.setAttribute("url", basePath + "java");
-            content.appendChild(el);
+            el.put("isTestSource", "false");
+            el.put("url", basePath + "java");
+            content.append(el);
             el = new XElement("sourceFolder");
-            el.setAttribute("type", "java-resource");
-            el.setAttribute("url", basePath + "resources");
-            content.appendChild(el);
+            el.put("type", "java-resource");
+            el.put("url", basePath + "resources");
+            content.append(el);
         }
 
         try (FileOutputStream fos = new FileOutputStream(imlPath)) {

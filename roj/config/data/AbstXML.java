@@ -25,7 +25,7 @@
  */
 package roj.config.data;
 
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.config.XMLParser;
@@ -53,7 +53,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
             comma = 23;
 
     private static class XSLexer extends AbstLexer {
-        static final LongBitSet SPECIAL = LongBitSet.from("+-()!=<>.[]*,");
+        static final MyBitSet SPECIAL = MyBitSet.from("+-()!=<>.[]*,");
 
         @Override
         @SuppressWarnings("fallthrough")
@@ -434,22 +434,22 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return attributes.getOrDefault(name, CNull.NULL);
     }
 
-    public final void setAttribute(String name, String value) {
+    public final void put(String name, String value) {
         initMap();
         attributes.put(name, new CString(value));
     }
 
-    public final void setAttribute(String name, int value) {
+    public final void put(String name, int value) {
         initMap();
         attributes.put(name, new CInteger(value));
     }
 
-    public final void setAttribute(String name, double value) {
+    public final void put(String name, double value) {
         initMap();
         attributes.put(name, new CDouble(value));
     }
 
-    public final void setAttribute(String name, boolean value) {
+    public final void put(String name, boolean value) {
         initMap();
         attributes.put(name, CBoolean.valueOf(value));
     }
@@ -459,7 +459,7 @@ public abstract class AbstXML implements Iterable<AbstXML> {
         return children.iterator();
     }
 
-    public final void appendChild(@Nonnull XElement entry) {
+    public final void append(@Nonnull XElement entry) {
         initList();
         children.add(entry);
     }

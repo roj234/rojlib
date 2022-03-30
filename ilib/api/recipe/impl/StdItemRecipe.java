@@ -26,7 +26,7 @@
 package ilib.api.recipe.impl;
 
 import ilib.api.recipe.IRecipe;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.util.Helpers;
 
 import net.minecraft.item.ItemStack;
@@ -67,7 +67,7 @@ public class StdItemRecipe extends AbstractItemRecipe implements IRecipe {
             if (stack.isEmpty())
                 throw new NullPointerException(getName() + " - Non-consume stack is really empty");
             if (keepInputIds == null) {
-                keepInputIds = new LongBitSet(this.input.size() + 1);
+                keepInputIds = new MyBitSet(this.input.size() + 1);
             }
             keepInputIds.add(this.input.size());
         }

@@ -27,7 +27,7 @@ package ilib.client.renderer;
 
 import ilib.ClientProxy;
 import ilib.ImpLib;
-import ilib.client.util.RenderUtils;
+import ilib.client.RenderUtils;
 import org.lwjgl.opengl.GL11;
 import roj.collect.MyHashMap;
 
@@ -128,12 +128,11 @@ public final class WaypointRenderer {
 
         float fadeAlpha = 1.0F;
         if (MIN_RENDER_DISTANCE > 0) {
-            if (actualDistance <= MIN_RENDER_DISTANCE + 0.001f)
-                return;
+            if (actualDistance <= MIN_RENDER_DISTANCE) return;
+
             if (FADING_DISTANCE > 0 && actualDistance <= MIN_RENDER_DISTANCE + FADING_DISTANCE)
                 fadeAlpha = (float) ((actualDistance - MIN_RENDER_DISTANCE) / FADING_DISTANCE);
-            if(fadeAlpha < 0 || fadeAlpha < .001f)
-                return;
+            if(fadeAlpha < .02f) return;
         }
 
         double viewDistance = actualDistance;
@@ -197,7 +196,7 @@ public final class WaypointRenderer {
             double maxWidth = Math.max(labelWidth, distWidth);
             // 居中
             // original: y=0 .....  maxWidth + 0 ..... 2.4
-            RenderUtils.drawRectangle(-maxWidth * 0.5, 0.5, 0, maxWidth + 0.1, 2.2 * lineHeight, 0x111111, 255 - (int) (fadeAlpha * 127));
+            RenderUtils.drawRectangle(-maxWidth * 0.5, 0.5, 0, maxWidth + 0.1, 2.2 * lineHeight, 0x111111 | (((int) (fadeAlpha * 127)) << 24));
 
             GlStateManager.translate(labelWidth - Math.floor(labelWidth), 2, 0);
             drawLabel(label, labelWidth, waypoint.getColor() | (int) (fadeAlpha * 255) << 24);

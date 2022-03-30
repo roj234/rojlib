@@ -30,12 +30,11 @@ import ilib.ImpLib;
 import ilib.command.sub.we.ModificationCache;
 import ilib.math.Arena;
 import ilib.math.Section;
-import ilib.misc.SelectionCache;
+import ilib.math.SelectionCache;
 import ilib.world.structure.ReplacementType;
 import ilib.world.structure.StructureAdvanced;
 import ilib.world.structure.schematic.Schematic;
 import ilib.world.structure.schematic.SchematicLoader;
-
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;

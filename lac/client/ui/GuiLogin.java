@@ -35,7 +35,7 @@ package lac.client.ui;
 
 import ilib.ClientProxy;
 import ilib.ImpLib;
-import ilib.client.GuiHelper;
+import ilib.gui.GuiHelper;
 import lac.client.packets.PacketLogin;
 
 import net.minecraft.client.Minecraft;

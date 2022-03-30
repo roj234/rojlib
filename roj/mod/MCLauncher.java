@@ -70,9 +70,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -350,9 +348,9 @@ public class MCLauncher extends JFrame {
     // region download MC
 
     private static void download(ActionEvent event) {
-        CMapping cfgLan = CONFIG.get("启动器配置").asMap();
+        CMapping cfgLan = CONFIG.get("通用").asMap();
 
-        File mcRoot = new File(CONFIG.getString("通用.MC目录"));
+        File mcRoot = new File(cfgLan.getString("MC目录"));
         if(!mcRoot.isDirectory() && !mcRoot.mkdirs()) {
             error("无法创建minecraft目录");
         }
@@ -491,13 +489,12 @@ public class MCLauncher extends JFrame {
 
     public static boolean installMinecraftClient(File mcRoot, File mcJson, boolean doAssets) {
         CMapping cfgGen = CONFIG.get("通用").asMap();
-        CMapping cfgLan = CONFIG.get("启动器配置").asMap();
 
         Object[] result;
         CMapping jsonDesc, mc_conf;
         try {
             File mcNative = new File(mcJson.getParentFile(), "/$natives/");
-            result = getRunConf(mcRoot, mcJson, mcNative, cfgLan);
+            result = getRunConf(mcRoot, mcJson, mcNative, cfgGen);
             config.put("mc_conf", mc_conf = (CMapping) result[0]);
             mc_conf.put("native_path", mcNative.getAbsolutePath());
             jsonDesc = (CMapping) result[3];
@@ -517,10 +514,10 @@ public class MCLauncher extends JFrame {
         if(!doAssets)
             return true;
 
-        if (!cfgLan.getString("assets地址").isEmpty()) {
+        if (!cfgGen.getString("assets地址").isEmpty()) {
             CmdUtil.info("补全assets...");
             try {
-                int count = completeAssets(cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, cfgLan.getString("assets地址"), mc_conf, jsonDesc);
+                int count = completeAssets(cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, cfgGen.getString("assets地址"), mc_conf, jsonDesc);
                 CmdUtil.success("assets补全完毕, " + count);
             } catch (IOException e) {
                 error("asset补全出了点错...\n请查看控制台");
@@ -714,7 +711,7 @@ public class MCLauncher extends JFrame {
                 }
                 int cpLen = cpTmp.length();
 
-                Set<String> forced = CONFIG.get("启动器配置.作为MC自身lib的key").asList().asStringSet();
+                Set<String> forced = CONFIG.get("通用.作为MC自身lib的key").asList().asStringSet();
                 CMapping data = instConf.get("data").asMap();
                 MyHashMap<String, String> map = new MyHashMap<>(data.size());
                 for (Map.Entry<String, CEntry> entry : data.entrySet()) {
@@ -1231,10 +1228,10 @@ public class MCLauncher extends JFrame {
         Map<String, String> mcEnv = new MyHashMap<>();
 
         String playerName = mc_conf.getString("player_name");
-        if(playerName.equals("")) playerName = CONFIG.getString("启动器配置.玩家名字");
+        if(playerName.equals("")) playerName = CONFIG.getString("通用.玩家名字");
 
         String authName = null, authToken = null, authUUID = null;
-        File def = new File(CONFIG.getString("启动器配置.外部accessToken"));
+        File def = new File(CONFIG.getString("通用.外部accessToken"));
         if (def.isFile()) {
             try {
                 CMapping map = JSONParser.parse(IOUtil.readUTF(def)).asMap();
@@ -1322,7 +1319,7 @@ public class MCLauncher extends JFrame {
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, CMapping cfg) throws IOException {
-        return getRunConf(mcRoot, mcJson, nativePath, skipped, cleanNatives, cfg.getBool("版本隔离"), CONFIG.getString("通用.libraries地址"), cfg.getString("附加JVM参数"), cfg.getString("附加MC参数"));
+        return getRunConf(mcRoot, mcJson, nativePath, skipped, cleanNatives, cfg.getBool("版本隔离"), cfg.getString("libraries地址"), cfg.getString("附加JVM参数"), cfg.getString("附加MC参数"));
     }
 
     public static Object[] getRunConf(File mcRoot, File mcJson, File nativePath, Collection<String> skipped, boolean cleanNatives, boolean insulation, String mirror, String jvmArg, String mcArg) throws IOException {

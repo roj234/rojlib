@@ -26,7 +26,7 @@
 package ilib.util.energy;
 
 import ilib.ImpLib;
-import ilib.api.energy.IMEnergy;
+import ilib.api.energy.METile;
 import ilib.capabilities.Capabilities;
 import ilib.math.FastPath;
 import ilib.math.PositionProvider;
@@ -54,8 +54,8 @@ import java.util.*;
 public class Network implements PositionProvider {
     protected FastPath<Network> fastPathStorage;
 
-    protected final IntMap<IMEnergy> allBlocks = new IntMap<>();
-    protected final Section aabb;
+    protected final IntMap<METile> allBlocks = new IntMap<>();
+    protected final Section        aabb;
     protected final int id, world;
 
     private static final int POS_MASK = 0b00_000_111111111_111111111_111111111;
@@ -83,7 +83,7 @@ public class Network implements PositionProvider {
         for (IntMap.Entry<Object> pEntry : cache.entrySet()) {
             EnumFacing provPos = EnumFacing.VALUES[pEntry.getKey() >>> 27];
 
-            IMEnergy provider = allBlocks.get(pEntry.getKey() & POS_MASK);
+            METile provider = allBlocks.get(pEntry.getKey() & POS_MASK);
             if (!provider.canExtract() || !provider.canConnectEnergy(provPos)) continue;
 
             Int2IntMap.Entry entry = transferredInTick.getEntryOrCreate(pEntry.getKey() & POS_MASK, Math.min(provider.currentME(), provider.extractSpeed()));
@@ -129,10 +129,10 @@ public class Network implements PositionProvider {
         }
     }
 
-    private int transferEnergy(IMEnergy provider, int recvOffset, int speed, double avg) {
+    private int transferEnergy(METile provider, int recvOffset, int speed, double avg) {
         EnumFacing recvFace = EnumFacing.VALUES[recvOffset >>> 27];
 
-        IMEnergy receiver = allBlocks.get(recvOffset & POS_MASK);
+        METile receiver = allBlocks.get(recvOffset & POS_MASK);
 
         if (!receiver.canReceive() || !receiver.canConnectEnergy(recvFace)) return -2;
 
@@ -166,7 +166,7 @@ public class Network implements PositionProvider {
     }
 
     @SuppressWarnings("fallthrough")
-    public boolean addEntry(BlockPos pos, IMEnergy energy) {
+    public boolean addEntry(BlockPos pos, METile energy) {
         int offset = offset(aabb, pos);
         if (allBlocks.put(offset, energy) != null)
             throw new IllegalArgumentException(energy.toString() + " Register twice in " + this.toString());
@@ -218,7 +218,7 @@ public class Network implements PositionProvider {
 
     public boolean removeEntry(BlockPos pos) {
         int offset = offset(aabb, pos);
-        IMEnergy energy = allBlocks.remove(offset);
+        METile energy = allBlocks.remove(offset);
         if (energy == null) return false;
 
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
@@ -230,7 +230,7 @@ public class Network implements PositionProvider {
                     cache.remove(i << 27 | offset);
                 }
 
-                if (energy.getEnergyType() == IMEnergy.EnergyType.STORAGE) {
+                if (energy.getEnergyType() == METile.EnergyType.STORAGE) {
                     removeReceiver(offset);
                     clearCache();
                 }
@@ -366,7 +366,7 @@ public class Network implements PositionProvider {
                 if (tile == null)
                     continue;
 
-                IMEnergy cap = tile.getCapability(Capabilities.MENERGY_TILE, null);
+                METile cap = tile.getCapability(Capabilities.MENERGY_TILE, null);
                 if (cap == null)
                     continue;
 
@@ -424,7 +424,7 @@ public class Network implements PositionProvider {
         Network network = new Network(aabb, id, world);
 
         int size = r.readVarInt(false);
-        IntMap<IMEnergy> allBlocks = network.allBlocks;
+        IntMap<METile> allBlocks = network.allBlocks;
         allBlocks.ensureCapacity(size);
         for (int i = 0; i < size; i++) {
             allBlocks.put(r.readVarInt(false), null);
@@ -446,7 +446,7 @@ public class Network implements PositionProvider {
     public void onTileLoad(BlockPos.PooledMutableBlockPos pos, TileEntity tile) {
         int off = offset(aabb, pos);
 
-        IMEnergy cap = tile.getCapability(Capabilities.MENERGY_TILE, null);
+        METile cap = tile.getCapability(Capabilities.MENERGY_TILE, null);
         if (cap == null) {
             if (allBlocks.containsKey(off)) {
                 invalidate(tile.getWorld());
@@ -459,7 +459,7 @@ public class Network implements PositionProvider {
             invalidate(tile.getWorld());
             ImpLib.logger().error("Unannounced Block Change at " + pos);
         }/* else {
-            if(cap.getEnergyType() == IMEnergy.EnergyType.TUBE) {
+            if(cap.getEnergyType() == ME.EnergyType.TUBE) {
                 edges.add(off);
             }
         }*/
@@ -471,7 +471,7 @@ public class Network implements PositionProvider {
             int i = iterator.nextInt();
             TileEntity tile = world.getTileEntity(unoffset(pos, i));
             if (tile == null) continue;
-            IMEnergy cap = tile.getCapability(Capabilities.MENERGY_TILE, null);
+            METile cap = tile.getCapability(Capabilities.MENERGY_TILE, null);
             if (cap != null) cap.onLeave();
         }
         pos.release();

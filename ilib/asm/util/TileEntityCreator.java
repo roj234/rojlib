@@ -28,12 +28,16 @@ package ilib.asm.util;
 import net.minecraft.tileentity.TileEntity;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/8/20 18:04
  */
 public interface TileEntityCreator {
+    default void setId(int id) {
+        throw new UnsupportedOperationException();
+    }
+    default Object clone() {
+        throw new UnsupportedOperationException();
+    }
+
     TileEntity get();
 }

@@ -28,7 +28,8 @@ package roj.opengl.render;
 
 import org.lwjgl.opengl.GL11;
 import roj.math.MathUtils;
-import roj.math.Vec3i;
+import roj.math.Vector;
+import roj.opengl.util.Util;
 import roj.opengl.util.VboUtil;
 import roj.opengl.vertex.VertexBuilder;
 import roj.opengl.vertex.VertexFormats;
@@ -40,32 +41,34 @@ import roj.opengl.vertex.VertexFormats;
 public class ArenaRenderer {
     public static final ArenaRenderer INSTANCE = new ArenaRenderer();
 
-    private static final float DTHETA  = 0.025F;
-    private static final float MAX_ALPHA = .1f;
-    private float r, g, b;
+    private static final float DTHETA = 0.025F;
+    private int color;
     private VertexBuilder vertexBuilder;
 
     public ArenaRenderer() {
-        r = g = b = 1;
+        color = 0xFFFFFFFF;
+        vertexBuilder = Util.sharedVertexBuilder;
     }
 
     public void setVertexBuilder(VertexBuilder vb) {
         vertexBuilder = vb;
     }
 
+    public int getColor() {
+        return color;
+    }
+
     public void setColor(int color) {
-        r = ((0xFF & color >> 16) / 255F);
-        g = ((0xFF & color >> 8) / 255F);
-        b = ((0xFF & color) / 255F);
+        this.color = color;
     }
     
-    public void render(Vec3i pos1, Vec3i pos2, float partialTicks, boolean anim) {
+    public void render(Vector pos1, Vector pos2, float time) {
         GL11.glPushMatrix();
-        GL11.glTranslatef(pos1.x, pos1.y, pos1.z);
+        GL11.glTranslated(pos1.x(), pos1.y(), pos1.z());
 
-        float lx = pos2.x - pos1.x;
-        float ly = pos2.y - pos1.y;
-        float lz = pos2.z - pos1.z;
+        float lx = (float) (pos2.x() - pos1.x());
+        float ly = (float) (pos2.y() - pos1.y());
+        float lz = (float) (pos2.z() - pos1.z());
         if (lx < 0) {
             GL11.glTranslatef(lx, 0, 0);
             lx = -lx;
@@ -85,64 +88,76 @@ public class ArenaRenderer {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glLineWidth(5);
+        GL11.glLineWidth(4);
 
-        if (anim)
-            renderAnimated(lx, ly, lz, partialTicks);
-        else
-            renderDefault(lx, ly, lz, r, g, b);
+        if ((lx > 15 || ly > 15 || lz > 15) && (lx * ly * lz < 1000000)) renderAnimated(lx, ly, lz, time);
+        renderDefault(lx, ly, lz);
 
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glPopMatrix();
     }
 
-    private void renderDefault(float lx, float ly, float lz, float r, float g, float b) {
+    public void renderDefault(float lx, float ly, float lz) {
         VertexBuilder bb = vertexBuilder;
-        bb.begin(VertexFormats.POSITION_COLOR);
+        bb.begin(VertexFormats.POSITION);
 
-        bb.pos(0, 0, 0).color(r, g, b, 1).endVertex();
-        bb.pos(lx, 0, 0).color(r, g, b, 1).endVertex();
-        bb.pos(lx, 0, lz).color(r, g, b, 1).endVertex();
-        bb.pos(0, 0, lz).color(r, g, b, 1).endVertex();
-        bb.pos(0, 0, 0).color(r, g, b, 1).endVertex();
+        bb.pos(0, 0, 0).endVertex();
+        bb.pos(lx, 0, 0).endVertex();
+        bb.pos(lx, 0, lz).endVertex();
+        bb.pos(0, 0, lz).endVertex();
+        bb.pos(0, 0, 0).endVertex();
 
-        bb.pos(0, ly, 0).color(r, g, b, 1).endVertex();
+        bb.pos(0, ly, 0).endVertex();
 
-        bb.pos(lx, ly, 0).color(r, g, b, 1).endVertex();
-        bb.pos(lx, 0, 0).color(r, g, b, 1).endVertex();
-        bb.pos(lx, ly, 0).color(r, g, b, 1).endVertex();
+        bb.pos(lx, ly, 0).endVertex();
+        bb.pos(lx, 0, 0).endVertex();
+        bb.pos(lx, ly, 0).endVertex();
 
-        bb.pos(lx, ly, lz).color(r, g, b, 1).endVertex();
-        bb.pos(lx, 0, lz).color(r, g, b, 1).endVertex();
-        bb.pos(lx, ly, lz).color(r, g, b, 1).endVertex();
+        bb.pos(lx, ly, lz).endVertex();
+        bb.pos(lx, 0, lz).endVertex();
+        bb.pos(lx, ly, lz).endVertex();
 
-        bb.pos(0, ly, lz).color(r, g, b, 1).endVertex();
-        bb.pos(0, 0, lz).color(r, g, b, 1).endVertex();
-        bb.pos(0, ly, lz).color(r, g, b, 1).endVertex();
+        bb.pos(0, ly, lz).endVertex();
+        bb.pos(0, 0, lz).endVertex();
+        bb.pos(0, ly, lz).endVertex();
 
-        bb.pos(0, ly, 0).color(r, g, b, 1).endVertex();
+        bb.pos(0, ly, 0).endVertex();
 
         bb.end();
+
+        Util.color(color);
         VboUtil.drawVertexes(GL11.GL_LINE_STRIP, bb);
+        Util.color(1,1,1);
     }
 
-    private void renderAnimated(float lx, float ly, float lz, float partialTicks) {
+    public void renderAnimated(float lx, float ly, float lz, float time) {
         GL11.glDisable(GL11.GL_CULL_FACE);
-        
-        float theta = DTHETA * partialTicks;
 
-        float r = this.r, g = this.g, b = this.b;
+        float theta = DTHETA * time;
+
+        float r = ((color >>> 16) & 0xFF) / 255F;
+        float g = ((color >>> 8) & 0xFF) / 255F;
+        float b = (color & 0xFF) / 255F;
+        float a = ((color >>> 24) & 0xFF) / 255F;
 
         VertexBuilder bb = vertexBuilder;
         bb.begin(VertexFormats.POSITION_COLOR);
 
         for (int i = 0; i < lx; i++) {
             for (int j = 0; j < lz; j++) {
-                float anime = (MathUtils.sin(theta + j + i) + 1) * 0.5F;
-                float lenDis = 0.4F * anime + 0.1F;
+                // j/2 和 i/2 : 控制轴上的速度
+                float anime = (MathUtils.sin(theta + j/2f + i/2f) + 1) * 0.5F;
+
+                // 0.3? 因为 方块大小不要太大
+                if (anime >= 0.3f) continue;
+
+                // 0.2是 0.5 - 0.3的结果
+                float lenDis = anime + 0.2F;
                 float lenDis_ = 1 - lenDis;
-                anime = Math.max(1 - anime, MAX_ALPHA);
+
+                // 这里的0.3要和上面一样
+                anime = a * (1 - anime * ( 1 / 0.3f ));
 
                 bb.pos(i + lenDis, -0.025D, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, -0.025D, j + lenDis).color(r, g, b, anime).endVertex();
@@ -158,10 +173,15 @@ public class ArenaRenderer {
 
         for (int i = 0; i < lx; i++) {
             for (int j = 0; j < ly; j++) {
-                float anime = (MathUtils.sin(theta + j + i) + 1) * 0.5F;
-                float lenDis = 0.4F * anime + 0.1F;
+                float anime = (MathUtils.sin(theta + j/2f + i/2f) + 1) * 0.5F;
+
+                if (anime >= 0.3f) continue;
+
+                float lenDis = anime + 0.2F;
                 float lenDis_ = 1 - lenDis;
-                anime = Math.max(1 - anime, MAX_ALPHA);
+
+                anime = a * (1 - anime * ( 1 / 0.3f ));
+
                 bb.pos(i + lenDis, j + lenDis, -0.025D).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, j + lenDis, -0.025D).color(r, g, b, anime).endVertex();
                 bb.pos(i + lenDis_, j + lenDis_, -0.025D).color(r, g, b, anime).endVertex();
@@ -176,10 +196,15 @@ public class ArenaRenderer {
 
         for (int i = 0; i < ly; i++) {
             for (int j = 0; j < lz; j++) {
-                float anime = (MathUtils.sin(theta + j + i) + 1) * 0.5F;
-                float lenDis = 0.4F * anime + 0.1F;
+                float anime = (MathUtils.sin(theta + j/2f + i/2f) + 1) * 0.5F;
+
+                if (anime >= 0.3f) continue;
+
+                float lenDis = anime + 0.2F;
                 float lenDis_ = 1 - lenDis;
-                anime = Math.max(1 - anime, MAX_ALPHA);
+
+                anime = a * (1 - anime * ( 1 / 0.3f ));
+
                 bb.pos(-0.025D, i + lenDis, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(-0.025D, i + lenDis_, j + lenDis).color(r, g, b, anime).endVertex();
                 bb.pos(-0.025D, i + lenDis_, j + lenDis_).color(r, g, b, anime).endVertex();

@@ -41,10 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2020/10/27 22:44
  */
 public abstract class ArgList implements IObject {

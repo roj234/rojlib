@@ -26,7 +26,7 @@
 package roj.reflect;
 
 public final class TraceUtil extends SecurityManager {
-    static final TraceUtil INSTANCE = new TraceUtil();
+    public static final TraceUtil INSTANCE = new TraceUtil();
     static final boolean ok;
 
     static {

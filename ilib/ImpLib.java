@@ -27,13 +27,11 @@
 package ilib;
 
 import com.google.common.collect.Multimap;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonDeserializer;
-import ilib.api.PreInitCompleteEvent;
 import ilib.asm.Loader;
-import ilib.autoreg.TileRegisterHandler;
+import ilib.asm.util.MCHooks;
 import ilib.block.BlockLootrChest;
-import ilib.client.resource.GeneratedModelRepo;
+import ilib.client.GeneratedModelRepo;
+import ilib.client.model.ItemModelInfo;
 import ilib.command.*;
 import ilib.command.sub.CmdSubCmd;
 import ilib.command.sub.CommandStructure;
@@ -41,34 +39,38 @@ import ilib.command.sub.MySubs;
 import ilib.command.sub.we.CommandFill;
 import ilib.command.sub.we.CommandSet;
 import ilib.command.sub.we.ModificationCache;
-import ilib.event.ClientEvent;
-import ilib.event.CommonEvent;
-import ilib.event.LootrEvent;
-import ilib.event.PowershotEvent;
+import ilib.event.*;
 import ilib.item.ItemBlockMI;
+import ilib.item.ItemPlaceHere;
+import ilib.item.ItemSelectTool;
+import ilib.item.ItemSpeedModifier;
 import ilib.misc.MiscOptimize;
-import ilib.network.ProxyPacket;
-import ilib.network.SPacketSetPlayerId;
-import ilib.util.AdvancementUtils.FakeAdvs;
 import ilib.util.BlockHelper;
+import ilib.util.ForgeUtil;
 import ilib.util.Hook;
 import ilib.util.PlayerUtil;
 import ilib.util.freeze.FreezeRegistryInjector;
-import net.minecraft.advancements.Advancement;
-import net.minecraft.advancements.AdvancementManager;
-import net.minecraft.advancements.AdvancementRewards;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.lwjgl.input.Keyboard;
+import roj.collect.SimpleList;
+import roj.config.data.CEntry;
+import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
+import roj.text.TextUtil;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.item.Item;
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.EnumTypeAdapterFactory;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.Style;
+import net.minecraft.tileentity.TileEntity;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
@@ -76,21 +78,16 @@ import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.ModMetadata;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.asm.transformers.AccessTransformer;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
 import net.minecraftforge.fml.common.discovery.JarDiscoverer;
 import net.minecraftforge.fml.common.event.*;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import roj.collect.SimpleList;
-import roj.config.data.CEntry;
-import roj.reflect.FieldAccessor;
-import roj.reflect.ReflectionUtils;
-import roj.text.TextUtil;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.jar.Manifest;
 
 /***<pre>
@@ -118,20 +115,15 @@ import java.util.jar.Manifest;
  */
 @Mod(modid = ImpLib.MODID, name = ImpLib.NAME, version = ImpLib.VERSION, acceptedMinecraftVersions = "[1.12, 1.13)", dependencies = "required:forge@[14.23.4.2768,);", acceptableRemoteVersions = "*")
 @Mod.EventBusSubscriber
-/**
- * @author Roj234
- * @since 2021/5/31 23:28
- */
 public class ImpLib {
     public static final String MODID = "ilib";
     public static final String NAME = "ImprovementLibrary";
-    public static final String VERSION = "0.4.0";
+    public static final String VERSION = "0.4.1";
 
     public static final boolean isClient = FMLCommonHandler.instance().getEffectiveSide().isClient();
     public static final Hook HOOK = new Hook();
+    @Deprecated
     public static final List<CommandBase> COMMANDS = new SimpleList<>();
-
-    public static final String MODEL_HASH =  "IL 0.4.0 MI 3.6.4";
 
     private static Logger logger;
 
@@ -143,12 +135,34 @@ public class ImpLib {
     @SidedProxy(serverSide = "ilib.ServerProxy", clientSide = "ilib.ClientProxy")
     public static ServerProxy proxy;
 
-    @EventHandler
-    public void preInit(FMLPreInitializationEvent event) {
-        TileRegisterHandler.register();
+    public ImpLib() {
+        Thread.currentThread().setName(isClient ? "客" : "服");
+    }
 
-        ProxyPacket.register();
-        SPacketSetPlayerId.register();
+    @EventHandler
+    @SuppressWarnings("unchecked")
+    public void preInit(FMLPreInitializationEvent event) {
+        // region 处理TileRegister注解
+        Set<ASMDataTable.ASMData> table = Loader.ASMTable.getAll("ilib.api.TileRegister");
+        if (table != null) {
+            for (ASMDataTable.ASMData c : table) {
+                String cn = c.getClassName();
+                try {
+                    Class<?> clazz = Class.forName(cn, false, Launch.classLoader);
+                    String str = (String) c.getAnnotationInfo().get("value");
+                    if (str.equals("")) {
+                        str = clazz.getSimpleName().toLowerCase();
+                        if (str.startsWith("tileentity")) str = str.substring(10);
+                        else if (str.startsWith("tile")) str = str.substring(4);
+                        str = ForgeUtil.getCurrentModId() + ':' + str;
+                    }
+                    TileEntity.register(str, (Class<? extends TileEntity>) clazz);
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException("@TileRegister #" + cn + " is failed to load.");
+                }
+            }
+        }
+        // endregion
 
         ModMetadata metadata = event.getModMetadata();
         metadata.autogenerated = false;
@@ -166,33 +180,32 @@ public class ImpLib {
 
         HOOK.triggerOnce("preInit");
 
+        Registry.namespace(MODID);
+
+        if (Config.registerItem) {
+            Item item = new ItemSelectTool();
+            Registry.items().add(item.setRegistryName(MODID, "select_tool").setTranslationKey("ilib.select_tool"));
+            Registry.model(new ItemModelInfo(item, true));
+
+            item = new ItemSpeedModifier();
+            Registry.items().add(item.setRegistryName(MODID, "speed_modifier").setTranslationKey("ilib.speed_modifier"));
+            Registry.model(new ItemModelInfo(item, true));
+
+            item = new ItemPlaceHere();
+            Registry.items().add(item.setRegistryName(MODID, "place_here").setTranslationKey("ilib.place_here"));
+            Registry.model(new ItemModelInfo(item, true));
+        }
+
         if (Config.lootR) {
             MinecraftForge.EVENT_BUS.register(LootrEvent.class);
-            Registry.namespace(MODID);
             Block block = new BlockLootrChest();
             Registry.block("chest_loot", block, new ItemBlockMI(block), null, 24, true);
         }
 
-        Loader.ASMTable = null;
         try {
             JarDiscoverer.class.getDeclaredMethod("save").invoke(null);
         } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
             throw new RuntimeException("不支持的功能: annotationSave");
-        }
-
-        if (Config.noAdvancement) {
-            try {
-                ReflectionUtils.setFinal(AdvancementManager.class, "field_192783_b", new GsonBuilder()
-                        .registerTypeHierarchyAdapter(Advancement.Builder.class, (JsonDeserializer<Advancement.Builder>) (p_deserialize_1_, p_deserialize_2_, p_deserialize_3_) -> null)
-                        .registerTypeAdapter(AdvancementRewards.class, new AdvancementRewards.Deserializer())
-                        .registerTypeHierarchyAdapter(ITextComponent.class, new ITextComponent.Serializer())
-                        .registerTypeHierarchyAdapter(Style.class, new Style.Serializer())
-                        .registerTypeAdapterFactory(new EnumTypeAdapterFactory()).create());
-
-                ReflectionUtils.setFinal(AdvancementManager.class, "field_192784_c", new FakeAdvs());
-            } catch (NoSuchFieldException e) {
-                throw new RuntimeException("不支持的功能: noAdvancement", e);
-            }
         }
 
         MiscOptimize.attributeRangeSet(Config.setAttributeRange);
@@ -203,13 +216,18 @@ public class ImpLib {
     @SideOnly(Side.CLIENT)
     public static void onPreInitDone() {
         GeneratedModelRepo.preInitDone();
-        MinecraftForge.EVENT_BUS.post(new PreInitCompleteEvent(true));
     }
 
     @EventHandler
     public void init(FMLInitializationEvent event) {
         proxy.init();
         HOOK.triggerOnce("init");
+        if (isClient && Config.betterKeyboard) {
+            Keyboard.enableRepeatEvents(true);
+        }
+
+        if(Config.sizeEvent > 0)
+            SizeEvent.register(Config.sizeEvent > 1);
     }
 
     @EventHandler
@@ -226,6 +244,10 @@ public class ImpLib {
            Config.freezeUnknownEntries.contains("block") ||
            Config.freezeUnknownEntries.contains("entity")) {
             FreezeRegistryInjector.inject();
+        }
+
+        if (Config.fastRecipe) {
+            MCHooks.initRecipes();
         }
 
         proxy.postInit();
@@ -253,6 +275,7 @@ public class ImpLib {
                 .register(
                         (new CmdSubCmd("debug")).setHelp("command.mi.help.debug.1")
                                 .registerSubCommand(MySubs.RENDER_INFO)
+                                .registerSubCommand(MySubs.BLOCK_UPDATE)
                                 .registerSubCommand(MySubs.TILE_TEST))
                 .register(
                         new CmdSubCmd("we")
@@ -370,7 +393,6 @@ public class ImpLib {
     public static MTIssueFixer issueFixer;
 
     @EventHandler
-    //@SideOnly(Side.CLIENT)
     public void onServerStart(FMLServerAboutToStartEvent event) {
         if (isClient) {
             if (Config.fixThreadIssues && issueFixer == null) {
@@ -378,15 +400,19 @@ public class ImpLib {
                 thread.setDaemon(true);
                 thread.start();
             }
+            event.getServer().setOnlineMode(false);
         }
     }
 
     @EventHandler
     public void onServerStart(FMLServerStartingEvent event) {
+        Thread.currentThread().setName("服");
+
         HOOK.trigger("ServerStart");
         CommonEvent.onServerStart(event.getServer());
         COMMANDS.forEach(event::registerServerCommand);
         new CommandListenerIL();
+
         final Thread thread = Thread.currentThread();
         proxy.setServerThread(thread);
         if (issueFixer != null) {
@@ -394,7 +420,6 @@ public class ImpLib {
             synchronized (issueFixer) {
                 issueFixer.notifyAll();
             }
-            //thread.setDaemon(true);
         }
     }
 
@@ -414,11 +439,8 @@ public class ImpLib {
         }
     }
 
-    /**
-     * 使用UnsafeFieldAccessor: GC
-     */
     @SuppressWarnings("unchecked")
-    public static void cleanTrash() {
+    private static void cleanTrash() {
         FieldAccessor acc;
         try {
             LaunchClassLoader loader = Launch.classLoader;

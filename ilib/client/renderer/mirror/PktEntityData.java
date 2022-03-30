@@ -25,10 +25,10 @@
  */
 package ilib.client.renderer.mirror;
 
-import ilib.network.IMessage;
-import roj.util.ByteList;
+import ilib.net.IMessage;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.network.PacketBuffer;
 
 public class PktEntityData implements IMessage {
     public int id;
@@ -75,7 +75,7 @@ public class PktEntityData implements IMessage {
     }
 
     @Override
-    public void fromBytes(ByteList buf) {
+    public void fromBytes(PacketBuffer buf) {
         id = buf.readVarInt(false);
         lX = buf.readDouble();
         lY = buf.readDouble();
@@ -93,7 +93,7 @@ public class PktEntityData implements IMessage {
     }
 
     @Override
-    public void toBytes(ByteList buf) {
+    public void toBytes(PacketBuffer buf) {
         buf.putVarInt(id, false)
         .putDouble(lX)
         .putDouble(lY)

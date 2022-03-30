@@ -441,11 +441,8 @@ public final class Header implements AudioConfig {
                 ", frameDuration=" + frameDuration;
     }
 
-    // ================================ 辅助功能  =================================
-    // 删除以下代码及对它们的相关引用：(1)不影响文件的正常解码；(2)不能获取及打印待解码文件的信息。
-
-    private float frameDuration;//一帧时长(秒)
-    private int frames;    //当前帧序号
+    float frameDuration;//一帧时长(秒)
+    int frames;         //当前帧序号
 
     /**
      * 获取当前帧的序号。<br>

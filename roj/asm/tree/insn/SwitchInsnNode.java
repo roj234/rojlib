@@ -86,7 +86,7 @@ public final class SwitchInsnNode extends InsnNode {
 
     @Override
     public void toByteArray(ConstantPool cw, ByteList w) {
-        if(pad == -1) {
+        if(pad == -1 || switcher.isEmpty()) {
             throw new IllegalStateException();
         }
 

@@ -25,13 +25,9 @@
  */
 package roj.text;
 
-import roj.collect.Int2IntBiMap;
-import roj.collect.IntList;
-import roj.collect.IntMap;
-import roj.collect.TrieTree;
+import roj.collect.*;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.PrimitiveIterator;
@@ -55,9 +51,9 @@ public class JPinyin {
      * @param flag       1标上声调 0标上数字 -1去掉声调
      */
     public JPinyin(String pinyinFile, @Nullable String wordS2T, @Nullable String wordT2S, @Nullable String wordYin, int flag) {
-        this.wordYin = wordYin == null ? null : new TrieTree<>();
-        this.wordS2T = wordS2T == null ? null : new TrieTree<>();
-        this.wordT2S = wordT2S == null ? null : new TrieTree<>();
+        this.wordYin = new TrieTree<>();
+        this.wordS2T = new TrieTree<>();
+        this.wordT2S = new TrieTree<>();
         this.charYin = new IntMap<>();
         this.T2S = wordS2T != null || wordT2S != null ? new Int2IntBiMap() : null;
 
@@ -65,15 +61,12 @@ public class JPinyin {
     }
 
     private void parse(String pinyin, String wordS2T, String wordT2S, String wordYin, byte flag) {
-        CharList cl = new CharList(32);
-
-        List<String> list0 = TextUtil.split(new ArrayList<>(10000), pinyin, '\n');
-        List<String> list1 = new ArrayList<>(5);
-        List<String> list2 = new ArrayList<>(10);
+        List<String> list0 = new SimpleList<>(10);
+        List<String> list1 = new SimpleList<>(5);
 
         IntList notYin = DEBUG ? new IntList() : null;
 
-        for (String s : list0) {
+        for (String s : new SimpleLineReader(pinyin, true)) {
             if (s.startsWith("#")) continue;
             TextUtil.split(list1, s, '=');
 
@@ -84,9 +77,9 @@ public class JPinyin {
                     notYin.add(cp);
                 charYin.put(cp, "[?Y]");
             } else {
-                TextUtil.split(list2, list1.get(1), ',');
+                TextUtil.split(list0, list1.get(1), ',');
                 //for(String s3 : list2) {
-                String s3 = list2.get(0);
+                String s3 = list0.get(0);
                 switch (flag) {
                     case -1:
                         s3 = s3.substring(0, s3.length() - 1);
@@ -97,7 +90,7 @@ public class JPinyin {
                 }
                 charYin.put(cp, s3);
                 //}
-                list2.clear();
+                list0.clear();
 
                 if (list1.size() > 2 && (wordS2T != null || wordT2S != null)) {
                     String TridChar = list1.get(2);

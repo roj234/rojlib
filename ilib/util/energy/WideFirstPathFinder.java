@@ -25,8 +25,8 @@
  */
 package ilib.util.energy;
 
-import ilib.api.energy.IMEnergy;
-import ilib.api.energy.IMEnergyTube;
+import ilib.api.energy.METile;
+import ilib.api.energy.METube;
 import ilib.capabilities.Capabilities;
 import ilib.util.PlayerUtil;
 import roj.collect.MyHashMap;
@@ -164,7 +164,7 @@ public class WideFirstPathFinder implements PathFinder {
 
         int q = origin.speed;
 
-        IMEnergyTube tube = origin.tube;
+        METube tube = origin.tube;
 
         for (EnumFacing face : EnumFacing.VALUES) {
             if (tube.canConnectEnergy(face)) {
@@ -182,10 +182,10 @@ public class WideFirstPathFinder implements PathFinder {
         if (world.isBlockLoaded(selfPos.setPos(pos.x, pos.y, pos.z), false)) {
             TileEntity te = world.getChunk(selfPos).getTileEntity(selfPos, Chunk.EnumCreateEntityType.CHECK);
             if (te == null) return false;
-            IMEnergy im = te.getCapability(Capabilities.MENERGY_TILE, null);
+            METile im = te.getCapability(Capabilities.MENERGY_TILE, null);
             if (im != null) {
-                if (im.getEnergyType() == IMEnergy.EnergyType.TUBE) {
-                    return (pos.speed = Math.min((pos.tube = (IMEnergyTube) im).transSpeed(), prevSpeed)) > 0;
+                if (im.getEnergyType() == METile.EnergyType.TUBE) {
+                    return (pos.speed = Math.min((pos.tube = (METube) im).transSpeed(), prevSpeed)) > 0;
                 } else {
                     result.add(new PathFindResult(te, prevSpeed, fromSide.getOpposite()));
                 }
@@ -199,8 +199,8 @@ public class WideFirstPathFinder implements PathFinder {
      */
     public static class Node {
         public int x, y, z;
-        public int speed;
-        public IMEnergyTube tube;
+        public int    speed;
+        public METube tube;
 
         private static final int CACHE_SIZE = 256;
         private static final Node[] CACHE = new Node[CACHE_SIZE];

@@ -359,15 +359,18 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     }
 
     public final ByteList putVarInt(int i) {
-        return putVarLong(i, true);
+        putVarLong(this, zig(i));
+        return this;
     }
 
     public final ByteList putVarInt(int i, boolean canBeNegative) {
-        return putVarLong(i, canBeNegative);
+        putVarLong(this, canBeNegative ? zig(i) : i);
+        return this;
     }
 
     public final ByteList putVarLong(long i) {
-        return putVarLong(i, true);
+        putVarLong(this, zig(i));
+        return this;
     }
 
     public final ByteList putVarLong(long i, boolean canBeNegative) {

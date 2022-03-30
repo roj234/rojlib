@@ -59,7 +59,7 @@ public class AEGuiClient {
 
         CMapping cfg = JSONParser.parse(IOUtil.readUTF(new FileInputStream(args[0])), JSONParser.LITERAL_KEY).asMap();
 
-        String[] text = TextUtil.split(cfg.getString("url"), ':');
+        String[] text = TextUtil.split1(cfg.getString("url"), ':');
         if(text.length == 0) {
             JOptionPane.showMessageDialog(null, "服务器端口有误");
             return;

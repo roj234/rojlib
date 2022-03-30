@@ -25,82 +25,24 @@
  */
 package ilib.asm;
 
+import ilib.asm.util.BoolFn;
 import roj.collect.MyHashMap;
-import roj.util.Helpers;
-
-import net.minecraft.launchwrapper.Launch;
-
-import net.minecraftforge.fml.common.discovery.ASMDataTable.ASMData;
-
-import java.util.Set;
-import java.util.function.Function;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public class Preloader {
-    private static final MyHashMap<String, Function<byte[], byte[]>> fileProcessors = new MyHashMap<>();
+    private static final MyHashMap<String, BoolFn> fileProcessors = new MyHashMap<>();
 
-    static {
-        /*Thread ldr = new Thread("Class Preloader") {
-            @Override
-            public void run() {
-                logger.info("Preloading minecraft classes...");
-                LockSupport.parkNanos(1_000_000_000L);
-                if (Thread.interrupted()) return;
-                char[] chars = new char[3];
-                int count = 0;
-                try {
-                    LaunchClassLoader cl = Launch.classLoader;
-                    for (int i = 0; i < 26; i++) {
-                        chars[2] = (char) TextUtil.digits[i + 10];
-                        cl.loadClass(new String(chars, 0, 1));
-                        LockSupport.parkNanos(100_000L);
-                        count++;
-                        for (int j = 0; j < 26; j++) {
-                            chars[1] = (char) TextUtil.digits[i + 10];
-                            cl.loadClass(new String(chars, 0, 2));
-                            LockSupport.parkNanos(100_000L);
-                            count++;
-                            for (int k = 0; k < 26; k++) {
-                                chars[0] = (char) TextUtil.digits[i + 10];
-                                cl.loadClass(new String(chars, 0, 3));
-                                LockSupport.parkNanos(100_000L);
-                                count++;
-                            }
-                        }
-                    }
-                } catch (ClassNotFoundException nfe) {
-                    System.out.println("Preloaded: " + count);
-                    nfe.printStackTrace();
-                }
-            }
-        };
-        ldr.setDaemon(true);
-        ldr.start();*/
-    }
-
-    public static void preload() {
-        Set<ASMData> all = Loader.ASMTable.getAll("ilib.asm.Preloaded");
-        for (ASMData data : all) {
-            try {
-                Class.forName(data.getClassName(), true, Launch.classLoader);
-            } catch (ClassNotFoundException e) {
-                Helpers.athrow(e);
-            }
-        }
-        all.clear();
-    }
-
-    public static void registerFileProcessor(String name, Function<byte[], byte[]> processor) {
-        Function<byte[], byte[]> fn = fileProcessors.putIfAbsent(name, processor);
+    public static void registerFileProcessor(String name, BoolFn processor) {
+        BoolFn fn = fileProcessors.putIfAbsent(name, processor);
         if (fn != null) {
             fileProcessors.put(name, fn.andThen(processor));
         }
     }
 
-    public static Function<byte[], byte[]> getFileProcessor(String entry) {
+    public static BoolFn getFileProcessor(String entry) {
         return fileProcessors.get(entry);
     }
 }

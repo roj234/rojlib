@@ -26,13 +26,13 @@
 package ilib;
 
 import com.google.common.collect.BiMap;
-import ilib.api.PreInitCompleteEvent;
-import ilib.client.register.BlockModelInfo;
-import ilib.client.register.ItemModelInfo;
-import ilib.client.register.ModelInfo;
+import ilib.client.model.BlockModelInfo;
+import ilib.client.model.ItemModelInfo;
+import ilib.client.model.ModelInfo;
 import ilib.item.fake.FakeItemBlock;
 import ilib.item.fake.ItemBlockMissing;
 import ilib.util.ForgeUtil;
+import ilib.util.Hook;
 import ilib.util.Registries;
 
 import net.minecraft.block.Block;
@@ -191,7 +191,7 @@ public final class Registry {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void postRegItem(RegistryEvent.Register<Item> event) {
-        MinecraftForge.EVENT_BUS.post(new PreInitCompleteEvent(false));
+        if (!ImpLib.isClient) ImpLib.HOOK.remove(Hook.MODEL_REGISTER);
 
         if (Config.enableMissingItemCreation) {
             for (Item item : generateMissingItems())
@@ -224,17 +224,8 @@ public final class Registry {
 
     @SubscribeEvent
     public static void registerBlocks(RegistryEvent.Register<Block> event) {
-        for (Block block : BLOCKS) {
-            try {
-                event.getRegistry().register(block);
-            } catch (ArrayIndexOutOfBoundsException ex) {
-                try {
-                    throw new MoreIdMissingException(block);
-                } catch (Error e) {
-                    throw new RuntimeException("MoreId mod is missing due to meta limit overhead of block " + block);
-                }
-            }
-        }
+        for (Block block : BLOCKS)
+            event.getRegistry().register(block);
         BLOCKS.clear();
         BLOCKS = null;
     }

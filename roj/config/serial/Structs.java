@@ -232,7 +232,7 @@ public class Structs {
 
         CMapping dst;
         if ((rid & 1) != 0) {
-            dst = new CObject<>(null);
+            dst = new CObject<>(null, ser);
         } else {
             dst = new CMapping(new MyHashMap<>());
         }

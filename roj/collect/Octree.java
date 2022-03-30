@@ -242,7 +242,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
                 key = v.getPos();
             }
 
-            next = node.k << 3;
+            next <<= 3;
         } while (true);
 
         ArrayList<V> list;
@@ -269,12 +269,42 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
         return true;
     }
 
+    private static int getNearest(Vec3i pos, int sunit) {
+        int cx = 0, cy = 0, cz = 0;
+
+        int next = 0b1000;
+        do {
+            if (pos.x < cx) {
+                next += 4;
+                cx -= sunit;
+            } else {
+                cx += sunit;
+            }
+            if (pos.y < cy) {
+                next += 2;
+                cy -= sunit;
+            } else {
+                cy += sunit;
+            }
+            if (pos.z < cz) {
+                next += 1;
+                cz -= sunit;
+            } else {
+                cz += sunit;
+            }
+
+            next <<= 3;
+            sunit >>>= 1;
+        } while (sunit > 0 && (0 == (next & (1 << 31))));
+
+        return next;
+    }
+
     /**
      * 移动一个node
      */
     public boolean move(Vec3i pos, Vec3i to) {
-        if (true)
-            throw new IllegalStateException("未完成");
+
         return true;
     }
 
@@ -317,7 +347,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
             if (key.equals(vPos)) {
                 return (V) node.v;
             }
-            next = node.k << 3;
+            next <<= 3;
         } while (true);
 
         ArrayList<V> list = (ArrayList<V>) node.v;
@@ -378,7 +408,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
             }
 
             sunit >>>= 1;
-            next = node.k << 3;
+            next <<= 3;
         } while (true);
 
         ArrayList<V> list = (ArrayList<V>) node.v;

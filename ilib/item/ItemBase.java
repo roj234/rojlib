@@ -28,12 +28,10 @@ package ilib.item;
 
 import ilib.api.Ownable;
 import ilib.api.item.ILostThing;
-import ilib.api.item.IShiftTooltip;
-import ilib.api.item.ITooltip;
 import ilib.util.Colors;
 import ilib.util.ForgeUtil;
 import ilib.util.ItemNBT;
-import ilib.util.TextHelper;
+import ilib.util.MCTexts;
 import ilib.util.energy.EnergyHelper;
 
 import net.minecraft.client.Minecraft;
@@ -52,7 +50,6 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -60,50 +57,26 @@ import java.util.List;
  * @since 2021/4/21 22:51
  */
 public class ItemBase extends Item {
-    protected static final List<String> color = new ArrayList<>();
-    protected static final List<String> tips = new ArrayList<>();
-
-    public String modid() {
-        ResourceLocation resloc = getRegistryName();
-        if (resloc != null)
-            return resloc.getNamespace();
+    protected final String modid() {
+        ResourceLocation name = getRegistryName();
+        if (name != null) return name.getNamespace();
         return ForgeUtil.getCurrentModId();
     }
 
+    protected void addTooltip(ItemStack stack, List<String> list) {}
+
     @Override
     @SideOnly(Side.CLIENT)
-    public final void addInformation(ItemStack itemstack, World world, @Nonnull List<String> list, @Nonnull ITooltipFlag flag) {
-        Item i = itemstack.getItem();
-        if (i instanceof ITooltip) {
-            ITooltip t = (ITooltip) i;
+    public final void addInformation(ItemStack stack, World world, @Nonnull List<String> list, @Nonnull ITooltipFlag flag) {
+        addTooltip(stack, list);
 
-            color.clear();
-            tips.clear();
-            t.getTooltip(tips, color, itemstack);
-
-            if (i instanceof IShiftTooltip) {
-                String z = I18n.format(tips.get(0));
-                TextHelper.shiftLore(list, color.size() > 0 ? I18n.format(color.get(0)) + z : z);
-            } else {
-                String s, s2;
-                for (int j = 0; j < tips.size(); j++) {
-                    s = tips.get(j);
-                    s = s == null ? "" : I18n.format(s);
-                    if (color.size() > j && (s2 = color.get(j)) != null) {
-                        list.add(I18n.format(s2) + s);
-                    } else {
-                        list.add(s);
-                    }
-                }
-            }
-        }
-
+        Item i = stack.getItem();
         if (i instanceof ILostThing) {
             ILostThing t = (ILostThing) i;
             EntityPlayer clientPlayer = Minecraft.getMinecraft().player;
             if (clientPlayer != null) {
-                if (t.isOwned(itemstack))
-                    if (t.isOwner(itemstack, clientPlayer))
+                if (t.isOwned(stack))
+                    if (t.isOwner(stack, clientPlayer))
                         list.add(Colors.ORANGE + I18n.format("tooltip.ilib.lstd.bound") + clientPlayer.getName());
                     else
                         list.add(Colors.DARK_RED + I18n.format("tooltip.ilib.lstd.notu"));
@@ -112,10 +85,10 @@ public class ItemBase extends Item {
             }
         }
 
-        NBTTagCompound tag = ItemNBT.getRootTagNullable(itemstack);
+        NBTTagCompound tag = ItemNBT.getRootTagNullable(stack);
         if (tag != null) {
             if (tag.getInteger("MaxME") != 0)
-                EnergyHelper.addEnergyInformation(itemstack, list);
+                EnergyHelper.addEnergyInformation(stack, list);
             if (tag.hasKey("Owner")) {
                 if (!(tag.getTag("Owner") instanceof NBTTagCompound)) {
                     tag.removeTag("Owner");
@@ -137,14 +110,12 @@ public class ItemBase extends Item {
     }
 
     public String getItemStackDisplayName(ItemStack stack) {
-        return TextHelper.translate(this.getTranslationKey(stack)).trim();
+        return MCTexts.format(this.getTranslationKey(stack)).trim();
     }
 
     @Override
     public final void getSubItems(@Nonnull CreativeTabs tab, @Nonnull NonNullList<ItemStack> list) {
-        if (isInCreativeTab(tab)) {
-            getSubItems(list);
-        }
+        if (isInCreativeTab(tab)) getSubItems(list);
     }
 
     @Override
@@ -159,13 +130,13 @@ public class ItemBase extends Item {
     public static String getOwnerTypeName(int type) {
         switch (type) {
             case 0:
-                return TextHelper.translate("gui.mi.tabs.perm.public");
+                return MCTexts.format("ilib.perm.public");
             case 1:
-                return TextHelper.translate("gui.mi.tabs.perm.private");
+                return MCTexts.format("ilib.perm.private");
             case 2:
-                return TextHelper.translate("gui.mi.tabs.perm.protected");
+                return MCTexts.format("ilib.perm.protected");
             default:
-                return TextHelper.translate("gui.mi.tabs.redstone.error");
+                return MCTexts.format("ilib.perm.unknown");
         }
     }
 }

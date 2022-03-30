@@ -25,13 +25,10 @@
  */
 package ilib.util;
 
-import roj.reflect.DirectAccessor;
-
-import net.minecraft.client.gui.GuiMainMenu;
-import net.minecraft.client.resources.IResourcePack;
+import net.minecraft.block.BlockRedstoneWire;
 import net.minecraft.util.math.Vec3d;
-
-import net.minecraftforge.fml.client.FMLClientHandler;
+import roj.asm.type.Type;
+import roj.reflect.DirectAccessor;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -45,13 +42,12 @@ import java.util.List;
  */
 public interface Reflection {
     Reflection HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(Reflection.class))
-            .access(GuiMainMenu.class, "field_73975_c", null, "setMainMenuSplash")
-            .access(FMLClientHandler.class, "resourcePackList")
             .access(Vec3d.class, new String[] {"field_72450_a", "field_72448_b", "field_72449_c" },
                     null,
                     new String[] { "setVecX", "setVecY", "setVecZ" })
-            .delegate(Throwable.class, "getStackTraceDepth")
             .delegate(EnumSet.class, "addAll")
+            .i_access("java/util/Collections$UnmodifiableList", "list", new Type("java/util/List"), "getModifiableList", null, false)
+            .access(BlockRedstoneWire.class, "field_150181_a", null, "setRedstoneProvidePower")
             .build();
 
     static DirectAccessor<Reflection> preloadNecessaryClassesBeforeDefine(DirectAccessor<Reflection> builder) {
@@ -59,18 +55,15 @@ public interface Reflection {
     }
 
     // region Field
-    void setMainMenuSplash(GuiMainMenu menu, String splash);
-
-    List<IResourcePack> getResourcePackList(FMLClientHandler handler);
-    void setResourcePackList(FMLClientHandler handler, List<IResourcePack> list);
-
     void setVecX(Vec3d vector, double x);
     void setVecY(Vec3d vector, double y);
     void setVecZ(Vec3d vector, double z);
+
+    <T> List<T> getModifiableList(List<T> unmodifiableList);
+
+    void setRedstoneProvidePower(BlockRedstoneWire block, boolean redstoneProvidePower);
     // endregion
     // region Method
-    int getStackTraceDepth(Throwable throwable);
-
     void addAll(EnumSet<?> set);
     // endregion
     // region Construct

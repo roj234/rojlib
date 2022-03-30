@@ -26,25 +26,28 @@
 package ilib.event;
 
 import ilib.ImpLib;
-import ilib.network.ILChannel;
-import ilib.network.IMessage;
-import ilib.network.IMessageHandler;
-import ilib.network.MessageContext;
-import ilib.util.TextHelper;
+import ilib.net.IMessage;
+import ilib.net.IMessageHandler;
+import ilib.net.MessageContext;
+import ilib.net.MyChannel;
+import ilib.util.MCTexts;
 import ilib.util.TimeUtil;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent;
-import net.minecraftforge.fml.relauncher.Side;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToLongMap;
 import roj.io.FileUtil;
 import roj.util.ByteList;
 import roj.util.ByteList.Streamed;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.util.text.TextComponentString;
+
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent;
+import net.minecraftforge.fml.relauncher.Side;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -58,8 +61,8 @@ import java.util.Map;
  * @since  2021/5/30 22:59
  */
 public class Sync {
-    static ByteList NULL_BYTES = new Streamed();
-    static ILChannel SYNC = new ILChannel("IL_SYN");
+    static ByteList  NULL_BYTES = new Streamed();
+    static MyChannel SYNC       = new MyChannel("IL_SYN");
 
     ToLongMap<String> fileMD5 = new ToLongMap<>();
     MyHashMap<String, ByteList> fileData = new MyHashMap<>();
@@ -130,7 +133,7 @@ public class Sync {
         ToLongMap<String> serverMD5;
 
         @Override
-        public void fromBytes(ByteList buf) {
+        public void fromBytes(PacketBuffer buf) {
             int len = buf.readVarInt(false);
             for (int i = 0; i < len; i++) {
                 serverMD5.put(buf.readVarIntUTF(), buf.readLong());
@@ -138,7 +141,7 @@ public class Sync {
         }
 
         @Override
-        public void toBytes(ByteList buf) {
+        public void toBytes(PacketBuffer buf) {
             buf.putVarInt(serverMD5.size(), false);
             for (ToLongMap.Entry<String> entry : serverMD5.selfEntrySet()) {
                 buf.putVarIntUTF(entry.k).putLong(entry.v);
@@ -158,10 +161,10 @@ public class Sync {
             if (!owner.fileMD5.isEmpty()) {
                 for (ToLongMap.Entry<String> entry : owner.fileMD5.selfEntrySet()) {
                     if (!new File(entry.k).delete()) {
-                        TimeUtil.beginText.add(TextHelper.translate("mi.sync.ioerror") + "无法删除 " + entry.k);
+                        TimeUtil.beginText.add(MCTexts.format("mi.sync.ioerror") + "无法删除 " + entry.k);
                     }
                 }
-                TimeUtil.beginText.add(TextHelper.translate("ilib.sync.remove") + owner.fileMD5.keySet().toString());
+                TimeUtil.beginText.add(MCTexts.format("ilib.sync.remove") + owner.fileMD5.keySet().toString());
             }
             owner.fileMD5 = serverMD5;
 
@@ -190,7 +193,7 @@ public class Sync {
         }
 
         @Override
-        public void fromBytes(ByteList buf) {
+        public void fromBytes(PacketBuffer buf) {
             int len = buf.readVarInt(false);
             if(buf.readBoolean()) { // fromClient
                 for (int i = 0; i < len; i++) {
@@ -208,7 +211,7 @@ public class Sync {
         }
 
         @Override
-        public void toBytes(ByteList buf) {
+        public void toBytes(PacketBuffer buf) {
             buf.putVarInt(files.size(), false).putBool(fromClient);
             if(fromClient) {
                 for(String key : files.keySet()) {
@@ -234,14 +237,14 @@ public class Sync {
                             try (FileOutputStream fos = new FileOutputStream(file)) {
                                 entry.getValue().writeToStream(fos);
                             } catch (IOException e) {
-                                TimeUtil.beginText.add(TextHelper.translate("ilib.sync.ioerror") + e.getMessage());
+                                TimeUtil.beginText.add(MCTexts.format("ilib.sync.ioerror") + e.getMessage());
                                 ImpLib.logger().warn(e);
                             }
                         }
                     }
-                    TimeUtil.beginText.add(TextHelper.translate("ilib.sync.synced") + files.keySet().toString());
+                    TimeUtil.beginText.add(MCTexts.format("ilib.sync.synced") + files.keySet().toString());
                 } else {
-                    TimeUtil.beginText.add(TextHelper.translate("ilib.sync.same"));
+                    TimeUtil.beginText.add(MCTexts.format("ilib.sync.same"));
                 }
             } else {
                 if(owner.replied.add(ctx.getPlayer())) {

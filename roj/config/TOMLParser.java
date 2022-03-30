@@ -25,8 +25,7 @@
  */
 package roj.config;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.data.*;
 import roj.config.serial.Serializer;
@@ -110,7 +109,7 @@ public class TOMLParser extends Parser {
         if (ser != null && map.containsKey("==", Type.STRING)) {
             Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
-                return new CObject<>(map.raw(), des);
+                return new CObject<>(map.raw(), ser, des);
             }
         }
 
@@ -219,7 +218,7 @@ public class TOMLParser extends Parser {
         if (ser != null && map.containsKey("==", Type.STRING)) {
             Serializer<?> des = ser.find(map.getString("=="));
             if (des != null) {
-                return new CObject<>(map.raw(), des);
+                return new CObject<>(map.raw(), ser, des);
             }
         }
 
@@ -310,7 +309,7 @@ public class TOMLParser extends Parser {
     }
 
     static class TOMLLexer extends AbstLexer {
-        static final IBitSet LITERAL_SPECIAL = LongBitSet.from("+-#.=\"'[]{} \n\r\t");
+        static final MyBitSet LITERAL_SPECIAL = MyBitSet.from("+-#.=\"'[]{} \n\r\t");
 
         byte flag;
 

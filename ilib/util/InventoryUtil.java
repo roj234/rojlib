@@ -33,8 +33,7 @@
  */
 package ilib.util;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.math.MathUtils;
 
 import net.minecraft.entity.player.EntityPlayer;
@@ -195,8 +194,8 @@ public class InventoryUtil {
         }
 
         // Load slots
-        IBitSet fromSlots = new LongBitSet();
-        IBitSet toSlots = new LongBitSet();
+        MyBitSet fromSlots = new MyBitSet();
+        MyBitSet toSlots = new MyBitSet();
 
         // Add From Slots
         if (fromSlot != -1)

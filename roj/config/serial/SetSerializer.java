@@ -36,7 +36,11 @@ import java.util.Set;
  * @author Roj233
  * @since 2022/1/11 17:45
  */
-class SetSerializer implements Serializer<Set<?>> {
+class SetSerializer extends WrapSerializer {
+    public SetSerializer(Serializers owner) {
+        super(owner);
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public Set<?> deserialize(CObject<?> object) {
@@ -45,19 +49,9 @@ class SetSerializer implements Serializer<Set<?>> {
     }
 
     @Override
-    public void serialize(CObject<?> base, Set<?> object) {
-        base.put("", CEntry.wrap(object));
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
     public Set<?> deserializeRc(CEntry o) {
         Collection<Object> unwrap = (Collection<Object>) o.unwrap();
         return unwrap == null ? null : new MyHashSet<>(unwrap);
-    }
-
-    @Override
-    public CEntry serializeRc(Set<?> t) {
-        return CEntry.wrap(t);
     }
 }

@@ -120,8 +120,6 @@ public final class VarList implements Iterable<Var> {
     }
 
     public Var get(int index) {
-        if (index < 0 || index >= size)
-            throw new IllegalArgumentException("Index(" + index + ") > Size(" + size + ")");
         Var v = list[index];
         if(v == null) {
             throw new IllegalArgumentException("Var[" + index + "] is not registered");
@@ -189,10 +187,11 @@ public final class VarList implements Iterable<Var> {
 
         int size = Math.min(this.size, list.size);
         for (int i = 0; i < size; i++) {
-            if (list1[i].type != list2[i].type) {
+            if (list1[i] == null || list2[i] == null || list1[i].type != list2[i].type) {
                 this.size = i;
-                break;
+                return;
             }
         }
+        this.size = size;
     }
 }

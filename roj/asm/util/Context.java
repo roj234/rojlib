@@ -148,6 +148,10 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
         return get(true);
     }
 
+    public boolean isFresh() {
+        return data == null;
+    }
+
     private void clearData() {
         if(this.data != null) {
             getFileName();

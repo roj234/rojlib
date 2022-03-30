@@ -25,6 +25,7 @@
  */
 package roj.config.serial;
 
+import roj.config.data.CDouble;
 import roj.config.data.CEntry;
 import roj.config.data.CObject;
 
@@ -45,11 +46,11 @@ class FloatSerializer implements Serializer<Float> {
 
     @Override
     public CEntry serializeRc(Float t) {
-        return CEntry.wrap(t);
+        return CDouble.valueOf(t);
     }
 
     @Override
     public void serialize(CObject<?> o, Float t) {
-        o.put("", CEntry.wrap(t));
+        o.put("", CDouble.valueOf(t));
     }
 }

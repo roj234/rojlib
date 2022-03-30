@@ -26,10 +26,11 @@
 package ilib.client.renderer.entity;
 
 import ilib.ClientProxy;
-import ilib.client.util.RenderUtils;
+import ilib.client.RenderUtils;
+import ilib.util.MCTexts;
 import org.lwjgl.opengl.GL11;
 
-import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.entity.RenderManager;
@@ -67,49 +68,34 @@ public class RenderTNTMy extends RenderTNTPrimed {
 
         int fuse = tnt.getFuse();
 
-        boolean lighting = GL11.glGetBoolean(GL11.GL_LIGHTING);
-
-        GlStateManager.disableLighting();
         GlStateManager.depthMask(false);
-        GlStateManager.disableDepth();
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(770, 771);
 
-        Minecraft mc = ClientProxy.mc;
+        FontRenderer fr = ClientProxy.mc.fontRenderer;
 
-        String fuseText = ticksToTime(fuse);
-        int width = mc.fontRenderer.getStringWidth(fuseText) / 2;
+        String fuseText = MCTexts.ticksToTime(fuse);
+        int width = fr.getStringWidth(fuseText) / 2;
 
         BufferBuilder buffer = RenderUtils.BUILDER;
-        buffer.begin(7, DefaultVertexFormats.POSITION_COLOR);
-        buffer.pos((-width - 1), -1.0D, 0.0D).color(0, 0, 0, 64).endVertex();
-        buffer.pos((-width - 1), 8.0D, 0.0D).color(0, 0, 0, 64).endVertex();
-        buffer.pos((width + 1), 8.0D, 0.0D).color(0, 0, 0, 64).endVertex();
-        buffer.pos((width + 1), -1.0D, 0.0D).color(0, 0, 0, 64).endVertex();
+        buffer.begin(7, DefaultVertexFormats.POSITION);
+        buffer.pos((-width - 1), -1.0D, 0).endVertex();
+        buffer.pos((-width - 1), 8.0D, 0).endVertex();
+        buffer.pos((width + 1), 8.0D, 0).endVertex();
+        buffer.pos((width + 1), -1.0D, 0).endVertex();
+
+        GlStateManager.color(0,0,0, 0.25f);
         RenderUtils.TESSELLATOR.draw();
 
-        GlStateManager.enableTexture2D();
-        mc.fontRenderer.drawString(fuseText, -width, 0, fuse > 60 ? 553648127 : 0xFFFF0000);
-        GlStateManager.enableDepth();
-        GlStateManager.depthMask(true);
-        if (lighting)
-            GlStateManager.enableLighting();
-        mc.fontRenderer.drawString(fuseText, -width, 0, -1);
-        GlStateManager.disableBlend();
-        RenderUtils.restoreColor();
-    }
+        int color = fuse > 2000 ? -1 : 0xFFFF0000;
 
-    private static String ticksToTime(int ticks) {
-        if (ticks > 72000) {
-            int h = ticks / 20 / 3600;
-            return h + " h";
-        }
-        if (ticks > 1200) {
-            int m = ticks / 20 / 60;
-            return m + " m";
-        }
-        int s = ticks / 20, ms = ticks % 20 / 2;
-        return s + "." + ms + " s";
+        GlStateManager.enableTexture2D();
+        fr.drawString(fuseText, -width, 0, color);
+        GlStateManager.depthMask(true);
+        fr.drawString(fuseText, -width, 0, color);
+        GlStateManager.disableBlend();
+
+        RenderUtils.restoreColor();
     }
 }

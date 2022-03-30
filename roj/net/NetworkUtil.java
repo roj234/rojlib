@@ -26,8 +26,7 @@
 package roj.net;
 
 import roj.asm.type.Type;
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.math.MathUtils;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
@@ -101,7 +100,7 @@ public final class NetworkUtil {
         return arr;
     }
 
-    static final IBitSet HEX = LongBitSet.from("0123456789ABCDEFabcdef");
+    static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
     public static byte[] IPv62int(CharSequence ip) {
         int len = TextUtil.limitedIndexOf(ip, '%', ip.length());
         byte[] arr = new byte[16];

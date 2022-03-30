@@ -28,10 +28,11 @@ package ilib.util;
 
 import ilib.ImpLib;
 import ilib.api.Ownable;
-import ilib.api.energy.IMEnergy;
+import ilib.api.energy.METile;
 import ilib.api.tile.ToolTarget;
-import ilib.collect.UUIDList;
+import ilib.tile.OwnerManager;
 import ilib.tile.TileBase;
+import roj.text.TextUtil;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -61,18 +62,6 @@ import java.util.List;
  * @since 2021/5/22 19:42
  */
 public final class ItemUtils {
-    public static Item stringToItem(String data) {
-        Item item = null;
-        int index = data.indexOf(":");
-        if (index > 0) {
-            item = Registries.item().getValue(new ResourceLocation(data));
-        }
-        if (item == null) {
-            ImpLib.logger().fatal("Couldn't get item by name " + data);
-        }
-        return item;
-    }
-
     /**
      * String to itemstack like minecraft:stone@0*1{myNbt: 1b}
      *
@@ -83,15 +72,13 @@ public final class ItemUtils {
             return ItemStack.EMPTY;
 
         int index = data.indexOf("@");
-        Item item;
         if (index < 0) {
-            item = stringToItem(data);
-            return new ItemStack(item);
+            return new ItemStack(Item.REGISTRY.getObject(new ResourceLocation(data)));
         }
         String itemMeta = data.substring(index + 1);
         String itemName = data.substring(0, index);
 
-        item = stringToItem(itemName);
+        Item item = Item.REGISTRY.getObject(new ResourceLocation(itemName));
         if (item == null)
             return null;
 
@@ -156,11 +143,13 @@ public final class ItemUtils {
     }
 
     public static void dropStacks(World world, List<ItemStack> stacks, BlockPos pos) {
-        stacks.forEach((ItemStack stack) -> dropStack(world, stack, pos));
+        for (int i = 0; i < stacks.size(); i++) {
+            dropStack(world, stacks.get(i), pos);
+        }
     }
 
     public static void dropStack(World world, ItemStack stack, BlockPos pos) {
-        if (stack != null && !stack.isEmpty()) {
+        if (!stack.isEmpty()) {
             float rx = world.rand.nextFloat() * 0.8F;
             float ry = world.rand.nextFloat() * 0.8F;
             float rz = world.rand.nextFloat() * 0.8F;
@@ -222,7 +211,7 @@ public final class ItemUtils {
             ItemNBT.setCompound(stack, "Owner", _tag);
 
             NBTTagList trusts = new NBTTagList();
-            UUIDList trustList = t.getTrustList();
+            OwnerManager trustList = t.getTrustList();
             for (int i = 0; i < trustList.size(); i++) {
                 NBTTagCompound compound = new NBTTagCompound();
                 compound.setLong("UUIDH", trustList.getUUIDH(i));
@@ -234,8 +223,8 @@ public final class ItemUtils {
         }
 
 
-        if ((tile instanceof IMEnergy) && ((IMEnergy) tile).maxME() > 0)
-            ItemNBT.setInt(stack, "MaxME", ((IMEnergy) tile).maxME());
+        if ((tile instanceof METile) && ((METile) tile).maxME() > 0)
+            ItemNBT.setInt(stack, "MaxME", ((METile) tile).maxME());
 
         //if(tile instanceof MetaTile){
         //     tag.setInt("Type", ((MetaTile)tile).getMeta());
@@ -253,8 +242,8 @@ public final class ItemUtils {
         IBlockState state = world.getBlockState(pos);
         ItemStack stack = state.getBlock().getItem(world, pos, state);
         ItemNBT.setRootTag(stack, tag);
-        if (block instanceof IMEnergy) {
-            ItemNBT.setInt(stack, "MaxME", ((IMEnergy) block).maxME());
+        if (block instanceof METile) {
+            ItemNBT.setInt(stack, "MaxME", ((METile) block).maxME());
         }
         dropStack(world, stack, pos);
         world.removeTileEntity(pos); // Cancel drop logic
@@ -290,7 +279,7 @@ public final class ItemUtils {
             tag.setInteger("z", pos.getZ());
             tile.readFromNBT(tag);
             if (tile instanceof TileBase) {
-                ((TileBase) tile).markForDataUpdate();
+                ((TileBase) tile).sendDataUpdate();
             }
         } else if (stack.hasTagCompound()) {
             ImpLib.logger().warn("Try to write but there is not a tileentity[Data re-write failed]");
@@ -304,9 +293,8 @@ public final class ItemUtils {
     public static String firstOredictName(@Nullable ItemStack i) {
         if (i == null) return null;
         try {
-            return net.minecraftforge.oredict.OreDictionary.getOreName(OreDictionary.getOreIDs(i)[0]);
-        } catch (IndexOutOfBoundsException ignored) {
-        }
+            return OreDictionary.getOreName(OreDictionary.getOreIDs(i)[0]);
+        } catch (IndexOutOfBoundsException ignored) {}
         return null;
     }
 
@@ -326,5 +314,21 @@ public final class ItemUtils {
 
     public static ItemStack getUsableDualHandItem(EntityPlayer player) {
         return ItemStack.EMPTY;
+    }
+
+    public static void setOreDict(Item item, int meta, String oreName) {
+        if (oreName.equals("cancel")) return;
+        ItemStack stack = new ItemStack(item, 1, meta);
+        for (String name : TextUtil.split(oreName, ',')) {
+            OreDictionary.registerOre(name, stack);
+        }
+    }
+
+    public static void setOreDict(Block block, int meta, String oreName) {
+        if (oreName.equals("cancel")) return;
+        ItemStack stack = new ItemStack(block, 1, meta);
+        for (String name : TextUtil.split(oreName, ',')) {
+            OreDictionary.registerOre(name, stack);
+        }
     }
 }

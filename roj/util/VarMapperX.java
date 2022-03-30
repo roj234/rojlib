@@ -1,7 +1,7 @@
 package roj.util;
 
 import roj.collect.IntIterator;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.Unioner;
 import roj.collect.Unioner.Range;
 import roj.collect.Unioner.Region;
@@ -54,7 +54,7 @@ public class VarMapperX extends VarMapper {
         if (v.start < 0) v.start = pos;
         v.end = pos;
 
-        LongBitSet S = v.S;
+        MyBitSet S = v.S;
         if (v.G.length <= S.size()) {
             int[] G = Arrays.copyOf(v.G, S.size()+1);
             for (int i = v.G.length; i <= S.size(); i++) {
@@ -69,7 +69,7 @@ public class VarMapperX extends VarMapper {
         if (v.start < 0) v.start = pos;
         v.end = pos;
 
-        LongBitSet S = v.S;
+        MyBitSet S = v.S;
         if (v.G.length <= S.size()) {
             int[] G = Arrays.copyOf(v.G, S.size()+1);
             for (int i = v.G.length; i <= S.size(); i++) {
@@ -197,7 +197,7 @@ public class VarMapperX extends VarMapper {
     }
 
     public static class VarX extends Var {
-        final LongBitSet S = new LongBitSet();
+        final MyBitSet S = new MyBitSet();
         int[] G = new int[] {-1,-1};
 
         public final List<Var> subVars = new ArrayList<>();

@@ -25,20 +25,14 @@
  */
 package ilib.asm.util;
 
-import ilib.Config;
-import ilib.asm.nixim.EventInvokerV2;
-import roj.collect.IntMap;
-import roj.reflect.ClassDefiner;
-
 import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.IEventListener;
 import net.minecraftforge.fml.common.eventhandler.ListenerList;
+import roj.collect.SimpleList;
+import roj.reflect.DirectAccessor;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.ListIterator;
-import java.util.function.Supplier;
 
 /**
  * @author Roj234
@@ -46,86 +40,81 @@ import java.util.function.Supplier;
  */
 public final class InvokerCompressor implements IEventListener {
     private final ListenerList target;
-    private final List<IEventListener> allListeners;
     private final int busID;
 
     public InvokerCompressor(List<IEventListener> list1, ListenerList list, int busID) {
         this.target = list;
-        this.allListeners = list1;
         this.busID = busID;
     }
 
-    static final EventPriority[] priorities = EventPriority.values();
-    static final Supplier<List<EventInvokerV2>> aNew = ArrayList::new;
+    public static final EventPriority[] priorities = EventPriority.values();
+    public static H Helper;
+    static {
+        try {
+            Class<?> inst = Class.forName("net.minecraftforge.fml.common.eventhandler.ListenerList$ListenerListInst");
+            Helper = DirectAccessor
+                .builder(H.class)
+                .delegate_o(inst, new String[]{ "forceRebuild", "shouldRebuild" })
+                .access(inst, "priorities", "getListeners", null)
+                .delegate_o(ListenerList.class, "getInstance")
+                .build();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
 
+    public interface H {
+        Object getListeners(Object o);
+        void forceRebuild(Object o);
+        boolean shouldRebuild(Object o);
+        Object getInstance(Object o, int id);
+    }
+
+    @SuppressWarnings("unchecked")
     @Override
     public void invoke(Event event) {
-        if (allListeners.remove(0) != this)
-            throw new IllegalStateException("Unexpected error : first is not self!!!");
-
-        if (!Config.eventInvokerMost) {
-            for (ListIterator<IEventListener> iterator = allListeners.listIterator(); iterator.hasNext(); ) {
-                IEventListener listener = iterator.next();
-                if (listener instanceof EventInvokerV2) {
-                    final EventInvokerV2 v2 = (EventInvokerV2) listener;
-                    if (v2.canCompress() && !v2.receiveCanceled()) {
-                        IEventListener asmListener = v2.compress();
-                        iterator.set(asmListener);
-                        target.unregister(busID, v2);
-                        target.register(busID, priorities[v2.getPriority()], asmListener);
-                    }
-                }
-            }
-        } else {
-            ClassDefiner.debug = true;
-            IntMap<List<EventInvokerV2>> nocancel = new IntMap<>(), cancel = new IntMap<>();
-
-            for (ListIterator<IEventListener> iterator = allListeners.listIterator(); iterator.hasNext(); ) {
-                IEventListener listener = iterator.next();
-                if (listener instanceof EventInvokerV2) {
-                    final EventInvokerV2 v2 = (EventInvokerV2) listener;
-                    if (v2.canCompress()) {
-                        (v2.receiveCanceled() ? cancel : nocancel).computeIfAbsentSp(v2.getPriority(), aNew).add(v2);
-                        iterator.remove();
-                    }
-                }
-            }
-
-            if (!nocancel.isEmpty()) {
-                for (IntMap.Entry<List<EventInvokerV2>> entry : nocancel.entrySet()) {
-                    final List<EventInvokerV2> list = entry.getValue();
-                    if(list.size() != 1) {
-                        for (EventInvokerV2 v2 : list)
-                            target.unregister(busID, v2);
-
-                        IEventListener asmListener = EventInvokerV2.compressAll(list, true);
-                        target.register(busID, priorities[entry.getKey()], (event1) -> {
-                            if (!event1.isCanceled()) {
-                                asmListener.invoke(event1);
-                            }
-                        });
-                    } else {
-                        allListeners.add(list.get(0));
-                    }
-                }
-            }
-
-            if (!cancel.isEmpty()) {
-                for (IntMap.Entry<List<EventInvokerV2>> entry : cancel.entrySet()) {
-                    final List<EventInvokerV2> list = entry.getValue();
-                    if(list.size() != 1) {
-                        for (EventInvokerV2 v2 : list)
-                            target.unregister(busID, v2);
-
-                        IEventListener asmListener = EventInvokerV2.compressAll(entry.getValue(), false);
-                        target.register(busID, priorities[entry.getKey()], asmListener);
-                    } else {
-                        allListeners.add(list.get(0));
-                    }
-                }
-            }
-        }
+        Object instance = Helper.getInstance(target, busID);
 
         target.unregister(busID, this);
+        if (!Helper.shouldRebuild(instance))
+            throw new IllegalStateException("Unexpected error : first is not self!!!");
+
+        List<EventInvokerV2> nocancel = new SimpleList<>(), cancel = new SimpleList<>();
+
+        for (EventPriority priority : priorities) {
+            List<IEventListener> listeners = ((List<List<IEventListener>>) Helper.getListeners(instance)).get(priority.ordinal());
+            for (int i = 0; i < listeners.size(); i++) {
+                IEventListener listener = listeners.get(i);
+                if (listener instanceof EventInvokerV2) {
+                    EventInvokerV2 v2 = (EventInvokerV2) listener;
+                    if (v2.canBatch()) {
+                        (v2.recvCancel ? cancel : nocancel).add(v2);
+                    }
+                }
+            }
+
+            if (nocancel.size() > 1) {
+                for (int i = 0; i < cancel.size(); i++) {
+                    EventInvokerV2 v2 = cancel.get(i);
+                    target.unregister(busID, v2);
+
+                    IEventListener merged = EventInvokerV2.batch(cancel, false);
+                    target.register(busID, priority, merged);
+                }
+            }
+
+            if (cancel.size() > 1) {
+                for (int i = 0; i < cancel.size(); i++) {
+                    EventInvokerV2 v2 = cancel.get(i);
+                    target.unregister(busID, v2);
+
+                    IEventListener merged = EventInvokerV2.batch(cancel, false);
+                    target.register(busID, priority, merged);
+                }
+            }
+
+            nocancel.clear();
+            cancel.clear();
+        }
     }
 }

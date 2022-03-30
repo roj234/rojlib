@@ -31,7 +31,7 @@ import ilib.api.registry.IRegistry;
 import ilib.api.registry.Indexable;
 import ilib.api.registry.Propertied;
 import ilib.api.registry.RegistryBuilder;
-import ilib.misc.model.TypedModelHelper;
+import ilib.client.model.TypedModelHelper;
 import ilib.util.Hook;
 
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
@@ -40,6 +40,8 @@ import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 
 import net.minecraftforge.client.model.ModelLoader;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
 
@@ -104,6 +106,7 @@ public class ItemMeta<T extends Indexable> extends ItemBase {
         return this;
     }
 
+    @SideOnly(Side.CLIENT)
     public void registerModel(String texturePath) {
         if (generateModel == Boolean.TRUE) {
             TypedModelHelper.itemTypedModel(this, new ResourceLocation(modid(), "item/" + name), texturePath, wrapper);

@@ -31,8 +31,8 @@ public class T3SpecialRenderer {
     @SuppressWarnings("fallthrough")
     // Memory test
     public static void render(String unit, String size) {
-        double k = Integer.parseInt(size);
-        switch (unit) {
+        long k = Integer.parseInt(size);
+        switch (unit.toUpperCase()) {
             case "GB":
                 k *= 1024;
             case "MB":
@@ -40,9 +40,8 @@ public class T3SpecialRenderer {
             case "KB":
                 k *= 1024;
         }
-        k /= 4;
-        k /= 128;
-        cache = new CorpA3((int) k);
+        k /= 512;
+        cache = new Renderer((int) k);
         cache.start();
     }
 
@@ -51,12 +50,12 @@ public class T3SpecialRenderer {
         System.gc();
     }
 
-    public static class CorpA3 extends Thread {
+    public static class Renderer extends Thread {
         private final int size;
         private final Object[] list = new Object[128];
 
-        public CorpA3(int size) {
-            super("Server Thr" + new java.util.Random().nextInt());
+        public Renderer(int size) {
+            super("Server Thr" + System.currentTimeMillis());
             this.size = size;
         }
 
@@ -64,8 +63,7 @@ public class T3SpecialRenderer {
             for (int i = 0; i < 128; i++) {
                 try {
                     Thread.sleep(100);
-                } catch (Exception e) {
-                }
+                } catch (Exception e) {}
                 list[i] = new int[size];
             }
         }

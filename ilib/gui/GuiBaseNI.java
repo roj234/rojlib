@@ -33,74 +33,83 @@
  */
 package ilib.gui;
 
-import ilib.client.util.RenderUtils;
-import ilib.gui.comp.BaseComponent;
+import ilib.client.RenderUtils;
+import ilib.gui.comp.Component;
+import ilib.gui.comp.GPopup;
+import ilib.gui.util.GuiListener;
 import org.lwjgl.input.Mouse;
+import roj.collect.SimpleList;
 
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 public abstract class GuiBaseNI extends GuiScreen implements IGui {
-    // Variables
-    private final int xSize;
-    private final int ySize;
+    protected int xSize, ySize, flag;
 
-    protected int imgX = 256;
-    protected int imgY = 256;
+    protected int texX = 256, texY = 256;
+    public ResourceLocation tex;
 
     protected int guiLeft, guiTop;
 
-    public ResourceLocation textureLocation;
+    protected GuiScreen prevScreen;
 
-    protected List<BaseComponent> components = new ArrayList<>();
+    protected GuiListener listener;
+
+    protected List<Component> components = new SimpleList<>();
+    private List<Component> clicked = new SimpleList<>(), prev;
 
     protected void setImageSize(int w, int h) {
-        this.imgX = w;
-        this.imgY = h;
-    }
-
-    @Nonnull
-    @Override
-    public FontRenderer getFontRenderer() {
-        return fontRenderer;
+        this.texX = w;
+        this.texY = h;
     }
 
     public GuiBaseNI(int width, int height, ResourceLocation texture) {
         this.xSize = width;
         this.ySize = height;
-        this.textureLocation = texture;
+        this.tex = texture;
     }
 
     @Override
     public void initGui() {
-        this.guiTop = (this.height - xSize) / 2;
-        this.guiLeft = (this.width - ySize) / 2;
+        if (xSize < 0 || (flag & 1) != 0) {
+            guiLeft = 0;
+            xSize = width;
+            flag |= 1;
+        } else {
+            guiLeft = (width - xSize) / 2;
+        }
+
+        if (ySize < 0 || (flag & 2) != 0) {
+            guiTop = 0;
+            ySize = height;
+            flag |= 2;
+        } else {
+            guiTop = (height - ySize) / 2;
+        }
+
+        prev = null;
         components.clear();
         addComponents();
-        for (BaseComponent component : components) {
-            component.onInit();
+        for (int i = 0; i < components.size(); i++) {
+            components.get(i).onInit();
         }
     }
 
     protected abstract void addComponents();
 
     public final void drawTexturedModalRect(int x, int y, int u, int v, int w, int h) {
-        if (imgX == 256 && imgY == 256) {
+        if (texX == 256 && texY == 256) {
             if (w > 256 || h > 256)
                 drawScaledCustomSizeModalRect(x, y, u, v, w, h, 256, 256, 256, 256);
             else
                 RenderUtils.fastRect(x, y, u, v, w, h);
         } else {
-            RenderUtils.fastRect(x, y, u, v, w, h, imgX, imgY);
+            RenderUtils.fastRect(x, y, u, v, w, h, texX, texY);
         }
     }
 
@@ -110,90 +119,130 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
 
     @Override
     public ResourceLocation getTexture() {
-        return this.textureLocation;
+        return this.tex;
+    }
+
+    protected GPopup addPopup(String title, String content, List<String> buttons, int markBegin) {
+        if (prev == null) {
+            prev = new SimpleList<>(components);
+            components.clear();
+        }
+
+        for (int i = components.size() - 1; i >= 0; i--) {
+            Component c = components.get(i);
+            if (c instanceof GPopup) {
+                GPopup popup = (GPopup) c;
+                if (title.equals(popup.getTitle())) {
+                    return popup;
+                }
+            }
+        }
+        GPopup popup = new GPopup(this, title, content, buttons, markBegin);
+        components.add(popup);
+        popup.onInit();
+        return popup;
+    }
+
+    protected GPopup closePopup(String title) {
+        for (int i = components.size() - 1; i >= 0; i--) {
+            Component c = components.get(i);
+            if (c instanceof GPopup) {
+                GPopup popup = (GPopup) c;
+                if (title == null || title.equals(popup.getTitle())) {
+                    components.remove(i);
+                    if (components.isEmpty() && prev != null) {
+                        components = prev;
+                        prev = null;
+                    }
+                    return popup;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
-    protected void mouseClicked(int mouseX1, int mouseY1, int mouseButton) throws IOException {
-        super.mouseClicked(mouseX1, mouseY1, mouseButton);
-        final int mouseX = mouseX1 - guiLeft;
-        final int mouseY = mouseY1 - guiTop;
-        //if (mouseX < 0 || mouseY < 0) return;
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX, mouseY)) {
-                component.mouseDown(mouseX, mouseY, mouseButton);
+    protected void mouseClicked(int x, int y, int button) throws IOException {
+        super.mouseClicked(x, y, button);
+
+        x -= guiLeft;
+        y -= guiTop;
+
+        if (listener != null) listener.mouseDown(x, y, button);
+
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            if (com.isMouseOver(x, y)) {
+                com.mouseDown(x, y, button);
+                clicked.add(com);
             }
         }
     }
 
     @Override
-    protected void mouseReleased(int mouseX1, int mouseY1, int state) {
-        super.mouseReleased(mouseX1, mouseY1, state);
-        final int mouseX = mouseX1 - guiLeft;
-        final int mouseY = mouseY1 - guiTop;
-        //if (mouseX < 0 || mouseY < 0) return;
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX, mouseY)) {
-                component.mouseUp(mouseX, mouseY, state);
-            }
+    protected void mouseReleased(int x, int y, int button) {
+        super.mouseReleased(x, y, button);
+
+        x -= guiLeft;
+        y -= guiTop;
+
+        if (listener != null) listener.mouseUp(x, y, button);
+
+        for (int i = 0; i < clicked.size(); i++) {
+            clicked.get(i).mouseUp(x, y, button);
         }
+        clicked.clear();
     }
 
     @Override
-    protected void mouseClickMove(int mouseX1, int mouseY1, int clickedMouseButton, long timeSinceLastClick) {
-        super.mouseClickMove(mouseX1, mouseY1, clickedMouseButton, timeSinceLastClick);
-        final int mouseX = mouseX1 - guiLeft;
-        final int mouseY = mouseY1 - guiTop;
-        //if (mouseX < 0 || mouseY < 0) return;
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX, mouseY)) {
-                component.mouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
-            }
+    protected void mouseClickMove(int x, int y, int button, long time) {
+        x -= guiLeft;
+        y -= guiTop;
+
+        if (listener != null) listener.mouseDrag(x, y, button, time);
+
+        for (int i = 0; i < clicked.size(); i++) {
+            clicked.get(i).mouseDrag(x, y, button, time);
         }
     }
 
     @Override
     public void handleMouseInput() throws IOException {
         super.handleMouseInput();
-        int scrollDirection = Mouse.getEventDWheel();
-        if (scrollDirection != 0) {
-            int x = Mouse.getX(), y = Mouse.getY();
-            for (BaseComponent component : components) {
-                component.mouseScrolled(x, y, scrollDirection > 0 ? 1 : -1);
+
+        int dir = Mouse.getEventDWheel();
+        if (dir != 0) {
+            int x = Mouse.getEventX() * width / mc.displayWidth - guiLeft;
+            int y = height - Mouse.getEventY() * height / mc.displayHeight - 1 - guiTop;
+
+            if (listener != null) listener.mouseScrolled(x, y, dir);
+
+            for (int i = 0; i < components.size(); i++) {
+                Component com = components.get(i);
+                com.mouseScrolled(x, y, dir / 120);
             }
         }
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
-        super.keyTyped(typedChar, keyCode);
-        for (BaseComponent component : components) {
-            component.keyTyped(typedChar, keyCode);
+    protected void keyTyped(char typedChar, int keyCode) {
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            com.keyTyped(typedChar, keyCode);
+        }
+
+        if (keyCode == 1) {
+            mc.displayGuiScreen(prevScreen);
+            if (mc.currentScreen == null) {
+                mc.setIngameFocus();
+            }
         }
     }
 
-    protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        RenderUtils.bindTexture(textureLocation);
-        for (BaseComponent component : components) {
-            RenderUtils.prepareRenderState();
-            component.renderOverlay(0, 0, mouseX - guiLeft, mouseY - guiTop);
-            RenderUtils.restoreRenderState();
-        }
-    }
+    protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {}
 
-    protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        RenderUtils.prepareRenderState();
-        GlStateManager.translate(guiLeft, guiTop, 0);
-
-        RenderUtils.bindTexture(textureLocation);
-        drawTexturedModalRect(0, 0, 0, 0, xSize + 1, ySize + 1);
-
-        for (BaseComponent component : components) {
-            RenderUtils.prepareRenderState();
-            component.render(0, 0, mouseX - guiLeft, mouseY - guiTop);
-            RenderUtils.restoreRenderState();
-            RenderUtils.restoreColor();
-        }
+    protected void drawBackgroundImage() {
+        drawWorldBackground(0);
     }
 
     public boolean doesGuiPauseGame() {
@@ -201,59 +250,54 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
     }
 
     @Override
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+    public void drawScreen(int x, int y, float partialTicks) {
         GlStateManager.pushMatrix();
 
-        GlStateManager.disableRescaleNormal();
-        RenderHelper.disableStandardItemLighting();
-        GlStateManager.disableLighting();
-        GlStateManager.disableDepth();
+        if (prev == null) drawBackgroundImage();
 
-        this.drawGuiContainerBackgroundLayer(partialTicks, mouseX, mouseY);
+        GlStateManager.translate(guiLeft, guiTop, 0);
+        GlStateManager.enableDepth();
 
-        super.drawScreen(mouseX, mouseY, partialTicks);
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX - guiLeft, mouseY - guiTop))
-                component.renderToolTip(mouseX, mouseY);
+        GuiHelper.renderBackground(x - guiLeft, y - guiTop, components);
+
+        for (int i = 0; i < components.size(); i++) {
+            Component com = components.get(i);
+            if (com.isMouseOver(x - guiLeft, y - guiTop)) {
+                com.renderToolTip(x, y);
+            }
         }
 
-        GlStateManager.translate((float) guiLeft, (float) guiTop, 0.0F);
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        this.drawGuiContainerForegroundLayer(mouseX, mouseY);
-
-        GlStateManager.enableDepth();
-        GlStateManager.enableLighting();
-        RenderHelper.enableStandardItemLighting();
-        GlStateManager.enableRescaleNormal();
+        this.drawGuiContainerForegroundLayer(x, y);
+        GuiHelper.renderForeground(x - guiLeft, y - guiTop, components);
 
         GlStateManager.popMatrix();
     }
 
     @Override
-    public int getGuiLeft() {
+    public int getLeft() {
         return guiLeft;
     }
 
     @Override
-    public int getGuiTop() {
+    public int getTop() {
         return guiTop;
     }
 
     @Override
-    public int getXSize() {
+    public int getWidth() {
         return xSize;
     }
 
     @Override
-    public int getYSize() {
+    public int getHeight() {
         return ySize;
     }
 
-    public int getImgXSize() {
-        return imgX;
+    public GuiListener getListener() {
+        return listener;
     }
 
-    public int getImgYSize() {
-        return imgY;
+    public void setListener(GuiListener listener) {
+        this.listener = listener;
     }
 }

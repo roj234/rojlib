@@ -25,12 +25,13 @@
  */
 package ilib.asm.fasterforge.anc;
 
+import net.minecraftforge.fml.common.MetadataCollection;
 import roj.asm.util.ConstantPool;
+import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
 import roj.text.StringPool;
 import roj.util.ByteList;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,9 +42,10 @@ import java.util.Map;
 public class JarInfo {
     public final Map<String, ClassInfo> classes;
     public final List<String> mainClasses;
+    public MetadataCollection mc;
 
     public JarInfo() {
-        this(new HashMap<>(), new ArrayList<>());
+        this(new MyHashMap<>(), new SimpleList<>());
     }
 
     public JarInfo(Map<String, ClassInfo> classes, List<String> mainClasses) {
@@ -65,12 +67,12 @@ public class JarInfo {
 
     public static JarInfo fromByteArray(ByteList r, StringPool pool, ConstantPool cp) {
         int len = r.readVarInt(false);
-        Map<String, ClassInfo> map = new HashMap<>(len);
+        Map<String, ClassInfo> map = new MyHashMap<>(len);
         for (int i = 0; i < len; i++) {
             map.put(pool.readString(r), ClassInfo.fromByteArray(r, pool, cp));
         }
         len = r.readVarInt(false);
-        List<String> list = new ArrayList<>(len);
+        List<String> list = new SimpleList<>(len);
         for (int i = 0; i < len; i++) {
             list.add(pool.readString(r));
         }

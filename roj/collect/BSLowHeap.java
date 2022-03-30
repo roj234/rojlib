@@ -155,10 +155,12 @@ public class BSLowHeap<T> implements List<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public T remove(int index) {
+    public T remove(int idx) {
+        if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
+
         Object[] data1 = this.entries;
-        if(size - index - 1 > 0)
-            System.arraycopy(data1, index + 1, data1, index, size - index - 1);
+        if(size - idx - 1 > 0)
+            System.arraycopy(data1, idx + 1, data1, idx, size - idx - 1);
         T t = (T) data1[--size];
         data1[size] = null;
         return t;
@@ -182,22 +184,26 @@ public class BSLowHeap<T> implements List<T> {
 
     @SuppressWarnings("unchecked")
     public T top() {
+        if (0 >= size) throw new ArrayIndexOutOfBoundsException(0);
         return (T) entries[0];
     }
 
     @SuppressWarnings("unchecked")
     public T bottom() {
+        if (0 >= size) throw new ArrayIndexOutOfBoundsException(-1);
         return (T) entries[size - 1];
     }
 
     @SuppressWarnings("unchecked")
     public T get(int idx) {
+        if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
         return (T) entries[idx];
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public T set(int idx, T el) {
+        if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
         T oel = (T) entries[idx];
         entries[idx] = el;
         return oel;

@@ -25,12 +25,12 @@
  */
 package ilib.asm.fasterforge.anc;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Multimap;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
+import roj.collect.MyHashMap;
 import roj.text.StringPool;
 import roj.util.ByteList;
+import roj.util.Helpers;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,17 +42,19 @@ import java.util.Map;
  * @since 2021/4/21 22:51
  */
 public class ClassInfo {
-    public final String internalName;
-    public final List<String> interfaces;
-    public final Multimap<String, Annotation> annotations;
+    public String internalName;
+    public List<String> interfaces;
+    public Map<String, List<Annotation>> annotations;
+
+    public ClassInfo() {}
 
     public ClassInfo(String internalName) {
         this.internalName = internalName;
         this.interfaces = new ArrayList<>();
-        this.annotations = ArrayListMultimap.create();
+        this.annotations = new MyHashMap<>();
     }
 
-    public ClassInfo(String internalName, List<String> interfaces, Multimap<String, Annotation> annotations) {
+    public ClassInfo(String internalName, List<String> interfaces, Map<String, List<Annotation>> annotations) {
         this.internalName = internalName;
         this.interfaces = interfaces;
         this.annotations = annotations;
@@ -61,11 +63,13 @@ public class ClassInfo {
     public void toByteArray(ByteList w, StringPool pool, ConstantPool cw) {
         pool.writeString(w, internalName);
         w.putVarInt(interfaces.size(), false);
-        for (String s : interfaces) {
-            pool.writeString(w, s);
+        for (int i = 0; i < interfaces.size(); i++) {
+            pool.writeString(w, interfaces.get(i));
         }
         w.putVarInt(annotations.size(), false);
-        for (Map.Entry<String, Collection<Annotation>> entry : annotations.asMap().entrySet()) {
+        System.out.println(internalName);
+        System.out.println(annotations);
+        for (Map.Entry<String, List<Annotation>> entry : annotations.entrySet()) {
             pool.writeString(w, entry.getKey());
             Collection<Annotation> as = entry.getValue();
             w.putVarInt(as.size(), false);
@@ -76,21 +80,31 @@ public class ClassInfo {
     }
 
     public static ClassInfo fromByteArray(ByteList r, StringPool pool, ConstantPool cp) {
+        System.out.println("==============");
         String internalName = pool.readString(r);
+        System.out.println("class= " + internalName);
         int len = r.readVarInt(false);
         List<String> list = new ArrayList<>(len);
         for (int i = 0; i < len; i++) {
             list.add(pool.readString(r));
         }
+        System.out.println("interface= " + list);
         len = r.readVarInt(false);
-        Multimap<String, Annotation> map = ArrayListMultimap.create(len, 1);
+        Map<String, List<Annotation>> map = new MyHashMap<>();
         for (int i = 0; i < len; i++) {
             String key = pool.readString(r);
+            System.out.println("annotation= " + key);
             int len2 = r.readVarInt(false);
+            System.out.println("vlen=" + len2);
+            System.out.println("rindexs=" + r.rIndex);
             for (int j = 0; j < len2; j++) {
-                map.put(key, Annotation.deserialize(cp, r));
+                Annotation v = Annotation.deserialize(cp, r);
+                System.out.println("ann[]=" + v);
+                map.computeIfAbsent(key, Helpers.fnArrayList()).add(v);
             }
+            System.out.println("rindexe=" + r.rIndex);
         }
+        System.out.println("==============");
         return new ClassInfo(internalName, list, map);
     }
 

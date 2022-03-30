@@ -33,6 +33,7 @@ import java.util.function.Supplier;
  * @author Roj234
  * @since  2021/1/2 14:23
  */
+@Deprecated
 @FunctionalInterface
 public interface LazyItemStack extends Supplier<ItemStack> {
     ItemStack get();

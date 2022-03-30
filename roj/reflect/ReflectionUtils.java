@@ -65,9 +65,8 @@ public final class ReflectionUtils {
      */
     public static Field getFieldValueByType(Class<?> obj, Class<?> targetClass) {
         for (Field f : getFields(obj)) {
-
             Class<?> tmp = f.getType();
-            while (tmp != Object.class) {
+            while (tmp != Object.class && tmp != null) {
                 if (tmp == targetClass) {
                     f.setAccessible(true);
                     return f;
@@ -252,7 +251,7 @@ public final class ReflectionUtils {
 
     public static List<Class<?>> getFathers(Class<?> clazz) {
         List<Class<?>> classes = new ArrayList<>();
-        while (clazz != Object.class) {
+        while (clazz != Object.class && clazz != null) {
             classes.add(clazz);
             Collections.addAll(classes, clazz.getInterfaces());
             clazz = clazz.getSuperclass();

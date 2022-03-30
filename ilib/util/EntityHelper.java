@@ -27,23 +27,16 @@
 package ilib.util;
 
 import com.google.common.base.Predicate;
+import ilib.ClientProxy;
 import ilib.entity.EntityLightningBoltMI;
 import ilib.util.BlockHelper.BresenhamLine;
-import roj.concurrent.OperationDone;
-import roj.concurrent.Ref;
-import roj.math.MathUtils;
-import roj.math.Vec2d;
-import roj.math.Vector;
-import roj.reflect.DirectAccessor;
-import roj.reflect.FieldAccessor;
-import roj.reflect.ReflectionUtils;
-import roj.util.Helpers;
-
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.BlockTrapDoor;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.*;
 import net.minecraft.entity.item.EntityBoat;
 import net.minecraft.entity.item.EntityMinecart;
@@ -63,27 +56,33 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
-
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
+import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
+import roj.collect.SimpleList;
+import roj.concurrent.OperationDone;
+import roj.concurrent.Ref;
+import roj.math.MathUtils;
+import roj.math.Vec2d;
+import roj.math.Vector;
+import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Function;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public class EntityHelper {
-    public static final Predicate<Object> alwaysTrue = (x) -> true;
-
     public static final int RT_STOP_ON_LIQUID = 1, RT_RETURN_LAST_AIR = 2;
+
     /**
      * 射线追踪
      */
@@ -95,16 +94,16 @@ public class EntityHelper {
             IBlockState state = world.getBlockState(pos);
             Block block = state.getBlock();
             if (!block.isAir(state, world, pos) && block.canCollideCheck(state, (flag & RT_STOP_ON_LIQUID) != 0)) {
-                if (block instanceof BlockLiquid && (flag & RT_STOP_ON_LIQUID) == 0) continue;
+                if ((block instanceof BlockLiquid || block instanceof IFluidBlock) && (flag & RT_STOP_ON_LIQUID) == 0) continue;
 
                 AxisAlignedBB aabb = state.getBoundingBox(world, pos);
                 if (aabb == Block.NULL_AABB) continue;
-                Vec3d nextVec = new Vec3d(itr.x, itr.y, itr.z);
-                Vec3d currVec = nextVec.subtract(itr.stepX, itr.stepY, itr.stepZ);
-                RayTraceResult ic = aabb.calculateIntercept(currVec, nextVec);
+                Vec3d next = new Vec3d(itr.x - pos.getX(), itr.y - pos.getY(), itr.z - pos.getZ());
+                Vec3d prev = next.subtract(itr.stepX, itr.stepY, itr.stepZ);
+                RayTraceResult ic = aabb.calculateIntercept(prev, next);
                 if (ic != null) {
                     if ((flag & RT_RETURN_LAST_AIR) != 0) {
-                        return new RayTraceResult(Type.MISS, currVec.subtract(itr.stepX, itr.stepY, itr.stepZ), null,
+                        return new RayTraceResult(Type.MISS, prev.subtract(itr.stepX, itr.stepY, itr.stepZ), null,
                         itr.pos.setPos(itr.x - itr.stepX, itr.y - itr.stepY, itr.z - itr.stepZ));
                     }
                     return new RayTraceResult(Type.BLOCK, ic.hitVec, ic.sideHit, pos);
@@ -114,38 +113,34 @@ public class EntityHelper {
         return null;
     }
 
-    public static Entity reyTraceEntity(World w, Vector begin, Vector end, double inacc) {
-        BresenhamLine itr = new BresenhamLine(begin.x(), begin.y(), begin.z(), end.x(), end.y(), end.z());
+    public static Entity rayTraceEntity(World w, Vector begin, Vector end, Entity excludes) {
+        List<Entity> entities = rayTraceEntity(w, begin, end, 0.4f, 1, Collections.singleton(excludes));
+        return entities.isEmpty() ? null : entities.get(0);
+    }
 
-        List<Entity> list = new ArrayList<>();
+    public static List<Entity> rayTraceEntity(World w, Vector begin, Vector end, float range, int max, Collection<? extends Entity> excludes) {
+        BresenhamLine itr = new BresenhamLine(begin.x(), begin.y(), begin.z(), end.x(), end.y(), end.z());
 
         AxisAlignedBB aabb = new AxisAlignedBB(itr.pos);
         for (FieldAccessor fa : AABB_FA) fa.setInstance(aabb);
 
         Chunk ch = null;
+        List<Entity> list = new SimpleList<>();
+        int size = 0;
+
+        Predicate<Entity> p = (e) -> list.size() < max && !excludes.contains(e);
         while (itr.hasNext()) {
             BlockPos pos = itr.next();
             if (ch == null || pos.getX() >> 4 != ch.x || pos.getZ() >> 4 != ch.z) {
                 ch = w.getChunk(pos);
             }
 
-            grow0(pos, inacc);
+            grow0(pos, range);
 
-            ch.getEntitiesOfTypeWithinAABB(Entity.class, aabb, list, alwaysTrue);
-            if (!list.isEmpty()) {
-                Entity nearest = null;
-                for (int i = 0; i < list.size(); i++) {
-                    Entity entity = list.get(i);
-                    double j = entity.getDistanceSq(pos);
-                    if (j < inacc) {
-                        inacc = j;
-                        nearest = entity;
-                    }
-                }
-                return nearest;
-            }
+            ch.getEntitiesOfTypeWithinAABB(Entity.class, aabb, list, p);
+            if (list.size() >= max) return list;
         }
-        return null;
+        return list;
     }
 
     public static List<Entity> getEntitiesInRange(Entity entity, double rx, double ry, double rz, @Nullable Predicate<? super Entity> filter) {
@@ -187,27 +182,15 @@ public class EntityHelper {
 
             roj.math.Vec3d dir = direction(src);
 
-            double angle = Math.toDegrees(ray.angle(dir));
-            double fov_angle = Math.min(FOV, FOV_FOCUS_NORMAL / ray.len());
+            double angle = Math.toDegrees(Math.acos(ray.angle(dir)));
+            double fov_angle = FOV * Math.pow(ray.len(), -0.1);
             if (angle > fov_angle) continue;
 
             double l2 = ray.len2();
             if (null != rayTraceBlock(src.world, srcEye, ray.add(srcEye), 0) ||
-                null != reyTraceEntity(src.world, srcEye, ray, Math.max(src.width, src.height))) continue;
+                !rayTraceEntity(src.world, srcEye, ray, Math.max(src.width, src.height), 1, Collections.emptyList()).isEmpty()) continue;
             min = src;
             minDist = l2;
-            //            Vec3d ray = eyeVec.subtract(targetVec);
-            //
-            //            double len = ray.length();
-            //            double yaw = Math.acos(ray.y / len);
-            //            double pitch = Math.atan2(-ray.x, ray.z);
-            //
-            //            if (Math.abs(yaw - eyeYaw) < Math.PI / 36 && Math.abs(pitch - eyePitch) < 2 * Math.PI / 45) { // 看着
-            //                if (len < minDist) {
-            //                    min = src;
-            //                    minDist = len;
-            //                }
-            //            }
         }
         return min;
     }
@@ -215,63 +198,123 @@ public class EntityHelper {
     /**
      * 观察者是否能看得见目标
      */
-    public static boolean isLooking(EntityLivingBase entity, Entity target) {
-        // 不同世界无法判断
+    public static boolean canSee(EntityLivingBase entity, Entity target) {
         if (entity.world != target.world) return false;
-
-        // 获取目标位置
-        Vec3d targetPos = target.getPositionVector();
-
-        // 若目标非活物，这里只判断底部
-        // 若目标是活物，则同时检查目标的头和脚以减小误差
-        // 可以再加上几个身体的判断，服务器资源的消耗和判断的准确性自己把握
-        return canSee(entity, targetPos, 96, SEE_EYE) || (target instanceof EntityLivingBase &&
-                canSee(entity, targetPos.add(0, target.getEyeHeight(), 0), 96, SEE_EYE));
+        return canSee(entity, target.getEntityBoundingBox(), FOV, 64);
     }
 
     /**
      * 观察者是否在盯着目标的头看
      */
-    public static boolean isLookingHead(EntityLivingBase entity, EntityLivingBase target) {
+    public static boolean canSeeHead(EntityLivingBase entity, EntityLivingBase target) {
         if (entity.world != target.world) return false;
-        Vec3d targetPos = new Vec3d(target.posX, target.posY + target.getEyeHeight(), target.posZ);
-        return canSee(entity, targetPos, 96, SEE_EYE);
+        // 盯着头,FOV设小一点
+        return canSee(entity, vec(target).add(0, target.getEyeHeight(), 0), 4, 64);
     }
 
-    public static boolean canSee(Entity src, Entity dst, double maxDist, int flag) {
-        // 附加判断：同一个世界
-        return src.world == dst.world && canSee(src, dst.getPositionVector(), maxDist, flag);
+    public static boolean canPlayerSee(AxisAlignedBB box) {
+        Minecraft mc = ClientProxy.mc;
+        GameSettings set = mc.gameSettings;
+        float fov = set.fovSetting;
+        if (set.thirdPersonView == 1) {
+            System.out.println("TPV = 1");
+        } else if (set.thirdPersonView == 2) {
+            System.out.println("TPV = 2");
+        }
+        return canSee(mc.player, box, fov, set.renderDistanceChunks << 4);
     }
 
-    // 视野最大角度, 视野焦点
-    public static final float FOV = 60, FOV_FOCUS_NORMAL = 25;
-    public static final int SEE_EYE = 1;
+    // 实体默认视野角度
+    public static final float FOV = 70;
 
-    public static boolean canSee(Entity src, Vec3d pos, double maxDist, int flag) {
-        // 1. 检测距离是否太远
-        if (src.getDistanceSq(pos.x, pos.y, pos.z) > maxDist * maxDist) return false;
+    public static boolean canSee(Entity entity, AxisAlignedBB box, float fov, float maxDist) {
+        maxDist *= maxDist;
 
-        roj.math.Vec3d srcEye = new roj.math.Vec3d(src.posX, src.posY + ((flag & SEE_EYE) != 0 ? src.getEyeHeight() : 0), src.posZ);
+        roj.math.Vec3d srcEye = new roj.math.Vec3d(entity.posX, entity.posY + entity.getEyeHeight(), entity.posZ);
 
-        // region 2. 检测无障碍物情况下能否看到
-        // 原点射向目标的直线
-        roj.math.Vec3d ray = new roj.math.Vec3d(pos.x - srcEye.x,
-                                                pos.y - srcEye.y,
-                                                pos.z - srcEye.z);
+        if (srcEye.x > box.minX && srcEye.x < box.maxY &&
+            srcEye.y > box.minY && srcEye.y < box.maxY &&
+            srcEye.z > box.minZ && srcEye.z < box.maxZ) return true;
+
         // 方位角
+        roj.math.Vec3d dir = direction(entity);
+
+        double sx = MathUtils.clamp(srcEye.x, box.minX, box.maxX),
+               sy = MathUtils.clamp(srcEye.y, box.minY, box.maxY),
+               sz = MathUtils.clamp(srcEye.z, box.minZ, box.maxZ);
+
+        for (int i = 0; i < 7; i++) {
+            double x = sx;
+            double y = sy;
+            double z = sz;
+
+            // 六面最接近玩家的点, 和视线指向的角落
+            switch (i) {
+                case 0:
+                    x = box.maxX;
+                    break;
+                case 1:
+                    x = box.minX;
+                    break;
+                case 2:
+                    y = box.maxY;
+                    break;
+                case 3:
+                    y = box.minY;
+                    break;
+                case 4:
+                    z = box.maxZ;
+                    break;
+                case 5:
+                    z = box.minZ;
+                    break;
+                case 6:
+                    x = dir.x < 0 ? box.minX : box.maxX;
+                    y = dir.y < 0 ? box.minY : box.maxY;
+                    z = dir.z < 0 ? box.minZ : box.maxZ;
+                    break;
+            }
+
+            // roj.opengl.render.ArenaRenderer.INSTANCE.render(new roj.math.Vec3d(x, y, z), new roj.math.Vec3d(x, y, z), 1);
+            if (entity.getDistanceSq(x, y, z) > maxDist) continue;
+
+            // 原点射向目标的直线
+            roj.math.Vec3d ray = new roj.math.Vec3d(x - srcEye.x + 0.5,
+                                                    y - srcEye.y + 0.5,
+                                                    z - srcEye.z + 0.5);
+
+            // 视线与目标连线之间的夹角
+            double angle = Math.toDegrees(Math.acos(ray.angle(dir)));
+            // 投影方式下视线角度最大值
+            double fov_angle = fov * Math.pow(ray.len(), -0.1);
+
+            // 如果角度在视野内
+            if (angle <= fov_angle) return true;
+        }
+
+        return false;
+    }
+
+    public static boolean canSee(Entity src, Vector pos, float fov, float maxDist) {
+        // 检测无障碍能否看到
+        maxDist *= maxDist;
+
+        roj.math.Vec3d srcEye = new roj.math.Vec3d(src.posX, src.posY + src.getEyeHeight(), src.posZ);
+
         roj.math.Vec3d dir = direction(src);
 
-        // 视线与目标连线之间的夹角
-        double angle = Math.toDegrees(ray.angle(dir));
-        // 投影方式下视线角度最大值: 默认FOV / 距离
-        double fov_angle = Math.min(FOV, FOV_FOCUS_NORMAL / ray.len());
+        if (src.getDistanceSq(pos.x(), pos.y(), pos.z()) > maxDist) return false;
 
-        // 如果角度超出了聚焦视野最大角度
+        roj.math.Vec3d ray = new roj.math.Vec3d(pos.x() - srcEye.x,
+                                                pos.y() - srcEye.y,
+                                                pos.z() - srcEye.z);
+
+        double angle = Math.toDegrees(Math.acos(ray.angle(dir)));
+        double fov_angle = fov * Math.pow(ray.len(), -0.1);
+
         if (angle > fov_angle) return false;
-        // endregion
 
-        // 3. 检测有障碍物的情况下能否看到
-        // Note: ray 用完了，不如省去一个对象
+        // 检测有障碍能否看到
         return null == rayTraceBlock(src.world, srcEye, ray.add(srcEye), 0);
     }
 
@@ -308,37 +351,13 @@ public class EntityHelper {
         ray.y = 0;
         facing.y = 0;
 
-        double angle = Math.toDegrees(ray.angle(facing));
+        double angle = Math.toDegrees(Math.acos(ray.angle(facing)));
         System.out.println("Angle " + angle);
 
         // 若射线方向跟目标面向方向夹角小于露出背部的最大角度就认为是背对了
         // 这里我没有判断目标是否在观察者视野里，背对背也是存在的情况
         return angle < max;
     }
-
-    public static void select(Entity source, double range, double max) {
-        roj.math.Vec3d facing = direction(source);
-
-        List<Entity> ex = Collections.emptyList();
-        for (Entity entity : ex) {
-            if (isInAngle(entity, source, ANGLE_BACK)) {
-                roj.math.Vec3d ray = new roj.math.Vec3d(entity.posX - source.posX,
-                                                        entity.posY - source.posY,
-                                                        entity.posZ - source.posZ);
-                double dot = ray.dot(facing);
-                double rLenSq = ray.len2();
-                double cosSq = dot * dot / rLenSq;
-                double sinSq = 1.0 - cosSq;
-                double distSq = rLenSq * sinSq;
-                if (distSq >= max) {
-                    continue;
-                }
-                // yes
-            }
-        }
-    }
-
-
 
     private static final FieldAccessor[] AABB_FA;
     static {
@@ -350,14 +369,6 @@ public class EntityHelper {
     }
 
     public static void grow0(BlockPos pos, double size) {
-        /**
-         public final double minX;
-         public final double minY;
-         public final double minZ;
-         public final double maxX;
-         public final double maxY;
-         public final double maxZ;
-         */
         AABB_FA[0].setDouble(pos.getX() - size);
         AABB_FA[1].setDouble(pos.getY() - size);
         AABB_FA[2].setDouble(pos.getZ() - size);
@@ -422,14 +433,6 @@ public class EntityHelper {
         }
         return entity;
     }
-
-
-
-    public static Function<World, ? extends Entity> createEntityFactory(Class<? extends Entity> cls) {
-        return Helpers.cast(DirectAccessor.builder(Function.class).construct(cls, "apply", World.class).build());
-    }
-
-
 
     public static void dismountEntity(EntityLivingBase rider, Entity riding) {
         if (!riding.isDead && rider.world.getBlockState(riding.getPosition()).getMaterial() != Material.PORTAL) {
@@ -578,6 +581,18 @@ public class EntityHelper {
                 a.getZOffset() + c.getZOffset());
         csm.accept(d.getXOffset(), d.getZOffset());
         csm.accept(a.getXOffset(), a.getZOffset());
+    }
+
+    public static roj.math.Vec3d vec(Vec3d v) {
+        return new roj.math.Vec3d(v.x, v.y, v.z);
+    }
+
+    public static roj.math.Vec3d vec(Entity v) {
+        return new roj.math.Vec3d(v.posX, v.posY, v.posZ);
+    }
+
+    public static roj.math.Vec3i vec(Vec3i v) {
+        return new roj.math.Vec3i(v.getX(), v.getY(), v.getZ());
     }
 
     private interface BiIntConsumer {

@@ -36,7 +36,7 @@ import javax.annotation.Nonnull;
  * @author Roj234
  * @since  2021/1/13 13:03
  */
-public class SlotFiltered extends SlotNIL {
+public class SlotFiltered extends SlotFlagged {
     private final IItemFilter valid;
     private final int id;
 

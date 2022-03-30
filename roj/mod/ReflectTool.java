@@ -279,27 +279,6 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
             panelField.setLayout(null);
             panelField.setBounds(0, 332, 600, 300);
 
-            JTextField searchField = new JTextField(20);
-            searchField.setBounds(2,2,100,25);
-            add(searchField);
-
-            JButton search = new JButton("过滤");
-            search.setBounds(124, 2, 80, 25);
-            ActionListener l = e -> {
-                init(clazz, panelMethod, panelField, searchField.getText().trim().toLowerCase());
-            };
-            search.addActionListener(l);
-            add(search);
-
-            searchField.addKeyListener(new KeyAdapter() {
-                @Override
-                public void keyTyped(KeyEvent keyEvent) {
-                    if (keyEvent.getKeyChar() == '\n') {
-                        l.actionPerformed(null);
-                    }
-                }
-            });
-
             init(clazz, panelMethod, panelField, null);
 
             JScrollPane paneM = new JScrollPane();
@@ -318,6 +297,29 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 
             getContentPane().add(paneM, BorderLayout.PAGE_START);
             getContentPane().add(paneF, BorderLayout.PAGE_END);
+
+            JTextField searchField = new JTextField(20);
+            searchField.setBounds(2,2,100,25);
+            add(searchField);
+
+            JButton search = new JButton("过滤");
+            search.setBounds(124, 2, 80, 25);
+            ActionListener l = e -> {
+                init(clazz, panelMethod, panelField, searchField.getText().trim().toLowerCase());
+                paneF.scrollRectToVisible(new Rectangle());
+                paneM.scrollRectToVisible(new Rectangle());
+            };
+            search.addActionListener(l);
+            add(search);
+
+            searchField.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyTyped(KeyEvent keyEvent) {
+                    if (keyEvent.getKeyChar() == '\n') {
+                        l.actionPerformed(null);
+                    }
+                }
+            });
 
             pack();
             setVisible(true);

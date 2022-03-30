@@ -26,15 +26,14 @@
 
 package ilib.world.saver;
 
+import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.util.PlayerUtil;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.network.PacketBuffer;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.datafix.DataFixer;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
@@ -47,11 +46,9 @@ import net.minecraftforge.event.world.ChunkEvent;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class ChunkSavingProvider extends ChunkProviderClient {
@@ -108,12 +105,6 @@ public class ChunkSavingProvider extends ChunkProviderClient {
                 super.onUnload();
                 ChunkSavingProvider.this.saveChunk(this);
             }
-
-            @Override
-            public void addTileEntity(BlockPos pos, TileEntity tileEntityIn) {
-                super.addTileEntity(pos, tileEntityIn);
-                ChunkSavingProvider.this.saveChunk(this);
-            }
         };
         this.loadedChunks.put(ChunkPos.asLong(x, z), chunk);
         MinecraftForge.EVENT_BUS.post(new ChunkEvent.Load(chunk));
@@ -133,7 +124,7 @@ public class ChunkSavingProvider extends ChunkProviderClient {
         }
     }
 
-    public void saveWorld() {
+    public int saveWorld() {
         this.loader.writeNextIO();
         final WorldInfo wInfo = world.getWorldInfo();
         wInfo.setBorderSize(world.getWorldBorder().getDiameter());
@@ -148,6 +139,21 @@ public class ChunkSavingProvider extends ChunkProviderClient {
         //world.getSaveHandler().saveWorldInfoWithPlayer(world.getWorldInfo(), world.server.getPlayerList().getHostPlayerData());
         world.getSaveHandler().saveWorldInfoWithPlayer(wInfo, null);
         world.mapStorage.saveAllData();
+
+        int saved = 0;
+        for (Chunk chunk : this.loadedChunks.values()) {
+            if (chunk.needsSaving(true)) {
+                try {
+                    this.loader.saveChunk(this.world, chunk);
+                    chunk.setModified(false);
+                    saved++;
+                } catch (Throwable e) {
+                    ImpLib.logger().error(e);
+                }
+            }
+        }
+
+        return saved;
     }
 
     @Nonnull
@@ -162,10 +168,10 @@ public class ChunkSavingProvider extends ChunkProviderClient {
     public boolean tick() {
         long i = System.currentTimeMillis();
 
-        if(i - lastTime > 2000) {
+        if(i - lastTime > 5000) {
             lastTime = i;
-            saveWorld();
-            PlayerUtil.sendTo(null, "[WS]2s/IO完毕");
+            int saved = saveWorld();
+            ClientProxy.mc.ingameGUI.setOverlayMessage("WorldSaver: 自动保存完毕(" + saved + ")", true);
         }
 
         for (Chunk chunk : this.loadedChunks.values()) {

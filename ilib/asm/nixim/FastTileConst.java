@@ -27,23 +27,25 @@ package ilib.asm.nixim;
 
 import ilib.Config;
 import ilib.ImpLib;
+import ilib.asm.util.MCHooks;
 import ilib.asm.util.TileEntityCreator;
 import ilib.util.freeze.FreezedTileEntity;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.Shadow;
-import roj.collect.MyHashMap;
-import roj.reflect.DirectAccessor;
-
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.registry.RegistryNamespaced;
 import net.minecraft.world.World;
-
 import net.minecraftforge.fml.common.FMLLog;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+import roj.collect.MyHashMap;
+import roj.collect.ToIntMap;
+import roj.reflect.DirectAccessor;
 
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.Map;
 
 /**
@@ -53,45 +55,64 @@ import java.util.Map;
 @Nixim("net.minecraft.tileentity.TileEntity")
 abstract class FastTileConst extends TileEntity {
     @Copy
-    public static Map<String, ilib.asm.util.TileEntityCreator> tileEntityCreator;
+    static Map<String, ilib.asm.util.TileEntityCreator> tileEntityCreator;
+    @Copy(staticInitializer = "initTC")
+    static RandomAccessFile tileCache;
+
+    static void initTC() {
+        tileEntityCreator = new MyHashMap<>();
+        try {
+            tileCache = new RandomAccessFile("Implib_FTC.bin", "rw");
+            ToIntMap<String> map = new ToIntMap<>();
+            TileEntityCreator creator = (TileEntityCreator) MCHooks.batchGenerate(tileCache, false, map);
+            if (creator != null) {
+                for (ToIntMap.Entry<String> entry : map.selfEntrySet()) {
+                    TileEntityCreator c = (TileEntityCreator) creator.clone();
+                    c.setId(entry.v);
+                    tileEntityCreator.put(entry.k, c);
+                }
+                System.out.println("使用BatchGen节省了 " + map.size() + " 个无用的class");
+            }
+            tileCache.seek(0);
+            tileCache.writeInt(0);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     @Shadow("field_190562_f")
     private static RegistryNamespaced<ResourceLocation, Class<? extends TileEntity>> REGISTRY;
 
     @Inject("func_190560_a")
     public static void register(String id, Class<? extends TileEntity> clazz) {
-        if (tileEntityCreator == null) {
-            tileEntityCreator = new MyHashMap<>();
+        if (tileCache != null) {
+            try {
+                MCHooks.batchAdd(tileCache, id, clazz);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        ResourceLocation loc = new ResourceLocation(id);
-
-        REGISTRY.putObject(loc, clazz);
-    }
-
-    @Copy
-    private static ilib.asm.util.TileEntityCreator createSupplierFor(Class<? extends TileEntity> clazz) {
-        return DirectAccessor.builder(TileEntityCreator.class)
-                             .construct(clazz, "get")
-                             .build();
+        REGISTRY.putObject(new ResourceLocation(id), clazz);
     }
 
     @Inject("func_190200_a")
     public static TileEntity create(World worldIn, NBTTagCompound compound) {
-        TileEntity tile = null;
         String id = compound.getString("id");
-        TileEntityCreator supplier;
 
         if (Config.disableTileEntities.contains(id)) {
             ImpLib.logger().warn("已根据配置文件 *删除* 了位于 " + compound.getInteger("x") + ',' + compound.getInteger("y") + ',' + compound.getInteger("z") + " 的实体的所有数据!.");
             return null;
         }
 
+        TileEntity tile = null;
         try {
-            supplier = tileEntityCreator.get(id);
+            TileEntityCreator supplier = tileEntityCreator.get(id);
             if (supplier == null) {
                 Class<? extends TileEntity> tileCz = REGISTRY.getObject(new ResourceLocation(id));
                 if (tileCz != null) {
-                    tileEntityCreator.put(id, supplier = createSupplierFor(tileCz));
+                    tileEntityCreator.put(id, supplier = DirectAccessor.builder(TileEntityCreator.class)
+                                                                       .construct(tileCz, "get")
+                                                                       .build());
                 }
             }
             if (supplier != null) {

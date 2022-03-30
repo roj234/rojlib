@@ -127,6 +127,11 @@ public class IntList implements Iterable<Integer> {
         return true;
     }
 
+    public void trimToSize() {
+        if (list.length != size)
+            list = Arrays.copyOf(list, size);
+    }
+
     public void addAll(IntList il) {
         addAll(il.list, il.size);
     }

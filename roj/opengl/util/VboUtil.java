@@ -33,11 +33,11 @@ public class VboUtil {
 
         arbVbo = !cap.OpenGL15 && cap.GL_ARB_vertex_buffer_object;
         if (vboSupported = cap.OpenGL15 || arbVbo) {
-            if (arbVbo) {
-                System.out.println("VBO: OK, Using ARB");
-            } else {
-                System.out.println("VBO: OK, Using GL 1.5");
-            }
+//            if (arbVbo) {
+//                System.out.println("VBO: OK, Using ARB");
+//            } else {
+//                System.out.println("VBO: OK, Using GL 1.5");
+//            }
             GL_STATIC_DRAW = 35044;
             GL_ARRAY_BUFFER = 34962;
         } else {

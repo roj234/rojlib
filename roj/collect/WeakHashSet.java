@@ -26,7 +26,6 @@
 
 package roj.collect;
 
-import roj.concurrent.OperationDone;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
@@ -69,7 +68,7 @@ public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
     }
 
     protected Entry[] entries;
-    protected int size = 0;
+    protected int size = 0, gc_ed;
 
     int length = 2;
 
@@ -95,7 +94,6 @@ public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
             resize();
     }
 
-
     private static class SetItr<K> extends MapItr<Entry> implements Iterator<K> {
         public SetItr(WeakHashSet<K> map) {
             super(map.entries, map);
@@ -117,6 +115,7 @@ public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
 
     @Override
     public int size() {
+        removeClearedEntry();
         return hasNull ? size + 1 : size;
     }
 
@@ -131,6 +130,8 @@ public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
     }
 
     public void resize() {
+        removeClearedEntry();
+
         Entry[] newEntries = new Entry[length];
         Entry entry;
         Entry next;
@@ -311,14 +312,17 @@ public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
 
     public void removeClearedEntry() {
         Entry entry;
+        o:
         while ((entry = (Entry) queue.poll()) != null) {
+            gc_ed++;
+
             Entry curr = entries[indexFor(entry.hash)];
             Entry prev = null;
             while (curr != entry) {
+                if (curr == null) continue o;
+
                 prev = curr;
                 curr = curr.next;
-                if (curr == null)
-                    throw OperationDone.NEVER;
             }
 
             if (prev == null) {

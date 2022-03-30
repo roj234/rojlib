@@ -146,7 +146,7 @@ final class ATHelper {
                 if (is != null) {
                     return AccessTransformer.openSome(is, names);
                 }
-            } catch (IOException e) {
+            } catch (Throwable e) {
                 e.printStackTrace();
             }
         }

@@ -30,17 +30,20 @@ import ilib.api.recipe.IRecipe;
 import ilib.api.recipe.MultiInputRecipe;
 import ilib.fluid.handler.IFluidProvider;
 import ilib.util.InventoryUtil;
-import net.minecraft.item.ItemStack;
-import net.minecraftforge.oredict.OreDictionary;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.util.Helpers;
 import roj.util.Idx;
+
+import net.minecraft.item.ItemStack;
+
+import net.minecraftforge.oredict.OreDictionary;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PrimitiveIterator;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -99,7 +102,7 @@ public class StdOreRecipe extends AbstractItemRecipe implements MultiInputRecipe
             if (stack.isEmpty())
                 throw new NullPointerException("Non-consume stack is really empty");
             if (keepInputIds == null) {
-                keepInputIds = new LongBitSet(this.input.size() + 1);
+                keepInputIds = new MyBitSet(this.input.size() + 1);
             }
             keepInputIds.add(this.input.size());
         }

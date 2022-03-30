@@ -25,41 +25,17 @@
  */
 
 package ilib.api;
-/**
- * No description provided
- *
+
+import ilib.tile.FieldSyncer;
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public interface Syncable {
-    // GUI
-    void setServerOnlyField(int id, int value);// MC -> C
+    FieldSyncer getSyncHandler();
 
-    int getServerOnlyField(int id);
-
-    int getServerOnlyFieldCount();
-
-    // Server data packet
-    int getServerField(int id);
-
-    void setServerField(int id, int value);// S->C
-
-    int getServerFieldCount();
-
-    // Client data packet
-    int getClientField(int id);
-
-    void setClientField(int id, int value);// C->S
-
-    int getClientFieldCount();
-
-    //
-    void manualSyncToServer();
-
-    void manualSyncToClient();
-
-    void manualSyncToClientSO();
-
-    //boolean hasChange();
+    int getFieldCount1();
+    void getFieldInfo(int[] array);
+    void setFieldInfo(int id, int val);
 }

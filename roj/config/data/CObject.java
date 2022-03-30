@@ -38,14 +38,23 @@ import java.util.Map;
  */
 public final class CObject<T> extends CMapping {
     public T value;
+    public Serializers ser;
 
     public CObject(T object) {
         this.value = object;
+        ser = Serializers.DEFAULT;
+    }
+
+    public CObject(T object, Serializers ser) {
+        this.value = object;
+        this.ser = ser;
     }
 
     @SuppressWarnings("unchecked")
-    public CObject(Map<String, CEntry> map, Serializer<?> deser) {
+    public CObject(Map<String, CEntry> map, Serializers ser, Serializer<?> deser) {
         super(map);
+        this.ser = ser;
+        // todo add ser putfield
         this.value = (T) deser.deserialize(this);
     }
 
@@ -71,13 +80,15 @@ public final class CObject<T> extends CMapping {
         map.clear();
         if (null != value) {
             map.put("==", new CString(value.getClass().getName()));
-            Serializers.DEFAULT.find(value.getClass().getName()).serialize(this, value);
+            Serializer<Object> s = ser.find(value.getClass().getName());
+            if (s == null) throw new IllegalArgumentException("Serializers " + ser + " unable to find a serializer for " + value);
+            s.serialize(this, value);
         }
     }
 
     @SuppressWarnings("unchecked")
     public void deserialize() {
-        value = (T) Serializers.DEFAULT.find(getString("==")).deserialize(this);
+        value = (T) ser.find(getString("==")).deserialize(this);
     }
 
     @Override
@@ -123,6 +134,7 @@ public final class CObject<T> extends CMapping {
             w.put((byte) Type.NULL.ordinal());
         } else {
             int i = w.wIndex();
+            serialize();
             super.toBinary(w, struct);
             if (w.get(i) == Type.MAP.ordinal())
                 w.put(i, (byte) Type.OBJECT.ordinal());

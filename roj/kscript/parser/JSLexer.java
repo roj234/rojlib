@@ -25,9 +25,8 @@
  */
 package roj.kscript.parser;
 
-import roj.collect.IBitSet;
 import roj.collect.IntList;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.config.ParseException;
 import roj.config.word.AbstLexer;
 import roj.config.word.LineHandler;
@@ -45,7 +44,7 @@ import java.util.Arrays;
  * @since  2020/10/3 19:20
  */
 public class JSLexer extends AbstLexer {
-    public static final IBitSet JS_SPECIAL = LongBitSet.from("+-*/()!~`@#%^&=,<>.?:;|[]{}");
+    public static final MyBitSet JS_SPECIAL = MyBitSet.from("+-*/()!~`@#%^&=,<>.?:;|[]{}");
 
     public boolean acceptsNumber;
 

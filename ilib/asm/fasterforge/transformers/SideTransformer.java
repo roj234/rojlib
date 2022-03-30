@@ -26,6 +26,8 @@
 package ilib.asm.fasterforge.transformers;
 
 import ilib.api.ContextClassTransformer;
+import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodSimple;
@@ -40,9 +42,6 @@ import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeDynInsnNode;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.Context;
-
-import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
-import net.minecraftforge.fml.relauncher.SideOnly;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -72,7 +71,6 @@ public class SideTransformer implements ContextClassTransformer {
             if (remove(pool, method.attrByName("RuntimeVisibleAnnotations"), SIDE)) {
                 it.remove();
                 lambdaGatherer.accept(method);
-                System.out.println("Remove method " + method.name.getString());
             }
         }
 

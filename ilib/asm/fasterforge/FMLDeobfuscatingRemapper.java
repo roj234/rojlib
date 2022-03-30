@@ -26,6 +26,9 @@
 package ilib.asm.fasterforge;
 
 import LZMA.LzmaInputStream;
+import net.minecraft.launchwrapper.LaunchClassLoader;
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.patcher.ClassPatchManager;
 import org.objectweb.asm.commons.Remapper;
 import roj.asm.Parser;
 import roj.asm.tree.AccessData;
@@ -38,11 +41,6 @@ import roj.mapper.Mapping;
 import roj.mapper.Util;
 import roj.mapper.util.Desc;
 import roj.util.Helpers;
-
-import net.minecraft.launchwrapper.LaunchClassLoader;
-
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.patcher.ClassPatchManager;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -61,6 +59,7 @@ public class FMLDeobfuscatingRemapper extends Remapper implements IFDAccessPort 
     private ConstMapper mapping;
 
     private FMLDeobfuscatingRemapper() {
+        FMLLog.bigWarning("ok");
     }
 
     public void setupLoadOnly(String deobfFileName, boolean loadAll) {

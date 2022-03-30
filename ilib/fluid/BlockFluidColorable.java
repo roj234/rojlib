@@ -27,17 +27,17 @@
 package ilib.fluid;
 
 import ilib.api.BlockColor;
+
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
+
 import net.minecraftforge.fluids.BlockFluidClassic;
 import net.minecraftforge.fluids.Fluid;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class BlockFluidColorable extends BlockFluidClassic implements BlockColor {
@@ -48,7 +48,7 @@ public class BlockFluidColorable extends BlockFluidClassic implements BlockColor
         this.fluid = fluid;
     }
 
-    public int getColorMultiplier(IBlockState state, IBlockAccess worldIn, BlockPos pos, int tintIndex) {
+    public int getColor(IBlockState state, IBlockAccess worldIn, BlockPos pos, int tintIndex) {
         return fluid.getColor();
     }
 }

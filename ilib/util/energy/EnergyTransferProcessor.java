@@ -28,19 +28,20 @@ package ilib.util.energy;
 
 import ilib.ClientProxy;
 import ilib.ImpLib;
-import ilib.api.energy.IMEnergy;
+import ilib.api.energy.METile;
 import ilib.capabilities.Capabilities;
-import ilib.client.renderer.ArenaRenderer;
 import ilib.client.renderer.WaypointRenderer;
 import ilib.math.FastPath;
 import ilib.math.Section;
 import ilib.util.DimensionHelper;
+import ilib.util.EntityHelper;
 import ilib.util.ItemUtils;
 import ilib.util.PlayerUtil;
 import org.apache.logging.log4j.Level;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.math.MathUtils;
+import roj.opengl.render.ArenaRenderer;
 
 import net.minecraft.nbt.NBTTagByteArray;
 import net.minecraft.nbt.NBTTagCompound;
@@ -88,7 +89,7 @@ public final class EnergyTransferProcessor implements Runnable {
         enqueueLock();
         for (IntMap.Entry<Network> ent : available.entrySet()) {
             BlockPos[] mm = ent.getValue().aabb.minMaxBlock();
-            ArenaRenderer.INSTANCE.render(mm[0], mm[1], event.getPartialTicks(), true);
+            ArenaRenderer.INSTANCE.render(EntityHelper.vec(mm[0]), EntityHelper.vec(mm[1]), event.getPartialTicks());
         }
         releaseLock();
     }
@@ -213,9 +214,9 @@ public final class EnergyTransferProcessor implements Runnable {
         if (te == null || te.isInvalid()) {
             throw new IllegalArgumentException("Invalid or null TileEntity");
         }
-        IMEnergy im = te.getCapability(Capabilities.MENERGY_TILE, null);
+        METile im = te.getCapability(Capabilities.MENERGY_TILE, null);
         if (im == null) {
-            ImpLib.logger().warn("Not IMEnergy tile " + te.getClass().getName());
+            ImpLib.logger().warn("Not ME tile " + te.getClass().getName());
             return;
         }
         if (te.getWorld() == null) {
@@ -234,8 +235,8 @@ public final class EnergyTransferProcessor implements Runnable {
 
         Network network = fastPath.get(world, te.getPos());
         if (network == null) {
+            if (1 == 1) return;
             network = new Network(new Section(te.getPos(), te.getPos()), nextNetworkId++, world);
-            PlayerUtil.broadcastAll("创建网络" + network);
             System.err.println("创建网络" + network);
             registerNetwork(network);
         }
@@ -249,9 +250,9 @@ public final class EnergyTransferProcessor implements Runnable {
     }
 
     public static void unregister(TileEntity te) {
-        IMEnergy im = te.getCapability(Capabilities.MENERGY_TILE, null);
+        METile im = te.getCapability(Capabilities.MENERGY_TILE, null);
         if (im == null) {
-            ImpLib.logger().warn("Not IMEnergy tile " + te.getClass().getName());
+            ImpLib.logger().warn("Not ME tile " + te.getClass().getName());
             return;
         }
         if (te.getWorld() == null) {
@@ -413,16 +414,16 @@ public final class EnergyTransferProcessor implements Runnable {
     }
 
     private static void releaseLock() {
-        while (!lock.compareAndSet(1, 0)) {
-            if(lock.get() == 0)
-                return;
-            Thread.yield();
-        }
+//        while (!lock.compareAndSet(1, 0)) {
+//            if(lock.get() == 0)
+//                return;
+//            Thread.yield();
+//        }
     }
 
     private static void enqueueLock() {
-        while (!lock.compareAndSet(0, 1)) {
-            Thread.yield();
-        }
+//        while (!lock.compareAndSet(0, 1)) {
+//            Thread.yield();
+//        }
     }
 }

@@ -25,17 +25,14 @@
  */
 package ilib.util;
 
-import roj.collect.LongMap;
-import roj.collect.MyHashSet;
-
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import net.minecraft.world.WorldServer;
-
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import roj.collect.LongMap;
+import roj.collect.MyHashSet;
 
 import java.util.Collections;
 import java.util.Set;
@@ -57,7 +54,7 @@ public final class PortalCache {
     public static void onPortalBlockEvent(BlockEvent e) {
         final BlockPos pos = e.getPos();
         final World world = e.getWorld();
-        if (world instanceof WorldServer && pos.getY() < world.provider.getActualHeight()) {
+        if (!world.isRemote && pos.getY() < world.provider.getActualHeight()) {
             PortalCache handler;
             switch (DimensionHelper.idFor(world)) {
                 case -1:

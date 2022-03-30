@@ -49,7 +49,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -62,7 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Shared {
     public static final boolean DEBUG;
     public static final String MC_BINARY = "forgeMcBin";
-    public static final String VERSION = "1.6.2";
+    public static final String VERSION = "1.6.3";
 
     public static final File BASE, TMP_DIR, PROJECTS_DIR;
 
@@ -160,9 +159,14 @@ public final class Shared {
         if(mapperFwd.getClassMap().isEmpty()) {
             synchronized (mapperFwd) {
                 if(mapperFwd.getClassMap().isEmpty()) {
+                    File map = new File(BASE, "/util/mcp-srg.srg");
+                    if (!map.isFile()) {
+                        CmdUtil.error("正向映射表 " + map + " 不存在,建议重新安装");
+                        return;
+                    }
                     mapperRev = null;
                     try {
-                        mapperFwd.initEnv(new File(BASE, "/util/mcp-srg.srg"), new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
+                        mapperFwd.initEnv(map, new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
                         if (DEBUG) CmdUtil.success("正向映射表已加载");
                     } catch (Exception e) {
                         CmdUtil.error("正向映射表加载失败", e);
@@ -223,20 +227,8 @@ public final class Shared {
     }
 
     static {
-        String basePath = System.getProperty("fmd.base_path");
-
-        File base;
-        if (basePath == null) {
-            try {
-                base = new File(FMDMain.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile().getParentFile().getParentFile();
-            } catch (URISyntaxException e) {
-                e.printStackTrace();
-                base = new File("").getAbsoluteFile();
-            }
-        } else{
-            base = new File(basePath);
-        }
-        BASE = base;
+        String basePath = System.getProperty("fmd.base_path", ".");
+        BASE = new File(basePath).getAbsoluteFile();
 
         loadConfig();
         if (CONFIG == null) System.exit(-2);

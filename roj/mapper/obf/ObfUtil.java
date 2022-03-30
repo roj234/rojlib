@@ -30,7 +30,6 @@ import roj.asm.Parser;
 import roj.asm.frame.CodeBlock;
 import roj.asm.frame.Interpreter;
 import roj.asm.tree.*;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.tree.insn.SwitchInsnNode;
@@ -304,10 +303,10 @@ public class ObfUtil {
                     }
                     Method m = (Method) node;
                     intp.init(m);
-                    List<CodeBlock> codeBlocks = intp.gather(m.code);
-                    if(m.code.frames != null)
-                        m.code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
-                    flatControlFlow0(m, codeBlocks, rnd, flag);
+//                    List<CodeBlock> codeBlocks = intp.gather(m.code);
+//                    if(m.code.frames != null)
+//                        m.code.interpretFlags = AttrCode.COMPUTE_FRAMES | AttrCode.COMPUTE_SIZES;
+//                    flatControlFlow0(m, codeBlocks, rnd, flag);
                 }
             }
         }

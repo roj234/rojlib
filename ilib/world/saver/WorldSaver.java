@@ -31,19 +31,17 @@ import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.util.DimensionHelper;
 import ilib.util.PlayerUtil;
-import roj.concurrent.TaskExecutor;
-import roj.concurrent.task.ITask;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.storage.MapStorage;
 import net.minecraft.world.storage.WorldInfo;
-
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import roj.concurrent.TaskSequencer;
+import roj.concurrent.task.ITask;
 
 import java.io.File;
 
@@ -60,17 +58,19 @@ public final class WorldSaver {
         return ClientProxy.mc.getIntegratedServer() != null;
     }
 
-    static TaskExecutor executor = new TaskExecutor();
+    static TaskSequencer executor = new TaskSequencer();
+    static Thread seqThread = new Thread(executor);
 
     @SubscribeEvent
     public static void onWorldUnload(WorldEvent.Unload event) {
         if(!enable) return;
         World w = event.getWorld();
         if (!w.isRemote) return;
-        if ((w instanceof WorldClient) && !isClientServer()) {
+        if ((w instanceof WorldClient) && !isClientServer() && w.chunkProvider instanceof ChunkSavingProvider) {
             try {
-                ChunkSavingProvider savingProvider = (ChunkSavingProvider) w.getChunkProvider();
+                ChunkSavingProvider savingProvider = (ChunkSavingProvider) w.chunkProvider;
                 savingProvider.saveWorld();
+                Thread.sleep(200);
             } catch (Throwable e) {
                 PlayerUtil.sendTo(null, "尾巴保存失败: " + e);
                 e.printStackTrace();
@@ -80,16 +80,17 @@ public final class WorldSaver {
 
     @SubscribeEvent
     public static void onWorldLoad(WorldEvent.Load event) {
-        sid++;
         if(!enable) return;
-        enter = true;
-        World w = event.getWorld();
+        onWorldLoad(event.getWorld());
+    }
+
+    public static void onWorldLoad(World w) {
         if (!w.isRemote) return;
         if ((w instanceof WorldClient) && !isClientServer()) {
             ImpLib.logger().debug("Injecting world " + w.provider.getDimension());
             // debug
             try {
-                StringBuilder sb = new StringBuilder("saves/mi_download_").append(sid).append("/");
+                StringBuilder sb = new StringBuilder("saves/世界保存_").append(sid).append("/");
                 int dim = DimensionHelper.idFor(w);
                 if (dim != 0) {
                     sb.append("DIM").append(dim).append("/");
@@ -100,9 +101,8 @@ public final class WorldSaver {
                 ilib.ATHandler.setChunkProvider(w, savingProvider);
                 ilib.ATHandler.setClientChunkProvider((WorldClient) w, savingProvider);
                 ATHandler.setMapStorage(w, new MapStorage(handler));
-                //ImpLib.logger().info("Success injected client world with ChunkSavingProvider");
-                //TimeUtil.beginText.add("1s后保存方块ID数据!请不要退出，除非你的MOD和服务器 **完全** 相同!");
-                executor.pushTask(new BlockIdSaver(handler, w.getWorldInfo()));
+                executor.register(new BlockIdSaver(handler, w.getWorldInfo()), 0, 1000, 1);
+                enter = true;
             } catch (Throwable e) {
                 PlayerUtil.sendTo(null, "世界注入失败: " + e);
                 throw new RuntimeException("Failure during injecting ChunkSavingProvider", e);
@@ -110,11 +110,31 @@ public final class WorldSaver {
         }
     }
 
+    private static void _changeState() {
+        if (enable) {
+            if (seqThread.getState() == Thread.State.NEW) {
+                seqThread.setDaemon(true);
+                seqThread.setName("WorldSaver Timer");
+                seqThread.start();
+                TagGetter.register();
+            }
+            WorldClient w = Minecraft.getMinecraft().world;
+            if (w != null) onWorldLoad(w);
+        }
+    }
+
     public static boolean toggleEnable() {
         enable = !enable;
-        if(enable && executor.getState() == Thread.State.NEW) {
-            executor.start();
-        }
+        _changeState();
+        return enable;
+    }
+
+    public static void setEnable(boolean enable1) {
+        enable = enable1;
+        _changeState();
+    }
+
+    public static boolean isEnabled() {
         return enable;
     }
 
@@ -143,9 +163,6 @@ public final class WorldSaver {
 
         @Override
         public void calculate() {
-            try {
-                Thread.sleep(1000);
-            } catch (Exception ignored) {}
             Minecraft.getMinecraft().addScheduledTask(this);
         }
 

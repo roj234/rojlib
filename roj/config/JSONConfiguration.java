@@ -32,6 +32,7 @@ package roj.config;
  * @since 2021/4/21 22:51
  */
 
+import roj.config.data.CCommMap;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.util.ByteList;
@@ -59,7 +60,7 @@ public abstract class JSONConfiguration {
 
     public final void init() {
         if (!config.isFile()) {
-            resetConfig(this.map = new CMapping(), config);
+            resetConfig(this.map = new CCommMap(), config);
         } else {
             reload();
         }
@@ -67,7 +68,8 @@ public abstract class JSONConfiguration {
 
     public void reload() {
         try (FileInputStream fis = new FileInputStream(config)) {
-            CMapping map = this.map = JSONParser.parse(new String(IOUtil.read(fis), StandardCharsets.UTF_8), 2).asMap();
+            CMapping map = this.map = JSONParser.parse(new String(IOUtil.read(fis), StandardCharsets.UTF_8),
+                                                       JSONParser.NO_DUPLICATE_KEY | JSONParser.LITERAL_KEY | JSONParser.COMMENT | JSONParser.UNESCAPED_SINGLE_QUOTE).asMap().withComments();
             readConfig(map);
         } catch (IOException | ParseException | ClassCastException e) {
             e.printStackTrace();
@@ -104,7 +106,7 @@ public abstract class JSONConfiguration {
     public final CMapping getConfig() {
         CMapping map = this.map;
         if(map == null)
-            map = this.map = new CMapping();
+            map = this.map = new CCommMap();
         return map;
     }
 

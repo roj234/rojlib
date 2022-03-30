@@ -25,15 +25,12 @@
  */
 package ilib.tile;
 
-import ilib.autoreg.TileRegister;
-import ilib.block.BlockLootrChest;
-import ilib.item.handler.StandardItemHandler;
-import ilib.item.handler.inv.InventoryArray;
+import ilib.api.TileRegister;
+import ilib.item.handler.ListInventory;
 import roj.collect.MyHashSet;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagString;
@@ -103,13 +100,12 @@ public class TileEntityLootrChest extends TileEntityChest {
     }
 
     public IInventory getInv(EntityPlayer player) {
-        InventoryArray fakeInventory = new InventoryArray(3 * 9, ItemStack.EMPTY);
-        IInventory mcInventory = new BlockLootrChest.MyInv(new StandardItemHandler(fakeInventory));
+        ListInventory fakeInventory = new ListInventory(3 * 9);
         if (addPlayerOpened(player)) {
-            fillWithLoot(player, mcInventory);
+            fillWithLoot(player, fakeInventory);
             markDirty();
         }
 
-        return mcInventory;
+        return fakeInventory;
     }
 }

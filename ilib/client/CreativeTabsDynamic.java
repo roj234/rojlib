@@ -25,28 +25,23 @@
  */
 package ilib.client;
 
-import ilib.ClientProxy;
 import ilib.api.client.FakeTab;
 import ilib.gui.IGui;
-import ilib.gui.comp.BaseComponent;
-import ilib.gui.comp.control.ComButton;
-import ilib.gui.comp.control.ComButtonOver;
-import ilib.gui.comp.control.ComScrollBar;
-import ilib.util.TextHelper;
+import ilib.gui.comp.Component;
+import ilib.gui.comp.GButton;
+import ilib.gui.comp.GButtonNP;
+import ilib.gui.comp.SimpleComponent;
+import ilib.util.MCTexts;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.math.MathUtils;
 
-import net.minecraft.client.gui.inventory.GuiContainer;
-import net.minecraft.client.gui.inventory.GuiContainerCreative;
-import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
-import net.minecraft.util.ResourceLocation;
 
 import javax.annotation.Nonnull;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -54,52 +49,46 @@ import java.util.Set;
  * @author Roj234
  * @since 2021/1/13 12:42
  */
-public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHandler*/ {
-    private class UpDownButton extends ComButtonOver {
+public class CreativeTabsDynamic extends CreativeTabsMy {
+    private class UpDownButton extends GButton {
         public UpDownButton(IGui parent, boolean up) {
-            super(parent, -24, up ? 8 : 120, up ? 96 : 111, 0, 15, 14);
+            super(parent, -22, up ? 8 : 128, 96, 0, 14, 8);
         }
 
         @Override
         protected void doAction() {
-            int nOff = MathUtils.clamp(offset + (this.u == 96 ? -1 : 1), 0, Math.max(categories.size() - 4, 0));
+            int nOff = MathUtils.clamp(offset + (yPos == 8 ? -1 : 1), 0,
+                                       Math.max(categories.size() - 4, 0));
             if (nOff != offset) {
                 offset = nOff;
                 updateButton();
             }
-            ((GuiContainerCreative.ContainerCreative) ((GuiContainer) getOwner()).inventorySlots).scrollTo(0);
         }
     }
 
-    private class TabSelectButton extends ComButton {
+    private class TabSelectButton extends GButtonNP {
         private CreativeTabs tab;
 
         public TabSelectButton(IGui parent, int yPos, CreativeTabs tab) {
-            super(parent, -26, yPos, 127, 0, 22, 22);
+            super(parent, -26, yPos, 22, 22);
+            setDummy();
             setTab(tab);
         }
 
         protected void setTab(@Nonnull CreativeTabs tab) {
             this.tab = tab;
-            this.v = selected.contains(tab) ? 22 : 0;
+            setLabel(tab.getIcon());
+            setToggled(selected.contains(tab));
         }
 
         @Override
-        public void renderOverlay(int guiLeft, int guiTop, int mouseX, int mouseY) {
-            RenderHelper.enableGUIStandardItemLighting();
-            ClientProxy.mc.getRenderItem().renderItemAndEffectIntoGUI(tab.getIcon(), xPos + (width / 2) - 8, yPos + (height / 2) - 8);
-            RenderHelper.disableStandardItemLighting();
-        }
-
-        @Override
-        public void getDynamicToolTip(List<String> toolTip, int mouseX, int mouseY) {
-            toolTip.add(TextHelper.translate(tab.getTranslationKey()));
+        public void getDynamicTooltip(List<String> tooltip, int mouseX, int mouseY) {
+            tooltip.add(MCTexts.format(tab.getTranslationKey()));
         }
 
         @Override
         protected void doAction() {
-            boolean select = selected.contains(tab);
-            if (select) {
+            if (selected.contains(tab)) {
                 selected.remove(tab);
             } else {
                 selected.add(tab);
@@ -108,49 +97,29 @@ public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHand
         }
     }
 
-    private class ScrollHandler extends ComScrollBar {
+    private class ScrollHandler extends SimpleComponent {
         public ScrollHandler(IGui parent) {
-            super(parent, -10, 24, 8, 24 * 4);
-        }
-
-        @Override
-        protected void onScroll(float position) {
+            super(parent, -26, 20, 24, 100);
         }
 
         @Override
         public void mouseScrolled(int x, int y, int dir) {
-            if(!isMouseOver(x, y))
-                return;
+            if(!checkMouseOver(x, y)) return;
+
             int nOff = MathUtils.clamp(offset - dir, 0, Math.max(categories.size() - 4, 0));
             if (nOff != offset) {
                 offset = nOff;
                 updateButton();
             }
         }
-
-        @Override
-        public void render(int guiLeft, int guiTop, int mouseX, int mouseY) {
-            drawTexturedModalRect(xPos, yPos, 0, 0, width, height);
-        }
     }
 
     @Override
     public boolean hasSearchBar() {
         for (CreativeTabs tabs : selected) {
-            if (tabs.hasSearchBar())
-                return true;
+            if (tabs.hasSearchBar()) return true;
         }
         return false;
-    }
-
-    @Nonnull
-    @Override
-    public ResourceLocation getBackgroundImage() {
-        for (CreativeTabs tabs : selected) {
-            if (tabs.hasSearchBar())
-                return tabs.getBackgroundImage();
-        }
-        return super.getBackgroundImage();
     }
 
     public static final class Category extends CreativeTabsMy implements FakeTab {
@@ -171,12 +140,12 @@ public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHand
     protected final Set<CreativeTabs> selected;
     protected int offset;
 
-    protected List<BaseComponent> components;
+    protected List<Component> components;
 
     public CreativeTabsDynamic(String name) {
         super(name);
-        this.categories = new LinkedList<>();
-        this.selected = new MyHashSet<>(2);
+        this.categories = new SimpleList<>();
+        this.selected = new MyHashSet<>();
     }
 
     @Override
@@ -187,13 +156,15 @@ public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHand
         }
     }
 
-    public void addComponents(IGui parent, List<BaseComponent> list) {
+    public void addComponents(IGui parent, List<Component> list) {
         components = list;
         offset = MathUtils.clamp(offset, 0, Math.max(categories.size() - 4, 0));
 
         list.add(new UpDownButton(parent, true));
+        list.add(new UpDownButton(parent, false));
+        list.add(new ScrollHandler(parent));
 
-        int yPos = 24;
+        int yPos = 22;
 
         for (int i = offset, l = Math.min(categories.size(), offset + 4); i < l; i++) {
             CreativeTabs tabs = categories.get(i);
@@ -202,16 +173,10 @@ public class CreativeTabsDynamic extends CreativeTabsMy/* implements ISearchHand
             yPos += 24;
         }
 
-        list.add(new UpDownButton(parent, false));
-
-        if (categories.size() > 4) {
-            list.add(new ScrollHandler(parent));
-        }
     }
 
-
     protected void updateButton() {
-        for (int i = offset, j = 1, l = Math.min(categories.size(), offset + 4); i < l; i++, j++) {
+        for (int i = offset, j = 3, l = Math.min(categories.size(), offset + 4); i < l; i++, j++) {
             TabSelectButton button = (TabSelectButton) components.get(j);
             button.setTab(categories.get(i));
         }

@@ -25,20 +25,24 @@
  */
 package ilib.event;
 
+import com.google.common.collect.ImmutableList;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.api.Ownable;
-import ilib.api.item.ICraftListener;
 import ilib.api.mark.MUnbreakable;
 import ilib.api.recipe.AnvilRecipe;
 import ilib.capabilities.Capabilities;
 import ilib.capabilities.EntitySize;
-import ilib.collect.UUIDList;
 import ilib.item.ItemSelectTool;
-import ilib.misc.SelectionCache;
+import ilib.math.Arena;
+import ilib.math.SelectionCache;
+import ilib.tile.OwnerManager;
 import ilib.util.EntityHelper;
 import ilib.util.InventoryUtil;
+import ilib.util.MCTexts;
 import ilib.util.PlayerUtil;
+import ilib.util.freeze.FreezedBlock;
+import roj.collect.ToDoubleMap;
 import roj.math.MathUtils;
 
 import net.minecraft.block.Block;
@@ -53,23 +57,21 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
-import net.minecraft.item.Item;
+import net.minecraft.init.SoundEvents;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerList;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.tileentity.TileEntityFurnace;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.AnvilUpdateEvent;
+import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.LivingSpawnEvent;
@@ -95,6 +97,7 @@ import java.util.Map;
 public class CommonEvent {
     public static void init() {
         MinecraftForge.EVENT_BUS.register(CommonEvent.class);
+        MinecraftForge.EVENT_BUS.register(DoorEvent.class);
     }
 
     @SubscribeEvent(priority = EventPriority.LOW)
@@ -131,13 +134,8 @@ public class CommonEvent {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onPlayerAttack(AttackEntityEvent event) {
         EntityPlayer player = event.getEntityPlayer();
-        if (player.world.isRemote) {
-            return;
-        }
         float str = player.getCooledAttackStrength(0);
-        if (str <= Config.attackCancelThreshold) {
-            event.setCanceled(true);
-        }
+        if (str < Config.attackCD) event.setCanceled(true);
     }
 
     private static void updateTick(EntityLivingBase entity) {
@@ -203,7 +201,6 @@ public class CommonEvent {
     @SubscribeEvent
     public static void onLivingUpdate(LivingEvent.LivingUpdateEvent event) {
         EntityLivingBase entity = event.getEntityLiving();
-        if(entity.world.isRemote) return;
 
         if(Config.fixNaNHealth) {
             final float health = entity.getHealth();
@@ -212,6 +209,8 @@ public class CommonEvent {
                 return;
             }
         }
+
+        if(entity.world.isRemote) return;
 
         updateTick(entity);
     }
@@ -317,22 +316,6 @@ public class CommonEvent {
     }
 
     @SubscribeEvent
-    public static void onCrafting(PlayerEvent.ItemCraftedEvent event) {
-        Item item = event.crafting.getItem();
-        Block block = null;
-        if ((item instanceof ItemBlock && (block = Block.getBlockFromItem(item)) instanceof ICraftListener) || item instanceof ICraftListener) {
-            ItemStack[] craftingList = new ItemStack[event.craftMatrix.getSizeInventory()];
-            for (int x = 0; x < craftingList.length; x++)
-                craftingList[x] = event.craftMatrix.getStackInSlot(x);
-
-            if (block instanceof ICraftListener) // Is a block class
-                ((ICraftListener) block).onCraft(event.player, craftingList, event.crafting);
-            else // Is an item class
-                ((ICraftListener) item).onCraft(event.player, craftingList, event.crafting);
-        }
-    }
-
-    @SubscribeEvent
     public static void onPlayerInteract(PlayerInteractEvent event) {
         if (!event.isCancelable()) return;
         if (event.getWorld().isRemote) {
@@ -363,7 +346,7 @@ public class CommonEvent {
                     PlayerUtil.sendTo(player, "tooltip.ilib.notpremission");
                     event.setCanceled(true);
                 } else if (ownerType == 2) {
-                    UUIDList trustedList = tile.getTrustList();
+                    OwnerManager trustedList = tile.getTrustList();
                     for (int i = 0; i < trustedList.size(); i++) {
                         if (trustedList.getUUIDH(i) == UUIDH && trustedList.getUUIDL(i) == UUIDL) {
                             return;
@@ -391,14 +374,35 @@ public class CommonEvent {
     @SubscribeEvent
     public static void onLeftClick(PlayerInteractEvent.LeftClickBlock event) {
         if (event.getItemStack().getItem() == ItemSelectTool.INSTANCE) {
-            if (!event.getWorld().isRemote) {
-                long UUID = event.getEntityPlayer().getUniqueID().getMostSignificantBits();
-                SelectionCache.set(UUID, 1, event.getPos());
-            } else {
-                PlayerUtil.sendTo(event.getEntityPlayer(), "command.ilib.sel.pos1");
+            long UUID = event.getEntityPlayer().getUniqueID().getMostSignificantBits();
+            Arena arena = SelectionCache.get(UUID);
+            BlockPos pos = event.getPos();
+
+            if (arena != null && pos.equals(arena.getP1())) return;
+            int count = SelectionCache.set(UUID, 1, pos).getSelectionSize();
+
+            if (event.getWorld().isRemote) {
+                EntityPlayer player = event.getEntityPlayer();
+                PlayerUtil.sendTo(player, MCTexts.format("command.ilib.sel.pos1") + ": " + pos.getX() + ',' + pos.getY() + ',' + pos.getZ());
+                if (count > 0) PlayerUtil.sendTo(player, "command.ilib.sel.size", count);
+                player.playSound(SoundEvents.BLOCK_NOTE_PLING, 1, 1);
             }
 
             event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onEntityDamage(LivingHurtEvent event) {
+        Entity attacker0 = event.getSource().getTrueSource();
+        if (attacker0 == null || attacker0.world.isRemote) return;
+
+        if (Config.jumpAttack && attacker0 instanceof EntityPlayer) {
+            float fallDistance = attacker0.fallDistance;
+            if (fallDistance > 2.0F) {
+                event.setAmount(event.getAmount() * (fallDistance / 2.0F));
+                attacker0.fallDistance = 0.0F;
+            }
         }
     }
 
@@ -416,40 +420,6 @@ public class CommonEvent {
                         world.scheduleUpdate(blockPos, block, 4 + world.rand.nextInt(7));
                     }
                 }
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onBlockBreak(BlockEvent.BreakEvent event) {
-        World world = event.getWorld();
-        if (world.isRemote) return;
-
-        if (event.getState().getBlock() == Blocks.FURNACE) {
-            TileEntity tile = world.getTileEntity(event.getPos());
-            if (tile instanceof TileEntityFurnace) {
-                TileEntityFurnace furnace = (TileEntityFurnace) tile;
-
-                ItemStack furnaceOutput = furnace.getStackInSlot(2);
-
-                float each = FurnaceRecipes.instance().getSmeltingExperience(furnaceOutput);
-
-                if (each <= 0) {
-                    return;
-                }
-                float total = furnaceOutput.getCount() * each;
-
-                int j = MathHelper.floor(total);
-                if (j < MathHelper.ceil(total) && Math.random() < (total - j))
-                    j++;
-                if(j > 0)
-                    event.setExpToDrop(j);
-                /*BlockPos pos = event.getPos();
-                while (total > 0) {
-                    int ball = EntityXPOrb.getXPSplit(total);
-                    total -= ball;
-                    world.spawnEntity(new EntityXPOrb(world, pos.getX(), pos.getY() + 0.5, pos.getZ(), ball));
-                }*/
             }
         }
     }
@@ -478,6 +448,56 @@ public class CommonEvent {
             if (!inventoryPlayer.getItemStack().isEmpty()) {
                 player.dropItem(inventoryPlayer.getItemStack(), false);
                 inventoryPlayer.setItemStack(ItemStack.EMPTY);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMissingBlock(RegistryEvent.MissingMappings<Block> event) {
+        ImmutableList<RegistryEvent.MissingMappings.Mapping<Block>> blocks = event.getAllMappings();
+        for (int i = 0; i < blocks.size(); i++) {
+            RegistryEvent.MissingMappings.Mapping<Block> map = blocks.get(i);
+            if (map.getTarget() != Blocks.AIR)
+            map.remap(new FreezedBlock().setRegistryName(map.key));
+        }
+    }
+
+    private static ToDoubleMap<String> playerAcc = new ToDoubleMap<>();
+
+    @SubscribeEvent
+    public static void collisionDamage(TickEvent.ServerTickEvent event) {
+        if(event.phase == TickEvent.Phase.END) return;
+
+        double damageThreshold = 1e-4;
+        double damageMultiplier = 10;
+        boolean damageIsWall = true;
+
+        List<EntityPlayerMP> players = PlayerUtil.getMinecraftServer().getPlayerList().getPlayers();
+        for (int i = 0; i < players.size(); i++) {
+            EntityPlayerMP player = players.get(i);
+            if (player.isElytraFlying()) continue;
+            if (player.isDead) {
+                playerAcc.remove(player.getName());
+                continue;
+            }
+
+            double mx = player.motionX;
+            double mz = player.motionZ;
+            double motion = mx * mx + mz * mz;
+
+            double prevMotion = playerAcc.getOrDefault(player.getName(), 0);
+            playerAcc.putDouble(player.getName(), motion);
+
+            if (prevMotion != motion)
+            System.out.println("delta motion " + prevMotion + " => " + motion);
+            double delta = Math.abs(prevMotion - motion) - damageThreshold;
+            if (delta > 0) {
+                float damage = (float) (delta * damageMultiplier);
+                if (damage != damage) return;
+
+                player.playSound(
+                    damage > 4 ? SoundEvents.ENTITY_GENERIC_BIG_FALL : SoundEvents.ENTITY_GENERIC_SMALL_FALL, 1, 1);
+                player.attackEntityFrom(damageIsWall ? DamageSource.FLY_INTO_WALL : DamageSource.FALL, damage);
             }
         }
     }
@@ -514,10 +534,12 @@ public class CommonEvent {
     @SubscribeEvent
     public static void mobSpawnFull(LivingSpawnEvent.CheckSpawn event) {
         if (Config.mobSpawnFullBlock) {
-            BlockPos pos = new BlockPos(event.getEntity().posX, event.getEntity().posY - 0.5, event.getEntity().posZ);
+            BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos
+                .retain(event.getEntity().posX, event.getEntity().posY - 0.5, event.getEntity().posZ);
             IBlockState state = event.getWorld().getBlockState(pos);
             if (!state.isFullCube() && state.getCollisionBoundingBox(event.getWorld(), pos) != Block.NULL_AABB)
                 event.setResult(Event.Result.DENY);
+            pos.release();
         }
     }
 

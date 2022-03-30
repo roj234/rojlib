@@ -776,7 +776,7 @@ public class MutableZipFile implements Closeable, AutoCloseable {
                         crc.update(list, 0, read);
                         while (!def.needsInput()) {
                             int len = def.deflate(list, d2, list.length - d2);
-                            appender.write(list, 0, len);
+                            appender.write(list, d2, len);
                         }
                     } while (read == d2);
                     def.finish();

@@ -228,7 +228,7 @@ public class Vec3d implements Vector {
      * @return the angle.
      */
     public double angle(Vec3d other) {
-        return dot(other) / (len() * other.len());
+        return dot(other) / Math.sqrt(len2() * other.len2());
     }
 
     /**
@@ -432,7 +432,7 @@ public class Vec3d implements Vector {
 
     @Override
     public String toString() {
-        return this.getClass().getName() + " {" + x + ", " + y + ", " + z + "}";
+        return "Vec3d {" + x + ", " + y + ", " + z + "}";
     }
 
     @Override

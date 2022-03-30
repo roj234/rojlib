@@ -465,7 +465,7 @@ public class Vec4f implements Vector {
 
     @Override
     public String toString() {
-        return this.getClass().getName() + " {" + x + ", " + y + ", " + z + ", " + w + "}";
+        return "Vec4f {" + x + ", " + y + ", " + z + ", " + w + "}";
     }
 
     @Override

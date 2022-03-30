@@ -25,25 +25,17 @@
  */
 package ilib.block;
 
-import ilib.item.handler.IItemHandler;
-import ilib.item.handler.MCInventoryMI;
 import ilib.tile.TileEntityLootrChest;
-import ilib.util.PlayerUtil;
 
 import net.minecraft.block.BlockChest;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.inventory.Container;
-import net.minecraft.inventory.ContainerChest;
-import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.ILockableContainer;
-import net.minecraft.world.LockCode;
 import net.minecraft.world.World;
 
 import javax.annotation.Nullable;
@@ -104,50 +96,5 @@ public class BlockLootrChest extends BlockChest {
 
     public int getComparatorInputOverride(IBlockState blockState, World worldIn, BlockPos pos) {
         return 0;
-    }
-
-    public static class MyInv extends MCInventoryMI implements ILockableContainer {
-
-        public MyInv(IItemHandler inv) {
-            super(inv, null);
-        }
-
-        @Override
-        public String getName() {
-            return "tile.ilib.chest_loot";
-        }
-
-        @Override
-        public boolean isLocked() {
-            return false;
-        }
-
-        @Override
-        public void setLockCode(LockCode code) {}
-
-        @Override
-        public LockCode getLockCode() {
-            return null;
-        }
-
-        @Override
-        public Container createContainer(InventoryPlayer inv, EntityPlayer player) {
-            return new ContainerChest(inv, this, player);
-        }
-
-        @Override
-        public String getGuiID() {
-            return "minecraft:chest";
-        }
-
-        @Override
-        public void closeInventory(EntityPlayer p) {
-            for (int i = 0; i < getSizeInventory(); i++) {
-                ItemStack stack = getStackInSlot(i);
-                if (!stack.isEmpty()) {
-                    PlayerUtil.giveToPlayer(p, stack);
-                }
-            }
-        }
     }
 }

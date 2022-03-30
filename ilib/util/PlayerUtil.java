@@ -27,8 +27,6 @@
 package ilib.util;
 
 import ilib.ImpLib;
-import roj.util.Helpers;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
@@ -39,14 +37,15 @@ import net.minecraft.server.management.PlayerChunkMap;
 import net.minecraft.server.management.PlayerChunkMapEntry;
 import net.minecraft.server.management.UserListOps;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+import roj.util.Helpers;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -167,22 +166,18 @@ public class PlayerUtil {
 
     public static void sendTo(ICommandSender player, String value) {
         if (player == null) {
-            if (!ImpLib.isClient)
-                return;
-            player = Minecraft.getMinecraft().player;
-            if (player == null) {
-                ImpLib.logger().catching(new RuntimeException("Tried to send message while client player is null"));
-                return;
-            }
+            if (!ImpLib.isClient) return;
+            Minecraft.getMinecraft().ingameGUI.addChatMessage(ChatType.CHAT, new TextComponentString(value));
+            return;
         }
         player.sendMessage(new TextComponentTranslation(value));
     }
 
     public static void sendTo(ICommandSender player, String value, Object... brackets) {
         if (player == null) {
-            if (!ImpLib.isClient)
-                return;
-            player = Minecraft.getMinecraft().player;
+            if (!ImpLib.isClient) return;
+            Minecraft.getMinecraft().ingameGUI.addChatMessage(ChatType.CHAT, new TextComponentTranslation(value, brackets));
+            return;
         }
         player.sendMessage(new TextComponentTranslation(value, brackets));
     }

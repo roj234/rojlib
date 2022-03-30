@@ -206,7 +206,7 @@ public class Mapping {
     }
 
     public static void makeInheritMap(Map<String, List<String>> superMap, Map<String, String> filter) {
-        MapperList l = new MapperList();
+        MapperList parents = new MapperList();
 
         SimpleList<String> self = new SimpleList<>();
         SimpleList<String> next = new SimpleList<>();
@@ -227,10 +227,10 @@ public class Mapping {
              */
             do {
                 if (cycle++ > 30)
-                    throw new IllegalStateException("Probably circular reference for " + name + " " + l);
-                l.addAll(self);
+                    throw new IllegalStateException("Probably circular reference for " + name + " " + parents);
+                parents.addAll(self);
                 if ((cycle & 3) == 0)
-                    l.preClean();
+                    parents.preClean();
                 for (int i = 0; i < self.size(); i++) {
                     String s = self.get(i);
                     Collection<String> tmp;
@@ -240,7 +240,7 @@ public class Mapping {
                             if (cycle > 15 && tmp.contains(s))
                                 throw new IllegalStateException("Circular reference in " + s);
                         } else {
-                            l.addAll(tmp);
+                            parents.addAll(tmp);
                         }
                     }
                     if (cycle > 15 && next.contains(s))
@@ -253,17 +253,17 @@ public class Mapping {
             } while (!self.isEmpty());
 
             if (filter != null) {
-                for (int i = l.size() - 1; i >= 0; i--) {
-                    if (!filter.containsKey(l.get(i))) {
-                        l.remove(i); // 删除不存在映射的爹
+                for (int i = parents.size() - 1; i >= 0; i--) {
+                    if (!filter.containsKey(parents.get(i))) {
+                        parents.remove(i); // 删除不存在映射的爹
                     }
                 }
             }
 
-            if (!l.isEmpty()) { // 若不是空的，则更新一个
-                l._init_();
-                entry.setValue(l);
-                l = new MapperList();
+            if (!parents.isEmpty()) { // 若不是空的，则更新一个
+                parents._init_();
+                entry.setValue(parents);
+                parents = new MapperList();
             } else {
                 itr.remove();
             }

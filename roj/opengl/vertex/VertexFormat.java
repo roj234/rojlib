@@ -36,17 +36,17 @@ import java.util.ArrayList;
  * @since 2021/9/18 13:23
  */
 public final class VertexFormat {
-    public static final int BYTE    = 0;
-    public static final int UBYTE    = 1;
+    public static final int BYTE   = 0;
+    public static final int UBYTE  = 1;
     public static final int SHORT  = 2;
     public static final int USHORT = 3;
-    public static final int INT  = 4;
-    public static final int UINT = 5;
-    public static final int FLOAT = 6;
+    public static final int INT    = 4;
+    public static final int UINT   = 5;
+    public static final int FLOAT  = 6;
 
-    public static final int POS = 0;
-    public static final int NORMAL = 1;
-    public static final int COLOR = 2;
+    public static final int POS     = 0;
+    public static final int NORMAL  = 1;
+    public static final int COLOR   = 2;
     public static final int PADDING = 3;
     public static final int UV      = 4;
     public static final int GENERIC = 5;
@@ -137,7 +137,7 @@ public final class VertexFormat {
     public static final class Builder {
         private final VertexFormat format = new VertexFormat();
         private final ArrayList<Entry> entries = new ArrayList<>();
-        private int flags;
+        private byte flags, count;
 
         public Builder() {}
 
@@ -197,11 +197,15 @@ public final class VertexFormat {
                     flags |= (1 << usage);
             }
             byte v = (byte) (((count - 1) << 6) | ((usage & 7) << 3) | (type & 7));
-            int index = 63 & (flags >>> 3 + 6 * (usage - UV));
+            int index;
+            if (usage == UV) {
+                index = this.count++;
+                if(index >= 32)
+                    throw new IndexOutOfBoundsException("At most 32 textures");
+            } else {
+                index = 0;
+            }
             entries.add(new Entry(v, (byte) index));
-            if(index++ == 32)
-                throw new IndexOutOfBoundsException("Multitexture only supports at most 32 textures");
-            flags = flags & (~(63 << (3 + 6 * (usage - UV)))) | (index << (3 + 6 * (usage - UV)));
             return this;
         }
 

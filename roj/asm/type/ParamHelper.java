@@ -289,8 +289,9 @@ public final class ParamHelper {
     public static String humanize(List<Type> types, String methodName, boolean trimPackage) {
         Type ret = types.remove(types.size() - 1);
 
-        CharList sb = IOUtil.getSharedCharBuf()
-                            .append(ret).append(' ').append(methodName).append("(");
+        CharList sb = IOUtil.getSharedCharBuf();
+        ret.appendString(sb, null);
+        sb.append(' ').append(methodName).append("(");
 
         if (!types.isEmpty()) {
             int i = 0;

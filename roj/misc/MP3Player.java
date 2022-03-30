@@ -29,118 +29,25 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.config.word.WordPresets;
 import roj.io.FileUtil;
-import roj.io.source.RandomAccessFileSource;
-import roj.sound.mp3.Player;
+import roj.sound.SoundUtil;
+import roj.sound.util.FilePlayer;
 import roj.sound.util.JavaAudio;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ArrayUtil;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
-import java.util.concurrent.locks.LockSupport;
 
+import static roj.sound.util.FilePlayer.*;
 /**
  * @author Roj233
  * @since 2021/8/18 13:35
  */
 public class MP3Player {
-    static final int PLAY_SINGLE = 1, PLAY_REPEAT = 2, WAITING = 4, CUT_SONG = 8;
-
-    static class Play extends Thread {
-        int flags;
-        int playIndex;
-        File[] playList, playListBackup;
-        Random rng;
-        Player player;
-
-        Play(File[] playList) {
-            setName("Player");
-            setDaemon(true);
-            this.playList = playList.clone();
-            this.playListBackup = playList;
-            this.player = new Player(new JavaAudio());
-            this.rng = new Random();
-        }
-
-        @Override
-        public void run() {
-            flags |= WAITING;
-            LockSupport.park();
-            while ((flags & WAITING) == 0) {
-                File file = playList[playIndex];
-                System.out.println("正在播放 " + file.getName());
-                try (RandomAccessFileSource in = new RandomAccessFileSource(file)) {
-                    player.open(in);
-                    player.decode();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-                // stop
-                if((flags & WAITING) != 0) {
-                    LockSupport.park();
-                    continue;
-                }
-
-                // cut
-                if((flags & CUT_SONG) != 0) {
-                    flags &= ~CUT_SONG;
-                    continue;
-                }
-
-                // auto next
-                if((flags & PLAY_SINGLE) != 0) {
-                    if((flags & PLAY_REPEAT) == 0) {
-                        flags |= WAITING;
-                        LockSupport.park();
-                    }
-                } else {
-                    if(++playIndex == playList.length) {
-                        playIndex = 0;
-                        if((flags & PLAY_REPEAT) == 0) {
-                            flags |= WAITING;
-                            LockSupport.park();
-                        }
-                    }
-                }
-            }
-        }
-
-        public void play(int song) {
-            File f = playList[song];
-            playIndex = song;
-            flags |= CUT_SONG;
-            player.stop();
-            mayNotify();
-        }
-
-        public void stopPlaying() {
-            player.stop();
-            mayNotify();
-        }
-
-        public void mayNotify() {
-            if((flags & WAITING) != 0) {
-                flags &= ~WAITING;
-                LockSupport.unpark(this);
-            }
-        }
-
-        public void dumpInfo() {
-            System.out.println(player.getHeader());
-            System.out.println(player.getID3Tag());
-            System.out.println("已播放 " + player.getHeader().getElapse() + "s");
-            System.out.println();
-        }
-    }
-
-    public static float dbSound(double linear) {
-        return (float) (Math.log10(linear <= 0 ? 1e-4 : linear) * 20.0);
-    }
 
     public static void main(String[] args) throws IOException {
         if(args.length < 1) {
@@ -149,7 +56,7 @@ public class MP3Player {
         }
 
         List<File> files = FileUtil.findAllFiles(new File(args[0]), file -> file.getName().toLowerCase().endsWith(".mp3"));
-        Play play = new Play(files.toArray(new File[files.size()]));
+        FilePlayer play = new FilePlayer(files);
         play.start();
 
         if (args.length != 2 || !args[1].equals("-notip")) {
@@ -197,8 +104,10 @@ public class MP3Player {
                     case "shuffle":
                         if(tmp.get(1).equals("on"))
                             ArrayUtil.shuffle(play.playList, play.rng);
-                        else
-                            System.arraycopy(play.playListBackup, 0, play.playList, 0, play.playList.length);
+                        else {
+                            play.playList.clear();
+                            play.playList.addAll(Helpers.cast(play.playListBackup));
+                        }
                         break;
                     case "cut":
                         play.play(Integer.parseInt(tmp.get(1)) - 1);
@@ -208,10 +117,10 @@ public class MP3Player {
                             play.player.cut(Double.parseDouble(tmp.get(1)));
                         break;
                     case "prev":
-                        play.play(play.playIndex == 0 ? play.playList.length - 1 : play.playIndex - 1);
+                        play.play(play.playIndex == 0 ? play.playList.size() - 1 : play.playIndex - 1);
                         break;
                     case "next":
-                        play.play(play.playIndex == play.playList.length - 1 ? 0 : play.playIndex + 1);
+                        play.play(play.playIndex == play.playList.size() - 1 ? 0 : play.playIndex + 1);
                         break;
                     case "pause":
                         play.player.pause();
@@ -233,16 +142,16 @@ public class MP3Player {
                         System.out.println("WIP");
                         break;
                     case "vol":
-                        ((JavaAudio) play.player.audio).setVolume(dbSound(Double.parseDouble(tmp.get(1))));
+                        ((JavaAudio) play.player.audio).setVolume(SoundUtil.dbSound(Double.parseDouble(tmp.get(1))));
                         break;
                     case "mute":
                         ((JavaAudio) play.player.audio).mute(muted = !muted);
                         break;
                     case "list":
                         System.out.println("===================================");
-                        File[] list = play.playList;
-                        for (int i = 0; i < list.length; i++) {
-                            File f = list[i];
+                        List<File> list = Helpers.cast(play.playList);
+                        for (int i = 0; i < list.size(); i++) {
+                            File f = list.get(i);
                             if (tmp.size() > 1 && !f.getName().contains(tmp.get(1))) continue;
                             System.out.println("  " + (i + 1) + ". " + f.getPath());
                         }

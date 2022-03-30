@@ -25,9 +25,9 @@
  */
 package roj.text;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
@@ -115,7 +115,7 @@ public class TextUtil {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
     };
 
-    public static final IBitSet ASCII_CHARACTERS = LongBitSet.from(digits).addAll("*@-_+./");
+    public static final MyBitSet ASCII_CHARACTERS = MyBitSet.from(digits).addAll("*@-_+./");
 
     public static StringBuilder encodeURI(CharSequence src) {
         StringBuilder tmp = new StringBuilder(src.length() * 3);
@@ -585,9 +585,13 @@ public class TextUtil {
     /**
      * @implNote 忽略空字符
      */
-    public static String[] split(String keys, char c) {
-        List<String> list = new ArrayList<>();
+    public static String[] split1(CharSequence keys, char c) {
+        List<String> list = new SimpleList<>();
         return split(list, keys, c).toArray(new String[list.size()]);
+    }
+
+    public static List<String> split(CharSequence keys, char c) {
+        return split(new SimpleList<>(), keys, c);
     }
 
     public static List<String> split(List<String> list, CharSequence str, char delimiter) {

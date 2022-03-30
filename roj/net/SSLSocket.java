@@ -356,9 +356,10 @@ public class SSLSocket extends PlainSocket {
                 pushback = pb = bb;
             }
 
-            rBuf.flip().position(mx);
-            pb.compact().put(rBuf).flip();
-            rBuf.limit(rBuf.capacity()).position(mx);
+            ByteBuffer rb = rBuf;
+            rb.limit(rb.position()).position(rb.position() - more);
+            pb.compact().put(rb).flip();
+            rb.position(rb.limit()).limit(rb.capacity());
         }
         return result;
     }

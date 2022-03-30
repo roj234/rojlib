@@ -36,9 +36,8 @@ import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
-import roj.collect.IBitSet;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
-import roj.collect.SingleBitSet;
 import roj.concurrent.Ref;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -65,15 +64,15 @@ import static roj.asm.util.AccessFlag.PUBLIC;
  * @author Roj233
  * @since 2021/8/13 20:16
  */
-public final class DirectAccessor<T> {
+public class DirectAccessor<T> {
     public static final String  MAGIC_ACCESSOR_CLASS = "sun/reflect/MagicAccessorImpl";
-    public static final boolean DEBUG                = System.getProperty("roj.directaccessor.debug") != null;
-    public static final IBitSet EMPTY_BITS           = new SingleBitSet();
+    public static final boolean  DEBUG      = false;
+    public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
 
     static final AtomicInteger NEXT_ID = new AtomicInteger();
 
     private static final Ref<Object> CallbackBuffer = Ref.from();
-    private static void syncCallback(Object handle) {
+    public static void syncCallback(Object handle) {
         CallbackBuffer.set(handle);
     }
 
@@ -100,6 +99,20 @@ public final class DirectAccessor<T> {
     static final class Cache {
         Class<?> clazz;
         FieldInsnNode node;
+    }
+    
+    private DirectAccessor(DirectAccessor<T> prev) {
+        this.methodByName = prev.methodByName;
+        this.owner = prev.owner;
+        this.var = prev.var;
+        this.caches = prev.caches;
+        this.cache = prev.cache;
+        this.check = prev.check;
+        this.sb = prev.sb;
+        this.target = prev.target;
+        this.from = prev.from;
+        this.to = prev.to;
+        this.fuzzy = prev.fuzzy;
     }
 
     private DirectAccessor(Class<T> deClass, String pkg, boolean checkDuplicate) {
@@ -135,7 +148,7 @@ public final class DirectAccessor<T> {
      * @return T
      */
     @SuppressWarnings("unchecked")
-    public synchronized T build() {
+    public final synchronized T build() {
         if(var == null)
             throw new IllegalStateException("Already built");
 
@@ -167,11 +180,11 @@ public final class DirectAccessor<T> {
         return obj;
     }
 
-    public Clazz getInternal() {
+    public final Clazz getInternal() {
         return var;
     }
 
-    public DirectAccessor<T> cloneable() {
+    public final DirectAccessor<T> cloneable() {
         if (!var.interfaces.contains("java/lang/Cloneable")) {
             cloneable(var);
         }
@@ -197,7 +210,7 @@ public final class DirectAccessor<T> {
     /**
      * @see #makeCache(Class, String, int)
      */
-    public DirectAccessor<T> makeCache(Class<?> targetClass) {
+    public final DirectAccessor<T> makeCache(Class<?> targetClass) {
         return makeCache(targetClass, "instance", 7);
     }
 
@@ -205,7 +218,7 @@ public final class DirectAccessor<T> {
      * get,set,clear Instance via Instanced or other... <br>
      * @param methodFlag 1: get 2:set 4:clear 8:check existence, plus them
      */
-    public DirectAccessor<T> makeCache(Class<?> targetClass, String name, int methodFlag) {
+    public final DirectAccessor<T> makeCache(Class<?> targetClass, String name, int methodFlag) {
         if(caches.getEntry(name) != null)
             throw new IllegalStateException("Cache already set!");
 
@@ -298,11 +311,11 @@ public final class DirectAccessor<T> {
         }
     }
 
-    public DirectAccessor<T> useCache() {
+    public final DirectAccessor<T> useCache() {
         return useCache("instance");
     }
 
-    public DirectAccessor<T> useCache(String name) {
+    public final DirectAccessor<T> useCache(String name) {
         cache = caches.get(name);
         if(cache == null && name != null) {
             throw new IllegalArgumentException("Cache '" + name + "' not exist");
@@ -313,14 +326,14 @@ public final class DirectAccessor<T> {
     /**
      * @see #construct(Class, String[], List)
      */
-    public DirectAccessor<T> construct(Class<?> target, String name) {
+    public final DirectAccessor<T> construct(Class<?> target, String name) {
         return construct(target, new String[]{name}, null);
     }
 
     /**
      * @see #construct(Class, String[], List)
      */
-    public DirectAccessor<T> construct(Class<?> target, String... names) {
+    public final DirectAccessor<T> construct(Class<?> target, String... names) {
         if (names.length == 0) throw new IllegalArgumentException("Wrong call");
         return construct(target, names, null);
     }
@@ -328,7 +341,7 @@ public final class DirectAccessor<T> {
     /**
      * @see #construct(Class, String[], List)
      */
-    public DirectAccessor<T> construct(Class<?> target, String name, Class<?>... param) {
+    public final DirectAccessor<T> construct(Class<?> target, String name, Class<?>... param) {
         if (param.length == 0) throw new IllegalArgumentException("Wrong call");
         return construct(target, new String[] { name }, Collections.singletonList(param));
     }
@@ -336,7 +349,7 @@ public final class DirectAccessor<T> {
     /**
      * @see #construct(Class, String[], List)
      */
-    public DirectAccessor<T> constructFuzzy(Class<?> target, String... names) {
+    public final DirectAccessor<T> constructFuzzy(Class<?> target, String... names) {
         if (names.length == 0) throw new IllegalArgumentException("Wrong call");
         return construct(target, names, Collections.emptyList());
     }
@@ -480,72 +493,72 @@ public final class DirectAccessor<T> {
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate(Class<?> target, String name) {
+    public final DirectAccessor<T> delegate(Class<?> target, String name) {
         String[] arr = new String[] {name};
         return delegate(target, arr, EMPTY_BITS, arr, null);
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate(Class<?> target, String name, String selfName) {
+    public final DirectAccessor<T> delegate(Class<?> target, String name, String selfName) {
         return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, null);
 
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate(Class<?> target, String... names) {
+    public final DirectAccessor<T> delegate(Class<?> target, String... names) {
         if (names.length == 0) throw new IllegalArgumentException("Wrong call");
         return delegate(target, names, EMPTY_BITS, names, null);
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate(Class<?> target, String[] names, String[] selfNames) {
+    public final DirectAccessor<T> delegate(Class<?> target, String[] names, String[] selfNames) {
         return delegate(target, names, EMPTY_BITS, selfNames, null);
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate_o(Class<?> target, String name) {
+    public final DirectAccessor<T> delegate_o(Class<?> target, String name) {
         String[] arr = new String[] {name};
         return delegate(target, arr, EMPTY_BITS, arr, Collections.emptyList());
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames) {
+    public final DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames) {
         return delegate(target, methodNames, EMPTY_BITS, methodNames, Collections.emptyList());
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate_o(Class<?> target, String method, String self) {
+    public final DirectAccessor<T> delegate_o(Class<?> target, String method, String self) {
         return delegate(target, new String[]{ method }, EMPTY_BITS, new String[]{ self },
                         Collections.emptyList());
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate_o(Class<?> target, String method, String self, Class<?>... param) {
+    public final DirectAccessor<T> delegate_o(Class<?> target, String method, String self, Class<?>... param) {
         if (param.length == 0) throw new IllegalArgumentException("Wrong call");
         return delegate(target, new String[]{ method }, EMPTY_BITS, new String[]{ self },
                         Collections.singletonList(param));
     }
 
     /**
-     * @see #delegate(Class, String[], IBitSet, String[], List)
+     * @see #delegate(Class, String[], MyBitSet, String[], List)
      */
-    public DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames, String[] selfNames) {
+    public final DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames, String[] selfNames) {
         return delegate(target, methodNames, EMPTY_BITS, selfNames, Collections.emptyList());
     }
 
@@ -557,7 +570,7 @@ public final class DirectAccessor<T> {
      * @return this
      * @throws IllegalArgumentException 当提供的参数有误,不支持或者不存在时
      */
-    public DirectAccessor<T> delegate(Class<?> target, String[] methodNames, @Nullable IBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
+    public DirectAccessor<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
         if(selfNames.length == 0)
             return this;
         boolean useCache = cache != null;
@@ -739,21 +752,21 @@ public final class DirectAccessor<T> {
     /**
      * @see #access(Class, String[], String[], String[])
      */
-    public DirectAccessor<T> access(Class<?> target, String fieldName) {
+    public final DirectAccessor<T> access(Class<?> target, String fieldName) {
         return access(target, new String[]{fieldName});
     }
 
     /**
      * @see #access(Class, String[], String[], String[])
      */
-    public DirectAccessor<T> access(Class<?> target, String[] fields) {
+    public final DirectAccessor<T> access(Class<?> target, String[] fields) {
         return access(target, fields, capitalize(fields, "get"), capitalize(fields, "set"));
     }
 
     /**
      * @see #access(Class, String[], String[], String[])
      */
-    public DirectAccessor<T> access(Class<?> target, String field, String getter, String setter) {
+    public final DirectAccessor<T> access(Class<?> target, String field, String getter, String setter) {
         return access(target, new String[] { field }, new String[] { getter }, new String[]{ setter });
     }
 
@@ -898,7 +911,7 @@ public final class DirectAccessor<T> {
                             insn.add(new ClassInsnNode(Opcodes.CHECKCAST, tName));
                     }
                 } else {
-                    code.localSize = --code.stackSize;
+                    code.localSize = code.stackSize--;
                 }
                 insn.add(NodeHelper.X_LOAD_I(fType.nativeName().charAt(0), isStatic || useCache ? 1 : 2));
                 if (check && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic || useCache ? 0 : 1]))
@@ -912,7 +925,7 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> i_construct(String target, String desc, String self) {
+    public final DirectAccessor<T> i_construct(String target, String desc, String self) {
         Method mm = methodByName.remove(self);
         if (mm == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
@@ -921,7 +934,7 @@ public final class DirectAccessor<T> {
         return i_construct(target, desc, mm);
     }
 
-    public DirectAccessor<T> i_construct(String target, String desc, Method self) {
+    public final DirectAccessor<T> i_construct(String target, String desc, Method self) {
         target = target.replace('.', '/');
 
         roj.asm.tree.Method invoke = new roj.asm.tree.Method(PUBLIC, var, self.getName(),
@@ -963,7 +976,7 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> i_delegate(String target, String name, String desc, String self, boolean isStatic, boolean isDirect) {
+    public final DirectAccessor<T> i_delegate(String target, String name, String desc, String self, boolean isStatic, boolean isDirect) {
         Method m = methodByName.remove(self);
         if (m == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
@@ -971,7 +984,7 @@ public final class DirectAccessor<T> {
         return i_delegate(target, name, desc, m, isStatic, isDirect);
     }
 
-    public DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, boolean isStatic, boolean isDirect) {
+    public final DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, boolean isStatic, boolean isDirect) {
         target = target.replace('.', '/');
 
         String sDesc = ParamHelper.class2asm(self.getParameterTypes(), self.getReturnType());
@@ -1015,19 +1028,19 @@ public final class DirectAccessor<T> {
         return this;
     }
 
-    public DirectAccessor<T> i_access(String target, String name, Type type, String getter, String setter, boolean isStatic) {
+    public final DirectAccessor<T> i_access(String target, String name, Type type, String getter, String setter, boolean isStatic) {
         Method g = methodByName.remove(getter);
-        if (g == null) {
+        if (g == null && getter != null) {
             throw new IllegalArgumentException(owner.getName() + '.' + getter + " 不存在或已被占用!");
         }
         Method s = methodByName.remove(setter);
-        if (s == null) {
+        if (s == null && setter != null) {
             throw new IllegalArgumentException(owner.getName() + '.' + setter + " 不存在或已被占用!");
         }
         return i_access(target, name, type, g, s, isStatic);
     }
 
-    public DirectAccessor<T> i_access(String target, String name, Type type, Method getter, Method setter, boolean isStatic) {
+    public final DirectAccessor<T> i_access(String target, String name, Type type, Method getter, Method setter, boolean isStatic) {
         target = target.replace('.', '/');
 
         if(getter != null) {
@@ -1065,7 +1078,7 @@ public final class DirectAccessor<T> {
                 code.localSize = (char) (code.stackSize + 1);
                 insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
             } else {
-                code.localSize = --code.stackSize;
+                code.localSize = code.stackSize--;
             }
             insn.add(NodeHelper.X_LOAD_I(type.nativeName().charAt(0), isStatic ? 1 : 2));
             insn.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, target, name, type));
@@ -1084,6 +1097,40 @@ public final class DirectAccessor<T> {
         return this;
     }
 
+    public final DirectAccessor<T> delayErrorToInvocation() {
+        return getClass() == DirectAccessor.class ? new DirectAccessor<T>(this) {
+            @Override
+            public DirectAccessor<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) {
+                try {
+                    return super.delegate(target, methodNames, flags, selfNames, fuzzyMode);
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                    return this;
+                }
+            }
+
+            @Override
+            public DirectAccessor<T> access(Class<?> target, String[] fields, String[] getters, String[] setters) {
+                try {
+                    return super.access(target, fields, getters, setters);
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                    return this;
+                }
+            }
+
+            @Override
+            public DirectAccessor<T> construct(Class<?> target, String[] names, List<Class<?>[]> fuzzy) {
+                try {
+                    return super.construct(target, names, fuzzy);
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                    return this;
+                }
+            }
+        } : this;
+    }
+
     public static <V> DirectAccessor<V> builder(Class<V> impl) {
         return new DirectAccessor<>(impl, "roj/reflect/", true);
     }
@@ -1096,48 +1143,48 @@ public final class DirectAccessor<T> {
         return new DirectAccessor<>(impl, pkg.getName().substring(0, pkg.getName().lastIndexOf('/') + 1), true);
     }
 
-    public DirectAccessor<T> unchecked() {
+    public final DirectAccessor<T> unchecked() {
         check = false;
         return this;
     }
 
-    public DirectAccessor<T> from(String... names) {
+    public final DirectAccessor<T> from(String... names) {
         if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
         this.from = names;
         return this;
     }
 
-    public DirectAccessor<T> in(Class<?> target) {
+    public final DirectAccessor<T> in(Class<?> target) {
         this.target = target;
         this.to = null;
         this.fuzzy = null;
         return this;
     }
 
-    public DirectAccessor<T> to(String... names) {
+    public final DirectAccessor<T> to(String... names) {
         if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
         this.to = names;
         this.fuzzy = null;
         return this;
     }
 
-    public DirectAccessor<T> withFuzzy(boolean fuzzy) {
+    public final DirectAccessor<T> withFuzzy(boolean fuzzy) {
         this.fuzzy = fuzzy ? Collections.emptyList() : null;
         return this;
     }
 
-    public DirectAccessor<T> withFuzzy(Class<?>... names) {
+    public final DirectAccessor<T> withFuzzy(Class<?>... names) {
         if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
         this.fuzzy = Collections.singletonList(names);
         return this;
     }
 
-    public DirectAccessor<T> withFuzzy(List<Class<?>[]> names) {
+    public final DirectAccessor<T> withFuzzy(List<Class<?>[]> names) {
         this.fuzzy = names;
         return this;
     }
 
-    public DirectAccessor<T> op(String op) {
+    public final DirectAccessor<T> op(String op) {
         if (target == null || from == null)
             throw new IllegalStateException("Missing arguments");
         switch (op) {
@@ -1169,7 +1216,7 @@ public final class DirectAccessor<T> {
         return dest;
     }
 
-    static void cloneable(Clazz clz) {
+    public static void cloneable(Clazz clz) {
         roj.asm.tree.Method cl = new roj.asm.tree.Method(PUBLIC, clz, "clone", "()Ljava/lang/Object;");
         AttrCode code = cl.code = new AttrCode(cl);
 

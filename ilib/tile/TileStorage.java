@@ -26,10 +26,10 @@
 
 package ilib.tile;
 
-import ilib.autoreg.TileRegister;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
+import ilib.api.TileRegister;
 import roj.collect.Int2IntMap;
+
+import net.minecraft.nbt.NBTTagCompound;
 
 import javax.annotation.Nonnull;
 
@@ -40,21 +40,9 @@ import javax.annotation.Nonnull;
 @TileRegister("ilib:storage")
 public class TileStorage extends TileBase {
     private final Int2IntMap data = new Int2IntMap();
-    private String type = DEFAULT_TYPE;
-    public static final String DEFAULT_TYPE = "[UNKNOWN]";
 
     public TileStorage() {
         super();
-    }
-
-    public TileStorage(String type) {
-        super();
-        this.type = type;
-    }
-
-    public TileStorage(int meta) {
-        super();
-        data.put(0, meta);
     }
 
     public int getOr(int a, int b) {
@@ -67,41 +55,48 @@ public class TileStorage extends TileBase {
 
     public void set(int id, int value) {
         data.put(id, value);
-        if (!getWorld().isRemote)
-            markForDataUpdate();
+        if (!world.isRemote) sendDataUpdate();
+    }
+
+    @Override
+    public NBTTagCompound getUpdateTag() {
+        int[] array = new int[data.size() << 1];
+        int i = 0;
+        for (Int2IntMap.Entry entry : data.entrySet()) {
+            array[i++] = entry.getKey();
+            array[i++] = entry.v;
+        }
+
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setIntArray("data", array);
+        return tag;
     }
 
     @Nonnull
     @Override
     public NBTTagCompound writeToNBT(@Nonnull NBTTagCompound tag) {
-        super.writeToNBT(tag);
-
-        NBTTagList list = new NBTTagList();
+        int[] array = new int[data.size() << 1];
+        int i = 0;
         for (Int2IntMap.Entry entry : data.entrySet()) {
-            NBTTagCompound tag2 = new NBTTagCompound();
-            tag2.setInteger("k", entry.getKey());
-            tag2.setInteger("v", entry.getValue());
-            list.appendTag(tag2);
+            array[i++] = entry.getKey();
+            array[i++] = entry.v;
         }
-        tag.setTag("data", list);
-        tag.setString("type", type);
+        tag.setIntArray("data", array);
 
-        return tag;
+        return super.writeToNBT(tag);
     }
 
     @Override
     public void readFromNBT(@Nonnull NBTTagCompound tag) {
         super.readFromNBT(tag);
 
-        NBTTagList list = tag.getTagList("data", 10);
+        int[] list = tag.getIntArray("data");
         data.clear();
-        if (!list.isEmpty()) {
-            for (int i = 0; i < list.tagCount(); i++) {
-                NBTTagCompound tag3 = list.getCompoundTagAt(i);
-                data.put(tag3.getInteger("k"), tag3.getInteger("v"));
+        if (list.length > 0 && (list.length & 1) == 0) {
+            for (int i = 0; i < list.length; ) {
+                data.put(list[i++], list[i++]);
             }
         }
-        type = tag.hasKey("type") ? tag.getString("type") : DEFAULT_TYPE;
     }
 
 }
