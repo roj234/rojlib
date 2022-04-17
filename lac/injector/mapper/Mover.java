@@ -25,14 +25,13 @@
  */
 package lac.injector.mapper;
 
-import roj.asm.Parser;
 import roj.asm.cst.CstRef;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrBootstrapMethods;
 import roj.asm.tree.attr.AttrBootstrapMethods.BootstrapMethod;
-import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeDynInsnNode;
+import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
 import roj.asm.util.InsnList;
 import roj.collect.HashBiMap;
@@ -183,9 +182,9 @@ public class Mover {
         for (int i = 0; i < append.size(); i++) {
             Movable mv = append.get(i);
             if (!mv.idn.isEmpty()) {
-                AttrBootstrapMethods bm = getBSM(data);
+                AttrBootstrapMethods bm = AttrHelper.getBootstrapMethods(data.cp, data);
                 if (bm == null) {
-                    data.attributes.putByName(bm = new AttrBootstrapMethods());
+                    data.attributes().putByName(bm = new AttrBootstrapMethods());
                 }
                 for (Map.Entry<BootstrapMethod, List<InvokeDynInsnNode>> entry : mv.idn.entrySet()) {
                     char id = (char) bm.methods.size();
@@ -204,7 +203,7 @@ public class Mover {
         for (int k = 0; k < insn.size(); k++) {
             InsnNode node = insn.get(k);
             if (node.nodeType() == InsnNode.T_INVOKE_DYNAMIC) {
-                AttrBootstrapMethods bm = getBSM(data);
+                AttrBootstrapMethods bm = AttrHelper.getBootstrapMethods(data.cp, data);
                 if (bm == null)
                     throw new IllegalStateException("有InvokeDyn却没有BSM属性 " + data.name);
                 if (e.idn.isEmpty())
@@ -213,19 +212,6 @@ public class Mover {
                 e.idn.computeIfAbsent(bm.methods.get(node1.tableIdx), Helpers.fnLinkedList()).add(node1);
             }
         }
-    }
-
-    private static AttrBootstrapMethods getBSM(ConstantData data) {
-        Attribute attr = (Attribute) data.attributes.getByName("BootstrapMethods");
-        AttrBootstrapMethods bm;
-        if (attr instanceof AttrBootstrapMethods) {
-            bm = (AttrBootstrapMethods) attr;
-        } else {
-            if (attr == null) return null;
-            bm = new AttrBootstrapMethods(Parser.reader(attr), data.cp);
-            data.attributes.putByName(bm);
-        }
-        return bm;
     }
 
     public void put(Desc from, Desc to) {

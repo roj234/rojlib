@@ -327,7 +327,7 @@ public class FMDGui extends JFrame {
         final String[] args = files.toArray(new String[files.size()]);
         ArrayUtil.inverse(args);
 
-        asyncRun(() -> FMDMain.deobf(args));
+        asyncRun(() -> FMDMain.deobf(args, false));
     }
 
     static final TaskExecutor asyncExecutor = new TaskExecutor();

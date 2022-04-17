@@ -48,6 +48,11 @@ public final class FreezedTileEntity extends TileEntity {
     public NBTTagCompound tag;
 
     @Override
+    public NBTTagCompound getUpdateTag() {
+        return new NBTTagCompound();
+    }
+
+    @Override
     public void readFromNBT(NBTTagCompound tag) {
         isInitial = false;
         this.tag = tag;

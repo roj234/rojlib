@@ -26,10 +26,7 @@
 
 package ilib.command;
 
-import net.minecraft.command.CommandBase;
-import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommandSender;
-import net.minecraft.command.PlayerNotFoundException;
+import net.minecraft.command.*;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.JsonToNBT;
@@ -38,19 +35,12 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.text.TextComponentString;
-import net.minecraft.util.text.TextComponentTranslation;
 
-import javax.annotation.Nonnull;
-/**
- * No description provided
- *
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class CommandItemNBT extends CommandBase {
-
-    @Nonnull
     @Override
     public String getName() {
         return "itemdata";
@@ -61,14 +51,13 @@ public final class CommandItemNBT extends CommandBase {
         return 2;
     }
 
-    @Nonnull
     @Override
-    public String getUsage(@Nonnull ICommandSender sender) {
+    public String getUsage(ICommandSender sender) {
         return "Usage: /itemdata [dataTag]";
     }
 
     @Override
-    public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, @Nonnull String[] args) throws CommandException {
+    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
         int _start = 0;
         EntityPlayerMP player = (sender instanceof EntityPlayerMP) ? (EntityPlayerMP) sender : (args.length == 0 ? null : getPlayer(server, sender, args[0]));
         if (sender != player)
@@ -78,8 +67,7 @@ public final class CommandItemNBT extends CommandBase {
         }
         ItemStack held = player.getHeldItemMainhand();
         if (held.isEmpty()) {
-            player.sendMessage(new TextComponentTranslation("command.mi.itemnbt.notitem"));
-            return;
+            throw new WrongUsageException("command.il.itemnbt.notitem");
         }
         NBTTagCompound tag = held.getTagCompound();
         if (tag == null && args.length == 0) {

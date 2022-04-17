@@ -31,9 +31,9 @@ import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstRef;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrBootstrapMethods;
-import roj.asm.tree.attr.Attribute;
 import roj.asm.type.ParamHelper;
 import roj.asm.util.AccessFlag;
+import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
 import roj.collect.*;
 import roj.concurrent.collect.ConcurrentFindHashMap;
@@ -361,8 +361,9 @@ public class ConstMapper extends Mapping {
     public final List<Desc> S15_ignoreSubImpl(List<Context> ctxs) {
         List<Desc> filled = new ArrayList<>();
         MyHashMap<String, IClass> methods = new MyHashMap<>(ctxs.size());
+
         MyHashSet<SubImpl> subs = Util.getInstance().gatherSubImplements(ctxs, this, methods);
-        System.out.println("SubImpl " + subs);
+
         for (SubImpl impl : subs) {
             String targetName = null, foundClass = null;
             Desc desc = impl.type;
@@ -419,9 +420,9 @@ public class ConstMapper extends Mapping {
 
         Desc sp = Util.getInstance().sharedDC;
 
-        List<MethodSimple> methods = data.methods;
+        List<? extends MethodNode> methods = data.methods;
         for (int i = 0; i < methods.size(); i++) {
-            MethodSimple m = methods.get(i);
+            MethodSimple m = (MethodSimple) methods.get(i);
 
             sp.owner = data.name;
             sp.name = m.name.getString();
@@ -474,9 +475,9 @@ public class ConstMapper extends Mapping {
         }
 
         // 警告: field不能继承, 默认不改name
-        List<FieldSimple> fields = data.fields;
+        List<? extends MoFNode> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
-            FieldSimple f = fields.get(i);
+            FieldSimple f = (FieldSimple) fields.get(i);
 
             sp.owner = data.name;
             sp.name = f.name.getString();
@@ -508,9 +509,9 @@ public class ConstMapper extends Mapping {
     public final void S25_mapFieldName(ConstantData data) {
         Desc md = Util.getInstance().sharedDC;
         md.owner = data.name;
-        List<FieldSimple> fields = data.fields;
+        List<? extends FieldNode> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
-            FieldSimple field = fields.get(i);
+            FieldSimple field = (FieldSimple) fields.get(i);
 
             md.name = field.name.getString();
             md.param = checkFieldType ? field.type.getString()  :"";
@@ -546,12 +547,9 @@ public class ConstMapper extends Mapping {
 
         List<CstDynamic> lmd = ctx.getInvokeDynamic();
         if(!lmd.isEmpty()) {
-            Attribute std = (Attribute) data.attributes.getByName("BootstrapMethods");
-            if (std == null)
-                throw new IllegalArgumentException("有lambda却无BootstrapMethod at " + data.name);
-            AttrBootstrapMethods bs = std instanceof AttrBootstrapMethods ? (AttrBootstrapMethods) std : new AttrBootstrapMethods(Parser.reader(std), data.cp);
-            data.attributes.putByName(bs);
-
+            AttrBootstrapMethods bs = AttrHelper.getBootstrapMethods(data.cp, data);
+            if (bs == null)
+                throw new IllegalArgumentException("有lambda却无BootstrapMethod, " + data.name);
             for (i = 0; i < lmd.size(); i++) {
                 mapLambda(bs, data, lmd.get(i));
             }
@@ -572,7 +570,7 @@ public class ConstMapper extends Mapping {
         md.name = dyn.getDesc().getName().getString();
         // FP: init / clinit
         if(md.name.startsWith("<")) return;
-        md.param = ibm.getMethodType();
+        md.param = ibm.interfaceDesc();
 
         String allDesc = dyn.getDesc().getType().getString();
         md.owner = ParamHelper.parseReturn(allDesc).owner;

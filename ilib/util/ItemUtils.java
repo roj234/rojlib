@@ -30,20 +30,17 @@ import ilib.ImpLib;
 import ilib.api.Ownable;
 import ilib.api.energy.METile;
 import ilib.api.tile.ToolTarget;
-import ilib.tile.OwnerManager;
 import ilib.tile.TileBase;
 import roj.text.TextUtil;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityItem;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.JsonToNBT;
 import net.minecraft.nbt.NBTException;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
@@ -111,9 +108,11 @@ public final class ItemUtils {
     /**
      * String to block like mi:test@0
      *
+     * @see BlockHelper#stateFromText(String)
      * @return block data
      */
     @Nullable
+    @Deprecated
     public static BlockInfo stringToBlock(@Nonnull String data) {
         String[] tmp0 = data.split("@");
         String[] tmp = tmp0[0].split(":");
@@ -167,14 +166,12 @@ public final class ItemUtils {
             world.spawnEntity(item);
 
             stack.setCount(0);
-        } else {
-            ImpLib.logger().warn("Stack is null or empty!");
         }
     }
 
-    public static void dropStacksInInventory(@Nonnull IItemHandler itemHandler, World world, BlockPos pos) {
-        for (int slot = 0; slot < itemHandler.getSlots(); slot++) {
-            ItemStack stack = itemHandler.getStackInSlot(slot);
+    public static void dropStacksInInventory(@Nonnull IItemHandler ih, World world, BlockPos pos) {
+        for (int slot = 0; slot < ih.getSlots(); slot++) {
+            ItemStack stack = ih.getStackInSlot(slot);
             dropStack(world, stack, pos);
         }
     }
@@ -198,37 +195,20 @@ public final class ItemUtils {
         return setOwner(world, stack, pos, tile);
     }
 
+    @Deprecated
     public static ItemStack setOwner(IBlockAccess world, ItemStack stack, BlockPos pos, TileEntity tile) {
         if (!(tile instanceof Ownable)) return null;
         Ownable t = (Ownable) tile;
 
-        if (t.getOwner() != null && !"UNKN".equals(t.getOwner())) {
-            NBTTagCompound _tag = new NBTTagCompound();
-            _tag.setInteger("Type", t.getOwnType());
-            _tag.setString("Name", t.getOwner());
-            _tag.setLong("UUIDH", t.getOwnerUUIDH());
-            _tag.setLong("UUIDL", t.getOwnerUUIDL());
-            ItemNBT.setCompound(stack, "Owner", _tag);
-
-            NBTTagList trusts = new NBTTagList();
-            OwnerManager trustList = t.getTrustList();
-            for (int i = 0; i < trustList.size(); i++) {
-                NBTTagCompound compound = new NBTTagCompound();
-                compound.setLong("UUIDH", trustList.getUUIDH(i));
-                compound.setLong("UUIDL", trustList.getUUIDL(i));
-
-                trusts.appendTag(compound);
-            }
-            ItemNBT.setList(stack, "Trusts", trusts);
+        if (t.getOwnerManager() != null) {
+            NBTTagCompound tag = new NBTTagCompound();
+            tag.setInteger("OwnMode", t.getOwnType());
+            tag.setString("Own", t.getOwnerManager().getId());
+            ItemNBT.setCompound(stack, "Owner", tag);
         }
 
-
-        if ((tile instanceof METile) && ((METile) tile).maxME() > 0)
+        if (tile instanceof METile)
             ItemNBT.setInt(stack, "MaxME", ((METile) tile).maxME());
-
-        //if(tile instanceof MetaTile){
-        //     tag.setInt("Type", ((MetaTile)tile).getMeta());
-        //}
 
         return stack;
     }
@@ -310,10 +290,6 @@ public final class ItemUtils {
             }
         }
         return new ItemStack[]{string2Stack(string)};
-    }
-
-    public static ItemStack getUsableDualHandItem(EntityPlayer player) {
-        return ItemStack.EMPTY;
     }
 
     public static void setOreDict(Item item, int meta, String oreName) {

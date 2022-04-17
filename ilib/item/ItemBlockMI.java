@@ -26,12 +26,12 @@
 
 package ilib.item;
 
-import ilib.api.Ownable;
 import ilib.api.item.ILostThing;
 import ilib.api.item.ITooltip;
 import ilib.util.Colors;
 import ilib.util.ItemNBT;
 import ilib.util.MCTexts;
+import ilib.util.NBTType;
 import ilib.util.energy.EnergyHelper;
 
 import net.minecraft.block.Block;
@@ -44,6 +44,7 @@ import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.NonNullList;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 
 import net.minecraftforge.fml.relauncher.Side;
@@ -59,13 +60,20 @@ import java.util.List;
 public class ItemBlockMI extends ItemBlock {
     public ItemBlockMI(Block block) {
         super(block);
+        ResourceLocation name = block.getRegistryName();
+        if (name != null) setRegistryName(name);
     }
 
     protected void addTooltip(ItemStack stack, List<String> list) {}
 
     @Override
+    public int getMetadata(int i) {
+        return i;
+    }
+
+    @Override
     @SideOnly(Side.CLIENT)
-    public final void addInformation(ItemStack stack, World world, @Nonnull List<String> list, @Nonnull ITooltipFlag flag) {
+    public final void addInformation(ItemStack stack, World world, List<String> list, ITooltipFlag flag) {
         ItemBlockMI i = (ItemBlockMI) stack.getItem();
 
         ITooltip tooltip = null;
@@ -97,22 +105,13 @@ public class ItemBlockMI extends ItemBlock {
         if (tag != null) {
             if (tag.getInteger("MaxME") != 0)
                 EnergyHelper.addEnergyInformation(stack, list);
-            if (tag.hasKey("Owner")) {
-                if (!(tag.getTag("Owner") instanceof NBTTagCompound)) {
-                    tag.removeTag("Owner");
-                    return;
-                }
-                NBTTagCompound tag2 = (NBTTagCompound) tag.getTag("Owner");
-                int ownerType = tag2.getInteger("Type");
-                String owner = tag2.getString("Name");
-
-                if (owner.equals(Ownable.UNKNOWN)) {
-                    tag.removeTag("Owner");
-                    return;
-                }
+            if (tag.hasKey("Owner", NBTType.COMPOUND)) {
+                NBTTagCompound owner = tag.getCompoundTag("Owner");
+                int ownerType = owner.getInteger("OwnType");
+                String ownerId = owner.getString("Own");
 
                 list.add(Colors.ORANGE + ItemBase.getOwnerTypeName(ownerType));
-                list.add(Colors.BLUE + I18n.format("tooltip.ilib.owner") + owner);
+                list.add(Colors.BLUE + I18n.format("tooltip.ilib.owner") + ownerId);
             }
         }
     }
@@ -138,6 +137,6 @@ public class ItemBlockMI extends ItemBlock {
     }
 
     protected void getSubItems(NonNullList<ItemStack> list) {
-        list.add(new ItemStack(this));
+        block.getSubBlocks(null, list);
     }
 }

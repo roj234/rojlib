@@ -26,8 +26,6 @@
 package ilib.command.test;
 
 import ilib.command.parser.CommandHandler;
-import ilib.command.parser.Sender;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.util.math.BlockPos;
@@ -37,17 +35,15 @@ import net.minecraft.util.text.TextComponentString;
  * @author Roj234
  * @since  2021/1/9 14:43
  */
-@CommandHandler
+@CommandHandler("")
 public class CmdTest {
-    public void anyName(@Sender ICommandSender sender, String abcde) {
+    public void anyName(ICommandSender sender, String abcde) {
         sender.sendMessage(new TextComponentString(abcde));
     }
 
-    public void anotherFunction(@Sender ICommandSender sender, IBlockState state, BlockPos pos) {
+    public void anotherFunction(ICommandSender sender, IBlockState state, BlockPos pos) {
         sender.sendMessage(new TextComponentString(sender.toString() + pos.toString()));
     }
 
-    public void someHow(ArgMgrTest.Test test) {
-
-    }
+    public void someHow(ArgMgrTest.Test test) {}
 }

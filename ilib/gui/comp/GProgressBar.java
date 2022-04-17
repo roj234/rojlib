@@ -29,6 +29,7 @@ package ilib.gui.comp;
 import ilib.client.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.util.Direction;
+import ilib.gui.util.Sprite;
 
 /**
  * @author Roj234
@@ -40,6 +41,16 @@ public class GProgressBar extends GTexture {
 
     public GProgressBar(IGui parent, int x, int y, int u, int v, int w, int h, Direction dir) {
         super(parent, x, y, u, v, w, h);
+        this.direction = dir;
+    }
+
+    public GProgressBar(Component relativeTo, Sprite sprite, Direction dir) {
+        super(relativeTo, sprite);
+        this.direction = dir;
+    }
+
+    public GProgressBar(IGui parent, int x, int y, Sprite sprite, Direction dir) {
+        super(parent, x, y, sprite);
         this.direction = dir;
     }
 

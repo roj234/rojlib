@@ -28,8 +28,16 @@ package ilib.util;
 
 import com.google.common.base.Predicate;
 import ilib.ClientProxy;
-import ilib.entity.EntityLightningBoltMI;
 import ilib.util.BlockHelper.BresenhamLine;
+import roj.collect.SimpleList;
+import roj.concurrent.OperationDone;
+import roj.concurrent.Ref;
+import roj.math.MathUtils;
+import roj.math.Vec2d;
+import roj.math.Vector;
+import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.BlockTrapDoor;
@@ -38,6 +46,7 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.*;
+import net.minecraft.entity.effect.EntityLightningBolt;
 import net.minecraft.entity.item.EntityBoat;
 import net.minecraft.entity.item.EntityMinecart;
 import net.minecraft.entity.passive.EntityPig;
@@ -50,25 +59,16 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.*;
 import net.minecraft.util.math.BlockPos.PooledMutableBlockPos;
 import net.minecraft.util.math.RayTraceResult.Type;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
+
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
-import roj.collect.SimpleList;
-import roj.concurrent.OperationDone;
-import roj.concurrent.Ref;
-import roj.math.MathUtils;
-import roj.math.Vec2d;
-import roj.math.Vector;
-import roj.reflect.FieldAccessor;
-import roj.reflect.ReflectionUtils;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Field;
@@ -81,13 +81,16 @@ import java.util.List;
  * @since 2021/4/21 22:51
  */
 public class EntityHelper {
-    public static final int RT_STOP_ON_LIQUID = 1, RT_RETURN_LAST_AIR = 2;
+    public static final int RT_STOP_ON_LIQUID = 1, RT_RETURN_LAST_AIR = 2, SKIP_FIRST_BLOCk = 4;
 
     /**
      * 射线追踪
      */
     public static RayTraceResult rayTraceBlock(IBlockAccess world, Vector begin, Vector end, int flag) {
         BresenhamLine itr = new BresenhamLine(begin.x(), begin.y(), begin.z(), end.x(), end.y(), end.z());
+        if ((flag & SKIP_FIRST_BLOCk) != 0 && itr.hasNext()) {
+            itr.next();
+        }
 
         while (itr.hasNext()) {
             BlockPos pos = itr.next();
@@ -238,6 +241,7 @@ public class EntityHelper {
 
         // 方位角
         roj.math.Vec3d dir = direction(entity);
+        roj.math.Vec3d ray = new roj.math.Vec3d();
 
         double sx = MathUtils.clamp(srcEye.x, box.minX, box.maxX),
                sy = MathUtils.clamp(srcEye.y, box.minY, box.maxY),
@@ -275,13 +279,12 @@ public class EntityHelper {
                     break;
             }
 
-            // roj.opengl.render.ArenaRenderer.INSTANCE.render(new roj.math.Vec3d(x, y, z), new roj.math.Vec3d(x, y, z), 1);
-            if (entity.getDistanceSq(x, y, z) > maxDist) continue;
-
             // 原点射向目标的直线
-            roj.math.Vec3d ray = new roj.math.Vec3d(x - srcEye.x + 0.5,
-                                                    y - srcEye.y + 0.5,
-                                                    z - srcEye.z + 0.5);
+            ray.set(x - srcEye.x + 0.5,
+                    y - srcEye.y + 0.5,
+                    z - srcEye.z + 0.5);
+
+            if (ray.len2() > maxDist) continue;
 
             // 视线与目标连线之间的夹角
             double angle = Math.toDegrees(Math.acos(ray.angle(dir)));
@@ -601,7 +604,6 @@ public class EntityHelper {
 
 
 
-    public static final Removed SOMEHOW = new Removed("unknown");
     public static final int REMOVE_LIGHTNING = 1, REMOVE_NOTIFY = 2, REMOVE_FORCE = 4;
     public static void remove(Entity entity, World world) {
         remove(entity, world, REMOVE_NOTIFY);
@@ -617,38 +619,32 @@ public class EntityHelper {
 
         entity.setEntityInvulnerable(false);
         entity.setDropItemsWhenDead(false);
-
-        if ((flag & EntityHelper.REMOVE_FORCE) != 0) {
-            entity.setOutsideBorder(true);
-        }
-
-        if ((flag & EntityHelper.REMOVE_NOTIFY) != 0) {
-            entity.setDead();
-        }
+        entity.setOutsideBorder(true);
+        entity.setDead();
 
         entity.isDead = true;
 
         if (entity instanceof EntityLivingBase) {
             EntityLivingBase e = (EntityLivingBase) entity;
-            if ((flag & EntityHelper.REMOVE_NOTIFY) != 0) {
+            try {
                 e.clearActivePotions();
                 e.setHealth(0.0f);
-
                 if ((flag & EntityHelper.REMOVE_LIGHTNING) != 0) {
-                    e.attackEntityFrom(SOMEHOW, Float.MAX_VALUE);
-                    e.onDeath(SOMEHOW);
-                    world.addWeatherEffect(new EntityLightningBoltMI(world, e.posX, e.posY, e.posZ));
+                    world.addWeatherEffect(new EntityLightningBolt(world, e.posX, e.posY, e.posZ, true));
                 }
                 e.setHealth(Float.MIN_VALUE);
-            }
+            } catch (Throwable ignored) {}
+
             if (entity instanceof EntityPlayer) {
                 EntityPlayer player = (EntityPlayer) entity;
                 world.playerEntities.remove(player);
-                final MinecraftServer server = world.getMinecraftServer();
-                if(server != null && (flag & EntityHelper.REMOVE_FORCE) != 0) {
-                    final WorldServer worldServer = (WorldServer) world;
-                    worldServer.getPlayerChunkMap().removePlayer((EntityPlayerMP) player);
-                    final EntityTracker tracker = worldServer.getEntityTracker();
+
+                MinecraftServer server = world.getMinecraftServer();
+                if(server != null) {
+                    WorldServer w1 = (WorldServer) world;
+                    w1.getPlayerChunkMap().removePlayer((EntityPlayerMP) player);
+
+                    EntityTracker tracker = w1.getEntityTracker();
                     tracker.removePlayerFromTrackers((EntityPlayerMP) player);
                     tracker.untrack(player);
                 }
@@ -656,61 +652,42 @@ public class EntityHelper {
             }
         }
 
-        int i = entity.chunkCoordX;
-        int j = entity.chunkCoordZ;
-        Chunk chunk = world.getChunkProvider().getLoadedChunk(i, j);
-        if(chunk != null) chunk.removeEntity(entity);
-        entity.addedToChunk = false;
-
-        world.loadedEntityList.remove(entity);
-
-        if ((flag & EntityHelper.REMOVE_NOTIFY) != 0) {
-            world.onEntityRemoved(entity);
-        }
-
-        entity.updateBlocked = true;
         entity.motionX = entity.motionY = entity.motionZ = 0;
-        entity.lastTickPosX = entity.posX = entity.prevPosX = Double.NaN;
-        entity.lastTickPosY = entity.posY = entity.prevPosY = Double.NaN;
-        entity.lastTickPosZ = entity.posZ = entity.prevPosZ = Double.NaN;
+        entity.updateBlocked = false;
+        entity.lastTickPosX = entity.posX = entity.prevPosX = 0;
+        entity.lastTickPosY = entity.posY = entity.prevPosY = 0;
+        entity.lastTickPosZ = entity.posZ = entity.prevPosZ = 0;
         entity.noClip = true;
         entity.collided = entity.collidedVertically = entity.collidedHorizontally = false;
         entity.forceSpawn = false;
         entity.velocityChanged = true;
 
-        if ((flag & EntityHelper.REMOVE_FORCE) != 0) {
-            entity.serverPosX = entity.serverPosY = entity.serverPosZ = 0;
-            entity.world = null;
-            entity.setEntityId(-1);
-        }
+        try {
+            entity.onUpdate();
+        } catch (Throwable ignored) {}
 
-        if ((flag & EntityHelper.REMOVE_NOTIFY) != 0) {
-            try {
-                entity.onUpdate();
-            } catch (Exception ignored) {}
-        }
+
+        int i = entity.chunkCoordX;
+        int j = entity.chunkCoordZ;
+        Chunk chunk = world.getChunkProvider().getLoadedChunk(i, j);
+        if(chunk != null) chunk.removeEntity(entity);
+
+        chunk = world.getChunkProvider().getLoadedChunk((int)entity.posX >> 4, (int)entity.posZ >> 4);
+        if(chunk != null) chunk.removeEntity(entity);
+
+        entity.addedToChunk = false;
+
+        world.loadedEntityList.remove(entity);
+
+        try {
+            world.onEntityRemoved(entity);
+        } catch (Throwable ignored) {}
     }
 
     public static DamageSource damage(EntityLivingBase entity) {
         if (entity instanceof EntityPlayer)
             return DamageSource.causePlayerDamage((EntityPlayer) entity);
         else return DamageSource.causeMobDamage(entity);
-    }
-
-    private static final class Removed extends DamageSource {
-        public Removed(String type) {
-            super(type);
-            setMagicDamage();
-            setDamageBypassesArmor();
-            setDamageIsAbsolute();
-            setDamageAllowedInCreativeMode();
-        }
-
-        @Override
-        public ITextComponent getDeathMessage(EntityLivingBase entity) {
-            String s = "death.mi.removed";
-            return new TextComponentTranslation(s, entity.getName());
-        }
     }
 
 

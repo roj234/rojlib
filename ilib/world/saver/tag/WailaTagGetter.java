@@ -5,15 +5,15 @@ import ilib.util.DimensionHelper;
 import ilib.util.EntityHelper;
 import ilib.util.PlayerUtil;
 import io.netty.buffer.ByteBuf;
+import roj.math.Vec3d;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.INetHandler;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+
 import net.minecraftforge.fml.common.network.ByteBufUtils;
-import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
-import roj.math.Vec3d;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -31,37 +31,34 @@ public class WailaTagGetter implements ITagGetter {
     public static boolean  isWailaInstalled;
 
     public static void register() {
-        MockingUtil.modInterceptor.add(new MockingUtil.Interceptor() {
-            @Override
-            public boolean intercept(FMLProxyPacket packet, INetHandler handler) {
-                if (packet.channel().equals("waila")) {
-                    ByteBuf buf = packet.payload().duplicate();
-                    switch (buf.readByte() & 0xFF) {
-                        case WAILA_PING_ID:
-                            PlayerUtil.sendTo(null, "屏蔽了Waila的配置同步");
-                            isWailaInstalled = true;
-                            return true;
-                        case WAILA_DATA_ID:
-                            NBTTagCompound tag = ByteBufUtils.readTag(buf);
-                            if (tag == null) break;
-                            if (tag.hasKey("x")) {
-                                AsyncPacket pkt = map.remove(new Vec3d(tag.getInteger("x"), tag.getInteger("y"), tag.getInteger("z")));
-                                if (pkt != null) {
-                                    PlayerUtil.sendTo(null, "结果: " + tag.toString());
-                                    return true;
-                                }
-                            } else if (tag.hasKey("posX")) {
-                                AsyncPacket pkt = map.remove(new Vec3d(tag.getDouble("posX"), tag.getDouble("posY"), tag.getDouble("posZ")));
-                                if (pkt != null) {
-                                    pkt.setDone(tag);
-                                    return true;
-                                }
+        MockingUtil.modInterceptor.add((packet, handler) -> {
+            if (packet.channel().equals("waila")) {
+                ByteBuf buf = packet.payload().duplicate();
+                switch (buf.readByte() & 0xFF) {
+                    case WAILA_PING_ID:
+                        PlayerUtil.sendTo(null, "屏蔽了Waila的配置同步");
+                        isWailaInstalled = true;
+                        return true;
+                    case WAILA_DATA_ID:
+                        NBTTagCompound tag = ByteBufUtils.readTag(buf);
+                        if (tag == null) break;
+                        if (tag.hasKey("x")) {
+                            AsyncPacket pkt = map.remove(new Vec3d(tag.getInteger("x"), tag.getInteger("y"), tag.getInteger("z")));
+                            if (pkt != null) {
+                                PlayerUtil.sendTo(null, "结果: " + tag.toString());
+                                return true;
                             }
-                            break;
-                    }
+                        } else if (tag.hasKey("posX")) {
+                            AsyncPacket pkt = map.remove(new Vec3d(tag.getDouble("posX"), tag.getDouble("posY"), tag.getDouble("posZ")));
+                            if (pkt != null) {
+                                pkt.setDone(tag);
+                                return true;
+                            }
+                        }
+                        break;
                 }
-                return false;
             }
+            return false;
         });
     }
 

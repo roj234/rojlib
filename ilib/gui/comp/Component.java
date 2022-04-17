@@ -27,9 +27,9 @@
 package ilib.gui.comp;
 
 import ilib.ClientProxy;
-import ilib.ImpLib;
 import ilib.anim.Animation;
 import ilib.client.RenderUtils;
+import ilib.gui.DefaultSprites;
 import ilib.gui.IGui;
 import ilib.gui.util.ComponentListener;
 import org.lwjgl.opengl.GL11;
@@ -49,20 +49,29 @@ import java.util.List;
  * @since 2021/4/21 22:51
  */
 public abstract class Component {
-    public static final ResourceLocation TEXTURE = new ResourceLocation(ImpLib.MODID, "textures/gui/components.png");
-    private static final List<String> tooltip = new SimpleList<>();
+    public static final ResourceLocation TEXTURE = DefaultSprites.TEXTURE;
+
+    static final List<String> tooltip = new SimpleList<>();
 
     protected IGui owner;
 
     protected int mark;
     protected int xPos, yPos;
 
-    protected int texX, texY;
     protected ResourceLocation texture;
 
     protected ComponentListener listener;
 
     protected Animation animation;
+
+    public Component(IGui parent) {
+        setOwner(parent);
+
+        if (parent instanceof ComponentListener)
+            setListener((ComponentListener) parent);
+
+        texture = TEXTURE;
+    }
 
     public Component(IGui parent, int x, int y) {
         setOwner(parent);
@@ -73,10 +82,11 @@ public abstract class Component {
         texture = TEXTURE;
         xPos = x;
         yPos = y;
-        texX = texY = 256;
     }
 
-    public void onInit() {}
+    public void onInit() {
+        if (listener != null) listener.componentInit(this);
+    }
 
     /**
      * Called to render the component
@@ -86,16 +96,17 @@ public abstract class Component {
     /**
      * Called after base render, is already translated to guiLeft and guiTop, just move offset
      */
-    public abstract void renderOverlay(int mouseX, int mouseY);
+    public abstract void render2(int mouseX, int mouseY);
 
     public void getDynamicTooltip(List<String> tooltip, int mouseX, int mouseY) {
         if (listener != null) listener.getDynamicTooltip(this, tooltip, mouseX, mouseY);
     }
 
-    public void renderToolTip(int mouseX, int mouseY) {
+    public void renderTooltip(int relX, int relY, int absX, int absY) {
         tooltip.clear();
-        getDynamicTooltip(tooltip, mouseX - owner.getLeft(), mouseY - owner.getTop());
-        if (!tooltip.isEmpty()) drawHoveringText(tooltip, mouseX, mouseY, ClientProxy.mc.fontRenderer);
+        getDynamicTooltip(tooltip, relX, relY);
+        if (!tooltip.isEmpty())
+            drawHoveringText(tooltip, absX, absY, ClientProxy.mc.fontRenderer);
     }
 
     /**
@@ -109,12 +120,8 @@ public abstract class Component {
         if (listener != null) listener.mouseDown(this, x, y, button);
     }
 
-    public final void drawTexturedModalRect(int x, int y, int u, int v, int w, int h) {
-        if (texX == 256 && texY == 256) {
-            RenderUtils.fastRect(x, y, u, v, w, h);
-        } else {
-            RenderUtils.fastRect(x, y, u, v, w, h, texX, texY);
-        }
+    public static void drawTexturedModalRect(int x, int y, int u, int v, int w, int h) {
+        RenderUtils.fastRect(x, y, u, v, w, h);
     }
 
     public void mouseUp(int x, int y, int button) {
@@ -145,9 +152,7 @@ public abstract class Component {
         return mouseX >= xPos && mouseX < xPos + getWidth() && mouseY >= yPos && mouseY < yPos + getHeight();
     }
 
-    public void keyTyped(char letter, int keyCode) {
-        if (listener != null) listener.keyTyped(this, letter, keyCode);
-    }
+    public void keyTyped(char letter, int keyCode) {}
 
     /*******************************************************************************************************************
      * Accessors/Mutators                                                                                              *
@@ -161,7 +166,7 @@ public abstract class Component {
         return xPos;
     }
 
-    public final void setXPos(int xPos) {
+    public void setXPos(int xPos) {
         this.xPos = xPos;
     }
 
@@ -169,8 +174,18 @@ public abstract class Component {
         return yPos;
     }
 
-    public final void setYPos(int yPos) {
+    public void setYPos(int yPos) {
         this.yPos = yPos;
+    }
+
+    public final Component alignCenterY() {
+        yPos = (owner.getHeight() - getHeight()) / 2;
+        return this;
+    }
+
+    public final Component alignCenterX() {
+        xPos = (owner.getWidth() - getWidth()) / 2;
+        return this;
     }
 
     public final ResourceLocation getTexture() {
@@ -197,7 +212,6 @@ public abstract class Component {
 
     public Component setListener(ComponentListener l) {
         this.listener = l;
-        if (l != null) l.componentAdded(this);
         return this;
     }
 

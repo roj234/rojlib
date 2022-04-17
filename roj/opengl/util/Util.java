@@ -28,11 +28,11 @@ package roj.opengl.util;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import roj.math.Mat4f;
+import roj.math.Mat4x3f;
 import roj.opengl.vertex.VertexBuilder;
 import roj.opengl.vertex.VertexFormat;
 import roj.opengl.vertex.VertexFormats;
 
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 
 /**
@@ -148,27 +148,23 @@ public class Util {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, id);
     }
 
-    static final ByteBuffer  mb0          = BufferUtils.createByteBuffer(16 * 4);
-    static final FloatBuffer matrixBuffer = mb0.asFloatBuffer();
+    static FloatBuffer matrixBuffer = BufferUtils.createFloatBuffer(16);
 
-    public static void loadMatrix(Mat4f transform) {
-        matrixBuffer.put(transform.m00)
-                    .put(transform.m01)
-                    .put(transform.m02)
-                    .put(transform.m03)
-                    .put(transform.m10)
-                    .put(transform.m11)
-                    .put(transform.m12)
-                    .put(transform.m13)
-                    .put(transform.m20)
-                    .put(transform.m21)
-                    .put(transform.m22)
-                    .put(transform.m23)
-                    .put(transform.m30)
-                    .put(transform.m31)
-                    .put(transform.m32)
-                    .put(transform.m33)
-                    .flip();
+    public static void loadMatrix(Mat4f m) {
+        matrixBuffer
+                .put(m.m00).put(m.m01).put(m.m02).put(m.m03)
+                .put(m.m10).put(m.m11).put(m.m12).put(m.m13)
+                .put(m.m20).put(m.m21).put(m.m22).put(m.m23)
+                .put(m.m30).put(m.m31).put(m.m32).put(m.m33).flip();
+        GL11.glMultMatrix(matrixBuffer);
+    }
+
+    public static void loadMatrix(Mat4x3f m) {
+        matrixBuffer
+                .put(m.m00).put(m.m01).put(m.m02).put(m.m03)
+                .put(m.m10).put(m.m11).put(m.m12).put(m.m13)
+                .put(m.m20).put(m.m21).put(m.m22).put(m.m23)
+                .put(0).put(0).put(0).put(1).flip();
         GL11.glMultMatrix(matrixBuffer);
     }
 }

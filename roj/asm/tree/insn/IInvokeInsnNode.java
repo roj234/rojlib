@@ -28,8 +28,8 @@ package roj.asm.tree.insn;
 
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
+import roj.collect.SimpleList;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -44,17 +44,17 @@ public abstract class IInvokeInsnNode extends InsnNode {
     }
 
     public String name;
-    String rawParam;
+    String rawDesc;
     List<Type> params;
     Type returnType;
 
     final void initPar() {
         if (params == null) {
-            if (rawParam.startsWith("()")) {
-                params = new ArrayList<>();
-                returnType = ParamHelper.parseReturn(rawParam);
+            if (rawDesc.startsWith("()")) {
+                params = new SimpleList<>();
+                returnType = ParamHelper.parseReturn(rawDesc);
             } else {
-                params = ParamHelper.parseMethod(rawParam);
+                params = ParamHelper.parseMethod(rawDesc);
                 returnType = params.remove(params.size() - 1);
             }
         }
@@ -71,7 +71,12 @@ public abstract class IInvokeInsnNode extends InsnNode {
     }
 
     public final String rawDesc() {
-        return this.rawParam;
+        if (params != null) {
+            params.add(returnType);
+            rawDesc = ParamHelper.getMethod(params, rawDesc);
+            params.remove(params.size() - 1);
+        }
+        return rawDesc;
     }
 
     /**
@@ -79,8 +84,8 @@ public abstract class IInvokeInsnNode extends InsnNode {
      *
      * @param param java规范中的方法参数描述符
      */
-    public final void setParameters(String param) {
-        this.rawParam = param;
+    public final void rawDesc(String param) {
+        this.rawDesc = param;
         if (params != null) {
             params.clear();
             ParamHelper.parseMethod(param, params);
@@ -93,5 +98,5 @@ public abstract class IInvokeInsnNode extends InsnNode {
      *
      * @param desc javap格式的描述符
      */
-    public abstract void rawDesc(String desc);
+    public abstract void fullDesc(String desc);
 }

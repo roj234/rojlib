@@ -61,6 +61,6 @@ public final class U4InsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, index);
+        return OpcodeUtil.toString0(code) + " " + index;
     }
 }

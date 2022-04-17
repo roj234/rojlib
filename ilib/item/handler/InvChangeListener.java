@@ -39,8 +39,4 @@ import net.minecraftforge.items.IItemHandler;
 
 public interface InvChangeListener {
     void onInventoryChanged(IItemHandler i, int slot, ItemStack old, ItemStack now);
-
-    default boolean shouldDelete() {
-        return false;
-    }
 }

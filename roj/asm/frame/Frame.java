@@ -39,12 +39,29 @@ public final class Frame {
      */
     public char type;
     public InsnNode target;
-    public VarList
-            locals = new VarList(),
-            stacks = new VarList();
+    public VarList locals, stacks;
+
+    private Frame() {
+        locals = new VarList();
+        stacks = new VarList();
+    }
 
     public Frame(int type) {
+        this();
         this.type = (char) type;
+    }
+
+    public Frame(int type, InsnNode target) {
+        this();
+        this.type = (char) type;
+        this.target = target;
+    }
+
+    public Frame(int type, InsnNode target, VarList locals, VarList stacks) {
+        this.type = (char) type;
+        this.target = target;
+        this.locals = locals;
+        this.stacks = stacks;
     }
 
     public String toString() {

@@ -78,6 +78,7 @@ public class Interpreter {
 
     public void init(MethodNode owner) {
         Frame empty = Frame.EMPTY;
+        this.first = empty;
         this.lastStack = empty.stacks;
         this.lastLocal = empty.locals;
 
@@ -115,33 +116,11 @@ public class Interpreter {
     // region A
 
     final void pushRefArray(String name) {
-        stack.add(obj(name.startsWith("[") ? "[" + name : "[L" + name + ';'));
+        stack.add(obj(name.endsWith(";") ? "[" + name : "[L" + name + ';'));
     }
 
     final void pushPrimArray(int arrayType) {
-        stack.add(obj("[" + (char) PrimArrayTypeToNativeType(arrayType)));
-    }
-
-    public static byte PrimArrayTypeToNativeType(int id) {
-        switch (id) {
-            case 4:
-                return 'Z';
-            case 5:
-                return 'C';
-            case 6:
-                return 'F';
-            case 7:
-                return 'D';
-            case 8:
-                return 'B';
-            case 9:
-                return 'S';
-            case 10:
-                return 'I';
-            case 11:
-                return 'J';
-        }
-        throw new IllegalStateException("Unknown PrimArrayType " + id);
+        stack.add(obj("[" + (char) NodeHelper.PrimitiveArray2Type(arrayType)));
     }
 
     final void loadInArray(Var v) {
@@ -1057,6 +1036,11 @@ public class Interpreter {
     Map<InsnNode, BasicBlock> bySource = new MyHashMap<>();
     Map<InsnNode, Target> byTarget = new MyHashMap<>();
     Unioner<Exc> byException = new Unioner<>();
+    Frame first;
+
+    public Frame getFirst() {
+        return first;
+    }
 
     // 算了，没人会帮我的
     protected void checkStackSame(BasicBlock next, VarList localB, VarList StackB) {
@@ -1126,6 +1110,8 @@ public class Interpreter {
                                 case 1:
                                 case 2:
                                 case 3:
+                                    if (bb == first) this.first = build(null);
+
                                     BasicBlock next = bySource.get(node);
                                     if (next != null) {
                                         if (visited.add(next)) {

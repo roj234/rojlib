@@ -26,22 +26,37 @@
 
 package ilib.asm;
 
+import ilib.api.ContextClassTransformer;
 import roj.asm.AccessTransformer;
+import roj.asm.util.Context;
 
-import net.minecraft.launchwrapper.IClassTransformer;
+import java.util.Collection;
+
+import static roj.asm.AccessTransformer.getTransforms;
 
 /**
  * @author Roj234
  * @since 2021/5/29 16:43
  */
-public class ATProxy implements IClassTransformer {
+public class ATProxy implements ContextClassTransformer {
     public ATProxy() {
         Loader.addTransformer(this);
     }
 
     @Override
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
+    public byte[] transform(String name, String trName, byte[] basicClass) {
         Loader.wrapTransformers();
-        return AccessTransformer.transform(transformedName, basicClass);
+        return AccessTransformer.transform(trName, basicClass);
+    }
+
+    @Override
+    public void transform(String trName, Context ctx) {
+        Collection<String> list = getTransforms().get(trName);
+        if (list == null) return;
+        if (ctx.isFresh()) {
+            transform(null, trName, ctx.get().list);
+        } else {
+            AccessTransformer.openSome(list, ctx.getData());
+        }
     }
 }

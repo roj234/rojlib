@@ -27,7 +27,10 @@ package ilib.asm.util;
 
 import roj.collect.AbstractIterator;
 
+import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.gen.ChunkProviderServer;
 
 import java.util.Iterator;
 
@@ -36,15 +39,14 @@ import java.util.Iterator;
  * @since  2020/8/23 0:15
  */
 public class MergedItr extends AbstractIterator<Chunk> {
-    final Chunk[] chunks;
-    final int index;
-    int i;
+    final ChunkProviderServer w;
+    final Iterator<ChunkPos> pers;
     final Iterator<Chunk> chunkIterator;
 
-    public MergedItr(Chunk[] chunks, int index, Iterator<Chunk> chunkIterator) {
+    public MergedItr(WorldServer w, Iterator<ChunkPos> persistent, Iterator<Chunk> chunkIterator) {
+        this.w = w.getChunkProvider();
+        this.pers = persistent;
         this.chunkIterator = chunkIterator;
-        this.chunks = chunks;
-        this.index = index;
     }
 
     /**
@@ -52,10 +54,12 @@ public class MergedItr extends AbstractIterator<Chunk> {
      */
     @Override
     public boolean computeNext() {
-        if (i < index) {
-            result = chunks[i++];
+        if (pers.hasNext()) {
+            ChunkPos pos = pers.next();
+            result = w.loadChunk(pos.x, pos.z);
             return true;
         }
+
         boolean flag = chunkIterator.hasNext();
         if (flag) {
             result = chunkIterator.next();

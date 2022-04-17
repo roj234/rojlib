@@ -39,6 +39,9 @@ import java.util.*;
  * @since 2021/5/16 14:34
  */
 public class WeakHashSet<K> implements Set<K>, MapLike<WeakHashSet.Entry> {
+    public static <T> WeakHashSet<T> newWeakHashSet() {
+        return new WeakHashSet<>();
+    }
 
     private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 

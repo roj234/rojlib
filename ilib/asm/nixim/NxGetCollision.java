@@ -25,20 +25,8 @@
  */
 package ilib.asm.nixim;
 
-import com.google.common.collect.ImmutableSetMultimap;
-import ilib.asm.util.MCHooks;
-import ilib.asm.util.MergedItr;
-import ilib.util.MutableVec;
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.init.Blocks;
-import net.minecraft.util.EntitySelectors;
-import net.minecraft.util.math.*;
-import net.minecraft.world.World;
-import net.minecraft.world.border.WorldBorder;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraftforge.common.ForgeChunkManager;
-import net.minecraftforge.event.ForgeEventFactory;
+import ilib.misc.MCHooks;
+import ilib.util.Reflection;
 import org.apache.commons.lang3.mutable.MutableDouble;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -46,9 +34,20 @@ import roj.collect.FilterList;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.init.Blocks;
+import net.minecraft.util.EntitySelectors;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
+import net.minecraft.world.border.WorldBorder;
+
+import net.minecraftforge.event.ForgeEventFactory;
+
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -211,7 +210,7 @@ abstract class NxGetCollision extends World {
             double kx = (1 - Math.floor(1 / dpx) * dpx) / 2;
             double kz = (1 - Math.floor(1 / dpz) * dpz) / 2;
 
-            MutableVec vector = new MutableVec();
+            Vec3d vec1 = new Vec3d(0, 0, 0);
 
             for (double xP = 0; xP <= 1; xP = (xP + dpx)) {
                 for (double yP = 0; yP <= 1; yP = (yP + dpy)) {
@@ -219,7 +218,11 @@ abstract class NxGetCollision extends World {
                         double cx = bb.minX + dx * xP;
                         double cy = bb.minY + dy * yP;
                         double cz = bb.minZ + dz * zP;
-                        if (this.rayTraceBlocks(vector.set(cx + kx, cy, cz + kz).getVector(), vec) == null) {
+
+                        Reflection.HELPER.setVecX(vec1, cx + kx);
+                        Reflection.HELPER.setVecY(vec1, cy);
+                        Reflection.HELPER.setVecZ(vec1, cz + kz);
+                        if (rayTraceBlocks(vec1, vec) == null) {
                             ++isBlock;
                         }
 
@@ -232,31 +235,6 @@ abstract class NxGetCollision extends World {
         } else {
             return 0;
         }
-    }
-
-    @Override
-    @Inject("getPersistentChunkIterable")
-    public Iterator<Chunk> getPersistentChunkIterable(Iterator<Chunk> chunkIterator) {
-        ImmutableSetMultimap<ChunkPos, ForgeChunkManager.Ticket> persistentChunksFor = getPersistentChunks();
-        Chunk[] chunks;
-        int index = 0;
-        if (!persistentChunksFor.isEmpty()) {
-            chunks = new Chunk[persistentChunksFor.size()];
-            profiler.startSection("forcedChunkLoading");
-            for (ChunkPos pos : persistentChunksFor.keys()) {
-                if (pos != null) {
-                    chunks[index++] = getChunk(pos.x, pos.z);
-                }
-            }
-            //profiler.endStartSection("regularChunkLoading");
-            profiler.endSection();
-        } else {
-            if (!chunkIterator.hasNext())
-                return Collections.emptyIterator();
-            chunks = null;
-        }
-
-        return new MergedItr(chunks, index, chunkIterator);
     }
 
     @Nullable

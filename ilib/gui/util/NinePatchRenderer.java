@@ -27,21 +27,26 @@
 package ilib.gui.util;
 
 import ilib.client.RenderUtils;
-import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import roj.opengl.util.Util;
 import roj.opengl.util.VboUtil;
 import roj.opengl.vertex.VertexBuilder;
-import roj.opengl.vertex.VertexFormat;
+
+import net.minecraft.util.ResourceLocation;
 
 /**
  * @author Roj234
  * @since 2021/1/13 12:37
  */
 public class NinePatchRenderer {
-    protected static final VertexFormat P2S_UV2F = VertexFormat.builder().pos(VertexFormat.SHORT, 2).uv2f().build();
+    public static final int NO_CT = 1,
+            NO_U = 2, NO_D = 4, NO_L = 8, NO_R = 16,
+            NO_LU = 32, NO_RU = 64, NO_LD = 128, NO_RD = 256;
 
-    protected int u, v, cell, center;
+    protected final int cell, center;
+    protected int renderFlag;
+
+    protected int u, v;
     protected ResourceLocation texture;
 
     public NinePatchRenderer(int u, int v, int cell, ResourceLocation texture) {
@@ -98,21 +103,19 @@ public class NinePatchRenderer {
     public int getCellSize() {
         return cell;
     }
-
-    public void setCellSize(int cell) {
-        this.cell = cell;
-    }
-
     public int getCenterSize() {
         return center;
     }
-
-    public void setCenterSize(int center) {
-        this.center = center;
-    }
-
     public int getTextureSize() {
         return center + (cell << 1);
+    }
+
+    public int getRenderFlag() {
+        return renderFlag;
+    }
+
+    public void setRenderFlag(int renderFlag) {
+        this.renderFlag = renderFlag;
     }
 
     protected static void drawNP(VertexBuilder vb, int x, int y, int w, int h, int cell, int u, int v) {
@@ -131,33 +134,44 @@ public class NinePatchRenderer {
     public void render(int x, int y, int u, int v, int w, int h) {
         if (texture != null) RenderUtils.bindTexture(texture);
 
-        int cs = this.cell;
-        int ce = cs + this.center;
+        int cs = cell;
+        int ce = cs + center;
         u += this.u;
         v += this.v;
 
         VertexBuilder vb = Util.sharedVertexBuilder;
-        vb.begin(P2S_UV2F);
+        vb.begin(SimpleSprite.P2S_UV2F);
+
+        int flag = renderFlag;
 
         // 中间
+        if ((flag & NO_CT) == 0)
         drawNP(vb, x + cs, y + cs, w - (cs << 1), h - (cs << 1), cs, u + cs, v + cs);
 
         // 上方线条
+        if ((flag & NO_U) == 0)
         drawNP(vb, x + cs, y, w - (cs << 1), cs, cs, u + cs, v);
         // 下方线条
+        if ((flag & NO_D) == 0)
         drawNP(vb, x + cs, y + h - cs, w - (cs << 1), cs, cs, u + cs, v + ce);
         // 左方线条
+        if ((flag & NO_L) == 0)
         drawNP(vb, x, y + cs, cs, h - (cs << 1), cs, u, v + cs);
         // 右方线条
+        if ((flag & NO_R) == 0)
         drawNP(vb, x + w - cs, y + cs, cs, h - (cs << 1), cs, u + ce, v + cs);
 
         // 左上角
+        if ((flag & NO_LU) == 0)
         drawNP(vb, x, y, cs, cs, cs, u, v);
         // 右上角
+        if ((flag & NO_RU) == 0)
         drawNP(vb, x + w - cs, y, cs, cs, cs, u + ce, v);
         // 左下角
+        if ((flag & NO_LD) == 0)
         drawNP(vb, x, y + h - cs, cs, cs, cs, u, v + ce);
         // 右下角
+        if ((flag & NO_RD) == 0)
         drawNP(vb, x + w - cs, y + h - cs, cs, cs, cs, u + ce, v + ce);
 
         // 36 vertices, each: 2 short + 2 float = 12 bytes

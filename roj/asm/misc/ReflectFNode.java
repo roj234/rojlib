@@ -26,8 +26,9 @@
 package roj.asm.misc;
 
 import roj.asm.Parser;
-import roj.asm.tree.MoFNode;
+import roj.asm.tree.FieldNode;
 import roj.asm.type.ParamHelper;
+import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 
@@ -39,7 +40,7 @@ import java.lang.reflect.Field;
  * @author Roj233
  * @since 2022/1/11 2:13
  */
-public final class ReflectFNode implements MoFNode {
+public final class ReflectFNode implements FieldNode {
     private final Field field;
 
     public ReflectFNode(Field field) {this.field = field;}
@@ -82,5 +83,10 @@ public final class ReflectFNode implements MoFNode {
     @Override
     public int hashCode() {
         return field.hashCode();
+    }
+
+    @Override
+    public Type fieldType() {
+        return ParamHelper.parseField(rawDesc());
     }
 }

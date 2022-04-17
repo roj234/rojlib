@@ -62,7 +62,7 @@ public class NiximModContainerFactory {
             Annotation ann = house.get(i);
             type = Type.getType("L" + ann.clazz + ';');
             if (modTypes.containsKey(type)) {
-                FMLLog.log.debug("检测到 {} 类型的mod ({}) - 开始加载", type, cn);
+                FMLLog.log.debug("检测到mod ({}) - 开始加载", cn);
 
                 try {
                     ModContainer ret = modTypes.get(type).newInstance(cn, container, TypeHelper.toPrimitive(ann.values));

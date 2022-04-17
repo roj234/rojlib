@@ -487,14 +487,14 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         return putFloat(putIndex(4), f);
     }
     public final ByteList putFloat(int wi, float f) {
-        return putInt(wi, Float.floatToIntBits(f));
+        return putInt(wi, Float.floatToRawIntBits(f));
     }
 
     public final ByteList putDouble(double d) {
         return putDouble(putIndex(8), d);
     }
     public final ByteList putDouble(int wi, double d) {
-        return putLong(wi, Double.doubleToLongBits(d));
+        return putLong(wi, Double.doubleToRawLongBits(d));
     }
 
     public final ByteList putShort(int s) {
@@ -1116,9 +1116,13 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
     public static final int FLAG_PARTIAL = 1;
     @SuppressWarnings("fallthrough")
     public static int decodeUTF0(int max, CharList out, ByteList in, int i, int flag) throws UTFDataFormatException {
+        i += in.arrayOffset();
+        max += in.arrayOffset();
+        byte[] inn = in.list;
+
         int c;
         while (i < max) {
-            c = in.getU(i);
+            c = inn[i] & 0xFF;
             if (c > 127) break;
             i++;
             out.append((char) c);
@@ -1127,7 +1131,7 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
         int c2, c3;
         cyl:
         while (i < max) {
-            c = in.getU(i);
+            c = inn[i] & 0xFF;
             switch (c >> 4) {
                 case 0:
                 case 1:
@@ -1154,8 +1158,9 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
                         }
                     }
 
-                    c2 = in.get(i - 1);
+                    c2 = inn[i - 1];
                     if ((c2 & 0xC0) != 0x80) {
+                        i -= in.arrayOffset();
                         throw new UTFDataFormatException("malformed input around byte " + (i - 1));
                     }
                     out.append((char) (((c & 0x1F) << 6) |
@@ -1173,9 +1178,10 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
                         }
                     }
 
-                    c2 = in.get(i - 2);
-                    c3 = in.get(i - 1);
+                    c2 = inn[i - 2];
+                    c3 = inn[i - 1];
                     if (((c2 & 0xC0) != 0x80) || ((c3 & 0xC0) != 0x80)) {
+                        i -= in.arrayOffset();
                         throw new UTFDataFormatException("malformed input around byte " + i);
                     }
 
@@ -1186,12 +1192,13 @@ public class ByteList extends OutputStream implements DataInput, DataOutput, Cha
                     break;
                 case 15:
                 default:
+                    i -= in.arrayOffset();
                     /* 10xx xxxx,  1111 xxxx */
                     throw new UTFDataFormatException("malformed input around byte " + i);
             }
         }
 
-        return i;
+        return i - in.arrayOffset();
     }
     // endregion
     // region Relative bit get method from original BitReader

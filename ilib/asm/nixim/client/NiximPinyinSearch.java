@@ -26,7 +26,7 @@
 package ilib.asm.nixim.client;
 
 import ilib.asm.nixim.FastSearchTree;
-import ilib.asm.util.MCHooks;
+import ilib.misc.MCHooks;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;

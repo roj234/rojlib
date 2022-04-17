@@ -35,6 +35,7 @@ package ilib.api.recipe.impl;
 
 import ilib.api.RandomEntry;
 import ilib.api.recipe.IRandomRecipe;
+
 import net.minecraft.item.ItemStack;
 
 import java.util.ArrayList;
@@ -56,7 +57,7 @@ public class StdRandomOreRecipe extends StdOreRecipe implements IRandomRecipe<St
     }
 
     @Override
-    public int getCount(int id) {
+    public int getCount(int id, ItemStack stack) {
         if (id >= randoms.size()) {
             throw new IllegalArgumentException("[MI矿物随机-" + getName() + "]随机列表大小不对! 需求: " + id + ", 实际: " + randoms.size());
         }

@@ -182,7 +182,7 @@ public final class AttrBootstrapMethods extends Attribute {
 
         public String owner, name;
 
-        private String     rawDesc;
+        private String rawDesc;
         private List<Type> params;
         private Type returnType;
 
@@ -193,21 +193,21 @@ public final class AttrBootstrapMethods extends Attribute {
             }
         }
 
-        public final Type returnType() {
+        public final Type factoryReturnType() {
             initPar();
             return returnType;
         }
 
-        public final List<Type> parameters() {
+        public final List<Type> factoryParameters() {
             initPar();
             return params;
         }
 
-        public final String rawDesc() {
+        public final String factoryDesc() {
             return rawDesc;
         }
 
-        public final void rawDesc(String param) {
+        public final void factoryDesc(String param) {
             this.rawDesc = param;
             if (params != null) {
                 params.clear();
@@ -251,7 +251,7 @@ public final class AttrBootstrapMethods extends Attribute {
             }
             sb.append(")\n            Desc: ");
 
-            List<Type> types = ParamHelper.parseMethod(getMethodType());
+            List<Type> types = ParamHelper.parseMethod(interfaceDesc());
 
             sb.append(types.remove(types.size() - 1)).append(" .dynamic(");
             if (!types.isEmpty()) {
@@ -267,7 +267,7 @@ public final class AttrBootstrapMethods extends Attribute {
             return method.kind == this.kind && method.owner.equals(this.owner) && method.name.equals(this.name) && method.rawDesc.equals(this.rawDesc);
         }
 
-        public String getMethodType() {
+        public String interfaceDesc() {
             CstMethodType mType = (CstMethodType) arguments.get(0);
             //            for (int i = 0; i < arguments.size(); i++) {
             //                Constant c = arguments.get(i);
@@ -281,6 +281,11 @@ public final class AttrBootstrapMethods extends Attribute {
             //                throw new IllegalArgumentException("METHOD_TYPE argument not found. ");
             //            }
             return mType.getValue().getString();
+        }
+
+        public CstRef implementor() {
+            CstMethodHandle handle = (CstMethodHandle) arguments.get(1);
+            return handle.getRef();
         }
 
         @Override

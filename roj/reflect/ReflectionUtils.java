@@ -82,7 +82,7 @@ public final class ReflectionUtils {
      */
     public static List<Field> getFields(Class<?> clazz) {
         ArrayList<Field> fields = new ArrayList<>();
-        while (clazz != Object.class) {
+        while (clazz != null && clazz != Object.class) {
             Collections.addAll(fields, clazz.getDeclaredFields());
             clazz = clazz.getSuperclass();
         }
@@ -90,7 +90,7 @@ public final class ReflectionUtils {
     }
 
     public static void consumeFields(Class<?> clazz, Consumer<Field> consumer) {
-        while (clazz != Object.class) {
+        while (clazz != null && clazz != Object.class) {
             for (Field field : clazz.getDeclaredFields())
                 consumer.accept(field);
             clazz = clazz.getSuperclass();
@@ -102,7 +102,7 @@ public final class ReflectionUtils {
      */
     public static List<Method> getMethods(Class<?> clazz) {
         MyHashSet<Method> methods = new MyHashSet<>();
-        while (clazz != Object.class) {
+        while (clazz != null && clazz != Object.class) {
             methods.addAll(clazz.getDeclaredMethods());
             clazz = clazz.getSuperclass();
         }

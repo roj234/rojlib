@@ -26,10 +26,7 @@
 package roj.mod.util;
 
 import roj.asm.type.ParamHelper;
-import roj.collect.FilterList;
-import roj.collect.HashBiMap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
+import roj.collect.*;
 import roj.io.IOUtil;
 import roj.mapper.Mapping;
 import roj.mapper.Util;
@@ -221,6 +218,32 @@ public class MappingHelper {
 
     // endregion
     // region MCP 结果导出
+
+    public void applyOverride(File override) throws IOException {
+        SimpleLineReader slr = new SimpleLineReader(IOUtil.readUTF(override), true);
+        String src = null;
+        while (slr.hasNext()) {
+            String line = slr.next();
+            if (line.startsWith("#")) continue;
+
+            if (src == null) {
+                src = line;
+            } else {
+                List<Desc> descs = fields.get(src);
+                if (descs == null) descs = methods.get(src);
+                if (descs == null) {
+                    System.out.println("无法找到 " + src);
+                } else {
+                    System.out.println("Override " + descs.get(0).name + "(" + src + ") => " + line);
+                    for (int i = 0; i < descs.size(); i++) {
+                        descs.get(i).name = line;
+                    }
+                }
+
+                src = null;
+            }
+        }
+    }
 
     public void extractMcp2Srg_MCP(File result) throws IOException {
         Util U = Util.getInstance();
@@ -498,8 +521,7 @@ public class MappingHelper {
             throw new IllegalStateException("Not done yet or not read MCP");
         }
 
-        CharList cl = new CharList(20);
-        ArrayList<String> tmp = new ArrayList<>(4);
+        SimpleList<String> tmp = new SimpleList<>(4);
 
         Map<String, String[]> ds = new MyHashMap<>(1000);
 
@@ -515,15 +537,14 @@ public class MappingHelper {
                 OUT.println("[Warn]Src参数不符合 " + key);
                 continue;
             }
-            Iterator<Desc> it = entry.getValue().iterator();
-            if (it.hasNext()) {
-                // aqb.onHarvest (Lamu;Let;Lawt;Laed;)Z
-                Desc descriptor = it.next();
+            List<Desc> value = entry.getValue();
+            // aqb.onHarvest (Lamu;Let;Lawt;Laed;)Z
+            Desc descriptor = value.get(0);
 
-                ds.put(tmp.get(1), new String[]{
-                        descriptor.owner, descriptor.name + '|' + U.transformMethodParam(classes, descriptor.param),
-                });
-            }
+            ds.put(tmp.get(1), new String[]{
+                    descriptor.owner,
+                    descriptor.name + '|' + U.transformMethodParam(classes, descriptor.param)
+            });
         }
 
         final Function<String, Map<String, List<String>>> fnM = Helpers.fnMyHashMap();
@@ -531,7 +552,7 @@ public class MappingHelper {
         for (Map.Entry<String, String> entry : paramNameMap.entrySet()) {
             tmp.clear();
             TextUtil.split(tmp, entry.getKey(), '_');
-            String[] data = ds.remove(tmp.get(1));
+            String[] data = ds.get(tmp.get(1));
             if(data == null) {
                 if(!tmp.get(1).startsWith("i"))
                     OUT.println("[Warn]Src参数不存在 " + entry.getKey());

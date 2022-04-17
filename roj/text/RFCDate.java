@@ -7,6 +7,7 @@ import roj.math.MathUtils;
  * @since 2022/3/12 16:13
  */
 public class RFCDate {
+    @SuppressWarnings("fallthrough")
     public static long parse(CharSequence seq) {
         // Tue, 25 Feb 2022 21:48:10 GMT
         String str = seq.subSequence(0, 3).toString();

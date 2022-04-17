@@ -46,8 +46,10 @@ public class HttpConnection {
     }
 
     public void connect() throws IOException {
-        if (!client.connected()) {
-            client.url(url).send();
+        if (response == null) {
+            if (!client.connected()) {
+                client.url(url).send();
+            }
             try {
                 response = client.response();
             } catch (ParseException e) {
@@ -57,6 +59,7 @@ public class HttpConnection {
     }
 
     public void disconnect() throws IOException {
+        response = null;
         client.disconnect();
     }
 

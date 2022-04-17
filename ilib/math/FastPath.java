@@ -183,16 +183,4 @@ public class FastPath<V extends PositionProvider>/* implements Iterable<V>*/ {
             }
         }
     }
-
-    /**
-     * Returns an iterator over elements of type {@code T}.
-     *
-     * @return an Iterator.
-     @Override public Iterator<V> iterator() {
-     return new AbstractIterator<V>() {
-     @Override public boolean computeNext() {
-     return false;
-     }
-     };
-     }*/
 }

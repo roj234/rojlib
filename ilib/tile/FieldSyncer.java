@@ -2,15 +2,20 @@ package ilib.tile;
 
 import ilib.ImpLib;
 import ilib.api.Syncable;
+import ilib.net.IMessage;
 import ilib.net.MyChannel;
 import ilib.net.NetworkHelper;
 import ilib.net.packet.MsgSyncField;
 import ilib.net.packet.MsgSyncFields;
+import ilib.util.BlockHelper;
 import roj.collect.SimpleList;
+import roj.util.EmptyArrays;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+
+import java.util.Arrays;
 
 /**
  * @author Roj233
@@ -19,11 +24,12 @@ import net.minecraft.util.math.BlockPos;
 public class FieldSyncer {
     public static final byte CLIENT = 2, SERVER = 1, GUI = 0;
 
-    private final SimpleList<EntityPlayerMP> players;
+    private SimpleList<EntityPlayerMP> players;
 
     private final TileEntity owner;
 
-    private final int[] fields, prevFields;
+    private int[] fields, prevFields;
+    private int fieldCount;
 
     private long client, server, gui;
     private int counts;
@@ -34,21 +40,28 @@ public class FieldSyncer {
 
     public <T extends TileEntity & Syncable> FieldSyncer(T sync, int fieldAmount) {
         this.owner = sync;
-        this.fields = new int[fieldAmount];
-        this.prevFields = new int[fieldAmount];
-        this.players = new SimpleList<>();
+        this.fields = fieldAmount == 0 ? EmptyArrays.INTS : new int[fieldAmount];
+        this.prevFields = fieldAmount == 0 ? EmptyArrays.INTS : new int[fieldAmount];
     }
 
     public void openGui(EntityPlayerMP player) {
+        if (players == null) return;
         if (!players.contains(player)) {
             // initial capacity=1
             players.ensureCapacity(1);
             players.add(player);
+
+            if (fieldCount == 0) {
+                BlockHelper.sendTileUpdate(owner);
+            } else {
+                MsgSyncFields pkt = new MsgSyncFields(this, owner.getPos(), GUI);
+                NetworkHelper.IL.sendTo(pkt, player);
+            }
         }
     }
 
     public void closeGui(EntityPlayerMP player) {
-        players.remove(player);
+        if (players != null) players.remove(player);
     }
 
     public void update() {
@@ -57,11 +70,15 @@ public class FieldSyncer {
         int[] prevFields = this.prevFields;
 
         ((Syncable) owner).getFieldInfo(fields);
-        for (int i = 0; i < prevFields.length; i++) {
+        for (int i = 0; i < fieldCount; i++) {
             if (fields[i] != prevFields[i]) {
                 prevFields[i] = fields[i];
                 modified |= 1L << i;
             }
+        }
+        if (players == null) {
+            players = new SimpleList<>();
+            return;
         }
         if (modified == 0) return;
 
@@ -80,8 +97,15 @@ public class FieldSyncer {
             }
         } else {
             if ((modified & server) != 0) {
-                ch.sendToAllTrackingChunk(new MsgSyncFields(this, pos, SERVER),
-                                          owner.getWorld(), pos.getX(), pos.getZ());
+                IMessage p;
+                if (idx >= 0) {
+                    MsgSyncField pkt = new MsgSyncField(idx, prevFields[idx]);
+                    pkt.pos = pos;
+                    p = pkt;
+                } else {
+                    p = new MsgSyncFields(this, pos, SERVER);
+                }
+                ch.sendToAllTrackingChunk(p, owner.getWorld(), pos.getX(), pos.getZ());
             }
             if ((modified & gui) != 0) {
                 SimpleList<EntityPlayerMP> players = this.players;
@@ -119,27 +143,40 @@ public class FieldSyncer {
 
     public FieldSyncer register(int k, int dir) {
         switch (dir) {
-            case SERVER:
-                server |= 1L << k;
-                counts += 0x10000;
-                break;
-            case CLIENT:
-                client |= 1L << k;
-                counts += 0x100;
-                break;
             case GUI:
                 gui |= 1L << k;
                 counts += 0x1;
                 break;
+            case SERVER:
+                server |= 1L << k;
+                counts += 0x100;
+                break;
+            case CLIENT:
+                client |= 1L << k;
+                counts += 0x10000;
+                break;
+        }
+        fieldCount = Math.max(++k, fieldCount);
+        if (fields.length < k) {
+            fields = Arrays.copyOf(fields, k);
+            prevFields = Arrays.copyOf(prevFields, k);
         }
         return this;
     }
 
     public FieldSyncer register(int from, int to, int dir) {
         switch (dir) {
-            case SERVER:
+            case GUI:
                 long mask = 0;
-                counts += (to - from) * 0x10000;
+                counts += (to - from);
+                while (from < to) {
+                    mask |= 1L << from++;
+                }
+                gui |= mask;
+                break;
+            case SERVER:
+                mask = 0;
+                counts += (to - from) * 0x100;
                 while (from < to) {
                     mask |= 1L << from++;
                 }
@@ -147,21 +184,18 @@ public class FieldSyncer {
                 break;
             case CLIENT:
                 mask = 0;
-                counts += (to - from) * 0x100;
+                counts += (to - from) * 0x10000;
                 while (from < to) {
                     mask |= 1L << from++;
                 }
                 client |= mask;
                 break;
-            case GUI:
-                mask = 0;
-                counts += (to - from);
-                while (from < to) {
-                    mask |= 1L << from++;
-                }
-                gui |= mask;
-                break;
         }
+        if (fields.length <= to) {
+            fields = Arrays.copyOf(fields, to);
+            prevFields = Arrays.copyOf(prevFields, to);
+        }
+        fieldCount = Math.max(to, fieldCount);
         return this;
     }
 
@@ -200,10 +234,10 @@ public class FieldSyncer {
         long set;
         switch (dir) {
             case CLIENT:
-                set = server;
+                set = client;
                 break;
             case SERVER:
-                set = client;
+                set = server;
                 break;
             default:
                 set = gui;
@@ -228,10 +262,10 @@ public class FieldSyncer {
         long set;
         switch (dir) {
             case CLIENT:
-                set = server;
+                set = client;
                 break;
             case SERVER:
-                set = client;
+                set = server;
                 break;
             default:
                 set = gui;

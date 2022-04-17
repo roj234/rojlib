@@ -99,7 +99,8 @@ public final class FMDMain {
             Shared.loadProject(true);
             if(args.length == 0) {
                 System.out.println("FMD 更快的mod开发环境 " + VERSION + " By Roj234");
-                CmdUtil.info("CLI可用指令: build, run, config, reflect, deobf, gc, reload, auto");
+                System.out.println("https://www.github.com/roj234/rojlib");
+                CmdUtil.info("CLI可用指令: build, run, config, reflect, reobf, deobf, gc, reload, auto");
                 System.out.println();
             }
         }
@@ -166,7 +167,10 @@ public final class FMDMain {
                 break;
             case "d":
             case "deobf":
-                exitCode = deobf(args);
+                exitCode = deobf(args, false);
+                break;
+            case "reobf":
+                exitCode = deobf(args, true);
                 break;
             case "ref":
             case "reflect":
@@ -265,6 +269,10 @@ public final class FMDMain {
                     helper.parseMCP(mcpFile, origPM);
                     helper.MCP_optimizeParamMap(origPM, paramMap);
                 }
+                File override = new File(BASE, "util/override.cfg");
+                if (override.isFile()) {
+                    helper.applyOverride(override);
+                }
                 helper.extractMcp2Srg_MCP(target);
             } catch (IOException e) {
                 CmdUtil.warning("IO异常 ", e);
@@ -319,7 +327,8 @@ public final class FMDMain {
         return forgeToMcp(mcpConfig, mcpFile, null, new File(BASE, "Mcp2Srg.srg"));
     }
 
-    public static int deobf(String[] args) throws IOException, InterruptedException {
+    // reverse: 是reverse的reverse....
+    public static int deobf(String[] args, boolean reverse) throws IOException, InterruptedException {
         List<File> files = new ArrayList<>();
 
         if(args.length > 1) {
@@ -330,7 +339,8 @@ public final class FMDMain {
             files = Collections.singletonList(UIUtil.readFile("文件"));
         }
 
-        ConstMapper rev = loadReverseMapper();
+        loadMapper();
+        ConstMapper rev = reverse ? mapperFwd : loadReverseMapper();
 
         MyHashMap<String, byte[]> res = new MyHashMap<>(400);
 
@@ -395,7 +405,7 @@ public final class FMDMain {
             return 0;
         }
 
-        boolean clearPkgInfo = helper.getBoolean("清除'@XXXNonnullByDefault'注解: (T/F)");
+        boolean clearPkgInfo = true;//helper.getBoolean("清除'@XXXNonnullByDefault'注解: (T/F)");
 
         Map<String, String> className = new MyHashMap<>();
         Map<String, Collection<String>> openSubClasses = new MyHashMap<>();
@@ -672,6 +682,7 @@ public final class FMDMain {
         boolean asyncRun = CONFIG.getBool("异步运行MC");
 
         if(CONFIG.getBool("启用热重载")) {
+            launchHotReload();
             asyncRun = true;
 
             int port = 0xFFFF & CONFIG.getInteger("重载端口");
@@ -839,6 +850,7 @@ public final class FMDMain {
                         }
                     }
                     ent.clear();
+                    if (!increment) break;
                 }
             }
         }

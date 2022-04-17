@@ -78,12 +78,8 @@ public final class InvokeItfInsnNode extends InvokeInsnNode {
     }
 
     public void toByteArray(ConstantPool cw, ByteList w) {
-        if (params != null) {
-            params.add(returnType);
-            rawParam = ParamHelper.getMethod(params);
-            params.remove(params.size() - 1);
-        }
-        w.put(code).putShort(cw.getItfRefId(owner, name, rawParam));
+        String desc = rawDesc();
+        w.put(code).putShort(cw.getItfRefId(owner, name, desc));
 
         // The value of the count operand of each invokeinterface instruction must reflect the number of local variables necessary
         // to store the arguments to be passed to the interface method.
@@ -93,7 +89,7 @@ public final class InvokeItfInsnNode extends InvokeInsnNode {
                 cnt += params.get(i).length();
             }
         } else {
-            cnt += ParamHelper.paramSize(rawParam);
+            cnt += ParamHelper.paramSize(desc);
         }
         w.put((byte) cnt)
          // The fourth operand byte of each invokeinterface instruction must have the value zero.

@@ -27,7 +27,6 @@ package ilib.asm.nixim;
 
 import ilib.Config;
 import ilib.ImpLib;
-import ilib.asm.util.VarIntEncoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.DecoderException;

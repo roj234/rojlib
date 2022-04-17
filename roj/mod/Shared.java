@@ -61,12 +61,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Shared {
     public static final boolean DEBUG;
     public static final String MC_BINARY = "forgeMcBin";
-    public static final String VERSION = "1.6.3";
+    public static final String VERSION = "1.6.4";
 
     public static final File BASE, TMP_DIR, PROJECTS_DIR;
 
     static final IFileWatcher watcher;
     static HRRemote hotReload;
+
+    public static void launchHotReload() {
+        if (hotReload == null && CONFIG.getBool("启用热重载")) {
+            int port = 0xFFFF & CONFIG.getInteger("重载端口");
+            if (port == 0) port = 4485;
+            try {
+                hotReload = new HRRemote(port);
+                hotReload.start();
+            } catch (IOException e) {
+                CmdUtil.warning("重载工具无法绑定端口", e);
+            }
+        }
+    }
 
     public static final TaskSequencer PeriodicTask;
     public static final TaskPool      Task = new TaskPool(0, Runtime.getRuntime().availableProcessors(), 1, 5000, "异步任务");
@@ -292,16 +305,5 @@ public final class Shared {
             PeriodicTask = null;
         }
         Util.setAsyncPool(Task);
-
-        if (!launchOnly && CONFIG.getBool("启用热重载")) {
-            int port = 0xFFFF & CONFIG.getInteger("重载端口");
-            if (port == 0) port = 4485;
-            try {
-                hotReload = new HRRemote(port);
-                hotReload.start();
-            } catch (IOException e) {
-                CmdUtil.warning("重载工具无法绑定端口", e);
-            }
-        }
     }
 }

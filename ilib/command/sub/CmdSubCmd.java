@@ -27,15 +27,13 @@
 package ilib.command.sub;
 
 import ilib.command.MasterCommand;
-import roj.collect.MyHashMap;
-
 import net.minecraft.command.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
+import roj.collect.MyHashMap;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 
@@ -137,7 +135,7 @@ public class CmdSubCmd extends AbstractSubCommand {
         }
     }
 
-    public CmdSubCmd registerSubCommand(@Nonnull ISubCommand command) {
+    public CmdSubCmd register(ISubCommand command) {
         subCommands.put(command.getName(), command);
         command.setParent(this.getParent());
         return this;

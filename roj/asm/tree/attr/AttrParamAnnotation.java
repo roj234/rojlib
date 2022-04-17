@@ -28,10 +28,10 @@ package roj.asm.tree.attr;
 
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.ConstantPool;
+import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -56,7 +56,8 @@ public final class AttrParamAnnotation extends Attribute {
     @Override
     protected void toByteArray1(ConstantPool pool, ByteList w) {
         w.put((byte) annotations.size());
-        for (List<Annotation> list : annotations) {
+        for (int i = 0; i < annotations.size(); i++) {
+            List<Annotation> list = annotations.get(i);
             w.putShort(list.size());
             for (Annotation anno : list) {
                 anno.toByteArray(pool, w);
@@ -64,13 +65,13 @@ public final class AttrParamAnnotation extends Attribute {
         }
     }
 
-    public static List<List<Annotation>> parse(ConstantPool constantPool, ByteReader r) {
-        int paramLen = r.readUByte();
-        List<List<Annotation>> annotationss = new ArrayList<>(paramLen);
-        for (; paramLen > 0; paramLen--) {
-            annotationss.add(AttrAnnotation.parse(constantPool, r));
+    public static List<List<Annotation>> parse(ConstantPool cp, ByteReader r) {
+        int len = r.readUByte();
+        List<List<Annotation>> anns = new SimpleList<>(len);
+        for (; len > 0; len--) {
+            anns.add(AttrAnnotation.parse(cp, r));
         }
-        return annotationss;
+        return anns;
     }
 
     public String toString() {

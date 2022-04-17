@@ -166,6 +166,16 @@ public class BSLowHeap<T> implements List<T> {
         return t;
     }
 
+    public void removeRange(int begin, int end) {
+        if (begin >= end) return;
+        System.arraycopy(entries, end, entries, begin, size - end);
+
+        int size1 = size;
+        for (int i = size = begin + size - end; i < size1; i++) {
+            entries[i] = null;
+        }
+    }
+
     public T pop() {
         return remove(0);
     }

@@ -28,11 +28,14 @@ package ilib;
 import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.resources.SimpleReloadableResourceManager;
+import net.minecraft.client.renderer.block.model.IBakedModel;
+import net.minecraft.client.renderer.block.model.ModelBakery;
+import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.network.EnumConnectionState;
 import net.minecraft.network.EnumPacketDirection;
 import net.minecraft.network.Packet;
+import net.minecraft.util.registry.RegistrySimple;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.storage.MapStorage;
@@ -44,77 +47,64 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nullable;
+import java.util.HashMap;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-/*@OpenAny(value = "net.minecraft.client.resources:SimpleReloadableResourceManager", names = {
-        "clearResources", "func_110543_a",
-        "notifyReloadListeners", "func_110544_b"
-})
-@OpenAny(value = "net.minecraft.world:World", names = {
-        "chunkProvider", "mapStorage",
-        "field_72988_C", "field_73020_y"
-})
-@OpenAny(value = "net.minecraft.client.multiplayer:WorldClient", names = {
-        "clientChunkProvider", "field_73033_b"
-})
-@OpenAny("net.minecraft.client.renderer:BufferBuilder")*/
+
+//!!AT [["net.minecraft.world.World", ["field_72988_C", "field_73020_y"]], ["net.minecraft.client.multiplayer.WorldClient", ["field_73033_b"]], ["net.minecraft.util.registry.RegistrySimple", ["field_82596_a"]], ["net.minecraft.client.renderer.BufferBuilder", ["field_179010_r"]]]
 public class ATHandler {
+    // field_72988_C
     public static void setChunkProvider(World world, IChunkProvider provider) {
         world.chunkProvider = provider;
     }
 
-    @SuppressWarnings("unchecked")
-    public static void addCapabilities(CapabilityDispatcher dispatcher, ICapabilityProvider provIn, @Nullable String idIn) {
-        ICapabilityProvider[] providers = new ICapabilityProvider[dispatcher.caps.length + 1];
-        System.arraycopy(dispatcher.caps, 0, providers, 0, providers.length);
-        providers[providers.length - 1] = provIn;
-        dispatcher.caps = providers;
-
-        if (idIn != null) {
-            INBTSerializable<NBTBase>[] writers = (INBTSerializable<NBTBase>[]) new INBTSerializable<?>[dispatcher.writers.length];
-            System.arraycopy(dispatcher.writers, 0, writers, 0, writers.length);
-            writers[writers.length - 1] = (INBTSerializable<NBTBase>) provIn;
-            dispatcher.writers = writers;
-
-            String[] names = new String[dispatcher.names.length];
-            System.arraycopy(dispatcher.names, 0, names, 0, names.length);
-            names[names.length - 1] = idIn;
-            dispatcher.names = names;
-        }
+    // field_73020_y
+    public static void setMapStorage(World world, MapStorage storage) {
+        world.mapStorage = storage;
     }
 
+    public static MapStorage getMapStorage(World world) {
+        return world.mapStorage;
+    }
+
+    // field_73033_b
     @SideOnly(Side.CLIENT)
     public static void setClientChunkProvider(WorldClient world, ChunkProviderClient provider) {
         world.clientChunkProvider = provider;
     }
 
-    public static void setMapStorage(World world, MapStorage storage) {
-        world.mapStorage = storage;
-    }
-
+    // field_82596_a
     @SideOnly(Side.CLIENT)
-    public static void notifyReloadListeners(SimpleReloadableResourceManager manager) {
-        manager.notifyReloadListeners();
+    public static void clearRegistry(RegistrySimple<ModelResourceLocation, IBakedModel> model11) {
+        IBakedModel v = model11.getObject(ModelBakery.MODEL_MISSING);
+        model11.registryObjects = new HashMap<>();
+        model11.registryObjects.put(ModelBakery.MODEL_MISSING, v);
     }
 
-    @SideOnly(Side.CLIENT)
-    public static void clearResources(SimpleReloadableResourceManager manager) {
-        manager.clearResources();
+    @SuppressWarnings("unchecked")
+    public static void addCapabilities(CapabilityDispatcher dp, ICapabilityProvider provIn, @Nullable String idIn) {
+        ICapabilityProvider[] providers = new ICapabilityProvider[dp.caps.length + 1];
+        System.arraycopy(dp.caps, 0, providers, 0, dp.caps.length);
+        providers[dp.caps.length] = provIn;
+        dp.caps = providers;
+
+        if (idIn != null) {
+            INBTSerializable<NBTBase>[] writers = (INBTSerializable<NBTBase>[]) new INBTSerializable<?>[dp.writers.length + 1];
+            System.arraycopy(dp.writers, 0, writers, 0, dp.writers.length);
+            writers[dp.writers.length] = (INBTSerializable<NBTBase>) provIn;
+            dp.writers = writers;
+
+            String[] names = new String[dp.names.length + 1];
+            System.arraycopy(dp.names, 0, names, 0, dp.names.length);
+            names[dp.names.length] = idIn;
+            dp.names = names;
+        }
     }
 
-    @SideOnly(Side.CLIENT)
-    public static void growBuffer(BufferBuilder b, int size) {
-        b.growBuffer(size);
-    }
-
-    @SideOnly(Side.CLIENT)
-    public static void setVertexCount(BufferBuilder b, int count) {
-        b.vertexCount = count;
-    }
-
+    // field_179010_r
     @SideOnly(Side.CLIENT)
     public static boolean isDrawing(BufferBuilder b) {
         return b.isDrawing;
@@ -123,14 +113,6 @@ public class ATHandler {
     @SideOnly(Side.CLIENT)
     public static void setDrawing(BufferBuilder b, boolean isDrawing) {
         b.isDrawing = isDrawing;
-    }
-
-    @SideOnly(Side.CLIENT)
-    public static void setRawBuffer(BufferBuilder b, byte[] bytes) {
-        b.byteBuffer.clear();
-        b.growBuffer(bytes.length);
-        b.vertexCount = bytes.length / b.vertexFormat.getSize();
-        b.byteBuffer.put(bytes);
     }
 
     public static void registerNetworkPacket(EnumConnectionState state, Class<? extends Packet<?>> packetClass) {

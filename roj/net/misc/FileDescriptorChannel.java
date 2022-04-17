@@ -87,6 +87,10 @@ public class FileDescriptorChannel extends AbstractSelectableChannel implements 
         if ((ops & Net.POLLIN) != 0 && (intOps & SelectionKey.OP_READ) != 0)
             newOps |= SelectionKey.OP_READ;
 
+        if ((ops & Net.POLLCONN) != 0 && (intOps & SelectionKey.OP_CONNECT) != 0) {
+            newOps |= SelectionKey.OP_CONNECT;
+        }
+
         if ((ops & Net.POLLOUT) != 0 && (intOps & SelectionKey.OP_WRITE) != 0)
             newOps |= SelectionKey.OP_WRITE;
 
@@ -108,12 +112,14 @@ public class FileDescriptorChannel extends AbstractSelectableChannel implements 
             newOps |= Net.POLLIN;
         if ((ops & SelectionKey.OP_WRITE) != 0)
             newOps |= Net.POLLOUT;
+        if ((ops & SelectionKey.OP_CONNECT) != 0)
+            newOps |= Net.POLLCONN;
         sk.selector.putEventOps(sk, newOps);
     }
 
     @Override
     public int validOps() {
-        return SelectionKey.OP_READ | SelectionKey.OP_WRITE;
+        return SelectionKey.OP_READ | SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT;
     }
 
     @Override

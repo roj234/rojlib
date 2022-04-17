@@ -26,288 +26,191 @@
 
 package ilib.gui.comp;
 
-import ilib.client.RenderUtils;
+import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
-import ilib.gui.util.ComponentListener;
-import net.minecraft.client.renderer.GlStateManager;
+import roj.collect.SimpleList;
+
 import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nullable;
 import java.awt.*;
-import java.util.ArrayList;
 import java.util.List;
+
+import static ilib.gui.comp.GTab.FOLDED_SIZE;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public final class GTabs extends Component {
-    // Variables
-    protected List<GTab> tabs;
-    protected GTab       activeTab;
+    public static final boolean LEFT = true, RIGHT = false;
 
-    public GTabs(IGui parentGui, int x) {
-        super(parentGui, x, 2);
-        tabs = new ArrayList<>();
-        setListener(new TabMouseListener());
+    private final boolean reverse;
+
+    private List<GTab> tabs = new SimpleList<>();
+    private byte clicked;
+
+    private GTab activeTab;
+
+    public GTabs(IGui parent, int x, boolean reverse) {
+        super(parent, x, 2);
+        this.reverse = reverse;
     }
 
-    public final GTab addTab(List<Component> components, int maxWidth, int maxHeight, int textureU, int textureV, @Nullable ItemStack stack) {
-        GTab tab = new GTab(owner, xPos - 5, yPos + (yPos + (tabs.size()) * 24),
-                            textureU, textureV, maxWidth, maxHeight, stack);
+    public GTab addTab(List<Component> child, int w, int h, @Nullable ItemStack stack) {
+        GTab tab = reverse ?
+                new GReverseTab(owner, xPos + 5 - FOLDED_SIZE, yPos + tabs.size() * FOLDED_SIZE)
+                : new GTab(owner, xPos - 5, yPos + tabs.size() * FOLDED_SIZE);
 
-        for (Component com : components) {
-            tab.addChild(com);
-        }
-
+        tab.expandedWidth = w;
+        tab.expandedHeight = h;
+        tab.components = child;
+        tab.stack = stack;
         tabs.add(tab);
         return tab;
     }
 
-    public final GTab addReverseTab(List<Component> components, int maxWidth, int maxHeight, int textureU, int textureV, @Nullable ItemStack stack) {
-        GTab tab = new GReverseTab(owner, xPos + 5, yPos + (yPos + (tabs.size()) * 24),
-                                   textureU, textureV, maxWidth, maxHeight, stack);
-        for (Component com : components) {
-            tab.addChild(com);
+    @Override
+    public void onInit() {
+        super.onInit();
+
+        for (int i = 0; i < tabs.size(); i++) {
+            tabs.get(i).onInit();
         }
-        tabs.add(tab);
-        return tab;
     }
 
-    /**
-     * Move the tabs to fit the expansion of one
-     */
-    private void realignTabsVertically() {
+    private void alignVertical() {
         int y = yPos;
-        for (GTab tab : tabs) {
+        for (int i = 0; i < tabs.size(); i++) {
+            GTab tab = tabs.get(i);
             tab.setYPos(y);
             y += tab.getHeight();
         }
     }
 
-    /**
-     * Gets the areas covered by the tab collection
-     *
-     * @param guiLeft The gui left of the parent
-     * @param guiTop  The gui top of the parent
-     * @return A list of covered areas
-     */
-    public final List<Rectangle> getAreasCovered(int guiLeft, int guiTop) {
-        List<Rectangle> list = new ArrayList<>();
-        for (GTab guiTab : tabs) {
-            if (guiTab instanceof GReverseTab)
-                list.add(new Rectangle(guiLeft + guiTab.getXPos() - getWidth(), guiTop + guiTab.getYPos(),
-                        guiTab.getWidth(), guiTab.getHeight()));
-            else
-                list.add(new Rectangle(guiLeft + guiTab.getXPos(), guiTop + guiTab.getYPos(),
-                        guiTab.getWidth(), guiTab.getHeight()));
+    public final void getAreasCovered(int left, int top, List<Rectangle> areas) {
+        Rectangle me = getArea(left, top);
+        if (activeTab != null) {
+            me.height += activeTab.height - FOLDED_SIZE;
+            areas.add(activeTab.getArea(left, top));
         }
-        return list;
+        areas.add(me);
     }
 
     /*******************************************************************************************************************
      * Component                                                                                                   *
      *******************************************************************************************************************/
 
-    /**
-     * Called when the mouse is scrolled
-     *
-     * @param dir 1 for positive, -1 for negative
-     */
     @Override
-    public final void mouseScrolled(int x, int y, int dir) {
-        if(!isMouseOver(x, y))
-            return;
-        for (GTab guiTab : tabs) {
-            guiTab.mouseScrolledTab(x, y, dir);
+    public void mouseDown(int x, int y, int button) {
+        super.mouseDown(x, y, button);
+
+        for (int i = 0; i < tabs.size(); i++) {
+            GTab tab = tabs.get(i);
+            if (tab.isMouseOver(x, y)) {
+                if (!tab.mouseDownActivated(x, y, button)) {
+                    if (activeTab != tab) {
+                        if (activeTab != null)
+                            activeTab.setActive(false);
+                        activeTab = tab;
+                        activeTab.setActive(true);
+                    } else if (tab.isActive()) {
+                        activeTab.setActive(false);
+                        activeTab = null;
+                    } else {
+                        activeTab.setActive(true);
+                    }
+                }
+                if (activeTab != null) clicked |= 1<<button;
+                break;
+            }
         }
     }
 
     @Override
-    public final boolean isMouseOver(int mouseX, int mouseY) {
-        for (GTab tab : tabs) {
-            if (tab.isMouseOver(mouseX, mouseY))
-                return true;
+    public void mouseUp(int x, int y, int button) {
+        super.mouseUp(x, y, button);
+
+        if ((clicked & (1<<button)) != 0) {
+            activeTab.mouseUp(x, y, button);
+            clicked ^= 1<<button;
+        }
+    }
+
+    @Override
+    public void mouseDrag(int x, int y, int button, long time) {
+        super.mouseDrag(x, y, button, time);
+
+        if ((clicked & (1<<button)) != 0) {
+            activeTab.mouseDrag(x, y, button, time);
+        }
+    }
+
+    @Override
+    public final void mouseScrolled(int x, int y, int dir) {
+        super.mouseScrolled(x, y, dir);
+
+        if (activeTab != null && activeTab.isMouseOver(x, y)) {
+            activeTab.mouseScrolled(x, y, dir);
+        }
+    }
+
+    @Override
+    public final boolean isMouseOver(int x, int y) {
+        for (int i = 0; i < tabs.size(); i++) {
+            if (tabs.get(i).isMouseOver(x, y)) return true;
         }
         return false;
     }
 
-    /**
-     * Used when a key is pressed
-     *
-     * @param letter  The letter
-     * @param keyCode The code
-     */
     @Override
-    public final void keyTyped(char letter, int keyCode) {
-        for (GTab guiTab : tabs) {
-            guiTab.keyTyped(letter, keyCode);
+    public void keyTyped(char letter, int keyCode) {
+        if (activeTab != null) activeTab.keyTyped(letter, keyCode);
+    }
+
+    @Override
+    public void renderTooltip(int relX, int relY, int absX, int absY) {
+        super.renderTooltip(relX, relY, absX, absY);
+
+        for (int i = 0; i < tabs.size(); i++) {
+            GTab tab = tabs.get(i);
+            if (tab.isMouseOver(relX, relY)) {
+                tab.renderTooltip(relX, relY, absX, absY);
+                break;
+            }
         }
     }
 
-    /**
-     * Render the tooltip if you can
-     *
-     * @param mouseX Mouse X
-     * @param mouseY Mouse Y
-     */
     @Override
-    public final void renderToolTip(int mouseX, int mouseY) {
-        for (GTab guiTab : tabs) {
-            if (guiTab.isMouseOver(mouseX - owner.getLeft(), mouseY - owner.getTop()))
-                guiTab.renderToolTip(mouseX, mouseY);
-        }
+    public void render(int mouseX, int mouseY) {
+        alignVertical();
+        GuiHelper.renderBackground(mouseX, mouseY, tabs);
     }
 
-    /**
-     * Called to render the component
-     */
     @Override
-    public final void render(int mouseX, int mouseY) {
-        realignTabsVertically();
-        for (GTab tab : tabs) {
-            GlStateManager.pushMatrix();
-            RenderUtils.prepareRenderState();
-            GlStateManager.translate(tab.getXPos(), tab.getYPos(), 0);
-            tab.render(mouseX - tab.getXPos(), mouseY - tab.getYPos());
-            tab.moveSlots();
-            RenderUtils.restoreRenderState();
-            RenderUtils.restoreColor();
-            GlStateManager.popMatrix();
-        }
-    }
-
-    /**
-     * Called after base render, is already translated to guiLeft and guiTop, just move offset
-     */
-    @Override
-    public final void renderOverlay(int mouseX, int mouseY) {
-        for (GTab tab : tabs) {
-            GlStateManager.pushMatrix();
-            RenderUtils.prepareRenderState();
-            GlStateManager.translate(tab.getXPos(), tab.getYPos(), 0);
-            tab.renderOverlay(mouseX, mouseY);
-            RenderUtils.restoreRenderState();
-            RenderUtils.restoreColor();
-            GlStateManager.popMatrix();
-        }
-    }
-
-    /**
-     * Used to find how wide this is
-     *
-     * @return How wide the component is
-     */
-    @Override
-    public final int getWidth() {
-        return 24;
-    }
-
-    /**
-     * Used to find how tall this is
-     *
-     * @return How tall the component is
-     */
-    @Override
-    public final int getHeight() {
-        return 5 + (tabs.size() * 24);
+    public void render2(int mouseX, int mouseY) {
+        GuiHelper.renderForeground(mouseX, mouseY, tabs);
     }
 
     /*******************************************************************************************************************
      * Accessors/Mutators                                                                                              *
      *******************************************************************************************************************/
 
-    public final List<GTab> getTabs() {
+    @Override
+    public int getWidth() {
+        return FOLDED_SIZE;
+    }
+
+    @Override
+    public int getHeight() {
+        return 5 + tabs.size() * FOLDED_SIZE;
+    }
+
+    public List<GTab> getTabs() {
         return tabs;
     }
 
-    public final void setTabs(List<GTab> tabs) {
+    public void setTabs(List<GTab> tabs) {
         this.tabs = tabs;
-    }
-
-    /**
-     * Private class to hold all mouse event logic
-     */
-    private class TabMouseListener implements ComponentListener {
-
-        /**
-         * Called when the mouse clicks on the component
-         *
-         * @param com The component to be clicked
-         * @param mouseX    X position of the mouse
-         * @param mouseY    Y position of the mouse
-         * @param button    Which button was clicked
-         */
-        @Override
-        public final void mouseDown(Component com, int mouseX, int mouseY, int button) {
-            for (int i = 0; i < tabs.size(); i++) {
-                GTab tab = tabs.get(i);
-                if (tab.isMouseOver(mouseX, mouseY)) {
-                    if (tab.getListener() == null) {
-                        if (!tab.mouseDownActivated(
-                                (tab instanceof GReverseTab) ? mouseX + tab.expandedWidth - 5 : mouseX - owner.getWidth() + 5,
-                                mouseY - (i * 24) - 2, button)) {
-                            if (activeTab != tab) {
-                                if (activeTab != null)
-                                    activeTab.setActive(false);
-                                activeTab = tab;
-                                activeTab.setActive(true);
-                                return;
-                            } else if (tab.areChildrenActive()) {
-                                activeTab.setActive(false);
-                                activeTab = null;
-                                return;
-                            } else {
-                                activeTab.setActive(true);
-                                return;
-                            }
-                        }
-                    } else
-                        tab.mouseDown(mouseX, mouseY, button);
-                    return;
-                }
-            }
-        }
-
-        /**
-         * Called when the mouse releases the component
-         *
-         * @param com The component to be clicked
-         * @param mouseX    X position of the mouse
-         * @param mouseY    Y position of the mouse
-         * @param button    Which button was clicked
-         */
-        @Override
-        public final void mouseUp(Component com, int mouseX, int mouseY, int button) {
-            for (int i = 0; i < tabs.size(); i++) {
-                GTab tab = tabs.get(i);
-                if (tab.isMouseOver(mouseX, mouseY)) {
-                    tab.mouseUpActivated((tab instanceof GReverseTab) ? mouseX + tab.expandedWidth - 5 : mouseX - owner.getWidth() + 5,
-                            mouseY - (i * 24) - 2, button);
-                    return;
-                }
-            }
-        }
-
-        /**
-         * Called when the mouse drags an item
-         *
-         * @param com The component to be clicked
-         * @param mouseX    X position of the mouse
-         * @param mouseY    Y position of the mouse
-         * @param button    Which button was clicked
-         * @param time      How long its been clicked
-         */
-        @Override
-        public final void mouseDrag(Component com, int mouseX, int mouseY, int button, long time) {
-            for (int i = 0; i < tabs.size(); i++) {
-                GTab tab = tabs.get(i);
-                if (tab.isMouseOver(mouseX, mouseY)) {
-                    tab.mouseDragActivated((tab instanceof GReverseTab) ? mouseX + tab.expandedWidth - 5 : mouseX - owner.getWidth() + 5,
-                            mouseY - (i * 24) - 2, button, time);
-                    return;
-                }
-            }
-        }
     }
 }

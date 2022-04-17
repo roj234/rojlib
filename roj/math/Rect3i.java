@@ -33,16 +33,8 @@ import roj.util.Hasher;
 public class Rect3i {
     public int xmin, ymin, zmin, xmax, ymax, zmax;
 
-    /**
-     * Constructs a new rectangle with the given properties.
-     *
-     * @param xmin the minimum {@code x}-axis value contained in the rectangle.
-     * @param ymin the minimum {@code y}-axis value contained in the rectangle.
-     * @param zmin the minimum {@code z}-axis value contained in the rectangle.
-     * @param xmax the maximum {@code x}-axis value contained in the rectangle.
-     * @param ymax the maximum {@code y}-axis value contained in the rectangle.
-     * @param zmax the maximum {@code z}-axis value contained in the rectangle.
-     */
+    public Rect3i() {}
+
     public Rect3i(int xmin, int ymin, int zmin, int xmax, int ymax, int zmax) {
         this.xmin = xmin;
         this.ymin = ymin;
@@ -54,51 +46,14 @@ public class Rect3i {
         fix();
     }
 
-    /**
-     * Constructs a new rectangle with the given parameters.
-     *
-     * @param min the minimum axis values contained in this rectangle.
-     * @param max the maximum axis values contained in this rectangle.
-     */
     public Rect3i(Vec3i min, Vec3i max) {
-        this.xmin = min.x;
-        this.ymin = min.y;
-        this.zmin = min.z;
-
-        this.xmax = max.x;
-        this.ymax = max.y;
-        this.zmax = max.z;
-        fix();
+        set(min, max);
     }
 
-    /**
-     * Constructs a new rectangle by copying the specified one.
-     *
-     * @param other the rectangle from which the new rectangle should be copy-constructed.
-     */
     public Rect3i(Rect3i other) {
-        this.xmin = other.xmin;
-        this.ymin = other.ymin;
-        this.zmin = other.zmin;
-
-        this.xmax = other.xmax;
-        this.ymax = other.ymax;
-        this.zmax = other.zmax;
-        fix();
+        set(other);
     }
 
-
-    /**
-     * Sets this rectangle according to the specified parameters.
-     *
-     * @param xmin the minimum {@code x}-axis value contained in the rectangle.
-     * @param ymin the minimum {@code y}-axis value contained in the rectangle.
-     * @param zmin the minimum {@code z}-axis value contained in the rectangle.
-     * @param xmax the maximum {@code x}-axis value contained in the rectangle.
-     * @param ymax the maximum {@code y}-axis value contained in the rectangle.
-     * @param zmax the maximum {@code z}-axis value contained in the rectangle.
-     * @return this rectangle.
-     */
     public Rect3i set(int xmin, int ymin, int zmin, int xmax, int ymax, int zmax) {
         this.xmin = xmin;
         this.ymin = ymin;
@@ -107,17 +62,11 @@ public class Rect3i {
         this.xmax = xmax;
         this.ymax = ymax;
         this.zmax = zmax;
+        fix();
 
         return this;
     }
 
-    /**
-     * Sets this rectangle according to the specified parameters.
-     *
-     * @param min the minimum axis values contained in this rectangle.
-     * @param max the maximum axis values contained in this rectangle.
-     * @return this rectangle.
-     */
     public Rect3i set(Vec3i min, Vec3i max) {
         this.xmin = min.x;
         this.ymin = min.y;
@@ -126,16 +75,11 @@ public class Rect3i {
         this.xmax = max.x;
         this.ymax = max.y;
         this.zmax = max.z;
+        fix();
 
         return this;
     }
 
-    /**
-     * Sets this rectangle by copying the specified one.
-     *
-     * @param other the rectangle from which the new rectangle should be copy-constructed.
-     * @return this rectangle.
-     */
     public Rect3i set(Rect3i other) {
         this.xmin = other.xmin;
         this.ymin = other.ymin;

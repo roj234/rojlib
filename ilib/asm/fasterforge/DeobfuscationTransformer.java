@@ -25,11 +25,6 @@
  */
 package ilib.asm.fasterforge;
 
-import net.minecraft.launchwrapper.IClassNameTransformer;
-import net.minecraft.launchwrapper.IClassTransformer;
-import net.minecraft.launchwrapper.Launch;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper;
 import roj.asm.Parser;
 import roj.asm.util.Context;
 import roj.collect.TrieTreeSet;
@@ -37,7 +32,14 @@ import roj.mapper.CodeMapper;
 import roj.mapper.ConstMapper;
 import roj.util.ByteList;
 
-import java.util.Arrays;
+import net.minecraft.launchwrapper.IClassNameTransformer;
+import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.launchwrapper.Launch;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper;
+
+import java.util.Collections;
 import java.util.List;
 
 public class DeobfuscationTransformer implements IClassTransformer, IClassNameTransformer {
@@ -53,14 +55,12 @@ public class DeobfuscationTransformer implements IClassTransformer, IClassNameTr
         FMLLog.bigWarning("ok");
         this.mapper = ((IFDAccessPort)FMLDeobfuscatingRemapper.INSTANCE).getMapper();
         this.codeMapper = new CodeMapper(mapper);
-        this.ctxs = Arrays.asList(new Context("", null));
+        this.ctxs = Collections.singletonList(new Context("", null));
     }
 
     public byte[] transform(String name, String transformedName, byte[] bytes) {
-        if (bytes == null)
-            return null;
-        if (!shouldTransform(name))
-            return bytes;
+        if (bytes == null) return null;
+        if (!shouldTransform(name)) return bytes;
         ctxs.get(0).set(new ByteList(bytes));
         mapper.remapIncrement(ctxs);
         codeMapper.remap(true, ctxs);

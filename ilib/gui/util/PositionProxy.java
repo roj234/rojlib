@@ -149,8 +149,8 @@ public class PositionProxy extends CListenerAdapter {
         }
     }
 
-    public void componentAdded(Component c) {
-        parent.componentAdded(c);
+    public void componentInit(Component c) {
+        parent.componentInit(c);
 
         PositionInfo info = position.get(c.getMark());
         if (info != null) info.component = c;

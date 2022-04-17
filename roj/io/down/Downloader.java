@@ -28,7 +28,6 @@ package roj.io.down;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.Waitable;
-import roj.io.BoxFile;
 import roj.io.FileUtil;
 import roj.io.FileUtil.ImmediateFuture;
 import roj.net.http.HttpClient;
@@ -36,17 +35,13 @@ import roj.net.http.HttpConnection;
 import roj.net.http.HttpHead;
 import roj.net.misc.FDCLoop;
 import roj.net.misc.FDChannel;
-import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 
 /**
  * @author Roj234
@@ -85,7 +80,7 @@ public final class Downloader extends IDown {
         return singleThread0(file, handler, info, conn);
     }
 
-    private static Waitable singleThread0(File file, IProgress handler, File info, HttpConnection o) throws IOException {
+    static Waitable singleThread0(File file, IProgress handler, File info, HttpConnection o) throws IOException {
         File tmp = new File(file.getAbsolutePath() + ".tmp");
 
         IDown d;
@@ -97,7 +92,7 @@ public final class Downloader extends IDown {
             d = new Downloader(0, tmp, info, o.getURL(), 0, len, handler);
         }
         HELP.pushTask(d);
-        return new D(Collections.singletonList(d), handler, file);
+        return new AsyncWait(Collections.singletonList(d), handler, file);
     }
 
     public static Waitable downloadMTD(String address, File file) throws IOException {
@@ -121,77 +116,16 @@ public final class Downloader extends IDown {
             throw new IOException("下载进度文件无法写入");
         }
 
-        HttpConnection conn = FileUtil.process302(new URL(address), true);
-
-        long remain = conn.getContentLengthLong();
-
-        if(remain < 0 || (conn.getHeaderField("ETag") == null
-            && conn.getHeaderField("Last-Modified") == null)
-            && !"bytes".equals(conn.getHeaderField("Accept-Ranges"))) {
-            return singleThread0(file, pg, info, conn);
-        }
-
-        if (checkETag) {
-            File tagFile = new File(file.getAbsolutePath() + ".tag");
-            BoxFile aoc = new BoxFile(tagFile);
-            aoc.load();
-            if ((aoc.contains("ETag") && !conn.getHeaderField("ETag").equals(aoc.getUTF("ETag"))) ||
-                    !conn.getHeaderField("Last-Modified").equals(aoc.getUTF("Last-Modified"))) {
-                if (aoc.contains("ETag") && !info.delete()) {
-                    throw new IOException("fInfoFile文件已被占用");
-                }
-                if (!conn.getHeaderField("ETag").startsWith("W/"))
-                aoc.append("ETag", ByteList.encodeUTF(conn.getHeaderField("ETag")));
-                aoc.append("Last-Modified", ByteList.encodeUTF(conn.getHeaderField("Last-Modified")));
-            }
-            aoc.close();
-        }
-
-        File tmp = new File(file.getAbsolutePath() + ".tmp");
-        FileUtil.allocSparseFile(tmp, remain);
-
-        conn.disconnect();
-
-        int id = 0;
-        long off = 0;
-
-        List<IDown> tasks = new ArrayList<>(chunkCount);
-        URL url = conn.getURL();
-        if (remain > chunkStartSize) {
-            long each = Math.max(remain / chunkCount, minChunkSize);
-            while (remain >= each) {
-                Downloader dn = new Downloader(id++, tmp, info, url, off, each, pg);
-
-                off += each;
-                remain -= each;
-
-                if (remain < each && remain < minChunkSize) {
-                    // 如果下载完毕
-                    if (dn.len > 0) dn.len += remain;
-                    remain = 0;
-                }
-
-                if (dn.getRemain() > 0) {
-                    HELP.pushTask(dn);
-                    tasks.add(dn);
-                }
-            }
-        }
-        if (remain > 0) {
-            Downloader dn = new Downloader(id, tmp, info, url, off, remain, pg);
-            if (dn.getRemain() > 0) {
-                HELP.pushTask(dn);
-                tasks.add(dn);
-            }
-        }
-
-        return new D(tasks, pg, file);
+        AsyncConnect ad = new AsyncConnect(address, file, pg, info);
+        HELP.pushTask(ad);
+        return ad;
     }
 
     private final RandomAccessFile info;
 
     private final long beginLen;
-    private long off, len;
+    long off, len;
+    private int delta;
 
     public Downloader(int pid, File file, File info, URL url, long off, long len) throws IOException {
         this(pid, file, info, url, off, len, null);
@@ -249,7 +183,10 @@ public final class Downloader extends IDown {
 
     // Unit: byte per second
     public long getAverageSpeed() {
-        return (long) ((double) (beginLen - len) / (System.currentTimeMillis() - begin) * 1000);
+        long spd = (long) ((double) delta / (System.currentTimeMillis() - begin) * 1000);
+        delta = 0;
+        begin = System.currentTimeMillis();
+        return spd;
     }
 
     void selected0() throws Exception {
@@ -257,12 +194,18 @@ public final class Downloader extends IDown {
         int r = in.position();
 
         off += r; len -= r;
+        delta += r;
 
         in.flip();
         do {
             int r2 = Math.min(r, buf.length);
             in.get(buf, 0, r2);
-            file.write(buf, 0, r2);
+            try {
+                file.write(buf, 0, r2);
+            } catch (Throwable e) {
+                close();
+                return;
+            }
             r -= r2;
         } while (r > 0);
         in.clear();
@@ -277,6 +220,22 @@ public final class Downloader extends IDown {
             writePos(beginLen - len);
         }
         if (progress != null) progress.onChange(this);
+    }
+
+    @Override
+    protected void setClientInfo(HttpClient client) throws Exception {
+        switch (state) {
+            case 1:
+                client.header("RANGE", "bytes=" + off + '-' + (off + len - 1));
+                client.url(url).send();
+                break;
+            case 2:
+                HttpHead r = client.response();
+                if (r.getCode() > 299) {
+                    throw new IOException("范围错误 " + off + '-' + (off + len - 1) + " , code=" + r.getCodeString());
+                }
+                break;
+        }
     }
 
     @Override
@@ -302,7 +261,10 @@ public final class Downloader extends IDown {
             } catch (IOException ignored) {}
         }
 
-        if (key != null) key.cancel();
+        if (key != null) {
+            key.cancel();
+            key = null;
+        }
 
         idle = -999;
         synchronized (client) {
@@ -319,125 +281,6 @@ public final class Downloader extends IDown {
                 info.writeLong(i);
                 last = t;
             }
-        }
-    }
-
-    @Override
-    public void calculate() throws Exception {
-        try {
-            if (!client.connected()) {
-                client.header("RANGE", "bytes=" + off + '-' + (off + len - 1));
-                client.url(url).send();
-                ch = client.getChannel();
-
-                if (ch.read() == 0) {
-                    init = true;
-                    reg();
-                } else {
-                    HELP.pushTask(this);
-                }
-            } else {
-                HttpHead r = client.response();
-                if (r.getCode() > 299) {
-                    System.out.println("范围错误 " + off + '-' + (off + len - 1) + " , code=" + r.getCodeString());
-                }
-
-                ByteBuffer buf = ch.buffer();
-
-                if (key == null) reg();
-
-                // 随着http头接收到的还可能有一些数据,设置为'可写'selected能够被调用
-                // 因为这里不是selector线程所以不能直接调用
-                key.interestOps(buf.position() > 0 ?
-                                    SelectionKey.OP_READ | SelectionKey.OP_WRITE :
-                                    SelectionKey.OP_READ);
-
-                init = false;
-            }
-        } catch (Throwable e) {
-            retry();
-            throw e;
-        }
-    }
-
-    private static final class D implements Waitable {
-        private final List<IDown> tasks;
-        private final IProgress        handler;
-        private final File             file;
-
-        D(List<IDown> tasks, IProgress handler, File file) {
-            this.tasks = tasks;
-            this.handler = handler;
-            this.file = file;
-        }
-
-        @Override
-        public void waitFor() throws IOException {
-            for (IDown task : tasks) {
-                synchronized (task) {
-                    try {
-                        task.waitFor();
-                    } catch (InterruptedException ignored) {}
-                }
-            }
-
-            if (handler != null) {
-                if (handler.wasShutdown())
-                    throw new IOException("下载失败");
-                handler.onFinish();
-            }
-
-            StringBuilder err = new StringBuilder();
-
-            File tag = new File(file.getAbsolutePath() + ".tag");
-            if(tag.isFile() && !tag.delete()) {
-                tag.deleteOnExit();
-                err.append("; ETag标记删除失败. ");
-            }
-
-            File info = new File(file.getAbsolutePath() + ".nfo");
-            if (info.isFile() && !info.delete()) {
-                info.deleteOnExit();
-                err.append("; 下载进度删除失败. ");
-            }
-
-            File tempFile = new File(file.getAbsolutePath() + ".tmp");
-            if (!tempFile.renameTo(file)) {
-                if(file.isFile()) {
-                    err.append("; 文件已被另一个线程完成.");
-                } else {
-                    err.append("; 文件重命名失败.");
-                }
-            }
-
-            if(err.length() > 0)
-                throw new IOException(err.toString());
-        }
-
-        @Override
-        public boolean isDone() {
-            boolean done = true;
-            for (int i = 0; i < tasks.size(); i++) {
-                IDown task = tasks.get(i);
-                if (task.getRemain() > 0) return false;
-            }
-            return true;
-        }
-
-        @Override
-        public void cancel() {
-            for (int i = 0; i < tasks.size(); i++) {
-                try {
-                    tasks.get(i).close();
-                } catch (IOException e) {
-                    // should not happen
-                }
-            }
-        }
-
-        @Override
-        public String toString() {
-            return tasks.toString();
         }
     }
 }

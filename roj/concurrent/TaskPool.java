@@ -31,8 +31,9 @@ import roj.concurrent.task.ITask;
 import roj.util.ArrayUtil;
 
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TaskPool implements ThreadStateMonitor, TaskHandler {
     protected final TaskExecutor[] thread;
@@ -53,7 +54,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     protected int core, max, addThr, maxThr;
     protected int running;
 
-    protected final AtomicInteger lock = new AtomicInteger();
+    protected final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public TaskPool(int coreThreads, int maxThreads, int threshold, int maxTaskPerThread, MyThreadFactory factory) {
         this.core = coreThreads;
@@ -85,13 +86,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     @Override
     @Async.Schedule
     public void pushTask(ITask task) {
-        if (running == -1) {
-            throw new RejectedExecutionException("TaskPool was shutdown.");
-        }
-
         final TaskExecutor[] processors = this.thread;
-
-        int ov = lightLock(lock);
 
         int len = running;
         if (len <= 0) {
@@ -99,7 +94,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
                 throw new RejectedExecutionException("TaskPool was shutdown.");
             }
 
-            newWorker(task, ov);
+            newWorker(task);
             return;
         }
 
@@ -107,28 +102,26 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         int minPending = Integer.MAX_VALUE;
         for (int i = 0; i < len; i++) {
             TaskExecutor p = processors[i];
-            if (p.getTaskAmount() < minPending) {
+            if (p != null && p.getTaskAmount() < minPending) {
                 th = p;
                 minPending = p.getTaskAmount();
             }
         }
 
         if(len < core && minPending > 0) {
-            newWorker(task, ov);
+            newWorker(task);
             return;
         }
 
         if (minPending >= addThr) {
             if (len < max) {
-                newWorker(task, ov);
+                newWorker(task);
                 return;
             } else if (minPending >= maxThr) {
                 onReject(task, minPending);
                 return;
             }
         }
-
-        untilCas(lock, ov + 1, ov);
 
         th.pushTask(task);
     }
@@ -145,47 +138,20 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         }
     }
 
-    private void newWorker(ITask task, int ov) {
-        untilCas(lock, ov + 1, -2); // -2 new thread, -1 stop , -3 shutdown
+    private void newWorker(ITask task) {
+        lock.writeLock().lock();
 
-        TaskExecutor pc = factory.get(this);
-        pc.getClass();
-        thread[running++] = pc;
-        pc.setDaemon(true);
-        pc.start();
-        pc.pushTask(task);
-
-        lock.set(ov);
-    }
-
-    private static void untilCas(AtomicInteger lock, int from, int to) {
-        int i = 0;
-        while (!lock.compareAndSet(from, to)) {
-            Thread.yield();
-            if (lock.compareAndSet(from, to)) break;
-            LockSupport.parkNanos(20);
-            if (i++ > 1000)
-                throw new Error("Failed to get lock " + from + " => " + to + ": " + lock.getAndSet(0));
+        try {
+            TaskExecutor pc = factory.get(this);
+            pc.getClass();
+            thread[running++] = pc;
+            pc.setDaemon(true);
+            pc.start();
+            pc.pushTask(task);
+        } finally {
+            lock.writeLock().unlock();
         }
-    }
 
-    private static int lightLock(AtomicInteger lock) {
-        int ov;
-        do {
-            ov = lock.get();
-            if (ov < 0) {
-                Thread.yield();
-            }
-
-            ov = lock.get();
-            if (ov < 0) {
-                LockSupport.parkNanos(20);
-            } else {
-                untilCas(lock, ov, ov + 1);
-                break;
-            }
-        } while (true);
-        return ov;
     }
 
     @Async.Schedule
@@ -200,13 +166,15 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
         if (running == -1) return;
         final TaskExecutor[] processors = this.thread;
 
-        int ov = lightLock(lock);
-        for (int i = 0, len = running; i < len; i++) {
-            TaskExecutor executor = processors[i];
-            executor.clearTasks();
+        lock.writeLock().lock();
+        try {
+            for (int i = 0, len = running; i < len; i++) {
+                TaskExecutor executor = processors[i];
+                executor.clearTasks();
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
-
-        untilCas(lock, ov + 1, ov);
     }
 
     @Override
@@ -219,12 +187,12 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
                 return false;
             }
 
-            untilCas(lock, 0, -1);
+            lock.writeLock().lock();
 
             thread[len] = null;
             this.running = len;
 
-            lock.set(0);
+            lock.writeLock().unlock();
 
             return true;
         }
@@ -241,10 +209,10 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
     }
 
     public void shutdown() {
-        untilCas(lock, 0, -3);
+        lock.writeLock().lock();
         int running = this.running;
         this.running = -1;
-        lock.set(0);
+        lock.writeLock().unlock();
 
         final TaskExecutor[] processors = this.thread;
         for (int i = 0; i < running; i++) {
@@ -256,7 +224,7 @@ public class TaskPool implements ThreadStateMonitor, TaskHandler {
 
     @Override
     public String toString() {
-        return "TaskPool{" + "thr=" + ArrayUtil.toString(thread, 0, running) + ", range=[" + core + ',' + max + "], lock=" + lock.get() + '}';
+        return "TaskPool{" + "thr=" + ArrayUtil.toString(thread, 0, running) + ", range=[" + core + ',' + max + "], lock=" + lock + '}';
     }
 
     @Override

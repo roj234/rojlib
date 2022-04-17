@@ -25,6 +25,11 @@
  */
 package ilib.asm.nixim;
 
+import ilib.asm.Loader;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+
 import net.minecraft.block.BlockSlab;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -36,9 +41,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
 
 import java.util.Random;
 
@@ -87,7 +89,7 @@ abstract class NiximSlab extends BlockSlab {
             }
         }
 
-        System.out.println("setstate: " + state1);
+        Loader.logger.info("setstate: " + state1);
         return world.setBlockState(pos, state1, world.isRemote ? 11 : 3);
     }
 

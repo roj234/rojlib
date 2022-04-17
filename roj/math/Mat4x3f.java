@@ -32,7 +32,9 @@ import roj.util.Hasher;
  * A row-major 4x3 {@code float} (affine) matrix.
  */
 public class Mat4x3f implements Cloneable {
-    public Mat4x3f() {}
+    public Mat4x3f() {
+        m00 = m11 = m22 = 1;
+    }
 
     public float m00, m01, m02, m03,
             m10, m11, m12, m13,

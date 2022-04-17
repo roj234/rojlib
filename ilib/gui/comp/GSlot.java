@@ -27,6 +27,7 @@
 package ilib.gui.comp;
 
 import ilib.gui.IGui;
+import ilib.gui.util.Sprite;
 
 import net.minecraft.inventory.Slot;
 
@@ -39,18 +40,6 @@ public class GSlot extends GTexture {
     protected int shownX, shownY;
     protected boolean display = true;
 
-    /**
-     * Creates an object that will move the physical slot when should render
-     * <p>
-     * This object will move the container slot, but also needs the texture to render
-     *
-     * @param parent The parent gui
-     * @param slot  The slot to move about
-     * @param slotX     Slot x
-     * @param slotY     Slot y
-     * @param x         The component x
-     * @param y         The component y
-     */
     public GSlot(IGui parent, Slot slot, int slotX, int slotY, int x, int y, int u, int v, int w, int h) {
         super(parent, x, y, u, v, w, h);
         this.slot = slot;
@@ -58,10 +47,14 @@ public class GSlot extends GTexture {
         this.shownY = slotY;
     }
 
-    public GSlot(IGui parent, Slot slot, int slotX, int slotY, int x, int y, int u, int v) {
-        this(parent, slot, slotX, slotY, x, y, u, v, 18, 18);
+    public GSlot(IGui parent, Slot slot, int slotX, int slotY, int x, int y, Sprite bg) {
+        super(parent, x - (bg.w() - 16) / 2, y - (bg.h() - 16) / 2, bg);
+        this.slot = slot;
+        this.shownX = slotX;
+        this.shownY = slotY;
     }
 
+    @Deprecated
     public GSlot(IGui parent, Slot slot, int x, int y, int u, int v) {
         this(parent, slot, x + 1, y + 1, x, y, u, v, 18, 18);
     }

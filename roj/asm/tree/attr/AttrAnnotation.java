@@ -46,11 +46,6 @@ public final class AttrAnnotation extends Attribute {
         super(name);
     }
 
-    public AttrAnnotation(boolean visible, ByteReader r, ConstantPool pool) {
-        super(visible ? VISIBLE : INVISIBLE);
-        annotations = parse(pool, r);
-    }
-
     public AttrAnnotation(String name, ByteReader r, ConstantPool pool) {
         super(name);
         annotations = parse(pool, r);

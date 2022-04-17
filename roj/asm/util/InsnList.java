@@ -32,7 +32,6 @@ import roj.collect.IntBiMap;
 import roj.collect.SimpleList;
 
 import java.util.ArrayList;
-import java.util.Collection;
 
 /**
  * @author Roj234
@@ -70,15 +69,6 @@ public final class InsnList extends SimpleList<InsnNode> {
             }
             super.add(i, node);
         }
-    }
-
-    @Override
-    @Deprecated
-    public boolean addAll(int i, Collection<? extends InsnNode> c) {
-        for (InsnNode node : c) {
-            add(i++, node);
-        }
-        return !c.isEmpty();
     }
 
     public IntBiMap<InsnNode> getPCMap() {

@@ -27,7 +27,8 @@ package ilib.asm.nixim;
 
 import ilib.Config;
 import ilib.ImpLib;
-import ilib.asm.util.MCHooks;
+import ilib.misc.MCHooks;
+import ilib.util.Reflection;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -35,6 +36,7 @@ import roj.asm.nixim.Shadow;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockLiquid;
+import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.crash.CrashReport;
 import net.minecraft.crash.CrashReportCategory;
@@ -42,9 +44,7 @@ import net.minecraft.init.Blocks;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ReportedException;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.*;
 import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
@@ -57,6 +57,7 @@ import net.minecraftforge.event.ForgeEventFactory;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import javax.annotation.Nullable;
 import java.util.EnumSet;
 
 /**
@@ -90,7 +91,146 @@ abstract class NxCachedPos extends World {
     @Shadow("field_73008_k")
     int skylightSubtracted;
 
-    @Inject("func_175721_c")
+    @Nullable
+    @Override
+    public RayTraceResult rayTraceBlocks(Vec3d begin, Vec3d end, boolean stopOnLiquid, boolean ignoreBlockWithoutBoundingBox, boolean returnLastUncollidableBlock) {
+        if (!Double.isNaN(begin.x) && !Double.isNaN(begin.y) && !Double.isNaN(begin.z)) {
+            if (!Double.isNaN(end.x) && !Double.isNaN(end.y) && !Double.isNaN(end.z)) {
+                BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain();
+
+                int i = MathHelper.floor(end.x);
+                int j = MathHelper.floor(end.y);
+                int k = MathHelper.floor(end.z);
+                int x = MathHelper.floor(begin.x);
+                int y = MathHelper.floor(begin.y);
+                int z = MathHelper.floor(begin.z);
+                pos.setPos(x, y, z);
+                IBlockState state = this.getBlockState(pos);
+                Block block = state.getBlock();
+                RayTraceResult result;
+                if ((!ignoreBlockWithoutBoundingBox || state.getCollisionBoundingBox(this, pos) != Block.NULL_AABB) && block.canCollideCheck(state, stopOnLiquid)) {
+                    result = state.collisionRayTrace(this, pos, begin, end);
+                    if (result != null) {
+                        pos.release();
+                        return result;
+                    }
+                }
+
+                result = null;
+                int maxDist1 = 200;
+
+                begin = new Vec3d(begin.x, begin.y, begin.z);
+                while(maxDist1-- >= 0) {
+                    if (Double.isNaN(begin.x) || Double.isNaN(begin.y) || Double.isNaN(begin.z)) {
+                        return null;
+                    }
+
+                    if (x == i && y == j && z == k) {
+                        return result;
+                    }
+
+                    boolean flag2 = true;
+                    boolean flag = true;
+                    boolean flag1 = true;
+                    double d0 = 999.0D;
+                    double d1 = 999.0D;
+                    double d2 = 999.0D;
+                    if (i > x) {
+                        d0 = (double)x + 1.0D;
+                    } else if (i < x) {
+                        d0 = (double)x + 0.0D;
+                    } else {
+                        flag2 = false;
+                    }
+
+                    if (j > y) {
+                        d1 = (double)y + 1.0D;
+                    } else if (j < y) {
+                        d1 = (double)y + 0.0D;
+                    } else {
+                        flag = false;
+                    }
+
+                    if (k > z) {
+                        d2 = (double)z + 1.0D;
+                    } else if (k < z) {
+                        d2 = (double)z + 0.0D;
+                    } else {
+                        flag1 = false;
+                    }
+
+                    double d3 = 999.0D;
+                    double d4 = 999.0D;
+                    double d5 = 999.0D;
+                    double d6 = end.x - begin.x;
+                    double d7 = end.y - begin.y;
+                    double d8 = end.z - begin.z;
+                    if (flag2) {
+                        d3 = (d0 - begin.x) / d6;
+                    }
+
+                    if (flag) {
+                        d4 = (d1 - begin.y) / d7;
+                    }
+
+                    if (flag1) {
+                        d5 = (d2 - begin.z) / d8;
+                    }
+
+                    if (d3 == -0.0D) {
+                        d3 = -1.0E-4D;
+                    }
+
+                    if (d4 == -0.0D) {
+                        d4 = -1.0E-4D;
+                    }
+
+                    if (d5 == -0.0D) {
+                        d5 = -1.0E-4D;
+                    }
+
+                    EnumFacing face;
+                    if (d3 < d4 && d3 < d5) {
+                        face = i > x ? EnumFacing.WEST : EnumFacing.EAST;
+                        Reflection.setVec(begin, d0, begin.y + d7 * d3, begin.z + d8 * d3);
+                    } else if (d4 < d5) {
+                        face = j > y ? EnumFacing.DOWN : EnumFacing.UP;
+                        Reflection.setVec(begin, begin.x + d6 * d4, d1, begin.z + d8 * d4);
+                    } else {
+                        face = k > z ? EnumFacing.NORTH : EnumFacing.SOUTH;
+                        Reflection.setVec(begin, begin.x + d6 * d5, begin.y + d7 * d5, d2);
+                    }
+
+                    x = MathHelper.floor(begin.x) - (face == EnumFacing.EAST ? 1 : 0);
+                    y = MathHelper.floor(begin.y) - (face == EnumFacing.UP ? 1 : 0);
+                    z = MathHelper.floor(begin.z) - (face == EnumFacing.SOUTH ? 1 : 0);
+                    pos.setPos(x, y, z);
+                    state = this.getBlockState(pos);
+                    block = state.getBlock();
+                    if (!ignoreBlockWithoutBoundingBox || state.getMaterial() == Material.PORTAL || state.getCollisionBoundingBox(this, pos) != Block.NULL_AABB) {
+                        if (block.canCollideCheck(state, stopOnLiquid)) {
+                            RayTraceResult r = state.collisionRayTrace(this, pos, begin, end);
+                            if (r != null) {
+                                pos.release();
+                                return r;
+                            }
+                        } else if (returnLastUncollidableBlock) {
+                            result = new RayTraceResult(RayTraceResult.Type.MISS, begin, face, pos);
+                        }
+                    }
+                }
+
+                if (result == null) pos.release();
+                return result;
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    @Inject("/")
     public int getLight(BlockPos pos, boolean checkNeighbors) {
         if (pos.getX() >= -30000000 && pos.getZ() >= -30000000 && pos.getX() < 30000000 && pos.getZ() < 30000000) {
             BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
@@ -115,31 +255,30 @@ abstract class NxCachedPos extends World {
                 }
 
                 Chunk chunk = this.getChunk(pos1);
-                return chunk.getLightSubtracted(pos1, this.skylightSubtracted);
+                int l = chunk.getLightSubtracted(pos1, this.skylightSubtracted);
+                pos1.release();
+                return l;
             }
         } else {
             return 15;
         }
     }
 
-    @Inject("func_175676_y")
+    @Inject("/")
     public int getStrongPower(BlockPos pos) {
         int red = 0;
 
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
         for (EnumFacing face : EnumFacing.VALUES) {
             red = Math.max(red, this.getStrongPower(pos1.setPos(pos).move(face), face));
-            if (red >= 15) {
-                pos1.release();
-                return red;
-            }
+            if (red >= 15) break;
         }
         pos1.release();
 
         return red;
     }
 
-    @Inject("canBlockFreezeBody")
+    @Inject("/")
     public boolean canBlockFreezeBody(BlockPos pos, boolean noWaterAdj) {
         Biome biome = this.getBiome(pos);
         float f = biome.getTemperature(pos);
@@ -164,7 +303,7 @@ abstract class NxCachedPos extends World {
         return false;
     }
 
-    @Inject("func_175666_e")
+    @Inject("/")
     public void updateComparatorOutputLevel(BlockPos pos, Block blockIn) {
         if (MCHooks.blockUpdate) return;
 
@@ -186,24 +325,21 @@ abstract class NxCachedPos extends World {
         pos1.release();
     }
 
-    @Inject("func_175687_A")
+    @Inject("/")
     public int getRedstonePowerFromNeighbors(BlockPos pos) {
         int cur = 0;
 
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
         for (EnumFacing face : EnumFacing.VALUES) {
             cur = Math.max(this.getRedstonePower(pos1.setPos(pos).move(face), face), cur);
-            if (cur >= 15) {
-                pos1.release();
-                return 15;
-            }
+            if (cur >= 15) break;
         }
 
         pos1.release();
         return cur;
     }
 
-    @Inject("func_175640_z")
+    @Inject("/")
     public boolean isBlockPowered(BlockPos pos) {
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain();
         for (EnumFacing face : EnumFacing.VALUES) {
@@ -218,7 +354,7 @@ abstract class NxCachedPos extends World {
     }
 
     @SideOnly(Side.CLIENT)
-    @Inject(value = "func_175705_a", flags = roj.asm.nixim.Inject.FLAG_OPTIONAL)
+    @Inject(value = "/", flags = roj.asm.nixim.Inject.FLAG_OPTIONAL)
     public int getLightFromNeighborsFor(EnumSkyBlock type, BlockPos pos) {
         if (!this.provider.hasSkyLight() && type == EnumSkyBlock.SKY) {
             return 0;
@@ -242,10 +378,7 @@ abstract class NxCachedPos extends World {
                     int currLight = getLightFor(type, pos1.setPos(pos).move(facings[i]));
                     if (currLight > maxLight)
                         maxLight = currLight;
-                    if (maxLight >= 15) {
-                        pos1.release();
-                        return 15;
-                    }
+                    if (maxLight >= 15) break;
                 }
 
                 pos1.release();
@@ -257,7 +390,7 @@ abstract class NxCachedPos extends World {
         }
     }
 
-    @Inject("func_175695_a")
+    @Inject("/")
     public void notifyNeighborsOfStateExcept(BlockPos pos, Block blockType, EnumFacing skipSide) {
         EnumSet<EnumFacing> directions = EnumSet.allOf(EnumFacing.class);
         directions.remove(skipSide);
@@ -272,7 +405,7 @@ abstract class NxCachedPos extends World {
         }
     }
 
-    @Inject("func_190522_c")
+    @Inject("/")
     public void updateObservingBlocksAt(BlockPos pos, Block blockType) {
         if (MCHooks.blockUpdate) return;
 
@@ -283,7 +416,7 @@ abstract class NxCachedPos extends World {
         pos1.release();
     }
 
-    @Inject("func_190524_a")
+    @Inject("/")
     public void neighborChanged(BlockPos pos, final Block blockIn, BlockPos fromPos) {
         if (MCHooks.blockUpdate) return;
 
@@ -326,7 +459,7 @@ abstract class NxCachedPos extends World {
         }
     }
 
-    @Inject("func_175685_c")
+    @Inject("/")
     public void notifyNeighborsOfStateChange(BlockPos pos, Block blockType, boolean updateObservers) {
         EnumSet<EnumFacing> directions = EnumSet.allOf(EnumFacing.class);
         if (!ForgeEventFactory.onNeighborNotify(this, pos, this.getBlockState(pos), directions, updateObservers).isCanceled()) {
@@ -342,7 +475,7 @@ abstract class NxCachedPos extends World {
         }
     }
 
-    @Inject("func_72975_g")
+    @Inject("/")
     public void markBlocksDirtyVertical(int x, int z, int y1, int y2) {
         int tmp;
         if (y1 > y2) {
@@ -363,7 +496,7 @@ abstract class NxCachedPos extends World {
         this.markBlockRangeForRenderUpdate(x, y1, z, x, y2, z);
     }
 
-    @Inject("func_184141_c")
+    @Inject("/")
     public IBlockState getGroundAboveSeaLevel(BlockPos pos) {
         BlockPos.PooledMutableBlockPos pos1 = BlockPos.PooledMutableBlockPos.retain(pos);
         pos1.setY(getSeaLevel());
@@ -378,7 +511,7 @@ abstract class NxCachedPos extends World {
         return state;
     }
 
-    @Inject("func_175710_j")
+    @Inject("/")
     public boolean canBlockSeeSky(BlockPos pos) {
         if (pos.getY() >= this.getSeaLevel()) {
             return this.canSeeSky(pos);
@@ -406,7 +539,7 @@ abstract class NxCachedPos extends World {
         }
     }
 
-    @Inject("func_175672_r")
+    @Inject("/")
     public BlockPos getTopSolidOrLiquidBlock(BlockPos pos) {
         Chunk chunk = this.getChunk(pos);
 
@@ -431,7 +564,7 @@ abstract class NxCachedPos extends World {
         return imm;
     }
 
-    @Inject("func_147470_e")
+    @Inject("/")
     public boolean isFlammableWithin(AxisAlignedBB bb) {
         int xMin = MathHelper.floor(bb.minX);
         int xMax = MathHelper.ceil(bb.maxX);
@@ -464,7 +597,7 @@ abstract class NxCachedPos extends World {
         return false;
     }
 
-    @Inject("func_180500_c")
+    @Inject("/")
     public boolean checkLightFor(EnumSkyBlock lightType, BlockPos pos) {
         if (!this.isAreaLoaded(pos, 16, false)) {
             return false;

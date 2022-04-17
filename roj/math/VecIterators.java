@@ -180,7 +180,7 @@ public final class VecIterators {
 
     public static final class MH3 extends AbstractIterator<Vec3i> implements Iterable<Vec3i> {
         private final Vec3i hp = new Vec3i();
-        public final int x, y, z, r;
+        public int x, y, z, r;
         private final boolean immutable;
         public MH3(int x, int y, int z, int r, boolean immutable) {
             result = hp;

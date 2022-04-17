@@ -2,6 +2,8 @@ package ilib.event;
 
 import com.google.common.collect.ImmutableMap;
 import ilib.util.BlockHelper;
+import roj.collect.ToLongMap;
+
 import net.minecraft.block.*;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.properties.IProperty;
@@ -9,11 +11,11 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import roj.collect.ToLongMap;
 
 /**
  * @author solo6975
@@ -33,7 +35,8 @@ public class DoorEvent {
         ImmutableMap<IProperty<?>, Comparable<?>> props = state.getProperties();
         if (props.containsKey(BlockPressurePlate.POWERED)) {
             open = state.getValue(BlockPressurePlate.POWERED);
-        } else if (props.containsKey(BlockPressurePlateWeighted.POWER)) {
+        } else if (props.containsKey(BlockPressurePlateWeighted.POWER) &&
+                !(state.getBlock() instanceof BlockRedstoneWire)) {
             open = state.getValue(BlockPressurePlateWeighted.POWER) > 0;
         } else if (props.containsKey(BlockButton.POWERED)) {
             open = state.getValue(BlockButton.POWERED);
@@ -71,7 +74,7 @@ public class DoorEvent {
     }
 
     @SubscribeEvent
-    public static void onPlaceDoor(BlockEvent.PlaceEvent e) {
+    public static void onPlaceDoor(BlockEvent.EntityPlaceEvent e) {
         World w = e.getWorld();
         if (w.isRemote) return;
 

@@ -130,7 +130,7 @@ public class SocketInputStream extends InputStream {
     @Override
     public void close() throws IOException {
         ByteBuffer buf = socket.buffer();
-        buf.limit(0);
+        if (buf != null) buf.limit(0);
     }
 
     @Override

@@ -1,16 +1,17 @@
 package ilib.misc;
 
 import ilib.ClientProxy;
-import ilib.asm.util.MCHooks;
+import ilib.asm.util.MCReplaces;
 import ilib.misc.ps.Cheat;
 import ilib.util.Colors;
 import ilib.util.PlayerUtil;
+import roj.collect.MyHashSet;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.ResourceLocation;
-import roj.collect.MyHashSet;
 
 /**
  * @author solo6975
@@ -21,8 +22,8 @@ public class XRay extends Cheat {
     static float originGamma;
     static MyHashSet<Block> target = new MyHashSet<>();
 
-    public static boolean shouldBlockBeRendered(IBlockState state) {
-        return !enable || target.contains(state.getBlock());
+    public static boolean shouldCulled(IBlockState state) {
+        return enable && !target.contains(state.getBlock());
     }
 
     public static void toggle() {
@@ -33,7 +34,7 @@ public class XRay extends Cheat {
         } else {
             set.gammaSetting = originGamma;
         }
-        MCHooks.debugRenderAllSide = enable;
+        MCReplaces.debugRenderAllSide = enable;
 
         ClientProxy.mc.renderGlobal.loadRenderers();
         PlayerUtil.sendTo(ClientProxy.mc.player, Colors.GREY + "XRay状态: " + Colors.ORANGE + enable);

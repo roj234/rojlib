@@ -26,10 +26,7 @@
 package roj.mod;
 
 import roj.asm.type.ParamHelper;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.TrieTree;
-import roj.collect.TrieTreeSet;
+import roj.collect.*;
 import roj.mapper.ConstMapper;
 import roj.mapper.util.Desc;
 import roj.ui.UIUtil;
@@ -126,7 +123,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 
     static final TrieTree<String>             simple2full = new TrieTree<>();
     static final TrieTreeSet                  fullClass   = new TrieTreeSet();
-    static final Map<String, ArrayList<Desc>> methodIndex = new MyHashMap<>(), fieldIndex = new MyHashMap<>();
+    static final Map<String, SimpleList<Desc>> methodIndex = new MyHashMap<>(), fieldIndex = new MyHashMap<>();
 
     public static void start(boolean exit) {
         new ReflectTool(exit, null);
@@ -167,12 +164,12 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
             }
 
             final Comparator<Desc> cmp = (o1, o2) -> o1.name.compareToIgnoreCase(o2.name);
-            for(ArrayList<Desc> list : methodIndex.values()) {
+            for(SimpleList<Desc> list : methodIndex.values()) {
                 list.sort(cmp);
                 list.trimToSize();
             }
 
-            for(ArrayList<Desc> list : fieldIndex.values()) {
+            for(SimpleList<Desc> list : fieldIndex.values()) {
                 list.sort(cmp);
                 list.trimToSize();
             }
@@ -265,6 +262,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 
             setTitle(clazz.substring(clazz.lastIndexOf('/') + 1) + " 的方法和字段");
             setLayout(null);
+            setAlwaysOnTop(true);
 
             UIUtil.setLogo(this, "FMD_logo.png");
 
@@ -306,8 +304,8 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
             search.setBounds(124, 2, 80, 25);
             ActionListener l = e -> {
                 init(clazz, panelMethod, panelField, searchField.getText().trim().toLowerCase());
-                paneF.scrollRectToVisible(new Rectangle());
-                paneM.scrollRectToVisible(new Rectangle());
+                paneF.validate();
+                paneM.validate();
             };
             search.addActionListener(l);
             add(search);
@@ -340,7 +338,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
             label.setBounds(280, 5, 40, 15);
             pMethod.add(label);
 
-            ArrayList<Desc> descs = methodIndex.get(clazz);
+            SimpleList<Desc> descs = methodIndex.get(clazz);
             if(descs != null) {
                 methodNames = new String[descs.size()];
                 int y = 25;

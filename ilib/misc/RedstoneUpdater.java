@@ -20,12 +20,13 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * @author solo6975
  * @since 2022/4/6 0:06
  */
-public class RedstoneUpdater extends BlockHelper.BlockWalker {
+public class RedstoneUpdater extends BlockHelper.BlockWalker implements Consumer<RedstoneUpdater.RedstoneInfo> {
     static final class RedstoneInfo extends BlockPos.MutableBlockPos {
         int redstone;
 
@@ -115,16 +116,21 @@ public class RedstoneUpdater extends BlockHelper.BlockWalker {
             SimpleList<MyHashSet<RedstoneInfo>> lv = w.byLevel;
             int max = entry.v - w.red - 1;
             for (int i = 0; i < max; i++) {
-                int level = entry.v - i;
+                this.level = entry.v - i;
                 MyHashSet<RedstoneInfo> poss = lv.get(i);
-                for (RedstoneInfo pos : poss) {
-                    if (pos.redstone < level) {
-                        pos.redstone = level;
-                    }
-                }
+                poss.forEach(this);
             }
 
             release(entry.k);
+        }
+    }
+
+    private int level;
+
+    @Override
+    public void accept(RedstoneInfo pos) {
+        if (pos.redstone < level) {
+            pos.redstone = level;
         }
     }
 

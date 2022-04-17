@@ -34,6 +34,11 @@ public abstract class SimpleInventory implements IItemHandler, IItemHandlerModif
     }
 
     @Override
+    public ItemStack getStackInSlot1(int i) {
+        return getStackInSlot(i);
+    }
+
+    @Override
     public final ItemStack decrStackSize(int id, int amount) {
         return extractItem(id, amount, false);
     }
@@ -171,19 +176,19 @@ public abstract class SimpleInventory implements IItemHandler, IItemHandlerModif
             int max = Math.min(getSlotLimit(id), stack.getMaxStackSize());
 
             if (sum > max) {
-                ItemStack copy = stack.copy();
-                ItemStack target = copy.splitStack(sum - max);
+                ItemStack target = stack.copy();
+                target.setCount(sum - max);
                 if (!simulate) {
-                    copy = prev.copy();
-                    copy.setCount(max);
-                    setStackInSlot(id, copy);
+                    ItemStack newStack = prev.copy();
+                    newStack.setCount(max);
+                    setStackInSlot(id, newStack);
                 }
                 return target;
             } else {
                 if (!simulate) {
-                    ItemStack copy = prev.copy();
-                    copy.setCount(sum);
-                    setStackInSlot(id, copy);
+                    ItemStack newStack = prev.copy();
+                    newStack.setCount(sum);
+                    setStackInSlot(id, newStack);
                 }
                 return ItemStack.EMPTY;
             }
@@ -209,10 +214,16 @@ public abstract class SimpleInventory implements IItemHandler, IItemHandlerModif
                 setStackInSlot(id, ItemStack.EMPTY);
             }
         } else {
-            ItemStack backup = stack.copy();
-            removed = stack.splitStack(count);
+            removed = stack.copy();
+            removed.setCount(count);
             if (!simulate) {
-                setStackInSlot(id, stack.isEmpty() ? ItemStack.EMPTY : stack);
+                if (stack.getCount() <= count) {
+                    setStackInSlot(id, ItemStack.EMPTY);
+                } else {
+                    ItemStack newStack = stack.copy();
+                    newStack.shrink(count);
+                    setStackInSlot(id, newStack);
+                }
             }
         }
 

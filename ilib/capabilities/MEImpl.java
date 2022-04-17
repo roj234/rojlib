@@ -80,6 +80,11 @@ public class MEImpl implements MEItem, ICapabilitySerializable<NBTTagCompound> {
         return this;
     }
 
+    @Override
+    public EnergyType getEnergyType() {
+        return EnergyType.STORAGE;
+    }
+
     public int currentME() {
         return power;
     }

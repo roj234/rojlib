@@ -26,12 +26,8 @@
 
 package ilib.item;
 
-import ilib.api.Ownable;
 import ilib.api.item.ILostThing;
-import ilib.util.Colors;
-import ilib.util.ForgeUtil;
-import ilib.util.ItemNBT;
-import ilib.util.MCTexts;
+import ilib.util.*;
 import ilib.util.energy.EnergyHelper;
 
 import net.minecraft.client.Minecraft;
@@ -49,7 +45,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
-import javax.annotation.Nonnull;
 import java.util.List;
 
 /**
@@ -67,7 +62,7 @@ public class ItemBase extends Item {
 
     @Override
     @SideOnly(Side.CLIENT)
-    public final void addInformation(ItemStack stack, World world, @Nonnull List<String> list, @Nonnull ITooltipFlag flag) {
+    public final void addInformation(ItemStack stack, World world, List<String> list, ITooltipFlag flag) {
         addTooltip(stack, list);
 
         Item i = stack.getItem();
@@ -89,22 +84,13 @@ public class ItemBase extends Item {
         if (tag != null) {
             if (tag.getInteger("MaxME") != 0)
                 EnergyHelper.addEnergyInformation(stack, list);
-            if (tag.hasKey("Owner")) {
-                if (!(tag.getTag("Owner") instanceof NBTTagCompound)) {
-                    tag.removeTag("Owner");
-                    return;
-                }
-                NBTTagCompound tag2 = (NBTTagCompound) tag.getTag("Owner");
-                int ownerType = tag2.getInteger("Type");
-                String owner = tag2.getString("Name");
+            if (tag.hasKey("Owner", NBTType.COMPOUND)) {
+                NBTTagCompound owner = tag.getCompoundTag("Owner");
+                int ownerType = owner.getInteger("OwnType");
+                String ownerId = owner.getString("Own");
 
-                if (owner.equals(Ownable.UNKNOWN)) {
-                    tag.removeTag("Owner");
-                    return;
-                }
-
-                list.add(Colors.ORANGE + getOwnerTypeName(ownerType));
-                list.add(Colors.BLUE + I18n.format("tooltip.ilib.owner") + owner);
+                list.add(Colors.ORANGE + ItemBase.getOwnerTypeName(ownerType));
+                list.add(Colors.BLUE + I18n.format("tooltip.ilib.owner") + ownerId);
             }
         }
     }
@@ -114,7 +100,7 @@ public class ItemBase extends Item {
     }
 
     @Override
-    public final void getSubItems(@Nonnull CreativeTabs tab, @Nonnull NonNullList<ItemStack> list) {
+    public final void getSubItems(CreativeTabs tab, NonNullList<ItemStack> list) {
         if (isInCreativeTab(tab)) getSubItems(list);
     }
 
@@ -130,13 +116,12 @@ public class ItemBase extends Item {
     public static String getOwnerTypeName(int type) {
         switch (type) {
             case 0:
+            default:
                 return MCTexts.format("ilib.perm.public");
             case 1:
                 return MCTexts.format("ilib.perm.private");
             case 2:
                 return MCTexts.format("ilib.perm.protected");
-            default:
-                return MCTexts.format("ilib.perm.unknown");
         }
     }
 }

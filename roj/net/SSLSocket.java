@@ -168,7 +168,7 @@ public class SSLSocket extends PlainSocket {
 
                 needIO:
                 while (this.status == HandshakeStatus.NEED_UNWRAP) {
-                    result = _readNetworkIn(0);
+                    result = _readNetworkIn();
 
                     this.status = result.getHandshakeStatus();
 
@@ -286,7 +286,8 @@ public class SSLSocket extends PlainSocket {
             rBuf.put(pb);
             pb.limit(ol);
 
-            if (nread == max) return max;
+            max -= nread;
+            if (max <= 0) return max;
         } else {
             nread = 0;
         }
@@ -302,7 +303,7 @@ public class SSLSocket extends PlainSocket {
         read = 0;
         vw:
         do {
-            SSLEngineResult result = _readNetworkIn(max - read);
+            SSLEngineResult result = _readNetworkIn();
             read += result.bytesProduced();
 
             /*
@@ -334,33 +335,33 @@ public class SSLSocket extends PlainSocket {
                     break;
 
                 default: // closed
-                    if (read == 0)
-                        return -1;
+                    if (read == 0) return -1;
                     break vw;
             }
         } while (networkIn.position() != 0);
-        return read + nread;
-    }
-
-    private SSLEngineResult _readNetworkIn(int mx) throws SSLException {
-        networkIn.flip();
-        SSLEngineResult result = engine.unwrap(networkIn, rBuf);
-        networkIn.compact();
-
-        int more = result.bytesProduced() - mx;
+        int more = read - max;
         if (more > 0) {
-            ByteBuffer pb = pushback;
-            if (pb.remaining() < more) {
-                ByteBuffer bb = ByteBuffer.allocate(pb.remaining() + more);
-                bb.put(pb).flip();
+            ByteBuffer pb = pushback.compact();
+
+            if (pb.capacity() - pb.position() < more) {
+                ByteBuffer bb = ByteBuffer.allocate(pb.position() + more);
+                pb.flip();
+                bb.put(pb);
                 pushback = pb = bb;
             }
 
             ByteBuffer rb = rBuf;
             rb.limit(rb.position()).position(rb.position() - more);
-            pb.compact().put(rb).flip();
-            rb.position(rb.limit()).limit(rb.capacity());
+            pb.put(rb).flip();
+            rb.position(rb.limit() - more).limit(rb.capacity());
         }
+        return read + nread;
+    }
+
+    private SSLEngineResult _readNetworkIn() throws SSLException {
+        networkIn.flip();
+        SSLEngineResult result = engine.unwrap(networkIn, rBuf);
+        networkIn.compact();
         return result;
     }
 

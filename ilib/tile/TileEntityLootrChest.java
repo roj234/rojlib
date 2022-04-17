@@ -103,7 +103,6 @@ public class TileEntityLootrChest extends TileEntityChest {
         ListInventory fakeInventory = new ListInventory(3 * 9);
         if (addPlayerOpened(player)) {
             fillWithLoot(player, fakeInventory);
-            markDirty();
         }
 
         return fakeInventory;

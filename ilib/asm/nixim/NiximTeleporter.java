@@ -27,7 +27,6 @@ package ilib.asm.nixim;
 
 import ilib.util.PortalCache;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 
@@ -53,11 +52,11 @@ public class NiximTeleporter extends Teleporter {
         super(worldIn);
     }
 
-    @Override
-    @Copy
-    public boolean isVanilla() {
-        return false;
-    }
+    //@Override
+    //@Copy
+    //public boolean isVanilla() {
+    //    return false;
+    //}
 
     @Override
     @Inject("func_180620_b")

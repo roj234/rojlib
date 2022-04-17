@@ -29,6 +29,7 @@ package roj.asm.tree.insn;
 import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstClass;
+import roj.asm.type.ParamHelper;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 
@@ -97,6 +98,10 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, owner.substring(owner.lastIndexOf('/') + 1));
+        StringBuilder sb = new StringBuilder()
+            .append(OpcodeUtil.toString0(code)).append(" ")
+            .append(owner.endsWith(";") ? ParamHelper.parseField(owner) : owner);
+        if (code == Opcodes.ANEWARRAY) sb.append("[]");
+        return sb.toString();
     }
 }

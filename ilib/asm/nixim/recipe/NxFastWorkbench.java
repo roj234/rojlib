@@ -25,18 +25,19 @@
  */
 package ilib.asm.nixim.recipe;
 
-import ilib.asm.util.MCHooks;
-import ilib.asm.util.MCHooks.RecipeCache;
+import ilib.misc.MCHooks;
+import ilib.misc.MCHooks.RecipeCache;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.collect.SimpleList;
+
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.NonNullList;
 import net.minecraft.world.World;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.collect.SimpleList;
 
 import java.util.List;
 
@@ -44,6 +45,7 @@ import java.util.List;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
+//!!AT [["net.minecraft.inventory.InventoryCrafting", ["field_70466_a"]]]
 @Nixim("net.minecraft.item.crafting.CraftingManager")
 abstract class NxFastWorkbench extends CraftingManager {
     @Inject("func_82787_a")
@@ -81,7 +83,7 @@ abstract class NxFastWorkbench extends CraftingManager {
 
     @Copy
     private static IRecipe findRecipe(InventoryCrafting inv, World world) {
-        if (MCHooks.mcRecipes.isEmpty()) {
+        if (MCHooks.mcRecipes == null) {
             for (IRecipe recipe : REGISTRY) {
                 if (recipe.matches(inv, world)) return recipe;
             }

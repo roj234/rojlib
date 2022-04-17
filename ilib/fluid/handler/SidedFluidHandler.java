@@ -34,6 +34,7 @@
 package ilib.fluid.handler;
 
 import ilib.api.tile.AdvSide;
+import ilib.tile.IOManager;
 import ilib.util.EnumIO;
 
 import net.minecraft.util.EnumFacing;
@@ -75,13 +76,13 @@ public abstract class SidedFluidHandler implements IFluidHandler {
 
         @Override
         protected boolean canFill() {
-            EnumIO mode = tile.getSideMode(EnumIO.TYPE_FLUID, face);
+            EnumIO mode = tile.getSideMode(IOManager.TYPE_FLUID, face);
             return mode == EnumIO.ALL || mode == EnumIO.INPUT;
         }
 
         @Override
         protected boolean canDrain() {
-            EnumIO mode = tile.getSideMode(EnumIO.TYPE_FLUID, face);
+            EnumIO mode = tile.getSideMode(IOManager.TYPE_FLUID, face);
             return mode == EnumIO.ALL || mode == EnumIO.OUTPUT;
         }
     }

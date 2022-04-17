@@ -35,6 +35,8 @@ import net.minecraft.util.math.BlockPos;
  * @since 2020/9/20 1:15
  */
 public class Section extends Rect3i implements PositionProvider {
+    public Section() {}
+
     public Section(int xmin, int ymin, int zmin, int xmax, int ymax, int zmax) {
         super(xmin, ymin, zmin, xmax, ymax, zmax);
     }

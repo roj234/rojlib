@@ -187,6 +187,11 @@ public final class ParamHelper {
      * 转换方法asm type对象为字符串
      */
     public static String getMethod(List<Type> list) {
+        return getMethod(list, null);
+    }
+
+    // 想打我就打吧
+    public static String getMethod(List<Type> list, String prev) {
         CharList sb = IOUtil.getSharedCharBuf().append('(');
 
         for (int i = 0; i < list.size(); i++) {
@@ -196,7 +201,7 @@ public final class ParamHelper {
 
             getOne(list.get(i), sb);
         }
-        return sb.toString();
+        return sb.equals(prev) ? prev : sb.toString();
     }
 
     public static void getOne(Type type, CharList sb) {
@@ -370,4 +375,5 @@ public final class ParamHelper {
         sb.append('L').append(sb1);
         return sb.append(';');
     }
+
 }

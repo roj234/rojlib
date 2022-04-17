@@ -40,7 +40,7 @@ import roj.collect.SimpleList;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
-import java.util.ArrayList;
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -51,10 +51,9 @@ import java.util.List;
  */
 public final class Clazz implements IClass {
     public Clazz() {
-        this.interfaces = new ArrayList<>();
-        this.methods = new ArrayList<>();
-        this.fields = new ArrayList<>();
-        this.attributes = new AttributeList();
+        this.interfaces = new SimpleList<>();
+        this.methods = new SimpleList<>();
+        this.fields = new SimpleList<>();
         this.accesses = AccessFlag.PUBLIC | AccessFlag.SUPER_OR_SYNC;
     }
 
@@ -72,26 +71,31 @@ public final class Clazz implements IClass {
         this.name = data.name;
         this.parent = data.parent;
 
-        this.interfaces = new SimpleList<>(data.interfaces.size());
-        List<CstClass> cstItfs = data.interfaces;
-        for (int i = 0; i < cstItfs.size(); i++) {
-            CstClass clz = cstItfs.get(i);
-            this.interfaces.add(clz.getValue().getString());
-        }
+        this.interfaces = data.interfaces();
 
         this.methods = new SimpleList<>(data.methods.size());
-        List<MethodSimple> cstMethods = data.methods;
+        List<? extends MethodNode> cstMethods = data.methods;
         for (int i = 0; i < cstMethods.size(); i++) {
-            MethodSimple method = cstMethods.get(i);
-            this.methods.add(new Method(data, method));
+            MoFNode node = cstMethods.get(i);
+            if (node instanceof Method) {
+                methods.add((Method) node);
+            } else {
+                methods.add(new Method(data, (MethodSimple) node));
+            }
         }
 
-        this.fields = new SimpleList<>(data.fields.size());
-        List<FieldSimple> cstFields = data.fields;
+        fields = new SimpleList<>(data.fields.size());
+        List<? extends MoFNode> cstFields = data.fields;
         for (int i = 0; i < cstFields.size(); i++) {
-            FieldSimple field = cstFields.get(i);
-            this.fields.add(new Field(data, field));
+            MoFNode node = cstFields.get(i);
+            if (node instanceof Field) {
+                fields.add((Field) node);
+            } else {
+                fields.add(new Field(data, (FieldSimple) node));
+            }
         }
+
+        if (data.attributes == null) return;
 
         this.attributes = new AttributeList(data.attributes.size());
 
@@ -126,7 +130,7 @@ public final class Clazz implements IClass {
     public List<String> interfaces;
     public List<Method> methods;
     public List<Field> fields;
-    public AttributeList attributes;
+    private AttributeList attributes;
 
     public Signature signature;
 
@@ -164,8 +168,9 @@ public final class Clazz implements IClass {
             sb.deleteCharAt(sb.length() - 1);
         }
         sb.append("\n\n");
-        if (!this.attributes.isEmpty()) {
-            for (Attribute i : this.attributes) {
+        if (attributes != null) {
+            for (int j = 0; j < attributes.size(); j++) {
+                Attribute i = attributes.get(j);
                 switch (i.name) {
                     case AttrAnnotation.INVISIBLE:
                     case AttrAnnotation.VISIBLE:
@@ -204,12 +209,16 @@ public final class Clazz implements IClass {
             methods.get(i).toByteArray(cw, w);
         }
 
-        if (signature != null)
-            attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
+        if (attributes == null && signature == null) {
+            w.putShort(0);
+        } else {
+            if (signature != null)
+                attributes().add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
 
-        w.putShort(attributes.size());
-        for (int i = 0, l = attributes.size(); i < l; i++) {
-            attributes.get(i).toByteArray(cw, w);
+            w.putShort(attributes.size());
+            for (int i = 0, l = attributes.size(); i < l; i++) {
+                attributes.get(i).toByteArray(cw, w);
+            }
         }
 
         int pos = w.wIndex();
@@ -233,6 +242,8 @@ public final class Clazz implements IClass {
 
     public void initAttributes(ConstantPool pool, ByteReader r) {
         int len = r.readUnsignedShort();
+        if (len == 0) return;
+        attributes = new AttributeList(len);
         for (int i = 0; i < len; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
             final int length = r.readInt();
@@ -308,19 +319,35 @@ public final class Clazz implements IClass {
     }
 
     public AttrInnerClasses getInnerClasses() {
-        return (AttrInnerClasses) attributes.getByName(AttrInnerClasses.NAME);
+        return attributes == null ? null : (AttrInnerClasses) attributes.getByName(AttrInnerClasses.NAME);
     }
 
     public AttrAnnotation getVisibleAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
+        return attributes == null ? null : (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
     }
 
     public AttrAnnotation getInvisibleAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
+        return attributes == null ? null : (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
     }
 
     public AttrSourceFile getSource() {
-        return (AttrSourceFile) attributes.getByName(AttrSourceFile.NAME);
+        return attributes == null ? null : (AttrSourceFile) attributes.getByName(AttrSourceFile.NAME);
+    }
+
+    @Override
+    public Attribute attrByName(String name) {
+        return attributes == null ? null : (Attribute) attributes.getByName(name);
+    }
+
+    @Override
+    public AttributeList attributes() {
+        return attributes == null ? attributes = new AttributeList() : attributes;
+    }
+
+    @Nullable
+    @Override
+    public AttributeList attributesNullable() {
+        return attributes;
     }
 
     @Override
@@ -359,7 +386,7 @@ public final class Clazz implements IClass {
     }
 
     @Override
-    public byte type() {
+    public int type() {
         return Parser.CTYPE_LOD_3;
     }
 }

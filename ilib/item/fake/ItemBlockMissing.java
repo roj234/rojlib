@@ -28,20 +28,25 @@ package ilib.item.fake;
 
 import ilib.client.CreativeTabsMy;
 import ilib.item.ItemBlockMI;
+
 import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.init.Blocks;
+import net.minecraft.item.ItemStack;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public class ItemBlockMissing extends ItemBlockMI {
+    private static final CreativeTabsMy tabBlockOnly = new CreativeTabsMy("ilib.missing").setIcon(new ItemStack(Blocks.BEDROCK));
+
     public ItemBlockMissing(Block block) {
         super(block);
-        setCreativeTab(CreativeTabsMy.tabBlockOnly);
+        setCreativeTab(tabBlockOnly);
     }
 
     public boolean canDisplayIn(CreativeTabs tab) {
-        return tab == CreativeTabsMy.tabBlockOnly;
+        return tab == tabBlockOnly;
     }
 }

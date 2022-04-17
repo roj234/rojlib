@@ -39,11 +39,13 @@ import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
+import javax.annotation.Nullable;
+
 /**
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class Field implements MoFNode {
+public final class Field implements FieldNode {
     public Field(int accesses, String name, String type) {
         this.accesses = (char) accesses;
         this.name = name;
@@ -62,8 +64,9 @@ public final class Field implements MoFNode {
         ConstantPool pool = data.cp;
         ByteReader r = new ByteReader();
 
-        AttributeList al = field.attributes;
-        attributes.ensureCapacity(al.size());
+        AttributeList al = field.attributes();
+        if (al == null || al.isEmpty()) return;
+        attributes = new AttributeList(al.size());
         for (int i = 0; i < al.size(); i++) {
             Attribute attr = al.get(i);
             if(attr.getClass() == AttrUnknown.class) {
@@ -82,8 +85,16 @@ public final class Field implements MoFNode {
         }
     }
 
+    public Field(java.lang.reflect.Field f) {
+        this.name = f.getName();
+        this.accesses = (char) f.getModifiers();
+        this.type = ParamHelper.parseField(ParamHelper.class2asm(f.getType()));
+    }
+
     public void initAttributes(ConstantPool pool, ByteReader r) {
         int len = r.readUnsignedShort();
+        if (len == 0) return;
+        attributes = new AttributeList(len);
         for (int i = 0; i < len; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
             final int length = r.readInt();
@@ -131,17 +142,24 @@ public final class Field implements MoFNode {
     public String name;
     public Type type;
     public char accesses;
-    public AttributeList attributes = new AttributeList();
+
+    private AttributeList attributes;
     public Signature signature;
 
     public void toByteArray(ConstantPool pool, ByteList w) {
         w.putShort(accesses).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(ParamHelper.getField(type)));
 
-        if (signature != null)
-            attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
-        w.putShort((short) attributes.size());
-        for (Attribute attribute : attributes) {
-            attribute.toByteArray(pool, w);
+        if (signature != null) attributes().add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
+
+        AttributeList attr = attributes;
+        if (attr == null) {
+            w.putShort(0);
+            return;
+        }
+
+        w.putShort((short) attr.size());
+        for (int i = 0; i < attr.size(); i++) {
+            attr.get(i).toByteArray(pool, w);
         }
     }
 
@@ -151,8 +169,18 @@ public final class Field implements MoFNode {
     }
 
     @Override
+    public void name(String name) {
+        this.name = name;
+    }
+
+    @Override
     public String rawDesc() {
         return ParamHelper.getField(type);
+    }
+
+    @Override
+    public void rawDesc(String rawDesc) {
+        type = ParamHelper.parseField(rawDesc);
     }
 
     @Override
@@ -170,28 +198,58 @@ public final class Field implements MoFNode {
         return accesses;
     }
 
+    @Override
+    public Type fieldType() {
+        return type;
+    }
+
+    @Override
+    public void fieldType(Type type) {
+        this.type = type;
+    }
+
     FieldSimple i_downgrade(ConstantPool cw) {
         FieldSimple f = new FieldSimple(accesses, cw.getUtf(name), cw.getUtf(rawDesc()));
-        f.attributes.ensureCapacity(attributes.size() +
-                                            (signature == null ? 0 : 1));
+        if (attributes == null) {
+            if (signature == null) return f;
+            attributes = new AttributeList();
+        }
+
+        AttributeList fAttr = f.attributes();
+        fAttr.ensureCapacity(attributes.size() + (signature == null ? 0 : 1));
         ByteList w = SharedBuf.i_get();
         for (int i = 0; i < attributes.size(); i++) {
-            f.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
+            fAttr.add(AttrUnknown.downgrade(cw, w, this.attributes.get(i)));
         }
         if (signature != null) {
             w.clear();
             w.putShort(cw.getUtfId(signature.toGeneric()));
-            f.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
+            fAttr.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
         }
         return f;
     }
 
+    @Override
+    public Attribute attrByName(String name) {
+        return attributes == null ? null : (Attribute) attributes.getByName(name);
+    }
+
+    public AttributeList attributes() {
+        return attributes == null ? attributes = new AttributeList() : attributes;
+    }
+
+    @Nullable
+    @Override
+    public AttributeList attributesNullable() {
+        return attributes;
+    }
+
     public AttrAnnotation getAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
+        return attributes == null ? null : (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
     }
 
     public AttrAnnotation getInvisibleAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
+        return attributes == null ? null : (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
     }
 
     public String toString() {
@@ -203,8 +261,8 @@ public final class Field implements MoFNode {
             sb.append("    ").append(getInvisibleAnnotations()).append('\n');
 
         sb.append("    ");
-        AccessFlag.toString(accesses, AccessFlag.TS_FIELD, sb);
-        sb.append(signature != null ? signature : type).append(' ').append(name);
+        AccessFlag.toString(accesses, AccessFlag.TS_FIELD, sb)
+                  .append(signature != null ? signature : type).append(' ').append(name);
 
         AttrConstantValue constant = (AttrConstantValue) attributes.getByName("ConstantValue");
         if (constant != null) {
@@ -212,8 +270,9 @@ public final class Field implements MoFNode {
         }
         sb.append('\n');
 
-        if (!attributes.isEmpty()) {
-            for (Attribute attr : attributes) {
+        if (attributes != null && !attributes.isEmpty()) {
+            for (int i = 0; i < attributes.size(); i++) {
+                Attribute attr = attributes.get(i);
                 switch (attr.name) {
                     case AttrAnnotation.VISIBLE:
                     case AttrAnnotation.INVISIBLE:

@@ -37,7 +37,7 @@ public class GNumberInput extends GTextInput {
     protected int val, min, max;
 
     public GNumberInput(IGui parent, int x, int y, int width, int height, int value, int min, int max) {
-        super(parent, x, y, width, height, null);
+        super(parent, x, y, width, height, Integer.toString(value));
         this.val = value;
         this.min = min;
         this.max = max;

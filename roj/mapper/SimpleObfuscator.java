@@ -343,11 +343,10 @@ public final class SimpleObfuscator extends Obfuscator {
             MyCodeVisitor mcv = new MyCodeVisitor();
             for (int i = 0; i < arr.size(); i++) {
                 ConstantData data = arr.get(i).getData();
-                List<MethodSimple> methods = data.methods;
+                List<? extends MethodNode> methods = data.methods;
 
                 for (int j = 0; j < methods.size(); j++) {
-                    MethodSimple m = methods.get(j);
-                    AttrUnknown code0 = (AttrUnknown) m.attributes.getByName("Code");
+                    AttrUnknown code0 = (AttrUnknown) methods.get(j).attrByName("Code");
                     if(code0 == null) continue;
                     mcv.initNil(code0.getRawData());
                     mcv.visit(data.cp);
@@ -361,11 +360,11 @@ public final class SimpleObfuscator extends Obfuscator {
             desc.param = "(Ljava/lang/String;)Ljava/lang/String;";
             for (int i = 0; i < arr.size(); i++) {
                 ConstantData data = arr.get(i).getData();
-                List<MethodSimple> methods = data.methods;
+                List<? extends MethodNode> methods = data.methods;
 
                 desc.owner = m1.classMap.getOrDefault(data.name, data.name);
                 for (int j = methods.size() - 1; j >= 0; j--) {
-                    MethodSimple m = methods.get(j);
+                    MethodSimple m = (MethodSimple) methods.get(j);
                     if (!m.type.getString().equals("(Ljava/lang/String;)Ljava/lang/String;")) continue;
                     desc.name = m.name.getString();
                     if (mcv.methods.containsKey(desc)) {
@@ -408,12 +407,12 @@ public final class SimpleObfuscator extends Obfuscator {
             boolean ch;
             for (int i = 0; i < arr.size(); i++) {
                 ConstantData data = arr.get(i).getData();
-                List<MethodSimple> methods = data.methods;
+                List<? extends MethodNode> methods = data.methods;
 
                 ch = false;
                 for (int j = 0; j < methods.size(); j++) {
-                    MethodSimple m = methods.get(j);
-                    AttrUnknown code0 = (AttrUnknown) m.attributes.getByName("Code");
+                    MethodNode m = methods.get(j);
+                    AttrUnknown code0 = (AttrUnknown) m.attrByName("Code");
                     if(code0 == null) continue;
                     AttrCode code = new AttrCode(m, code0.getRawData(), data.cp);
                     InsnList insn = code.instructions;
@@ -444,7 +443,7 @@ public final class SimpleObfuscator extends Obfuscator {
                         }
                     }
                     if (ch) {
-                        m.attributes.putByName(code);
+                        m.attributes().putByName(code);
                     }
                 }
                 done.clear();
@@ -534,67 +533,60 @@ public final class SimpleObfuscator extends Obfuscator {
     }
 
     static void clearSign(ConstantData data) {
-        AttributeList al = data.attributes;
+        AttributeList al = data.attributesNullable();
+        if (al == null) return;
+
         al.removeByName("InnerClasses");
         al.removeByName("Signature");
         al.removeByName("SourceFile");
-        List<MethodSimple> methods = data.methods;
+        List<? extends MethodNode> methods = data.methods;
         for (int i = 0; i < methods.size(); i++) {
-            MethodSimple m = methods.get(i);
-            AttributeList al1 = m.attributes;
-            al1.removeByName("Signature");
+            AttributeList al1 = methods.get(i).attributesNullable();
+            if (al1 != null) al1.removeByName("Signature");
         }
-        List<FieldSimple> fields = data.fields;
+        List<? extends FieldNode> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
-            FieldSimple m = fields.get(i);
-            AttributeList al1 = m.attributes;
-            al1.removeByName("Signature");
+            AttributeList al1 = fields.get(i).attributesNullable();
+            if (al1 != null) al1.removeByName("Signature");
         }
     }
 
     void fakeSign(ConstantData data) {
-        AttributeList al = data.attributes;
-
         Signature sign1 = getSign(Signature.CLASS);
 
         if (data.methods.isEmpty() || data.fields.isEmpty() || rand.nextFloat() > 0.11f)
-            al.putByName(new AttrUTF("Signature", sign1.toGeneric()));
+            data.attributes().putByName(new AttrUTF("Signature", sign1.toGeneric()));
 
         sign1 = getSign(Signature.METHOD);
 
-        List<MethodSimple> methods = data.methods;
+        List<? extends MethodNode> methods = data.methods;
         for (int i = 0; i < methods.size(); i++) {
-            MethodSimple m = methods.get(i);
-            AttributeList al1 = m.attributes;
             if (rand.nextFloat() > 0.66f)
-                al1.putByName(new AttrUTF("Signature", sign1.toGeneric()));
+                methods.get(i).attributes().putByName(new AttrUTF("Signature", sign1.toGeneric()));
         }
 
         sign1 = getSign(Signature.FIELD_OR_CLASS);
 
-        List<FieldSimple> fields = data.fields;
+        List<? extends FieldNode> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
-            FieldSimple m = fields.get(i);
-            AttributeList al1 = m.attributes;
             if (rand.nextFloat() > 0.66f)
-                al1.putByName(new AttrUTF("Signature", sign1.toGeneric()));
+                fields.get(i).attributes().putByName(new AttrUTF("Signature", sign1.toGeneric()));
         }
     }
 
     void codeSign(ConstantData data) {
         Signature sign2 = getSign(Signature.METHOD);
 
-        List<MethodSimple> methods = data.methods;
+        List<? extends MethodNode> methods = data.methods;
 
         if (lineLog != null && (flags & DESTROY_LINE) != 0) {
             lineLog.append(data.name).append('\n');
         }
 
         for (int i = 0; i < methods.size(); i++) {
-            MethodSimple m = methods.get(i);
-            AttrUnknown au = (AttrUnknown) m.attributes.getByName("Code");
-            if(au == null)
-                continue;
+            MethodNode m = methods.get(i);
+            AttrUnknown au = (AttrUnknown) m.attrByName("Code");
+            if(au == null) continue;
 
             ByteReader r = Parser.reader(au);
             ByteList w = new ByteList(r.remaining());
@@ -686,8 +678,8 @@ public final class SimpleObfuscator extends Obfuscator {
                              .putShort(tableLen);
 
                             if(lineLog != null)
-                                lineLog.append(' ').append(m.name.getString())
-                                       .append(' ').append(m.type.getString()).append('\n');
+                                lineLog.append(' ').append(m.name())
+                                       .append(' ').append(m.rawDesc()).append('\n');
                             for (int k = 0; k < tableLen; k++) {
                                 int index = r.readUnsignedShort();
                                 int line = r.readUnsignedShort();

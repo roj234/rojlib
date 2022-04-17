@@ -26,6 +26,7 @@
 package roj.net.http.serv;
 
 import roj.collect.MyHashMap;
+import roj.collect.RingBuffer;
 import roj.concurrent.OperationDone;
 import roj.config.ParseException;
 import roj.io.PooledBuf;
@@ -52,6 +53,7 @@ import java.util.zip.Deflater;
 
 public final class RequestHandler extends FDChannel {
     public static final int KEEP_ALIVE_TIMEOUT = 300;
+    public static final int MAX_HANGING = 32;
     private static final int SRCBUF_CAPACITY = 3072;
 
     public static final ACalendar RFC_DATE = new ACalendar(TimeZone.getTimeZone("GMT"));
@@ -59,6 +61,7 @@ public final class RequestHandler extends FDChannel {
     public static final class Local {
         public ACalendar date = RFC_DATE.copy();
         public MyHashMap<String, Object> ctx = new MyHashMap<>();
+        public RingBuffer<RequestHandler> hanging = new RingBuffer<>(MAX_HANGING);
     }
     public static final FastThreadLocal<Local> LocalShared = FastThreadLocal.withInitial(Local::new);
 
@@ -308,11 +311,17 @@ public final class RequestHandler extends FDChannel {
                             return;
                         }
 
-                        if (request != null && !"close".equals(request.headers().get("Connection"))) {
+                        if (request != null && !"close".equals(request.headers().get("Connection")) && key.isValid()) {
                             state = HANGING;
                             clear();
                             interestOps(SelectionKey.OP_READ);
                             time = System.currentTimeMillis() + KEEP_ALIVE_TIMEOUT * 1000;
+
+                            RingBuffer<RequestHandler> rb = LocalShared.get().hanging;
+                            if (!rb.contains(this)) {
+                                RequestHandler before = rb.addLast(this);
+                                if (before != null) before.close();
+                            }
                         } else {
                             state = PRE_CLOSE;
                             selected(0);
@@ -320,6 +329,7 @@ public final class RequestHandler extends FDChannel {
                         }
                     }
                 case HANGING:
+                    if (ch == null) return;
                     int r = ch.read();
                     if (r > 0 || (r == 0 && ch.buffer().position() > 0)) {
                         flag = KEPT_ALIVE;
@@ -330,6 +340,7 @@ public final class RequestHandler extends FDChannel {
                         selected(0);
                         return;
                     } else if (r == 0) return;
+                    LocalShared.get().hanging.remove(this);
                 case PRE_CLOSE:
                     time = System.currentTimeMillis() + 100;
                     clear();
@@ -375,7 +386,7 @@ public final class RequestHandler extends FDChannel {
             key.interestOps(ops);
     }
 
-    private void clear() throws Exception {
+    private void clear() {
         if (def != null) def.reset();
         request = null;
         hl = null;
@@ -436,6 +447,7 @@ public final class RequestHandler extends FDChannel {
                     throw new IllegalRequestException(Code.BAD_REQUEST, "无效请求头 " + version);
 
                 // 浏览器限制2048
+                // noinspection all
                 if (path.length() > 2000) {
                     throw new IllegalRequestException(Code.URI_TOO_LONG);
                 }
@@ -563,6 +575,7 @@ public final class RequestHandler extends FDChannel {
         int c = h.getCount("Content-Length");
         if (c > 1) {
             List<String> list = h.getAll("Content-Length");
+            // noinspection all
             for (int i = 0; i < list.size(); i++) {
                 if (!list.get(i).equals(list.get(0)))
                     throw new IllegalRequestException(400);
@@ -695,6 +708,7 @@ public final class RequestHandler extends FDChannel {
                         continue find;
                     }
                 }
+                // noinspection all
                 while (b[i++] != '\n');
                 System.arraycopy(b, i, b, i1, h.wIndex() - i);
                 h.wIndex(h.wIndex() - (i - i1));

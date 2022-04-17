@@ -37,17 +37,6 @@ import java.util.*;
  * @since  2021/4/13 23:25
  */
 public final class RingBuffer<T> implements Iterable<T> {
-    public static void main(String[] args) {
-        RingBuffer<Object> test = new RingBuffer<>(100);
-        for (int i = 0; i < 200; i++) {
-            test.addFirst(i);
-        }
-        for (Iterator<Object> it = test.descendingIterator(); it.hasNext(); ) {
-            Object o = it.next();
-            System.out.println(o);
-        }
-    }
-
     private final class Itr extends AbstractIterator<T> {
         int i;
         int dir;

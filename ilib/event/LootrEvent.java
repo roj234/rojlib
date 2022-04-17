@@ -77,13 +77,17 @@ public class LootrEvent {
 
     @SubscribeEvent
     public static void onDestroyLootrChest(BlockEvent.BreakEvent event) {
-        if (event.getWorld().isRemote) return;
-        IBlockState state = event.getWorld().getBlockState(event.getPos());
+        World world = event.getWorld();
+        if (world.isRemote) return;
+        IBlockState state = event.getState();
         if (state.getBlock() == BlockLootrChest.INSTANCE.getBlock()) {
-            final EntityPlayer player = event.getPlayer();
+            EntityPlayer player = event.getPlayer();
             if (!player.isSneaking()) {
                 player.sendMessage(new TextComponentTranslation("tooltip.ilib.not_break"));
                 event.setCanceled(true);
+            } else {
+                BlockPos pos = event.getPos();
+                world.createExplosion(null, pos.getX(), pos.getY(), pos.getZ(), 3, true);
             }
         }
     }

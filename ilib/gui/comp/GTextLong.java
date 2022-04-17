@@ -71,6 +71,7 @@ public class GTextLong extends GScrollView {
     @Override
     public void onInit() {
         super.onInit();
+
         if (text != null) {
             setRawLine(text);
             text = null;
@@ -151,7 +152,7 @@ public class GTextLong extends GScrollView {
         }
 
         @Override
-        public void renderOverlay(int mouseX, int mouseY) {
+        public void render2(int mouseX, int mouseY) {
             if (lines == null) return;
 
             GlStateManager.pushMatrix();

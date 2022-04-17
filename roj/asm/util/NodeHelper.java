@@ -26,16 +26,21 @@
 package roj.asm.util;
 
 import roj.asm.Opcodes;
-import roj.asm.cst.CstDouble;
-import roj.asm.cst.CstFloat;
-import roj.asm.cst.CstInt;
-import roj.asm.cst.CstLong;
+import roj.asm.cst.*;
 import roj.asm.tree.insn.*;
+import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
+import roj.collect.IntMap;
+import roj.collect.SimpleList;
+import roj.io.IOUtil;
+import roj.text.CharList;
 
 import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.Map;
 
 import static roj.asm.Opcodes.*;
+import static roj.asm.type.Type.*;
 
 /**
  * @author Roj234
@@ -486,5 +491,118 @@ public class NodeHelper {
             }
         }
         return "A";
+    }
+
+    public static byte Type2PrimitiveArray(char nativeType) {
+        switch (nativeType) {
+            case 'Z':
+                return 4;
+            case 'C':
+                return 5;
+            case 'F':
+                return 6;
+            case 'D':
+                return 7;
+            case 'B':
+                return 8;
+            case 'S':
+                return 9;
+            case 'I':
+                return 10;
+            case 'J':
+                return 11;
+            default:
+                throw new IllegalArgumentException();
+        }
+    }
+
+    public static byte PrimitiveArray2Type(int id) {
+        switch (id) {
+            case 4:
+                return 'Z';
+            case 5:
+                return 'C';
+            case 6:
+                return 'F';
+            case 7:
+                return 'D';
+            case 8:
+                return 'B';
+            case 9:
+                return 'S';
+            case 10:
+                return 'I';
+            case 11:
+                return 'J';
+        }
+        throw new IllegalStateException("Unknown PrimArrayType " + id);
+    }
+
+    public static void newArray(InsnList list, Type t, int size) {
+        if (t.array == 0) throw new IllegalStateException("不是数组");
+        list.add(loadInt(size));
+        if (t.array == 1) {
+            switch (t.type) {
+                case CLASS:
+                    list.add(new ClassInsnNode(ANEWARRAY, t.owner));
+                    return;
+                case BYTE:
+                case SHORT:
+                case CHAR:
+                case BOOLEAN:
+                case DOUBLE:
+                case INT:
+                case FLOAT:
+                case LONG:
+                    list.add(new U1InsnNode(NEWARRAY, Type2PrimitiveArray(t.array)));
+                    return;
+                default:
+                    list.remove(list.size() - 1);
+                    throw new IllegalStateException("不支持的参数类型 " + t.type);
+            }
+        }
+
+        CharList sb = IOUtil.getSharedCharBuf();
+        ParamHelper.getOne(t, sb);
+        list.add(new ClassInsnNode(ANEWARRAY, new String(sb.list, 1, sb.length() - 1)));
+    }
+
+    public static void switchString(InsnList list, Map<String, InsnNode> target, InsnNode def) {
+        if (target.isEmpty()) {
+            list.add(new GotoInsnNode(def));
+            return;
+        }
+
+        list.add(NPInsnNode.of(DUP));
+        list.add(new InvokeInsnNode(INVOKESPECIAL, "java/lang/String", "hashCode", "()I"));
+
+        SwitchInsnNode sw = new SwitchInsnNode(LOOKUPSWITCH);
+        list.add(sw);
+        sw.def = def;
+
+        // check duplicate
+        IntMap<List<Map.Entry<String, InsnNode>>> tmp = new IntMap<>(target.size());
+        for (Map.Entry<String, InsnNode> entry : target.entrySet()) {
+            int hash = entry.getKey().hashCode();
+            List<Map.Entry<String, InsnNode>> list1 = tmp.get(hash);
+            if (list1 == null) {
+                tmp.put(hash, list1 = new SimpleList<>(2));
+            }
+            list1.add(entry);
+        }
+
+        for (IntMap.Entry<List<Map.Entry<String, InsnNode>>> entry : tmp.entrySet()) {
+            LabelInsnNode pos = new LabelInsnNode();
+            sw.switcher.add(new SwitchEntry(entry.getKey(), pos));
+            list.add(pos);
+            List<Map.Entry<String, InsnNode>> list1 = entry.getValue();
+            for (int i = 0; i < list1.size(); i++) {
+                Map.Entry<String, InsnNode> entry1 = list1.get(i);
+                list.add(new LdcInsnNode(LDC, new CstString(entry1.getKey())));
+                list.add(new InvokeInsnNode(INVOKESPECIAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z"));
+                list.add(new IfInsnNode(IFNE, entry1.getValue()));
+            }
+            list.add(new GotoInsnNode(def));
+        }
     }
 }

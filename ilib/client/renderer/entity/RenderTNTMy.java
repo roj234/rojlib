@@ -88,7 +88,7 @@ public class RenderTNTMy extends RenderTNTPrimed {
         GlStateManager.color(0,0,0, 0.25f);
         RenderUtils.TESSELLATOR.draw();
 
-        int color = fuse > 2000 ? -1 : 0xFFFF0000;
+        int color = fuse > 300 ? -1 : 0xFFFF0000;
 
         GlStateManager.enableTexture2D();
         fr.drawString(fuseText, -width, 0, color);
@@ -96,6 +96,6 @@ public class RenderTNTMy extends RenderTNTPrimed {
         fr.drawString(fuseText, -width, 0, color);
         GlStateManager.disableBlend();
 
-        RenderUtils.restoreColor();
+        RenderUtils.colorWhite();
     }
 }

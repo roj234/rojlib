@@ -40,157 +40,93 @@ import net.minecraftforge.common.util.Constants.NBT;
 public final class ItemNBT {
     public static final String DATA_ID = "IL";
 
-    public static NBTTagCompound getDataMap(ItemStack stack) {
-        init(stack);
-
-        return stack.getTagCompound().getCompoundTag(DATA_ID);
-    }
-
     public static boolean hasData(ItemStack stack, String key) {
-        if (getRootTagNullable(stack) == null)
-            return false;
-        init(stack);
-
-        return getDataMap(stack).hasKey(key);
+        if (stack.getSubCompound(DATA_ID) == null) return false;
+        return getRootTag(stack).hasKey(key);
     }
 
     public static boolean hasData(ItemStack stack, String key, int type) {
-        if (getRootTagNullable(stack) == null)
-            return false;
-        init(stack);
-
-        return getDataMap(stack).hasKey(key, type);
+        if (stack.getSubCompound(DATA_ID) == null) return false;
+        return getRootTag(stack).hasKey(key, type);
     }
 
     public static void removeData(ItemStack stack, String key) {
-        init(stack);
-
-        getDataMap(stack).removeTag(key);
+        getRootTag(stack).removeTag(key);
     }
 
     public static int getInt(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getInteger(key);
+        return getRootTag(stack).getInteger(key);
     }
 
     public static long getLong(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getLong(key);
+        return getRootTag(stack).getLong(key);
     }
 
     public static boolean getBoolean(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getBoolean(key);
+        return getRootTag(stack).getBoolean(key);
     }
 
     public static double getDouble(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getDouble(key);
+        return getRootTag(stack).getDouble(key);
     }
 
     public static float getFloat(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getFloat(key);
+        return getRootTag(stack).getFloat(key);
     }
 
     public static String getString(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getString(key);
+        return getRootTag(stack).getString(key);
     }
 
     public static NBTTagCompound getCompound(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getCompoundTag(key);
+        return getRootTag(stack).getCompoundTag(key);
     }
 
     public static NBTTagList getList(ItemStack stack, String key) {
-        init(stack);
-
-        return getDataMap(stack).getTagList(key, NBT.TAG_COMPOUND);
+        return getRootTag(stack).getTagList(key, NBT.TAG_COMPOUND);
     }
 
     public static void setInt(ItemStack stack, String key, int i) {
-        init(stack);
-
-        getDataMap(stack).setInteger(key, i);
+        getRootTag(stack).setInteger(key, i);
     }
 
     public static void setLong(ItemStack stack, String key, long i) {
-        init(stack);
-
-        getDataMap(stack).setLong(key, i);
+        getRootTag(stack).setLong(key, i);
     }
 
     public static void setBoolean(ItemStack stack, String key, boolean b) {
-        init(stack);
-
-        getDataMap(stack).setBoolean(key, b);
+        getRootTag(stack).setBoolean(key, b);
     }
 
     public static void setDouble(ItemStack stack, String key, double d) {
-        init(stack);
-
-        getDataMap(stack).setDouble(key, d);
+        getRootTag(stack).setDouble(key, d);
     }
 
     public static void setFloat(ItemStack stack, String key, float d) {
-        init(stack);
-
-        getDataMap(stack).setFloat(key, d);
+        getRootTag(stack).setFloat(key, d);
     }
 
     public static void setString(ItemStack stack, String key, String s) {
-        init(stack);
-
-        getDataMap(stack).setString(key, s);
+        getRootTag(stack).setString(key, s);
     }
 
     public static void setCompound(ItemStack stack, String key, NBTTagCompound tag) {
-        init(stack);
-
-        getDataMap(stack).setTag(key, tag);
+        getRootTag(stack).setTag(key, tag);
     }
 
     public static void setList(ItemStack stack, String key, NBTTagList tag) {
-        init(stack);
-
-        getDataMap(stack).setTag(key, tag);
+        getRootTag(stack).setTag(key, tag);
     }
 
     public static void setRootTag(ItemStack stack, NBTTagCompound tag) {
-        init(stack);
-
-        stack.getTagCompound().setTag(DATA_ID, tag);
-    }
-
-    public static NBTTagCompound getRootTag(ItemStack stack) {
-        init(stack);
-
-        return stack.getTagCompound().getCompoundTag(DATA_ID);
+        stack.setTagInfo(DATA_ID, tag);
     }
 
     public static NBTTagCompound getRootTagNullable(ItemStack stack) {
-        NBTTagCompound tag = stack.getTagCompound();
-        if (tag == null) return null;
-        if (!tag.hasKey(DATA_ID)) return null;
-        return tag.getCompoundTag(DATA_ID);
+        return stack.getSubCompound(DATA_ID);
     }
 
-    private static void init(ItemStack stack) {
-        NBTTagCompound tag = stack.getTagCompound();
-        if (tag == null) {
-            stack.setTagCompound(tag = new NBTTagCompound());
-        }
-
-        if (!tag.hasKey(DATA_ID)) {
-            tag.setTag(DATA_ID, new NBTTagCompound());
-        }
+    public static NBTTagCompound getRootTag(ItemStack stack) {
+        return stack.getOrCreateSubCompound(DATA_ID);
     }
 }

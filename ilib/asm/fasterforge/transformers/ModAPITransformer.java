@@ -28,118 +28,108 @@ package ilib.asm.fasterforge.transformers;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Sets;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.ModAPIManager;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
 import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureWriter;
 import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodSimple;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 
-import java.util.*;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModAPIManager;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transformers.ModAPITransformer {
-    private static final boolean logDebugInfo = true;//(Config.debug & 1) != 0;
+    private static final boolean debug = true;
 
     private ListMultimap<String, ASMDataTable.ASMData> optionals;
 
-    public ModAPITransformer() {
+    public ModAPITransformer() {}
 
-    }
-
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
+    public byte[] transform(String name, String trName, byte[] b) {
         String lookupName = name;
         if (name.endsWith("$class"))
             lookupName = name.substring(0, name.length() - 6);
-        if (this.optionals == null || !this.optionals.containsKey(lookupName))
-            return basicClass;
-        ConstantData classNode = Parser.parseConstants(basicClass);
-        if (logDebugInfo)
-            log("Optional removal - found optionals for class {} - processing", name);
-        for (ASMDataTable.ASMData optional : this.optionals.get(lookupName)) {
+        if (optionals == null || !optionals.containsKey(lookupName)) return b;
+
+        ConstantData data = Parser.parseConstants(b);
+        if (debug) log("Optional - for {}", name);
+
+        for (ASMDataTable.ASMData optional : optionals.get(lookupName)) {
             String modId = (String) optional.getAnnotationInfo().get("modid");
             if (Loader.isModLoaded(modId) || ModAPIManager.INSTANCE.hasAPI(modId)) {
-                if (logDebugInfo)
-                    log("Optional removal skipped - mod present {}", modId);
+                if (debug) log("Optional skipped {}", modId);
                 continue;
             }
-            if (logDebugInfo)
-                log("Optional on {} triggered - mod missing {}", name, modId);
+
+            if (debug) log("Optional process {}", name, modId);
             if (optional.getAnnotationInfo().containsKey("iface")) {
-                Boolean stripRefs = (Boolean) optional.getAnnotationInfo().get("striprefs");
-                if (stripRefs == null)
-                    stripRefs = Boolean.FALSE;
-                stripInterface(classNode, (String) optional.getAnnotationInfo().get("iface"), stripRefs);
+                Boolean ref = (Boolean) optional.getAnnotationInfo().get("striprefs");
+                if (ref == null) ref = Boolean.FALSE;
+                stripInterface(data, (String) optional.getAnnotationInfo().get("iface"), ref);
                 continue;
             }
-            stripMethod(classNode, optional.getObjectName());
+
+            stripMethod(data, optional.getObjectName());
         }
-        if (logDebugInfo)
-            log("Optional removal - class {} processed", name);
-        return Parser.toByteArray(classNode);
+        return Parser.toByteArray(data);
     }
 
-    private void stripMethod(ConstantData classNode, String methodDescriptor) {
-        if (classNode.name.endsWith("$class")) {
-            String subName = classNode.name.substring(0, classNode.name.length() - 6);
-            int pos = methodDescriptor.indexOf('(') + 1;
-            methodDescriptor = methodDescriptor.substring(0, pos) + 'L' + subName + ';' + methodDescriptor.substring(pos);
+    private static void stripMethod(ConstantData data, String desc) {
+        if (data.name.endsWith("$class")) {
+            String subName = data.name.substring(0, data.name.length() - 6);
+            int pos = desc.indexOf('(') + 1;
+            desc = desc.substring(0, pos) + 'L' + subName + ';' + desc.substring(pos);
         }
-        for (ListIterator<MethodSimple> iterator = classNode.methods.listIterator(); iterator.hasNext(); ) {
-            MethodSimple method = iterator.next();
-            if (methodDescriptor.equals(method.name + method.type.getString())) {
-                iterator.remove();
-                if (logDebugInfo)
-                    log("Optional removal - method {} removed", methodDescriptor);
+
+        for (int i = 0; i < data.methods.size(); i++) {
+            MethodNode mn = data.methods.get(i);
+            if (desc.equals(mn.name() + mn.rawDesc())) {
+                data.methods.remove(i);
+                if (debug) log("Optional - method {}", desc);
                 return;
             }
         }
-        if (logDebugInfo)
-            log("Optional removal - method {} NOT removed - not found", methodDescriptor);
+        if (debug) log("Optional - NOT found", desc);
     }
 
-    private void log(String s, Object... methodDescriptor) {
-        ilib.asm.Loader.logger.info(s, methodDescriptor);
-    }
-
-    private void stripInterface(ConstantData cn, String interfaceName, boolean stripRefs) {
-        String ifaceName = interfaceName.replace('.', '/');
-        boolean found = cn.interfaces.remove(new CstClass(ifaceName));
-        Attribute sign = cn.attrByName("signature");
-        if (found && sign != null) {
+    private static void stripInterface(ConstantData cn, String itf, boolean stripRefs) {
+        String itfNative = itf.replace('.', '/');
+        boolean found = cn.interfaces.remove(new CstClass(itfNative));
+        if (!found) {
+            if (debug) log("Optional - NOT found {}", itf);
+            return;
+        }
+        Attribute sign = cn.attrByName("Signature");
+        if (sign != null) {
             CstUTF v = (CstUTF) cn.cp.get(Parser.reader(sign));
             SignatureReader sr = new SignatureReader(v.getString());
-            RemovingSignatureWriter sw = new RemovingSignatureWriter(ifaceName);
+            RemovingSignatureWriter sw = new RemovingSignatureWriter(itfNative);
             sr.accept(sw);
             v.setString(sw.toString());
-            if (logDebugInfo)
-                log("Optional removal - interface {} removed from type signature", interfaceName);
+            if (debug) log("Optional - signature remove {}", sw);
         }
-        if (found && logDebugInfo)
-            log("Optional removal - interface {} removed", interfaceName);
-        if (!found && logDebugInfo)
-            log("Optional removal - interface {} NOT removed - not found", interfaceName);
-        if (found && stripRefs) {
-            if (logDebugInfo)
-                log("Optional removal - interface {} - stripping method signature references", interfaceName);
-            for (Iterator<MethodSimple> iterator = cn.methods.iterator(); iterator.hasNext(); ) {
-                MethodSimple node = iterator.next();
-                if (node.type.getString().contains(ifaceName)) {
-                    if (logDebugInfo)
-                        log("Optional removal - interface {} - stripping method containing reference {}", interfaceName, node.name);
-                    iterator.remove();
+        if (stripRefs) {
+            for (int i = cn.methods.size() - 1; i >= 0; i--) {
+                MethodNode mn = cn.methods.get(i);
+                if (mn.rawDesc().contains(itfNative)) {
+                    cn.methods.remove(i);
+                    if (debug) log("Optional - remove interface {} parameter method {}", itf, mn.name());
                 }
             }
-            if (logDebugInfo)
-                log("Optional removal - interface {} - all method signature references stripped", interfaceName);
-        } else if (found) {
-            if (logDebugInfo)
-                log("Optional removal - interface {} - NOT stripping method signature references", interfaceName);
+        } else {
+            if (debug) log("Optional - interface {} ", itf);
         }
+    }
+
+    private static void log(String s, Object... str) {
+        ilib.asm.Loader.logger.info(s, str);
     }
 
     public void initTable(ASMDataTable dataTable) {
@@ -157,9 +147,8 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
         Set<ASMDataTable.ASMData> result = Sets.newHashSet();
         for (ASMDataTable.ASMData data : packedInterfaces) {
             List<Map<String, Object>> packedList = (List<Map<String, Object>>) data.getAnnotationInfo().get("value");
-            for (Map<String, Object> packed : packedList) {
-                ASMDataTable.ASMData newData = data.copy(packed);
-                result.add(newData);
+            for (int i = 0; i < packedList.size(); i++) {
+                result.add(data.copy(packedList.get(i)));
             }
         }
         return result;

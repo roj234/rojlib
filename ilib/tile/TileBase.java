@@ -37,7 +37,6 @@ import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import net.minecraftforge.fml.relauncher.Side;
@@ -67,9 +66,7 @@ public abstract class TileBase extends TileEntity {
     public void update() {
         if (canTick()) {
             onTick();
-            if (world.isRemote) {
-                onClientTick();
-            } else {
+            if (!world.isRemote) {
                 onServerTick();
             }
         }
@@ -82,8 +79,6 @@ public abstract class TileBase extends TileEntity {
     }
 
     protected void onTick() {}
-
-    protected void onClientTick() {}
 
     protected void onServerTick() {}
 
@@ -116,9 +111,6 @@ public abstract class TileBase extends TileEntity {
     @Override
     public NBTTagCompound getUpdateTag() {
         NBTTagCompound tag = writeToNBT(new NBTTagCompound());
-        tag.removeTag("x");
-        tag.removeTag("y");
-        tag.removeTag("z");
         tag.removeTag("id");
         return tag;
     }
@@ -133,24 +125,50 @@ public abstract class TileBase extends TileEntity {
         handleUpdateTag(pkt.getNbtCompound());
     }
 
+    protected final void handleUpdateTagFallback(NBTTagCompound tag) {
+        NBTTagCompound tag1 = writeToNBT(new NBTTagCompound());
+        for(String key : tag1.getKeySet()) {
+            if (!tag.hasKey(key))
+                tag.setTag(key, tag1.getTag(key));
+        }
+        this.readFromNBT(tag);
+    }
+
     // endregion
     // fastUtil
 
+    @Override
+    @SideOnly(Side.CLIENT)
+    public void setPos(BlockPos posIn) {
+        super.setPos(posIn);
+        cacheAB = null;
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    public void updateContainingBlockInfo() {
+        super.updateContainingBlockInfo();
+        cacheAB = null;
+    }
+
+    @SideOnly(Side.CLIENT)
+    private AxisAlignedBB cacheAB;
+
     @SideOnly(Side.CLIENT)
     public AxisAlignedBB getRenderBoundingBox() {
+        if (cacheAB != null) return cacheAB;
+
         Block type = this.getBlockType();
         BlockPos pos = this.getPos();
         if (type != null) {
             try {
-                AxisAlignedBB cbb = this.world.getBlockState(this.getPos()).getCollisionBoundingBox(this.world, pos).offset(pos);
-                cbb.contains(Vec3d.ZERO);
-                return cbb;
+                return cacheAB = world.getBlockState(pos).getCollisionBoundingBox(world, pos).offset(pos);
             } catch (Throwable e) {
-                return new AxisAlignedBB(this.getPos().add(-1, 0, -1), this.getPos().add(1, 1, 1));
+                return cacheAB = new AxisAlignedBB(pos.add(-1, 0, -1), this.getPos().add(1, 1, 1));
             }
         }
 
-        return new AxisAlignedBB(pos.add(-1, 0, -1), pos.add(1, 1, 1));
+        return cacheAB = new AxisAlignedBB(pos.add(-1, 0, -1), pos.add(1, 1, 1));
     }
 
     public boolean canRenderBreaking() {

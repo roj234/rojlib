@@ -71,10 +71,7 @@ public class GMultilineText extends Component {
      *******************************************************************************************************************/
 
     @Override
-    public void render(int mouseX, int mouseY) {}
-
-    @Override
-    public void renderOverlay(int mouseX, int mouseY) {
+    public void render(int mouseX, int mouseY) {
         int w = getWidth();
         int h = getHeight();
 
@@ -111,6 +108,9 @@ public class GMultilineText extends Component {
             y += 10;
         }
     }
+
+    @Override
+    public void render2(int mouseX, int mouseY) {}
 
     /*******************************************************************************************************************
      * Accessors/Mutators                                                                                              *

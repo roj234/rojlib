@@ -134,17 +134,17 @@ public class Sync {
 
         @Override
         public void fromBytes(PacketBuffer buf) {
-            int len = buf.readVarInt(false);
+            int len = buf.readVarInt();
             for (int i = 0; i < len; i++) {
-                serverMD5.put(buf.readVarIntUTF(), buf.readLong());
+                serverMD5.put(buf.readString(64), buf.readLong());
             }
         }
 
         @Override
         public void toBytes(PacketBuffer buf) {
-            buf.putVarInt(serverMD5.size(), false);
+            buf.writeVarInt(serverMD5.size());
             for (ToLongMap.Entry<String> entry : serverMD5.selfEntrySet()) {
-                buf.putVarIntUTF(entry.k).putLong(entry.v);
+                buf.writeString(entry.k).writeLong(entry.v);
             }
         }
 
@@ -194,32 +194,35 @@ public class Sync {
 
         @Override
         public void fromBytes(PacketBuffer buf) {
-            int len = buf.readVarInt(false);
+            int len = buf.readVarInt();
             if(buf.readBoolean()) { // fromClient
                 for (int i = 0; i < len; i++) {
-                    String key = buf.readVarIntUTF();
+                    String key = buf.readString(64);
                     files.put(key, null);
                 }
                 fromClient = false;
             } else {
                 for (int i = 0; i < len; i++) {
-                    String key = buf.readVarIntUTF();
-                    ByteList data = buf.slice(buf.readVarInt(false));
-                    files.put(key, data);
+                    String key = buf.readString(64);
+                    byte[] data = new byte[buf.readVarInt()];
+                    buf.readBytes(data);
+                    files.put(key, new ByteList(data));
                 }
             }
         }
 
         @Override
         public void toBytes(PacketBuffer buf) {
-            buf.putVarInt(files.size(), false).putBool(fromClient);
+            buf.writeVarInt(files.size()).writeBoolean(fromClient);
             if(fromClient) {
                 for(String key : files.keySet()) {
-                    buf.putVarIntUTF(key);
+                    buf.writeString(key);
                 }
             } else {
                 for(Map.Entry<String, ByteList> entry : files.entrySet()) {
-                    buf.putVarIntUTF(entry.getKey()).putVarInt(entry.getValue().wIndex(), false).put(entry.getValue());
+                    buf.writeString(entry.getKey())
+                       .writeVarInt(entry.getValue().wIndex())
+                       .writeBytes(entry.getValue().list, entry.getValue().arrayOffset(), entry.getValue().wIndex());
                 }
             }
         }

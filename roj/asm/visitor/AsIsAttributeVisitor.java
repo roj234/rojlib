@@ -25,6 +25,8 @@
  */
 package roj.asm.visitor;
 
+import roj.util.ByteList;
+
 /**
  * As-is Attribute Visitor !! Require NOT clearConstant mode
  *
@@ -42,7 +44,8 @@ public class AsIsAttributeVisitor extends AttributeVisitor {
 
     @Override
     public boolean visit(String name, int length) {
-        bw.putShort(cw.getUtfId(name)).putInt(length).put(br.bytes().list, br.rIndex, length);
+        ByteList bb = br.bytes;
+        bw.putShort(cw.getUtfId(name)).putInt(length).put(bb.list, br.rIndex + bb.arrayOffset(), length);
         return true;
     }
 }

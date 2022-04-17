@@ -27,13 +27,18 @@
 package ilib.asm;
 
 import ilib.api.ContextClassTransformer;
-import roj.asm.nixim.NiximException;
+import roj.asm.TransformException;
 import roj.asm.nixim.NiximSystem;
 import roj.asm.util.Context;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
+import sun.reflect.Reflection;
 
 import javax.annotation.Nonnull;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 
 /**
  * @author Roj234
@@ -41,12 +46,35 @@ import javax.annotation.Nonnull;
  */
 public final class NiximProxy extends NiximSystem implements ContextClassTransformer {
     public static final NiximProxy instance = new NiximProxy();
-    private final CharList replacer = new CharList(48);
 
-    public static void read(@Nonnull final byte[] basicClass) {
+    static void Nx(String file) {
+        if (file.charAt(0) == '!') {
+            CharList sb = IOUtil.getSharedCharBuf();
+            sb.append("ilib/asm/nixim/").append(file, 1, file.length());
+            if (!file.endsWith(".class")) sb.append(".class");
+            file = sb.toString();
+        }
+
         try {
-            instance.load(basicClass);
-        } catch (NiximException e) {
+            Class<?> caller = NiximProxy.class;
+            try {
+                caller = Reflection.getCallerClass();
+            } catch (Throwable ignored) {}
+            InputStream in = caller.getClassLoader().getResourceAsStream(file);
+            if (in == null) throw new FileNotFoundException(file);
+
+            Context ctx = new Context("", IOUtil.getSharedByteBuf().readStreamFully(in));
+            Loader.logger.info("NiximRead " + ctx.getData().name);
+            instance.loadCtx(ctx);
+        } catch (TransformException | IOException e) {
+            Helpers.athrow(e);
+        }
+    }
+
+    public static void Nx(@Nonnull byte[] data) {
+        try {
+            instance.load(data);
+        } catch (TransformException e) {
             Helpers.athrow(e);
         }
     }
@@ -60,18 +88,21 @@ public final class NiximProxy extends NiximSystem implements ContextClassTransfo
     @Override
     public void transform(String transformedName, Context context) {
         try {
-            CharList r = replacer;
+            CharList r = IOUtil.getSharedCharBuf()
+                               .append(transformedName)
+                               .replace('.', '/');
 
-            r.clear();
-            r.append(transformedName);
-            r.replace('.', '/');
-
-            NiximData data = registry.remove(r);
+            NiximData data = registry.get(r);
             if (data != null) {
-                // 历史遗留问题+让代码保持简洁
-                nixim(context, data, NO_FIELD_MODIFIER_CHECK | NO_METHOD_MODIFIER_CHECK);
+                synchronized (registry) {
+                    data = registry.remove(r);
+                }
+                if (data != null) {
+                    // 历史遗留问题+让代码保持简洁
+                    nixim(context, data, NO_FIELD_MODIFIER_CHECK | NO_METHOD_MODIFIER_CHECK);
+                }
             }
-        } catch (NiximException e) {
+        } catch (TransformException e) {
             Helpers.athrow(e);
         }
     }

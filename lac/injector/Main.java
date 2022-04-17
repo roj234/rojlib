@@ -28,12 +28,10 @@ package lac.injector;
 import lac.client.AccessHelper;
 import lac.injector.mapper.Mover;
 import roj.asm.Parser;
-import roj.asm.nixim.NiximException;
+import roj.asm.TransformException;
 import roj.asm.nixim.NiximSystem;
 import roj.asm.nixim.NiximSystem.NiximData;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.FieldSimple;
-import roj.asm.tree.MethodSimple;
+import roj.asm.tree.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
 import roj.asm.util.Pack125;
@@ -175,17 +173,6 @@ public class Main extends JFrame {
 
     private void install() {
         CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
-        if (JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(this, "我们将进行混淆操作\n为了不出现bug\n建议您打开客户端进行[反射调用记录]\n在启动客户端之后，请您尽可能的多进行各种(骚)操作(一般来说...不用)",
-              "友好地询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE)) {
-            try {
-                genDetector();
-                String jvmArg = mc_conf.getString("jvmArg");
-                mc_conf.put("jvmArg", jvmArg + " -Xbootclasspath/p:" + new File("lac-detector.jar").getAbsoluteFile());
-                MCLauncher.runClient(mc_conf, 3, null);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
 
         try {
             preInject(mc_conf, ComboRandom.from("fdsgh r78e95hf8d89entb90 v bf0fRE%$&UJ"));
@@ -435,9 +422,9 @@ public class Main extends JFrame {
             ConstantData data = ctxs.get(i).getData();
             if (!data.name.equals(AH_CLASS) && rnd.nextFloat() > 0.66f)
                 insertAccessHelper(data, rnd);
-            List<MethodSimple> ms = data.methods;
+            List<? extends MethodNode> ms = data.methods;
             for (int j = 0; j < ms.size(); j++) {
-                MethodSimple m = ms.get(j);
+                MethodSimple m = (MethodSimple) ms.get(j);
                 int acc = m.accesses;
                 if (AccessFlag.STATIC == (acc & (AccessFlag.STATIC | AccessFlag.NATIVE)) &&
                         !m.name().startsWith("<")) {
@@ -446,9 +433,9 @@ public class Main extends JFrame {
                     methodsAll.add(desc);
                 }
             }
-            List<FieldSimple> fs = data.fields;
+            List<? extends FieldNode> fs = data.fields;
             for (int j = 0; j < fs.size(); j++) {
-                FieldSimple m = fs.get(j);
+                FieldSimple m = (FieldSimple) fs.get(j);
                 m.accesses = (char) (m.accesses & ~(AccessFlag.PRIVATE | AccessFlag.PROTECTED) | AccessFlag.PUBLIC | AccessFlag.SYNTHETIC);
             }
         }
@@ -559,7 +546,7 @@ public class Main extends JFrame {
 //            e.compress();
 //    }
 
-    private static void patch(MyHashMap<Owner, Context> classes) throws IOException, NiximException {
+    private static void patch(MyHashMap<Owner, Context> classes) throws IOException, TransformException {
         Owner check = new Owner();
 
         NiximSystem system = new NiximSystem();
@@ -587,7 +574,7 @@ public class Main extends JFrame {
                     target = findMinecraftClass(entry.getKey());
                 }
                 if (target == null)
-                    throw new NiximException("无法找到 " + check.name);
+                    throw new TransformException("无法找到 " + check.name);
             }
             NiximSystem.nixim(target, entry.getValue(), 0);
         }
@@ -605,7 +592,7 @@ public class Main extends JFrame {
             check.name = entry.getKey() + ".class";
             Context target = classes.get(check);
             if (target == null) {
-                throw new NiximException("无法找到 " + check.name);
+                throw new TransformException("无法找到 " + check.name);
             }
             sb.clear();
             sb.readStreamFully(Main.class.getClassLoader().getResourceAsStream(entry.getValue()));
@@ -619,23 +606,6 @@ public class Main extends JFrame {
     private static Context findMinecraftClass(String key) {
         return null;
     }
-
-    private static void genDetector() throws IOException {
-        File lac_detector = new File("lac-detector.jar");
-        lac_detector.deleteOnExit();
-        ZipFileWriter zfw = new ZipFileWriter(lac_detector);
-        String[] names = new String[] {
-                "lac/injector/misc/LACDetector.class",
-                "sun/reflect/ReflectionFactory.class",
-                "sun/reflect/ReflectUtil.class",
-        };
-        for (String name : names) {
-            zfw.beginEntry(new ZipEntry(name));
-            zfw.write(IOUtil.read(name));
-        }
-        zfw.close();
-    }
-
     private static String c2f(Class<?> clz) {
         return clz.getName().replace('.', '/') + ".class";
     }

@@ -37,15 +37,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
 
 import javax.annotation.Nonnull;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public final class CommandPlayerNBT extends CommandBase {
-
     @Nonnull
     @Override
     public String getName() {
@@ -57,14 +54,13 @@ public final class CommandPlayerNBT extends CommandBase {
         return 2;
     }
 
-    @Nonnull
     @Override
-    public String getUsage(@Nonnull ICommandSender sender) {
+    public String getUsage(ICommandSender sender) {
         return "Usage: /playerdata <player> [dataTag]";
     }
 
     @Override
-    public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, String[] args) throws CommandException {
+    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
         EntityPlayerMP targetPlayer;
         NBTTagCompound playerTag = new NBTTagCompound();
         if (args.length == 0) {

@@ -31,18 +31,11 @@ import ilib.ImpLib;
 import ilib.api.Ownable;
 import ilib.api.mark.MUnbreakable;
 import ilib.api.recipe.AnvilRecipe;
-import ilib.capabilities.Capabilities;
-import ilib.capabilities.EntitySize;
-import ilib.item.ItemSelectTool;
-import ilib.math.Arena;
-import ilib.math.SelectionCache;
-import ilib.tile.OwnerManager;
 import ilib.util.EntityHelper;
 import ilib.util.InventoryUtil;
-import ilib.util.MCTexts;
 import ilib.util.PlayerUtil;
 import ilib.util.freeze.FreezedBlock;
-import roj.collect.ToDoubleMap;
+import ilib.world.deco.FastBiomeDecorator;
 import roj.math.MathUtils;
 
 import net.minecraft.block.Block;
@@ -57,7 +50,6 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
-import net.minecraft.init.SoundEvents;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
@@ -68,6 +60,7 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.world.biome.BiomeDecorator;
 
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.AnvilUpdateEvent;
@@ -78,6 +71,7 @@ import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.event.entity.player.AnvilRepairEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.terraingen.BiomeEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
@@ -90,14 +84,24 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import java.util.List;
 import java.util.Map;
 
+import static ilib.Config.worldGenOpt;
+
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public class CommonEvent {
     public static void init() {
+        if (worldGenOpt) MinecraftForge.TERRAIN_GEN_BUS.register(CommonEvent.class);
         MinecraftForge.EVENT_BUS.register(CommonEvent.class);
         MinecraftForge.EVENT_BUS.register(DoorEvent.class);
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onCreateDeco(BiomeEvent.CreateDecorator event) {
+        if (event.getNewBiomeDecorator().getClass() == BiomeDecorator.class) {
+            event.setNewBiomeDecorator(new FastBiomeDecorator(event.getOriginalBiomeDecorator()));
+        }
     }
 
     @SubscribeEvent(priority = EventPriority.LOW)
@@ -138,81 +142,21 @@ public class CommonEvent {
         if (str < Config.attackCD) event.setCanceled(true);
     }
 
-    private static void updateTick(EntityLivingBase entity) {
-        EntitySize cap = entity.getCapability(Capabilities.RENDERING_SIZE, null);
-        if (cap != null) {
-            double rh = cap.relHeight,
-                    rw = cap.relWidth;
-            float height = (float)(cap.defHeight * rh),
-                    width = (float)(cap.defWidth * rw);
-            if (rw != 1 || rh != 1) {
-                cap.transformed = true;
-
-                if(entity instanceof EntityPlayer) {
-                    EntityPlayer player = (EntityPlayer) entity;
-                    float eyeHeight = (float) (player.getDefaultEyeHeight() * rh);
-                    if (player.isSneaking()) {
-                        height *= 0.9166667F;
-                        eyeHeight *= 0.9382716F;
-                    }
-                    if (player.isElytraFlying())
-                        height *= 0.33F;
-                    if (player.isPlayerSleeping()) {
-                        width = 0.2F;
-                        height = 0.2F;
-                    }
-                    //if (player.isRiding()) {
-                        //
-                    //}
-                    width = Math.max(width, 0.15F);
-                    height = Math.max(height, 0.25F);
-                    if (height >= 1.6F) {
-                        player.eyeHeight = eyeHeight;
-                    } else {
-                        player.eyeHeight = eyeHeight * 0.9876542F;
-                    }
-                } else {
-                    width = Math.max(width, 0.04F);
-                    height = Math.max(height, 0.08F);
-                }
-                entity.height = height;
-                entity.width = width;
-                double d0 = width / 2.0D;
-                AxisAlignedBB aabb = entity.getEntityBoundingBox();
-                entity.setEntityBoundingBox(new AxisAlignedBB(entity.posX - d0, aabb.minY, entity.posZ - d0, entity.posX + d0, aabb.minY + entity.height, entity.posZ + d0));
-            } else {
-                if (cap.transformed) {
-                    entity.height = height;
-                    entity.width = width;
-                    double d0 = width / 2.0D;
-                    AxisAlignedBB aabb = entity.getEntityBoundingBox();
-                    entity.setEntityBoundingBox(new AxisAlignedBB(entity.posX - d0, aabb.minY, entity.posZ - d0, entity.posX + d0, aabb.minY + height, entity.posZ + d0));
-
-                    if(entity instanceof EntityPlayer) {
-                        EntityPlayer player = (EntityPlayer) entity;
-                        player.eyeHeight = player.getDefaultEyeHeight();
-                    }
-                    cap.transformed = false;
-                }
-            }
-        }
-    }
-
     @SubscribeEvent
     public static void onLivingUpdate(LivingEvent.LivingUpdateEvent event) {
         EntityLivingBase entity = event.getEntityLiving();
 
         if(Config.fixNaNHealth) {
-            final float health = entity.getHealth();
+            float health = entity.getHealth();
             if(health != health || health == Float.POSITIVE_INFINITY || health == Float.NEGATIVE_INFINITY) {
+                entity.setHealth(0);
                 EntityHelper.remove(entity, null, EntityHelper.REMOVE_NOTIFY | EntityHelper.REMOVE_FORCE);
                 return;
             }
+            if (entity.posX != entity.posX) entity.posX = 0;
+            if (entity.posY != entity.posY) entity.posY = 0;
+            if (entity.posZ != entity.posZ) entity.posZ = 0;
         }
-
-        if(entity.world.isRemote) return;
-
-        updateTick(entity);
     }
 
     /*@SubscribeEvent 手动添加即可
@@ -318,76 +262,31 @@ public class CommonEvent {
     @SubscribeEvent
     public static void onPlayerInteract(PlayerInteractEvent event) {
         if (!event.isCancelable()) return;
-        if (event.getWorld().isRemote) {
-            return;
-        }
+        if (event.getWorld().isRemote) return;
 
-        BlockPos blockpos = event.getPos();
+        BlockPos pos = event.getPos();
         EntityPlayer player = event.getEntityPlayer();
-        TileEntity t = event.getWorld().getTileEntity(blockpos);
+        TileEntity t = event.getWorld().getTileEntity(pos);
         if (t instanceof Ownable) {
             Ownable tile = (Ownable) t;
-            if (tile.unOwned())
-                return;
+            if (tile.getOwnerManager() == null) return;
 
-            long UUIDH = player.getUniqueID().getMostSignificantBits();
-            long UUIDL = player.getUniqueID().getLeastSignificantBits();
-
-            long UUIDCompareH = tile.getOwnerUUIDH();
-            long UUIDCompareL = tile.getOwnerUUIDL();
-            int ownerType = tile.getOwnType(); // 0 public 1 private 2 protected
-
-            if (UUIDH != UUIDCompareH || UUIDL != UUIDCompareL) {
-                if (player.capabilities.isCreativeMode) {
-                    PlayerUtil.sendTo(player, "tooltip.ilib.bypass");
-                    return;
-                }
-                if (ownerType == 1) {
-                    PlayerUtil.sendTo(player, "tooltip.ilib.notpremission");
-                    event.setCanceled(true);
-                } else if (ownerType == 2) {
-                    OwnerManager trustedList = tile.getTrustList();
-                    for (int i = 0; i < trustedList.size(); i++) {
-                        if (trustedList.getUUIDH(i) == UUIDH && trustedList.getUUIDL(i) == UUIDL) {
-                            return;
-                        }
-                    }
-                    PlayerUtil.sendTo(player, "tooltip.ilib.notpremission");
+            if (!tile.getOwnerManager().isTrusted(player, tile.getOwnType())) {
+                if (!PlayerUtil.isOpped(player)) {
+                    PlayerUtil.sendTo(player, "ilib.no_permission");
                     event.setCanceled(true);
                 }
             }
-            return;
         }
 
-        IBlockState blockState = event.getWorld().getBlockState(blockpos);
-        Block block = blockState.getBlock();
+        IBlockState state = event.getWorld().getBlockState(pos);
+        Block block = state.getBlock();
 
         if (block instanceof MUnbreakable) {
             if (player.getHeldItemMainhand().getItem() instanceof ItemBlock) {
                 if (((ItemBlock) player.getHeldItemMainhand().getItem()).getBlock() == block)
                     return;
             }
-            event.setCanceled(true);
-        }
-    }
-
-    @SubscribeEvent
-    public static void onLeftClick(PlayerInteractEvent.LeftClickBlock event) {
-        if (event.getItemStack().getItem() == ItemSelectTool.INSTANCE) {
-            long UUID = event.getEntityPlayer().getUniqueID().getMostSignificantBits();
-            Arena arena = SelectionCache.get(UUID);
-            BlockPos pos = event.getPos();
-
-            if (arena != null && pos.equals(arena.getP1())) return;
-            int count = SelectionCache.set(UUID, 1, pos).getSelectionSize();
-
-            if (event.getWorld().isRemote) {
-                EntityPlayer player = event.getEntityPlayer();
-                PlayerUtil.sendTo(player, MCTexts.format("command.ilib.sel.pos1") + ": " + pos.getX() + ',' + pos.getY() + ',' + pos.getZ());
-                if (count > 0) PlayerUtil.sendTo(player, "command.ilib.sel.size", count);
-                player.playSound(SoundEvents.BLOCK_NOTE_PLING, 1, 1);
-            }
-
             event.setCanceled(true);
         }
     }
@@ -459,46 +358,6 @@ public class CommonEvent {
             RegistryEvent.MissingMappings.Mapping<Block> map = blocks.get(i);
             if (map.getTarget() != Blocks.AIR)
             map.remap(new FreezedBlock().setRegistryName(map.key));
-        }
-    }
-
-    private static ToDoubleMap<String> playerAcc = new ToDoubleMap<>();
-
-    @SubscribeEvent
-    public static void collisionDamage(TickEvent.ServerTickEvent event) {
-        if(event.phase == TickEvent.Phase.END) return;
-
-        double damageThreshold = 1e-4;
-        double damageMultiplier = 10;
-        boolean damageIsWall = true;
-
-        List<EntityPlayerMP> players = PlayerUtil.getMinecraftServer().getPlayerList().getPlayers();
-        for (int i = 0; i < players.size(); i++) {
-            EntityPlayerMP player = players.get(i);
-            if (player.isElytraFlying()) continue;
-            if (player.isDead) {
-                playerAcc.remove(player.getName());
-                continue;
-            }
-
-            double mx = player.motionX;
-            double mz = player.motionZ;
-            double motion = mx * mx + mz * mz;
-
-            double prevMotion = playerAcc.getOrDefault(player.getName(), 0);
-            playerAcc.putDouble(player.getName(), motion);
-
-            if (prevMotion != motion)
-            System.out.println("delta motion " + prevMotion + " => " + motion);
-            double delta = Math.abs(prevMotion - motion) - damageThreshold;
-            if (delta > 0) {
-                float damage = (float) (delta * damageMultiplier);
-                if (damage != damage) return;
-
-                player.playSound(
-                    damage > 4 ? SoundEvents.ENTITY_GENERIC_BIG_FALL : SoundEvents.ENTITY_GENERIC_SMALL_FALL, 1, 1);
-                player.attackEntityFrom(damageIsWall ? DamageSource.FLY_INTO_WALL : DamageSource.FALL, damage);
-            }
         }
     }
 

@@ -25,6 +25,7 @@
  */
 package ilib;
 
+import ilib.asm.Loader;
 import ilib.event.PowershotEvent;
 import roj.asm.nixim.NiximSystem;
 import roj.collect.MyHashSet;
@@ -52,10 +53,13 @@ public final class Config extends JSONConfiguration {
         entityAabbCache, noAdvancement, eventInvoker, removePatchy, slabHelper, eventInvokerMost, packetBufferInfinity,
         IwantLight, noRecipeBook, fixNaNHealth, fixThreadIssues, noCollision, noEnchantTax, noAnvilTax, betterF3,
         injectLWP, clearLava, F3_ins, F3_render, F3_hard, safer, fastFont, noGhostBlock, checkStackDepth,
-            betterKeyboard;
+        betterKeyboard, separateDismount, noPistonGhost, myNextTickList, fixCRD, oshi886, replaceEnumFacing,
+        noSoManyBlockPos2, replaceTransformer, noMixin, smallBuf, soundRecycle, tractDirectMem, traceAABB,
+            traceBP, passLeaves, leaves, worldGenOpt, myOreGen;
 
     public static int fpsLowTime, fpsLowFPS, clientNetworkTimeout, chatLength, debug, maxParticleCountPerLayer,
-        maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, pagedTooltipLen, tooltipFlag, pagedTooltipTime;
+        maxChunkTick, entityUpdateFreq, tileUpdateFreq, siFrameTime, pagedTooltipLen, tooltipFlag, pagedTooltipTime,
+            lowerChunkBuf;
 
     public static byte threadPriority, dynamicViewDistance, changeWorldSpeed;
 
@@ -67,20 +71,16 @@ public final class Config extends JSONConfiguration {
 
     public static CMapping setAttributeRange;
 
-    public static float attackCD, fpsLowVol;
+    public static float attackCD, fpsLowVol, complexModelThreshold;
 
     public static Set<Map.Entry<String, CEntry>> powerShotRequirement;
 
     public static MyHashSet<String> freezeUnknownEntries;
 
-    public static boolean networkOpt1, networkOpt2, resetCompressor = true;
+    public static boolean networkOpt1, networkOpt2;
     public static int compressionLevel = -1, maxCompressionPacketSize = 2097152;
 
     public static final Config instance;
-
-    public static int sizeEvent;
-    @Deprecated
-    public static byte packetDelay;
 
     static {
         instance = new Config();
@@ -113,9 +113,19 @@ public final class Config extends JSONConfiguration {
         fixNaNHealth = map.putIfAbsent("优化.修复实体假死(NaN/Inf)的BUG", true);
         fastRecipe = map.putIfAbsent("优化.替换MC的穷举法提高熔炉/工作台合成判断速度", true);
         fastMethod = map.putIfAbsent("优化.优化碰撞体积获取", true);
+        map.putCommentDotted("优化.方块更新优化2", "优化方块更新有关代码，使之使用PooledMutableBlocKPos\n" +
+                "其他5个优化");
+        noSoManyBlockPos2 = map.putIfAbsent("优化.方块更新优化2", true);
 
         maxChunkTick = map.putIfAbsent("优化.区块.每t最大生成", 10);
         maxChunkTimeTick = map.putIfAbsent("优化.区块.每t最大耗时(ms)", 25) * 1000000L;
+
+        map.putCommentDotted("优化.优化随机刻", "其实没啥用，除非你randomTickSpeed开到几千");
+        otherWorldChange = map.putIfAbsent("优化.优化随机刻", true);
+        leaves = map.putIfAbsent("优化.优化树叶的内存占用", true);
+        map.putCommentDotted("优化.替换EnumFacing\\.values()", "降低大量区块更新时的CPU占用");
+        replaceEnumFacing = map.putIfAbsent("优化.替换EnumFacing\\.values()", true);
+        worldGenOpt = map.putIfAbsent("优化.世界生成优化", true);
         // endregion
         // region 默认关闭
         map.putCommentDotted("优化.实体AABB缓存", "Surge已有同类功能");
@@ -138,8 +148,12 @@ public final class Config extends JSONConfiguration {
             "微量降低性能(实际上把提升的性能都降回来了)\n" +
             "能够预防此类崩溃");
         checkStackDepth = map.putIfAbsent("优化.禁止过度嵌套的方块更新", false);
-        map.putCommentDotted("优化.优化随机刻", "其实没啥用，除非你randomTickSpeed开到几千");
-        otherWorldChange = map.putIfAbsent("优化.优化随机刻", false);
+        //map.putCommentDotted("优化.MyNextTickList", "防止出现NextTickList not synch异常\n" +
+        //        "并带有一些优化");
+        //myNextTickList = map.putIfAbsent("优化.MyNextTickList", false);
+        map.putCommentDotted("优化.矿石生成优化", "该优化严重影响矿石的形状\n" +
+                "后果自负");
+        myOreGen = map.putIfAbsent("优化.矿石生成优化", true);
         // endregion
 
         map.putCommentDotted("优化.测试", "这些优化可能存在较严重的bug");
@@ -147,7 +161,6 @@ public final class Config extends JSONConfiguration {
         modelCache = map.putIfAbsent("优化.测试.模型缓存", false);
         eventInvokerMost = map.putIfAbsent("优化.测试.激进事件调用优化", false);
         fastLightCheck = map.putIfAbsent("优化.测试.替换区块中的光照计算，提高效率", false);
-
 
         networkOpt1 = map.putIfAbsent("优化.测试.网络优化.A部分", false);
         networkOpt2 = map.putIfAbsent("优化.测试.网络优化.B部分", false);
@@ -167,32 +180,59 @@ public final class Config extends JSONConfiguration {
             "在MoreId的更新计划中, 我们计划引入类似1.13的机制,至此meta与方块id再无关联, 不过这可能会导致严重的兼容性问题");
         replaceOIM = map.putIfAbsent("优化.弃用.替换ObjectIdentityMap", false);
 
-        // region 客户端Only
-        map.putCommentDotted("优化.客户端.快速字体渲染", "可能存在兼容性问题");
-        fastFont = map.putIfAbsent("优化.客户端.快速字体渲染", true);
-        map.putCommentDotted("优化.客户端.自动修复无声音问题", "如果还是没用, 请在任意世界内输入//reloadSoundMgr指令");
-        reloadSound = map.putIfAbsent("优化.客户端.自动修复无声音问题", true);
-        map.putCommentDotted("优化.客户端.最大粒子效果数量", "实际上这是每个粒子层的数量,而一共有4-8个层");
-        maxParticleCountPerLayer = map.putIfAbsent("优化.客户端.最大粒子效果数量", 4096);
+        Boolean side = Loader.testClientSide();
+        if (side != Boolean.FALSE) {
+            // region 客户端Only
+            map.putCommentDotted("优化.客户端.快速字体渲染", "可能存在兼容性问题");
+            fastFont = map.putIfAbsent("优化.客户端.快速字体渲染", true);
+            map.putCommentDotted("优化.客户端.自动修复无声音问题", "如果还是没用, 请在任意世界内输入//reloadSoundMgr指令");
+            reloadSound = map.putIfAbsent("优化.客户端.自动修复无声音问题", true);
+            map.putCommentDotted("优化.客户端.最大粒子效果数量", "实际上这是每个粒子层的数量,而一共有4-8个层");
+            maxParticleCountPerLayer = map.putIfAbsent("优化.客户端.最大粒子效果数量", 4096);
 
-        map.putCommentDotted("优化.客户端.自动降低FPS.时间", "单位秒, 0关闭");
-        fpsLowTime = map.putIfAbsent("优化.客户端.自动降低FPS.时间 ", 30);
-        fpsLowFPS = map.putIfAbsent("优化.客户端.自动降低FPS.目标帧率", 10);
-        map.putCommentDotted("优化.客户端.自动降低FPS.目标音量", "范围0-1");
-        fpsLowVol = (float) map.putIfAbsent("优化.客户端.自动降低FPS.目标音量", 0.2f);
+            map.putCommentDotted("优化.客户端.自动降低FPS.时间", "单位秒, 0关闭");
+            fpsLowTime = map.putIfAbsent("优化.客户端.自动降低FPS.时间 ", 30);
+            fpsLowFPS = map.putIfAbsent("优化.客户端.自动降低FPS.目标帧率", 10);
+            map.putCommentDotted("优化.客户端.自动降低FPS.目标音量", "范围0-1");
+            fpsLowVol = (float) map.putIfAbsent("优化.客户端.自动降低FPS.目标音量", 0.2f);
 
-        map.putCommentDotted("优化.客户端.提高切换世界速度", "1: 不显示[下载地形中]\n" +
-            "2: 禁用切换世界时检测碰撞\n" +
-            "3: 禁止切换世界时GC");
-        changeWorldSpeed = (byte) map.putIfAbsent("优化.客户端.提高切换世界速度", 3);
+            map.putCommentDotted("优化.客户端.提高切换世界速度", "1: 不显示[下载地形中]\n" +
+                    "2: 禁用切换世界时检测碰撞\n" +
+                    "3: 禁止切换世界时GC");
+            changeWorldSpeed = (byte) map.putIfAbsent("优化.客户端.提高切换世界速度", 3);
 
-        map.putCommentDotted("优化.客户端.替换实体列表", "使用WeakSet替换原先的ArrayList, 有效降低长时间游玩的内存占用");
-        replaceEntityList = map.putIfAbsent("优化.客户端.替换实体列表", true);
-        // endregion
-        // region 服务端Only
-        map.putCommentDotted("优化.服务端.根据TPS自动调节视距", "这表示最小值, 0关闭");
-        dynamicViewDistance = (byte) map.putIfAbsent("优化.服务端.根据TPS自动调节视距", 0);
-        // endregion
+            map.putCommentDotted("优化.客户端.优化区块渲染缓冲", "将缓冲区余量由十倍降为<n>倍\n" +
+                    "越低的值CPU占用越低，世界加载越慢(OF有同类功能,冲突)\n" +
+                    "需求: 优化方块渲染");
+            lowerChunkBuf = map.putIfAbsent("优化.客户端.优化区块渲染缓冲", 3);
+
+            soundRecycle = map.putIfAbsent("优化.客户端.重复使用音频缓冲", true);
+
+            map.putCommentDotted("优化.客户端.优化方块渲染", "也许可以提高10-20FPS");
+            fixCRD = map.putIfAbsent("优化.客户端.优化方块渲染", true);
+
+            map.putCommentDotted("优化.客户端.复杂模型阈值", "平均每面四边形数大于该值时才会使用高级光照\n" +
+                    "而不是一直使用\n" +
+                    "在不影响显示的情况下能够降低50%的区块更新CPU\n" +
+                    "如果部分模型出现黑边,请降低它,如果值小于等于1,则不是这个优化的问题\n" +
+                    "需求: 优化方块渲染");
+            complexModelThreshold = (float) map.putIfAbsent("优化.客户端.复杂模型阈值", 4f);
+
+            map.putCommentDotted("优化.客户端.降低渲染缓冲区大小", "根据统计数据,可以节约90%的方块渲染常驻内存\n" +
+                    "如果是2G内存分配,则可以减少370MB\n" +
+                    "在使用带有大量3D模型的材质包时不建议开启(高分辨率无关系)");
+            smallBuf = map.putIfAbsent("优化.客户端.降低渲染缓冲区大小", true);
+
+            map.putCommentDotted("优化.客户端.替换实体列表", "使用WeakSet替换原先的ArrayList, 有效降低长时间游玩的内存占用");
+            replaceEntityList = map.putIfAbsent("优化.客户端.替换实体列表", true);
+            // endregion
+        }
+        if (side != Boolean.TRUE) {
+            // region 服务端Only
+            map.putCommentDotted("优化.服务端.根据TPS自动调节视距", "这表示最小值, 0关闭");
+            dynamicViewDistance = (byte) map.putIfAbsent("优化.服务端.根据TPS自动调节视距", 0);
+            // endregion
+        }
 
         // endregion
         // region 功能
@@ -222,6 +262,8 @@ public final class Config extends JSONConfiguration {
 
         packetBufferInfinity = map.putIfAbsent("功能.删除数据包的数据长度限制", false);
 
+        noPistonGhost = map.putIfAbsent("功能.修复活塞导致的幽灵方块", false);
+
         map.putCommentDotted("功能.修改无敌帧", "长度的单位是tick, -1不修改");
         siFrameTime = map.putIfAbsent("功能.修改无敌帧.长度", -1);
         siTimeExcludeAttackers = map.putIfAbsent("功能.修改无敌帧.攻击者黑名单", CList.of("minecraft:slime", "tconstruct:blueslime", "thaumcraft:thaumslime")).asList().asStringSet();
@@ -231,79 +273,98 @@ public final class Config extends JSONConfiguration {
         setAttributeRange = map.getOrCreateMap("功能.调节属性范围");
 
         map.putCommentDotted("功能.安全管理", "替换安全管理器以防止mod启动进程，监听端口，或者加载native\n" +
-            "当然，如果它像ImpLib一样不讲武德那实际上有多少用就不好说了");
-        safer = map.putIfAbsent("功能.安全管理.启用", true);
+            "当然，如果它像ImpLib一样不讲武德那实际上有多少用就不好说了\n" +
+                "不兼容CatServer(服务器开这个干啥)");
+        safer = map.putIfAbsent("功能.安全管理.启用", false);
         if (map.putIfAbsent("功能.安全管理.禁止联网", false)) {
             noUpdate = map.getOrCreateList("功能.安全管理.禁止联网白名单").asStringSet();
         }
 
         noGhostBlock = map.putIfAbsent("功能.防止幽灵方块出现", true);
+        passLeaves = map.putIfAbsent("功能.可以穿过树叶", true);
+
+        if (side != Boolean.FALSE) {
+            commandEverywhere = map.putIfAbsent("功能.客户端.删除反胃效果", true);
+            noShitSound = map.putIfAbsent("功能.客户端.删除洞穴音效", true);
+
+            map.putCommentDotted("功能.客户端.禁用模型生成器", "如果你想用材质包修改使用该功能生成的模型\n" +
+                    "并没有关闭,只是把它的优先级调到了最低\n" +
+                    "目前这个选项没啥鬼用, 只是告诉你我以后也许会这么干");
+            map.putIfAbsent("功能.客户端.禁用模型生成器", false);
+
+            map.putCommentDotted("功能.客户端.在日志中记录聊天", "是的, 你可以关闭它");
+            logChat = map.putIfAbsent("功能.客户端.在日志中记录聊天", true);
+            map.putCommentDotted("功能.客户端.聊天记录最大长度", "这是指客户端UI中的历史记录");
+            chatLength = map.putIfAbsent("功能.客户端.聊天记录最大长度", 100);
+
+            map.putCommentDotted("功能.客户端.中文模式开启英文字宽", "选择英文, 你会发现这时的英文字符都会更宽\n" +
+                    "开启以把它带入任何语言");
+            fixFont = map.putIfAbsent("功能.客户端.中文模式开启英文字宽", false);
+
+            map.putCommentDotted("功能.客户端.重复键盘事件", "难道你不觉得，打字时长按无效很烦么\n" +
+                    "可能造成以下问题: 长按E打开背包，它又没了（你会长按么）");
+            betterKeyboard = map.putIfAbsent("功能.客户端.重复键盘事件", true);
+
+            map.putCommentDotted("功能.客户端.独立的脱离按键", "分开潜行与脱离");
+            separateDismount = map.putIfAbsent("功能.客户端.独立的脱离按键", false);
+
+            betterF3 = map.putIfAbsent("功能.客户端.更好的F3.启用", true);
+            F3_ins = map.putIfAbsent("功能.客户端.更好的F3.本地服务端信息", false);
+            F3_render = map.putIfAbsent("功能.客户端.更好的F3.渲染信息", true);
+            F3_hard = map.putIfAbsent("功能.客户端.更好的F3.硬件信息", false);
+
+            map.putCommentDotted("功能.客户端.更好的F3.不显示CPU类型", "减少0.4s启动时间\nMojang NB!");
+            oshi886 = map.putIfAbsent("功能.客户端.更好的F3.不显示CPU类型", true);
+
+            map.putCommentDotted("功能.客户端.清澈的岩浆", "如果要实现'I See Lava' mod的全部功能，你需要用材质包把岩浆的材质替换成半透明的");
+            clearLava = map.putIfAbsent("功能.客户端.清澈的岩浆", false);
+
+            int tooltipFlags = map.putIfAbsent("功能.客户端.高级提示框.注册名", true) ? 1 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.未本地化名", false) ? 1 << 1 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.矿物词典", false) ? 1 << 2 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.NBT", false) ? 1 << 3 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.食物", false) ? 1 << 4 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.粘度", true) ? 1 << 5 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.亮度", false) ? 1 << 6 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.温度", false) ? 1 << 7 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.颜色", false) ? 1 << 8 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.密度", false) ? 1 << 9 : 0;
+            tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.气体", false) ? 1 << 10 : 0;
+            tooltipFlag = tooltipFlags | (map.putIfAbsent("功能.客户端.流体提示框.可放置", false) ? 1 << 11 : 0);
+
+            pagedTooltipLen = map.putIfAbsent("功能.客户端.Tooltip分页.长度", 16);
+            pagedTooltipTime = map.putIfAbsent("功能.客户端.Tooltip分页.切换时间(帧)", 60);
+            noticeItemChange = map.putIfAbsent("功能.客户端.提示物品改变", false);
+
+            map.putCommentDotted("功能.客户端.NBT最大长度", "单位KB, 防止因为过长的NBT无法进入服务器");
+            nbtMaxLength = (long) map.putIfAbsent("功能.客户端.NBT最大长度", 2048) << 10;
+            title = map.putIfAbsent("功能.客户端.窗口标题", "Minecraft 1.12.2");
+            clientNetworkTimeout = map.putIfAbsent("功能.客户端.连接服务器的超时", 30);
+            autoClimb = map.putIfAbsent("功能.客户端.自动爬楼梯", true);
+            showDPS = map.putIfAbsent("功能.客户端.显示DPS", true);
+            map.putCommentDotted("功能.客户端.关闭Potion Shift", "药水效果不再使背包界面右移");
+            disablePotionShift = map.putIfAbsent("功能.客户端.关闭Potion Shift", true);
+            map.putCommentDotted("功能.客户端.修复卡死", "删除mojang提供的patchy(服务器黑名单)\n" +
+                    "它是主线程读网络,程序员都知道这有多么操蛋\n" +
+                    "然而不少mod也这么干\n" +
+                    "比如JECH, 以及AbyssalCraft");
+            removePatchy = map.putIfAbsent("功能.客户端.修复卡死", false);
+            map.putCommentDotted("功能.客户端.更显眼的选择框", "我都不知道我做这玩意是为了啥");
+            showySelectBox = map.putIfAbsent("功能.客户端.更显眼的选择框", false);
+        }
 
 
-        commandEverywhere = map.putIfAbsent("功能.客户端.删除反胃效果", true);
-        noShitSound = map.putIfAbsent("功能.客户端.删除洞穴音效", true);
-
-        map.putCommentDotted("功能.客户端.在日志中记录聊天", "是的, 你可以关闭它");
-        logChat = map.putIfAbsent("功能.客户端.在日志中记录聊天", true);
-        map.putCommentDotted("功能.客户端.聊天记录最大长度", "这是指客户端UI中的历史记录");
-        chatLength = map.putIfAbsent("功能.客户端.聊天记录最大长度", 100);
-
-        map.putCommentDotted("功能.客户端.中文模式开启英文字宽", "选择英文, 你会发现这时的英文字符都会更宽\n" +
-            "开启以把它带入任何语言");
-        fixFont = map.putIfAbsent("功能.客户端.中文模式开启英文字宽", false);
-
-        map.putCommentDotted("功能.客户端.重复键盘事件", "难道你不觉得，打字时长按无效很烦么\n" +
-                "可能造成以下问题: 长按E打开背包，它又没了（你会长按么）");
-        betterKeyboard = map.putIfAbsent("功能.客户端.重复键盘事件", true);
-
-        betterF3 = map.putIfAbsent("功能.客户端.更好的F3.启用", true);
-        F3_ins = map.putIfAbsent("功能.客户端.更好的F3.本地服务端信息", false);
-        F3_render = map.putIfAbsent("功能.客户端.更好的F3.渲染信息", true);
-        F3_hard = map.putIfAbsent("功能.客户端.更好的F3.硬件信息", true);
-
-        map.putCommentDotted("功能.客户端.清澈的岩浆", "如果要实现'I See Lava' mod的全部功能，你需要用材质包把岩浆的材质替换成半透明的");
-        clearLava = map.putIfAbsent("功能.客户端.清澈的岩浆", false);
-
-        int tooltipFlags = map.putIfAbsent("功能.客户端.高级提示框.注册名", true) ? 1 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.未本地化名", false) ? 1 << 1 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.矿物词典", false) ? 1 << 2 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.NBT", false) ? 1 << 3 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.食物", false) ? 1 << 4 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.粘度", true) ? 1 << 5 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.亮度", false) ? 1 << 6 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.温度", false) ? 1 << 7 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.颜色", false) ? 1 << 8 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.密度", false) ? 1 << 9 : 0;
-        tooltipFlags |= map.putIfAbsent("功能.客户端.流体提示框.气体", false) ? 1 << 10 : 0;
-        tooltipFlag = tooltipFlags | (map.putIfAbsent("功能.客户端.流体提示框.可放置", false) ? 1 << 11 : 0);
-
-        pagedTooltipLen = map.putIfAbsent("功能.客户端.Tooltip分页.长度", 16);
-        pagedTooltipTime = map.putIfAbsent("功能.客户端.Tooltip分页.切换时间(帧)", 60);
-        noticeItemChange = map.putIfAbsent("功能.客户端.提示物品改变", false);
-
-        map.putCommentDotted("功能.客户端.NBT最大长度", "单位KB, 防止因为过长的NBT无法进入服务器");
-        nbtMaxLength = (long)map.putIfAbsent("功能.客户端.NBT最大长度", 2048) << 10;
-        title = map.putIfAbsent("功能.客户端.窗口标题", "Minecraft 1.12.2");
-        clientNetworkTimeout = map.putIfAbsent("功能.客户端.连接服务器的超时", 30);
-        autoClimb = map.putIfAbsent("功能.客户端.自动爬楼梯", true);
-        showDPS = map.putIfAbsent("功能.客户端.显示DPS", true);
-        map.putCommentDotted("功能.客户端.关闭Potion Shift", "药水效果不再使背包界面右移");
-        disablePotionShift = map.putIfAbsent("功能.客户端.关闭Potion Shift", true);
-        map.putCommentDotted("功能.客户端.修复卡死", "删除mojang提供的patchy(服务器黑名单)\n" +
-            "它是主线程读网络,程序员都知道这有多么操蛋\n" +
-            "然而不少mod也这么干\n" +
-            "比如JECH, 以及AbyssalCraft");
-        removePatchy = map.putIfAbsent("功能.客户端.修复卡死", false);
-        map.putCommentDotted("功能.客户端.更显眼的选择框", "我都不知道我做这玩意是为了啥");
-        showySelectBox = map.putIfAbsent("功能.客户端.更显眼的选择框", false);
-
-
-        map.putCommentDotted("优化.服务端.禁止二次登陆", "新登录的人不能挤掉之前登录的人\n" +
-            "正版服严禁开启!");
-        noDuplicateLogin = map.putIfAbsent("优化.服务端.禁止二次登陆", false);
+        if (side != Boolean.TRUE) {
+            map.putCommentDotted("优化.服务端.禁止二次登陆", "新登录的人不能挤掉之前登录的人\n" +
+                    "正版服严禁开启!");
+            noDuplicateLogin = map.putIfAbsent("优化.服务端.禁止二次登陆", false);
+        }
 
 
         threadPriority = (byte) map.putIfAbsent("调试.主进程优先级(1-9)", -1);
+
+        replaceTransformer = !map.putIfAbsent("调试.禁用上下文ASM", false);
+        noMixin = map.putIfAbsent("调试.与Mixin不兼容的优化", false);
 
         map.putCommentDotted("调试.关闭调试日志", "关闭的是forge的调试日志与stdout");
         shrinkLog = map.putIfAbsent("调试.关闭调试日志", true);
@@ -314,19 +375,21 @@ public final class Config extends JSONConfiguration {
             "位  8: 记录GeneratedModelRepo的材质注册\n" +
             "位 16: 调试事件优化\n" +
             "位 32: 记录AABB缓存\n" +
-            "位 64: 保留\n" +
-            "位128: 保留\n");
+            "位 64: 游戏内调试功能\n" +
+            "位128: 版本兼容(测试版)\n");
         debug = map.putIfAbsent("调试.调试标志位", 0);
         ClassDefiner.debug = (debug & 1) != 0;
         NiximSystem.debug = (debug & 4) != 0;
         clientBrand = map.putIfAbsent("调试.客户端标识", "vanilla");
 
+        tractDirectMem = map.putIfAbsent("调试.追踪直接内存分配", false);
+        traceAABB = map.putIfAbsent("调试.追踪碰撞箱创建", false);
+        traceBP = map.putIfAbsent("调试.追踪BlockPos创建", false);
 
 
 
         map.putCommentDotted("内部使用", "它们没啥用，并且可能是为以后的新优化收集素材");
         injectLWP = map.putIfAbsent("内部使用.注入LaunchWrapper.开启", false);
-        map.getOrCreateList("内部使用.注入LaunchWrapper.附加不转换前缀");
 
         enablePinyinSearch = map.putIfAbsent("内部使用.拼音搜索!!! 没错，JECH可以删了", true);
         searchNameOnly = map.putIfAbsent("内部使用.只搜索物品名字", false);

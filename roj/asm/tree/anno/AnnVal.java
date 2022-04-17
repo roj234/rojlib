@@ -27,6 +27,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cst.*;
+import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
 import roj.util.ByteReader;
@@ -54,7 +55,35 @@ public abstract class AnnVal {
     public static final char ANNOTATION = '@';
     public static final char ARRAY      = '[';
 
-    public AnnVal() {}
+    public int asInt() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not INT");
+    }
+    public float asFloat() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not FLOAT");
+    }
+    public double asDouble() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not DOUBLE");
+    }
+    public long asLong() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not LONG");
+    }
+    public String asString() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not STRING");
+    }
+    public AnnValEnum asEnum() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not ENUM");
+    }
+    public Type asClass() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not CLASS");
+    }
+    public Annotation asAnnotation() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not ANNOTATION");
+    }
+    public List<AnnVal> asArray() {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " is not ARRAY");
+    }
+
+    AnnVal() {}
 
     @Deprecated
     public static AnnVal parse(ConstantPool pool, ByteReader r) {
@@ -118,4 +147,5 @@ public abstract class AnnVal {
     public abstract void toByteArray(ConstantPool pool, ByteList w);
 
     public abstract String toString();
+
 }

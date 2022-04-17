@@ -25,6 +25,7 @@
  */
 package roj.misc;
 
+import roj.asm.TransformException;
 import roj.asm.nixim.*;
 import roj.io.IOUtil;
 import roj.mod.util.IntCallable;
@@ -38,7 +39,7 @@ import java.io.IOException;
  * @since 2021/10/7 11:54
  */
 public class NiximExample {
-    public static void main(String[] args) throws IOException, NiximException {
+    public static void main(String[] args) throws IOException, TransformException {
         NiximSystem nt2 = new NiximSystem();
         nt2.load(IOUtil.read("roj/misc/NiximExample$Mixin.class"));
         ByteList sharedOutput = nt2.nixim("roj/misc/NiximExample", new ByteList(IOUtil.read("roj/misc/NiximExample.class")));

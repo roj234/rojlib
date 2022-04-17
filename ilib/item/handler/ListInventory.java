@@ -54,10 +54,11 @@ public class ListInventory extends SimpleInventory {
     }
 
     public void setInventorySize(int size) {
+        if (inv.length == size) return;
         ItemStack[] old = this.inv;
         this.inv = new ItemStack[size];
         clear();
-        System.arraycopy(old, 0, inv, 0, size);
+        System.arraycopy(old, 0, inv, 0, Math.min(size, old.length));
         dirty = true;
     }
 
@@ -82,8 +83,12 @@ public class ListInventory extends SimpleInventory {
 
     @Override
     public void setStackInSlot(int id, @Nonnull ItemStack stack) {
-        inventoryChanged(id, inv[id], stack);
+        ItemStack prev = inv[id];
+
         inv[id] = stack;
+        dirty = true;
+
+        inventoryChanged(id, prev, stack);
     }
 
     @Override
@@ -102,13 +107,15 @@ public class ListInventory extends SimpleInventory {
         return this;
     }
 
+    public void removeCallback(InvChangeListener listener) {
+        callbacks.remove(listener);
+    }
+
     protected void inventoryChanged(int slotId, ItemStack old, ItemStack now) {
         for (int i = 0; i < callbacks.size(); i++) {
             InvChangeListener l = callbacks.get(i);
-            if (l.shouldDelete()) callbacks.remove(i--);
             l.onInventoryChanged(this, slotId, old, now);
         }
-        dirty = true;
     }
 
     public NBTTagList writeToNBT() {
@@ -137,7 +144,7 @@ public class ListInventory extends SimpleInventory {
                 inv[i] = new ItemStack(st);
             }
         }
-        while (i++ < inv.length) inv[i] = ItemStack.EMPTY;
+        while (i < inv.length) inv[i++] = ItemStack.EMPTY;
         dirty = true;
     }
 }

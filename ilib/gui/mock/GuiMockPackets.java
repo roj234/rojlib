@@ -42,7 +42,7 @@ public class GuiMockPackets extends GuiBaseNI implements ComponentListener {
 
     @Override
     protected void addComponents() {
-        components.add(GText.alignCenterY(this, 10, "\u00a7l修改PacketAdapter", Color.WHITE));
+        components.add(GText.alignCenterX(this, 10, "\u00a7l修改PacketAdapter", Color.WHITE));
 
         components.add(new SavedPackets(this, 10, 24, -10, -40));
 

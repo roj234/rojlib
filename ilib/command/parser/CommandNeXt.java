@@ -26,14 +26,24 @@
 
 package ilib.command.parser;
 
-import ilib.command.sub.ISubCommand;
-import roj.collect.MyHashMap;
-
-import net.minecraft.command.*;
+import net.minecraft.command.CommandBase;
+import net.minecraft.command.CommandException;
+import net.minecraft.command.ICommandSender;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraft.util.text.TextComponentTranslation;
+import roj.asm.TransformException;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.Method;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.util.AccessFlag;
+import roj.asm.util.AttrHelper;
+import roj.asm.util.Context;
+import roj.asm.util.InsnList;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -42,30 +52,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static roj.asm.Opcodes.INVOKESPECIAL;
+
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public final class CommandNeXt extends CommandBase {
-    public final String name;
-    public final int permission;
-
-    private final Map<String, ISubCommand> subCommands = new MyHashMap<>();
+    public String name;
+    public int permission;
 
     private List<String> aliases;
-    private TextComponentString helpComponent;
-    private String canUseCommands;
 
     static List<String> empty_list = Collections.emptyList();
 
-    public static ICommandListener listener;
-
-    static Map<String, User> data;
-    static Map<String, ArgumentManager<?>> decoders;
-
-    static class User {
-        ASMInvoker targetInvoker;
-    }
+    static Map<Class<?>, ArgumentHandler<?>> decoders;
 
     private interface ASMInvoker {
         void invoke(Object instance, Object[] data);
@@ -75,92 +76,90 @@ public final class CommandNeXt extends CommandBase {
         // todo
     }
 
-    public CommandNeXt(String name, int level, Class<? extends CommandHandler> target) {
+    public static void from(Context ctx) throws TransformException {
+        ConstantData data = ctx.getData();
+        List<Annotation> annotations = AttrHelper.getAnnotations(data.cp, data, false);
+        if (annotations == null) throw new TransformException("没有找到EVC注解");
+        block:{
+            for (int i = 0; i < annotations.size(); i++) {
+                Annotation a = annotations.get(i);
+                if (a.clazz.endsWith("EnumViaConfig")) {
+                    break block;
+                }
+            }
+            throw new TransformException("没有找到EVC注解");
+        }
+
+        Method clInit = data.getUpgradedMethod("<clinit>", "()V");
+        if (clInit == null) {
+            clInit = new Method(AccessFlag.STATIC, data, "<clinit>", "()V");
+            clInit.code = new AttrCode(clInit);
+            data.methods.add(Helpers.cast(clInit));
+        } else {
+            // return
+            InsnList insn = clInit.code.instructions;
+            insn.remove(insn.size() - 1);
+            for (int i = 0; i < insn.size(); i++) {
+                InsnNode node = insn.get(i);
+                if (node.getOpcode() == INVOKESPECIAL) {
+                    InvokeInsnNode iin = (InvokeInsnNode) node;
+                    if (iin.owner.equals(data.name) && iin.name.equals("<init>")) {
+                        throw new TransformException("不应手动创建任何" + data.name + "对象");
+                    }
+                }
+            }
+        }
+        clInit.code.interpretFlags = AttrCode.COMPUTE_SIZES | AttrCode.COMPUTE_FRAMES;
+
+        List<? extends MethodNode> ms = data.methods;
+        for (int i = 0; i < ms.size(); i++) {
+            MethodNode m = ms.get(i);
+            List<Annotation> anns = AttrHelper.getAnnotations(data.cp, m, false);
+            if (anns == null) continue;
+            for (int j = 0; j < anns.size(); j++) {
+                Annotation ann = anns.get(j);
+                if (ann.clazz.endsWith("EnumViaConfig$Constructor")) {
+                    if (!m.name().equals("<init>")) throw new TransformException("构造器注解必须应用于构造器");
+
+                }
+            }
+        }
+    }
+
+    public CommandNeXt(String name, int level, Class<?> target) {
         this.name = name;
         this.permission = level;
     }
 
-    @Nonnull
+   
     public String getName() {
         return name;
     }
-
-    @Nonnull
+   
     public String getUsage(@Nonnull ICommandSender sender) {
         return "command.mi." + name + ".usage";
     }
 
-    @Nonnull
+   
     public List<String> getAliases() {
         return this.aliases == null ? empty_list : this.aliases;
     }
 
-    public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, @Nonnull String[] args) throws CommandException {
-        if (helpComponent == null)
-            helpComponent = new TextComponentString("/" + getName() + " help <name>");
-        if (args.length >= 1) {
-            String s = args[0];
-            ISubCommand command = subCommands.get(s);
-            if (command != null) {
-                command.execute(server, sender, removeFirst(args));
-                return;
-            } else if ("help".equals(s)) {
-                if (args.length == 1) {
-                    sender.sendMessage(new TextComponentString(getName() + " help <name>"));
-                } else {
-                    command = subCommands.get(args[1]);
-                    if (command != null)
-                        sender.sendMessage(new TextComponentTranslation(command.getHelp()));
-                }
-                return;
-            }
-        }
-        if (canUseCommands == null) {
-            if (subCommands.size() == 0)
-                throw new CommandException("没有子命令! 这是一个BUG!");
-            StringBuilder sb = new StringBuilder("/" + getName() + " <");
-            for (String str : subCommands.keySet()) {
-                sb.append(str);
-                sb.append('/');
-            }
-            sb.append("help");
-            sb.append('>');
-            canUseCommands = sb.toString();
-        }
-        throw new WrongUsageException(canUseCommands);
-    }
-
-    public static void setCommandListener(ICommandListener _listener) {
-        listener = _listener;
+    public void execute(@Nonnull MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
     }
 
     @Override
     public int getRequiredPermissionLevel() {
         return this.permission;
     }
-
-    @Nonnull
-    public List<String> getTabCompletions(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, String[] args, @Nullable BlockPos pos) {
-        if (args.length == 1) {
-            return getListOfStringsMatchingLastWord(args, subCommands.keySet());
-        } else if (args.length > 1) {
-            String s = args[0];
-            ISubCommand command = subCommands.get(s);
-            return command == null ? ("help".equals(s) ? getListOfStringsMatchingLastWord(args, subCommands.keySet()) : empty_list) : command.getTabCompletionOptions(server, sender, removeFirst(args), pos);
-        } else {
-            return empty_list;
-        }
+   
+    public List<String> getTabCompletions(@Nonnull MinecraftServer server, ICommandSender sender, String[] args, @Nullable BlockPos pos) {
+        return empty_list;
     }
 
     @Override
     public boolean isUsernameIndex(String[] args, int index) {
-        if (args.length < 1) {
-            return false;
-        } else {
-            String s = args[0];
-            ISubCommand command = subCommands.get(s);
-            return command != null && command.isUsernameIndex(removeFirst(args), index - 1);
-        }
+        return false;
     }
 
     public CommandNeXt addAliases(String alias) {
@@ -170,15 +169,5 @@ public final class CommandNeXt extends CommandBase {
         }
         this.aliases.add(alias);
         return this;
-    }
-
-    public static String[] removeFirst(String[] args) {
-        if (args.length < 2) {
-            return new String[0];
-        } else {
-            String[] nArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, nArgs, 0, nArgs.length);
-            return nArgs;
-        }
     }
 }

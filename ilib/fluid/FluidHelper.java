@@ -53,56 +53,45 @@ public class FluidHelper {
             WATER_STILL = new ResourceLocation(ImpLib.MODID, "fluid/base_water"),
             WATER_FLOW = new ResourceLocation(ImpLib.MODID, "fluid/base_water_flow");
 
-    /**
-     * Forge具有化神奇为腐朽的能力 <br>
-     * 神说,要有FluidBuilder <br>
-     * 一行代码搞定, 从未如此简单
-     *
-     * @param name    流体注册名
-     * @param builder FluidBuilder配置好的实例
-     * @since Before preInit
-     */
-    public static Fluid registerFluid(@Nonnull String name, @Nonnull FluidBuilder builder) {
+    public static Fluid registerFluid(String name, FluidBuilder builder) {
+        Fluid prev = FluidRegistry.getFluid(name);
+        if (prev != null) {
+            ImpLib.logger().info("Fluid " + name + " has been registered.");
+            return prev;
+        }
+
         Fluid fluid = builder.fluid(name);
 
-        if (FluidRegistry.isFluidRegistered(fluid)) {
-            ImpLib.logger().info("Found fluid " + fluid.getName() + ", the registration is canceled.");
-            return FluidRegistry.getFluid(name);
-        }
         FluidRegistry.registerFluid(fluid);
         FluidRegistry.addBucketForFluid(fluid);
 
-        registerFluidBlock(fluid, builder.hasColor() ? new BlockFluidColorable(fluid, builder.material) : new BlockFluidClassic(fluid, builder.material));
+        BlockFluidBase block = builder.hasColor() ?
+                new BlockFluidColorable(fluid, builder.material) :
+                new BlockFluidClassic(fluid, builder.material);
+        fluid.setBlock(block);
 
+        Registry.registerFluidBlock(name, block);
         return fluid;
     }
 
-    /**
-     * Forge具有化神奇为腐朽的能力 <br>
-     * 神说,要有FluidBuilder <br>
-     * 一行代码搞定, 从未如此简单
-     *
-     * @param name    流体注册名
-     * @param builder FluidBuilder配置好的实例
-     * @param fluid   流体的实例，实现NBT控制之类的功能
-     * @since Before preInit
-     */
-    public static void registerFluid(@Nonnull String name, @Nonnull FluidBuilder builder, @Nonnull Fluid fluid) {
-        fluid = builder.fluid(fluid, name);
-
-        if (FluidRegistry.isFluidRegistered(fluid)) {
-            ImpLib.logger().info("Found fluid " + fluid.getName() + ", the registration is canceled.");
+    public static void registerFluid(String name, FluidBuilder builder, Fluid fluid) {
+        Fluid prev = FluidRegistry.getFluid(name);
+        if (prev != null) {
+            ImpLib.logger().info("Fluid " + name + " has been registered.");
             return;
         }
+
+        fluid = builder.fluid(fluid, name);
+
         FluidRegistry.registerFluid(fluid);
         FluidRegistry.addBucketForFluid(fluid);
 
-        registerFluidBlock(fluid, builder.hasColor() ? new BlockFluidColorable(fluid, builder.material) : new BlockFluidClassic(fluid, builder.material));
-    }
+        BlockFluidBase block = builder.hasColor() ?
+                new BlockFluidColorable(fluid, builder.material) :
+                new BlockFluidClassic(fluid, builder.material);
+        fluid.setBlock(block);
 
-    private static void registerFluidBlock(@Nonnull Fluid fluid, @Nonnull BlockFluidBase block) {
-        //fluid.setBlock(block);
-        Registry.registerFluidBlock(fluid.getName(), block);
+        Registry.registerFluidBlock(name, block);
     }
 
     public static class FluidBuilder {
@@ -123,12 +112,12 @@ public class FluidHelper {
             return this;
         }
 
-        public FluidBuilder setMaterial(@Nonnull Material material) {
+        public FluidBuilder setMaterial(Material material) {
             this.material = material;
             return this;
         }
 
-        public FluidBuilder setSound(@Nonnull SoundEvent fill, @Nonnull SoundEvent drain) {
+        public FluidBuilder setSound(SoundEvent fill, SoundEvent drain) {
             this.soundFill = fill;
             this.soundDrain = drain;
             return this;
@@ -139,7 +128,7 @@ public class FluidHelper {
             return this;
         }
 
-        public FluidBuilder setResource(@Nonnull ResourceLocation resStill, @Nonnull ResourceLocation resFlow) {
+        public FluidBuilder setResource(ResourceLocation resStill, ResourceLocation resFlow) {
             this.locStill = resStill;
             this.locFlow = resFlow;
             return this;

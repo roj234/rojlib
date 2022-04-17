@@ -1,11 +1,14 @@
 package ilib.gui.comp;
 
 import ilib.client.RenderUtils;
+import ilib.gui.DefaultSprites;
 import ilib.gui.IGui;
 import ilib.gui.util.Direction;
-import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
+import roj.collect.SimpleList;
 import roj.math.MathUtils;
+
+import net.minecraft.client.renderer.GlStateManager;
 
 import java.awt.*;
 
@@ -107,7 +110,7 @@ public abstract class GScrollView extends GGroup {
         private int overTime;
 
         public ScrollBtn(boolean up) {
-            super(GScrollView.this, 0, 0, 96, 0, 14, 14);
+            super(GScrollView.this, 0, 0, DefaultSprites.UP_BTN);
             setFlag(BUTTON_ENABLED | CHANGE_V_BY_HOVER);
 
             if (up) flag |= 256;
@@ -117,21 +120,21 @@ public abstract class GScrollView extends GGroup {
                     xPos = up ? 0 : GScrollView.this.getWidth() - 8;
                     yPos = 0;
                     width = 8;
+                    height = 14;
                     break;
                 case DOWN:
                     xPos = up ? 0 : GScrollView.this.getWidth() - 8;
                     yPos = GScrollView.this.getHeight() - 14;
                     width = 8;
+                    height = 14;
                     break;
                 case LEFT:
                     xPos = 0;
                     yPos = up ? 0 : GScrollView.this.getHeight() - 8;
-                    height = 8;
                     break;
                 case RIGHT:
                     xPos = GScrollView.this.getWidth() - 14;
                     yPos = up ? 0 : GScrollView.this.getHeight() - 8;
-                    height = 8;
                     break;
             }
         }
@@ -245,7 +248,7 @@ public abstract class GScrollView extends GGroup {
 
         if (i == off) return;
 
-        components.removeRange(reserved, components.size());
+        ((SimpleList<Component>)components).removeRange(reserved, components.size());
 
         addElements(i, Math.min(getElementCount(), i + displayable));
 

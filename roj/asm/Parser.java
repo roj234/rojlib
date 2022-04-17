@@ -59,9 +59,11 @@ public final class Parser {
     public static final int CTYPE_LOD_2   = 1;
     public static final int CTYPE_LOD_3   = 2;
     public static final int CTYPE_REFLECT = 3;
+
     public static final int FTYPE_SIMPLE  = 0;
     public static final int FTYPE_FULL    = 1;
     public static final int FTYPE_REFLECT = 2;
+
     public static final int MTYPE_SIMPLE  = 3;
     public static final int MTYPE_FULL    = 4;
     public static final int MTYPE_REFLECT = 5;
@@ -195,52 +197,50 @@ public final class Parser {
         }
 
         len = r.readUnsignedShort();
-        List<FieldSimple> fields = result.fields;
+        List<FieldSimple> fields = Helpers.cast(result.fields);
         for (int i = 0; i < len; i++) {
             FieldSimple field = new FieldSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+            fields.add(field);
 
-            AttributeList attributes = field.attributes;
             int attrLen = r.readUnsignedShort();
+            if (attrLen == 0) continue;
+            AttributeList attributes = field.attributes();
             attributes.ensureCapacity(attrLen);
 
-            for (int j = 0; j < attrLen; j++) {
+            while (attrLen-- > 0) {
                 String name0 = ((CstUTF) pool.get(r)).getString();
-
-                Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
-                attributes.add(attr);
+                attributes.add(new AttrUnknown(name0, r.slice(r.readInt())));
             }
-            fields.add(field);
         }
 
         len = r.readUnsignedShort();
-        List<MethodSimple> methods = result.methods;
+        List<MethodSimple> methods = Helpers.cast(result.methods);
         for (int i = 0; i < len; i++) {
             MethodSimple method = new MethodSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
             method.cn(result.name);
+            methods.add(method);
 
-            AttributeList attributes = method.attributes;
             int attrLen = r.readUnsignedShort();
+            if (attrLen == 0) continue;
+            AttributeList attributes = method.attributes();
             attributes.ensureCapacity(attrLen);
 
-            for (int j = 0; j < attrLen; j++) {
+            while (attrLen-- > 0) {
                 String name0 = ((CstUTF) pool.get(r)).getString();
-
-                Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
-                attributes.add(attr);
+                attributes.add(new AttrUnknown(name0, r.slice(r.readInt())));
             }
-            methods.add(method);
         }
 
         len = r.readUnsignedShort();
-        AttributeList attributes = result.attributes;
-        attributes.ensureCapacity(len);
+        if (len > 0) {
+            AttributeList attrs = result.attributes();
+            attrs.ensureCapacity(len);
 
-        for (int i = 0; i < len; i++) {
-            String name0 = ((CstUTF) pool.get(r)).getString();
-
-            Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
-
-            attributes.add(attr);
+            for (int i = 0; i < len; i++) {
+                String name0 = ((CstUTF) pool.get(r)).getString();
+                Attribute attr = new AttrUnknown(name0, r.slice(r.readInt()));
+                attrs.add(attr);
+            }
         }
 
         return result;

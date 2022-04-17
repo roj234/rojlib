@@ -554,41 +554,14 @@ public class MethodPoet extends Interpreter {
     }
 
     public MethodPoet newArray(char nativeType) {
-        byte prm;
-        switch (nativeType) {
-            case 'Z':
-                prm =  4;
-                break;
-            case 'C':
-                prm =  5;
-                break;
-            case 'F':
-                prm =  6;
-                break;
-            case 'D':
-                prm =  7;
-                break;
-            case 'B':
-                prm =  8;
-                break;
-            case 'S':
-                prm =  9;
-                break;
-            case 'I':
-                prm =  10;
-                break;
-            case 'J':
-                prm =  11;
-                break;
-            default:
-                throw new IllegalArgumentException();
-        }
+        byte prm = NodeHelper.Type2PrimitiveArray(nativeType);
         pop(INT);
         // noinspection all
         stack.add(fromType(Type.std(nativeType), sb));
         insn.add(new U1InsnNode(NEWARRAY, prm));
         return this;
     }
+
     public MethodPoet newArray(int len, char n) {
         return const1(len).newArray(n);
     }

@@ -25,6 +25,7 @@
  */
 package ilib.asm;
 
+import ilib.Config;
 import ilib.api.ContextClassTransformer;
 import roj.asm.SharedBuf;
 import roj.asm.SharedBuf.Level;
@@ -36,8 +37,6 @@ import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader.Acceptor;
 import net.minecraft.launchwrapper.LaunchClassLoader.Reader;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.List;
 
 /**
@@ -55,18 +54,20 @@ class LaunchInjector implements Acceptor {
 
         Reader rd = (Reader) obj;
 
-        ByteList shared = (ByteList) rd.threadLocalForYou;
-        if (shared == null)
-            rd.threadLocalForYou = shared = new ByteList();
-
-        shared.setArray(rd.buf1);
-        Context ctx = new Context(name, shared);
-
         Level level = SharedBuf.alloc();
         level.setLevel(true);
         try {
-            for (int i = 0; i < transformers.size(); i++) {
-                try {
+            if (rd.buf1 == null) {
+                for (int i = 0; i < transformers.size(); i++) {
+                    IClassTransformer o = transformers.get(i);
+                    rd.buf1 = o.transform(name, trName, rd.buf1);
+                }
+                rd.pos1 = rd.buf1 == null ? -1 : rd.buf1.length;
+            } else {
+                ByteList shared = new ByteList(rd.buf1);
+                Context ctx = new Context(name, shared);
+
+                for (int i = 0; i < transformers.size(); i++) {
                     Object o = ((List<?>) transformers).get(i);
                     if (o instanceof ContextClassTransformer) {
                         ((ContextClassTransformer) o).transform(trName, ctx);
@@ -74,20 +75,17 @@ class LaunchInjector implements Acceptor {
                         shared.setArray(((IClassTransformer) o).transform(name, trName, ctx.get().toByteArray()));
                         ctx.set(shared);
                     }
-                } catch (Throwable e) {
-                    try (FileOutputStream out = new FileOutputStream(trName.replace('/', '.'))) {
-                        ctx.get().writeToStream(out);
-                    } catch (IOException ignored) {}
-                    throw e;
                 }
-            }
 
-            ByteList list = ctx.get();
-            rd.buf1 = list.list;
-            rd.pos1 = list.wIndex();
+                ByteList list = ctx.get();
+                rd.buf1 = list.list;
+                rd.pos1 = list.wIndex();
+            }
+        } catch (Throwable e) {
+            if ((Config.debug & 64) != 0) e.printStackTrace();
+            throw e;
         } finally {
             level.setLevel(false);
-            Loader.classLoadElapse = System.nanoTime() - cn;
         }
     }
 }

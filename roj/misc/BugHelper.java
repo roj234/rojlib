@@ -1,24 +1,11 @@
 package roj.misc;
 
-import roj.asm.Parser;
-import roj.asm.cst.Constant;
-import roj.asm.cst.CstUTF;
-import roj.asm.tree.AccessData;
-import roj.asm.tree.ConstantData;
-import roj.collect.MyHashMap;
-import roj.io.FileUtil;
+import roj.asm.cst.CstRef;
+import roj.asm.util.Context;
 import roj.io.ZipUtil;
-import roj.mapper.Mapping;
-import roj.ui.CmdUtil;
 import roj.util.ByteList;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.zip.ZipFile;
 
 /**
  * @author Roj233
@@ -26,86 +13,17 @@ import java.util.zip.ZipFile;
  */
 public class BugHelper {
     public static void main(String[] args) throws Exception {
-        System.out.println("检测IMessage的子类");
-
-        MyHashMap<String, List<String>> librarySupers = new MyHashMap<>();
-        MyHashMap<String, String[]> toFile = new MyHashMap<>();
         ByteList bl = new ByteList();
-        String[] currZip = new String[1];
 
         ZipUtil.ICallback cb = (fileName, s) -> {
-            bl.clear();
-            bl.readStreamFully(s);
-            if(bl.wIndex() < 32)
-                return;
-
-            AccessData data;
-            try {
-                data = Parser.parseAccessDirect(bl.list);
-            } catch (Throwable e) {
-                CmdUtil.warning("Class " + fileName + " is unable to read", e);
-                return;
-            }
-
-            ArrayList<String> list = new ArrayList<>();
-            if(!"java/lang/Object".equals(data.superName)) {
-                list.add(data.superName);
-            }
-            list.addAll(data.itf);
-            toFile.put(data.name, new String[] {currZip[0], fileName});
-
-            // 构建lib一极继承表
-            if(!list.isEmpty())
-                librarySupers.put(data.name, list);
-        };
-
-        List<File> files = FileUtil.findAllFiles(new File(args[0]));
-
-        for (int i = 0; i < files.size(); i++) {
-            File fi = files.get(i);
-            String f = fi.getName();
-            if(f.endsWith(".zip") || f.endsWith(".jar")) {
-                currZip[0] = fi.getAbsolutePath();
-                ZipUtil.unzip(fi, cb, (ze) -> ze.getName().endsWith(".class"));
-            }
-        }
-
-        Mapping.makeInheritMap(librarySupers, null);
-
-        System.out.println("ClassInheritance load complete.");
-
-        MyHashMap<String, ZipFile> zfs = new MyHashMap<>();
-
-        for (Map.Entry<String, List<String>> key : librarySupers.entrySet()) {
-            if(!key.getValue().contains("net/minecraftforge/fml/common/network/simpleimpl/IMessage")) {
-                String[] data = toFile.get(key.getKey());
-                ZipFile zf = zfs.get(data[0]);
-                if(zf == null) {
-                    zfs.put(data[0], zf = new ZipFile(data[0]));
+            Context ctx = new Context(fileName, s);
+            for (CstRef ref : ctx.getMethodConstants()) {
+                if (ref.desc().getName().getString().equals("getPotentialSpawns")) {
+                    System.err.println(fileName);
+                    break;
                 }
-                InputStream in = zf.getInputStream(zf.getEntry(data[1]));
-                bl.clear();
-                bl.readStreamFully(in);
-
-                    ConstantData cd = Parser.parseConstants(bl);
-                    List<Constant> cc = cd.cp.array();
-                    for (int i = 0; i < cc.size(); i++) {
-                        if(cc.get(i).type() == Constant.UTF) {
-                            String cn = ((CstUTF) cc.get(i)).getString();
-                            if(cn.endsWith("readItemStack")) {
-                                System.out.println(">> In " + zf.getName());
-                                System.out.println("> Inheritor '" + key.getKey() + "'");
-                                System.out.println(" - !!Exact class usage found: " + cn);
-                                try(FileOutputStream fos = new FileOutputStream(data[1].substring(data[1].lastIndexOf('/') + 1))) {
-                                    bl.writeToStream(fos);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                in.close();
             }
-        }
+        };
+        ZipUtil.unzip(new File(args[0]), cb, (ze) -> ze.getName().endsWith(".class"));
     }
-
 }

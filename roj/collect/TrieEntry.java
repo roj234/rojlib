@@ -252,19 +252,17 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable {
                     }
                 }
 
-                Iterator<ENTRY> itr = b.get(i);
-                if (!itr.hasNext()) { // this level is empty
-                    do {
-                        a.remove(i);
-                        b.remove(i--);
-                        if (i < 0) return false;
-                    } while (!b.get(i).hasNext());
-                } else {
-                    ENTRY t = itr.next();
-                    a.add(t);
-                    b.add((Iterator<ENTRY>) t.iterator());
-                    i++;
+                Iterator<ENTRY> itr;
+                while (!(itr = b.get(i)).hasNext()) {
+                    a.remove(i);
+                    b.remove(i--);
+                    if (i < 0) return false;
                 }
+
+                ENTRY t = itr.next();
+                a.add(t);
+                b.add((Iterator<ENTRY>) t.iterator());
+                i++;
             }
         }
 

@@ -8,7 +8,9 @@ import ilib.net.IMessageHandler;
 import ilib.net.MessageContext;
 import ilib.tile.FieldSyncer;
 import ilib.tile.OwnerManager;
+import ilib.util.PlayerUtil;
 
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.inventory.Container;
 import net.minecraft.network.PacketBuffer;
@@ -19,12 +21,16 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import java.util.concurrent.Callable;
+
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class MsgSyncField implements IMessage, IMessageHandler<MsgSyncField> {
-    public int key, val;
+public class MsgSyncField implements IMessage, IMessageHandler<MsgSyncField>, Callable<Void> {
+    private FieldSyncer owner;
+
+    private int key, val;
 
     public int wid;
     public BlockPos pos;
@@ -60,8 +66,18 @@ public class MsgSyncField implements IMessage, IMessageHandler<MsgSyncField> {
 
     @Override
     public void onMessage(MsgSyncField msg, MessageContext ctx) {
-        if (ctx.side == Side.SERVER) {
-            EntityPlayerMP p = ctx.getServerHandler().player;
+        if (msg.pos != null) {
+            EntityPlayer p = ctx.getPlayer();
+
+            // loaded before client world load
+            if (p == null || p.world == null) return;
+
+            if (msg.pos == null || !p.world.isBlockLoaded(msg.pos)) {
+                if (p instanceof EntityPlayerMP)
+                ((EntityPlayerMP) p).connection
+                        .disconnect(new TextComponentTranslation("ilib.illegal_packet.0"));
+                return;
+            }
 
             TileEntity t = p.world.getTileEntity(msg.pos);
             if (!(t instanceof Syncable)) {
@@ -69,30 +85,50 @@ public class MsgSyncField implements IMessage, IMessageHandler<MsgSyncField> {
                 return;
             }
 
-            if (!MsgSyncFields.isUsableByPlayer(t, p)) {
-                p.sendMessage(new TextComponentTranslation("ilib.illegal_packet.2"));
-                return;
-            }
+            owner = ((Syncable) t).getSyncHandler();
 
-            if (t instanceof Ownable) {
-                Ownable t1 = (Ownable) t;
-                OwnerManager om = t1.getOwnerManager();
-                if (om != null && !om.isTrusted(p, t1.getOwnType())) {
-                    p.sendMessage(new TextComponentTranslation("ilib.illegal_packet.3"));
+            if (ctx.side == Side.SERVER) {
+                if (!MsgSyncFields.isUsableByPlayer(t, p)) {
+                    p.sendMessage(new TextComponentTranslation("ilib.illegal_packet.2"));
                     return;
                 }
-            }
 
-            FieldSyncer fs = ((Syncable) t).getSyncHandler();
-            fs.setField(msg.key, msg.val, FieldSyncer.CLIENT);
-        } else {
-            onClient(msg);
+                if (t instanceof Ownable) {
+                    Ownable t1 = (Ownable) t;
+                    OwnerManager om = t1.getOwnerManager();
+                    if (om != null && !om.isTrusted(p, t1.getOwnType())) {
+                        p.sendMessage(new TextComponentTranslation("ilib.illegal_packet.3"));
+                        return;
+                    }
+                }
+
+                PlayerUtil.getMinecraftServer().callFromMainThread(this);
+                return;
+            }
+            wid = -1;
         }
+        onClient();
+    }
+
+    @Override
+    public Void call() {
+        if (pos == null) {
+            onClientCall();
+        } else {
+            owner.setField(key, val, wid < 0 ? FieldSyncer.SERVER : FieldSyncer.CLIENT);
+            owner = null;
+        }
+        return null;
     }
 
     @SideOnly(Side.CLIENT)
-    private void onClient(MsgSyncField msg) {
+    private void onClient() {
+        ClientProxy.mc.addScheduledTask(this);
+    }
+
+    @SideOnly(Side.CLIENT)
+    private void onClientCall() {
         Container con = ClientProxy.mc.player.openContainer;
-        if (con.windowId == wid) con.updateProgressBar(msg.key, msg.val);
+        if (con.windowId == wid) con.updateProgressBar(key, val);
     }
 }

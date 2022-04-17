@@ -9,9 +9,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.net.URL;
-import java.nio.channels.SelectionKey;
-
-import static roj.io.down.Downloader.HELP;
 
 /**
  * @author Roj233
@@ -93,30 +90,19 @@ final class Streaming extends IDown {
     }
 
     @Override
-    public void calculate() throws Exception {
-        if (!client.connected()) {
-            client.url(url).send();
-            ch = client.getChannel();
+    protected void setClientInfo(HttpClient client) throws Exception {
+        switch (state) {
+            case 1:
+                client.send();
+                break;
+            case 2:
+                HttpHead r = client.response();
+                if (r.getCode() > 299) {
+                    System.out.println("范围错误 code=" + r.getCodeString());
+                }
 
-            if (ch.read() == 0) {
-                init = true;
-                reg();
-            } else {
-                HELP.pushTask(this);
-            }
-        } else {
-            HttpHead r = client.response();
-            if (r.getCode() > 299) {
-                System.out.println("范围错误 code=" + r.getCodeString());
-            }
-
-            in = client.getInputStream();
-
-            if (key == null) reg();
-
-            key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-
-            init = false;
+                in = client.getInputStream();
+                break;
         }
     }
 }

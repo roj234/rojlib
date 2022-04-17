@@ -68,6 +68,7 @@ public final class NIOUtil {
 
     private static void __init() throws IOException {
         ByteBuffer b = ByteBuffer.allocateDirect(1);
+        Class<?> itf = b.getClass().getInterfaces()[0];
 
         SocketChannel sc = SocketChannel.open();
         sc.close();
@@ -84,7 +85,7 @@ public final class NIOUtil {
 
         try {
             UTIL = DirectAccessor.builder(H.class)
-                                 .access(Socket.class, "impl", "socketImpl", null)
+                                 .access(Socket.class, new String[]{"impl", "connected"}, new String[]{"socketImpl", null}, new String[]{null, "setConnected"})
                                  .access(SocketImpl.class, "fd", "socketFd", null)
                                  .access(DatagramSocket.class, "impl", "socketImpl1", null)
                                  .access(DatagramSocketImpl.class, "fd", "socketFd1", null)
@@ -94,8 +95,8 @@ public final class NIOUtil {
                                  .access(fc.getClass(), new String[] {"fd", "nd"}, new String[] {"fChFd", "fChNd"}, null)
                                  .access(dc.getClass(), new String[] {"fd", "nd"}, new String[] {"dChFd", "dChNd"}, null)
                                  .delegate(Class.forName("sun.nio.ch.IOUtil"), "configureBlocking")
-                                 .delegate_o(b.getClass(), new String[] {"attachment", "cleaner"})
-                                 .access(b.getClass(), "address", "address", null)
+                                 .delegate(Class.forName("sun.nio.ch.Net"), "connect")
+                                 .delegate_o(itf, new String[] {"attachment", "cleaner", "address"})
                                  .build();
         } catch (Throwable e1) {
             if (e == null) e = e1;
@@ -248,6 +249,10 @@ public final class NIOUtil {
         }
     }
 
+    public static int connect(FileDescriptor fd, InetAddress addr, int port) throws IOException {
+        return UTIL.connect(fd, addr, port);
+    }
+
     public static void configureBlocking(FileDescriptor fd, boolean tag) throws IOException {
         if(fd.valid())
             UTIL.configureBlocking(fd, tag);
@@ -323,6 +328,10 @@ public final class NIOUtil {
         return e;
     }
 
+    public static void setConnected(Socket sc, boolean connect) {
+        UTIL.setConnected(sc, connect);
+    }
+
     private interface H {
         SocketImpl socketImpl(Socket socket);
         DatagramSocketImpl socketImpl1(DatagramSocket socket);
@@ -344,7 +353,10 @@ public final class NIOUtil {
         Object attachment(Object buf);
         Object cleaner(Object buf);
 
+        int connect(FileDescriptor fd, InetAddress addr, int port) throws IOException;
         void configureBlocking(FileDescriptor fd, boolean var1) throws IOException;
+
+        void setConnected(Socket socket, boolean connected);
     }
 
     private static Object topMost(Object o) {
@@ -357,7 +369,11 @@ public final class NIOUtil {
         if (!shared.isDirect()) return;
         // Java做了多次运行的处理，无须担心
         Object cl = UTIL.cleaner(topMost(shared));
-        if (cl != null) CLEAN.accept(cl);
+        if (cl != null) {
+            synchronized (cl) {
+                CLEAN.accept(cl);
+            }
+        }
     }
 
     public static boolean directBufferEquals(Buffer a, Buffer b) {

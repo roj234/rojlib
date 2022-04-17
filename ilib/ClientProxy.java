@@ -28,49 +28,37 @@ package ilib;
 
 import ilib.api.BlockColor;
 import ilib.api.ItemColor;
+import ilib.api.client.ICustomModel;
 import ilib.client.GeneratedModelRepo;
 import ilib.client.KeyRegister;
 import ilib.client.TextureHelper;
-import ilib.client.model.BlockModelInfo;
 import ilib.client.model.BlockStateBuilder;
-import ilib.client.model.ItemModelInfo;
 import ilib.client.model.ModelInfo;
-import ilib.client.renderer.entity.RenderLightningBoltMI;
 import ilib.client.renderer.entity.RenderTNTMy;
-import ilib.client.renderer.mirror.MirrorSubSystem;
 import ilib.command.MasterCommand;
-import ilib.command.sub.CommandPixelPainting;
 import ilib.command.sub.MySubs;
-import ilib.entity.EntityLightningBoltMI;
 import ilib.event.ClientEvent;
-import ilib.util.*;
-import roj.config.data.CMapping;
-import roj.io.IOUtil;
-
+import ilib.util.Hook;
+import ilib.util.PlayerUtil;
+import ilib.util.Registries;
+import ilib.util.Tinter;
 import net.minecraft.block.Block;
-import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.block.model.ModelResourceLocation;
-import net.minecraft.client.renderer.block.statemap.StateMapperBase;
+import net.minecraft.client.renderer.color.BlockColors;
+import net.minecraft.client.renderer.color.ItemColors;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.entity.item.EntityTNTPrimed;
-import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
-
 import net.minecraftforge.client.ClientCommandHandler;
 import net.minecraftforge.client.event.ColorHandlerEvent;
 import net.minecraftforge.client.event.ModelRegistryEvent;
-import net.minecraftforge.client.model.ModelLoader;
-import net.minecraftforge.fluids.BlockFluidBase;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import roj.io.IOUtil;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author Roj234
@@ -82,32 +70,22 @@ public final class ClientProxy extends ServerProxy {
     final Thread clientThread = Thread.currentThread();
 
     @Override
-    public boolean isMainThread(boolean atClientIfClient) {
-        if (atClientIfClient)
-            return Thread.currentThread() == clientThread;
-        else
-            return Thread.currentThread() == serverThread;
+    public boolean isOnThread(boolean client) {
+        return Thread.currentThread() == (client ? clientThread : serverThread);
     }
 
     @Override
-    public void runAtMainThread(boolean atClientIfClient, Runnable run) {
-        boolean isAlreadyCurrentThread = isMainThread(atClientIfClient);
-        if (isAlreadyCurrentThread)
-            run.run();
-        else if (atClientIfClient)
-            mc.addScheduledTask(run);
-        else
-            PlayerUtil.getMinecraftServer().addScheduledTask(run);
-    }
-
-    @Override
-    void setServerThread(Thread serverThread) {
-        this.serverThread = serverThread;
+    public void runAtMainThread(boolean client, Runnable run) {
+        if (isOnThread(client)) run.run();
+        else if (client) mc.addScheduledTask(run);
+        else PlayerUtil.getMinecraftServer().addScheduledTask(run);
     }
 
     @Override
     void preInit() {
         super.preInit();
+
+        MinecraftForge.EVENT_BUS.register(this);
 
         TextureHelper.preInit();
 
@@ -119,150 +97,102 @@ public final class ClientProxy extends ServerProxy {
         super.init();
 
         RenderManager man = mc.getRenderManager();
-
-        man.entityRenderMap.put(EntityLightningBoltMI.class, new RenderLightningBoltMI(man));
         man.entityRenderMap.put(EntityTNTPrimed.class, new RenderTNTMy(man));
-
-        MirrorSubSystem.initClient();
 
         KeyRegister.init();
     }
 
     @Override
     void postInit() {
-        TextureHelper.postInit();
-
         ClientCommandHandler.instance.registerCommand(new MasterCommand("il_client", 0)
                 .register(MySubs.DUMP_GL_INFO)
                 .register(MySubs.RELOAD_TEXTURE)
-                .register(MySubs.PACKAGE_SIMULATOR)
-                .register(MySubs.GC)
-                .register(new CommandPixelPainting())
-        );
+                .register(MySubs.PACKET_SIMULATOR)
+                .register(MySubs.GC));
+    }
+
+    @SubscribeEvent
+    public void blockColors(ColorHandlerEvent.Block event) {
+        BlockColors handler = event.getBlockColors();
+        Tinter blockTinter = new Tinter();
+        Block[] colored = new Block[1];
+        for (Block block : Registries.block()) {
+            if (block instanceof BlockColor) {
+                colored[0] = block;
+                handler.registerBlockColorHandler(blockTinter, colored);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void itemColors(ColorHandlerEvent.Item event) {
+        ItemColors handler = event.getItemColors();
+        Tinter itemTinter = new Tinter();
+        Item[] colored = new Item[1];
+        for (Item item : Registries.item()) {
+            if (item instanceof ItemColor) {
+                colored[0] = item;
+                handler.registerItemColorHandler(itemTinter, colored);
+            }
+        }
     }
 
     @SubscribeEvent
     public void registerModels(ModelRegistryEvent event) {
         ImpLib.HOOK.triggerOnce(Hook.MODEL_REGISTER);
 
-        for (ModelInfo info : Registry.getModels()) {
-            if (info instanceof ItemModelInfo) {
-                ItemModelInfo info1 = (ItemModelInfo) info;
-                //ImpLib.logger().info("Registering model for " + info1.item + '@' + info1.meta + " to " + info1.model);
-                ModelLoader.setCustomModelResourceLocation(info1.item, info1.meta, info1.model);
-            } else {
-                BlockModelInfo info1 = (BlockModelInfo) info;
-
-                if (info1.model != null) {
-                    //ImpLib.logger().info("Registering model for Block " + info1.block + " to " + info1.model);
-                    ModelLoader.setCustomStateMapper(info1.block, new SingleTexture(info1.model));
-                    final Item item = info1.item();
-                    if (item != null) {
-                        //ImpLib.logger().info("Registering model for " + item + "@0 to " + info1.model);
-                        ModelLoader.setCustomModelResourceLocation(item, 0, info1.model);
-                    }
-                }
-            }
+        for(Block block : Registries.block()) {
+            if (block instanceof ICustomModel) ((ICustomModel) block).registerModel();
         }
 
-        registerGenModel();
+        for(Item item : Registries.item()) {
+            if (item instanceof ICustomModel) ((ICustomModel) item).registerModel();
+        }
+
+        List<ModelInfo> models = Registry.getModels();
+        for (int i = 0; i < models.size(); i++) {
+            models.get(i).apply();
+        }
+
+        String blockPath = "assets/" + ImpLib.MODID + "/blockstates/generated/blocks.json";
+        GeneratedModelRepo.addModel(blockPath, blockMergedModel.build());
+        blockMergedModel = null;
+
+        String itemPath = "assets/" + ImpLib.MODID + "/blockstates/generated/items.json";
+        GeneratedModelRepo.addModel(itemPath, itemMergedModel.build());
+        itemMergedModel = null;
+
+        String fluidPath = "assets/" + ImpLib.MODID + "/blockstates/generated/fluids.json";
+        GeneratedModelRepo.addModel(fluidPath, fluidMergedModel.build());
+        fluidMergedModel = null;
+
+        GeneratedModelRepo.addModel();
     }
 
     private static BlockStateBuilder blockMergedModel;
     private static BlockStateBuilder itemMergedModel;
     private static BlockStateBuilder fluidMergedModel;
 
-    public static BlockStateBuilder getBlockMergedModel() {
+    public BlockStateBuilder getBlockMergedModel() {
         return blockMergedModel;
     }
-
-    public static BlockStateBuilder getItemMergedModel() {
+    public BlockStateBuilder getItemMergedModel() {
         return itemMergedModel;
     }
-
-    public static BlockStateBuilder getFluidMergedModel() {
+    public BlockStateBuilder getFluidMergedModel() {
         return fluidMergedModel;
+    }
+    public void registerTexture(ResourceLocation tex) {
+        ClientEvent.registerTexture(tex);
     }
 
     static {
         try {
-            itemMergedModel = new BlockStateBuilder(new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), StandardCharsets.UTF_8), true);
+            itemMergedModel = new BlockStateBuilder(IOUtil.readUTF(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), true);
+            blockMergedModel = new BlockStateBuilder(IOUtil.readUTF(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), false);
+            fluidMergedModel = new BlockStateBuilder(false).setDefaultModel("forge:fluid");
         } catch (IOException e) {
-            itemMergedModel = new BlockStateBuilder(true);
-        }
-        try {
-            blockMergedModel = new BlockStateBuilder(new String(IOUtil.read(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), StandardCharsets.UTF_8), false);
-        } catch (IOException e) {
-            blockMergedModel = new BlockStateBuilder(false);
-        }
-        fluidMergedModel = new BlockStateBuilder(false).setDefaultModel("forge:fluid");
-    }
-
-    private static void registerGenModel() {
-        String fluidPath = "assets/" + ImpLib.MODID + "/blockstates/generated/fluids.json";
-        GeneratedModelRepo.register(fluidPath, fluidMergedModel.build());
-        fluidMergedModel = null;
-
-        String itemPath = "assets/" + ImpLib.MODID + "/blockstates/generated/items.json";
-        GeneratedModelRepo.register(itemPath, itemMergedModel.build());
-        itemMergedModel = null;
-
-        String blockPath = "assets/" + ImpLib.MODID + "/blockstates/generated/blocks.json";
-        GeneratedModelRepo.register(blockPath, blockMergedModel.build());
-        blockMergedModel = null;
-    }
-
-    @SubscribeEvent
-    public void blockColors(ColorHandlerEvent.Block event) {
-        List<Block> COLOR_BLOCKS = new ArrayList<>();
-        for (Map.Entry<ResourceLocation, Block> entry : Registries.block().getEntries()) {
-            if (entry.getValue() instanceof BlockColor) {
-                COLOR_BLOCKS.add(entry.getValue());
-            }
-        }
-        event.getBlockColors().registerBlockColorHandler(new Tinter(), COLOR_BLOCKS.toArray(new Block[COLOR_BLOCKS.size()]));
-    }
-
-    @SubscribeEvent
-    public void itemColors(ColorHandlerEvent.Item event) {
-        List<Item> COLOR_ITEMS = new ArrayList<>();
-        for (Map.Entry<ResourceLocation, Item> entry : Registries.item().getEntries()) {
-            if (entry.getValue() instanceof ItemColor) {
-                COLOR_ITEMS.add(entry.getValue());
-            }
-        }
-        // 第二个参数代表“所有需要使用此 IItemColor 的物品”，是一个 var-arg Item。
-        event.getItemColors().registerItemColorHandler(new Tinter(), COLOR_ITEMS.toArray(new Item[COLOR_ITEMS.size()]));
-    }
-
-    @Override
-    public void registerFluidModel(String fluid, BlockFluidBase block) {
-        String fluidId = ImpLib.MODID + ":generated/fluids";
-
-        CMapping modelMap = new CMapping();
-        modelMap.put("fluid", ForgeUtil.getCurrentModId() + ':' + fluid);
-
-        fluidMergedModel.setVariantNonType(fluid, "custom", modelMap);
-
-        final ModelResourceLocation path = new ModelResourceLocation(fluidId, fluid);
-
-        final Item item = Item.getItemFromBlock(block);
-        if (item != Items.AIR)
-            ModelLoader.setCustomMeshDefinition(item, (stack) -> path);
-        ModelLoader.setCustomStateMapper(block, new SingleTexture(path));
-    }
-
-    protected static class SingleTexture extends StateMapperBase {
-        private final ModelResourceLocation path;
-
-        public SingleTexture(ModelResourceLocation path) {
-            this.path = path;
-        }
-
-        @Nonnull
-        @Override
-        protected ModelResourceLocation getModelResourceLocation(@Nonnull IBlockState state) {
-            return path;
+            e.printStackTrace();
         }
     }
 }

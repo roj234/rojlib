@@ -26,7 +26,6 @@
 package ilib.event;
 
 import ilib.ImpLib;
-import ilib.util.ItemUtils;
 import roj.collect.ToDoubleMap;
 
 import net.minecraft.block.state.IBlockState;
@@ -56,43 +55,39 @@ import javax.annotation.Nonnull;
  * @author Roj234
  * @since  2021/5/31 1:05
  */
-public class PowershotEvent {
+public class PowershotEvent implements ICapabilityProvider {
     public static final ToDoubleMap<String> enchantmentMultipliers = new ToDoubleMap<>();
     public static final ToDoubleMap<IBlockState> powerRequirement = new ToDoubleMap<>();
 
-    public static class Power implements ICapabilityProvider {
-        public double power;
+    private final double power;
 
-        public Power() {}
-
-        public Power(double power) {
-            this.power = power;
-        }
-
-        public boolean hasCapability(@Nonnull Capability<?> cap, EnumFacing facing) {
-            return cap == POWER;
-        }
-
-        @SuppressWarnings("unchecked")
-        public <T> T getCapability(@Nonnull Capability<T> cap, EnumFacing facing) {
-            if (cap == POWER) {
-                return (T) this;
-            }
-            return null;
-        }
+    private PowershotEvent(double power) {
+        this.power = power;
     }
 
-    public static final ResourceLocation POWER_ID = new ResourceLocation(ImpLib.MODID, "arrow_power");
-    @CapabilityInject(Power.class)
-    public static Capability<Power> POWER;
+    public boolean hasCapability(@Nonnull Capability<?> cap, EnumFacing facing) {
+        return cap == POWER;
+    }
 
-    public static void onImpactBlock(AttachCapabilitiesEvent<Entity> event) {
+    @SuppressWarnings("unchecked")
+    public <T> T getCapability(@Nonnull Capability<T> cap, EnumFacing facing) {
+        if (cap == POWER) return (T) this;
+        return null;
+    }
+
+    public static final ResourceLocation POWER_ID = new ResourceLocation(ImpLib.MODID, "a_power");
+
+    @CapabilityInject(PowershotEvent.class)
+    public static Capability<PowershotEvent> POWER;
+
+    @SubscribeEvent
+    public static void onAttachCapability(AttachCapabilitiesEvent<Entity> event) {
         final Entity entity = event.getObject();
 
         if(!entity.world.isRemote && entity instanceof EntityArrow) {
             double power = computePower((EntityArrow) entity);
             if(power == power)
-                event.getCapabilities().put(POWER_ID, new Power(power));
+                event.getCapabilities().put(POWER_ID, new PowershotEvent(power));
         }
     }
 
@@ -108,7 +103,7 @@ public class PowershotEvent {
                 NBTTagList enchs = stack.getEnchantmentTagList();
                 for (int i = 0; i < enchs.tagCount(); i++) {
                     NBTTagCompound ench = enchs.getCompoundTagAt(i);
-                    double mul = enchantmentMultipliers.getDouble(ench.getString("id"));
+                    double mul = enchantmentMultipliers.getOrDefault(ench.getString("id"), Double.NaN);
                     if (mul == mul)
                         power += MathHelper.clamp(ench.getInteger("lvl"), 0, 255) * mul;
                 }
@@ -121,8 +116,8 @@ public class PowershotEvent {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onImpactBlock(ProjectileImpactEvent.Arrow event) {
         EntityArrow arrow = event.getArrow();
-        Power powerCap = arrow.getCapability(POWER, null);
-        if(arrow.world.isRemote || powerCap == null) return;
+        PowershotEvent cap = arrow.getCapability(POWER, null);
+        if(arrow.world.isRemote || cap == null) return;
 
         RayTraceResult result = event.getRayTraceResult();
 
@@ -133,9 +128,9 @@ public class PowershotEvent {
         BlockPos pos = result.getBlockPos();
         IBlockState state = arrow.world.getBlockState(pos);
 
-        double require = powerRequirement.get(state);
-        if (require == require && powerCap.power >= require) {
-            ItemUtils.breakBlock(arrow.world, pos);
+        double require = powerRequirement.getOrDefault(state, Double.NaN);
+        if (require == require && cap.power >= require) {
+            arrow.world.destroyBlock(pos, true);
             event.setCanceled(true);
         }
     }

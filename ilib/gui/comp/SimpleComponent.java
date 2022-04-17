@@ -35,6 +35,14 @@ import ilib.gui.util.SizeModifiable;
 public abstract class SimpleComponent extends Component implements SizeModifiable {
     protected int width, height;
 
+    public SimpleComponent(IGui parent) {
+        super(parent);
+    }
+
+    public SimpleComponent(IGui parent, int x, int y) {
+        super(parent, x, y);
+    }
+
     public SimpleComponent(IGui parent, int x, int y, int w, int h) {
         super(parent, x, y);
         this.width = w;
@@ -47,6 +55,8 @@ public abstract class SimpleComponent extends Component implements SizeModifiabl
         if (yPos < 0) yPos += owner.getHeight();
         if (width < 0) width = owner.getWidth() + width - xPos;
         if (height < 0) height = owner.getHeight() + height - yPos;
+
+        super.onInit();
     }
 
     protected final boolean shouldInit() {
@@ -57,7 +67,7 @@ public abstract class SimpleComponent extends Component implements SizeModifiabl
     public void render(int mouseX, int mouseY) {}
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {}
+    public void render2(int mouseX, int mouseY) {}
 
     @Override
     public int getWidth() {

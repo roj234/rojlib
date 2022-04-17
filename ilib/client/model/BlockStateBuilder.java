@@ -28,6 +28,7 @@ package ilib.client.model;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
+import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.Type;
 
@@ -40,41 +41,37 @@ public class BlockStateBuilder {
 
     public final boolean isItem;
 
-    public BlockStateBuilder(String jsonData1, boolean isItemModel) {
+    public BlockStateBuilder(String json, boolean item) {
         try {
-            jsonData = JSONParser.parse(jsonData1).asMap();
+            jsonData = JSONParser.parse(json).asMap();
         } catch (ParseException e) {
             throw new RuntimeException("Illegal model data ", e);
         }
         defaults = jsonData.getOrCreateMap("defaults");
         variants = jsonData.getOrCreateMap("variants");
-        isItem = isItemModel;
+        isItem = item;
     }
 
-    public BlockStateBuilder(boolean isItemModel) {
+    public BlockStateBuilder(boolean item) {
         try {
-            jsonData = JSONParser.parse(isItemModel ? "{\n" +
+            jsonData = JSONParser.parse(item ? "{\n" +
                     "  \"forge_marker\": 1,\n" +
                     "  \"defaults\": {\n" +
                     "    \"model\": \"builtin/generated\",\n" +
                     "    \"transform\": \"forge:default-item\"\n" +
                     "  },\n" +
-                    "  \"variants\": {\n" +
-                    "    \"inventory\": [{}]\n" +
-                    "  }\n" +
+                    "  \"variants\": {}\n" +
                     "}" : "{\n" +
                     "  \"forge_marker\": 1,\n" +
                     "  \"defaults\": {},\n" +
-                    "  \"variants\": {\n" +
-                    "    \"inventory\": [{}]\n" +
-                    "  }\n" +
+                    "  \"variants\": {}\n" +
                     "}").asMap();
         } catch (ParseException e) {
             throw new RuntimeException("It can't happen! ", e);
         }
         defaults = jsonData.get("defaults").asMap();
         variants = jsonData.get("variants").asMap();
-        isItem = isItemModel;
+        isItem = item;
     }
 
     public CMapping getDefault() {
@@ -90,8 +87,6 @@ public class BlockStateBuilder {
     }
 
     public BlockStateBuilder addVariant4D(String k) {
-        CMapping map1 = new CMapping();
-        map1.put("y", 0);
         CMapping map2 = new CMapping();
         map2.put("y", 180);
         CMapping map3 = new CMapping();
@@ -99,10 +94,10 @@ public class BlockStateBuilder {
         CMapping map4 = new CMapping();
         map4.put("y", 90);
         return addVariant(k)
-                .setVariantNonType(k, "north", map1)
-                .setVariantNonType(k, "south", map2)
-                .setVariantNonType(k, "west", map3)
-                .setVariantNonType(k, "east", map4);
+                .addVariantValue(k, "north")
+                .addVariantValue(k, "south", map2)
+                .addVariantValue(k, "west", map3)
+                .addVariantValue(k, "east", map4);
     }
 
     public BlockStateBuilder merge(BlockStateBuilder another) {
@@ -120,13 +115,25 @@ public class BlockStateBuilder {
         return this;
     }
 
-    public BlockStateBuilder setVariantNonType(String key, String tag, CEntry entry) {
+    public BlockStateBuilder addVariantValue(String key, String tag, CEntry entry) {
         variants.getOrCreateMap(key).put(tag, entry);
         return this;
     }
 
-    public BlockStateBuilder setVariantNonTypeModel(String key, String model) {
-        variants.getOrCreateMap(key).put("model", model);
+    public BlockStateBuilder addVariantValue(String key, String tag, String json) throws ParseException {
+        variants.getOrCreateMap(key).put(tag, JSONParser.parse(json));
+        return this;
+    }
+
+    public BlockStateBuilder setSingleVariantValue(String key, String tag, CEntry entry) {
+        CList vList = variants.getOrCreateList(key);
+        CMapping map;
+        if (vList.size() == 0) {
+            vList.add(map = new CMapping());
+        } else {
+            map = vList.get(0).asMap();
+        }
+        map.put(tag, entry);
         return this;
     }
 
@@ -192,6 +199,16 @@ public class BlockStateBuilder {
             variant.put("textures", new CMapping());
         }
         variant.get("textures").asMap().put(textureName, texture);
+        return this;
+    }
+
+    public BlockStateBuilder setMCVariantModel(String key, String model) {
+        variants.getOrCreateMap(key).put("model", model);
+        return this;
+    }
+
+    public BlockStateBuilder setMCVariantTexture(String key, String textureName, String texture) {
+        variants.getOrCreateMap(key).getOrCreateMap("textures").put(textureName, texture);
         return this;
     }
 

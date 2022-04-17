@@ -26,15 +26,15 @@
 
 package ilib.gui.comp;
 
-import ilib.anim.Animation;
-import ilib.client.RenderUtils;
+import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
-import ilib.gui.util.ComponentListener;
 import org.lwjgl.opengl.GL11;
 import roj.collect.SimpleList;
 
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.tileentity.TileEntity;
+
+import java.util.List;
 
 /**
  * @author Roj234
@@ -43,8 +43,8 @@ import net.minecraft.tileentity.TileEntity;
 public class GGroup extends SimpleComponent implements IGui {
     protected boolean active;
 
-    protected SimpleList<Component> components;
-    private SimpleList<Component> clicked = new SimpleList<>();
+    protected List<Component> components;
+    protected final List<Component>[] clicked = GuiHelper.createClickedComponentList();
 
     public GGroup(IGui parent, int x, int y, int width, int height) {
         super(parent, x, y, width, height);
@@ -53,31 +53,28 @@ public class GGroup extends SimpleComponent implements IGui {
         components = new SimpleList<>();
     }
 
-    /*******************************************************************************************************************
-     * Overrides                                                                                                       *
-     *******************************************************************************************************************/
-
     public final GGroup append(Component com) {
         components.add(com);
         return this;
     }
+    /*******************************************************************************************************************
+     * Overrides                                                                                                       *
+     *******************************************************************************************************************/
 
-    public SimpleList<Component> getComponents() {
-        return components;
+    protected final void superInit() {
+        super.onInit();
     }
 
     @Override
     public void onInit() {
         super.onInit();
+
         for (int i = 0; i < components.size(); i++) {
             components.get(i).onInit();
         }
     }
 
-    /**
-     * toggle display
-     */
-    public final void moveSlots() {
+    public final void toggleSlot() {
         for (int i = 0; i < components.size(); i++) {
             Object component = components.get(i);
             if (component instanceof GSlot) {
@@ -88,11 +85,13 @@ public class GGroup extends SimpleComponent implements IGui {
 
     @Override
     public void mouseDown(int x, int y, int button) {
-        if (isActive()) {
-            super.mouseDown(x, y, button);
+        super.mouseDown(x, y, button);
 
+        if (isActive()) {
             x -= xPos;
             y -= yPos;
+
+            List<Component> clicked = this.clicked[button];
             for (int i = 0; i < components.size(); i++) {
                 Component com = components.get(i);
                 if (com.isMouseOver(x, y)) {
@@ -105,11 +104,13 @@ public class GGroup extends SimpleComponent implements IGui {
 
     @Override
     public void mouseUp(int x, int y, int button) {
-        if (isActive()) {
-            super.mouseUp(x, y, button);
+        super.mouseUp(x, y, button);
 
+        if (isActive()) {
             x -= xPos;
             y -= yPos;
+
+            List<Component> clicked = this.clicked[button];
             for (int i = 0; i < clicked.size(); i++) {
                 clicked.get(i).mouseUp(x, y, button);
             }
@@ -119,11 +120,13 @@ public class GGroup extends SimpleComponent implements IGui {
 
     @Override
     public void mouseDrag(int x, int y, int button, long time) {
-        if (isActive()) {
-            super.mouseDrag(x, y, button, time);
+        super.mouseDrag(x, y, button, time);
 
+        if (isActive()) {
             x -= xPos;
             y -= yPos;
+
+            List<Component> clicked = this.clicked[button];
             for (int i = 0; i < clicked.size(); i++) {
                 clicked.get(i).mouseDrag(x, y, button, time);
             }
@@ -132,11 +135,13 @@ public class GGroup extends SimpleComponent implements IGui {
 
     @Override
     public void mouseScrolled(int x, int y, int dir) {
-        if (isActive()) {
-            if(!isMouseOver(x, y)) return;
+        if(!isMouseOver(x, y)) return;
+        super.mouseScrolled(x, y, dir);
 
+        if (isActive()) {
             x -= xPos;
             y -= yPos;
+
             for (int i = 0; i < components.size(); i++) {
                 Component com = components.get(i);
                 com.mouseScrolled(x, y, dir);
@@ -146,84 +151,47 @@ public class GGroup extends SimpleComponent implements IGui {
 
     @Override
     public void keyTyped(char letter, int keyCode) {
-        for (int i = 0; i < components.size(); i++) {
-            Component com = components.get(i);
-            com.keyTyped(letter, keyCode);
+        if (isActive()) {
+            for (int i = 0; i < components.size(); i++) {
+                Component com = components.get(i);
+                com.keyTyped(letter, keyCode);
+            }
         }
     }
 
     @Override
-    public void renderToolTip(int x, int y) {
-        if (isActive()) {
-            x -= xPos;
-            y -= yPos;
+    public void renderTooltip(int relX, int relY, int absX, int absY) {
+        super.renderTooltip(relX, relY, absX, absY);
 
-            GlStateManager.pushMatrix();
-            GL11.glTranslatef(xPos, yPos, 0);
+        if (isActive()) {
+            relX -= xPos;
+            relY -= yPos;
+
             for (int i = 0; i < components.size(); i++) {
                 Component com = components.get(i);
-                if (com.isMouseOver(x, y)) {
-                    com.renderToolTip(x, y);
+                if (com.isMouseOver(relX, relY)) {
+                    com.renderTooltip(relX, relY, absX, absY);
                 }
             }
-            GlStateManager.popMatrix();
-        } else super.renderToolTip(x, y);
+        }
     }
 
     @Override
-    public final void render(int mouseX, int mouseY) {
-        // Render the children
+    public void render(int mouseX, int mouseY) {
         if (isActive()) {
-            mouseX -= xPos;
-            mouseY -= yPos;
-
             GlStateManager.pushMatrix();
             GL11.glTranslatef(xPos, yPos, 0);
-            for (int i = 0; i < components.size(); i++) {
-                RenderUtils.prepareRenderState();
-
-                Component com = components.get(i);
-                Animation anim = com.getAnimation();
-                if (anim != null) {
-                    GlStateManager.pushMatrix();
-                    anim.apply();
-                }
-                com.render(mouseX, mouseY);
-                if (anim != null) {
-                    GlStateManager.popMatrix();
-                    if (!anim.isPlaying()) com.setAnimation(null);
-                }
-            }
-            RenderUtils.restoreRenderState();
+            GuiHelper.renderBackground(mouseX - xPos, mouseY - yPos, components);
             GlStateManager.popMatrix();
         }
     }
 
     @Override
-    public final void renderOverlay(int mouseX, int mouseY) {
-        // Render the children
+    public void render2(int mouseX, int mouseY) {
         if (isActive()) {
-            mouseX -= xPos;
-            mouseY -= yPos;
-
             GlStateManager.pushMatrix();
             GL11.glTranslatef(xPos, yPos, 0);
-            for (int i = 0; i < components.size(); i++) {
-                RenderUtils.prepareRenderState();
-
-                Component com = components.get(i);
-                Animation anim = com.getAnimation();
-                if (anim != null) {
-                    GlStateManager.pushMatrix();
-                    anim.apply();
-                }
-                com.renderOverlay(mouseX, mouseY);
-                if (anim != null) {
-                    GlStateManager.popMatrix();
-                    if (!anim.isPlaying()) com.setAnimation(null);
-                }
-            }
-            RenderUtils.restoreRenderState();
+            GuiHelper.renderForeground(mouseX - xPos, mouseY - yPos, components);
             GlStateManager.popMatrix();
         }
     }
@@ -232,24 +200,20 @@ public class GGroup extends SimpleComponent implements IGui {
      * Accessors/Mutators                                                                                              *
      *******************************************************************************************************************/
 
-    public final boolean isActive() {
+    public List<Component> getComponents() {
+        return components;
+    }
+
+    public void setComponents(List<Component> components) {
+        this.components = components;
+    }
+
+    public boolean isActive() {
         return active;
     }
 
-    public final void setActive(boolean active) {
+    public void setActive(boolean active) {
         this.active = active;
-    }
-
-    @Override
-    public GGroup setListener(ComponentListener l) {
-        this.listener = l;
-        if (l != null) l.componentAdded(this);
-        if (components != null) {
-            for (int i = 0; i < components.size(); i++) {
-                components.get(i).setListener(l);
-            }
-        }
-        return this;
     }
 
     @Override

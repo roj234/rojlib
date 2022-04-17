@@ -30,12 +30,6 @@ import net.minecraft.util.EnumFacing;
 
 // ME unit define
 public interface METile extends MEItem {
-    enum EnergyType {
-        RECEIVER, STORAGE, PROVIDER, TUBE
-    }
-
-    EnergyType getEnergyType();
-
     default void onJoin(int id) {}
 
     default void onLeave() {}

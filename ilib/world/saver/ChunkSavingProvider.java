@@ -26,11 +26,13 @@
 
 package ilib.world.saver;
 
+import ilib.ATHandler;
 import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.util.PlayerUtil;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+
 import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.datafix.DataFixer;
@@ -40,6 +42,7 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.EmptyChunk;
 import net.minecraft.world.chunk.storage.AnvilChunkLoader;
 import net.minecraft.world.storage.WorldInfo;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.ChunkEvent;
 
@@ -138,7 +141,7 @@ public class ChunkSavingProvider extends ChunkProviderClient {
         wInfo.setBorderLerpTime(world.getWorldBorder().getTimeUntilTarget());
         //world.getSaveHandler().saveWorldInfoWithPlayer(world.getWorldInfo(), world.server.getPlayerList().getHostPlayerData());
         world.getSaveHandler().saveWorldInfoWithPlayer(wInfo, null);
-        world.mapStorage.saveAllData();
+        ATHandler.getMapStorage(world).saveAllData();
 
         int saved = 0;
         for (Chunk chunk : this.loadedChunks.values()) {

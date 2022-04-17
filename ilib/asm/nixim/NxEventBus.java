@@ -28,12 +28,6 @@ package ilib.asm.nixim;
 import ilib.Config;
 import ilib.asm.util.EventInvokerV2;
 import ilib.asm.util.InvokerCompressor;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
-import net.minecraftforge.fml.common.eventhandler.*;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -43,6 +37,13 @@ import roj.collect.MyHashMap;
 import roj.reflect.ReflectionUtils;
 import roj.util.EmptyArrays;
 import roj.util.Helpers;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
+import net.minecraftforge.fml.common.eventhandler.*;
 
 import java.lang.reflect.*;
 import java.util.ArrayList;
@@ -141,7 +142,7 @@ abstract class NxEventBus {
             EventPriority priority = EventPriority.valueOf(prn);
 
             EventInvokerV2 asm = new EventInvokerV2(method, target instanceof Class ? null : target, filter,
-                                                    InvokerCompressor.Helper.getInstance(list, busID),
+                                                    InvokerCompressor.getInstance(list, busID),
                                                     priority, (Boolean) map.getOrDefault("", false));
 
             if (IContextSetter.class.isAssignableFrom(type)) {

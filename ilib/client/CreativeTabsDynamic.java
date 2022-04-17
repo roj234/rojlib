@@ -26,13 +26,14 @@
 package ilib.client;
 
 import ilib.api.client.FakeTab;
+import ilib.gui.DefaultSprites;
+import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
 import ilib.gui.comp.Component;
 import ilib.gui.comp.GButton;
 import ilib.gui.comp.GButtonNP;
 import ilib.gui.comp.SimpleComponent;
 import ilib.util.MCTexts;
-import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.math.MathUtils;
 
@@ -43,7 +44,6 @@ import net.minecraft.util.NonNullList;
 
 import javax.annotation.Nonnull;
 import java.util.List;
-import java.util.Set;
 
 /**
  * @author Roj234
@@ -52,7 +52,7 @@ import java.util.Set;
 public class CreativeTabsDynamic extends CreativeTabsMy {
     private class UpDownButton extends GButton {
         public UpDownButton(IGui parent, boolean up) {
-            super(parent, -22, up ? 8 : 128, 96, 0, 14, 8);
+            super(parent, -22, up ? 8 : 128, DefaultSprites.UP_BTN);
         }
 
         @Override
@@ -62,6 +62,7 @@ public class CreativeTabsDynamic extends CreativeTabsMy {
             if (nOff != offset) {
                 offset = nOff;
                 updateButton();
+                GuiHelper.playButtonSound();
             }
         }
     }
@@ -78,7 +79,7 @@ public class CreativeTabsDynamic extends CreativeTabsMy {
         protected void setTab(@Nonnull CreativeTabs tab) {
             this.tab = tab;
             setLabel(tab.getIcon());
-            setToggled(selected.contains(tab));
+            setToggled(selected == tab);
         }
 
         @Override
@@ -88,12 +89,11 @@ public class CreativeTabsDynamic extends CreativeTabsMy {
 
         @Override
         protected void doAction() {
-            if (selected.contains(tab)) {
-                selected.remove(tab);
-            } else {
-                selected.add(tab);
+            if (selected != tab) {
+                selected = tab;
+                GuiHelper.playButtonSound();
+                owner.componentRequestUpdate();
             }
-            owner.componentRequestUpdate();
         }
     }
 
@@ -116,10 +116,7 @@ public class CreativeTabsDynamic extends CreativeTabsMy {
 
     @Override
     public boolean hasSearchBar() {
-        for (CreativeTabs tabs : selected) {
-            if (tabs.hasSearchBar()) return true;
-        }
-        return false;
+        return selected != null && selected.hasSearchBar();
     }
 
     public static final class Category extends CreativeTabsMy implements FakeTab {
@@ -129,15 +126,15 @@ public class CreativeTabsDynamic extends CreativeTabsMy {
 
         public Category appendTo(CreativeTabsDynamic ct) {
             ct.categories.add(this);
-            if (ct.selected.isEmpty()) {
-                ct.selected.add(this);
+            if (ct.selected == null) {
+                ct.selected = this;
             }
             return this;
         }
     }
 
     protected final List<CreativeTabs> categories;
-    protected final Set<CreativeTabs> selected;
+    protected CreativeTabs selected;
     protected int offset;
 
     protected List<Component> components;
@@ -145,13 +142,12 @@ public class CreativeTabsDynamic extends CreativeTabsMy {
     public CreativeTabsDynamic(String name) {
         super(name);
         this.categories = new SimpleList<>();
-        this.selected = new MyHashSet<>();
     }
 
     @Override
     public void displayAllRelevantItems(NonNullList<ItemStack> list) {
         for (Item item : Item.REGISTRY) {
-            if (selected.contains(item.getCreativeTab()))
+            if (selected == item.getCreativeTab())
                 item.getSubItems(item.getCreativeTab(), list);
         }
     }

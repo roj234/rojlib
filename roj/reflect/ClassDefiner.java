@@ -43,10 +43,11 @@ import java.util.List;
 public final class ClassDefiner extends ClassLoader {
     private interface FastDef {
         Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len,
-                ProtectionDomain protectionDomain);
+                ProtectionDomain pd);
         Class<?> defineClass1(ClassLoader loader, String name, byte[] b, int off, int len,
-                ProtectionDomain protectionDomain, String source);
+                ProtectionDomain pd, String source);
         List<Class<?>> getClasses(ClassLoader loader);
+        Class<?> findLoadedClass(ClassLoader loader, String name);
     }
 
     private static final ClassLoader SELF_LOADER = getParentClassLoader(ClassDefiner.class);
@@ -65,7 +66,7 @@ public final class ClassDefiner extends ClassLoader {
         try {
             SharedBuf.alloc().setLevel(true);
             fi = DirectAccessor.builder(FastDef.class)
-                               .delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1" })
+                               .delegate(ClassLoader.class, new String[]{ "defineClass", "defineClass1", "findLoadedClass" })
                                .access(ClassLoader.class, "classes", "getClasses", null)
                                .build();
             SharedBuf.alloc().setLevel(false);
@@ -85,6 +86,10 @@ public final class ClassDefiner extends ClassLoader {
         slowDef = slowDef1;
 
         ClassLoader.registerAsParallelCapable();
+    }
+
+    public static Class<?> findLoadedClass(ClassLoader loader, String name) {
+        return def.findLoadedClass(loader, name);
     }
 
     private ClassDefiner(ClassLoader parent) {

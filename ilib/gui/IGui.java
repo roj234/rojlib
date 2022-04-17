@@ -29,17 +29,13 @@ package ilib.gui;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 
-import javax.annotation.Nullable;
-
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public interface IGui {
-    @Nullable
     ResourceLocation getTexture();
 
-    @Nullable
     TileEntity getTileEntity();
 
     int getWidth();

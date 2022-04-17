@@ -32,21 +32,25 @@ import roj.asm.cst.CstRef;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.type.ParamHelper;
+import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.util.Context;
+import roj.asm.util.InsnList;
 import roj.asm.visitor.AsIsAttributeVisitor;
 import roj.asm.visitor.CodeVisitor;
 import roj.util.ByteList;
 import roj.util.ByteReader;
 
 import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 
 import java.util.List;
 
 public class TerminalTransformer extends CodeVisitor implements ContextClassTransformer {
-    public TerminalTransformer() {
+    public TerminalTransformer() {}
+
+    private TerminalTransformer(int unused) {
         bw = new ByteList();
         br = new ByteReader();
 
@@ -56,13 +60,13 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
     }
 
     @Override
-    public void transform(String transformedName, Context context) {
-        check(clsName = transformedName);
+    public void transform(String trName, Context ctx) {
+        if (!check(clsName = trName)) return;
 
-        ConstantData data = context.getData();
+        ConstantData data = ctx.getData();
 
-        mName = "<IMPLIB快速常量池检查>";
-        mDesc = "<无法获得>";
+        mName = "IMPLIB快速常量检查";
+        mDesc = "";
 
         boolean doVisit = false;
         List<Constant> csts = data.cp.getConstants();
@@ -70,52 +74,83 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
             Constant c = csts.get(i);
             if (c.type() == Constant.METHOD) {
                 CstRef ref = (CstRef) c;
-                if (ref.desc().getType().getString().equals("(I)V")) {
-                    if (ref.getClassName().equals("java/lang/System") &&
-                            ref.desc().getName().getString().equals("exit")) {
-                        warn();
-                        ref.setClazz(data.cp.getClazz(callbackOwner));
-                    } else if (ref.getClassName().equals("java/lang/Runtime")) {
-                        String n = ref.desc().getName().getString();
-                        if (n.equals("halt") || n.equals("exit")) {
-                            doVisit = true;
-                        }
+                if (ref.matches("java/lang/System", "exit", "(I)V")) {
+                    warn();
+                    ref.setClazz(data.cp.getClazz(callbackOwner));
+                    ref.desc(data.cp.getDesc("systemExitCalled", "(I)V"));
+                } else if (ref.getClassName().equals("java/lang/Runtime")) {
+                    String n = ref.desc().getName().getString();
+                    if (n.equals("halt") || n.equals("exit")) {
+                        doVisit = true;
                     }
                 }
             }
         }
 
         if (doVisit) {
-            dirty = false;
-
-            attributeVisitor.cw = cw = data.cp;
-
-            List<? extends MethodNode> methods = data.methods;
-            for (int i = 0; i < methods.size(); i++) {
-                MethodNode method = methods.get(i);
-                mName = method.name();
-                mDesc = method.rawDesc();
-
-                Attribute attr = (Attribute) method.attributes().getByName("Code");
-                if (attr != null) {
-                    if (attr instanceof AttrCode) {
-                        attr.toByteArray(cw, bw);
-                    } else {
-                        br.refresh(attr.getRawData());
-                        bw.clear();
-                        visit(cw);
-                        if (dirty) {
-                            attr.getRawData().setArray(bw.toByteArray());
-                        }
-                    }
-                }
-            }
-
-            attributeVisitor.cw = cw = attributeVisitor.cp = cp = null;
+            TerminalTransformer visitor = new TerminalTransformer(1);
+            visitor.clsName = clsName;
+            visitor.doVisit(data);
         }
     }
 
-    static String clsName, mName, mDesc;
+    private void doVisit(ConstantData data) {
+        attributeVisitor.cw = cw = data.cp;
+
+        List<? extends MethodNode> methods = data.methods;
+        for (int i = 0; i < methods.size(); i++) {
+            MethodNode method = methods.get(i);
+            mName = method.name();
+            mDesc = method.rawDesc();
+
+            Attribute attr = (Attribute) method.attributes().getByName("Code");
+            if (attr != null) {
+                dirty = false;
+
+                if (attr instanceof AttrCode) {
+                    traverseAndFilter((AttrCode) attr);
+                } else {
+                    br.refresh(attr.getRawData());
+                    bw.clear();
+                    visit(cw);
+                    if (dirty) {
+                        byte[] slice = new byte[bw.wIndex() - 6];
+                        System.arraycopy(bw.list, 6, slice, 0, slice.length);
+                        ((AttrUnknown) attr).setRawData(new ByteList(slice));
+                    }
+                }
+            }
+        }
+
+        //attributeVisitor.cw = cw = attributeVisitor.cp = cp = null;
+    }
+
+    private static boolean traverseAndFilter(AttrCode attr) {
+        boolean dirty = false;
+        // 有时间了把Interpreter改成二进制模式
+        InsnList insn = attr.instructions;
+        for (int i = 0; i < insn.size(); i++) {
+            InsnNode node = insn.get(i);
+            if (node.nodeType() == InsnNode.T_INVOKE) {
+                InvokeInsnNode node1 = (InvokeInsnNode) node;
+                if (node1.owner.equals("java/lang/Runtime")) {
+                    if (node1.name.equals("exit") || node1.name.equals("halt")) {
+                        dirty = true;
+                        node1.owner = callbackOwner;
+                        node1.name = node1.name.equals("exit") ? "runtimeExitCalled" : "runtimeHaltCalled";
+                        node1.fullDesc("(Ljava/lang/Runtime;I)V");
+                    }
+                }
+            }
+        }
+
+        if (dirty) {
+           // attr.interpretFlags = AttrCode.COMPUTE_FRAMES;
+        }
+        return dirty;
+    }
+
+    String clsName, mName, mDesc;
 
     @Override
     public void invoke(byte code, CstRef method) {
@@ -129,7 +164,7 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
                         warn();
                         bw.put(Opcodes.INVOKESTATIC)
                           .putShort(cw.getMethodRefId(callbackOwner,
-                                                      name.equals("exit") ? "runtimeExitCalled" : "runtimeHaltCalled", "(I)V"));
+                                                      name.equals("exit") ? "runtimeExitCalled" : "runtimeHaltCalled", "(Ljava/lang/Runtime;I)V"));
                         dirty = true;
                         return;
                 }
@@ -139,47 +174,22 @@ public class TerminalTransformer extends CodeVisitor implements ContextClassTran
     }
 
     private void warn() {
-        if (warn) {
-            FMLLog.log.warn("=============================================================");
-            FMLLog.log.warn("不允许MOD直接退出JAVA!");
-            FMLLog.log.warn("来自: {}.{}{}", clsName, mName, mDesc);
-            FMLLog.log.warn("请使用 FMLCommonHandler.exitJava();");
-            FMLLog.log.warn("=============================================================");
-        }
+        FMLLog.log.warn("=============================================================");
+        FMLLog.log.warn("不允许MOD直接退出JAVA!");
+        FMLLog.log.warn("来自: {}.{}{}", clsName, mName, mDesc);
+        FMLLog.log.warn("请使用 FMLCommonHandler.exitJava();");
+        FMLLog.log.warn("=============================================================");
     }
 
-    private boolean dirty, warn;
+    private boolean dirty;
 
-    private static final String callbackOwner = ParamHelper.class2asm(TerminalTransformer.class);
+    private static final String callbackOwner = "net.minecraftforge.fml.common.asm.transformers.TerminalTransformer$ExitVisitor".replace('.', '/');
 
-    public void check(String clsName) {
-        warn = (!clsName.equals("net/minecraft/client/Minecraft") && !clsName.equals("net/minecraft/server/dedicated/DedicatedServer") && !clsName
-                .equals("net/minecraft/server/dedicated/ServerHangWatchdog") && !clsName.equals("net/minecraft/server/dedicated/ServerHangWatchdog$1") && !clsName
-                .equals("net/minecraftforge/fml/common/FMLCommonHandler") && !clsName.startsWith("com/jcraft/jogg/") && !clsName
-                .startsWith("scala/sys/") && !clsName.startsWith("net/minecraft/server/gui/MinecraftServerGui") && !clsName
-                .startsWith("com/sun/jna/"));
-    }
-
-    public static void systemExitCalled(int status) {
-        checkAccess();
-        System.exit(status);
-    }
-
-    public static void runtimeExitCalled(Runtime runtime, int status) {
-        checkAccess();
-        runtime.exit(status);
-    }
-
-    public static void runtimeHaltCalled(Runtime runtime, int status) {
-        checkAccess();
-        runtime.halt(status);
-    }
-
-    private static void checkAccess() {
-        StackTraceElement[] cause = Thread.currentThread().getStackTrace();
-        String callingClass = (cause.length > 2) ? cause[3].getClassName() : "none";
-        String callingParent = (cause.length > 3) ? cause[4].getClassName() : "none";
-        if (!(callingClass.startsWith("net.minecraftforge.fml.") || (callingClass.equals("net.minecraft.client.Minecraft") && callingParent.equals("net.minecraft.client.Minecraft")) || (callingClass.equals("net.minecraft.server.gui.MinecraftServerGui$1") && callingParent.equals("java.awt.AWTEventMulticaster")) || (callingClass.equals("net.minecraft.server.dedicated.DedicatedServer") && callingParent.equals("net.minecraft.server.MinecraftServer")) || callingClass.equals("net.minecraft.server.dedicated.ServerHangWatchdog") || callingClass.equals("net.minecraft.server.dedicated.ServerHangWatchdog$1")))
-            throw new FMLSecurityManager.ExitTrappedException();
+    public boolean check(String clsName) {
+        return (!clsName.equals("net.minecraft.client.Minecraft") && !clsName.equals("net.minecraft.server.dedicated.DedicatedServer") && !clsName
+                .equals("net.minecraft.server.dedicated.ServerHangWatchdog") && !clsName.equals("net.minecraft.server.dedicated.ServerHangWatchdog$1") && !clsName
+                .equals("net.minecraftforge.fml.common.FMLCommonHandler") && !clsName.startsWith("com.jcraft.jogg.") && !clsName
+                .startsWith("scala.sys.") && !clsName.startsWith("net.minecraft.server.gui.MinecraftServerGui") && !clsName
+                .startsWith("com.sun.jna."));
     }
 }

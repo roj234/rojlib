@@ -31,4 +31,6 @@ package ilib.client.model;
  */
 public abstract class ModelInfo {
     ModelInfo() {}
+
+    public abstract void apply();
 }

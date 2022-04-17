@@ -28,14 +28,15 @@ package ilib.api.registry;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
+
 import net.minecraft.block.properties.IProperty;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-/**
+
+/**
  * No description provided
  *
  * @author Roj234
@@ -104,7 +105,7 @@ public class BlockPropTyped<T extends Propertied<T>> implements IProperty<T>, IR
 
     @Nonnull
     @Override
-    public Collection<T> getAllowedValues() {
+    public List<T> getAllowedValues() {
         return this.allowedValues;
     }
 

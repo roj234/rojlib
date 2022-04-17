@@ -48,7 +48,7 @@ public class ClassReplacer implements IClassTransformer {
             return basicClass;
 
         if ((Config.debug & 2) != 0) {
-            System.out.println("Replaced class " + trName + "(" + name + ')');
+            Loader.logger.info("CL替换 " + trName + "(" + name + ')');
         }
 
         return list.remove(trName);

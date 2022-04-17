@@ -40,11 +40,9 @@ import java.util.List;
 public interface ComponentListener {
     int BUTTON_CLICKED = 0, TEXT_CHANGED = 1, SLIDER_MOVED = 2;
 
-    default void componentAdded(Component c) {}
+    default void componentInit(Component c) {}
 
     default void actionPerformed(Component c, int action) {}
-
-    default void keyTyped(Component c, char character, int keyCode) {}
 
     default void mouseDown(Component c, int mouseX, int mouseY, int button) {}
 

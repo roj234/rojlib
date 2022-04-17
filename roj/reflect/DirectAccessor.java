@@ -718,7 +718,7 @@ public class DirectAccessor<T> {
                 }
             }
 
-            int size = useCache || isStatic == 1 ? 0 : 1;
+            int size = useCache || isStatic != 0 ? 0 : 1;
             int j = size;
             for (Class<?> param : params) {
                 String tag = NodeHelper.XPrefix(param);
@@ -736,7 +736,14 @@ public class DirectAccessor<T> {
             code.stackSize = (char) Math.max(size + isStatic, 1);
             code.localSize = (char) (size + 1);
 
-            insn.add(new InvokeInsnNode(isStatic == 1 ? Opcodes.INVOKESTATIC : (flags != null && flags.contains(i) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), tName, tm.getName(), tDesc));
+            if (isStatic != 0) {
+                insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, tName, tm.getName(), tDesc));
+            } else if (target.isInterface()) {
+                insn.add(new InvokeItfInsnNode(tName, tm.getName(), tDesc));
+            } else {
+                insn.add(new InvokeInsnNode((flags != null && flags.contains(i) ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), tName, tm.getName(), tDesc));
+            }
+
             insn.add(NodeHelper.X_RETURN(NodeHelper.XPrefix(tm.getReturnType())));
         }
         return this;
@@ -976,15 +983,15 @@ public class DirectAccessor<T> {
         return this;
     }
 
-    public final DirectAccessor<T> i_delegate(String target, String name, String desc, String self, boolean isStatic, boolean isDirect) {
+    public final DirectAccessor<T> i_delegate(String target, String name, String desc, String self, byte opcode) {
         Method m = methodByName.remove(self);
         if (m == null) {
             throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
         }
-        return i_delegate(target, name, desc, m, isStatic, isDirect);
+        return i_delegate(target, name, desc, m, opcode);
     }
 
-    public final DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, boolean isStatic, boolean isDirect) {
+    public final DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, byte opcode) {
         target = target.replace('.', '/');
 
         String sDesc = ParamHelper.class2asm(self.getParameterTypes(), self.getReturnType());
@@ -996,6 +1003,7 @@ public class DirectAccessor<T> {
 
         InsnList insn = code.instructions;
 
+        boolean isStatic = opcode == Opcodes.INVOKESTATIC;
         if (!isStatic) {
             insn.add(NPInsnNode.of(Opcodes.ALOAD_1));
         }
@@ -1017,7 +1025,13 @@ public class DirectAccessor<T> {
         code.stackSize = (char) Math.max(size + (isStatic ? 1 : 0), 1);
         code.localSize = (char) (size + 1);
 
-        insn.add(new InvokeInsnNode(isStatic ? Opcodes.INVOKESTATIC : (isDirect ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL), target, self.getName(), desc));
+        if (isStatic) {
+            insn.add(new InvokeInsnNode(Opcodes.INVOKESTATIC, target, self.getName(), desc));
+        } else if (opcode == Opcodes.INVOKEINTERFACE) {
+            insn.add(new InvokeItfInsnNode(target, self.getName(), desc));
+        } else {
+            insn.add(new InvokeInsnNode(opcode, target, self.getName(), desc));
+        }
         insn.add(NodeHelper.X_RETURN(NodeHelper.XPrefix(self.getReturnType())));
 
         if(sb != null) {

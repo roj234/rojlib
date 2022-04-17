@@ -25,9 +25,9 @@
  */
 package ilib.asm.nixim;
 
-import ilib.asm.util.MCHooks;
-import net.minecraft.entity.Entity;
-import net.minecraft.world.World;
+import ilib.asm.Loader;
+import ilib.asm.util.ICreator;
+import ilib.misc.MCHooks;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -35,6 +35,9 @@ import roj.asm.nixim.Shadow;
 import roj.collect.ToIntMap;
 import roj.reflect.DirectAccessor;
 import roj.util.Helpers;
+
+import net.minecraft.entity.Entity;
+import net.minecraft.world.World;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -52,7 +55,7 @@ class FastEntityConst {
     Class<? extends Entity> cls;
 
     @Copy
-    static MCHooks.ICreator entityCreator;
+    static ICreator         entityCreator;
     @Copy
     static ToIntMap<String> entityCreatorId;
     @Copy(staticInitializer = "initEC")
@@ -62,10 +65,10 @@ class FastEntityConst {
         try {
             entityCache = new RandomAccessFile("Implib_FEC.bin", "rw");
             ToIntMap<String> map = entityCreatorId = new ToIntMap<>();
-            MCHooks.ICreator creator = (MCHooks.ICreator) MCHooks.batchGenerate(entityCache, true, map);
+            ICreator creator = (ICreator) MCHooks.batchGenerate(entityCache, true, map);
             if (creator != null) {
                 entityCreator = creator;
-                System.out.println("使用BatchGen节省了 " + map.size() + " 个无用的class");
+                Loader.logger.info("使用BatchGen节省了 " + map.size() + " 个无用的class");
             }
             entityCache.seek(0);
             entityCache.writeInt(0);
@@ -87,7 +90,7 @@ class FastEntityConst {
         Object o;
         int i = entityCreatorId.getOrDefault(cls.getName(), -1);
         if (i >= 0) {
-            ((MCHooks.ICreator) (o = entityCreator.clone())).setId(i);
+            ((ICreator) (o = entityCreator.clone())).setId(i);
         } else {
             o = DirectAccessor.builder(Function.class).construct(cls, "apply", World.class).build();
         }

@@ -2,6 +2,7 @@ package ilib.gui.comp;
 
 import ilib.ClientProxy;
 import ilib.client.RenderUtils;
+import ilib.gui.DefaultSprites;
 import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
 import ilib.gui.util.ComponentListener;
@@ -29,7 +30,7 @@ public class GSlider extends SimpleComponent {
     private float prevPercent;
     private int prevX;
 
-    protected NinePatchRenderer buttonModel = GButtonNP.MODEL_2;
+    protected NinePatchRenderer buttonModel = DefaultSprites.BUTTON_B;
 
     public GSlider(IGui parent, int x, int y, int w, int h, float percent) {
         super(parent, x, y, w, h);
@@ -79,7 +80,7 @@ public class GSlider extends SimpleComponent {
     }
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {
+    public void render2(int mouseX, int mouseY) {
         if (label != null) {
             FontRenderer fr = ClientProxy.mc.fontRenderer;
 

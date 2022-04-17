@@ -255,7 +255,7 @@ public class SimpleLineReader implements Iterable<String>, AutoCloseable, Iterat
                 case '\n':
                     if (i > prev+r || !cleanEmpty) {
                         lineNumber++;
-                        if (lines-- == 0) {
+                        if (lines-- <= 0) {
                             CharSequence seq = prev == i ? "" : keys.subSequence(prev, i - r);
                             index = i+1;
                             cur = seq.toString();
@@ -270,7 +270,7 @@ public class SimpleLineReader implements Iterable<String>, AutoCloseable, Iterat
 
         if (i > prev || !cleanEmpty) {
             lineNumber++;
-            if (lines-- == 0) {
+            if (lines-- <= 0) {
                 CharSequence seq = prev == i ? "" : keys.subSequence(prev, i);
                 index = i+1;
                 cur = seq.toString();

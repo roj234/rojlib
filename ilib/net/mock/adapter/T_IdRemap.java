@@ -1,12 +1,11 @@
 package ilib.net.mock.adapter;
 
-import ilib.asm.util.VarIntEncoder;
+import ilib.asm.nixim.VarIntEncoder;
 import ilib.net.mock.MockingUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import roj.util.ByteList;
-
 import net.minecraft.network.PacketBuffer;
+import roj.util.ByteList;
 
 /**
  * @author solo6975

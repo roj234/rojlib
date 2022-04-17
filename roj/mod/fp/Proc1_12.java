@@ -197,6 +197,10 @@ public final class Proc1_12 extends Processor {
                         Map<String, String> origPM = new MyHashMap<>(1000);
                         helper.parseMCP(mcpPackFile, origPM);
                         helper.MCP_optimizeParamMap(origPM, paramMap);
+                        File override = new File(BASE, "util/override.cfg");
+                        if (override.isFile()) {
+                            helper.applyOverride(override);
+                        }
                         helper.extractMcp2Srg_MCP(mcpSrgPath);
                     } catch (IOException e) {
                         CmdUtil.error("generateMcpSrg()失败", e);

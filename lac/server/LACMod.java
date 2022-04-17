@@ -71,10 +71,10 @@ public class LACMod {
 
     static {
         try {
-            NiximProxy.read(IOUtil.read(LACMod.class, "lac/server/nixim/NxC00Handshake.class"));
+            NiximProxy.Nx(IOUtil.read(LACMod.class, "lac/server/nixim/NxC00Handshake.class"));
             if (Config.ENCRYPT_IV.length > 0)
-                NiximProxy.read(IOUtil.read(LACMod.class, "lac/server/nixim/NxEncryption.class"));
-            NiximProxy.read(IOUtil.read(LACMod.class, "lac/server/nixim/NxNetworkMgr.class"));
+                NiximProxy.Nx(IOUtil.read(LACMod.class, "lac/server/nixim/NxEncryption.class"));
+            NiximProxy.Nx(IOUtil.read(LACMod.class, "lac/server/nixim/NxNetworkMgr.class"));
             ClassReplacer.add(
                     "net.minecraftforge.fml.common.network.handshake.FMLHandshakeServerState",
                     IOUtil.read(LACMod.class, "lac/server/nixim/NxFMLHS_S.class"));

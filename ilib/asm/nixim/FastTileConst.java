@@ -27,15 +27,10 @@ package ilib.asm.nixim;
 
 import ilib.Config;
 import ilib.ImpLib;
-import ilib.asm.util.MCHooks;
-import ilib.asm.util.TileEntityCreator;
+import ilib.asm.Loader;
+import ilib.asm.util.ICreator;
+import ilib.misc.MCHooks;
 import ilib.util.freeze.FreezedTileEntity;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.registry.RegistryNamespaced;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.common.FMLLog;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -43,6 +38,14 @@ import roj.asm.nixim.Shadow;
 import roj.collect.MyHashMap;
 import roj.collect.ToIntMap;
 import roj.reflect.DirectAccessor;
+
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.registry.RegistryNamespaced;
+import net.minecraft.world.World;
+
+import net.minecraftforge.fml.common.FMLLog;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -55,23 +58,23 @@ import java.util.Map;
 @Nixim("net.minecraft.tileentity.TileEntity")
 abstract class FastTileConst extends TileEntity {
     @Copy
-    static Map<String, ilib.asm.util.TileEntityCreator> tileEntityCreator;
+    static Map<String, ICreator> tileEntityCreator;
     @Copy(staticInitializer = "initTC")
-    static RandomAccessFile tileCache;
+    static RandomAccessFile      tileCache;
 
     static void initTC() {
         tileEntityCreator = new MyHashMap<>();
         try {
             tileCache = new RandomAccessFile("Implib_FTC.bin", "rw");
             ToIntMap<String> map = new ToIntMap<>();
-            TileEntityCreator creator = (TileEntityCreator) MCHooks.batchGenerate(tileCache, false, map);
+            ICreator creator = (ICreator) MCHooks.batchGenerate(tileCache, false, map);
             if (creator != null) {
                 for (ToIntMap.Entry<String> entry : map.selfEntrySet()) {
-                    TileEntityCreator c = (TileEntityCreator) creator.clone();
+                    ICreator c = (ICreator) creator.clone();
                     c.setId(entry.v);
                     tileEntityCreator.put(entry.k, c);
                 }
-                System.out.println("使用BatchGen节省了 " + map.size() + " 个无用的class");
+                Loader.logger.info("使用BatchGen节省了 " + map.size() + " 个无用的class");
             }
             tileCache.seek(0);
             tileCache.writeInt(0);
@@ -106,11 +109,11 @@ abstract class FastTileConst extends TileEntity {
 
         TileEntity tile = null;
         try {
-            TileEntityCreator supplier = tileEntityCreator.get(id);
+            ICreator supplier = tileEntityCreator.get(id);
             if (supplier == null) {
                 Class<? extends TileEntity> tileCz = REGISTRY.getObject(new ResourceLocation(id));
                 if (tileCz != null) {
-                    tileEntityCreator.put(id, supplier = DirectAccessor.builder(TileEntityCreator.class)
+                    tileEntityCreator.put(id, supplier = DirectAccessor.builder(ICreator.class)
                                                                        .construct(tileCz, "get")
                                                                        .build());
                 }

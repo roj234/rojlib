@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
 
 /**
  * @author Roj234
@@ -39,7 +38,7 @@ import java.security.NoSuchAlgorithmException;
 public final class SecureUtil {
     public static final String PROTOCOL = "TLS", KEY_FORMAT = "PKCS12", MANAGER_FORMAT = "SunX509";
 
-    private static SSLContext getSslContext(InputStream pkPath, InputStream caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
+    static SSLContext getSslContext(InputStream pkPath, InputStream caPath, char[] passwd, boolean serverSide) throws IOException, GeneralSecurityException {
         // 密钥管理器
         KeyManager[] kmf = null;
         if (serverSide) {
@@ -63,7 +62,7 @@ public final class SecureUtil {
         return ctx;
     }
 
-    private static TrustManager[] makeTrustManagers(InputStream caPath, char[] passwd) throws GeneralSecurityException, IOException {
+    static TrustManager[] makeTrustManagers(InputStream caPath, char[] passwd) throws GeneralSecurityException, IOException {
         KeyStore tks = KeyStore.getInstance(KEY_FORMAT);
         try (InputStream in = caPath) {
             tks.load(in, passwd);
@@ -85,12 +84,4 @@ public final class SecureUtil {
         return kmf.getKeyManagers();
     }
 
-    public static JavaSslFactory getSslFactory(SslConfig cfg) throws IOException, GeneralSecurityException {
-        SSLContext context = getSslContext(cfg.getPkPath(), cfg.getCaPath(), cfg.getPasswd(), cfg.isServerSide());
-        return new JavaSslFactory(context, cfg);
-    }
-
-    public static JavaSslFactory getClientDefault() throws NoSuchAlgorithmException {
-        return new JavaSslFactory(SSLContext.getDefault(), null);
-    }
 }

@@ -4,6 +4,10 @@ import ilib.ClientProxy;
 import ilib.world.saver.tag.AsyncPacket;
 import ilib.world.saver.tag.ITagGetter;
 import ilib.world.saver.tag.WailaTagGetter;
+import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import roj.concurrent.task.ExecutionTask;
+
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
@@ -11,13 +15,11 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import roj.concurrent.task.ExecutionTask;
 
 import java.util.Iterator;
 import java.util.List;
@@ -69,6 +71,7 @@ public class TagGetter {
 
     private static void findNearby() {
         nearbyTiles.clear();
+        nearbyEntities.clear();
 
         EntityPlayerSP me = ClientProxy.mc.player;
         WorldClient at = ClientProxy.mc.world;
@@ -86,9 +89,7 @@ public class TagGetter {
             List<Entity> entities = at
                 .getEntitiesWithinAABBExcludingEntity(me, new AxisAlignedBB(me.getPosition().add(16, 16, 16),
                                                                             me.getPosition().add(-16, -16, -16)));
-            for (int i = 0; i < entities.size(); i++) {
-                nearbyEntities.add(entities.get(i));
-            }
+            nearbyEntities.addAll(entities);
             System.err.println("正在追加附近的实体:" + nearbyEntities);
         }
     }

@@ -29,14 +29,13 @@ import roj.asm.tree.anno.Annotation;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
 public interface FastParser {
-    Set<String> getItf();
+    List<String> getItf();
 
     Map<String, List<Annotation>> getAnnotationMap();
 

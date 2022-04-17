@@ -34,8 +34,9 @@
 package ilib.gui.util;
 
 import ilib.client.RenderUtils;
+import ilib.gui.GuiHelper;
 import org.lwjgl.input.Mouse;
-import roj.math.Mat4f;
+import roj.math.Mat4x3f;
 import roj.math.Vec3f;
 
 /**
@@ -43,49 +44,43 @@ import roj.math.Vec3f;
  * @since 2022/4/2 17:08
  */
 public final class TrackballMC {
-    private final int button;
-    private final float radius;
+    private final int radius;
     private float sensitive;
 
     private boolean dragging;
 
     private Vec3f begin;
-    private Mat4f beginMat, mat = new Mat4f();
+    private Mat4x3f beginMat = new Mat4x3f(),
+                    mat = new Mat4x3f();
 
-    public TrackballMC(int button, float radius, float sensitive) {
-        this.button = button;
+    public TrackballMC(int radius, float sensitive) {
         this.radius = radius;
         this.sensitive = sensitive;
     }
 
     public void update(int mouseX, int mouseY) {
-        float mx = mouseX / radius * sensitive;
-        float my = mouseY / radius * sensitive;
-
-        boolean pressed = Mouse.isButtonDown(button);
+        boolean pressed = Mouse.isButtonDown(GuiHelper.RIGHT);
         if (!dragging) {
             if (pressed) {
                 dragging = true;
-                startDrag(mx, my);
+                startDrag(mouseX, mouseY);
             }
         } else if (!pressed) {
             dragging = false;
-            endDrag(mx, my);
+            endDrag(mouseX, mouseY);
         }
 
-        applyTransform(mx, my);
+        applyTransform(mouseX, mouseY);
     }
 
     public void followMouse(int mouseX, int mouseY) {
         begin = spherePoint(0.5f, 0.5f);
+        beginMat.makeIdentity();
 
-        float mx = mouseX / radius * sensitive;
-        float my = mouseY / radius * sensitive;
-        mat.makeIdentity();
-        mat = getTransform(mx, my);
+        mat = getTransform(mouseX, mouseY);
     }
 
-    public void setTransform(Mat4f transform) {
+    public void setTransform(Mat4x3f transform) {
         mat = transform;
     }
 
@@ -99,10 +94,13 @@ public final class TrackballMC {
         return result;
     }
 
-    public Mat4f getTransform(float mouseX, float mouseY) {
+    public Mat4x3f getTransform(int mouseX, int mouseY) {
         if (begin == null) return mat;
 
-        Vec3f current = spherePoint(mouseX, mouseY);
+        float mx = mouseX / (float)radius * sensitive;
+        float my = -mouseY / (float)radius * sensitive;
+
+        Vec3f current = spherePoint(mx, my);
 
         float dot = begin.dot(current);
         if (Math.abs(dot - 1) < 1e-4) return mat;
@@ -117,16 +115,19 @@ public final class TrackballMC {
         return mat.set(beginMat).rotate(current, angle);
     }
 
-    public void applyTransform(float mouseX, float mouseY) {
+    public void applyTransform(int mouseX, int mouseY) {
         RenderUtils.loadMatrix(getTransform(mouseX, mouseY));
     }
 
-    public void startDrag(float mouseX, float mouseY) {
-        begin = spherePoint(mouseX, mouseY);
-        beginMat = new Mat4f(mat);
+    public void startDrag(int mouseX, int mouseY) {
+        float mx = mouseX / (float)radius * sensitive;
+        float my = -mouseY / (float)radius * sensitive;
+
+        begin = spherePoint(mx, my);
+        beginMat.set(mat);
     }
 
-    public void endDrag(float mouseX, float mouseY) {
+    public void endDrag(int mouseX, int mouseY) {
         mat = getTransform(mouseX, mouseY);
         begin = null;
     }

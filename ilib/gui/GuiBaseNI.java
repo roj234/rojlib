@@ -45,6 +45,9 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 
+import net.minecraftforge.client.event.GuiScreenEvent;
+import net.minecraftforge.common.MinecraftForge;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -61,7 +64,8 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
     protected GuiListener listener;
 
     protected List<Component> components = new SimpleList<>();
-    private List<Component> clicked = new SimpleList<>(), prev;
+    private final List<Component>[] clicked = GuiHelper.createClickedComponentList();
+    private List<Component> prev;
 
     protected void setImageSize(int w, int h) {
         this.texX = w;
@@ -93,11 +97,17 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
         }
 
         prev = null;
-        components.clear();
-        addComponents();
+
+        init();
+
         for (int i = 0; i < components.size(); i++) {
             components.get(i).onInit();
         }
+    }
+
+    protected void init() {
+        components.clear();
+        addComponents();
     }
 
     protected abstract void addComponents();
@@ -170,6 +180,7 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
 
         if (listener != null) listener.mouseDown(x, y, button);
 
+        List<Component> clicked = this.clicked[button];
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             if (com.isMouseOver(x, y)) {
@@ -188,6 +199,7 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
 
         if (listener != null) listener.mouseUp(x, y, button);
 
+        List<Component> clicked = this.clicked[button];
         for (int i = 0; i < clicked.size(); i++) {
             clicked.get(i).mouseUp(x, y, button);
         }
@@ -201,6 +213,7 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
 
         if (listener != null) listener.mouseDrag(x, y, button, time);
 
+        List<Component> clicked = this.clicked[button];
         for (int i = 0; i < clicked.size(); i++) {
             clicked.get(i).mouseDrag(x, y, button, time);
         }
@@ -243,6 +256,13 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
 
     protected void drawBackgroundImage() {
         drawWorldBackground(0);
+
+        if (tex != Component.TEXTURE) {
+            RenderUtils.bindTexture(tex);
+            RenderUtils.fastRect(guiLeft, guiTop, 0, 0, xSize, ySize);
+        }
+
+        MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.BackgroundDrawnEvent(this));
     }
 
     public boolean doesGuiPauseGame() {
@@ -258,17 +278,20 @@ public abstract class GuiBaseNI extends GuiScreen implements IGui {
         GlStateManager.translate(guiLeft, guiTop, 0);
         GlStateManager.enableDepth();
 
-        GuiHelper.renderBackground(x - guiLeft, y - guiTop, components);
+        x -= guiLeft;
+        y -= guiTop;
+
+        GuiHelper.renderBackground(x, y, components);
 
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
-            if (com.isMouseOver(x - guiLeft, y - guiTop)) {
-                com.renderToolTip(x, y);
+            if (com.isMouseOver(x, y)) {
+                com.renderTooltip(x, y, x, y);
             }
         }
 
         this.drawGuiContainerForegroundLayer(x, y);
-        GuiHelper.renderForeground(x - guiLeft, y - guiTop, components);
+        GuiHelper.renderForeground(x, y, components);
 
         GlStateManager.popMatrix();
     }

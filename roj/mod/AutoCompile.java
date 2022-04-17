@@ -5,6 +5,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.ui.CmdUtil;
 
+import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.mod.Shared.DEBUG;
@@ -69,47 +70,62 @@ final class AutoCompile extends Thread {
             if (DEBUG) System.out.println("[AC] 等待项目初始化");
             LockSupport.park();
         }
-        ext:
+
         while (true) {
             LockSupport.park();
             if (!enable) {
                 if (DEBUG) System.out.println("[AC] 关闭");
             } else {
                 Project p = Shared.project;
-                MyHashSet<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
-                if (set.contains(null) || set.isEmpty()) {
-                    if (set.contains(null))
-                        if (DEBUG) System.out.println("[AC] 未注册监听器");
+                List<Project> dependencies = p.getAllDependencies();
+                if (dependencies.isEmpty()) {
+                    checkAndCompile(p);
                 } else {
-                    if (Debounce > 0) {
-                        tmp1.clear(); tmp1.addAll(set);
-
-                        long lastTime = System.currentTimeMillis() + Debounce;
-                        do {
-                            if (!enable || p != Shared.project) continue ext;
-                            LockSupport.parkUntil(lastTime);
-                        } while (System.currentTimeMillis() < lastTime);
-
-                        set = Shared.watcher.getModified(Shared.project, IFileWatcher.ID_SRC);
-                        tmp2.clear(); tmp2.addAll(set);
-                        if (!tmp1.equals(tmp2)) {
-                            LockSupport.unpark(this);
-                            continue;
+                    dependencies.add(p);
+                    for (int i = dependencies.size() - 1; i >= 0; i--) {
+                        if (checkAndCompile(dependencies.get(i))) {
+                            break;
                         }
                     }
-
-                    MyHashMap<String, Object> ojbk = new MyHashMap<>(4);
-                    ojbk.put("zl", "");
-                    try {
-                        selfTrigger = true;
-                        FMDMain.build(ojbk);
-                        if (DEBUG) CmdUtil.success("[AC] Done");
-                    } catch (Throwable e) {
-                        CmdUtil.error("自动编译出错", e);
-                    }
-                    selfTrigger = false;
                 }
             }
         }
+    }
+
+    private boolean checkAndCompile(Project p) {
+        MyHashSet<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
+        if (set.contains(null) || set.isEmpty()) {
+            if (set.contains(null)) if (DEBUG) System.out.println("[AC] 未注册监听器");
+            return false;
+        } else {
+            if (Debounce > 0) {
+                tmp1.clear(); tmp1.addAll(set);
+
+                long lastTime = System.currentTimeMillis() + Debounce;
+                do {
+                    if (!enable) return true;
+                    LockSupport.parkUntil(lastTime);
+                } while (System.currentTimeMillis() < lastTime);
+
+                set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
+                tmp2.clear(); tmp2.addAll(set);
+                if (!tmp1.equals(tmp2)) {
+                    LockSupport.unpark(this);
+                    return true;
+                }
+            }
+
+            MyHashMap<String, Object> ojbk = new MyHashMap<>(4);
+            ojbk.put("zl", "");
+            try {
+                selfTrigger = true;
+                FMDMain.build(ojbk);
+                if (DEBUG) CmdUtil.success("[AC] Done");
+            } catch (Throwable e) {
+                CmdUtil.error("自动编译出错", e);
+            }
+            selfTrigger = false;
+        }
+        return true;
     }
 }

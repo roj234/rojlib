@@ -42,6 +42,11 @@ public final class AnnValEnum extends AnnVal {
 
     public String clazz, value;
 
+    @Override
+    public AnnValEnum asEnum() {
+        return this;
+    }
+
     public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) ENUM)
          .putShort(pool.getUtfId("L" + this.clazz + ';'))

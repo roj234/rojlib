@@ -35,9 +35,7 @@ import net.minecraft.item.ItemStack;
  * @since  2021/1/13 13:03
  */
 public class SlotFlagged extends Slot {
-    public static int UPDATE = 1, NO_TAKE = 2, NO_PUT = 4, NO_DISPLAY = 8;
-
-    public static SlotFlagged DISABLED_SLOT = new SlotFlagged(null, 0, 0, 0, NO_DISPLAY);
+    public static final int UPDATE = 1, NO_TAKE = 2, NO_PUT = 4, NO_DISPLAY = 8;
 
     protected int flag;
 

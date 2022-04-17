@@ -53,7 +53,7 @@ public final class EWDump {
             List<Method> methods = clz.methods;
             for (int i = 0; i < methods.size(); i++) {
                 Method m = methods.get(i);
-                m.attributes.clear();
+                m.attributes().clear();
                 m.code.attributes.clear();
             }
             ConstantData cData = Parser.parseConstants(Parser.toByteArrayShared(clz));

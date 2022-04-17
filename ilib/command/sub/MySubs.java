@@ -27,8 +27,8 @@ package ilib.command.sub;
 
 import ilib.Config;
 import ilib.ImpLib;
-import ilib.asm.util.MCHooks;
 import ilib.client.TextureHelper;
+import ilib.misc.MCHooks;
 import ilib.misc.ps.Cheat;
 import ilib.util.Colors;
 import ilib.util.DimensionHelper;
@@ -70,13 +70,6 @@ import java.util.Set;
  */
 public abstract class MySubs extends AbstractSubCommand {
     static LongMap<Object> generatedChunks;
-
-    public static final MySubs CLEAR = new MySubs("clear_item") {
-        public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-            // world/* mob/entity/item
-            server.getCommandManager().executeCommand(sender, "kill @e[type=item]");
-        }
-    };
 
     public static final MySubs REGEN = new MySubs("regenLoadedChunks") {
         public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
@@ -237,7 +230,7 @@ public abstract class MySubs extends AbstractSubCommand {
         }
     };
 
-    public static MySubs DUMP_GL_INFO, RELOAD_TEXTURE, PACKAGE_SIMULATOR;
+    public static MySubs DUMP_GL_INFO, RELOAD_TEXTURE, PACKET_SIMULATOR;
 
     static {
         if (ImpLib.isClient)
@@ -262,7 +255,7 @@ public abstract class MySubs extends AbstractSubCommand {
 
         if ((Config.debug & 128) == 0) return;
 
-        PACKAGE_SIMULATOR = Cheat.getPrimaryCommand();
+        PACKET_SIMULATOR = Cheat.getPrimaryCommand();
     }
 
     private final String name, help;

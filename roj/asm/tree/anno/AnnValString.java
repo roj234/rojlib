@@ -40,6 +40,11 @@ public final class AnnValString extends AnnVal {
 
     public String value;
 
+    @Override
+    public String asString() {
+        return value;
+    }
+
     public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) STRING)
          .putShort(pool.getUtfId(value));

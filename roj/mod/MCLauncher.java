@@ -37,7 +37,6 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
-import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.Waitable;
 import roj.concurrent.task.AbstractExecutionTask;
@@ -54,8 +53,8 @@ import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.io.down.Downloader;
+import roj.io.down.MTDAsyncProgress;
 import roj.io.down.MTDProgress;
-import roj.io.down.STDProgress;
 import roj.math.Version;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -63,14 +62,15 @@ import roj.text.UTFCoder;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
-import roj.util.Helpers;
 import roj.util.OS;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -79,7 +79,6 @@ import java.util.List;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.jar.Manifest;
 import java.util.regex.Pattern;
@@ -112,7 +111,7 @@ public class MCLauncher extends JFrame {
         Shared.watcher.terminate();
 
         activeWindow = new MCLauncher();
-        activeWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        activeWindow.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     }
 
     public MCLauncher() {
@@ -264,22 +263,10 @@ public class MCLauncher extends JFrame {
     // endregion
     // region waiter
 
-    private static TaskExecutor waiter;
     public static final int TIMEOUT_TIME = 60000;
-    public static PrintStream waitOut;
 
     private static void waitFor(ITask task) {
-        if(waiter == null) {
-            waiter = new TaskExecutor();
-            waiter.setDaemon(true);
-            waiter.start();
-        }
-
         long str = System.currentTimeMillis();
-
-        if(waitOut == null) {
-            waitOut = System.out;
-        }
 
         boolean skip = false;
         do {
@@ -292,8 +279,7 @@ public class MCLauncher extends JFrame {
                     if (task != null) task.cancel(true);
                     return;
                 }
-                if(r == 1)
-                    skip = true;
+                if(r == 1) skip = true;
                 str = System.currentTimeMillis();
             }
 
@@ -304,7 +290,9 @@ public class MCLauncher extends JFrame {
         if(activeWindow == null) return 1;
 
         Object[] options = { "继续等", "不等了", "不再提示" };
-        int m = JOptionPane.showOptionDialog(activeWindow, "等了一分钟了，还没下完", "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        int m = JOptionPane.showOptionDialog(activeWindow, "等了一分钟了，还没下完\n" +
+            "然后插句嘴，如果你觉得下的太慢了，直接关闭窗口好了\n" +
+            "我们会实时保存下载进度", "询问", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 
         switch (m) {
             case JOptionPane.YES_OPTION: // con
@@ -443,8 +431,6 @@ public class MCLauncher extends JFrame {
         assets = new File(assets, "/objects/");
         CharList tmp = new CharList();
 
-        STDProgress.noAvgSpeed = true;
-
         MyHashSet<String> hashes = new MyHashSet<>();
         DownMcFile manager = new DownMcFile();
 
@@ -473,16 +459,15 @@ public class MCLauncher extends JFrame {
                 val.put("url", mirrorB + url);
                 String url1 = replaceMirror(val, mirrorB);
 
-                manager.add(url, asset, val.getString("sha1"));
+                manager.add(url1, asset, val.getString("sha1"), null);
             }
         }
 
         int cnt = manager.entries.size();
         if(cnt > 0) {
-            waitFor(manager);
+            manager.setWaitable();
+            Task.pushTask(manager);
         }
-
-        STDProgress.noAvgSpeed = false;
 
         return cnt;
     }
@@ -693,16 +678,20 @@ public class MCLauncher extends JFrame {
                     CmdUtil.warning("无法创建临时目录 " + libraryPath.getAbsolutePath());
                 }
 
+                DownMcFile manager = new DownMcFile();
+
                 Map<String, Version> versions = new MyHashMap<>();
                 Map<String, String> libraries = new MyHashMap<>();
                 final String libUrl = cfgGen.getString("libraries地址");
                 for (CEntry entry : instConf.get("libraries").asList()) {
                     final CMapping data = entry.asMap();
-                    if (data.getString("name").startsWith("net.minecraftforge:forge:") && data.get("downloads").asMap().get("artifact").asMap().getString("url").isEmpty())
+                    if (data.getString("name").startsWith("net.minecraftforge:forge:") &&
+                        data.get("downloads").asMap().get("artifact").asMap().getString("url").isEmpty())
                         continue;
 
-                    detectLibrary(data, versions, libraryPath, null, libraries, libUrl, Task);
+                    detectLibrary(data, versions, libraryPath, null, libraries, libUrl, manager);
                 }
+                Task.pushTask(manager);
 
                 String tmp = libraryPath.getAbsolutePath() + File.separatorChar;
                 CharList cpTmp = new CharList(1000);
@@ -1495,9 +1484,11 @@ public class MCLauncher extends JFrame {
             File nativePath = (File) imArg.get("nativePath");
             File libraryPath = (File) imArg.get("libraryPath");
             TaskHandler handler = (TaskHandler) imArg.get("handler");
-            for (CEntry entry : list) {
-                detectLibrary(entry.asMap(), versions, libraryPath, nativePath, libraries, mirror, handler);
+            DownMcFile manager = new DownMcFile();
+            for (int i = 0; i < list.size(); i++) {
+                detectLibrary(list.get(i).asMap(), versions, libraryPath, nativePath, libraries, mirror, manager);
             }
+            handler.pushTask(manager);
         }
 
         String jarName = mapping.getString("jar");
@@ -1550,7 +1541,8 @@ public class MCLauncher extends JFrame {
         return new Object[] {jar, asset, mainClass, arg, ver, 0};
     }
 
-    private static void detectLibrary(CMapping data, Map<String, Version> versions, File libPath, File nativePath, Map<String, String> libraries, String mirror, TaskHandler handler) {
+    private static void detectLibrary(CMapping data, Map<String, Version> versions, File libPath, File nativePath,
+        Map<String, String> libraries, String mirror, DownMcFile task) {
         if(!isRuleFit(data.get("rules").asList())) {
             if(DEBUG)
                 CmdUtil.info(data.getString("name") + " 不符合加载规则" + data.get("rules").toShortJSON());
@@ -1642,7 +1634,7 @@ public class MCLauncher extends JFrame {
                 } : name.endsWith("log4j-core") ? () -> {
                     fixLog4j(libFile);
                 } : null;
-                downloadLibrary(downloads, mirror, libFile, handler, cb, classifiers, file);
+                downloadLibrary(downloads, mirror, libFile, task, cb, classifiers, file);
                 if(nt)
                     return;
             } else {
@@ -1674,9 +1666,7 @@ public class MCLauncher extends JFrame {
             byte[] b = mzf.get("org/apache/logging/log4j/core/lookup/JndiLookup.class");
             if (b != null) {
                 ConstantData data = Parser.parseConstants(b);
-                int i = data.getMethodByName("lookup");
-                Method mn = new Method(data, data.methods.get(i));
-                data.methods.set(i, Helpers.cast(mn));
+                Method mn = data.getUpgradedMethod("lookup");
 
                 InsnList insn = mn.code.instructions;
                 if (insn.size() > 3) {
@@ -1698,7 +1688,7 @@ public class MCLauncher extends JFrame {
         }
     }
 
-    private static void downloadLibrary(CMapping map, String mirror, File libFile, TaskHandler handler, Runnable cb, String classifiers, String libFileName) {
+    private static void downloadLibrary(CMapping map, String mirror, File libFile, DownMcFile task, Runnable cb, String classifiers, String libFileName) {
         File libParent = libFile.getAbsoluteFile().getParentFile();
         if(!libParent.isDirectory() && !libParent.mkdirs())
             throw new IllegalStateException("无法创建library保存文件夹  " + libParent.getAbsolutePath());
@@ -1723,24 +1713,11 @@ public class MCLauncher extends JFrame {
             artifact.put("url", map1.getString("协议") + (map1.getString("libraries地址").isEmpty() ? map1.getString("forge地址") : map1.getString("libraries地址")) + '/' + libFileName);
         }
 
-        if(handler != null) {
-            if (!libFile.exists()) {
-                String url = replaceMirror(artifact, mirror.isEmpty() ? null : mirror);
-                String sha1 = map.getString("sha1");
-                DownMcFile task = new DownMcFile();
-                task.add(url, libFile, sha1);
-                task.then(cb);
-                handler.pushTask(task);
-            }
-        } else {
-            try {
-                downloadMinecraftFile(artifact, libFile, mirror.isEmpty() ? null : mirror);
-            } catch (IOException e) {
-                throw new IllegalStateException("下载失败", e);
-            }
+        if (!libFile.exists()) {
+            String url = replaceMirror(artifact, mirror.isEmpty() ? null : mirror);
+            String sha1 = artifact.getString("sha1");
+            task.add(url, libFile, sha1, cb);
         }
-        if(cb != null)
-            cb.run();
     }
 
     private static boolean isRuleFit(CList rules) {
@@ -1935,7 +1912,7 @@ public class MCLauncher extends JFrame {
         if (!target.exists()) {
             CmdUtil.info("开始下载 " + url);
             DownMcFile man = new DownMcFile();
-            man.add(url, target, map.getString("sha1"));
+            man.add(url, target, map.getString("sha1"), null);
             man.run();
         }
     }
@@ -1957,7 +1934,7 @@ public class MCLauncher extends JFrame {
         if (!target.exists()) {
             CmdUtil.info("开始下载 " + url);
             DownMcFile man = new DownMcFile("md5");
-            man.add(url, target, md5);
+            man.add(url, target, md5, null);
             man.run();
         }
     }
@@ -1971,6 +1948,11 @@ public class MCLauncher extends JFrame {
     private static final class DownMcFile extends AbstractExecutionTask {
         private final List<Entry> entries = new ArrayList<>();
 
+        public void setWaitable() {
+            wait = true;
+            except = System.currentTimeMillis() + TIMEOUT_TIME;
+        }
+
         static final class Entry {
             final String url;
             final File target;
@@ -1979,22 +1961,26 @@ public class MCLauncher extends JFrame {
             int retry;
 
             Waitable future;
+            Runnable callback;
 
-            public Entry(String name, File file, String digest) {
+            public Entry(String name, File file, String digest, Runnable callback) {
                 this.url = name;
                 this.target = file;
                 if (digest != null)
                     digest = digest.toLowerCase();
                 this.digest = digest;
+                this.callback = callback;
             }
         }
 
         private final UTFCoder uc;
-        private Runnable onFinish;
         private MessageDigest DIG;
-        private long except;
+        private final MTDAsyncProgress hdr = new MTDAsyncProgress();
 
-        static final int maxTask = 16;
+        private long except;
+        private boolean wait;
+
+        static final int maxTask = CONFIG.getInteger("通用.最大同时下载数");
 
         public DownMcFile() {
             this("sha1");
@@ -2007,17 +1993,35 @@ public class MCLauncher extends JFrame {
             } catch (NoSuchAlgorithmException ignored) {}
         }
 
-        public void then(Runnable function) {
-            this.onFinish = function;
+        public void add(String url, File file, String hash, Runnable cb) {
+            entries.add(new Entry(url, file, hash, cb));
         }
 
-        public void add(String url, File file, String sha1) {
-            entries.add(new Entry(url, file, sha1));
+        void refresh() {
+            for (int i = 0; i < entries.size(); i++) {
+                try {
+                    Entry e = entries.get(i);
+                    if (e.future != null) {
+                        e.future.cancel();
+                        e.future = null;
+                    }
+                } catch (Exception ignored) {}
+            }
         }
 
         @Override
         public void calculate() {
-            if (except > 0) LockSupport.parkUntil(except);
+            if (wait && System.currentTimeMillis() > except) {
+                int r = ifBreakWait();
+                if(r == -1) {
+                    cancel(true);
+                    return;
+                }
+                if(r == 1) wait = false;
+                else refresh();
+                except = System.currentTimeMillis() + TIMEOUT_TIME;
+            }
+
             int count = 0;
             try {
                 for (int i = entries.size() - 1; i >= 0; i--) {
@@ -2026,7 +2030,11 @@ public class MCLauncher extends JFrame {
                         if (e.future.isDone()) {
                             try {
                                 e.future.waitFor();
-                                if (verifyFile(e)) entries.remove(i);
+                                e.future = null;
+                                if (verifyFile(e)) {
+                                    if (e.callback != null) e.callback.run();
+                                    entries.remove(i);
+                                }
                             } catch (Throwable ex) {
                                 handleError(e, ex);
                             }
@@ -2046,15 +2054,14 @@ public class MCLauncher extends JFrame {
                             continue;
                         }
                         try {
-                            e.future = Downloader.downloadMTD(e.url, e.target, null);
+                            e.future = Downloader.downloadMTD(e.url, e.target, hdr.subProgress());
                         } catch (Throwable ex) {
                             handleError(e, ex);
                         }
                     }
                 }
-                except = System.currentTimeMillis() + 100;
+                Thread.sleep(1);
                 if (!entries.isEmpty()) return;
-                if(onFinish != null) onFinish.run();
             } catch (Throwable e) {
                 exception = new ExecutionException(e);
             }
@@ -2077,7 +2084,10 @@ public class MCLauncher extends JFrame {
                     try {
                         e.future = Downloader.downloadMTD(e.url, e.target, new MTDProgress());
                         e.future.waitFor();
-                        if (verifyFile(e)) break;
+                        if (!verifyFile(e)) {
+                            entries.add(0, e);
+                        }
+                        break;
                     } catch (Throwable ex) {
                         handleError(e, ex);
                     }
@@ -2088,6 +2098,7 @@ public class MCLauncher extends JFrame {
         private boolean verifyFile(Entry e) throws IOException {
             if (e.target.isFile()) {
                 if (e.digest != null && !e.digest.isEmpty()) {
+                    DIG.reset();
                     try (FileInputStream in = new FileInputStream(e.target)) {
                         ByteList bb = IOUtil.getSharedByteBuf();
                         bb.ensureCapacity(4096);
@@ -2116,10 +2127,11 @@ public class MCLauncher extends JFrame {
                             return false;
                         }
                     } else {
-                        CmdUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕.");
+                        CmdUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕. (" + entries.size() + "剩余)");
                         return true;
                     }
                 }
+                return true;
             }
             return false;
         }
@@ -2142,12 +2154,7 @@ public class MCLauncher extends JFrame {
         @Override
         public boolean cancel(boolean force) {
             canceled = true;
-            for (int i = 0; i < entries.size(); i++) {
-                try {
-                    Entry e = entries.get(i);
-                    if (e.future != null) e.future.cancel();
-                } catch (Exception ignored) {}
-            }
+            refresh();
             entries.clear();
             return true;
         }

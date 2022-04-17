@@ -34,7 +34,7 @@ import roj.util.ByteList;
  * @since  2021/5/27 21:58
  */
 public final class Keyframe extends Mat4x3f {
-    public int time;
+    public int time, color;
 
     public Keyframe() {
         m00 = m11 = m22 = 1;
@@ -48,6 +48,7 @@ public final class Keyframe extends Mat4x3f {
     public Keyframe(Keyframe frame) {
         set(frame);
         time = frame.time;
+        color = frame.color;
     }
 
     public void set(byte type, float x, float y, float z) {
@@ -88,6 +89,7 @@ public final class Keyframe extends Mat4x3f {
 
     public void toByteArray(ByteList w) {
         w.putVarInt(time, false)
+         .putInt(color)
          .putFloat(m00)
          .putFloat(m01)
          .putFloat(m02)
@@ -105,6 +107,7 @@ public final class Keyframe extends Mat4x3f {
     public static Keyframe fromByteArray(ByteList r) {
         Keyframe kf = new Keyframe();
         kf.time = r.readVarInt(false);
+        kf.color = r.readInt();
         kf.m00 = r.readFloat();
         kf.m01 = r.readFloat();
         kf.m02 = r.readFloat();

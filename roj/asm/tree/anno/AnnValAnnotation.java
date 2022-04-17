@@ -40,6 +40,11 @@ public final class AnnValAnnotation extends AnnVal {
 
     public Annotation value;
 
+    @Override
+    public Annotation asAnnotation() {
+        return value;
+    }
+
     public void toByteArray(ConstantPool pool, ByteList w) {
         value.toByteArray(pool, w.put((byte) ANNOTATION));
     }

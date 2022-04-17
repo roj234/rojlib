@@ -1,5 +1,6 @@
 package ilib.gui.comp;
 
+import ilib.gui.DefaultSprites;
 import ilib.gui.IGui;
 import ilib.gui.util.NinePatchRenderer;
 
@@ -10,10 +11,7 @@ import ilib.gui.util.NinePatchRenderer;
 public class GButtonNP extends GButton {
     protected static int UV_NORMAL = 0, UV_HIGHLIGHT = 1, UV_CLICK = 2, UV_DISABLE = 3;
 
-    public static final NinePatchRenderer MODEL_1 = new NinePatchRenderer(2, TEXTURE);
-    public static final NinePatchRenderer MODEL_2 = new NinePatchRenderer(110, 0,2, 12, TEXTURE);
-
-    protected NinePatchRenderer buttonModel = MODEL_1;
+    protected NinePatchRenderer buttonModel = DefaultSprites.BUTTON_A;
 
     public GButtonNP(IGui parent, int x, int y, Object label) {
         super(parent, x, y, 0, 20, label);

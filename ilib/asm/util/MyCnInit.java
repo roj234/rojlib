@@ -32,10 +32,7 @@ import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
-import net.minecraft.network.EnumPacketDirection;
-import net.minecraft.network.NettyPacketDecoder;
-import net.minecraft.network.NettyPacketEncoder;
-import net.minecraft.network.NetworkManager;
+import net.minecraft.network.*;
 
 /**
  * @author Roj234
@@ -57,10 +54,10 @@ public class MyCnInit extends ChannelInitializer<Channel> {
         if (pa != null) {
             channel.pipeline()
                    .addLast("timeout", new ReadTimeoutHandler(Config.clientNetworkTimeout))
-                   .addLast("splitter", new VarIntDecoder())
+                   .addLast("splitter", new NettyVarint21FrameDecoder())
                    .addLast("decoder", new ILInboundMocker(pa))
                    .addLast("real_decoder", new NettyPacketDecoder(EnumPacketDirection.CLIENTBOUND))
-                   .addLast("prepender", new VarIntEncoder())
+                   .addLast("prepender", new NettyVarint21FrameEncoder())
                    .addLast("encoder", new ILOutboundMocker(pa))
                    .addLast("real_encoder", new NettyPacketEncoder(EnumPacketDirection.SERVERBOUND))
                    .addLast("packet_handler", new ILStateSniffer(pa))
@@ -68,9 +65,9 @@ public class MyCnInit extends ChannelInitializer<Channel> {
         } else {
             channel.pipeline()
                    .addLast("timeout", new ReadTimeoutHandler(Config.clientNetworkTimeout))
-                   .addLast("splitter", new VarIntDecoder())
+                   .addLast("splitter", new NettyVarint21FrameDecoder())
                    .addLast("decoder", new NettyPacketDecoder(EnumPacketDirection.CLIENTBOUND))
-                   .addLast("prepender", new VarIntEncoder())
+                   .addLast("prepender", new NettyVarint21FrameEncoder())
                    .addLast("encoder", new NettyPacketEncoder(EnumPacketDirection.SERVERBOUND))
                    .addLast("packet_handler", man);
         }

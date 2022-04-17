@@ -33,7 +33,6 @@
  */
 package ilib.util;
 
-import ilib.ImpLib;
 import org.lwjgl.input.Keyboard;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -41,10 +40,7 @@ import roj.text.JPinyin;
 import roj.text.TextUtil;
 import roj.util.EmptyArrays;
 
-import net.minecraft.client.resources.I18n;
-
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraft.util.text.translation.I18n;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -57,8 +53,8 @@ public class MCTexts {
         if (pinyin == null) {
             try {
                 pinyin = new JPinyin(IOUtil.readUTF("META-INF/pinyin/char_t2s_yin.txt"),
-                                     null,//IOUtil.readUTF("META-INF/pinyin/word_s2t.txt"),
-                                     null,//IOUtil.readUTF( "META-INF/pinyin/word_t2s.txt"),
+                                     IOUtil.readUTF("META-INF/pinyin/word_s2t.txt"),
+                                     IOUtil.readUTF( "META-INF/pinyin/word_t2s.txt"),
                                      IOUtil.readUTF("META-INF/pinyin/word_yin.txt"),
                                      -1);
             } catch (IOException e) {
@@ -70,30 +66,25 @@ public class MCTexts {
     }
 
     public static String format(String text, Object... param) {
-        if (ImpLib.isClient)
-            return _t(text, param);
-        return text.replace(".name", "");
+        text = I18n.translateToLocalFormatted(text, param);
+        if (!text.contains("\\n")) return text;
+        CharList tmp = IOUtil.getSharedCharBuf()
+                             .append(text)
+                             .replace("\\n", "\n");
+        return tmp.toString();
     }
 
     public static String format(String text) {
-        return format(text, EmptyArrays.OBJECTS);
+        text = I18n.translateToLocal(text);
+        if (!text.contains("\\n")) return text;
+        CharList tmp = IOUtil.getSharedCharBuf()
+                             .append(text)
+                             .replace("\\n", "\n");
+        return tmp.toString();
     }
 
     public static String format(boolean flag) {
         return format(flag ? "tooltip.true" : "tooltip.false", EmptyArrays.OBJECTS);
-    }
-
-    @SideOnly(Side.CLIENT)
-    private static String _t(String text, Object[] obj) {
-        text = I18n.format(text);
-        if (obj.length == 0 && !text.contains("\\n")) return text;
-        CharList tmp = IOUtil.getSharedCharBuf()
-                             .append(text)
-                             .replace("\\n", "\n");
-        for (int i = 0; i < obj.length; i++) {
-            tmp.replace("$" + i + "$s", String.valueOf(obj[i]));
-        }
-        return tmp.toString();
     }
 
     public static int getStringWidth(CharSequence s) {

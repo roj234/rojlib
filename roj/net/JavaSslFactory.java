@@ -31,6 +31,9 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.channels.SocketChannel;
+import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
 import java.util.function.Supplier;
 
 /**
@@ -44,6 +47,15 @@ public class JavaSslFactory implements SocketFactory, Supplier<SSLEngine> {
     public JavaSslFactory(SSLContext context, SslConfig config) {
         this.context = context;
         this.config = config;
+    }
+
+    public static JavaSslFactory getSslFactory(SslConfig cfg) throws IOException, GeneralSecurityException {
+        SSLContext context = SecureUtil.getSslContext(cfg.getPkPath(), cfg.getCaPath(), cfg.getPasswd(), cfg.isServerSide());
+        return new JavaSslFactory(context, cfg);
+    }
+
+    public static JavaSslFactory getClientDefault() throws NoSuchAlgorithmException {
+        return new JavaSslFactory(SSLContext.getDefault(), null);
     }
 
     public SSLEngine get() {
@@ -62,5 +74,10 @@ public class JavaSslFactory implements SocketFactory, Supplier<SSLEngine> {
     @Override
     public WrappedSocket wrap(Socket sc) throws IOException {
         return new SSLSocket(sc, NIOUtil.fd(sc), this);
+    }
+
+    @Override
+    public WrappedSocket wrap(SocketChannel sc) throws IOException {
+        return new SSLSocket(sc.socket(), NIOUtil.fd(sc), this);
     }
 }

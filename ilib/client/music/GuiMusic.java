@@ -73,7 +73,7 @@ public class GuiMusic extends GuiBaseNI implements ComponentListener {
 
     @Override
     protected void addComponents() {
-        components.add(GText.alignCenterY(this, 10, "ImpLib音乐播放器", Color.WHITE));
+        components.add(GText.alignCenterX(this, 10, "ImpLib音乐播放器", Color.WHITE));
 
         components.add(new MusicList(this, 10, 24, -10, -54).setDirectionAndInit(Direction.RIGHT));
 

@@ -631,14 +631,24 @@ public class AttrCode extends Attribute {
     }
 
     private static void putVar(Var v, ByteList w, ConstantPool pool) {
-        w.put(v.type);
         switch (v.type) {
             case VarType.REFERENCE:
-                w.putShort(pool.getClassId(v.owner));
+                w.put(v.type).putShort(pool.getClassId(v.owner));
                 break;
             case VarType.UNINITIAL:
-                w.putShort(InsnNode.validate(v.node).bci);
+                w.put(v.type).putShort(InsnNode.validate(v.node).bci);
                 break;
+            case VarType.LONG:
+                w.put((byte) 4);
+                break;
+            case VarType.FLOAT:
+                w.put((byte) 2);
+                break;
+            case VarType.DOUBLE:
+                w.put((byte) 3);
+                break;
+            default:
+                w.put(v.type);
         }
     }
 
@@ -748,8 +758,7 @@ public class AttrCode extends Attribute {
     }
 
     private static Var getVar(ConstantPool pool, ByteReader r, IntMap<InsnNode> pcCounter) {
-        int type = VarType.validate(r.readByte());
-        switch (type) {
+        switch (r.readByte()) {
             case VarType.REFERENCE:
                 String className = ((CstClass) pool.get(r)).getValue().getString();
                 return new Var(className);
@@ -758,8 +767,20 @@ public class AttrCode extends Attribute {
                 return new Var(node);
             case VarType.UNINITIAL_THIS:
                 return Var.READ_ONLY_UNI_THIS;
+            case VarType.TOP:
+                return Var.TOP;
+            case VarType.INT:
+                return Var.INT;
+            case 2:
+                return Var.FLOAT;
+            case 3:
+                return Var.DOUBLE;
+            case 4:
+                return Var.LONG;
+            case VarType.NULL:
+                return Var.NULL;
             default:
-                return Var.std(type);
+                throw new ArrayIndexOutOfBoundsException("Not know " + r.bytes.getU(r.rIndex-1) + " is what");
         }
     }
 
@@ -811,20 +832,7 @@ public class AttrCode extends Attribute {
             localSize = (char) ft.maxLocalSize;
         }
 
-        // later, maybe less than a year, will change to CodeBlock methods
-        ft.init(owner);
-
-        InsnList insn = this.instructions;
-        o:
-        for (int i = 0; i < insn.size();) {
-            switch (ft.visitNode(insn.get(i++))) {
-                case 1: // return
-                case 2: // goto
-                case 3: // if
-                    firstFrame = ft.build(null);
-                    break o;
-            }
-        }
+        firstFrame = ft.getFirst();
     }
 
     // endregion

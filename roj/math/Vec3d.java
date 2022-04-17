@@ -308,6 +308,10 @@ public class Vec3d implements Vector {
         return this.x * v.x + this.y * v.y + this.z * v.z;
     }
 
+    public double dot(double vx, double vy, double vz) {
+        return this.x * vx + this.y * vy + this.z * vz;
+    }
+
     /**
      * 外积/法线(与a,b都垂直的向量) <BR>
      * Calculates and returns the cross-product of this vector with the specified one.

@@ -28,10 +28,11 @@ package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.cst.CstDynamic;
-import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.util.ByteList;
+
+import java.util.List;
 
 /**
  * @author Roj234
@@ -46,7 +47,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
         super(Opcodes.INVOKEDYNAMIC);
         this.tableIdx = ref.tableIdx;
         this.name = ref.getDesc().getName().getString();
-        this.rawParam = ref.getDesc().getType().getString();
+        this.rawDesc = ref.getDesc().getType().getString();
     }
 
     @Override
@@ -69,12 +70,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
      */
     @Override
     public void toByteArray(ConstantPool cw, ByteList w) {
-        if (params != null) {
-            params.add(returnType);
-            rawParam = ParamHelper.getMethod(params);
-            params.remove(params.size() - 1);
-        }
-        w.put(code).putShort(cw.getInvokeDynId(tableIdx, name, rawParam)).putShort(0);
+        w.put(code).putShort(cw.getInvokeDynId(tableIdx, name, rawDesc())).putShort(0);
     }
 
     @Override
@@ -83,20 +79,23 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
     }
 
     public String toString() {
-        initPar();
         StringBuilder sb = new StringBuilder(super.toString()).append(" #").append((int) tableIdx).append(' ').append(returnType).append(" ?").append('.').append(name).append('(');
+
+        List<Type> params = parameters();
         if (!params.isEmpty()) {
-            for (int i = 0; i < params.size(); i++) {
-                Type par = params.get(i);
-                sb.append(par).append(", ");
+            int i = 0;
+            while (true) {
+                Type par = params.get(i++);
+                sb.append(par);
+                if (i == params.size()) break;
+                sb.append(", ");
             }
-            sb.delete(sb.length() - 2, sb.length());
         }
         return sb.append(')').toString();
     }
 
     @Override
-    public void rawDesc(String desc) {
+    public void fullDesc(String desc) {
         throw new UnsupportedOperationException("InvokeDyn does not support 'classed' descriptor");
     }
 }

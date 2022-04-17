@@ -26,11 +26,6 @@
 package ilib.asm.nixim.client;
 
 import ilib.asm.util.IFontRenderer;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.client.settings.GameSettings;
-import net.minecraft.util.ResourceLocation;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
@@ -40,6 +35,12 @@ import roj.opengl.text.TextRenderer;
 import roj.opengl.util.Util;
 import roj.opengl.vertex.VertexBuilder;
 import roj.text.TextUtil;
+
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.texture.TextureManager;
+import net.minecraft.client.settings.GameSettings;
+import net.minecraft.util.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -74,6 +75,9 @@ public class NxNewFont extends FontRenderer implements IFontRenderer {
 
     public int drawString(String text, float x, float y, int color, boolean dropShadow) {
         GlStateManager.pushMatrix();
+
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(770, 771);
 
         float scale = 16 / 24f;
         GlStateManager.scale(scale, scale, scale);

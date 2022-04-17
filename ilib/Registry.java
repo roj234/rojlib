@@ -26,15 +26,15 @@
 package ilib;
 
 import com.google.common.collect.BiMap;
-import ilib.client.model.BlockModelInfo;
-import ilib.client.model.ItemModelInfo;
+import ilib.client.model.ILBlockModel;
+import ilib.client.model.ILFluidModel;
+import ilib.client.model.ILItemModel;
 import ilib.client.model.ModelInfo;
 import ilib.item.fake.FakeItemBlock;
 import ilib.item.fake.ItemBlockMissing;
 import ilib.util.ForgeUtil;
 import ilib.util.Hook;
 import ilib.util.Registries;
-
 import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.enchantment.Enchantment;
@@ -48,7 +48,6 @@ import net.minecraft.potion.PotionType;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.world.biome.Biome;
-
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fluids.BlockFluidBase;
@@ -57,8 +56,10 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.VillagerRegistry;
 import net.minecraftforge.registries.IForgeRegistry;
+import roj.collect.SimpleList;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -68,56 +69,48 @@ import java.util.List;
 public final class Registry {
     public static String NS = null;
 
-    private static ArrayList<Block> BLOCKS = new ArrayList<>();
-    private static ArrayList<Item> ITEMS = new ArrayList<>();
-
-    private static ArrayList<ModelInfo> MODELS = new ArrayList<>();
+    private static SimpleList<ModelInfo> MODELS = new SimpleList<>();
 
     static {
         MinecraftForge.EVENT_BUS.register(Registry.class);
     }
 
     public static void fake(String modid, String id, Block block) {
-        BLOCKS.add(block.setRegistryName(modid, id).setTranslationKey("fake." + modid + '.' + id));
+        Registries.block().register(block.setRegistryName(modid, id).setTranslationKey("fake." + modid + '.' + id));
 
         fake(modid, id, new FakeItemBlock(block));
     }
 
     public static void fake(String modid, String id, Item item) {
-        ITEMS.add(item.setRegistryName(modid, id).setTranslationKey("fake." + modid + "." + id).setMaxStackSize(64));
+        Registries.item().register(item.setRegistryName(modid, id).setTranslationKey("fake." + modid + "." + id).setMaxStackSize(64));
     }
 
     /**
      * 不注册物品
      */
     public static void block(String id, Block block) {
-        block(id, block, null, null, 0, false);
+        Registries.block().register(block.setRegistryName(NS, id).setTranslationKey(NS + '.' + id));
     }
 
     public static void block(String id, Block block, boolean mmodel) {
         block(id, block);
-        model(new BlockModelInfo(block, true));
+        ILBlockModel.Merged(block);
     }
 
     public static void block(String id, Block block, Item item, CreativeTabs tab, int stack, boolean model) {
-        BLOCKS.add(block.setRegistryName(NS, id).setTranslationKey(NS + '.' + id));
-        if (tab != null)
-            block.setCreativeTab(tab);
-
-        if (model)
-            model(new BlockModelInfo(block, false));
+        Registries.block().register(block.setRegistryName(NS, id).setTranslationKey(NS + '.' + id));
+        if (tab != null) block.setCreativeTab(tab);
 
         if (item != null) {
             item(id, item, tab, stack, false);
             if (model && !(item instanceof ItemBlock))
-                model(new ItemModelInfo(item, 0, false, true));
+                ILItemModel.Vanilla(item);
         }
     }
 
     public static void item(String id, Item item, CreativeTabs tab, int stack, boolean model) {
-        ITEMS.add(item.setRegistryName(NS, id).setTranslationKey(NS + '.' + id).setCreativeTab(tab));
-        if (model)
-            model(new ItemModelInfo(item, false));
+        Registries.item().register(item.setRegistryName(NS, id).setTranslationKey(NS + '.' + id).setCreativeTab(tab));
+        if (model) ILItemModel.Vanilla(item);
 
         if (stack > 0) item.setMaxStackSize(stack);
     }
@@ -183,7 +176,7 @@ public final class Registry {
         for (Block block : registryBlock.getValuesCollection()) {
             if (blockItemBiMap.get(block) == null && registryItems.getValue(block.getRegistryName()) == null) {
                 Item item = new ItemBlockMissing(block).setRegistryName(block.getRegistryName());
-                items.add(item);
+                Registries.item().register(item);
             }
         }
         return items;
@@ -202,62 +195,26 @@ public final class Registry {
     public static void registerFluidBlock(String fluid, BlockFluidBase block) {
         String modid = ForgeUtil.getCurrentModId();
 
-        BLOCKS.add(block.setRegistryName(modid, fluid).setTranslationKey(modid + '.' + fluid));
+        Registries.block().register(block.setRegistryName(modid, fluid).setTranslationKey(modid + '.' + fluid));
 
-        ImpLib.proxy.registerFluidModel(fluid, block);
+        MODELS.add(new ILFluidModel(fluid, block));
     }
 
 
-    public static void model(ModelInfo modelInfo) {
-        MODELS.add(modelInfo);
-    }
-
-    public static void mergedModel(Block block) {
-        model(new BlockModelInfo(block, true));
-    }
-
-    public static void mergedModel(Item item) {
-        model(new ItemModelInfo(item, true));
-    }
-
-    /////////////////////////////////// Call by events
-
-    @SubscribeEvent
-    public static void registerBlocks(RegistryEvent.Register<Block> event) {
-        for (Block block : BLOCKS)
-            event.getRegistry().register(block);
-        BLOCKS.clear();
-        BLOCKS = null;
-    }
-
-    @SubscribeEvent
-    public static void registerItems(RegistryEvent.Register<Item> event) {
-        for (Item item : ITEMS)
-            event.getRegistry().register(item);
-        ITEMS.clear();
-        ITEMS = null;
+    public static void model(ModelInfo info) {
+        if (info != null) MODELS.add(info);
     }
 
     public static List<ModelInfo> getModels() {
         if (MODELS != null) {
-            List<ModelInfo> models = new ArrayList<>(MODELS);
-            MODELS.clear();
+            List<ModelInfo> models = MODELS;
             MODELS = null;
             return models;
         }
-        return null;
-    }
-
-    public static ArrayList<Block> blocks() {
-        return BLOCKS;
-    }
-
-    public static ArrayList<Item> items() {
-        return ITEMS;
+        return Collections.emptyList();
     }
 
     public static void namespace(String namespace) {
         NS = namespace;
     }
-
 }

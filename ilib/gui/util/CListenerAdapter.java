@@ -15,16 +15,12 @@ public abstract class CListenerAdapter implements ComponentListener {
         this.parent = parent;
     }
 
-    public void componentAdded(Component c) {
-        parent.componentAdded(c);
+    public void componentInit(Component c) {
+        parent.componentInit(c);
     }
 
     public void actionPerformed(Component c, int action) {
         parent.actionPerformed(c, action);
-    }
-
-    public void keyTyped(Component c, char character, int keyCode) {
-        parent.keyTyped(c, character, keyCode);
     }
 
     public void mouseDown(Component c, int mouseX, int mouseY, int button) {

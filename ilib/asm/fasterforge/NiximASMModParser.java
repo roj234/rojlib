@@ -25,40 +25,37 @@
  */
 package ilib.asm.fasterforge;
 
-import com.google.common.base.MoreObjects;
 import ilib.asm.fasterforge.anc.FastParser;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.LoaderException;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import org.objectweb.asm.Type;
 import roj.asm.Parser;
-import roj.asm.cst.CstClass;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Inject.At;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.FieldSimple;
-import roj.asm.tree.MethodSimple;
+import roj.asm.tree.FieldNode;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.util.ConstantPool;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.ByteReader;
-import roj.util.Helpers;
+
+import net.minecraftforge.fml.common.FMLLog;
+import net.minecraftforge.fml.common.LoaderException;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Nixim(value = "net.minecraftforge.fml.common.discovery.asm.ASMModParser", copyItf = true)
 public class NiximASMModParser extends ASMModParser implements FastParser {
@@ -71,8 +68,10 @@ public class NiximASMModParser extends ASMModParser implements FastParser {
     private int classVersion;
     @Shadow("asmSuperType")
     private Type asmSuperType;
-    @Shadow("interfaces")
-    private Set<String> interfaces;
+    @Copy
+    private List<String> interfaces11;
+    @Copy
+    private String name;
 
     NiximASMModParser() throws IOException {
         super(null);
@@ -84,40 +83,44 @@ public class NiximASMModParser extends ASMModParser implements FastParser {
     public void remapInit(InputStream stream) {
         $$$CONSTRUCTOR();
 
-        interfaces = new MyHashSet<>();
         named = new MyHashMap<>();
         try {
-            ByteList shared = IOUtil.getSharedByteBuf();
-            shared.clear();
-            shared.readStreamFully(stream);
+            ByteList shared = IOUtil.getSharedByteBuf().readStreamFully(stream);
             ConstantData data = Parser.parseConstants(shared);
 
-            this.asmType = TypeHelper.asmType(data.name);
+            this.asmType = TypeHelper.asmType(name = data.name);
             this.asmSuperType = TypeHelper.asmType(data.parent);
             this.classVersion = data.version;
-            List<CstClass> classes = data.interfaces;
-            for (int i = 0; i < classes.size(); i++) {
-                this.interfaces.add(classes.get(i).getValue().getString());
-            }
+            interfaces11 = data.interfaces();
 
-            List<Annotation> list = named.computeIfAbsent(data.name.replace('/', '.'), Helpers.fnArrayList());
+            SimpleList<Annotation> list = new SimpleList<>();
             getAnn(data.cp, data.attrByName("RuntimeInvisibleAnnotations"), list);
             getAnn(data.cp, data.attrByName("RuntimeVisibleAnnotations"), list);
-
-            List<FieldSimple> fields = data.fields;
-            for (int i = 0; i < fields.size(); i++) {
-                FieldSimple fs = fields.get(i);
-                list = named.computeIfAbsent(fs.name.getString(), Helpers.fnArrayList());
-                getAnn(data.cp, fs.attrByName("RuntimeInvisibleAnnotations"), list);
-                getAnn(data.cp, fs.attrByName("RuntimeVisibleAnnotations"), list);
+            if (!list.isEmpty()) {
+                named.put(data.name.replace('/', '.'), list);
+                list = new SimpleList<>();
             }
 
-            List<MethodSimple> methods = data.methods;
+            List<? extends FieldNode> fields = data.fields;
+            for (int i = 0; i < fields.size(); i++) {
+                FieldNode fs = fields.get(i);
+                getAnn(data.cp, fs.attrByName("RuntimeInvisibleAnnotations"), list);
+                getAnn(data.cp, fs.attrByName("RuntimeVisibleAnnotations"), list);
+                if (!list.isEmpty()) {
+                    named.put(fs.name(), list);
+                    list = new SimpleList<>();
+                }
+            }
+
+            List<? extends MethodNode> methods = data.methods;
             for (int i = 0; i < methods.size(); i++) {
-                MethodSimple ms = methods.get(i);
-                list = named.computeIfAbsent(ms.name.getString() + ms.type.getString(), Helpers.fnArrayList());
+                MethodNode ms = methods.get(i);
                 getAnn(data.cp, ms.attrByName("RuntimeVisibleAnnotations"), list);
                 getAnn(data.cp, ms.attrByName("RuntimeVisibleAnnotations"), list);
+                if (!list.isEmpty()) {
+                    named.put(ms.name() + ms.rawDesc(), list);
+                    list = new SimpleList<>();
+                }
             }
         } catch (Exception ex) {
             FMLLog.log.error("class加载失败", ex);
@@ -127,8 +130,8 @@ public class NiximASMModParser extends ASMModParser implements FastParser {
 
     @Copy
     @Override
-    public Set<String> getItf() {
-        return this.interfaces;
+    public List<String> getItf() {
+        return this.interfaces11;
     }
 
     @Copy
@@ -145,10 +148,7 @@ public class NiximASMModParser extends ASMModParser implements FastParser {
 
     @Inject("toString")
     public String toString() {
-        return MoreObjects.toStringHelper("FastAnnotationDiscover")
-                          .add("name", this.asmType.getClassName())
-                          .add("version", this.classVersion)
-                          .add("parent", asmSuperType.getClassName()).toString();
+        return "AnnotationDiscover[" + name + "]";
     }
 
     @Inject("sendToTable")
@@ -162,17 +162,19 @@ public class NiximASMModParser extends ASMModParser implements FastParser {
                                  entry.getKey(), TypeHelper.toPrimitive(ann.values));
             }
         }
-        for (String intf : this.interfaces)
-            table.addASMData(candidate, intf, asmType.getInternalName(), null, null);
+        List<String> itf = interfaces11;
+        for (int i = 0; i < itf.size(); i++) {
+            table.addASMData(candidate, itf.get(i), name, null, null);
+        }
     }
 
     @Copy
-    private static void getAnn(ConstantPool cp, Attribute attr, List<Annotation> list) {
-        if (attr == null)
-            return;
+    private static void getAnn(ConstantPool cp, Attribute attr, SimpleList<Annotation> list) {
+        if (attr == null) return;
         ByteReader r = Parser.reader(attr);
 
         int cnt = r.readUnsignedShort();
+        list.ensureCapacity(cnt);
         while (cnt-- > 0) {
             list.add(Annotation.deserialize(cp, r));
         }

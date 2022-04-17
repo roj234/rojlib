@@ -53,6 +53,12 @@ public final class AccessData implements IClass {
         this.name = name;
         this.superName = superName;
         this.itf = itf;
+        for (int i = 0; i < fields.size(); i++) {
+            fields.get(i).this$0 = this;
+        }
+        for (int i = 0; i < methods.size(); i++) {
+            methods.get(i).this$0 = this;
+        }
     }
 
     @Override
@@ -81,11 +87,13 @@ public final class AccessData implements IClass {
     }
 
     @Override
-    public byte type() {
+    public int type() {
         return Parser.CTYPE_LOD_1;
     }
 
     public static final class MOF implements MoFNode {
+        AccessData this$0;
+
         public final String name, desc;
         /**
          * Read only
@@ -99,10 +107,9 @@ public final class AccessData implements IClass {
             this.dao = dao;
         }
 
-        // 不想用非静态class
         @Override
         public void accessFlag(int flag) {
-            throw new IllegalStateException("Use AccessData.setFlagFor()");
+            this$0.setFlagFor(this, flag);
         }
 
         @Override
@@ -141,11 +148,10 @@ public final class AccessData implements IClass {
         byteCode[cao + 1] = (byte) flag;
     }
 
-    public AccessData setFlagFor(MOF node, int flag) {
+    void setFlagFor(MOF node, int flag) {
         node.acc = (char) flag;
         byteCode[node.dao] = (byte) (flag >>> 8);
         byteCode[node.dao + 1] = (byte) flag;
-        return this;
     }
 
     @Override

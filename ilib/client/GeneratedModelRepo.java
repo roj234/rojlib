@@ -34,10 +34,8 @@ import roj.io.IOUtil;
 import net.minecraft.client.resources.AbstractResourcePack;
 import net.minecraft.client.resources.ResourcePackFileNotFoundException;
 
-import javax.annotation.Nonnull;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,42 +44,40 @@ import java.util.Set;
  * @since 2021/4/21 22:51
  */
 public final class GeneratedModelRepo extends AbstractResourcePack {
-    static final Map<String, byte[]> data = new MyHashMap<>();
-    static final Set<String> domains = new MyHashSet<>();
+    private static final Map<String, byte[]> data = new MyHashMap<>();
+    private static final Set<String> domains = new MyHashSet<>();
 
-    public static void preInitDone() {
-        GeneratedModelRepo instance = new GeneratedModelRepo();
+    public static void addModel() {
+        GeneratedModelRepo repo = new GeneratedModelRepo();
         data.put("pack.mcmeta", ("{\"pack\": {\"description\":\"IMPLIB生成的模型\"," +
             "\"pack_format\": 3}}").getBytes(StandardCharsets.UTF_8));
-        TextureHelper.enqueuePackLoad(instance);
+        TextureHelper.load(repo);
     }
 
-    public static void register(String path, String jsonData) {
-        register(path, jsonData.getBytes(StandardCharsets.UTF_8));
+    public static void addModel(String path, CharSequence data) {
+        register(path, IOUtil.SharedCoder.get().encode(data));
         if ((Config.debug & 8) != 0)
-            System.out.println("Path " + path + "   is   " + jsonData);
+            ImpLib.logger().info("'" + path + "' >>> " + data);
     }
 
-    public static void register(String path, byte[] jsonData) {
-        if (path == null || !path.startsWith("assets/")) {
-            throw new IllegalArgumentException("Illegal resource path " + path);
+    public static void register(String path, byte[] b) {
+        if (!path.startsWith("assets/")) {
+            throw new IllegalArgumentException("无效的资源路径 " + path);
         }
 
         String domain = path.substring(7);
         domain = domain.substring(0, domain.indexOf('/'));
 
         domains.add(domain);
-
-        data.put(path, jsonData);
+        data.put(path, b);
     }
 
     private GeneratedModelRepo() {
-        super(new File("generated_model"));
+        super(new File("IL模型生成器"));
     }
 
-    public static String registerFileableTexture(String texture, File basePath) {
-        if (texture.indexOf(':') != -1)
-            return texture;
+    public static String registerFileTexture(String texture, File basePath) {
+        if (texture.indexOf(':') != -1) return texture;
         File real = new File(basePath, texture);
         if (!real.isFile()) {
             ImpLib.logger().warn("File not found: " + real.getAbsolutePath());
@@ -100,21 +96,19 @@ public final class GeneratedModelRepo extends AbstractResourcePack {
     }
 
     @Override
-    protected InputStream getInputStreamByName(@Nonnull String name) throws ResourcePackFileNotFoundException {
-        final byte[] buf = data.get(name);
-        if(buf != null)
-            return new ByteArrayInputStream(buf);
-        throw new ResourcePackFileNotFoundException(new File("generated_model_repo"), name);
+    protected InputStream getInputStreamByName(String name) throws ResourcePackFileNotFoundException {
+        byte[] buf = data.get(name);
+        if(buf != null) return new ByteArrayInputStream(buf);
+        throw new ResourcePackFileNotFoundException(resourcePackFile, name);
     }
 
     @Override
-    protected boolean hasResourceName(@Nonnull String key) {
+    protected boolean hasResourceName(String key) {
         return data.containsKey(key);
     }
 
-    @Nonnull
     @Override
     public Set<String> getResourceDomains() {
-        return Collections.unmodifiableSet(domains);
+        return domains;
     }
 }

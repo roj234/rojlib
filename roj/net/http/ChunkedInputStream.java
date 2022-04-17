@@ -39,6 +39,7 @@ import java.io.InputStream;
  * @since  2021/10/23 21:30
  */
 class ChunkedInputStream extends InputStream {
+    static final byte[] buffer = new byte[1024];
     static final int CHUNK_LENGTH = 0, CHUNK_DATA = 1, CHUNK_END = 2, EOF = 3;
 
     private final SocketInputStream in;
@@ -155,8 +156,15 @@ class ChunkedInputStream extends InputStream {
 
     @Override
     public void close() throws IOException {
-        stage = EOF;
-        in.close();
+        // 不用考虑多线程问题
+        try {
+            while (stage != EOF) {
+                if (read(buffer) < 0) break;
+            }
+        } finally {
+            stage = EOF;
+            in.close();
+        }
     }
 
     @Override

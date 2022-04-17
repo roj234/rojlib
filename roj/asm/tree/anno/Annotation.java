@@ -6,7 +6,7 @@
  * Copyright (c) 2021 Roj234
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
+ * of this software and getsociated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
@@ -27,11 +27,15 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cst.CstUTF;
+import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.collect.LinkedMyHashMap;
 import roj.util.ByteList;
 import roj.util.ByteReader;
+import roj.util.Helpers;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 
@@ -48,9 +52,62 @@ public final class Annotation {
         this.values = values;
     }
 
-    public Annotation(Annotation another) {
-        this.clazz = another.clazz;
-        this.values = another.values;
+    public int getInt(String name, int def) {
+        AnnVal av = values.get(name);
+        if (av == null) return def;
+        return av.asInt();
+    }
+    public float getFloat(String name, float def) {
+        AnnVal av = values.get(name);
+        if (av == null) return def;
+        return av.asInt();
+    }
+    public double getDouble(String name, double def) {
+        AnnVal av = values.get(name);
+        if (av == null) return def;
+        return av.asInt();
+    }
+    public long getLong(String name, long def) {
+        AnnVal av = values.get(name);
+        if (av == null) return def;
+        return av.asInt();
+    }
+    public String getString(String name) {
+        AnnVal av = values.get(name);
+        if (av == null) return Helpers.nonnull();
+        return av.asString();
+    }
+    public String getString(String name, String def) {
+        AnnVal av = values.get(name);
+        if (av == null) return def;
+        return av.asString();
+    }
+    public AnnValEnum getEnum(String name) {
+        AnnVal av = values.get(name);
+        if (av == null) return Helpers.nonnull();
+        return av.asEnum();
+    }
+    public Type getClass(String name) {
+        AnnVal av = values.get(name);
+        if (av == null) return Helpers.nonnull();
+        return av.asClass();
+    }
+    public Annotation getAnnotation(String name) {
+        AnnVal av = values.get(name);
+        if (av == null) return Helpers.nonnull();
+        return av.asAnnotation();
+    }
+    public List<AnnVal> getArray(String name) {
+        AnnVal av = values.get(name);
+        if (av == null) return Helpers.nonnull();
+        return av.asArray();
+    }
+    public boolean containsKey(String name) {
+        return values.containsKey(name);
+    }
+
+    public void put(String name, AnnVal av) {
+        values.put(name, av);
     }
 
     @Deprecated
@@ -69,10 +126,17 @@ public final class Annotation {
     public static Annotation deserialize(ConstantPool pool, ByteList r) {
         String type = ((CstUTF) pool.get(r)).getString();
         int len = r.readUnsignedShort();
-        Map<String, AnnVal> params = new LinkedMyHashMap<>(len);
-        while (len-- > 0) {
-            params.put(((CstUTF) pool.get(r)).getString(), AnnVal.parse(pool, r));
+
+        Map<String, AnnVal> params;
+        if (len > 0) {
+            params = new LinkedMyHashMap<>(len);
+            while (len-- > 0) {
+                params.put(((CstUTF) pool.get(r)).getString(), AnnVal.parse(pool, r));
+            }
+        } else {
+            params = Collections.emptyMap();
         }
+
         return new Annotation(type, params);
     }
 

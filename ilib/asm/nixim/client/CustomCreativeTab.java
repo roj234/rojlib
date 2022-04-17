@@ -26,12 +26,11 @@
 package ilib.asm.nixim.client;
 
 import ilib.Config;
-import ilib.asm.util.MCHooks;
 import ilib.client.CreativeTabsDynamic;
-import ilib.client.api.IContainerCreative;
 import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
 import ilib.gui.comp.Component;
+import ilib.misc.MCHooks;
 import ilib.util.MCTexts;
 import org.lwjgl.input.Mouse;
 import roj.asm.nixim.Copy;
@@ -66,7 +65,7 @@ import java.util.List;
 
 @Nixim(value = "net.minecraft.client.gui.inventory.GuiContainerCreative", copyItf = true)
 //!!AT ["net.minecraft.client.gui.inventory.GuiContainerCreative", ["func_147050_b"], true]
-abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, IContainerCreative {
+abstract class CustomCreativeTab extends GuiContainerCreative implements IGui {
     @Shadow("field_147058_w")
     static int selectedTabIndex;
 
@@ -248,10 +247,13 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
         } else {
             if (components == null) return;
 
+            x -= guiLeft;
+            y -= guiTop;
             for (int i = 0; i < components.size(); i++) {
                 Component com = components.get(i);
-                if (com.isMouseOver(x - guiLeft, y - guiTop))
-                    com.renderToolTip(x, y);
+                if (com.isMouseOver(x, y)) {
+                    com.renderTooltip(x, y, x + guiLeft, y + guiTop);
+                }
             }
         }
     }
@@ -272,7 +274,7 @@ abstract class CustomCreativeTab extends GuiContainerCreative implements IGui, I
                 NonNullList<ItemStack> checker = new NonNullList<>(new FilterList<>((old, latest) -> {
                     boolean matches = false;
 
-                    List<String> inf = MCHooks.makeBetterInformation(latest);
+                    List<String> inf = MCHooks.getTooltipForSearch(latest);
                     for (int i = 0; i < inf.size(); i++) {
                         String line = inf.get(i);
                         if (containsPinyin(line.toLowerCase(), text)) {

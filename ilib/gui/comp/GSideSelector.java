@@ -27,19 +27,18 @@
 package ilib.gui.comp;
 
 import ilib.ClientProxy;
-import ilib.client.KeyHelper;
 import ilib.client.RenderUtils;
+import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
 import ilib.gui.util.SidePicker;
 import ilib.gui.util.TrackballMC;
-import org.lwjgl.opengl.GL11;
-
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+import org.lwjgl.opengl.GL11;
 
 import javax.annotation.Nullable;
 import java.awt.*;
@@ -49,8 +48,6 @@ import java.awt.*;
  * @since 2021/5/31 20:23
  */
 public class GSideSelector extends Component {
-    public static final int LEFT = 0, RIGHT = 1, MIDDLE = 2;
-
     protected Provider provider;
 
     protected float scale;
@@ -70,13 +67,15 @@ public class GSideSelector extends Component {
         this.highlight = highlightWhenNoHover;
 
         this.diameter = MathHelper.ceil(scale * Math.sqrt(3));
-        trackball = new TrackballMC(1, scale, ClientProxy.mc.gameSettings.mouseSensitivity * 2);
+        trackball = new TrackballMC((int) scale, ClientProxy.mc.gameSettings.mouseSensitivity * 2);
 
         picker = new SidePicker(0.5);
     }
 
     @Override
     public void onInit() {
+        super.onInit();
+
         Entity entity = ClientProxy.mc.getRenderViewEntity();
         if (entity != null) trackball.setTransform(RenderUtils.createEntityRotateMatrix(entity));
     }
@@ -94,32 +93,47 @@ public class GSideSelector extends Component {
     public void mouseDown(int x, int y, int button) {
         super.mouseDown(x, y, button);
         lastHit = null;
-        if (button == MIDDLE) onInit();
+        switch (button) {
+            case GuiHelper.MIDDLE:
+                onInit();
+                break;
+            case GuiHelper.RIGHT:
+                trackball.startDrag(x - xPos - diameter / 2, y - yPos - diameter / 2);
+                break;
+        }
     }
 
     @Override
     public void mouseUp(int x, int y, int button) {
         super.mouseUp(x, y, button);
 
-        if (button == LEFT && lastHit != null)
-            onSideToggled(lastHit, KeyHelper.isShiftPressed() ? 1 : (KeyHelper.isCtrlPressed() ? 2 : 0), button);
+        switch (button) {
+            case GuiHelper.LEFT:
+                if (lastHit != null)
+                    onSideToggled(lastHit,
+                            (GuiHelper.isShiftPressed() ? 1 : 0) |
+                            (GuiHelper.isCtrlPressed() ? 2 : 0), button);
+                break;
+            case GuiHelper.RIGHT:
+                trackball.endDrag(x - xPos - diameter / 2, y - yPos - diameter / 2);
+                break;
+        }
     }
 
     @Override
     public void render(int mouseX, int mouseY) {
-        int width = getWidth();
-        int height = getHeight();
+        int w = diameter / 2;
 
         GlStateManager.pushMatrix();
         GlStateManager.color(1, 0, 0, 0.4f);
-        GlStateManager.translate(xPos + width / 2f, yPos + height / 2f, (float) diameter);
+        GlStateManager.translate(xPos + w, yPos + w, diameter);
         GlStateManager.scale(scale, -scale, scale);
 
-        trackball.update(mouseX - xPos - width/2, height/2 - (mouseY - yPos));
+        trackball.applyTransform(mouseX - xPos - w, mouseY - yPos - w);
 
         if (state != null) {
             RenderUtils.bindMinecraftBlockSheet();
-            RenderUtils.renderBlock(ClientProxy.mc.world, BlockPos.ORIGIN, state);
+            RenderUtils.renderBlock(null, BlockPos.ORIGIN, state);
         }
 
         Color[] colors = new Color[highlight ? 7 : 1];
@@ -144,7 +158,7 @@ public class GSideSelector extends Component {
     }
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {}
+    public void render2(int mouseX, int mouseY) {}
 
     /*******************************************************************************************************************
      * Utility methods                                                                                                 *
@@ -154,7 +168,7 @@ public class GSideSelector extends Component {
     protected void drawHighlights(EnumFacing face, Color[] colors) {
         EnumFacing[] values = EnumFacing.VALUES;
 
-        boolean rendered = false;
+        Boolean blendState = null;
         for (int i = 0; i < colors.length; i++) {
             Color c = colors[i];
             if (c == null || c.getAlpha() == 0) continue;
@@ -162,8 +176,8 @@ public class GSideSelector extends Component {
             EnumFacing dir = i == 0 ? face : values[i - 1];
 
             if (dir != null) {
-                if (!rendered) {
-                    rendered = true;
+                if (blendState == null) {
+                    blendState = GL11.glGetBoolean(GL11.GL_BLEND);
                     prepareRenderState();
                 }
 
@@ -172,24 +186,23 @@ public class GSideSelector extends Component {
             }
         }
 
-        if (rendered) restoreRenderState();
+        if (blendState != null) {
+            GL11.glEnd();
+
+            GlStateManager.enableTexture2D();
+            if (!blendState) {
+                GlStateManager.disableBlend();
+            }
+        }
     }
 
     protected static void prepareRenderState() {
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
 
         GL11.glBegin(GL11.GL_QUADS);
     }
 
-    protected static void restoreRenderState() {
-        GL11.glEnd();
-
-        GlStateManager.disableBlend();
-        GlStateManager.enableTexture2D();
-        GlStateManager.color(1, 1, 1, 1);
-    }
+    protected static void restoreRenderState() {}
 
     protected static void drawQuad(EnumFacing dir) {
         switch (dir) {

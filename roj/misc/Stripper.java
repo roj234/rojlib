@@ -45,7 +45,7 @@ public class Stripper {
         }
         String ln = IOUtil.readAs(new FileInputStream(args[0]), args.length > 3 ? args[3] : "UTF-8");
         int lineBegin = Integer.parseInt(args[1]);
-        int begin = lineOffset(ln, 0, lineBegin - 1);
+        int begin = lineBegin == 1 ? 0 : lineOffset(ln, 0, lineBegin - 1);
         int end = args[2].equals("-1") ? ln.length() : lineOffset(ln, begin, Integer.parseInt(args[2]) - lineBegin);
         ByteList.encodeUTF(ln.substring(begin, end)).writeToStream(new FileOutputStream(args[0]));
     }

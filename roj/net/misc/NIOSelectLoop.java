@@ -95,7 +95,11 @@ public abstract class NIOSelectLoop<T extends Selectable> implements Shutdownabl
 
                 if (Thread.interrupted()) break;
                 if (sel.keys().isEmpty()) {
-                    LockSupport.parkNanos(loop.idleKill * 1_000_000L);
+                    time = System.currentTimeMillis();
+                    while (System.currentTimeMillis() < time + loop.idleKill) {
+                        if (!sel.keys().isEmpty()) break;
+                        LockSupport.parkNanos(loop.idleKill * 1_000_000L);
+                    }
                     if (sel.keys().isEmpty()) {
                         if (Thread.interrupted() || owner.getRunningCount() > owner.minThreads) break;
                     }

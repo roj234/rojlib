@@ -26,92 +26,79 @@
 
 package ilib.client;
 
-import ilib.ATHandler;
 import ilib.ClientProxy;
 import ilib.Config;
 import ilib.ImpLib;
 import ilib.util.Hook;
 import ilib.util.ReflectionClient;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.*;
-import net.minecraftforge.fml.client.FMLClientHandler;
 import roj.collect.SimpleList;
 
-import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.FallbackResourceManager;
+import net.minecraft.client.resources.IResourceManager;
+import net.minecraft.client.resources.IResourcePack;
+import net.minecraft.client.resources.SimpleReloadableResourceManager;
 
-//!!AT [["net.minecraft.client.resources.SimpleReloadableResourceManager", ["field_110548_a"]], ["net.minecraft.client.resources.FallbackResourceManager", ["field_110540_a"]]]
+import net.minecraftforge.client.resource.IResourceType;
+import net.minecraftforge.client.resource.ISelectiveResourceReloadListener;
+import net.minecraftforge.client.resource.VanillaResourceType;
+import net.minecraftforge.fml.client.FMLClientHandler;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Predicate;
+
+//!!AT [["net.minecraft.client.resources.SimpleReloadableResourceManager", ["field_110548_a", "func_110544_b"]], ["net.minecraft.client.resources.FallbackResourceManager", ["field_110540_a"]]]
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public final class TextureHelper implements IResourceManagerReloadListener {
+public final class TextureHelper implements ISelectiveResourceReloadListener {
     public static SimpleReloadableResourceManager resourceManager;
     private static ArrayList<IResourcePack> packLoad = new ArrayList<>();
 
     public static void preInit() {
         resourceManager = (SimpleReloadableResourceManager) Minecraft.getMinecraft().getResourceManager();
-        while (packLoad.size() > 0) {
-            register(packLoad.remove(packLoad.size() - 1));
+        resourceManager.registerReloadListener(new TextureHelper());
+        for (int i = 0; i < packLoad.size(); i++) {
+            load0(packLoad.get(i));
         }
         packLoad = null;
     }
 
-    public static void postInit() {
-        TextureHelper instance = new TextureHelper();
-        resourceManager.registerReloadListener(instance);
-    }
-
     public static void manualReload() {
-        ilib.ATHandler.notifyReloadListeners(resourceManager);
+        resourceManager.notifyReloadListeners();
     }
 
-    public static void enqueuePackLoad(IResourcePack pack) {
+    public static void load(IResourcePack pack) {
         if (packLoad != null) {
             packLoad.add(pack);
         } else {
-            register(pack);
+            load0(pack);
         }
     }
 
-    private static void register(IResourcePack pack) {
+    private static void load0(IResourcePack pack) {
         ReflectionClient.HELPER.getResourcePackList(FMLClientHandler.instance()).add(pack);
         resourceManager.reloadResourcePack(pack);
     }
 
     public static List<IResourcePack> getLoadedResourcePacks() {
-        List<IResourcePack> anotherList = new SimpleList<>();
-        for (FallbackResourceManager resourceManager : resourceManager.domainResourceManagers.values()) {
-            anotherList.addAll(resourceManager.resourcePacks);
+        List<IResourcePack> list = new SimpleList<>();
+        for (FallbackResourceManager man : resourceManager.domainResourceManagers.values()) {
+            list.addAll(man.resourcePacks);
         }
-        return anotherList;
-    }
-
-    public static void removeAndReload(Collection<? extends IResourcePack> list) {
-        Collection<IResourcePack> anotherList = getLoadedResourcePacks();
-        int size = anotherList.size();
-        anotherList.removeAll(list);
-        if (anotherList.size() == size) {
-            return;
-        }
-
-        ATHandler.clearResources(resourceManager);
-
-        for (IResourcePack pack : anotherList) {
-            resourceManager.reloadResourcePack(pack);
-        }
-
-        ilib.ATHandler.notifyReloadListeners(resourceManager);
+        return list;
     }
 
     @Override
-    public void onResourceManagerReload(@Nonnull IResourceManager man) {
-        ImpLib.HOOK.trigger(Hook.LANGUAGE_RELOAD);
-        if (Config.fixFont) {
-            ClientProxy.mc.fontRenderer.setUnicodeFlag(false);
-            ClientProxy.mc.fontRenderer.setBidiFlag(false);
+    public void onResourceManagerReload(IResourceManager man, Predicate<IResourceType> pred) {
+        if (pred.test(VanillaResourceType.LANGUAGES)) {
+            ImpLib.HOOK.trigger(Hook.LANGUAGE_RELOAD);
+            if (Config.fixFont) {
+                ClientProxy.mc.fontRenderer.setUnicodeFlag(false);
+                ClientProxy.mc.fontRenderer.setBidiFlag(false);
+            }
         }
     }
 }

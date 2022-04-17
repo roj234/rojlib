@@ -89,6 +89,6 @@ public final class IncrInsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, (int) variableId, amount);
+        return OpcodeUtil.toString0(code) + " " + variableId + " += " + amount;
     }
 }

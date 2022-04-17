@@ -25,12 +25,13 @@
  */
 package ilib.asm.util;
 
+import roj.collect.SimpleList;
+import roj.reflect.DirectAccessor;
+
 import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.IEventListener;
 import net.minecraftforge.fml.common.eventhandler.ListenerList;
-import roj.collect.SimpleList;
-import roj.reflect.DirectAccessor;
 
 import java.util.List;
 
@@ -63,7 +64,11 @@ public final class InvokerCompressor implements IEventListener {
         }
     }
 
-    public interface H {
+    public static Object getInstance(ListenerList list, int id) {
+        return Helper.getInstance(list, id);
+    }
+
+    interface H {
         Object getListeners(Object o);
         void forceRebuild(Object o);
         boolean shouldRebuild(Object o);

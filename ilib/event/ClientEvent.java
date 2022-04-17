@@ -34,18 +34,20 @@ import ilib.api.item.ICustomTooltip;
 import ilib.capabilities.Capabilities;
 import ilib.capabilities.EntitySize;
 import ilib.client.AutoFPS;
-import ilib.client.KeyHelper;
 import ilib.client.KeyRegister;
 import ilib.client.misc.MyDebugOverlay;
 import ilib.client.music.MusicPlayer;
 import ilib.client.renderer.DebugRenderer;
+import ilib.client.renderer.WaypointRenderer;
+import ilib.gui.GuiHelper;
 import ilib.item.ItemSelectTool;
 import ilib.math.Arena;
 import ilib.math.SelectionCache;
 import ilib.util.*;
 import ilib.world.saver.WorldSaver;
+import org.lwjgl.input.Keyboard;
 import roj.collect.IntMap;
-import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.math.MathUtils;
 import roj.opengl.render.ArenaRenderer;
 import roj.reflect.ReflectionUtils;
@@ -59,6 +61,8 @@ import net.minecraft.client.gui.GuiMultiplayer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.block.model.IBakedModel;
+import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.Entity;
@@ -79,6 +83,7 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.util.registry.RegistrySimple;
 import net.minecraft.world.WorldProvider;
 
 import net.minecraftforge.client.IRenderHandler;
@@ -216,6 +221,22 @@ public final class ClientEvent {
         } else if (gui instanceof GuiMultiplayer) {
             WorldSaver.plusSid();
         }
+
+        if (Config.betterKeyboard) {
+            Keyboard.enableRepeatEvents(gui != null);
+        }
+
+        if (model11 != null) {
+            //ATHandler.clearRegistry(model11);
+            model11 = null;
+        }
+    }
+
+    private static RegistrySimple<ModelResourceLocation, IBakedModel> model11;
+
+    @SubscribeEvent
+    public static void onModelBake(ModelBakeEvent event) {
+        model11 = (RegistrySimple<ModelResourceLocation, IBakedModel>) event.getModelRegistry();
     }
 
     // region 反反截图
@@ -258,22 +279,25 @@ public final class ClientEvent {
 
     @SubscribeEvent
     public static void onRenderWordLast(RenderWorldLastEvent event) {
-        EntityPlayer p = mc.player;
+        Entity p = mc.getRenderManager().renderViewEntity;
+        if (p == null) return;
+
+        WaypointRenderer.render();
 
         double x = p.lastTickPosX + (p.posX - p.lastTickPosX) * (double) event.getPartialTicks();
         double y = p.lastTickPosY + (p.posY - p.lastTickPosY) * (double) event.getPartialTicks();
         double z = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * (double) event.getPartialTicks();
 
         GlStateManager.pushMatrix();
-        GlStateManager.translate(-x,-y,-z);
+        GlStateManager.translate(-x, -y, -z);
 
-        //DebugRenderer.drawChunk();
+        DebugRenderer.drawPending();
         if (KeyRegister.shouldDrawLight) DebugRenderer.drawLight(false, false);
 
         Arena arena = SelectionCache.get(mc.player.getUniqueID().getMostSignificantBits());
         if (arena != null && arena.isOK()) {
             if (EntityHelper.canPlayerSee(new AxisAlignedBB(arena.getP1(), arena.getP2()))) {
-                boolean noDepth = p.getHeldItemMainhand().getItem() == ItemSelectTool.INSTANCE;
+                boolean noDepth = mc.player.getHeldItemMainhand().getItem() == ItemSelectTool.INSTANCE;
                 if (noDepth) GlStateManager.disableDepth();
                 // noinspection all
                 int rgb = 0xFF000000 | MathHelper.hsvToRGB((System.currentTimeMillis() / 50) % 100 / 100f, 0.7F, 0.6F);
@@ -392,7 +416,7 @@ public final class ClientEvent {
     // endregion
     // region 注册丢失的流体材质, 以及自定义的其它材质
 
-    private static final MyHashSet<ResourceLocation> ADDITIONAL_TEXTURES = new MyHashSet<>();
+    private static final List<ResourceLocation> moreSprites = new SimpleList<>();
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void registerSpirit(TextureStitchEvent.Pre event) {
@@ -407,11 +431,13 @@ public final class ClientEvent {
             e.printStackTrace();
         }
 
-        for (ResourceLocation loc : ADDITIONAL_TEXTURES) map.registerSprite(loc);
+        for (int i = 0; i < moreSprites.size(); i++) {
+            map.registerSprite(moreSprites.get(i));
+        }
     }
 
     public static void registerTexture(ResourceLocation loc) {
-        ADDITIONAL_TEXTURES.add(loc);
+        moreSprites.add(loc);
     }
 
     // endregion
@@ -451,7 +477,7 @@ public final class ClientEvent {
         }
 
         final int f = Config.tooltipFlag;
-        if (f != 0 && !KeyHelper.isShiftPressed()) {
+        if (f != 0 && !GuiHelper.isShiftPressed()) {
             if ((f & 1) != 0) {
                 list.add("\u00a7a" + I18n.format("tooltip.ilib.registry"));
                 list.add("\u00a77 - " + item.getRegistryName());
@@ -470,7 +496,7 @@ public final class ClientEvent {
                 }
             }
             if ((f & 8) != 0 && stack.hasTagCompound()) {
-                if (!KeyHelper.isCtrlPressed()) {
+                if (!GuiHelper.isCtrlPressed()) {
                     list.add("\u00a7aNBT (Ctrl)");
                 } else {
                     list.add("\u00a7aNBT");
@@ -561,7 +587,7 @@ public final class ClientEvent {
 
     static ItemStack lastRender;
     static String[] backup;
-    static int timer;
+    static int timer, prevLen;
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void lastTooltip(RenderTooltipEvent.Pre event) {
@@ -570,8 +596,10 @@ public final class ClientEvent {
 
         List<String> tooltip = Reflection.HELPER.getModifiableList(event.getLines());
 
-        if (lastRender == null || !InventoryUtil.areItemStacksEqual(event.getStack(), lastRender)) {
+        if (lastRender == null || !InventoryUtil.areItemStacksEqual(event.getStack(), lastRender) ||
+                tooltip.size() != prevLen) {
             timer = 0;
+            prevLen = tooltip.size();
 
             for (int i = 0; i < tooltip.size(); i++) {
                 String s = tooltip.get(i);
@@ -581,16 +609,17 @@ public final class ClientEvent {
                 }
             }
 
+            lastRender = event.getStack().copy();
+
             if (tooltip.size() <= rows) {
-                lastRender = null;
+                timer = -1;
                 return;
             }
 
             backup = tooltip.toArray(new String[tooltip.size()]);
-
-            lastRender = event.getStack().copy();
         }
 
+        if (timer < 0) return;
         int pages = (int) Math.ceil(((double) backup.length) / rows);
 
         int v = timer++ / Config.pagedTooltipTime;

@@ -33,16 +33,11 @@ import ilib.asm.fasterforge.anc.ClassInfo;
 import ilib.asm.fasterforge.anc.FastParser;
 import ilib.asm.fasterforge.anc.JarInfo;
 import ilib.asm.util.BoolFn;
-import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.ModCandidate;
-import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.tree.anno.Annotation;
 import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.config.data.CEntry;
 import roj.config.data.CObject;
 import roj.config.serial.Serializers;
@@ -51,9 +46,17 @@ import roj.io.IOUtil;
 import roj.io.MutableZipFile;
 import roj.util.ByteList;
 
+import net.minecraftforge.fml.common.*;
+import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ModCandidate;
+import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
+
 import java.io.*;
 import java.lang.reflect.Constructor;
-import java.util.*;
+import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
@@ -80,7 +83,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
                 CObject<?> obj = CEntry.fromBinary(r, st, ser).asObject(MyHashMap.class);
                 obj.deserialize();
                 store = (MyHashMap<String, JarInfo>) obj.value;
-                System.out.println("[IMPLIB]正在使用缓存的注解数据");
+                Loader.logger.info("[IMPLIB]正在使用缓存的注解数据");
             } catch (Throwable e) {
                 e.printStackTrace();
                 store.clear();
@@ -229,26 +232,28 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
 
                     FastParser parser = (FastParser) mp;
                     Map<String, List<Annotation>> map = parser.getAnnotationMap();
-                    Set<String> itf = parser.getItf();
+                    List<String> itf = parser.getItf();
 
                     if (map.isEmpty() && itf.isEmpty()) continue;
 
-                    ClassInfo ci = new ClassInfo(mp.getASMType().getInternalName());
-                    ji.classes.put(ze.getName(), ci);
+                    if (Config.cacheAnnotation) {
+                        ClassInfo ci = new ClassInfo(mp.getASMType().getInternalName());
+                        ji.classes.put(ze.getName(), ci);
 
-                    ci.interfaces = new SimpleList<>(itf);
-                    ci.annotations = map;
+                        ci.interfaces = itf;
+                        ci.annotations = map;
+                    }
 
                     mp.validate();
                     mp.sendToTable(table, candidate);
 
-                    ModContainer container = ModContainerFactory.instance().build(mp, candidate.getModContainer(), candidate);
-                    if (container != null) {
+                    ModContainer c = ModContainerFactory.instance().build(mp, candidate.getModContainer(), candidate);
+                    if (c != null) {
                         ji.mainClasses.add(ze.getName());
-                        table.addContainer(container);
-                        foundMods.add(container);
-                        container.bindMetadata(mc);
-                        container.setClassVersion(mp.getClassVersion());
+                        table.addContainer(c);
+                        foundMods.add(c);
+                        c.bindMetadata(mc);
+                        c.setClassVersion(mp.getClassVersion());
                     }
 
                     candidate.addClassEntry(ze.getName());
@@ -262,7 +267,7 @@ abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.Jar
         if (mzf != null) {
             mzf.store();
             for (int i = 0; i < 20; i++) {
-                System.err.println("有一个mod(" + candidate.getModContainer().getName() + ")已被兼容性修改，这会导致它无法加载，需要再次启动MC。这个提示可能会出现多次");
+                Loader.logger.info("有一个mod(" + candidate.getModContainer().getName() + ")已被兼容性修改，这会导致它无法加载，需要再次启动MC。这个提示可能会出现多次");
             }
         }
     }

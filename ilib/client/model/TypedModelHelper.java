@@ -35,72 +35,54 @@ package ilib.client.model;
 
 import ilib.api.registry.IRegistry;
 import ilib.api.registry.Indexable;
-import ilib.api.registry.Propertied;
 import ilib.client.GeneratedModelRepo;
+
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
+
 import net.minecraftforge.client.model.ModelLoader;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 public class TypedModelHelper {
 
-    public static void itemTypedModel(Item item, ResourceLocation modelPath, String texturePath, IRegistry<?> wrapper) {
-        itemTypedModel(item, modelPath, texturePath, wrapper.values());
+    public static void itemTypedModel(Item item, ResourceLocation model, String texturePath, IRegistry<?> wrapper) {
+        itemTypedModel(item, model, texturePath, wrapper.values());
     }
 
-    public static void itemTypedModel(Item item, ResourceLocation modelPath, String texturePath, Indexable[] values) {
-        generateModel(item, modelPath, texturePath, values, true);
+    public static void itemTypedModel(Item item, ResourceLocation model, String texturePath, Indexable[] values) {
+        itemTypedModel(item, model, texturePath, values, true);
     }
 
-    public static void generateModel(Item item, ResourceLocation modelPath, String texturePath, Indexable[] values, boolean register) {
+    public static void itemTypedModel(Item item, ResourceLocation model, String textureDirectory, Indexable[] values, boolean register) {
         BlockStateBuilder modelBuilder = new BlockStateBuilder(true).addVariant("type");
 
-        String base = modelPath.getNamespace() + ':' + "items/" + texturePath + '/';
+        String base = model.getNamespace() + ":items/" + textureDirectory + '/';
 
         for (Indexable t : values) {
             modelBuilder.setVariantTexture("type", t.getName(), base + t.getName());
             if (register) {
-                ModelLoader.setCustomModelResourceLocation(item, t.getIndex(), new ModelResourceLocation(modelPath, "type" + '=' + t.getName()));
+                ModelLoader.setCustomModelResourceLocation(item, t.getIndex(), new ModelResourceLocation(model, "type" + '=' + t.getName()));
             }
         }
 
-        GeneratedModelRepo.register("assets/" + modelPath.getNamespace() + "/blockstates/" + modelPath.getPath() + ".json", modelBuilder.build());
+        GeneratedModelRepo.addModel("assets/" + model.getNamespace() + "/blockstates/" + model.getPath() + ".json", modelBuilder.build());
     }
 
-    public static void generateModel(BlockStateBuilder modelBuilder, String texPos, Item item, ResourceLocation modelPath, String texturePath, Collection<String> values) {
-        modelBuilder.addVariant("type");
+    public static void typeModelMerged(ResourceLocation model, String texturePath, Collection<String> values) {
+        typeModelMerged(new BlockStateBuilder(true), "layer0", model, texturePath, values);
+    }
 
-        String base = modelPath.getNamespace() + ':' + "items/" + texturePath + '/';
+    public static void typeModelMerged(BlockStateBuilder b, String textureType, ResourceLocation model, String textureDirectory, Collection<String> values) {
+        b.addVariant("type");
+
+        String base = model.getNamespace() + ":items/" + textureDirectory + '/';
 
         for (String t : values) {
-            modelBuilder.setVariantTexture("type", t, texPos, base + t);
+            b.setVariantTexture("type", t, textureType, base + t);
         }
 
-        GeneratedModelRepo.register("assets/" + modelPath.getNamespace() + "/blockstates/" + modelPath.getPath() + ".json", modelBuilder.build());
-    }
-
-    public static void generateModel(Item item, ResourceLocation modelPath, String texturePath, Collection<String> values) {
-        generateModel(new BlockStateBuilder(true), "layer0", item, modelPath, texturePath, values);
-    }
-
-    public static void generateModel(Item item, ResourceLocation modelPath, String texturePath, String[] values) {
-        generateModel(item, modelPath, texturePath, Arrays.asList(values));
-    }
-
-    public static <T extends Propertied<T>> void itemLinearModel(Item item, ResourceLocation modelPath, String texturePath, int begin, int end) {
-        BlockStateBuilder modelBuilder = new BlockStateBuilder(true);
-        modelBuilder.addVariant("type");
-
-        String base = modelPath.getNamespace() + ':' + "items/" + texturePath + '/';
-
-        for (int i = begin; i < end; i++) {
-            ModelLoader.setCustomModelResourceLocation(item, i, new ModelResourceLocation(modelPath, "type" + '=' + i));
-            modelBuilder.setVariantTexture("type", String.valueOf(i), base + i);
-        }
-
-        GeneratedModelRepo.register("assets/" + modelPath.getNamespace() + "/blockstates/" + modelPath.getPath() + ".json", modelBuilder.build());
+        GeneratedModelRepo.addModel("assets/" + model.getNamespace() + "/blockstates/" + model.getPath() + ".json", b.build());
     }
 }

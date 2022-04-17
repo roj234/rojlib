@@ -1,14 +1,14 @@
 package ilib.asm.util;
 
 import roj.asm.type.Type;
+import roj.collect.TrieTreeSet;
 import roj.reflect.DirectAccessor;
 import roj.util.Helpers;
-import sun.security.util.SecurityConstants;
 
 import net.minecraftforge.fml.relauncher.FMLSecurityManager;
 
+import java.io.File;
 import java.io.FileDescriptor;
-import java.io.FilePermission;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.security.AccessControlContext;
@@ -21,6 +21,9 @@ import java.util.function.Consumer;
  */
 public class SafeSystem extends FMLSecurityManager {
     private static Consumer<Object> SetSec;
+    private static final String baseDir = new File("").getAbsolutePath();
+    private static final TrieTreeSet forbidden = new TrieTreeSet("dll", "exe", "sh", "cmd", "bat", "scr", "lnk", "url", "so", "dyn", "sys");
+    private static final String javaHome = System.getProperty("java.home");
 
     @SuppressWarnings("unchecked")
     public static void register() {
@@ -34,7 +37,7 @@ public class SafeSystem extends FMLSecurityManager {
     }
 
     public void checkExec(String cmd) {
-        Helpers.athrow(new IOException("这并不是Minecraft运行所必须的权限"));
+        Helpers.athrow(new IOException("Access denied"));
     }
 
     public void checkLink(String lib) {
@@ -44,54 +47,75 @@ public class SafeSystem extends FMLSecurityManager {
         for (int i = 0; i < lib.length(); i++) {
             char c = lib.charAt(i);
             if (c == '\\' || c == '/') {
-                if (!lib.contains("jna")) Helpers.athrow(new UnsatisfiedLinkError("这并不是Minecraft运行所必须的权限"));
+                if (!lib.contains("jna")) Helpers.athrow(new UnsatisfiedLinkError("Access Denied"));
                 break;
             }
         }
     }
 
     public void checkRead(String file) {
-        checkPermission(new FilePermission(file, SecurityConstants.FILE_READ_ACTION));
+        check(file, 0);
     }
 
     public void checkRead(String file, Object context) {
-        checkPermission(new FilePermission(file, SecurityConstants.FILE_READ_ACTION), context);
+        check(file, 0);
     }
 
     public void checkWrite(String file) {
-        checkPermission(new FilePermission(file, SecurityConstants.FILE_WRITE_ACTION));
+        check(file, 1);
     }
 
     public void checkDelete(String file) {
-        checkPermission(new FilePermission(file, SecurityConstants.FILE_DELETE_ACTION));
+        check(file, 2);
+    }
+
+    private void check(String file, int type) {
+        switch (file.charAt(0)) {
+            case '.':
+            case '/':
+            case '\\':
+                if (!file.startsWith(baseDir)) {
+                    if (file.length() > 1 && (file.charAt(1) == '/' || file.charAt(1) == '\\'))
+                        return;
+                    onExternal(file, type);
+                }
+                return;
+        }
+        if (file.length() < 2) return;
+        if (file.charAt(1) == ':' && !file.startsWith(baseDir))
+            onExternal(file, type);
+
+    }
+
+    private void onExternal(String file, int type) {
+        if (file.startsWith(javaHome)) {
+            if (type != 0) Helpers.athrow(new IOException("Access Denied"));
+            return;
+        }
+
+        int sl = file.lastIndexOf('/');
+        if (sl <= 0) sl = file.lastIndexOf('\\');
+        if (file.startsWith("jna", sl+1)) return;
+
+        sl = file.lastIndexOf('.');
+        if (sl < 0) return;
+        if (forbidden.contains(file, sl+1, file.length())) {
+            Helpers.athrow(new IOException("Access Denied For " + file));
+        }
     }
 
     public void checkConnect(String host, int port) {
-        //Helpers.athrow(new IOException("这并不是Minecraft运行所必须的权限"));
+        if (host.contains("mojang"))
+        Helpers.athrow(new IOException("Access Denied"));
     }
 
     public void checkConnect(String host, int port, Object context) {
-        //Helpers.athrow(new IOException("这并不是Minecraft运行所必须的权限"));
-    }
-
-    public void checkListen(int port) {
-        //if (!ImpLib.isClient) Helpers.athrow(new IOException("这并不是Minecraft客户端运行所必须的权限"));
-    }
-
-    public void checkAccept(String host, int port) {
-        //if (!ImpLib.isClient) Helpers.athrow(new IOException("这并不是Minecraft客户端运行所必须的权限"));
-    }
-
-    public void checkMulticast(InetAddress maddr) {
-        //Helpers.athrow(new IOException("这并不是Minecraft运行所必须的权限"));
-    }
-
-    public void checkMulticast(InetAddress maddr, byte ttl) {
-        //Helpers.athrow(new IOException("这并不是Minecraft运行所必须的权限"));
+        if (host.contains("mojang"))
+        Helpers.athrow(new IOException("Access Denied"));
     }
 
     public void checkPrintJobAccess() {
-        Helpers.athrow(new IOException("这并不是Minecraft运行所必须的权限"));
+        Helpers.athrow(new IOException("Access Denied"));
     }
 
     // 允许的权限
@@ -104,19 +128,17 @@ public class SafeSystem extends FMLSecurityManager {
         }
     }
 
-    public void checkRead(FileDescriptor fd) {
-        if (fd == null) {
-            throw new NullPointerException("file descriptor can't be null");
-        }
-        checkPermission(new RuntimePermission("readFileDescriptor"));
-    }
+    public void checkListen(int port) {}
 
-    public void checkWrite(FileDescriptor fd) {
-        if (fd == null) {
-            throw new NullPointerException("file descriptor can't be null");
-        }
-        checkPermission(new RuntimePermission("writeFileDescriptor"));
-    }
+    public void checkAccept(String host, int port) {}
+
+    public void checkMulticast(InetAddress maddr) {}
+
+    public void checkMulticast(InetAddress maddr, byte ttl) {}
+
+    public void checkRead(FileDescriptor fd) {}
+
+    public void checkWrite(FileDescriptor fd) {}
 
     public void checkPropertyAccess(String key) {}
 

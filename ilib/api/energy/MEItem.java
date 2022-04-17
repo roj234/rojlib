@@ -30,6 +30,12 @@ import ilib.capabilities.INBTSerializable;
 
 // ME unit define
 public interface MEItem extends INBTSerializable {
+    enum EnergyType {
+        RECEIVER, STORAGE, PROVIDER, TUBE
+    }
+
+    EnergyType getEnergyType();
+
     int currentME();
     int maxME();
 

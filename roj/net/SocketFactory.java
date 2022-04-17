@@ -29,13 +29,25 @@ import roj.io.NIOUtil;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.channels.SocketChannel;
 
 /**
  * @author Roj233
  * @since 2022/1/9 4:00
  */
 public interface SocketFactory {
-    SocketFactory PLAIN_FACTORY = socket -> new PlainSocket(socket, NIOUtil.fd(socket));
+    SocketFactory PLAIN_FACTORY = new SocketFactory() {
+        @Override
+        public WrappedSocket wrap(Socket socket) throws IOException {
+           return new PlainSocket(socket, NIOUtil.fd(socket));
+        }
+
+        @Override
+        public WrappedSocket wrap(SocketChannel socket) throws IOException {
+            return new PlainSocket(socket.socket(), NIOUtil.fd(socket));
+        }
+    };
 
     WrappedSocket wrap(Socket socket) throws IOException;
+    WrappedSocket wrap(SocketChannel socket) throws IOException;
 }

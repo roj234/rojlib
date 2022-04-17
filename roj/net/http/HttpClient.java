@@ -28,8 +28,9 @@ package roj.net.http;
 import roj.config.ParseException;
 import roj.io.ChannelOutputStream;
 import roj.io.EmptyInputStream;
+import roj.io.NIOUtil;
 import roj.net.Connector;
-import roj.net.SecureUtil;
+import roj.net.JavaSslFactory;
 import roj.net.SocketFactory;
 import roj.net.SocketSequence;
 import roj.text.CharList;
@@ -51,10 +52,11 @@ import java.util.concurrent.locks.LockSupport;
  * @since  2020/12/5 14:34
  */
 public class HttpClient extends Connector {
-    private CharSequence action, path, body;
+    private CharSequence action, body;
     private final Headers header = new Headers();
     private final CharList utf8Buf = new CharList();
     private int maxReceive;
+    private URL url;
 
     public HttpClient() {
         header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,* /*;q=0.8,application/signed-exchange;v=b3;q=0.9")
@@ -64,7 +66,6 @@ public class HttpClient extends Connector {
                 .header("Pragma", "no-cache")
                 .header("Cache-Control", "no-cache");
         action = "GET";
-        path = "/";
     }
 
     public HttpClient method(String type) {
@@ -97,17 +98,16 @@ public class HttpClient extends Connector {
         return this;
     }
 
-    public HttpClient path(CharSequence path) {
-        this.path = path;
-        return this;
-    }
-
     public HttpClient ssl(SocketFactory f) {
         this.factory = f == null ? SocketFactory.PLAIN_FACTORY : f;
         return this;
     }
 
     public void send() throws IOException {
+        if (in != null) in.close();
+        if (server == null) {
+            createSocket(url.getHost(), url.getPort() < 0 ? url.getDefaultPort() : url.getPort(), false);
+        }
         connect();
 
         long timeout = (readTimeout <= 0 ? 5000 : readTimeout) + System.currentTimeMillis();
@@ -152,7 +152,7 @@ public class HttpClient extends Connector {
             header.put("Content-Length", Integer.toString(ByteList.byteCountUTF8(body)));
         }
 
-        text.append(action).append(" ").append(path).append(" HTTP/1.1").append(CRLF);
+        text.append(action).append(" ").append(url.getPath()).append(" HTTP/1.1").append(CRLF);
         header.encode(text);
 
         if (body == null) {
@@ -199,15 +199,13 @@ public class HttpClient extends Connector {
         try {
             HttpHead hdr = HttpHead.parse(lexer);
             ByteBuffer buf = channel.buffer();
+            int pos = buf.position();
+            buf.position(lexer.index).limit(pos);
+            buf.compact();
             if (!"HEAD".contentEquals(action)) {
-                int pos = buf.position();
-                buf.position(lexer.index).limit(pos);
-                buf.compact();
-
                 in = HttpInputStream.create(hdr, new SocketInputStream(channel).init(hdr.headers.get("Content-Length"), readTimeout));
             } else {
                 in = new EmptyInputStream();
-                buf.clear();
             }
             return hdr;
         } finally {
@@ -235,16 +233,19 @@ public class HttpClient extends Connector {
     }
 
     public HttpClient url(URL url) throws IOException {
-        if(url.getProtocol().equals("https")) {
+        if(url.getProtocol().equals("https") && factory == SocketFactory.PLAIN_FACTORY) {
             try {
-                factory = SecureUtil.getClientDefault();
+                factory = JavaSslFactory.getClientDefault();
             } catch (GeneralSecurityException ignored) {}
         }
-        path = url.getPath();
+        this.url = url;
         String host = url.getHost();
         if (url.getPort() >= 0) host += ":" + url.getPort();
         header.put("Host", host);
-        createSocket(url.getHost(), url.getPort() < 0 ? url.getDefaultPort() : url.getPort(), false);
         return this;
+    }
+
+    public void setConnected() {
+        NIOUtil.setConnected(server, true);
     }
 }

@@ -28,8 +28,8 @@ package roj.asm.tree.insn;
 
 import roj.asm.OpcodeUtil;
 import roj.asm.cst.CstRefField;
-import roj.asm.tree.Clazz;
-import roj.asm.tree.Field;
+import roj.asm.tree.IClass;
+import roj.asm.tree.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
@@ -93,12 +93,12 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     public String owner, name, rawType;
     private Type type;
 
-    public FieldInsnNode(byte code, Clazz clazz, int index) {
+    public FieldInsnNode(byte code, IClass clazz, int index) {
         super(code);
-        Field field = clazz.fields.get(index);
-        this.owner = clazz.name;
-        this.name = field.name;
-        this.type = field.type;
+        MoFNode field = clazz.fields().get(index);
+        this.owner = clazz.name();
+        this.name = field.name();
+        this.type = ParamHelper.parseField(field.rawDesc());
     }
 
     public Type getType() {
@@ -149,6 +149,6 @@ public final class FieldInsnNode extends InsnNode implements IClassInsnNode {
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, rawType, owner.substring(owner.lastIndexOf('/') + 1), name);
+        return OpcodeUtil.toString0(code) + " " + owner.substring(owner.lastIndexOf('/') + 1) + "." + name + " : " + getType();
     }
 }

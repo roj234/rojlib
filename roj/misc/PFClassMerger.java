@@ -50,13 +50,13 @@ public class PFClassMerger {
                 s.put(args[j], new ArrayList<>());
             }
             for (int i = 0; i < now.methods.size(); i++) {
-                MethodSimple ms = now.methods.get(i);
+                MethodSimple ms = (MethodSimple) now.methods.get(i);
                 List<MoFNode> nodes = s.get(ms.name.getString());
                 if(nodes != null)
                     nodes.add(new Method(now, ms));
             }
             for (int i = orig.methods.size() - 1; i >= 0; i--) {
-                MethodSimple ms = orig.methods.get(i);
+                MethodSimple ms = (MethodSimple) orig.methods.get(i);
                 List<MoFNode> nodes = s.get(ms.name.getString());
                 if(nodes != null) {
                     for (int k = 0; k < nodes.size(); k++) {

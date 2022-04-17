@@ -1,10 +1,12 @@
 package ilib.tile;
 
 import ilib.fluid.handler.FluidHandler;
+import ilib.item.handler.ListInventory;
 import ilib.item.handler.SimpleInventory;
 import ilib.util.EnumIO;
-import roj.collect.IntList;
-import roj.util.EmptyArrays;
+import roj.collect.IntIterator;
+import roj.collect.MyBitSet;
+import roj.reflect.DirectAccessor;
 
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -18,11 +20,13 @@ import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.IItemHandlerModifiable;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -30,30 +34,44 @@ import java.util.List;
  * @since 2022/4/15 15:05
  */
 public final class IOManager {
-    public static final int ITEM_IN = 1, ITEM_OUT = 2, FLUID_IN = 4, FLUID_OUT = 8;
+    public static final byte ITEM_IN  = 0, ITEM_OUT = 1, FLUID_IN = 2, FLUID_OUT = 3;
+    public static final int TYPE_ITEM = 0, TYPE_ENERGY = 1, TYPE_FLUID  = 2;
 
     private final TileEntity tile;
-    private final IItemHandler ih;
-    private final IFluidHandler fh;
+    private IItemHandler ih;
+    private IFluidHandler fh;
 
     private final int[] ioMask, ioMode;
 
-    public byte autoIO;
+    private byte autoIO, autoIOFilter;
 
-    private IntList itemSlots;
+    private MyBitSet itemIn, itemOut;
     private ItemProxy itemProxy;
-    private int inSlotCount;
+    private int itemIOSpeed;
 
-    private IntList fluidIn, fluidOut;
+    private MyBitSet fluidIn, fluidOut;
     private FluidProxy fluidProxy;
+    private int fluidIOSpeed;
 
     public IOManager(TileEntity tile) {
+        this(tile,
+             tile.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null),
+             tile.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null)
+            );
+    }
+
+    public IOManager(TileEntity tile, IItemHandler ih, IFluidHandler fh) {
         this.tile = tile;
         this.ioMode = new int[3];
-        this.ioMask = new int[3];
+        this.ioMask = new int[] {
+                0x00010001, 0x00010001, 0x00010001
+        };
 
-        this.ih = tile.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
-        this.fh = tile.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+        itemIOSpeed = 4;
+        fluidIOSpeed = 100;
+
+        setItemHandler(ih);
+        setFluidHandler(fh);
     }
 
     // region 设置
@@ -70,47 +88,118 @@ public final class IOManager {
         ioMask[type] &= 0xFFFF0000;
     }
 
+    public MyBitSet getItemInputs() {
+        return itemIn;
+    }
+
+    public MyBitSet getItemOutputs() {
+        return itemOut;
+    }
+
+    public MyBitSet getFluidInputs() {
+        return fluidIn;
+    }
+
+    public MyBitSet getFluidOutputs() {
+        return fluidOut;
+    }
+
+    public int getFluidIOSpeed() {
+        return fluidIOSpeed;
+    }
+
+    public void setFluidIOSpeed(int fluidIOSpeed) {
+        this.fluidIOSpeed = fluidIOSpeed;
+    }
+
+    public int getItemIOSpeed() {
+        return itemIOSpeed;
+    }
+
+    public void setItemIOSpeed(int itemIOSpeed) {
+        this.itemIOSpeed = itemIOSpeed;
+    }
+
+    public void setItemHandler(IItemHandler inv) {
+        this.ih = inv;
+        if (inv != null) {
+            itemIn = new MyBitSet();
+            itemOut = new MyBitSet();
+        }
+    }
+
+    public void setFluidHandler(IFluidHandler fluids) {
+        this.fh = fluids;
+        if (fluids instanceof FluidHandler) {
+            fluidIn = new MyBitSet();
+            fluidOut = new MyBitSet();
+        }
+    }
+
+    public void setAutoIOFilter(int autoIOFilter) {
+        this.autoIOFilter = (byte) autoIOFilter;
+        this.autoIO &= autoIOFilter;
+    }
+
+    public int getAutoIOFilter() {
+        return autoIOFilter;
+    }
+
     // endregion
 
+    public void setAutoIO(int newIO) {
+        if (fh == null) newIO &= ~((1<<FLUID_IN) | (1<<FLUID_OUT));
+        if (ih == null) newIO &= ~((1<<ITEM_IN) | (1<<ITEM_OUT));
+        this.autoIO = (byte) (newIO & autoIOFilter);
+    }
+
+    public int getAutoIO() {
+        return autoIO & 0xFF;
+    }
+
     public EnumIO getMode(int type, EnumFacing face) {
-        return EnumIO.VALUES[(ioMode[type] >>> (face.ordinal() << 3)) & 15];
+        return EnumIO.VALUES[(ioMode[type] >>> (face.ordinal() << 2)) & 15];
     }
 
     public void setMode(int type, EnumFacing face, EnumIO mode) {
         int id = mode.ordinal();
-        if (((1 << id) & ioMask[type]) == 0) return;
+        if (((1 << id) & ioMask[type]) == 0) {
+            System.out.println("mode is not allowed: " + type + " " + face + " " + mode);
+            return;
+        }
 
-        int field = ioMode[type] & ~(15 << (face.ordinal() << 3));
-        ioMode[type] = field | (id << (face.ordinal() << 3));
+        int field = ioMode[type] & ~(15 << (face.ordinal() << 2));
+        ioMode[type] = field | (id << (face.ordinal() << 2));
     }
 
     public void resetMode(int type) {
         if (type == -1) {
             for (int i = 0; i < 3; i++) {
-                resetMode(type);
+                ioMode[i] = getDefault(i);
             }
-            return;
+        } else {
+            ioMode[type] = getDefault(type);
         }
+    }
 
+    private int getDefault(int type) {
         int mode = 0;
         int idx = getIdx(ioMask[type] >>> 16);
-        for (int j = 0; j < 18; j += 3) {
+        for (int j = 0; j < 24; j += 4) {
             mode |= idx << j;
         }
-        ioMode[type] = mode;
+        return mode;
     }
 
     public void nextMode(int type, EnumFacing face) {
         int mode = ioMode[type];
-        int mask = ioMask[type];
+        int mask = ioMask[type] & 0xFFFF;
 
-        int j = face.ordinal();
+        int j = face.ordinal() << 2;
         int ord = (mode >>> j) & 15;
-        if (((1 << ++ord) & mask) == 0) {
-            ord = 0;
-            while (((1 << ord) & mask) == 0) {
-                ord++;
-            }
+
+        while (((1 << ++ord) & mask) == 0) {
+            if (ord == 15) ord = -1;
         }
 
         ioMode[type] = (mode & ~(15 << j)) | (ord << j);
@@ -122,7 +211,7 @@ public final class IOManager {
             int mask = ioMask[i];
             int idx = getIdx(mask >>> 16);
 
-            for (int j = 0; j < 18; j += 3) {
+            for (int j = 0; j < 24; j += 4) {
                 int ord = (mode >>> j) & 15;
                 if (((1 << ord) & mask) == 0) {
                     mode = (mode & ~(15 << j)) | (idx << j);
@@ -152,40 +241,69 @@ public final class IOManager {
     }
 
     public void doAutoIO() {
-        if ((autoIO & ITEM_OUT) != 0) {
+        if (tile.getWorld().isRemote) return;
+
+        int io = autoIO & 0xF;
+        if ((io & (1<<ITEM_OUT)) != 0) {
+            int max = itemIOSpeed;
             // 物品自动输出
-            for (int i = 0; i < itemSlots.size(); i++) {
-                int val = itemSlots.get(i);
-                if (val < 0) outputItem(-val - 1);
+            for (IntIterator i = itemOut.iterator(); i.hasNext(); ) {
+                max -= outputItem(max, i.nextInt()).getCount();
+                if (max <= 0) break;
             }
         }
 
-        if ((autoIO & ITEM_IN) != 0) {
+        if ((io & (1<<ITEM_IN)) != 0) {
             // 物品自动输入
-            inputItem(64);
+            inputItem(itemIOSpeed);
         }
 
-        if ((autoIO & FLUID_OUT) != 0) {
-            FluidTank[] tanks = ((FluidHandler) fh).tanks;
+        if ((io & (1<<FLUID_OUT)) != 0) {
+            if (fluidOut != null) {
+                FluidTank[] tanks = ((FluidHandler) fh).tanks;
 
-            // 流体自动输出
-            for (int i = 0; i < fluidOut.size(); i++) {
-                FluidStack stack = tanks[fluidOut.get(i)].getFluid();
-                if (stack != null) drainFluid(stack);
+                int max = fluidIOSpeed;
+                // 流体自动输出
+                for (IntIterator i = fluidOut.iterator(); i.hasNext(); ) {
+                    FluidStack stack = tanks[i.nextInt()].getFluid();
+                    if (stack != null) {
+                        int amount = stack.amount;
+                        if (amount > max) stack.amount = max;
+
+                        int drained = drainFluid(stack);
+                        stack.amount = amount - drained;
+
+                        max -= drained;
+                        if (max <= 0) break;
+                    }
+                }
+            } else {
+                FluidStack st = fh.drain(fluidIOSpeed, false);
+                if (st != null) {
+                    int drained = drainFluid(st);
+                    if (drained > 0) fh.drain(drained, true);
+                }
             }
         }
 
-        if ((autoIO & FLUID_IN) != 0) {
-            FluidTank[] tanks = ((FluidHandler) fh).tanks;
+        if ((io & (1<<FLUID_IN)) != 0) {
+            if (fluidIn != null) {
+                FluidTank[] tanks = ((FluidHandler) fh).tanks;
 
-            // 流体自动输入
-            for (int i = 0; i < fluidIn.size(); i++) {
-                FluidTank tank = tanks[fluidIn.get(i)];
-                int remain = tank.getCapacity() - tank.getFluidAmount();
-                if (remain > 0) fillFluid(remain, tank);
+                int max = fluidIOSpeed;
+                // 流体自动输入
+                for (IntIterator i = fluidIn.iterator(); i.hasNext(); ) {
+                    FluidTank tank = tanks[i.nextInt()];
+                    int remain = tank.getCapacity() - tank.getFluidAmount();
+                    if (remain > 0)
+                        max -= fillFluid(remain > max ? max : remain, tank);
+
+                    if (max <= 0) break;
+                }
+            } else {
+                fillFluid(fluidIOSpeed, fh);
             }
         }
-
     }
 
     // region Sided Handler
@@ -196,8 +314,8 @@ public final class IOManager {
     }
 
     public IItemHandler getItemHandler(EnumFacing face) {
-        EnumIO mode = getMode(EnumIO.TYPE_ITEM, face);
-        if (mode.canInput() == mode.canOutput()) return mode.canInput() ? ih : null;
+        EnumIO mode = getMode(TYPE_ITEM, face);
+        if (mode.canInput() == mode.canOutput()) return mode.canInput() ? ih : new ListInventory(0);
 
         if (itemProxy == null) itemProxy = new ItemProxy();
         itemProxy.input = mode.canInput();
@@ -206,10 +324,10 @@ public final class IOManager {
     }
 
     public IFluidHandler getFluidHandler(EnumFacing face) {
-        EnumIO mode = getMode(EnumIO.TYPE_FLUID, face);
+        EnumIO mode = getMode(TYPE_FLUID, face);
         if (mode.canInput() == mode.canOutput()) return mode.canInput() ? fh : null;
 
-        if (fluidProxy == null) fluidProxy = new FluidProxy();
+        if (fluidProxy == null) fluidProxy = fh instanceof FluidHandler ? new FluidProxy() : new FHProxy();
         fluidProxy.input = mode.canInput();
 
         return fluidProxy;
@@ -220,13 +338,14 @@ public final class IOManager {
 
     public int drainFluid(FluidStack stack) {
         if(stack.amount == 0) return 0;
+        int begin = stack.amount;
 
         World w = tile.getWorld();
         BlockPos p = tile.getPos();
 
         PooledMutableBlockPos pos1 = PooledMutableBlockPos.retain();
         for(EnumFacing face : EnumFacing.VALUES) {
-            EnumIO type = getMode(EnumIO.TYPE_FLUID, face);
+            EnumIO type = getMode(TYPE_FLUID, face);
             if(type != EnumIO.OUTPUT && type != EnumIO.ALL) continue;
 
             TileEntity t = w.getTileEntity(pos1.setPos(p).move(face));
@@ -239,7 +358,7 @@ public final class IOManager {
             }
         }
         pos1.release();
-        return stack.amount;
+        return begin - stack.amount;
     }
 
     public void fillFluid(List<FluidStack> fluids) {
@@ -256,7 +375,7 @@ public final class IOManager {
 
         PooledMutableBlockPos pos1 = PooledMutableBlockPos.retain();
         for(EnumFacing face : EnumFacing.VALUES) {
-            EnumIO type = getMode(EnumIO.TYPE_FLUID, face);
+            EnumIO type = getMode(TYPE_FLUID, face);
             if(type != EnumIO.INPUT && type != EnumIO.ALL) continue;
 
             TileEntity t = w.getTileEntity(pos1.setPos(p).move(face));
@@ -279,35 +398,40 @@ public final class IOManager {
         }
     }
 
-    public void fillFluid(int maxFill, IFluidHandler fh) {
+    public int fillFluid(int maxFill, IFluidHandler fh) {
+        int remain = maxFill;
         World w = tile.getWorld();
         BlockPos p = tile.getPos();
 
         PooledMutableBlockPos pos1 = PooledMutableBlockPos.retain();
         for(EnumFacing face : EnumFacing.VALUES) {
-            EnumIO type = getMode(EnumIO.TYPE_FLUID, face);
+            EnumIO type = getMode(TYPE_FLUID, face);
             if(type != EnumIO.INPUT && type != EnumIO.ALL) continue;
 
             TileEntity t = w.getTileEntity(pos1.setPos(p).move(face));
             if(t != null) {
                 IFluidHandler src = t.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, face.getOpposite());
                 if(src != null) {
-                    FluidStack fs = src.drain(maxFill, false);
+                    FluidStack fs = src.drain(remain, false);
                     int filled = fh.fill(fs, true);
                     src.drain(filled, true);
 
-                    maxFill -= filled;
-                    if (maxFill == 0) break;
+                    remain -= filled;
+                    if (remain == 0) break;
                 }
             }
         }
         pos1.release();
+        return maxFill - remain;
     }
 
 
-    public ItemStack outputItem(int slot) {
-        ItemStack stack = ih.getStackInSlot(slot);
-        return outputItem(ih.extractItem(slot, stack.getCount(), false));
+    public ItemStack outputItem(int maxOut, int slot) {
+        int count = Math.min(maxOut, ih.getStackInSlot(slot).getCount());
+        ItemStack stack = ih.extractItem(slot, count, true);
+        stack = outputItem(stack);
+
+        return ih.extractItem(slot, count - stack.getCount(), false);
     }
 
     public ItemStack outputItem(ItemStack stack) {
@@ -318,7 +442,7 @@ public final class IOManager {
 
         PooledMutableBlockPos pos1 = PooledMutableBlockPos.retain();
         for(EnumFacing face : EnumFacing.VALUES) {
-            EnumIO type = getMode(EnumIO.TYPE_ITEM, face);
+            EnumIO type = getMode(TYPE_ITEM, face);
             if(type != EnumIO.OUTPUT && type != EnumIO.ALL) continue;
 
             TileEntity t = w.getTileEntity(pos1.setPos(p).move(face));
@@ -343,7 +467,7 @@ public final class IOManager {
 
         PooledMutableBlockPos pos1 = PooledMutableBlockPos.retain();
         for(EnumFacing face : EnumFacing.VALUES) {
-            EnumIO type = getMode(EnumIO.TYPE_ITEM, face);
+            EnumIO type = getMode(TYPE_ITEM, face);
             if(type != EnumIO.INPUT && type != EnumIO.ALL) continue;
 
             TileEntity t = w.getTileEntity(pos1.setPos(p).move(face));
@@ -382,43 +506,33 @@ public final class IOManager {
         if (modes.length >= 3) {
             System.arraycopy(modes, 0, ioMode, 0, 3);
             checkViolation();
+        } else {
+            resetMode(-1);
         }
-        autoIO = tag.getByte("Auto");
+        setAutoIO(tag.getByte("Auto"));
     }
 
-    public NBTTagCompound writeToNBT() {
-        NBTTagCompound tag = new NBTTagCompound();
-        tag.setIntArray("Mode", ioMode);
-        tag.setByte("Auto", autoIO);
+    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
+        for (int i = 0; i < 3; i++) {
+            if (ioMode[i] != getDefault(i)) {
+                tag.setIntArray("Mode", ioMode);
+                break;
+            }
+        }
+
+        if (autoIO != 0) tag.setByte("Auto", autoIO);
         return tag;
     }
 
     class ItemProxy extends SimpleInventory {
-        public ItemProxy() {
+        ItemProxy() {
             super("IOManagerProxy");
-            inSlotCount = 0;
-            for (int j = 0; j < itemSlots.size(); j++) {
-                int val = itemSlots.get(j);
-                if (val >= 0) inSlotCount++;
-            }
         }
 
         boolean input;
 
         private int mapToSlot(int i) {
-            for (int j = 0; j < itemSlots.size(); j++) {
-                int val = itemSlots.get(j);
-                if (input) {
-                    if (val >= 0) {
-                        if (i-- == 0) return val;
-                    }
-                } else {
-                    if (val < 0) {
-                        if (i-- == 0) return -val - 1;
-                    }
-                }
-            }
-            throw new IndexOutOfBoundsException();
+            return (input ? itemIn : itemOut).nthTrue(i);
         }
 
         @Override
@@ -427,8 +541,18 @@ public final class IOManager {
         }
 
         @Override
+        protected boolean canExtract(int id, ItemStack stack) {
+            return !input;
+        }
+
+        @Override
+        public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
+            return input;
+        }
+
+        @Override
         public int getSlots() {
-            return input ? inSlotCount : itemSlots.size() - inSlotCount;
+            return (input ? itemIn : itemOut).size();
         }
 
         @Nonnull
@@ -439,23 +563,50 @@ public final class IOManager {
     }
 
     class FluidProxy extends FluidHandler {
-        @Override
-        protected void setupTanks() {
-            tanks = ((FluidHandler) fh).tanks;
-            fluidIn.trimToSize();
-            fluidOut.trimToSize();
+        FluidProxy() {
+            if (fh instanceof FluidHandler)
+                tanks = ((FluidHandler) fh).tanks;
         }
 
         @Override
-        protected int[] getInputTanks() {
-            return input ? fluidIn.getRawArray() : EmptyArrays.INTS;
+        protected MyBitSet getInputTanks() {
+            return input ? fluidIn : DirectAccessor.EMPTY_BITS;
         }
 
         @Override
-        protected int[] getOutputTanks() {
-            return !input ? fluidOut.getRawArray() : EmptyArrays.INTS;
+        protected MyBitSet getOutputTanks() {
+            return !input ? fluidOut : DirectAccessor.EMPTY_BITS;
         }
 
         boolean input;
+    }
+
+    class FHProxy extends FluidProxy {
+        FHProxy() {}
+
+        @Override
+        public IFluidTankProperties[] getTankProperties() {
+            return fh.getTankProperties();
+        }
+
+        @Override
+        public int fill(FluidStack stack, boolean b) {
+            if (!input) return 0;
+            return fh.fill(stack, b);
+        }
+
+        @Nullable
+        @Override
+        public FluidStack drain(FluidStack stack, boolean b) {
+            if (input) return null;
+            return fh.drain(stack, b);
+        }
+
+        @Nullable
+        @Override
+        public FluidStack drain(int i, boolean b) {
+            if (input) return null;
+            return fh.drain(i, b);
+        }
     }
 }

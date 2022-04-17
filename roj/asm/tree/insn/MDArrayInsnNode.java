@@ -99,6 +99,6 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, ParamHelper.parseField(owner).toString());
+        return OpcodeUtil.toString0(code) + " " + ParamHelper.parseField(owner);
     }
 }

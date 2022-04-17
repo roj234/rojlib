@@ -25,11 +25,10 @@
  */
 package roj.mod.remap;
 
-import roj.asm.Parser;
 import roj.asm.cst.CstClass;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrInnerClasses;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.ui.CmdUtil;
@@ -139,43 +138,18 @@ public class ClassMerger {
     }
 
     private void processInnerClasses(ConstantData main, ConstantData sub) {
-        AttrInnerClasses subAttr = getAttr(sub);
-        if(subAttr == null)
-            return;
-        AttrInnerClasses mainAttr = getAttr(main);
-        if(mainAttr == null) {
-            main.attributes.add(subAttr);
+        List<AttrInnerClasses.InnerClass> scs = AttrHelper.getInnerClasses(sub.cp, sub);
+        if(scs == null) return;
+        List<AttrInnerClasses.InnerClass> mcs = AttrHelper.getInnerClasses(main.cp, main);
+        if(mcs == null) {
+            main.attributes().add(sub.attrByName("InnerClasses"));
             return;
         }
 
-        List<AttrInnerClasses.InnerClass> scs = subAttr.classes;
-        List<AttrInnerClasses.InnerClass> mcs = mainAttr.classes;
-        o:
         for (int i = 0; i < scs.size(); i++) {
             AttrInnerClasses.InnerClass sc = scs.get(i);
-
-            for (int j = 0; j < mcs.size(); j++) {
-                AttrInnerClasses.InnerClass mc = mcs.get(j);
-                if (mc.equals(sc)) {
-                    continue o;
-                }
-            }
-
-            mainAttr.classes.add(sc);
+            if (!mcs.contains(sc)) mcs.add(sc);
         }
-
-        main.attributes.putByName(mainAttr);
-    }
-
-    private static AttrInnerClasses getAttr(ConstantData clz) {
-        AttrInnerClasses aIC = null;
-        Attribute attr = clz.attrByName("InnerClasses");
-        if(attr instanceof AttrInnerClasses) {
-            aIC = (AttrInnerClasses) attr;
-        } else if(attr != null) {
-            aIC = new AttrInnerClasses(Parser.reader(attr), clz.cp);
-        }
-        return aIC;
     }
 
     private void processItf(ConstantData main, ConstantData sub) {

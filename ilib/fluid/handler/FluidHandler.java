@@ -23,17 +23,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-/**
- * This file is a part of more items mod (MI)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: FluidHandler.java
- */
 package ilib.fluid.handler;
 
-import roj.util.EmptyArrays;
+import roj.collect.IntIterator;
+import roj.collect.MyBitSet;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -56,51 +49,41 @@ public abstract class FluidHandler implements IFluidHandler, ICapabilityProvider
     public FluidTank[] tanks;
 
     public static class SimpleImpl extends FluidHandler {
-        protected int[] inputs;
-        protected int[] outputs;
-
-        public SimpleImpl(FluidTank... tanks) {
-            this.tanks = tanks;
-            this.inputs = this.outputs = EmptyArrays.INTS;
-        }
+        protected MyBitSet inputs, outputs;
 
         public SimpleImpl(int[] inputs, int[] outputs, FluidTank... tanks) {
+            this.tanks = tanks;
+            this.inputs = MyBitSet.from(inputs);
+            this.outputs = MyBitSet.from(outputs);
+        }
+
+        public SimpleImpl(int inputs, int outputs, FluidTank... tanks) {
+            this.tanks = tanks;
+            this.inputs = MyBitSet.fromRange(0, inputs);
+            this.outputs = MyBitSet.fromRange(inputs, inputs + outputs);
+        }
+
+        public SimpleImpl(MyBitSet inputs, MyBitSet outputs, FluidTank... tanks) {
             this.tanks = tanks;
             this.inputs = inputs;
             this.outputs = outputs;
         }
 
         @Override
-        protected void setupTanks() {}
-
-        @Override
-        protected int[] getInputTanks() {
+        protected MyBitSet getInputTanks() {
             return inputs;
         }
 
         @Override
-        protected int[] getOutputTanks() {
+        protected MyBitSet getOutputTanks() {
             return outputs;
         }
     }
 
-    /**
-     * Default constructor, calls the setupTanks method to setup the tanks
-     */
-    public FluidHandler() {
-        setupTanks();
-    }
+    public FluidHandler() {}
 
-
-    /*******************************************************************************************************************
-     * Abstract Methods                                                                                                *
-     *******************************************************************************************************************/
-
-    protected abstract void setupTanks();
-
-    protected abstract int[] getInputTanks();
-
-    protected abstract int[] getOutputTanks();
+    protected abstract MyBitSet getInputTanks();
+    protected abstract MyBitSet getOutputTanks();
 
     /*******************************************************************************************************************
      * FluidHandler                                                                                                    *
@@ -109,21 +92,17 @@ public abstract class FluidHandler implements IFluidHandler, ICapabilityProvider
     public void onTankChanged(FluidTank tank) {}
 
     protected boolean canFill(Fluid fluid) {
-        for (int id : getInputTanks()) {
-            if (id < tanks.length) {
-                FluidStack fluid1 = tanks[id].getFluid();
-                if (fluid1 == null || fluid1.getFluid() == null || fluid1.getFluid() == fluid)
-                    return true;
-            }
+        for (IntIterator i = getInputTanks().iterator(); i.hasNext(); ) {
+            FluidStack fluid1 = tanks[i.nextInt()].getFluid();
+            if (fluid1 == null || fluid1.getFluid() == null || fluid1.getFluid() == fluid) return true;
         }
         return false;
     }
 
     protected boolean canDrain(Fluid fluid) {
-        for (int id : getOutputTanks()) {
-            FluidStack fluid1 = tanks[id].getFluid();
-            if (fluid1 != null && (fluid == null || fluid1.getFluid() == fluid))
-                return true;
+        for (IntIterator i = getOutputTanks().iterator(); i.hasNext(); ) {
+            FluidStack fluid1 = tanks[i.nextInt()].getFluid();
+            if (fluid1 != null && (fluid == null || fluid1.getFluid() == fluid)) return true;
         }
         return false;
     }
@@ -184,8 +163,8 @@ public abstract class FluidHandler implements IFluidHandler, ICapabilityProvider
     @Override
     public int fill(FluidStack stack, boolean doFill) {
         if (stack != null && stack.getFluid() != null) {
-            for (int id : getInputTanks()) {
-                FluidTank tank = tanks[id];
+            for (IntIterator i = getInputTanks().iterator(); i.hasNext(); ) {
+                FluidTank tank = tanks[i.nextInt()];
                 int filled = tank.fill(stack, false);
                 if (filled > 0) {
                     if (!doFill) return filled;
@@ -215,12 +194,14 @@ public abstract class FluidHandler implements IFluidHandler, ICapabilityProvider
     @Nullable
     @Override
     public FluidStack drain(int amount, boolean doDrain) {
-        for (int id : getOutputTanks()) {
-            FluidStack stack = tanks[id].drain(amount, false);
+        for (IntIterator i = getOutputTanks().iterator(); i.hasNext(); ) {
+            FluidTank tank = tanks[i.nextInt()];
+            FluidStack stack = tank.drain(amount, false);
             if (stack != null) {
                 if (!doDrain) return stack;
-                tanks[id].drain(amount, true);
-                onTankChanged(tanks[id]);
+
+                tank.drain(amount, true);
+                onTankChanged(tank);
                 return stack;
             }
         }
@@ -230,15 +211,17 @@ public abstract class FluidHandler implements IFluidHandler, ICapabilityProvider
     @Nullable
     @Override
     public FluidStack drain(FluidStack stack, boolean doDrain) {
-        for (int id : getOutputTanks()) {
-            FluidStack in = tanks[id].getFluid();
+        for (IntIterator i = getOutputTanks().iterator(); i.hasNext(); ) {
+            FluidTank tank = tanks[i.nextInt()];
+
+            FluidStack in = tank.getFluid();
             if (in == null || in.getFluid() != stack.getFluid()) continue;
-            in = tanks[id].drain(stack.amount, false);
+            in = tank.drain(stack.amount, false);
 
             if (in != null) {
                 if (!doDrain) return in;
-                tanks[id].drain(stack.amount, true);
-                onTankChanged(tanks[id]);
+                tank.drain(stack.amount, true);
+                onTankChanged(tank);
                 return in;
             }
         }

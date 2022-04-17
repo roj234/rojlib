@@ -82,6 +82,6 @@ public final class U1InsnNode extends InsnNode implements IIndexInsnNode {
     }
 
     public String toString() {
-        return OpcodeUtil.toString0(code, index);
+        return OpcodeUtil.toString0(code) + " " + index;
     }
 }

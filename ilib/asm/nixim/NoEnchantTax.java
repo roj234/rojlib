@@ -26,7 +26,7 @@
 package ilib.asm.nixim;
 
 import com.mojang.authlib.GameProfile;
-import ilib.asm.util.MCHooks;
+import ilib.misc.MCHooks;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 

@@ -26,6 +26,8 @@
 package ilib.event;
 
 import ilib.ClientProxy;
+import ilib.capabilities.Capabilities;
+import ilib.capabilities.EntitySize;
 import org.lwjgl.opengl.GL11;
 import roj.collect.MyHashSet;
 
@@ -43,6 +45,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.EntityDamageSource;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -55,6 +58,7 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
@@ -73,22 +77,85 @@ public final class SizeEvent {
     public static void onPlayerFall(LivingFallEvent event) {
         if (event.getEntityLiving() instanceof EntityPlayer) {
             EntityPlayer player = (EntityPlayer)event.getEntityLiving();
-            if (player.height < 0.45F)
-                event.setDistance(0);
-            event.setDistance(event.getDistance() / player.height * 0.6F);
+            if (player.height < 0.45F) event.setDistance(0);
+            else event.setDistance(event.getDistance() / player.height * 0.6F);
         }
     }
 
-    @SubscribeEvent
-    public void onLivingTick(LivingEvent.LivingUpdateEvent event) {
-        EntityLivingBase entity = event.getEntityLiving();
-        World world = (event.getEntityLiving()).world;
-        for (EntityLivingBase entities : world.getEntitiesWithinAABB(EntityLivingBase.class, entity.getEntityBoundingBox())) {
-            if (!entity.isSneaking())
-                if (entity.height / entities.height >= 4 && entities.getRidingEntity() != entity)
-                    entities.attackEntityFrom(causeCrushingDamage(entity), entity.height - entities.height);
+//    @SubscribeEvent
+//    public void onLivingTick(LivingEvent.LivingUpdateEvent event) {
+//        EntityLivingBase entity = event.getEntityLiving();
+//        List<EntityLivingBase> es = entity.world.getEntitiesWithinAABB(EntityLivingBase.class,
+//                                                                       entity.getEntityBoundingBox());
+//        for (int i = 0; i < es.size(); i++) {
+//            EntityLivingBase e = es.get(i);
+//            if (!entity.isSneaking()) {
+//                if (entity.height / e.height >= 4 && e.getRidingEntity() != entity)
+//                    e.attackEntityFrom(causeCrushingDamage(entity), entity.height - e.height);
+//            }
+//        }
+//    }
+
+    private static void updateTick(EntityLivingBase entity) {
+        EntitySize cap = entity.getCapability(Capabilities.RENDERING_SIZE, null);
+        if (cap != null) {
+            double rh = cap.relHeight,
+                    rw = cap.relWidth;
+            float height = (float)(cap.defHeight * rh),
+                    width = (float)(cap.defWidth * rw);
+            if (rw != 1 || rh != 1) {
+                cap.transformed = true;
+
+                if(entity instanceof EntityPlayer) {
+                    EntityPlayer player = (EntityPlayer) entity;
+                    float eyeHeight = (float) (player.getDefaultEyeHeight() * rh);
+                    if (player.isSneaking()) {
+                        height *= 0.9166667F;
+                        eyeHeight *= 0.9382716F;
+                    }
+                    if (player.isElytraFlying())
+                        height *= 0.33F;
+                    if (player.isPlayerSleeping()) {
+                        width = 0.2F;
+                        height = 0.2F;
+                    }
+                    //if (player.isRiding()) {
+                    //
+                    //}
+                    width = Math.max(width, 0.15F);
+                    height = Math.max(height, 0.25F);
+                    if (height >= 1.6F) {
+                        player.eyeHeight = eyeHeight;
+                    } else {
+                        player.eyeHeight = eyeHeight * 0.9876542F;
+                    }
+                } else {
+                    width = Math.max(width, 0.04F);
+                    height = Math.max(height, 0.08F);
+                }
+                entity.height = height;
+                entity.width = width;
+                double d0 = width / 2.0D;
+                AxisAlignedBB aabb = entity.getEntityBoundingBox();
+                entity.setEntityBoundingBox(new AxisAlignedBB(entity.posX - d0, aabb.minY, entity.posZ - d0, entity.posX + d0, aabb.minY + entity.height, entity.posZ + d0));
+            } else {
+                if (cap.transformed) {
+                    entity.height = height;
+                    entity.width = width;
+                    double d0 = width / 2.0D;
+                    AxisAlignedBB aabb = entity.getEntityBoundingBox();
+                    entity.setEntityBoundingBox(new AxisAlignedBB(entity.posX - d0, aabb.minY, entity.posZ - d0, entity.posX + d0, aabb.minY + height, entity.posZ + d0));
+
+                    if(entity instanceof EntityPlayer) {
+                        EntityPlayer player = (EntityPlayer) entity;
+                        player.eyeHeight = player.getDefaultEyeHeight();
+                    }
+                    cap.transformed = false;
+                }
+            }
         }
     }
+
 
     public static DamageSource causeCrushingDamage(EntityLivingBase entity) { return new EntityDamageSource("crushing", entity); }
 
@@ -108,10 +175,13 @@ public final class SizeEvent {
 
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase == Phase.START) return;
+        updateTick(event.player);
+
         EntityPlayer player = event.player;
         World world = event.player.world;
         player.stepHeight = player.height / 3;
-        player.jumpMovementFactor *= player.height / 1.8F;
+        player.jumpMovementFactor = 0.02f * player.height / 1.8F;
 
         if (player.height < 0.9F) {
             BlockPos.PooledMutableBlockPos pos = BlockPos.PooledMutableBlockPos.retain(player.posX, player.posY, player.posZ);
@@ -136,10 +206,10 @@ public final class SizeEvent {
                 final boolean b = player.collidedHorizontally && canClimb(player, facing);
                 if (b && climb.contains(block)) {
                     player.motionY = !player.isSneaking() ? 0.1D : 0;
+                } else {
+                    check(player, world, pos, player.getHeldItemMainhand(), b);
+                    check(player, world, pos, player.getHeldItemOffhand(), b);
                 }
-
-                check(player, world, pos, player.getHeldItemMainhand(), b);
-                check(player, world, pos, player.getHeldItemOffhand(), b);
             }
 
             pos.release();
@@ -152,8 +222,10 @@ public final class SizeEvent {
         } else if (stack.getItem() == Items.PAPER && !player.onGround) {
             player.jumpMovementFactor = 0.035F;
             player.fallDistance = 0;
-            if (player.motionY < 0)
-                player.motionY *= 0.6D;
+            if (player.motionY < 0) {
+                double vec = 1 - (player.motionX * player.motionX + player.motionZ * player.motionZ) * 10;
+                player.motionY *= 0.99D * Math.max(vec, 0.95);
+            }
             if (player.isSneaking()) {
                 player.jumpMovementFactor *= 3.5F;
             } else {
@@ -227,10 +299,7 @@ public final class SizeEvent {
     public static void onEntityJump(LivingEvent.LivingJumpEvent event) {
         if (event.getEntityLiving() instanceof EntityPlayer) {
             EntityPlayer player = (EntityPlayer)event.getEntityLiving();
-            float height = player.height / 1.8F;
-            if(height < 0.65F)
-                height = 0.65F;
-            player.motionY *= height;
+            player.motionY *= Math.sqrt(player.height / 1.8F);
         }
     }
 
@@ -240,33 +309,16 @@ public final class SizeEvent {
         event.setNewSpeed(event.getOriginalSpeed() * player.height / 1.8F);
     }
 
-    /*@SubscribeEvent
-    @SideOnly(Side.CLIENT)
-    public void onFOVChange(FOVUpdateEvent event) {
-        if (event.getEntity() != null) {
-            EntityPlayer player = event.getEntity();
-            GameSettings settings = (Minecraft.getMinecraft()).gameSettings;
-            PotionEffect speed = player.getActivePotionEffect(MobEffects.SPEED);
-            float fov = settings.fovSetting / settings.fovSetting;
-            if (player.isSprinting()) {
-                event.setNewfov((speed != null) ? (fov + 0.1F * (speed.getAmplifier() + 1) + 0.15F) : (fov + 0.1F));
-            } else {
-                event.setNewfov((speed != null) ? (fov + 0.1F * (speed.getAmplifier() + 1)) : fov);
-            }
-        }
-    }*/
-
     @SubscribeEvent
     @SideOnly(Side.CLIENT)
     public static void onCameraSetup(EntityViewRenderEvent.CameraSetup event) {
         EntityPlayerSP player = ClientProxy.mc.player;
         float scale = player.height / 1.8F;
-        if(scale > 1) {
-            final int view = ClientProxy.mc.gameSettings.thirdPersonView;
-            if (view == 1)
-                GL11.glTranslatef(0, 0, -scale * 2);
-            else if (view == 2)
-                GL11.glTranslatef(0, 0, scale * 2);
-        }
+        if (scale < 0) scale = -scale;
+        final int view = ClientProxy.mc.gameSettings.thirdPersonView;
+        if (view == 1)
+            GL11.glTranslatef(0, 0, -scale * 2);
+        else if (view == 2)
+            GL11.glTranslatef(0, 0, scale * 2);
     }
 }

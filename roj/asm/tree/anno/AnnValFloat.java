@@ -40,6 +40,26 @@ public final class AnnValFloat extends AnnVal {
 
     public float value;
 
+    @Override
+    public int asInt() {
+        return (int) value;
+    }
+
+    @Override
+    public double asDouble() {
+        return value;
+    }
+
+    @Override
+    public float asFloat() {
+        return value;
+    }
+
+    @Override
+    public long asLong() {
+        return (long) value;
+    }
+
     public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) FLOAT).putShort(pool.getFloatId(value));
     }

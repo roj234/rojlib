@@ -109,16 +109,11 @@ public class ItemMeta<T extends Indexable> extends ItemBase {
     @SideOnly(Side.CLIENT)
     public void registerModel(String texturePath) {
         if (generateModel == Boolean.TRUE) {
-            TypedModelHelper.itemTypedModel(this, new ResourceLocation(modid(), "item/" + name), texturePath, wrapper);
+            TypedModelHelper.itemTypedModel(this, new ResourceLocation(modid(), "items/" + name), texturePath, wrapper);
         } else if (generateModel == Boolean.FALSE) {
-            ResourceLocation base = new ResourceLocation(modid(), "item/" + texturePath);
+            ResourceLocation base = new ResourceLocation(modid(), "items/" + texturePath);
             for (T t : wrapper.values()) {
                 ModelLoader.setCustomModelResourceLocation(this, indexFor(t), new ModelResourceLocation(base, "type=" + t.getName()));
-            }
-        } else {
-            ModelResourceLocation loc = new ModelResourceLocation((String) generateModel);
-            for (T t : wrapper.values()) {
-                ModelLoader.setCustomModelResourceLocation(this, indexFor(t), loc);
             }
         }
     }

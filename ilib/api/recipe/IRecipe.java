@@ -23,7 +23,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package ilib.api.recipe;
 
 import ilib.fluid.handler.IFluidProvider;
@@ -34,13 +33,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * @author Roj234
- * @since 2021/4/21 22:51
- */
 public interface IRecipe {
     boolean isShaped();
 
@@ -52,20 +48,19 @@ public interface IRecipe {
         return false;
     }
 
-    default int getCount(int id) {
-        throw new UnsupportedOperationException();
+    default int getCount(int id, ItemStack stack) {
+        return stack.getCount();
     }
 
+    @Deprecated
     default int getMin(int id) {
         throw new UnsupportedOperationException();
     }
 
-    boolean matches(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> list);
+    boolean matches(@Nullable IFluidProvider fp, List<ItemStack> list);
 
-    @Nonnull
-    List<ItemStack> operateInput(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> input);
+    List<ItemStack> operateInput(@Nullable IFluidProvider fp, List<ItemStack> input);
 
-    @Nonnull
     String getName();
 
     int getTimeCost();
@@ -79,6 +74,10 @@ public interface IRecipe {
     List<ItemStack> getInput();
 
     List<ItemStack> getOutput();
+
+    default List<ItemStack> getOutput(List<ItemStack> inputs) {
+        return getOutput();
+    }
 
     static boolean stackEquals(ItemStack self, @Nonnull ItemStack rec) {
         return InventoryUtil.areItemStacksEqual(self, rec) || (rec.hasTagCompound() && rec.getTagCompound().hasKey("_MI_ANYITEM"));

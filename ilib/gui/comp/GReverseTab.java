@@ -28,10 +28,9 @@ package ilib.gui.comp;
 
 import ilib.ClientProxy;
 import ilib.client.RenderUtils;
+import ilib.gui.DefaultSprites;
+import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
-import ilib.gui.util.NinePatchRenderer;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
 
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderHelper;
@@ -43,78 +42,46 @@ import javax.annotation.Nullable;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class GReverseTab extends GTab {
+public final class GReverseTab extends GTab {
+    private int prevX;
 
-    /**
-     * Creates a Gui Tab
-     * <p>
-     * IMPORTANT: Texture should be a full nine patchClient renderer minus the right column of cells
-     * See NinePatchRenderer construction for more info
-     */
-    public GReverseTab(IGui parent, int x, int y, int u, int v, int exWidth, int exHeight, @Nullable ItemStack displayStack) {
-        super(parent, x, y, u, v, exWidth, exHeight, displayStack);
-        tabRenderer = new NinePatchRenderer(u, v, 8, parent.getTexture());
+    public GReverseTab(IGui parent, int x, int y, int exWidth, int exHeight, @Nullable ItemStack stack) {
+        super(parent, x, y, exWidth, exHeight, stack);
+        prevX = x;
+    }
+
+    GReverseTab(IGui parent, int x, int y) {
+        super(parent, x, y);
+        prevX = x;
     }
 
     @Override
     public void render(int mouseX, int mouseY) {
-        GlStateManager.pushMatrix();
+        RenderUtils.setColor(color);
+        DefaultSprites.TAB.render(xPos, yPos, 0, 9, width, height);
 
-        // Set targets to stun
-        int targetWidth = isActive ? expandedWidth : FOLDED_SIZE;
-        int targetHeight = isActive ? expandedHeight : FOLDED_SIZE;
-
-        // Move size
-        if (currentWidth != targetWidth)
-            currentWidth = targetWidth;
-        if (currentHeight != targetHeight)
-            currentHeight = targetHeight;
-
-        // Render the tab
-        tabRenderer.render(-currentWidth, 0, currentWidth, currentHeight);
-
-        // Render the stack, if available
-        RenderUtils.restoreColor();
         if (stack != null) {
             RenderHelper.enableGUIStandardItemLighting();
-            GL11.glEnable(GL12.GL_RESCALE_NORMAL);
-            // -21 3
-            ClientProxy.mc.getRenderItem().renderItemAndEffectIntoGUI(stack, -20, 4);
-            RenderUtils.restoreColor();
-            GL11.glDisable(GL12.GL_RESCALE_NORMAL);
-            GL11.glDisable(GL11.GL_LIGHTING);
+
+            ClientProxy.mc.getRenderItem().renderItemAndEffectIntoGUI(stack,
+                                           xPos + width - 20, yPos + 4);
+
+            RenderHelper.disableStandardItemLighting();
         }
 
-        // Render the children
-        if (areChildrenActive()) {
-            GlStateManager.translate(-expandedWidth, 0, 0);
-            for (Component com : children) {
-                RenderUtils.prepareRenderState();
-                com.render(mouseX, mouseY);
-                RenderUtils.restoreColor();
-                RenderUtils.restoreRenderState();
-            }
+        if (isActive()) {
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(xPos, yPos, 0);
+            GuiHelper.renderBackground(mouseX - xPos, mouseY - yPos, components);
+            GlStateManager.popMatrix();
         }
 
-        GlStateManager.popMatrix();
+        animateFold();
+        xPos = prevX - width + FOLDED_SIZE;
     }
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {
-        // Render the children
-        if (areChildrenActive()) {
-            GlStateManager.translate(-expandedWidth, 0, 0);
-            for (Component com : children) {
-                RenderUtils.prepareRenderState();
-                com.renderOverlay(mouseX, mouseY);
-                RenderUtils.restoreColor();
-                RenderUtils.restoreRenderState();
-            }
-        }
-    }
-
-    @Override
-    public boolean isMouseOver(int mouseX, int mouseY) {
-        return mouseX >= xPos - currentWidth && mouseX < xPos && mouseY >= yPos && mouseY < yPos + getHeight();
+    public void setXPos(int xPos) {
+        prevX = xPos;
     }
 }

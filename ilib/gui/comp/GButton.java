@@ -31,6 +31,7 @@ import ilib.client.RenderUtils;
 import ilib.gui.GuiHelper;
 import ilib.gui.IGui;
 import ilib.gui.util.ComponentListener;
+import ilib.gui.util.Sprite;
 import ilib.util.MCTexts;
 
 import net.minecraft.client.gui.FontRenderer;
@@ -47,7 +48,7 @@ import java.awt.*;
 public class GButton extends SimpleComponent {
     public static final int BUTTON_CLICKING      = 1, BUTTON_HOVERED    = 2,  BUTTON_TOGGLED     = 4,
                             CHANGE_V_BY_CLICKING = 8, CHANGE_V_BY_HOVER = 16, CHANGE_V_BY_TOGGLE = 32,
-                            BUTTON_ENABLED      = 64, HANDLE_TOGGLE = 128;
+                            BUTTON_ENABLED      = 64, HANDLE_TOGGLE = 128, BUTTON_MUTED = 256;
 
     protected int u, v;
     protected Object label;
@@ -65,18 +66,29 @@ public class GButton extends SimpleComponent {
         setHoverButton();
     }
 
-    public GButton(IGui parent, int x, int y, int u, int v, int w, int h, @Nullable Object label) {
-        this(parent, x, y, u, v, w, h);
-        setLabel(label);
+    public GButton(IGui parent, int x, int y, int u, int v, int w, int h) {
+        this(parent, x, y, u, v, w, h, null);
     }
 
-    public GButton(IGui parent, int x, int y, int u, int v, int w, int h) {
+    public GButton(IGui parent, int x, int y, int u, int v, int w, int h, @Nullable Object label) {
         super(parent, x, y, w, h);
         this.u = u;
         this.v = v;
-        width = w;
-        height = h;
         setHoverButton();
+        setLabel(label);
+    }
+
+    public GButton(IGui parent, int x, int y, Sprite sprite) {
+        this(parent, x, y, sprite, null);
+    }
+
+    public GButton(IGui parent, int x, int y, Sprite sprite, @Nullable Object label) {
+        super(parent, x, y, sprite.w(), sprite.h());
+        u = sprite.u();
+        v = sprite.v();
+        setTexture(sprite.texture());
+        setHoverButton();
+        setLabel(label);
     }
 
     public GButton setCheckbox() {
@@ -95,7 +107,7 @@ public class GButton extends SimpleComponent {
     }
 
     public GButton setDummy() {
-        flag = BUTTON_ENABLED | GButton.CHANGE_V_BY_TOGGLE;
+        flag = BUTTON_ENABLED | CHANGE_V_BY_TOGGLE | BUTTON_MUTED;
         return this;
     }
 
@@ -111,7 +123,7 @@ public class GButton extends SimpleComponent {
 
         if ((flag & BUTTON_ENABLED) == 0) return;
 
-        GuiHelper.playButtonSound();
+        if ((flag & BUTTON_MUTED) == 0) GuiHelper.playButtonSound();
 
         if ((flag & HANDLE_TOGGLE) != 0) flag ^= BUTTON_TOGGLED;
 
@@ -147,12 +159,12 @@ public class GButton extends SimpleComponent {
             } else if ((flag & (CHANGE_V_BY_TOGGLE | BUTTON_TOGGLED)) == (CHANGE_V_BY_TOGGLE | BUTTON_TOGGLED)) {
                 v += height;
             }
-            drawTexturedModalRect(xPos, yPos, getU(), v, width, height);
+            RenderUtils.fastRect(xPos, yPos, getU(), v, width, height);
         }
     }
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {
+    public void render2(int mouseX, int mouseY) {
         if (label instanceof String) {
             FontRenderer fr = ClientProxy.mc.fontRenderer;
 

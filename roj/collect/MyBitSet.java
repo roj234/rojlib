@@ -49,7 +49,7 @@ public class MyBitSet implements Iterable<Integer> {
         this.cap = set.length << 6;
     }
 
-    public static MyBitSet from(String data) {
+    public static MyBitSet from(CharSequence data) {
         MyBitSet set = new MyBitSet(data.length());
         for (int i = 0; i < data.length(); i++) {
             set.add(data.charAt(i));
@@ -75,7 +75,7 @@ public class MyBitSet implements Iterable<Integer> {
 
     public static MyBitSet fromRange(int from, int to) {
         MyBitSet set = new MyBitSet(to);
-        while (from < to) set.add(from++);
+        set.addRange(from, to);
         return set;
     }
 
@@ -134,6 +134,13 @@ public class MyBitSet implements Iterable<Integer> {
         return this;
     }
 
+    public MyBitSet addAll(CharSequence s) {
+        for (int i = 0; i < s.length(); i++) {
+            add(s.charAt(i));
+        }
+        return this;
+    }
+
     public boolean add(int e) {
         if(e < 0) throw new IllegalArgumentException();
         if (e > max)
@@ -146,6 +153,23 @@ public class MyBitSet implements Iterable<Integer> {
             return true;
         }
         return false;
+    }
+
+    public int addRange(int from, int to) {
+        if(from < 0 || to < 0) throw new IllegalArgumentException();
+        if (to > max) max = to;
+        expand(to);
+
+        int s = size;
+        while (from < to) {
+            long v = set[from >>> 6];
+            if (v != (v = v | 1L << (from & 63))) {
+                size++;
+            }
+            set[from >>> 6] = v;
+            from++;
+        }
+        return size - s;
     }
 
     /**

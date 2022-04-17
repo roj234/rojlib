@@ -26,8 +26,12 @@
 
 package ilib.util;
 
+import com.google.common.collect.UnmodifiableIterator;
 import ilib.ImpLib;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
+import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.text.TextUtil;
 
 import net.minecraft.block.Block;
@@ -35,14 +39,13 @@ import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.BlockStateContainer;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
-import net.minecraft.network.play.server.SPacketBlockChange;
-import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import net.minecraft.server.management.PlayerChunkMapEntry;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ObjectIntIdentityMap;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.BlockPos.PooledMutableBlockPos;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
@@ -51,10 +54,7 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.registries.GameData;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
 
 /**
@@ -281,11 +281,17 @@ public final class BlockHelper {
 
         @Override
         public BlockPos next() {
-            pos.setPos(x, y, z);
-            x += stepX;
-            y += stepY;
-            z += stepZ;
-            i++;
+            int x1 = pos.getX();
+            int y1 = pos.getY();
+            int z1 = pos.getZ();
+
+            do {
+                pos.setPos(x, y, z);
+                x += stepX;
+                y += stepY;
+                z += stepZ;
+                i++;
+            } while (x1 == pos.getX() && y1 == pos.getY() && z1 == pos.getZ());
             return pos;
         }
     }
@@ -385,14 +391,19 @@ public final class BlockHelper {
     }
 
     public static int getBlockCountAround(int size, BlockPos pos, World world, Block block) {
-        BlockPos pos1 = pos.offset(EnumFacing.UP, size).offset(EnumFacing.NORTH, size).offset(EnumFacing.WEST, size);
-        BlockPos pos2 = pos.offset(EnumFacing.DOWN, size).offset(EnumFacing.SOUTH, size).offset(EnumFacing.EAST, size);
+        PooledMutableBlockPos pos1 = PooledMutableBlockPos.retain(pos)
+        .move(EnumFacing.UP, size).move(EnumFacing.NORTH, size).move(EnumFacing.WEST, size);
+        PooledMutableBlockPos pos2 = PooledMutableBlockPos.retain(pos)
+        .move(EnumFacing.DOWN, size).move(EnumFacing.SOUTH, size).move(EnumFacing.EAST, size);
 
         int i = 0;
-        for (BlockPos bp : BlockPos.getAllInBoxMutable(pos1, pos2)) {
-            if (world.getBlockState(bp).getBlock() == block)
-                i++;
+        for (BlockPos p : BlockPos.getAllInBoxMutable(pos1, pos2)) {
+            if (world.getBlockState(p).getBlock() == block) i++;
         }
+
+        pos1.release();
+        pos2.release();
+
         return i;
     }
 
@@ -427,30 +438,13 @@ public final class BlockHelper {
         world.notifyBlockUpdate(pos, state, state, PLACEBLOCK_UPDATE | PLACEBLOCK_SENDCHANGE);
     }
 
-    public static void updateBlockState(World world, BlockPos pos) {
-        if (!world.isRemote) {
-            WorldServer worldServer = ((WorldServer) world);
-            int cx = pos.getX() >> 4;
-            int cz = pos.getZ() >> 4;
-            PlayerChunkMapEntry entry = ((WorldServer) world).getPlayerChunkMap().getEntry(cx, cz);
-            if (entry != null)
-                entry.sendPacket(new SPacketBlockChange(worldServer, pos));
-        } else {
-            world.markBlockRangeForRenderUpdate(pos, pos);
-        }
-    }
-
     public static void sendTileUpdate(@Nonnull TileEntity tile) {
         World world = tile.getWorld();
+        BlockPos pos = tile.getPos();
         if (!world.isRemote) {
-            BlockPos pos = tile.getPos();
-            WorldServer worldServer = ((WorldServer) world);
-            int cx = pos.getX() >> 4;
-            int cz = pos.getZ() >> 4;
-            PlayerChunkMapEntry entry = ((WorldServer) world).getPlayerChunkMap().getEntry(cx, cz);
-            SPacketUpdateTileEntity packet = tile.getUpdatePacket();
-            if (entry != null && packet != null)
-                entry.sendPacket(packet);
+            tile.markDirty();
+        } else {
+            world.markBlockRangeForRenderUpdate(pos, pos);
         }
     }
 
@@ -460,6 +454,10 @@ public final class BlockHelper {
         } else {
             world.markBlockRangeForRenderUpdate(pos, pos);
         }
+    }
+
+    public static ItemStack toStack(IBlockState input) {
+        return new ItemStack(input.getBlock(), 1, input.getBlock().damageDropped(input));
     }
 
     public void callNeighborStateChange(World world, BlockPos pos) {
@@ -551,23 +549,47 @@ public final class BlockHelper {
         }
     }
 
-    @SuppressWarnings({"rawtypes","unchecked"})
+    public static String stateToText(IBlockState state) {
+        CharList tmp = IOUtil.getSharedCharBuf();
+        return tmp.append(state.getBlock().getRegistryName().toString())
+                  .append('@').append(state.getBlock().getMetaFromState(state)).toString();
+    }
+
+    public static String stateToTextEx(IBlockState state) {
+        CharList tmp = IOUtil.getSharedCharBuf();
+        tmp.append(state.getBlock().getRegistryName().toString()).append('@');
+
+        UnmodifiableIterator<Map.Entry<IProperty<?>, Comparable<?>>> itr = state.getProperties().entrySet().iterator();
+        while (itr.hasNext()) {
+            Map.Entry<IProperty<?>, Comparable<?>> entry = itr.next();
+            tmp.append(entry.getKey().getName()).append('=').append(entry.getValue().toString());
+            if (!itr.hasNext()) break;
+            tmp.append(',');
+        }
+
+        return tmp.toString();
+    }
+
+
+    @SuppressWarnings({"rawtypes","unchecked","deprecation"})
     public static IBlockState matchState(Block block, String desc) {
-        try {
+        if (TextUtil.isNumber(desc) == 0) {
             int meta = Integer.parseInt(desc);
             if (meta < 0) {
                 throw new IllegalArgumentException("meta < 0 : " + desc);
             } else {
                 return block.getStateFromMeta(meta);
             }
-        } catch (NumberFormatException e) {
+        } else {
             IBlockState state = block.getDefaultState();
             if (!"default".equals(desc)) {
                 BlockStateContainer container = block.getBlockState();
-                ArrayList<String> tmp = new ArrayList<>();
+                SimpleList<String> tmp = new SimpleList<>();
 
-                for (String one : TextUtil.split(new ArrayList<>(), desc, ',')) {
-                    TextUtil.split(tmp, desc, '=', 2);
+                List<String> states = TextUtil.split(desc, ',');
+                for (int i = 0; i < states.size(); i++) {
+                    tmp.clear();
+                    TextUtil.split(tmp, states.get(i), '=', 2);
                     if (tmp.size() < 2) return null;
 
                     IProperty prop = container.getProperty(tmp.get(0));
@@ -582,7 +604,6 @@ public final class BlockHelper {
 
                     state = state.withProperty(prop, val);
                 }
-
             }
             return state;
         }

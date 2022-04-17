@@ -27,20 +27,13 @@ package ilib.util;
 
 import roj.reflect.DirectAccessor;
 
-import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.client.audio.SoundManager;
 import net.minecraft.client.gui.GuiMainMenu;
-import net.minecraft.client.renderer.BlockModelRenderer;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.IResourcePack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.IBlockAccess;
 
 import net.minecraftforge.fml.client.FMLClientHandler;
 
-import java.util.BitSet;
 import java.util.List;
 
 /**
@@ -49,10 +42,8 @@ import java.util.List;
  */
 public interface ReflectionClient {
     ReflectionClient HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(ReflectionClient.class))
-            .delayErrorToInvocation()
             .access(GuiMainMenu.class, "field_73975_c", null, "setMainMenuSplash")
             .access(FMLClientHandler.class, "resourcePackList")
-            .delegate(BlockModelRenderer.class, "func_187496_a", "renderQuadsFlat")
             .access(SoundHandler.class, "field_147694_f", "getSoundManager", null)
             .access(SoundManager.class, "field_148617_f", "getInited", null)
             .build();
@@ -72,6 +63,5 @@ public interface ReflectionClient {
 
     // endregion
     // region Method
-    void renderQuadsFlat(BlockModelRenderer r, IBlockAccess world, IBlockState state, BlockPos pos, int bright, boolean ownBright, BufferBuilder bb, List<BakedQuad> list, BitSet set);
     // endregion
 }

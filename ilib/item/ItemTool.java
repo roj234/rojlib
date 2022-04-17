@@ -27,7 +27,7 @@
 package ilib.item;
 
 import ilib.ImpLib;
-import ilib.api.item.IShiftTooltip;
+import ilib.api.item.ITooltip;
 import ilib.api.tile.ToolTarget;
 import ilib.api.tile.ToolTarget.Type;
 import ilib.util.Colors;
@@ -47,7 +47,7 @@ import java.util.List;
  * @since 2021/4/21 22:51
  */
 @Deprecated
-public class ItemTool extends ItemRightClickBlock implements IShiftTooltip {
+public class ItemTool extends ItemRightClick implements ITooltip {
     private final Type type;
 
     public static final ItemTool WRENCH = new ItemTool(Type.WRENCH),
@@ -61,7 +61,7 @@ public class ItemTool extends ItemRightClickBlock implements IShiftTooltip {
     }
 
     @Override
-    protected ItemStack onRightClick(World world, BlockPos targetPos, BlockPos clickPos, EntityPlayer player, ItemStack stack, EnumFacing sideHit) {
+    protected ItemStack onRightClickBlock(World world, BlockPos pos, BlockPos clickPos, EntityPlayer player, ItemStack stack, EnumFacing side) {
         if (world.isRemote) return stack;
         TileEntity te = world.getTileEntity(clickPos);
 
@@ -77,10 +77,10 @@ public class ItemTool extends ItemRightClickBlock implements IShiftTooltip {
 
             switch (bin) {
                 case ToolTarget.TOGGLE:
-                    tile.toggleByTool(type.getIndex(), sideHit);
+                    tile.toggleByTool(type.getIndex(), side);
                     break;
                 case ToolTarget.TURN:
-                    boolean flag = world.getBlockState(clickPos).getBlock().rotateBlock(world, clickPos, sideHit);
+                    boolean flag = world.getBlockState(clickPos).getBlock().rotateBlock(world, clickPos, side);
                     return flag ? stack : null;
                 case ToolTarget.DESTROY:
                     tile.destroyByTool(type.getIndex());
@@ -92,7 +92,7 @@ public class ItemTool extends ItemRightClickBlock implements IShiftTooltip {
             }
             return stack;
         } else if (!player.isSneaking() && type.getIndex() == 0) {
-            boolean flag = world.getBlockState(clickPos).getBlock().rotateBlock(world, clickPos, sideHit);
+            boolean flag = world.getBlockState(clickPos).getBlock().rotateBlock(world, clickPos, side);
 
             return flag ? stack : null;
         }

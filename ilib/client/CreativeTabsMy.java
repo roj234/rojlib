@@ -26,11 +26,7 @@
 
 package ilib.client;
 
-import ilib.Config;
-import ilib.ImpLib;
-
 import net.minecraft.creativetab.CreativeTabs;
-import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 
@@ -47,20 +43,13 @@ public class CreativeTabsMy extends CreativeTabs {
     private ItemStack iconStack = ItemStack.EMPTY;
     private boolean search;
 
-    public static CreativeTabsMy tabBlockOnly;
-
-    public static void preInit() {
-        if (Config.enableMissingItemCreation)
-            tabBlockOnly = new CreativeTabsMy("ilib.missing").setBackground("ilib").setIcon(new ItemStack(Blocks.BEDROCK));
-    }
-
     public CreativeTabsMy(String name) {
         super(name);
     }
 
     public CreativeTabsMy setBackground(String bg) {
-        int index = bg.indexOf(":");
-        this.setBackgroundImageName(index != -1 ? bg.substring(0, index) + ":" + "textures/gui/creative_tab/" + bg.substring(index + 1) + ".png" : ImpLib.MODID + ":" + "textures/gui/creative_tab/" + bg + ".png");
+        int i = bg.indexOf(":");
+        this.setBackgroundImageName(i != -1 ? bg.substring(0, i) + ":textures/gui/"+bg.substring(i+1) + ".png" : "ilib:textures/gui/"+bg+".png");
         return this;
     }
 
@@ -79,11 +68,12 @@ public class CreativeTabsMy extends CreativeTabs {
         return search;
     }
 
-    @Nonnull
     @SideOnly(Side.CLIENT)
     @Override
     public ResourceLocation getBackgroundImage() {
-        return new ResourceLocation(getBackgroundImageName());
+        return new ResourceLocation(getBackgroundImageName().equals("items.png")?
+                   "textures/gui/container/creative_inventory/tab_items.png":
+                   getBackgroundImageName());
     }
 
     @Nonnull

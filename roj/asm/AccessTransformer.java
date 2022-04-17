@@ -28,10 +28,11 @@ package roj.asm;
 
 import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.attr.AttrInnerClasses;
+import roj.asm.tree.IClass;
+import roj.asm.tree.MoFNode;
 import roj.asm.tree.attr.AttrInnerClasses.InnerClass;
-import roj.asm.tree.attr.Attribute;
 import roj.asm.util.AccessFlag;
+import roj.asm.util.AttrHelper;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.text.SimpleLineReader;
@@ -84,12 +85,10 @@ public class AccessTransformer {
         }
     }
 
-    @Nonnull
-    public static byte[] transform(@Nonnull String className, @Nonnull final byte[] bytecode) {
+    public static byte[] transform(String className, byte[] b) {
         Collection<String> list = transforms.get(className);
-        if (list == null)
-            return bytecode;
-        return openSome(bytecode, list);
+        if (list == null) return b;
+        return openSome(b, list);
     }
 
     public static int doAT(int flag, boolean evenProtected) {
@@ -102,11 +101,9 @@ public class AccessTransformer {
 
     public static byte[] openSubClass(final byte[] bytecode, Collection<String> names) {
         ConstantData data = Parser.parseConstants(bytecode);
-        Attribute attribute = data.attrByName("InnerClasses");
-        AttrInnerClasses ic = new AttrInnerClasses(Parser.reader(attribute), data.cp);
-        data.attributes.putByName(ic);
 
-        List<InnerClass> classes = ic.classes;
+        List<InnerClass> classes = AttrHelper.getInnerClasses(data.cp, data);
+        if (classes == null) throw new IllegalStateException("InnerClass is null for " + data.name);
         for (int i = 0; i < classes.size(); i++) {
             InnerClass clz = classes.get(i);
             if (names.contains(clz.self)) {
@@ -116,9 +113,13 @@ public class AccessTransformer {
         return Parser.toByteArray(data);
     }
 
-    public static byte[] openSome(final byte[] bytecode, Collection<String> names) {
+    public static byte[] openSome(byte[] bytecode, Collection<String> names) {
         AccessData data = Parser.parseAccessDirect(bytecode);
+        openSome(names, data);
+        return data.toByteArray();
+    }
 
+    public static void openSome(Collection<String> names, IClass data) {
         if (names.contains("<$extend>")) {
             data.accessFlag(doAT(data.accessFlag(), true));
         }
@@ -132,19 +133,17 @@ public class AccessTransformer {
             names = new Universe();
         }
 
-        for (AccessData.MOF field : data.fields) {
-            if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
-                continue;
+        open(names, evenProtected, data.fields());
+        open(names, evenProtected, data.methods());
+    }
+
+    private static void open(Collection<String> names, boolean evenProtected, List<? extends MoFNode> fields) {
+        for (int i = 0; i < fields.size(); i++) {
+            MoFNode field = fields.get(i);
+            if (!names.contains(field.name()) && !names.contains(field.name() + '|' + field.rawDesc())) continue;
             int flag = doAT(field.accessFlag(), evenProtected || !(names instanceof Universe));
-            data.setFlagFor(field, flag);
+            field.accessFlag(flag);
         }
-        for (AccessData.MOF field : data.methods) {
-            if (!names.contains(field.name) && !names.contains(field.name + '|' + field.desc))
-                continue;
-            int flag = doAT(field.accessFlag(), evenProtected || !(names instanceof Universe));
-            data.setFlagFor(field, flag);
-        }
-        return data.toByteArray();
     }
 
     public static void add(String className, String fieldName) {

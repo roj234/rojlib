@@ -65,7 +65,7 @@ public class InventoryUtil {
 
         float f = 0;
         for (int i = 0; i < inv.getSizeInventory(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
+            ItemStack stack = inv.getStackInSlot1(i);
             if (!stack.isEmpty()) {
                 f += (float) stack.getCount() / (float) Math.min(stack.getMaxStackSize(), inv.getInventoryStackLimit());
             }
@@ -135,7 +135,7 @@ public class InventoryUtil {
      * @param fromSlot The from slot, -1 for any
      * @param target   The target inventory, can be IInventory, ISideInventory, or preferably IItemHandler
      * @param intoSlot The slot to move into the target, -1 for any
-     * @param max      The maxBlock amount to move/extract
+     * @param max      The max amount to move/extract
      * @param dir      The direction moving into, so the face of the fromInventory
      * @param doMove   True to actually do the move, false to simulate
      * @return True if something was moved
@@ -269,7 +269,7 @@ public class InventoryUtil {
                 InventoryPlayer.getHotbarSize();
 
         for (int i = FIRST_HOTBAR_SLOT; i < LAST_HOTBAR_SLOT_PLUS_ONE; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if (stack.getItem() == item && (damage == -1 || stack.getItemDamage() == damage)) {
                 return stack;
             }
@@ -293,7 +293,7 @@ public class InventoryUtil {
                 InventoryPlayer.getHotbarSize();
 
         for (int i = FIRST_HOTBAR_SLOT; i < LAST_HOTBAR_SLOT_PLUS_ONE; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if (clazz.isInstance(stack.getItem())) {
                 return stack;
             }
@@ -316,7 +316,7 @@ public class InventoryUtil {
 
         T capr;
         for (int i = FIRST_HOTBAR_SLOT; i < LAST_HOTBAR_SLOT_PLUS_ONE; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if (!stack.isEmpty() && (capr = stack.getCapability(cap, null)) != null) {
                 return capr;
             }
@@ -340,7 +340,7 @@ public class InventoryUtil {
 
         T capr;
         for (int i = FIRST_HOTBAR_SLOT; i < LAST_HOTBAR_SLOT_PLUS_ONE; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if (!stack.isEmpty() && (capr = stack.getCapability(cap, null)) != null) {
                 list.add(capr);
             }
@@ -375,7 +375,7 @@ public class InventoryUtil {
                 InventoryPlayer.getHotbarSize();
 
         for (int i = FIRST_HOTBAR_SLOT; i < LAST_HOTBAR_SLOT_PLUS_ONE; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if (stack == oldStack) {
                 player.inventory.setInventorySlotContents(i, newStack);
                 return true;
@@ -399,7 +399,7 @@ public class InventoryUtil {
                 InventoryPlayer.getHotbarSize();
 
         for (int i = FIRST_HOTBAR_SLOT; i < LAST_HOTBAR_SLOT_PLUS_ONE; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if (stack.getItem() == item && (damage == -1 || stack.getItemDamage() == damage)) {
                 player.inventory.setInventorySlotContents(i, newStack);
                 return true;

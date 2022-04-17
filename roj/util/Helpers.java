@@ -27,9 +27,13 @@ package roj.util;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -54,12 +58,11 @@ public class Helpers {
     }
 
     public static boolean hasCircle(Node begin) {
-        if(begin == null)
-            return false;
+        if(begin == null) return false;
 
         Node slow = begin, fast1, fast2 = begin;
 
-        while (/*slow != null && */(fast1 = fast2.next()) != null && (fast2 = fast1.next()) != null) {
+        while ((fast1 = fast2.next()) != null && (fast2 = fast1.next()) != null) {
             if (slow == fast1 || slow == fast2) return true;
             slow = slow.next();
         }
@@ -78,7 +81,7 @@ public class Helpers {
     @Deprecated
     public static <K, V> Map<K, V> subMap(Map<K, V> map, int start, int end) {
         int i = -1;
-        Map<K, V> subMap = new HashMap<>();
+        Map<K, V> subMap = new MyHashMap<>();
 
         for (K key : map.keySet()) {
             if (i++ < start) continue;
@@ -91,23 +94,13 @@ public class Helpers {
 
     @Nonnull
     public static <T> T nonnull() {
+        // noinspection all
         return null;
-    }
-
-    public static StringBuilder traceString(Throwable err, int i) {
-        StringBuilder sb = new StringBuilder();
-        StackTraceElement[] elements = err.getStackTrace();
-        sb.append(err.getClass().getName()).append(':').append(err.getMessage());
-        for (StackTraceElement element : elements) {
-            if (i-- > 0) continue;
-            sb.append("    at ").append(element.getClassName()).append('.').append(element.getMethodName()).append(" line ").append(element.getLineNumber()).append('\n');
-        }
-        return sb;
     }
 
     public static final Predicate<?> alwaystrue = (a) -> true;
     public static final Predicate<?> alwaysfalse = (a) -> false;
-    public static final Function<?, ?> arraylistfn = (a) -> new ArrayList<>();
+    public static final Function<?, ?> arraylistfn = (a) -> new SimpleList<>();
     public static final Function<?, ?> linkedlistfn = (a) -> new LinkedList<>();
     public static final Function<?, ?> myhashmapfn = (a) -> new MyHashMap<>();
     public static final Function<?, ?> myhashsetfn = (a) -> new MyHashSet<>();
@@ -129,5 +122,12 @@ public class Helpers {
     }
     public static <T,R> Function<T, Set<R>> fnMyHashSet() {
         return cast(myhashsetfn);
+    }
+
+    public static <T,R> MyHashMap<T,R> newMyHashMap() {
+        return new MyHashMap<>();
+    }
+    public static <T> MyHashSet<T> newMyHashSet() {
+        return new MyHashSet<>();
     }
 }

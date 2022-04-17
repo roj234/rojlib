@@ -30,11 +30,6 @@ package ilib.asm.util;
  * @since  2020/11/14 16:15
  */
 
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.ModContainer;
-import net.minecraftforge.fml.common.eventhandler.Event;
-import net.minecraftforge.fml.common.eventhandler.EventPriority;
-import net.minecraftforge.fml.common.eventhandler.IEventListener;
 import roj.asm.Opcodes;
 import roj.asm.tree.Clazz;
 import roj.asm.tree.attr.AttrCode;
@@ -43,6 +38,12 @@ import roj.asm.tree.insn.*;
 import roj.asm.util.InsnList;
 import roj.asm.util.NodeHelper;
 import roj.reflect.DirectAccessor;
+
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
+import net.minecraftforge.fml.common.eventhandler.Event;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
+import net.minecraftforge.fml.common.eventhandler.IEventListener;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -92,7 +93,7 @@ public final class EventInvokerV2 implements IEventListener {
         DirectAccessor.addInit(cz);
         cz.interfaces.add("ilib/asm/util/EventInvokerV2$INIT");
 
-        cz.attributes.add(new AttrSourceFile("ImpLib合并的事件执行者"));
+        cz.attributes().add(new AttrSourceFile("ImpLib合并的事件执行者"));
 
         if (haveDyn) {
             addField(cz, "[Ljava/lang/Object;", "setArr", "(Ljava/lang/Object;)V");
@@ -227,7 +228,7 @@ public final class EventInvokerV2 implements IEventListener {
             DirectAccessor.addInit(cz);
             cz.interfaces.add("ilib/asm/util/EventInvokerV2$INIT");
 
-            cz.attributes.add(new AttrSourceFile("ImpLib生成的事件执行者"));
+            cz.attributes().add(new AttrSourceFile("ImpLib生成的事件执行者"));
 
             roj.asm.tree.Method m0 = new roj.asm.tree.Method(PUBLIC, cz, "invoke", HANDLER_FUNC_DESC);
             cz.methods.add(m0);

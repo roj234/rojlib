@@ -49,7 +49,7 @@ import java.util.List;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class Method implements MethodNode, MoFNode {
+public final class Method implements MethodNode {
     public Method(int accesses, IClass owner, String name, String desc) {
         this.accesses = (char) accesses;
         this.owner = owner.name();
@@ -72,12 +72,12 @@ public final class Method implements MethodNode, MoFNode {
         this.owner = data.name;
         this.name = method.name.getString();
         this.rawDesc = method.type.getString();
-        this.attributes = new AttributeList(method.attributes.size());
+        this.attributes = new AttributeList(method.attributes().size());
 
         ConstantPool pool = data.cp;
         ByteReader r = new ByteReader();
 
-        AttributeList al = method.attributes;
+        AttributeList al = method.attributes();
         for (int i = 0; i < al.size(); i++) {
             Attribute attr = al.get(i);
             if(attr.getClass() == AttrUnknown.class) {
@@ -100,8 +100,17 @@ public final class Method implements MethodNode, MoFNode {
         }
     }
 
+    public Method(java.lang.reflect.Method m) {
+        name = m.getName();
+        accesses = (char) m.getModifiers();
+        rawDesc = ParamHelper.class2asm(m.getParameterTypes(), m.getReturnType());
+        owner = m.getDeclaringClass().getName().replace('.', '/');
+    }
+
     public void initAttributes(ConstantPool pool, ByteReader r) {
         int len = r.readUnsignedShort();
+        if (len == 0) return;
+        attributes = new AttributeList(len);
         for (int i = 0; i < len; i++) {
             String name = ((CstUTF) pool.get(r)).getString();
             int length = r.readInt();
@@ -167,75 +176,86 @@ public final class Method implements MethodNode, MoFNode {
         return attr;
     }
 
-    public String owner, name;
+    public String owner;
 
+    public String name;
+    public char accesses;
     private String rawDesc;
     private List<Type> params;
     private Type returnType;
 
-    public char accesses;
-    public AttributeList attributes;
+    private AttributeList attributes;
 
     @Nullable
     public Signature signature;
     public AttrCode code;
 
-    private void aOn(Attribute a) {
-        if (a != null)
-            attributes.add(a);
-    }
-
     MethodSimple i_downgrade(ConstantPool cw) {
         if (params != null) {
             params.add(returnType);
-            rawDesc = ParamHelper.getMethod(params);
+            rawDesc = ParamHelper.getMethod(params, rawDesc);
             params.remove(params.size() - 1);
         }
         MethodSimple m = new MethodSimple(accesses, cw.getUtf(name), cw.getUtf(rawDesc));
         m.owner = owner;
-        if (params != null) {
-            m.params = params;
-        }
-        m.attributes.ensureCapacity(attributes.size() +
-                                            (code == null ? 0 : 1) +
-                                            (signature == null ? 0 : 1));
+        if (params != null) m.params = params;
+
+        if (attributes == null && code == null && signature == null) return m;
+
+        AttributeList otherAttr = m.attributes();
+        AttributeList myAttr = attributes();
+        otherAttr.ensureCapacity(myAttr.size() + (code == null ? 0 : 1) + (signature == null ? 0 : 1));
         ByteList w = SharedBuf.i_get();
-        for (int i = 0; i < attributes.size(); i++) {
-            m.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
+        for (int i = 0; i < myAttr.size(); i++) {
+            otherAttr.add(AttrUnknown.downgrade(cw, w, myAttr.get(i)));
         }
         if (signature != null) {
             w.clear();
             w.putShort(cw.getUtfId(signature.toGeneric()));
-            m.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
+            otherAttr.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
         }
         if (code != null) {
-            m.attributes.add(AttrUnknown.downgrade(cw, w, code));
+            otherAttr.add(AttrUnknown.downgrade(cw, w, code));
         }
         return m;
     }
 
     @Override
+    public Attribute attrByName(String name) {
+        return attributes == null ? null : (Attribute) attributes.getByName(name);
+    }
+
+    @Override
     public AttributeList attributes() {
+        return attributes == null ? attributes = new AttributeList() : attributes;
+    }
+
+    @Nullable
+    @Override
+    public AttributeList attributesNullable() {
         return attributes;
     }
 
     public void toByteArray(ConstantPool pool, ByteList w) {
-        w.putShort(accesses).putShort(pool.getUtfId(name));
-
         if (params != null) {
             params.add(returnType);
-            rawDesc = ParamHelper.getMethod(params);
+            rawDesc = ParamHelper.getMethod(params, rawDesc);
             params.remove(params.size() - 1);
         }
-        w.putShort(pool.getUtfId(rawDesc));
+        w.putShort(accesses).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(rawDesc));
 
-        aOn(code);
-        if (signature != null)
-            attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
+        if (code != null) attributes().add(code);
+        if (signature != null) attributes().add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
 
-        w.putShort(attributes.size());
-        for (int i = 0; i < attributes.size(); i++) {
-            attributes.get(i).toByteArray(pool, w);
+        AttributeList attr = attributes;
+        if (attr == null) {
+            w.putShort(0);
+            return;
+        }
+
+        w.putShort(attr.size());
+        for (int i = 0; i < attr.size(); i++) {
+            attr.get(i).toByteArray(pool, w);
         }
     }
 
@@ -286,21 +306,26 @@ public final class Method implements MethodNode, MoFNode {
         AttrStringList throwsEx = getThrows();
         if (throwsEx != null) {
             sb.append(" throws ");
-            for (String clz : throwsEx.classes) {
+            List<String> classes = throwsEx.classes;
+            for (int i = 0; i < classes.size(); i++) {
+                String clz = classes.get(i);
                 sb.append(clz.substring(clz.lastIndexOf('/') + 1)).append(", ");
             }
             sb.delete(sb.length() - 2, sb.length());
         }
         sb.append("\n      Code: \n").append(code);
-        sb.append("\n      Attributes: \n");
-        for (Attribute attr : attributes) {
-            switch (attr.name) {
-                case AttrAnnotation.INVISIBLE:
-                case AttrAnnotation.VISIBLE:
-                case "Exceptions":
-                    continue;
+        if (attributes != null) {
+            sb.append("\n      Attributes: \n");
+            for (int i = 0; i < attributes.size(); i++) {
+                Attribute attr = attributes.get(i);
+                switch (attr.name) {
+                    case AttrAnnotation.INVISIBLE:
+                    case AttrAnnotation.VISIBLE:
+                    case "Exceptions":
+                        continue;
+                }
+                sb.append("         ").append(attr.toString()).append('\n');
             }
-            sb.append("         ").append(attr.toString()).append('\n');
         }
         return sb.toString();
     }
@@ -359,6 +384,11 @@ public final class Method implements MethodNode, MoFNode {
         return this.rawDesc;
     }
 
+    @Override
+    public void name(String name) {
+        this.name = name;
+    }
+
     public void rawDesc(String param) {
         this.rawDesc = param;
         if (params != null) {
@@ -384,30 +414,18 @@ public final class Method implements MethodNode, MoFNode {
     }
 
     public AttrAnnotation getAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
+        return attributes == null ? null : (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
     }
 
     public AttrAnnotation getInvisibleAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
-    }
-
-    public AttrParamAnnotation getParameterAnnotations() {
-        return (AttrParamAnnotation) attributes.getByName(AttrParamAnnotation.VISIBLE);
-    }
-
-    public AttrParamAnnotation getInvisibleParameterAnnotations() {
-        return (AttrParamAnnotation) attributes.getByName(AttrParamAnnotation.INVISIBLE);
+        return attributes == null ? null : (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
     }
 
     public AttrMethodParameters getParameterAccesses() {
-        return (AttrMethodParameters) attributes.getByName(AttrMethodParameters.NAME);
+        return attributes == null ? null : (AttrMethodParameters) attributes.getByName(AttrMethodParameters.NAME);
     }
 
     public AttrStringList getThrows() {
-        return (AttrStringList) attributes.getByName(AttrStringList.EXCEPTIONS);
-    }
-
-    public AttrAnnotationDefault getAnnotationDefault() {
-        return (AttrAnnotationDefault) attributes.getByName(AttrAnnotationDefault.NAME);
+        return attributes == null ? null : (AttrStringList) attributes.getByName(AttrStringList.EXCEPTIONS);
     }
 }

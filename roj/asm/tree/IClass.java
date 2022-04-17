@@ -36,15 +36,10 @@ import java.util.List;
  * @author solo6975
  * @since 2021/7/22 18:20
  */
-public interface IClass {
+public interface IClass extends Attributed {
     String name();
     @Nullable
     String parent();
-
-    default void accessFlag(int flag) {
-        throw new UnsupportedOperationException(getClass().getName() + " does not support set access flag");
-    }
-    char accessFlag();
 
     List<String> interfaces();
     List<? extends MoFNode> methods();
@@ -65,8 +60,6 @@ public interface IClass {
         }
         return -1;
     }
-
-    byte type();
 
     default ByteList getBytes(ByteList buf) {
         throw new UnsupportedOperationException(getClass().getName() + " does not support encoding");

@@ -27,7 +27,12 @@ package ilib.asm.nixim.client;
 
 import ilib.Config;
 import ilib.client.DisplayListRenderer;
-import ilib.client.renderer.mirror.render.world.RenderGlobalProxy;
+import ilib.client.mirror.render.world.RenderGlobalProxy;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.math.MathUtils;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -45,12 +50,8 @@ import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.util.ClassInheritanceMultiMap;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.chunk.Chunk;
+
 import net.minecraftforge.client.MinecraftForgeClient;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.math.MathUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -186,7 +187,7 @@ public class NiximRenderGlobal extends RenderGlobal {
         double dy = MathUtils.interpolate(viewing.prevPosY, viewing.posY, partialTicks);
         double dz = MathUtils.interpolate(viewing.prevPosZ, viewing.posZ, partialTicks);
 
-        RenderManager renderMan = this.renderManager;
+        RenderManager rm = this.renderManager;
 
         List<Entity> weatherEffects = this.world.weatherEffects;
         for (int i = 0; i < weatherEffects.size(); ++i) {
@@ -194,7 +195,7 @@ public class NiximRenderGlobal extends RenderGlobal {
             if (eff.shouldRenderInPass(pass)) {
                 ++this.countEntitiesRendered;
                 if (eff.isInRangeToRender3d(dx, dy, dz)) {
-                    renderMan.renderEntityStatic(eff, partialTicks, false);
+                    rm.renderEntityStatic(eff, partialTicks, false);
                 }
             }
         }
@@ -208,29 +209,28 @@ public class NiximRenderGlobal extends RenderGlobal {
 
         boolean renderSelf = this.mc.gameSettings.thirdPersonView != 0 || (viewing instanceof EntityLivingBase && ((EntityLivingBase) viewing).isPlayerSleeping());
 
-        EntityPlayerSP player = this.mc.player;
+        EntityPlayerSP p = this.mc.player;
 
         BlockPos.PooledMutableBlockPos mPos = BlockPos.PooledMutableBlockPos.retain();
         for (ContainerLocalRenderInformation info : this.renderInfos) {
-            BlockPos chunkPos = info.renderChunk.getPosition();
-
-            Chunk chunk = this.world.getChunk(chunkPos);
-            ClassInheritanceMultiMap<Entity> entities = chunk.getEntityLists()[chunkPos.getY() >> 4];
+            BlockPos pos = info.renderChunk.getPosition();
+            ClassInheritanceMultiMap<Entity> entities = world.getChunk(pos).getEntityLists()[pos.getY() >> 4];
 
             if (entities.isEmpty()) continue;
 
             for (Entity entity : entities) {
                 if (entity.shouldRenderInPass(pass)) {
-                    if (renderMan.shouldRender(entity, camera, dx, dy, dz) || entity.isRidingOrBeingRiddenBy(player)) {
+                    if (rm.shouldRender(entity, camera, dx, dy, dz) || entity.isRidingOrBeingRiddenBy(p)) {
                         if (entity != self || renderSelf) {
                             if (entity.posY < 0 || entity.posY >= 256 || world.isBlockLoaded(mPos.setPos(entity))) {
-                                ++this.countEntitiesRendered;
-                                renderMan.renderEntityStatic(entity, partialTicks, false);
-                                if (doOutline && this.isOutlineActive(entity, self, camera)) {
+                                ++countEntitiesRendered;
+
+                                rm.renderEntityStatic(entity, partialTicks, false);
+                                if (doOutline && isOutlineActive(entity, self, camera)) {
                                     outline.add(entity);
                                 }
 
-                                if (renderMan.isRenderMultipass(entity)) {
+                                if (rm.isRenderMultipass(entity)) {
                                     multipass.add(entity);
                                 }
                             }
@@ -245,7 +245,7 @@ public class NiximRenderGlobal extends RenderGlobal {
         if (!multipass.isEmpty()) {
             for (int i = 0, size = multipass.size(); i < size; i++) {
                 Entity entity1 = multipass.get(i);
-                renderMan.renderMultipass(entity1, partialTicks);
+                rm.renderMultipass(entity1, partialTicks);
             }
         }
 
@@ -258,13 +258,13 @@ public class NiximRenderGlobal extends RenderGlobal {
                 GlStateManager.disableFog();
                 this.entityOutlineFramebuffer.bindFramebuffer(false);
                 RenderHelper.disableStandardItemLighting();
-                renderMan.setRenderOutlines(true);
+                rm.setRenderOutlines(true);
 
                 for (int j = 0; j < outline.size(); ++j) {
-                    renderMan.renderEntityStatic(outline.get(j), partialTicks, false);
+                    rm.renderEntityStatic(outline.get(j), partialTicks, false);
                 }
 
-                renderMan.setRenderOutlines(false);
+                rm.setRenderOutlines(false);
                 RenderHelper.enableStandardItemLighting();
                 GlStateManager.depthMask(false);
                 this.entityOutlineShader.render(partialTicks);

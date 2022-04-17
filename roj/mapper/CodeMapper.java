@@ -28,15 +28,13 @@ package roj.mapper;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.FieldSimple;
-import roj.asm.tree.MethodSimple;
+import roj.asm.tree.*;
 import roj.asm.tree.attr.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.AttributeList;
+import roj.asm.util.AttrHelper;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.Context;
 import roj.collect.MyBitSet;
@@ -124,15 +122,8 @@ public final class CodeMapper extends Mapping {
         data.normalize();
 
         // 这里都成了String，要第一个！
-        Attribute a = (Attribute) data.attributes.getByName("InnerClasses");
-        if(a != null) {
-            AttrInnerClasses ic;
-            if(a instanceof AttrInnerClasses)
-                ic = (AttrInnerClasses) a;
-            else
-                data.attributes.putByName(ic = new AttrInnerClasses(Parser.reader(a), data.cp));
-
-            List<AttrInnerClasses.InnerClass> classes = ic.classes;
+        List<AttrInnerClasses.InnerClass> classes = AttrHelper.getInnerClasses(data.cp, data);
+        if(classes != null) {
             for (int j = 0; j < classes.size(); j++) {
                 AttrInnerClasses.InnerClass clz = classes.get(j);
                 if (clz.name != null && clz.parent != null) {
@@ -160,14 +151,8 @@ public final class CodeMapper extends Mapping {
             }
         }
 
-        a = (Attribute) data.attributes.getByName("BootstrapMethods");
-        if(a != null) {
-            AttrBootstrapMethods bs;
-            if(a instanceof AttrBootstrapMethods)
-                bs = (AttrBootstrapMethods) a;
-            else
-                data.attributes.putByName(bs = new AttrBootstrapMethods(Parser.reader(a), data.cp));
-
+        AttrBootstrapMethods bs = AttrHelper.getBootstrapMethods(data.cp, data);
+        if(bs != null) {
             List<AttrBootstrapMethods.BootstrapMethod> methods = bs.methods;
             for (int i = 0; i < methods.size(); i++) {
                 AttrBootstrapMethods.BootstrapMethod ibm = methods.get(i);
@@ -192,7 +177,7 @@ public final class CodeMapper extends Mapping {
         }
 
         // 泛型的UTF(几乎)不可能重复，但真碰到了我倒霉，还是放前面，至于和BSM重复？滚蛋
-        mapSignature(data.cp, data.attributes);
+        mapSignature(data.cp, data);
 
         mapParam(U, ctx, data);
 
@@ -200,11 +185,10 @@ public final class CodeMapper extends Mapping {
         data.normalize();
     }
 
-    private void mapSignature(ConstantPool pool, AttributeList list) {
-        Attribute a = (Attribute) list.getByName("Signature");
-        if(a == null) {
-            return;
-        }
+    private void mapSignature(ConstantPool pool, Attributed list) {
+        Attribute a = list.attrByName("Signature");
+        if(a == null) return;
+
         if(a instanceof AttrUTF) {
             AttrUTF au = (AttrUTF) a;
 
@@ -218,7 +202,7 @@ public final class CodeMapper extends Mapping {
 
             generic.rename(NAME_REMAPPER);
 
-            list.putByName(new AttrUTF(AttrUTF.SIGNATURE, generic.toGeneric()));
+            list.attributes().putByName(new AttrUTF(AttrUTF.SIGNATURE, generic.toGeneric()));
         }
     }
 
@@ -246,11 +230,11 @@ public final class CodeMapper extends Mapping {
         String oldCls, newCls;
         int i;
 
-        List<MethodSimple> methods1 = data.methods;
+        List<? extends MethodNode> methods1 = data.methods;
         Desc md = U.sharedDC;
         md.owner = data.name;
         for (i = 0; i < methods1.size(); i++) {
-            MethodSimple method = methods1.get(i);
+            MethodSimple method = (MethodSimple) methods1.get(i);
 
             /**
              * Method Name
@@ -279,14 +263,14 @@ public final class CodeMapper extends Mapping {
                 }
             }
 
-            mapSignature(data.cp, method.attributes);
+            mapSignature(data.cp, method);
         }
 
         md.owner = data.name;
         md.param = "";
-        List<FieldSimple> fields = data.fields;
+        List<? extends FieldNode> fields = data.fields;
         for (i = 0; i < fields.size(); i++) {
-            FieldSimple field = fields.get(i);
+            FieldSimple field = (FieldSimple) fields.get(i);
 
             /**
              * Field Name
@@ -317,12 +301,12 @@ public final class CodeMapper extends Mapping {
                 }
             }
 
-            mapSignature(data.cp, field.attributes);
+            mapSignature(data.cp, field);
         }
 
         // 十分不幸的是, field rename (when parameterized) 会被 LVT 工序影响
         for (i = 0; i < methods1.size(); i++) {
-            transform_LVT_LVTT_ST(U, data, methods1.get(i));
+            transform_LVT_LVTT_ST(U, data, (MethodSimple) methods1.get(i));
         }
 
         List<CstRef> cst = ctx.getFieldConstants();
@@ -396,7 +380,7 @@ public final class CodeMapper extends Mapping {
     }
 
     private void transform_LVT_LVTT_ST(Util U, ConstantData data, MethodSimple method) {
-        AttrUnknown au = (AttrUnknown) method.attributes.getByName("Code");
+        AttrUnknown au = (AttrUnknown) method.attributes().getByName("Code");
         if(au != null) {
             ByteReader r = Parser.reader(au);
             r.rIndex += 4; // stack size

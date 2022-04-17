@@ -52,8 +52,6 @@ public final class Idx {
     }
 
     public void reset(int length) {
-        if(length >= 64 && !(list instanceof MyBitSet))
-            list = new MyBitSet(length);
         list.fill(length);
         len = (short) length;
         size = 0;
@@ -74,7 +72,7 @@ public final class Idx {
 
     public IntIterator remains() {
         assert str == 0;
-        return (IntIterator) list.iterator();
+        return list.iterator();
     }
 
     @Override

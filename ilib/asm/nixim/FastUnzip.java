@@ -1,15 +1,13 @@
 package ilib.asm.nixim;
 
-import ilib.Config;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.network.PacketBuffer;
 import roj.util.EmptyArrays;
 
-import java.util.List;
 import java.util.zip.Inflater;
 
 import static ilib.Config.maxCompressionPacketSize;
@@ -18,7 +16,7 @@ import static ilib.Config.maxCompressionPacketSize;
  * @author solo6975
  * @since 2022/4/6 22:41
  */
-public class FastUnzip extends ByteToMessageDecoder {
+public class FastUnzip extends ChannelInboundHandlerAdapter {
     private final Inflater inflater;
     private int threshold;
     private byte[] tmp = EmptyArrays.BYTES;
@@ -28,15 +26,17 @@ public class FastUnzip extends ByteToMessageDecoder {
         this.inflater = new Inflater();
     }
 
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> msg) throws Exception {
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        ByteBuf in = (ByteBuf) msg;
         if (in.readableBytes() != 0) {
             PacketBuffer pb = new PacketBuffer(in);
             int len = pb.readVarInt();
             if (len == 0) {
-                msg.add(pb.readBytes(pb.readableBytes()));
+                ctx.fireChannelRead(pb.readBytes(pb.readableBytes()));
             } else {
-                if (len < this.threshold) {
-                    throw new DecoderException("Badly compressed packet - size of " + len + " is below server threshold of " + this.threshold);
+                if (len < threshold) {
+                    throw new DecoderException("Badly compressed packet - size of " + len + " is below server threshold of " + threshold);
                 }
 
                 if (len > maxCompressionPacketSize) {
@@ -67,7 +67,7 @@ public class FastUnzip extends ByteToMessageDecoder {
                             if (outOff < out.length) {
                                 throw new DecoderException("无效的压缩流");
                             }
-                            msg.add(Unpooled.wrappedBuffer(out));
+                            ctx.fireChannelRead(Unpooled.wrappedBuffer(out));
                             return;
                         }
                     }
@@ -80,8 +80,8 @@ public class FastUnzip extends ByteToMessageDecoder {
                 if (inflater.inflate(out) < out.length) {
                     throw new DecoderException("无效的压缩流");
                 }
-                if (Config.resetCompressor) inflater.reset();
-                msg.add(Unpooled.wrappedBuffer(out));
+                inflater.reset();
+                ctx.fireChannelRead(Unpooled.wrappedBuffer(out));
             }
         }
     }

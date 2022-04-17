@@ -35,8 +35,8 @@ import java.util.List;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class WrappedTransformers extends SimpleList<IClassTransformer> {
-    public WrappedTransformers(List<IClassTransformer> list) {
+class WrappedTransformers extends SimpleList<IClassTransformer> {
+    WrappedTransformers(List<IClassTransformer> list) {
         super(list);
     }
 

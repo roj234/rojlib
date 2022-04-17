@@ -36,7 +36,6 @@ package ilib.gui;
 import ilib.client.RenderUtils;
 import ilib.gui.comp.Component;
 import ilib.gui.comp.GTabs;
-import ilib.gui.comp.GText;
 import ilib.gui.util.GuiListener;
 import org.lwjgl.input.Mouse;
 import roj.collect.SimpleList;
@@ -45,6 +44,9 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
+
+import net.minecraftforge.client.event.GuiScreenEvent;
+import net.minecraftforge.common.MinecraftForge;
 
 import java.awt.*;
 import java.io.IOException;
@@ -55,20 +57,12 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
 
     protected T inventory;
 
-    protected int texX = 256, texY = 256;
     public ResourceLocation tex;
-
-    protected GTabs rightTabs, leftTabs;
 
     protected GuiListener listener;
 
     protected List<Component> components = new SimpleList<>();
-    private List<Component> clicked = new SimpleList<>();
-
-    protected final void setImageSize(int w, int h) {
-        this.texX = w;
-        this.texY = h;
-    }
+    private final List<Component>[] clicked = GuiHelper.createClickedComponentList();
 
     public GuiBase(T inventory, int width, int height, String title, ResourceLocation texture) {
         super(inventory);
@@ -79,47 +73,24 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
         this.inventory = inventory;
     }
 
-    protected void init() {
-        initComponents();
-        initTabs();
-    }
-
     @Override
-    public void initGui() {
+    public final void initGui() {
         super.initGui();
+
+        init();
 
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             com.onInit();
         }
-
-        init();
     }
 
-    protected void initComponents() {
-        rightTabs = new GTabs(this, xSize + 1);
-        leftTabs = new GTabs(this, -1);
-
-        components.add(GText.alignCenterY(this, 3, name, null));
-
+    protected void init() {
+        components.clear();
         addComponents();
     }
 
-    protected void initTabs() {
-        addRightTabs(rightTabs);
-        addLeftTabs(leftTabs);
-
-        components.add(rightTabs);
-        components.add(leftTabs);
-    }
-
     protected abstract void addComponents();
-
-    protected void addRightTabs(GTabs tabs) {
-    }
-
-    protected void addLeftTabs(GTabs tabs) {
-    }
 
     @Override
     protected void renderHoveredToolTip(int mouseX, int mouseY) {
@@ -133,19 +104,8 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             if (com.isMouseOver(mouseX, mouseY)) {
-                com.renderToolTip(mouseX, mouseY);
+                com.renderTooltip(mouseX, mouseY, mouseX, mouseY);
             }
-        }
-    }
-
-    public final void drawTexturedModalRect(int x, int y, int u, int v, int w, int h) {
-        if (texX == 256 && texY == 256) {
-            if (w > 256 || h > 256)
-                drawScaledCustomSizeModalRect(x, y, u, v, w, h, 256, 256, 256, 256);
-            else
-                RenderUtils.fastRect(x, y, u, v, w, h);
-        } else {
-            RenderUtils.fastRect(x, y, u, v, w, h, texX, texY);
         }
     }
 
@@ -168,6 +128,7 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
 
         if (listener != null) listener.mouseDown(x, y, button);
 
+        List<Component> clicked = this.clicked[button];
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             if (com.isMouseOver(x, y)) {
@@ -186,6 +147,7 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
 
         if (listener != null) listener.mouseUp(x, y, button);
 
+        List<Component> clicked = this.clicked[button];
         for (int i = 0; i < clicked.size(); i++) {
             clicked.get(i).mouseUp(x, y, button);
         }
@@ -199,6 +161,7 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
 
         if (listener != null) listener.mouseDrag(x, y, button, time);
 
+        List<Component> clicked = this.clicked[button];
         for (int i = 0; i < clicked.size(); i++) {
             clicked.get(i).mouseDrag(x, y, button, time);
         }
@@ -225,6 +188,7 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
     @Override
     protected void keyTyped(char typedChar, int keyCode) throws IOException {
         super.keyTyped(typedChar, keyCode);
+
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             com.keyTyped(typedChar, keyCode);
@@ -255,6 +219,8 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
 
         RenderUtils.bindTexture(tex);
         RenderUtils.fastRect(guiLeft, guiTop, 0, 0, xSize, ySize);
+
+        MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.BackgroundDrawnEvent(this));
     }
 
     public final int getLeft() {
@@ -278,8 +244,7 @@ public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implem
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             if (com instanceof GTabs) {
-                GTabs tabCollection = (GTabs) com;
-                areas.addAll(tabCollection.getAreasCovered(guiLeft, guiTop));
+                ((GTabs) com).getAreasCovered(guiLeft, guiTop, areas);
             } else {
                 areas.add(new Rectangle(com.getArea(guiLeft, guiTop)));
             }

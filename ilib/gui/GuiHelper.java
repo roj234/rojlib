@@ -30,12 +30,16 @@ import ilib.ImpLib;
 import ilib.anim.Animation;
 import ilib.client.RenderUtils;
 import ilib.gui.comp.Component;
+import org.lwjgl.input.Keyboard;
+import roj.collect.SimpleList;
+import roj.util.Helpers;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.init.SoundEvents;
+import net.minecraft.util.SoundEvent;
 
 import java.awt.*;
 import java.util.List;
@@ -45,8 +49,10 @@ import java.util.List;
  * @since 2021/5/30 23:56
  */
 public class GuiHelper {
+    public static final int LEFT = 0, RIGHT = 1, MIDDLE = 2;
+
     public static void openClientGui(GuiScreen screen) {
-        if (!ImpLib.proxy.isMainThread(true)) {
+        if (!ImpLib.proxy.isOnThread(true)) {
             ImpLib.proxy.runAtMainThread(true, () -> openClientGui(screen));
             return;
         }
@@ -56,6 +62,11 @@ public class GuiHelper {
     public static void playButtonSound() {
         ClientProxy.mc.getSoundHandler()
                 .playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+    }
+
+    public static void playSound(SoundEvent sound, float pitch) {
+        ClientProxy.mc.getSoundHandler()
+                      .playSound(PositionedSoundRecord.getMasterRecord(sound, pitch));
     }
 
     public static boolean isInBounds(int x, int y, int a, int b, int c, int d) {
@@ -109,7 +120,7 @@ public class GuiHelper {
 
     // region 渲染部分
 
-    public static void renderBackground(int rx, int ry, List<Component> components) {
+    public static void renderBackground(int rx, int ry, List<? extends Component> components) {
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             Animation anim = com.getAnimation();
@@ -127,7 +138,7 @@ public class GuiHelper {
         RenderUtils.restoreRenderState();
     }
 
-    public static void renderForeground(int rx, int ry, List<Component> components) {
+    public static void renderForeground(int rx, int ry, List<? extends Component> components) {
         for (int i = 0; i < components.size(); i++) {
             Component com = components.get(i);
             Animation anim = com.getAnimation();
@@ -136,7 +147,7 @@ public class GuiHelper {
                 anim.apply();
             }
             RenderUtils.prepareRenderState();
-            com.renderOverlay(rx, ry);
+            com.render2(rx, ry);
             if (anim != null) {
                 GlStateManager.popMatrix();
                 if (!anim.isPlaying()) com.setAnimation(null);
@@ -146,4 +157,25 @@ public class GuiHelper {
     }
 
     // endregion
+
+    public static boolean isCtrlPressed() {
+        boolean ctrl = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
+
+        // Mac
+        if (!ctrl && Minecraft.IS_RUNNING_ON_MAC)
+            ctrl = Keyboard.isKeyDown(Keyboard.KEY_LMETA) || Keyboard.isKeyDown(Keyboard.KEY_RMETA);
+        return ctrl;
+    }
+
+    public static boolean isShiftPressed() {
+        return Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT);
+    }
+
+    public static List<Component>[] createClickedComponentList() {
+        return Helpers.cast(new List<?>[] {
+                new SimpleList<>(2),
+                new SimpleList<>(2),
+                new SimpleList<>(2)
+        });
+    }
 }

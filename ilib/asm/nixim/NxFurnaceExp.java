@@ -1,5 +1,9 @@
 package ilib.asm.nixim;
 
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.BlockContainer;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -12,9 +16,6 @@ import net.minecraft.tileentity.TileEntityFurnace;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.Shadow;
 
 /**
  * @author solo6975
@@ -36,7 +37,7 @@ abstract class NxFurnaceExp extends BlockContainer {
             if (tile instanceof TileEntityFurnace) {
                 TileEntityFurnace furnace = (TileEntityFurnace) tile;
 
-                ItemStack out = furnace.getStackInSlot(2);
+                ItemStack out = furnace.getStackInSlot1(2);
                 float each = FurnaceRecipes.instance().getSmeltingExperience(out);
 
                 if (each > 0) {

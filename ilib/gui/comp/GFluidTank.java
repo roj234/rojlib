@@ -29,8 +29,11 @@ package ilib.gui.comp;
 import ilib.client.RenderUtils;
 import ilib.gui.IGui;
 import ilib.gui.util.Direction;
+import ilib.gui.util.Sprite;
 import ilib.util.MCTexts;
 import org.lwjgl.opengl.GL11;
+
+import net.minecraft.client.renderer.GlStateManager;
 
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
@@ -63,12 +66,35 @@ public class GFluidTank extends SimpleComponent {
         this.direction = Direction.UP;
     }
 
+    public GFluidTank(Component relativeTo, Sprite sprite, FluidTank tank) {
+        super(relativeTo.owner,
+              relativeTo.xPos + sprite.offsetX(),
+              relativeTo.yPos + sprite.offsetY(),
+              sprite.w(), sprite.h());
+        this.u = sprite.u();
+        this.v = sprite.v();
+        setTexture(sprite.texture());
+
+        this.tank = tank;
+        this.direction = Direction.UP;
+    }
+
+    public GFluidTank(IGui parent, int x, int y, Sprite sprite, FluidTank tank) {
+        super(parent, x, y, sprite.w(), sprite.h());
+        this.u = sprite.u();
+        this.v = sprite.v();
+        setTexture(sprite.texture());
+
+        this.tank = tank;
+        this.direction = Direction.UP;
+    }
+
     /*******************************************************************************************************************
      * Overrides                                                                                                       *
      *******************************************************************************************************************/
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {
+    public void render2(int mouseX, int mouseY) {
         GL11.glPushMatrix();
         GL11.glTranslatef(xPos, yPos, 0);
 
@@ -95,12 +121,14 @@ public class GFluidTank extends SimpleComponent {
                 break;
         }
 
+        GlStateManager.enableBlend();
         RenderUtils.renderFluid(tank, x, y + h, w, h);
 
         GL11.glPopMatrix();
 
         if (u > 0) {
             RenderUtils.bindTexture(getTexture());
+            RenderUtils.colorWhite();
             drawTexturedModalRect(xPos, yPos, u, v, width, height);
         }
     }

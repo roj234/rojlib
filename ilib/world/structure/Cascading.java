@@ -26,12 +26,12 @@
 
 package ilib.world.structure;
 
+import ilib.world.schematic.SchematicLoader;
 import ilib.world.structure.cascading.SizedStructure;
 import ilib.world.structure.cascading.StructureMap;
 import ilib.world.structure.cascading.StructureMap.Direction;
 import ilib.world.structure.cascading.Structures;
 import ilib.world.structure.cascading.api.IStructure;
-import ilib.world.structure.schematic.SchematicLoader;
 
 import net.minecraft.util.EnumFacing;
 
@@ -84,7 +84,7 @@ public class Cascading {
          * 自动加载
          */
         public StructAL(String filename) {
-            super(SchematicLoader.INSTANCE.loadSchematic("assets/ilib/structures/" + filename));
+            super(SchematicLoader.load("assets/ilib/structures/" + filename));
         }
     }
 

@@ -51,7 +51,7 @@ public class GTextInput extends SimpleComponent {
     private String prevText;
     private int prevSel;
 
-    protected String text;
+    protected String text, placeholder;
     private int selectionStart, selectionEnd;
     private int scrollChar;
     private boolean focused, enabled;
@@ -71,6 +71,10 @@ public class GTextInput extends SimpleComponent {
 
     protected void onChange(String value) {
         if (listener != null) listener.actionPerformed(this, ComponentListener.TEXT_CHANGED);
+    }
+
+    protected void onKeyDown(String value) {
+
     }
 
     @Override
@@ -162,6 +166,7 @@ public class GTextInput extends SimpleComponent {
                   .append(text, selectionEnd, text.length()).toString();
         setSelection(selectionStart+1);
         checkValid();
+        onKeyDown(text);
     }
 
     @Override
@@ -173,10 +178,15 @@ public class GTextInput extends SimpleComponent {
     }
 
     @Override
-    public void renderOverlay(int mouseX, int mouseY) {
+    public void render2(int mouseX, int mouseY) {
         String text = this.text;
-        FontRenderer fr = this.fr;
 
+        if (text.isEmpty() && !focused) {
+            drawPlaceholder();
+            return;
+        }
+
+        FontRenderer fr = this.fr;
         int w = width;
         int rightBound = scrollChar;
         while (rightBound < text.length()) {
@@ -207,12 +217,23 @@ public class GTextInput extends SimpleComponent {
             if (w == 1 && System.currentTimeMillis() % 1000 < 500) return;
             w = Math.min(w, width - x);
 
+            GlStateManager.disableTexture2D();
+
             GlStateManager.enableColorLogic();
             GlStateManager.colorLogicOp(LogicOp.OR_REVERSE);
             RenderUtils.drawRectangle(xPos + 2 + x, yPos, 0, w, height, color ^ 0xFFFFFF);
             GlStateManager.disableColorLogic();
+
+            GlStateManager.enableTexture2D();
         }
     }
+
+    protected void drawPlaceholder() {
+        if (placeholder != null) {
+            fr.drawStringWithShadow(placeholder, xPos + 2, yPos + (height - fr.FONT_HEIGHT) / 2f, color);
+        }
+    }
+
     /*******************************************************************************************************************
      * Utilities                                                                                                        *
      *******************************************************************************************************************/
@@ -329,6 +350,14 @@ public class GTextInput extends SimpleComponent {
         this.selectionStart = selectionEnd = 0;
         this.scrollChar = 0;
         this.color = NORMAL_COLOR;
+    }
+
+    public String getPlaceholder() {
+        return placeholder;
+    }
+
+    public void setPlaceholder(String placeholder) {
+        this.placeholder = placeholder;
     }
 
     public int getColor() {

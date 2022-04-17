@@ -75,7 +75,7 @@ public abstract class JSONConfiguration {
             e.printStackTrace();
             config.renameTo(new File(config.getPath() + ".broken." + System.currentTimeMillis()));
             System.err.println("配置文件 " + config + " 读取失败! 重新生成配置!");
-            resetConfig(this.map = new CMapping(), config);
+            resetConfig(this.map = new CCommMap(), config);
         }
     }
 

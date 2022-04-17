@@ -44,10 +44,7 @@ import java.util.List;
 import java.util.PrimitiveIterator;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class StdOreRecipe extends AbstractItemRecipe implements MultiInputRecipe {
@@ -111,7 +108,7 @@ public class StdOreRecipe extends AbstractItemRecipe implements MultiInputRecipe
         return Helpers.cast(this);
     }
 
-    public boolean matches(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> list) {
+    public boolean matches(@Nonnull IFluidProvider fp, @Nonnull List<ItemStack> list) {
         return isShaped() ? matchesOreShaped(this, list) : matchesOreShapeless(this, list);
     }
 
@@ -199,7 +196,7 @@ public class StdOreRecipe extends AbstractItemRecipe implements MultiInputRecipe
 
     @Nonnull
     @Override
-    public List<ItemStack> operateInput(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> input) {
+    public List<ItemStack> operateInput(@Nonnull IFluidProvider fp, @Nonnull List<ItemStack> input) {
         return isShaped() ? operateMultiShaped(this, input) : operateMultiShapeless(this, input);
     }
 
@@ -210,7 +207,7 @@ public class StdOreRecipe extends AbstractItemRecipe implements MultiInputRecipe
      * @param input  输入
      * @return 合成后的物品列表
      */
-    public static List<ItemStack> operateMultiShaped(@Nonnull MultiInputRecipe recipe, @Nonnull List<ItemStack> input) {
+    public static List<ItemStack> operateMultiShaped(MultiInputRecipe recipe, List<ItemStack> input) {
         int inputLen = input.size();
         List<ItemStack[]> list = recipe.getMultiInputs();
         if (inputLen != list.size()) throw new IllegalStateException("NFSIZEError");

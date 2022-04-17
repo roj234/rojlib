@@ -27,6 +27,11 @@ public class SidedProxy extends SimpleInventory {
         return slots.size();
     }
 
+    @Override
+    public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
+        return parent.isItemValid(slots.nthTrue(slot), stack);
+    }
+
     @Nonnull
     @Override
     public ItemStack getStackInSlot(int i) {

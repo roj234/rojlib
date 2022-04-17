@@ -27,12 +27,13 @@ package ilib.client;
 
 import ilib.ClientProxy;
 import ilib.Config;
+import org.lwjgl.opengl.GL11;
+import roj.math.MathUtils;
+
 import net.minecraft.client.renderer.GLAllocation;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.text.TextComponentString;
-import org.lwjgl.opengl.GL11;
-import roj.math.MathUtils;
 
 /**
  * @author Roj234
@@ -70,11 +71,6 @@ public class DisplayListRenderer {
         ClientProxy.mc.ingameGUI.setOverlayMessage(new TextComponentString("T "  + partialTick + " D " + x + " " + y + " " + z), false);
         GlStateManager.translate(x * 2, y, z * 2);
         GL11.glCallList(this.listId);
-    }
-
-    @Override
-    protected void finalize() {
-        deleteGlBuffers();
     }
 
     public void deleteGlBuffers() {

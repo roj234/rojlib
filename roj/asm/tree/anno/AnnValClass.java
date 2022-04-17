@@ -42,6 +42,11 @@ public final class AnnValClass extends AnnVal {
 
     public Type value;
 
+    @Override
+    public Type asClass() {
+        return value;
+    }
+
     public void toByteArray(ConstantPool pool, ByteList w) {
         w.put((byte) CLASS).putShort(pool.getUtfId(ParamHelper.getField(value)));
     }

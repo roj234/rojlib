@@ -26,6 +26,7 @@
 
 package ilib.gui;
 
+import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.api.Syncable;
 import ilib.tile.FieldSyncer;
@@ -35,6 +36,7 @@ import invtweaks.api.container.ContainerSection;
 import invtweaks.api.container.ContainerSectionCallback;
 import roj.collect.MyHashMap;
 
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
@@ -44,6 +46,8 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 
 import net.minecraftforge.fml.common.Optional.Method;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -58,8 +62,8 @@ public abstract class ContainerIL extends Container {
     protected final TileBase tile;
     protected final FieldSyncer fs;
 
-    public ContainerIL(InventoryPlayer player) {
-        this.tile = null;
+    public ContainerIL(InventoryPlayer player, TileBase base) {
+        this.tile = base;
         this.fs = null;
         this.playerInv = player;
     }
@@ -145,7 +149,7 @@ public abstract class ContainerIL extends Container {
 
     @Override
     public boolean canInteractWith(@Nonnull EntityPlayer player) {
-        return tile.isUsableByPlayer(player);
+        return tile == null || tile.isUsableByPlayer(player);
     }
 
     @Override
@@ -155,11 +159,13 @@ public abstract class ContainerIL extends Container {
 
     @Override
     public void onContainerClosed(EntityPlayer player) {
+        super.onContainerClosed(player);
         if (fs != null && !player.world.isRemote) fs.closeGui((EntityPlayerMP) player);
     }
 
     @Override
     public void addListener(IContainerListener listener) {
+        super.addListener(listener);
         if (fs != null && listener instanceof EntityPlayerMP) {
             fs.openGui((EntityPlayerMP) listener);
         }
@@ -179,4 +185,14 @@ public abstract class ContainerIL extends Container {
     //@RowSizeCallback
     //@Method(modid = "inventorytweaks")
     //public int getRowSize() { return this.rowSize; }
+
+    public static boolean isOpeningGui(TileBase tile) {
+        return ImpLib.isClient && isOpeningGuiClient(tile);
+    }
+
+    @SideOnly(Side.CLIENT)
+    private static boolean isOpeningGuiClient(TileBase tile) {
+        GuiScreen scr = ClientProxy.mc.currentScreen;
+        return scr instanceof GuiBase && ((GuiBase<?>) scr).inventory.tile == tile;
+    }
 }

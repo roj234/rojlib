@@ -85,6 +85,7 @@ public final class EnergyTransferProcessor implements Runnable {
     public static final int NO_ME = -7233;
 
     @SubscribeEvent
+    @SideOnly(Side.CLIENT)
     public static void onRenderPos(RenderWorldLastEvent event) {
         enqueueLock();
         for (IntMap.Entry<Network> ent : available.entrySet()) {
@@ -211,6 +212,7 @@ public final class EnergyTransferProcessor implements Runnable {
 
 
     public static void register(TileEntity te) {
+        if (1 == 1) return;
         if (te == null || te.isInvalid()) {
             throw new IllegalArgumentException("Invalid or null TileEntity");
         }
@@ -235,7 +237,6 @@ public final class EnergyTransferProcessor implements Runnable {
 
         Network network = fastPath.get(world, te.getPos());
         if (network == null) {
-            if (1 == 1) return;
             network = new Network(new Section(te.getPos(), te.getPos()), nextNetworkId++, world);
             System.err.println("创建网络" + network);
             registerNetwork(network);

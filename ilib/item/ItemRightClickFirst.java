@@ -33,26 +33,26 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
-public abstract class ItemRightClickFirst extends ItemRightClickBlock {
+public abstract class ItemRightClickFirst extends ItemRightClick {
     @Override
-    public EnumActionResult onItemUseFirst(EntityPlayer player, World world, BlockPos clickPos, EnumFacing side, float hitX, float hitY, float hitZ, EnumHand hand) {
-        ItemStack itemStackIn = player.getHeldItem(hand);
+    public EnumActionResult onItemUseFirst(EntityPlayer player, World world, BlockPos pos, EnumFacing side, float hitX, float hitY, float hitZ, EnumHand hand) {
+        ItemStack stack = player.getHeldItem(hand);
 
         if (player.isSneaking())
             return EnumActionResult.PASS;
 
-        if (world.isBlockModifiable(player, clickPos)) {
-            BlockPos targetPos = clickPos.offset(side);
+        if (world.isBlockModifiable(player, pos)) {
+            BlockPos targetPos = pos.offset(side);
 
-            if (player.canPlayerEdit(clickPos, side, itemStackIn)) {
-                return onRightClickFirst(world, targetPos, clickPos, player, itemStackIn) ? EnumActionResult.SUCCESS : EnumActionResult.PASS;
+            if (player.canPlayerEdit(pos, side, stack)) {
+                return onRightClickFirst(world, targetPos, pos, player, stack) ?
+                        EnumActionResult.SUCCESS:
+                        EnumActionResult.PASS;
             }
         }
 

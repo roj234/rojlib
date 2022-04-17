@@ -28,7 +28,6 @@ package ilib.util;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
-import net.minecraft.item.ItemStack;
 
 /**
  * @author Roj234
@@ -45,11 +44,6 @@ public class BlockInfo {
     @Deprecated
     public BlockInfo(Block block, int meta) {
         this(block.getStateFromMeta(meta));
-    }
-
-    @Deprecated
-    public static ItemStack toStack(IBlockState input) {
-        return new ItemStack(input.getBlock(), 1, input.getBlock().getMetaFromState(input));
     }
 
     public IBlockState getState() {

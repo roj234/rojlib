@@ -42,7 +42,7 @@ public class GuiMock extends GuiBaseNI implements ComponentListener {
 
     @Override
     protected void addComponents() {
-        components.add(GText.alignCenterY(this, 10, "\u00a7lProtocolLib mod alpha 0.1.1", Color.WHITE));
+        components.add(GText.alignCenterX(this, 10, "\u00a7lProtocolLib mod alpha 0.1.1", Color.WHITE));
 
         int y = 50;
         for (int i = 0; i < 6; i++) {

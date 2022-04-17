@@ -28,50 +28,44 @@ package ilib;
 
 import com.google.common.collect.Multimap;
 import ilib.asm.Loader;
-import ilib.asm.util.MCHooks;
+import ilib.asm.fasterforge.transformers.EventSubscriberTransformer;
+import ilib.asm.fasterforge.transformers.SideTransformer;
 import ilib.block.BlockLootrChest;
-import ilib.client.GeneratedModelRepo;
-import ilib.client.model.ItemModelInfo;
-import ilib.command.*;
+import ilib.client.model.ILItemModel;
+import ilib.collect.MyImmutableMultimap;
+import ilib.command.CommandItemNBT;
+import ilib.command.CommandListenerIL;
+import ilib.command.CommandPlayerNBT;
+import ilib.command.MasterCommand;
+import ilib.command.sub.CmdILFill;
+import ilib.command.sub.CmdSchematic;
 import ilib.command.sub.CmdSubCmd;
-import ilib.command.sub.CommandStructure;
 import ilib.command.sub.MySubs;
-import ilib.command.sub.we.CommandFill;
-import ilib.command.sub.we.CommandSet;
-import ilib.command.sub.we.ModificationCache;
-import ilib.event.*;
+import ilib.event.ClientEvent;
+import ilib.event.CommonEvent;
+import ilib.event.LootrEvent;
+import ilib.event.PowershotEvent;
 import ilib.item.ItemBlockMI;
-import ilib.item.ItemPlaceHere;
 import ilib.item.ItemSelectTool;
-import ilib.item.ItemSpeedModifier;
+import ilib.misc.MCHooks;
 import ilib.misc.MiscOptimize;
 import ilib.util.BlockHelper;
 import ilib.util.ForgeUtil;
 import ilib.util.Hook;
-import ilib.util.PlayerUtil;
+import ilib.util.Registries;
 import ilib.util.freeze.FreezeRegistryInjector;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.lwjgl.input.Keyboard;
-import roj.collect.SimpleList;
-import roj.config.data.CEntry;
-import roj.reflect.FieldAccessor;
-import roj.reflect.ReflectionUtils;
-import roj.text.TextUtil;
-
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
 import net.minecraft.command.CommandBase;
-import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommandSender;
 import net.minecraft.item.Item;
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
-
+import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.client.SplashProgress;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
@@ -81,13 +75,24 @@ import net.minecraftforge.fml.common.asm.transformers.AccessTransformer;
 import net.minecraftforge.fml.common.discovery.ASMDataTable;
 import net.minecraftforge.fml.common.discovery.JarDiscoverer;
 import net.minecraftforge.fml.common.event.*;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.fml.common.patcher.ClassPatchManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import roj.collect.SimpleList;
+import roj.config.data.CEntry;
+import roj.dev.HRAgent;
+import roj.io.NIOUtil;
+import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
+import roj.util.Helpers;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.Buffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.LockSupport;
 import java.util.jar.Manifest;
 
 /***<pre>
@@ -125,6 +130,8 @@ public class ImpLib {
     @Deprecated
     public static final List<CommandBase> COMMANDS = new SimpleList<>();
 
+    public static boolean isAuthor = Minecraft.getMinecraft().getSession().getPlayerID().equals("Async");
+
     private static Logger logger;
 
     public static Logger logger() {
@@ -135,8 +142,14 @@ public class ImpLib {
     @SidedProxy(serverSide = "ilib.ServerProxy", clientSide = "ilib.ClientProxy")
     public static ServerProxy proxy;
 
-    public ImpLib() {
+    static {
+        ForgeHooksClient.invalidateLog4jThreadCache();
         Thread.currentThread().setName(isClient ? "客" : "服");
+        try {
+            HRAgent.useRojLib();
+        } catch (Throwable ignored) {}
+        SideTransformer.lockdown();
+        EventSubscriberTransformer.lockdown();
     }
 
     @EventHandler
@@ -180,20 +193,13 @@ public class ImpLib {
 
         HOOK.triggerOnce("preInit");
 
-        Registry.namespace(MODID);
-
         if (Config.registerItem) {
             Item item = new ItemSelectTool();
-            Registry.items().add(item.setRegistryName(MODID, "select_tool").setTranslationKey("ilib.select_tool"));
-            Registry.model(new ItemModelInfo(item, true));
+            Registries.item().register(item.setRegistryName(MODID, "select_tool"));
 
-            item = new ItemSpeedModifier();
-            Registry.items().add(item.setRegistryName(MODID, "speed_modifier").setTranslationKey("ilib.speed_modifier"));
-            Registry.model(new ItemModelInfo(item, true));
-
-            item = new ItemPlaceHere();
-            Registry.items().add(item.setRegistryName(MODID, "place_here").setTranslationKey("ilib.place_here"));
-            Registry.model(new ItemModelInfo(item, true));
+            ILItemModel.Merged(item, 0, "select_tool");
+            ILItemModel.Merged(item, 1, "speed_modifier");
+            ILItemModel.Merged(item, 2, "place_here");
         }
 
         if (Config.lootR) {
@@ -213,21 +219,10 @@ public class ImpLib {
         Config.instance.save();
     }
 
-    @SideOnly(Side.CLIENT)
-    public static void onPreInitDone() {
-        GeneratedModelRepo.preInitDone();
-    }
-
     @EventHandler
     public void init(FMLInitializationEvent event) {
         proxy.init();
         HOOK.triggerOnce("init");
-        if (isClient && Config.betterKeyboard) {
-            Keyboard.enableRepeatEvents(true);
-        }
-
-        if(Config.sizeEvent > 0)
-            SizeEvent.register(Config.sizeEvent > 1);
     }
 
     @EventHandler
@@ -247,7 +242,7 @@ public class ImpLib {
         }
 
         if (Config.fastRecipe) {
-            MCHooks.initRecipes();
+            MCHooks.cacheRecipes();
         }
 
         proxy.postInit();
@@ -269,136 +264,28 @@ public class ImpLib {
         COMMANDS.add(new MasterCommand("implib", 3)
                 .aliases("il")
                 .register(MySubs.CHECK_OD)
-                .register(new CommandServerManage())
-                .register(new CommandStructure())
+                .register(new CmdSchematic())
                 .register(MySubs.REGEN)
                 .register(
                         (new CmdSubCmd("debug")).setHelp("command.mi.help.debug.1")
-                                .registerSubCommand(MySubs.RENDER_INFO)
-                                .registerSubCommand(MySubs.BLOCK_UPDATE)
-                                .registerSubCommand(MySubs.TILE_TEST))
-                .register(
-                        new CmdSubCmd("we")
-                                .registerSubCommand(new CommandFill())
-                                .registerSubCommand(new CommandSet())
-                                .registerSubCommand(new MySubs("redo") {
-                                    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-                                        try {
-                                            if (ModificationCache.redo()) {
-                                                PlayerUtil.sendTo(sender, "command.ilib.we.affected", ModificationCache.getAffectBlocks());
-                                            } else {
-                                                throw new CommandException("command.ilib.we.cant_redo");
-                                            }
-                                        } catch (IllegalStateException e) {
-                                            throw new CommandException("command.ilib.we.async_working");
-                                        }
-                                    }
-                                })
-                                .registerSubCommand(new MySubs("undo") {
-                                    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-                                        try {
-                                            if (ModificationCache.undo()) {
-                                                PlayerUtil.sendTo(sender, "command.ilib.we.affected", ModificationCache.getAffectBlocks());
-                                            } else {
-                                                throw new CommandException("command.ilib.we.cant_undo");
-                                            }
-                                        } catch (IllegalStateException e) {
-                                            throw new CommandException("command.ilib.we.async_working");
-                                        }
-                                    }
-                                })
-                                .registerSubCommand(new MySubs("mem") {
-                                    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-                                        switch (args.length) {
-                                            case 0: {
-                                                long bytes = ModificationCache.getMemoryBytes();
-                                                PlayerUtil.sendTo(sender, "当前重做+撤销缓存已使用内存: " + TextUtil.scaledNumber(bytes) + "B");
-                                                PlayerUtil.sendTo(sender, "当前重做缓存已使用数量: " + ModificationCache.redo.size() + '/' + ModificationCache.maxRedoCount);
-                                                PlayerUtil.sendTo(sender, "当前撤销缓存已使用数量: " + ModificationCache.undo.size() + '/' + ModificationCache.maxUndoCount);
-                                                return;
-                                            }
-                                            case 1: {
-                                                if (args[0].equals("clear")) {
-                                                    ModificationCache.undo.clear();
-                                                    ModificationCache.redo.clear();
-                                                    PlayerUtil.sendTo(sender, "command.ilib.ok");
-                                                    return;
-                                                }
-                                            }
-                                            break;
-                                            case 2: {
-                                                switch (args[0]) {
-                                                    case "set": {
-                                                        switch (args[1]) {
-                                                            case "on": {
-                                                                ModificationCache.setEnable(true);
-                                                                PlayerUtil.sendTo(sender, "command.ilib.ok");
-                                                                return;
-                                                            }
-                                                            case "off": {
-                                                                ModificationCache.setEnable(false);
-                                                                PlayerUtil.sendTo(sender, "command.ilib.ok");
-                                                                return;
-                                                            }
-                                                        }
-                                                    }
-                                                    break;
-                                                    case "async": {
-                                                        switch (args[1]) {
-                                                            case "on": {
-                                                                ModificationCache.setAsync(true);
-                                                                PlayerUtil.sendTo(sender, "command.ilib.ok");
-                                                                return;
-                                                            }
-                                                            case "off": {
-                                                                ModificationCache.setAsync(false);
-                                                                PlayerUtil.sendTo(sender, "command.ilib.ok");
-                                                                return;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            break;
-                                            case 3: {
-                                                if (args[0].equals("mem")) {
-                                                    try {
-                                                        int maxUndo = Integer.parseInt(args[1]);
-                                                        int maxRedo = Integer.parseInt(args[2]);
-
-                                                        ModificationCache.maxUndoCount = maxUndo;
-                                                        ModificationCache.maxRedoCount = maxRedo;
-
-                                                        PlayerUtil.sendTo(sender, "command.ilib.ok");
-                                                    } catch (NumberFormatException ignored) {
-                                                        PlayerUtil.sendTo(sender, "command.ilib.int");
-                                                    }
-                                                    return;
-                                                }
-                                            }
-                                            break;
-                                        }
-                                        PlayerUtil.sendTo(sender, "使用/il we mem <maxUndo> <maxRedo> 设置最大重做和撤销数量");
-                                        PlayerUtil.sendTo(sender, "使用/il we mem set <on/off> 启用/关闭重做和撤销功能");
-                                        PlayerUtil.sendTo(sender, "使用/il we mem async <on/off> 启用/关闭异步操作(不是所有功能都支持)");
-                                        PlayerUtil.sendTo(sender, "使用/il we mem clear 清空撤销数据");
-                                    }
-                                }))
+                                .register(MySubs.RENDER_INFO)
+                                .register(MySubs.BLOCK_UPDATE)
+                                .register(MySubs.TILE_TEST))
+                .register(new CmdILFill())
                 .register(MySubs.GC)
                 .register(MySubs.UNLOAD_CHUNKS)
                 .register(MySubs.TPS_CHANGE)
         );
     }
 
-    public static MTIssueFixer issueFixer;
+    private static MTIssueFixer fixer;
 
     @EventHandler
     public void onServerStart(FMLServerAboutToStartEvent event) {
         if (isClient) {
-            if (Config.fixThreadIssues && issueFixer == null) {
-                Thread thread = new Thread(issueFixer = new MTIssueFixer(), "Issue Fixer");
-                thread.setDaemon(true);
-                thread.start();
+            if (Config.fixThreadIssues && fixer == null) {
+                fixer = new MTIssueFixer();
+                fixer.start();
             }
             event.getServer().setOnlineMode(false);
         }
@@ -406,37 +293,35 @@ public class ImpLib {
 
     @EventHandler
     public void onServerStart(FMLServerStartingEvent event) {
+        ForgeHooksClient.invalidateLog4jThreadCache();
         Thread.currentThread().setName("服");
+        proxy.setServerThread(Thread.currentThread());
+        if (fixer != null) {
+            fixer.trigger = 2;
+            LockSupport.unpark(fixer);
+        }
 
         HOOK.trigger("ServerStart");
         CommonEvent.onServerStart(event.getServer());
-        COMMANDS.forEach(event::registerServerCommand);
-        new CommandListenerIL();
 
-        final Thread thread = Thread.currentThread();
-        proxy.setServerThread(thread);
-        if (issueFixer != null) {
-            issueFixer.trigger = 2;
-            synchronized (issueFixer) {
-                issueFixer.notifyAll();
-            }
+        CommandListenerIL listener = new CommandListenerIL(event.getServer());
+        for (int i = 0; i < COMMANDS.size(); i++) {
+            listener.serverCmd.registerCommand(COMMANDS.get(i));
         }
     }
 
     @EventHandler
     public void onServerStart(FMLServerStoppingEvent event) {
         HOOK.trigger("ServerStop");
-        proxy.setServerThread(null);
+        if (fixer != null) {
+            fixer.trigger = 1;
+            LockSupport.unpark(fixer);
+        }
     }
 
     @EventHandler
-    public void onServerStart(FMLServerStoppedEvent event) {
-        if (issueFixer != null) {
-            issueFixer.trigger = 1;
-            synchronized (issueFixer) {
-                issueFixer.notifyAll();
-            }
-        }
+    public void onServerStop(FMLServerStoppedEvent event) {
+        proxy.setServerThread(null);
     }
 
     @SuppressWarnings("unchecked")
@@ -447,16 +332,17 @@ public class ImpLib {
 
             acc = ReflectionUtils.access(ReflectionUtils.getField(AccessTransformer.class, "modifiers"));
 
-            for (IClassTransformer transformer : loader.getTransformers()) {
-                if (transformer instanceof AccessTransformer) {
-                    acc.setInstance(transformer);
+            List<IClassTransformer> transformers = loader.getTransformers();
+            for (int i = 0; i < transformers.size(); i++) {
+                IClassTransformer t = transformers.get(i);
+                if (t instanceof AccessTransformer) {
+                    acc.setInstance(t);
                     Multimap<String, Object> map = (Multimap<String, Object>) acc.getObject();
 
                     if (map != null) {
-                        logger().info("" + map.size() + " entries fixed");
-
-                        if (!(map instanceof ilib.collect.MyImmutableMultimap)) {
-                            acc.setObject(new ilib.collect.MyImmutableMultimap(map));
+                        if (!(map instanceof MyImmutableMultimap)) {
+                            acc.setObject(new MyImmutableMultimap(map));
+                            logger().info("固定的AT Entry: " + map.size());
                         }
                     }
                 }
@@ -482,10 +368,30 @@ public class ImpLib {
                 manifestCache.clear();
             } catch (Throwable ignored) {}
 
-            logger().info(count + " entries cleared");
-
+            logger().info("清除的资源/manifest缓存: " + count);
         } catch (Exception e) {
-            logger().catching(e);
+            logger().warn("无法清除缓存1", e);
+        }
+
+        try {
+            ClassPatchManager cpm = ClassPatchManager.INSTANCE;
+            acc = ReflectionUtils.access(ClassPatchManager.class.getDeclaredField("patchedClasses"));
+            acc.setInstance(cpm);
+
+            Map<String, byte[]> patchedClasses = Helpers.cast(acc.getObject());
+            logger().info("清除的补丁缓存: " + patchedClasses.size());
+            patchedClasses.clear();
+        } catch (Throwable e) {
+            logger().warn("无法清除缓存2", e);
+        }
+
+        try {
+            Field buf = SplashProgress.class.getDeclaredField("buf");
+            buf.setAccessible(true);
+            NIOUtil.clean((Buffer) buf.get(null));
+            logger().info("清除Splash剩下的缓冲区: 16MB");
+        } catch (Throwable e) {
+            logger().warn("无法清除缓存3", e);
         }
 
         try {
@@ -499,102 +405,12 @@ public class ImpLib {
             acc.setInstance(loader);
 
             List<?> injectCache = (List<?>) acc.getObject();
-
-            int count = injectCache.size();
-            logger().info(count + " groups cleared");
-
+            logger().info("清除了Mixin group: " + injectCache.size());
             injectCache.clear();
 
-        } catch (ClassNotFoundException e) {
-            logger().debug("Mixin not found");
+        } catch (ClassNotFoundException ignored) {
         } catch (Exception e) {
-            logger().catching(e);
-        }
-    }
-
-    private static class MTIssueFixer implements Runnable {
-        public Thread self;
-        public int trigger = 0;
-
-        @Override
-        public void run() {
-            Thread self = this.self = Thread.currentThread();
-            Thread server = null;
-            while (!self.isInterrupted()) {
-                if (ImpLib.proxy.serverThread != null) {
-                    server = ImpLib.proxy.serverThread;
-                }
-
-                try {
-                    synchronized (this) {
-                        wait();
-                    }
-                } catch (InterruptedException e) {
-                    return;
-                }
-
-                if (trigger != 0) {
-                    switch (trigger) {
-                        case 1: { // STOP
-                            if (server != null) {
-                                //server.setDaemon(true);
-
-                                try {
-                                    server.join(10000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-
-                                if (server.isAlive()) {
-                                    server.interrupt();
-                                    try {
-                                        server.stop();
-                                    } catch (Throwable e) {
-                                        ImpLib.logger().error("无法终止进程", e);
-                                        try {
-                                            Thread.sleep(50);
-                                        } catch (InterruptedException e1) {
-                                            e1.printStackTrace();
-                                        }
-                                        //while (true) {
-                                        //    System.exit(17);
-                                        //}
-                                    }
-                                }
-                                server = null;
-
-                                trigger = 0;
-                            }
-                        }
-                        break;
-                        case 2: { // MAXIMUM
-                            if (server != null) {
-
-                                int sop = server.getPriority();
-
-                                server.setPriority(Thread.MAX_PRIORITY);
-                                final Thread client = ((ClientProxy) proxy).clientThread;
-
-                                int cop = client.getPriority();
-
-                                client.setPriority(Thread.MIN_PRIORITY);
-
-                                try {
-                                    Thread.sleep(1000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-
-                                server.setPriority(sop);
-                                client.setPriority(cop);
-
-                                trigger = 0;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
+            logger().warn("无法清除缓存4", e);
         }
     }
 }

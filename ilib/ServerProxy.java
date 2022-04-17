@@ -27,15 +27,14 @@
 package ilib;
 
 import ilib.capabilities.Capabilities;
-import ilib.client.CreativeTabsMy;
-import ilib.client.renderer.mirror.MirrorSubSystem;
+import ilib.client.mirror.Mirror;
+import ilib.client.model.BlockStateBuilder;
 import ilib.event.CommonEvent;
 import ilib.misc.MiscOptimize;
 import ilib.util.Hook;
 import ilib.util.PlayerUtil;
 
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fluids.BlockFluidBase;
+import net.minecraft.util.ResourceLocation;
 
 /**
  * @author Roj234
@@ -44,27 +43,34 @@ import net.minecraftforge.fluids.BlockFluidBase;
 public class ServerProxy {
     Thread serverThread;
 
-    protected boolean isServerRunning() {
-        return serverThread.getState() == Thread.State.RUNNABLE || serverThread.getState() == Thread.State.TERMINATED;
+    public BlockStateBuilder getBlockMergedModel() {
+        return null;
+    }
+    public BlockStateBuilder getItemMergedModel() {
+        return null;
+    }
+    public BlockStateBuilder getFluidMergedModel() {
+        return null;
+    }
+    public void registerTexture(ResourceLocation tex) {
+        throw new IllegalStateException("Wrong side");
     }
 
-    public boolean isMainThread(boolean atClientIfClient) {
-        return !atClientIfClient && Thread.currentThread() == serverThread;
+    public boolean isOnThread(boolean client) {
+        return !client && Thread.currentThread() == serverThread;
     }
 
-    public void runAtMainThread(boolean atClientIfClient, Runnable run) {
+    public void runAtMainThread(boolean client, Runnable run) {
         PlayerUtil.getMinecraftServer().addScheduledTask(run);
     }
 
-    void setServerThread(Thread serverThread) {
-        if (this.serverThread != null && serverThread != null)
+    void setServerThread(Thread t) {
+        if (this.serverThread != null && t != null)
             throw new IllegalStateException("Server Thread already set");
-        this.serverThread = serverThread;
+        this.serverThread = t;
     }
 
     void preInit() {
-        CreativeTabsMy.preInit();
-        MinecraftForge.EVENT_BUS.register(this);
         CommonEvent.init();
         Capabilities.init();
 
@@ -75,16 +81,12 @@ public class ServerProxy {
     }
 
     void init() {
-        Registry.getModels();
         ImpLib.HOOK.remove(Hook.MODEL_REGISTER);
 
-        MirrorSubSystem.init();
+        Mirror.init();
     }
 
     void postInit() {
 
-    }
-
-    public void registerFluidModel(String fluid, BlockFluidBase block) {
     }
 }

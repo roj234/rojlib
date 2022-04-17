@@ -35,6 +35,7 @@ package ilib.api.recipe.impl;
 
 import ilib.api.recipe.IRecipe;
 import ilib.fluid.handler.IFluidProvider;
+
 import net.minecraft.item.ItemStack;
 
 import javax.annotation.Nonnull;
@@ -50,13 +51,13 @@ public class FurnaceRecipe implements IRecipe {
         outputs = Collections.singletonList(out);
     }
 
-    public boolean matches(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> list) {
+    public boolean matches(@Nonnull IFluidProvider fp, @Nonnull List<ItemStack> list) {
         return true;
     }
 
     @Nonnull
     @Override
-    public List<ItemStack> operateInput(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> input) {
+    public List<ItemStack> operateInput(@Nonnull IFluidProvider fp, @Nonnull List<ItemStack> input) {
         if (IRecipe.decrStackSize(input, 0, 1).isEmpty()) {
             throw new RuntimeException("FurnaceRecipe: Invalid input");
         }

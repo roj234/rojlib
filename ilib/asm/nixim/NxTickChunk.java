@@ -25,6 +25,13 @@
  */
 package ilib.asm.nixim;
 
+import com.google.common.collect.ImmutableSetMultimap;
+import ilib.asm.util.MergedItr;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
@@ -36,6 +43,7 @@ import net.minecraft.profiler.Profiler;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerChunkMap;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.WorldServer;
@@ -44,10 +52,8 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.WorldInfo;
-import roj.asm.nixim.Copy;
-import roj.asm.nixim.Inject;
-import roj.asm.nixim.Nixim;
-import roj.asm.nixim.Shadow;
+
+import net.minecraftforge.common.ForgeChunkManager;
 
 import javax.annotation.Nullable;
 import java.util.Iterator;
@@ -66,7 +72,18 @@ abstract class NxTickChunk extends WorldServer {
     @Shadow("field_73063_M")
     private PlayerChunkMap playerChunkMap;
 
-    @Inject("func_147456_g")
+    @Override
+    @Inject("/")
+    public Iterator<Chunk> getPersistentChunkIterable(Iterator<Chunk> chunkIterator) {
+        ImmutableSetMultimap<ChunkPos, ForgeChunkManager.Ticket> persistentChunksFor = getPersistentChunks();
+        if (!persistentChunksFor.isEmpty()) {
+            return new MergedItr(this, persistentChunksFor.keys().iterator(), chunkIterator);
+        } else {
+            return chunkIterator;
+        }
+    }
+
+    @Inject("/")
     protected void updateBlocks() {
         this.playerCheckLight();
         if (this.worldInfo.getTerrainType() == WorldType.DEBUG_ALL_BLOCK_STATES) {
@@ -163,7 +180,7 @@ abstract class NxTickChunk extends WorldServer {
 
     }
 
-    @Shadow("func_175733_a")
+    @Shadow("/")
     public Entity getEntityFromUuid(UUID uuid) {
         return null;
     }
@@ -174,7 +191,7 @@ abstract class NxTickChunk extends WorldServer {
         return (EntityPlayer) getEntityFromUuid(uuid);
     }
 
-    @Inject("func_184162_i")
+    @Inject("/")
     protected void playerCheckLight() {
         this.profiler.startSection("playerCheckLight");
         if (!this.playerEntities.isEmpty()) {
@@ -190,5 +207,4 @@ abstract class NxTickChunk extends WorldServer {
 
         this.profiler.endSection();
     }
-
 }

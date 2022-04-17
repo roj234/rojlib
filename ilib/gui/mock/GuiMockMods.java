@@ -34,7 +34,7 @@ public class GuiMockMods extends GuiBaseNI implements ComponentListener {
 
     @Override
     protected void addComponents() {
-        components.add(GText.alignCenterY(this, 10, "\u00a7l自定义发送给服务器的模组 (名称 版本)", Color.WHITE));
+        components.add(GText.alignCenterX(this, 10, "\u00a7l自定义发送给服务器的模组 (名称 版本)", Color.WHITE));
 
         components.add(new ModView(this, 10, 24, -10, -40));
 

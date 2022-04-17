@@ -173,9 +173,9 @@ public abstract class Obfuscator {
                     List<String> parents = t.selfSupers.get(data.name);
                     if (parents == null) continue;
 
-                    List<FieldSimple> fields = data.fields;
+                    List<? extends FieldNode> fields = data.fields;
                     for (int j = 0; j < fields.size(); j++) {
-                        FieldSimple field = fields.get(j);
+                        FieldSimple field = (FieldSimple) fields.get(j);
                         d.owner = data.name;
                         d.name = field.name();
                         d.param = field.rawDesc();
@@ -337,9 +337,9 @@ public abstract class Obfuscator {
             }
         }
 
-        List<FieldSimple> fields = data.fields;
+        List<? extends FieldNode> fields = data.fields;
         for (int i = 0; i < fields.size(); i++) {
-            FieldSimple field = fields.get(i);
+            FieldSimple field = (FieldSimple) fields.get(i);
             int acc = field.accesses;
             if ((flags & ADD_SYNTHETIC) != 0) {
                 acc |= AccessFlag.SYNTHETIC;

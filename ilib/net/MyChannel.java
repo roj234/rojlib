@@ -76,45 +76,26 @@ public class MyChannel {
         CHANNELS.put(channel, this);
     }
 
-    /**
-     * 注册一个消息
-     *
-     * @param handler 消息处理程序
-     * @param clazz   class
-     * @param id      ID，不一定要连续
-     * @param side    接收方
-     * @param <M>     消息类型
-     */
     @SuppressWarnings("unchecked")
-    public <M extends IMessage> void registerMessage(IMessageHandler<M> handler, Class<M> clazz, int id, Side side) {
+    public <M extends IMessage> void registerMessage(IMessageHandler<M> handler, Class<M> message, int id, Side receiver) {
         Supplier<M> supplier = (Supplier<M>) DirectAccessor
                 .builder(Supplier.class)
-                .constructFuzzy(clazz, "get")
+                .constructFuzzy(message, "get")
                 .build();
-        registerMessage(handler, clazz, supplier, id, side);
+        registerMessage(handler, message, supplier, id, receiver);
     }
 
-    /**
-     * 注册一个消息
-     *
-     * @param handler  消息处理程序
-     * @param clazz    class
-     * @param supplier 消息提供者
-     * @param id       ID，不一定要连续
-     * @param side     接收方
-     * @param <M>      消息类型
-     */
-    public <M extends IMessage> void registerMessage(IMessageHandler<M> handler, Class<M> clazz, Supplier<M> supplier, int id, Side side) {
-        if (side == Side.SERVER) {
-            clientCodec.addEnc(id, clazz);
-            serverCodec.addDec(id, supplier, handler);
+    public <M extends IMessage> void registerMessage(IMessageHandler<M> handler, Class<M> message, Supplier<M> newMessage, int id, Side receiver) {
+        if (receiver == Side.SERVER) {
+            clientCodec.addEnc(id, message);
+            serverCodec.addDec(id, newMessage, handler);
         } else {
-            serverCodec.addEnc(id, clazz);
+            serverCodec.addEnc(id, message);
             if (ImpLib.isClient)
-                clientCodec.addDec(id, supplier, handler);
-            if (side == null) {
-                clientCodec.addEnc(id, clazz);
-                serverCodec.addDec(id, supplier, handler);
+                clientCodec.addDec(id, newMessage, handler);
+            if (receiver == null) {
+                clientCodec.addEnc(id, message);
+                serverCodec.addDec(id, newMessage, handler);
             }
         }
     }
@@ -235,7 +216,7 @@ public class MyChannel {
     }
 
     public void sendToAllTracking(@Nonnull IMessage message, Entity entity) {
-        if (!ImpLib.proxy.isMainThread(false)) {
+        if (!ImpLib.proxy.isOnThread(false)) {
             ImpLib.proxy.runAtMainThread(false, () -> sendToAllTracking(message, entity));
         } else {
             ((WorldServer) entity.getEntityWorld()).getEntityTracker().sendToTracking(entity, serverCodec.encode(message));

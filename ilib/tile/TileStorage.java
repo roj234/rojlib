@@ -49,27 +49,14 @@ public class TileStorage extends TileBase {
         return data.getOrDefault(a, b);
     }
 
+    @Deprecated
     public Integer get(int id) {
         return data.get(id);
     }
 
     public void set(int id, int value) {
         data.put(id, value);
-        if (!world.isRemote) sendDataUpdate();
-    }
-
-    @Override
-    public NBTTagCompound getUpdateTag() {
-        int[] array = new int[data.size() << 1];
-        int i = 0;
-        for (Int2IntMap.Entry entry : data.entrySet()) {
-            array[i++] = entry.getKey();
-            array[i++] = entry.v;
-        }
-
-        NBTTagCompound tag = new NBTTagCompound();
-        tag.setIntArray("data", array);
-        return tag;
+        sendDataUpdate();
     }
 
     @Nonnull
@@ -81,7 +68,7 @@ public class TileStorage extends TileBase {
             array[i++] = entry.getKey();
             array[i++] = entry.v;
         }
-        tag.setIntArray("data", array);
+        tag.setIntArray("X", array);
 
         return super.writeToNBT(tag);
     }
@@ -90,7 +77,7 @@ public class TileStorage extends TileBase {
     public void readFromNBT(@Nonnull NBTTagCompound tag) {
         super.readFromNBT(tag);
 
-        int[] list = tag.getIntArray("data");
+        int[] list = tag.getIntArray("X");
         data.clear();
         if (list.length > 0 && (list.length & 1) == 0) {
             for (int i = 0; i < list.length; ) {

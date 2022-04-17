@@ -40,7 +40,7 @@ public class ItemModelBuilder {
     }
 
     public String build() {
-        return jsonData.toJSON();
+        return jsonData.toShortJSON();
     }
 
     public ItemModelBuilder setModel(String model) {

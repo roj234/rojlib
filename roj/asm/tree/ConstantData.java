@@ -37,7 +37,6 @@ import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.FileOutputStream;
-import java.util.ArrayList;
 import java.util.List;
 
 import static roj.asm.util.AccessFlag.*;
@@ -59,10 +58,10 @@ public final class ConstantData implements IClass {
 
     public ConstantPool cp;
 
-    public final List<MethodSimple> methods = new ArrayList<>();
-    public final List<FieldSimple> fields = new ArrayList<>();
-    public final List<CstClass> interfaces = new ArrayList<>();
-    public final AttributeList attributes = new AttributeList();
+    public List<? extends MethodNode> methods = new SimpleList<>();
+    public List<? extends FieldNode> fields = new SimpleList<>();
+    public List<CstClass> interfaces = new SimpleList<>();
+    AttributeList attributes = new AttributeList();
 
     public void verify() {
         int permDesc = 0;
@@ -142,7 +141,7 @@ public final class ConstantData implements IClass {
         this.name = nameCst.getValue().getString();
         if (superNameIndex == 0) {
             this.parentCst = null;
-            this.parent = null;
+            this.parent = Helpers.nonnull();
         } else {
             this.parentCst = ((CstClass) cp.array(superNameIndex));
             this.parent = parentCst.getValue().getString();
@@ -150,7 +149,17 @@ public final class ConstantData implements IClass {
     }
 
     public Attribute attrByName(String name) {
-        return (Attribute) attributes.getByName(name);
+        return attributes == null ? null : (Attribute) attributes.getByName(name);
+    }
+
+    @Override
+    public AttributeList attributes() {
+        return attributes == null ? attributes = new AttributeList() : attributes;
+    }
+
+    @Override
+    public AttributeList attributesNullable() {
+        return attributes;
     }
 
     public ByteList getBytes(ByteList w) {
@@ -168,17 +177,21 @@ public final class ConstantData implements IClass {
 
         w.putShort(fields.size());
         for (int i = 0, l = fields.size(); i < l; i++) {
-            ((MoFNode) fields.get(i)).toByteArray(cw, w);
+            fields.get(i).toByteArray(cw, w);
         }
 
         w.putShort(methods.size());
         for (int i = 0, l = methods.size(); i < l; i++) {
-            ((MoFNode) methods.get(i)).toByteArray(cw, w);
+            methods.get(i).toByteArray(cw, w);
         }
 
-        w.putShort(attributes.size());
-        for (int i = 0, l = attributes.size(); i < l; i++) {
-            attributes.get(i).toByteArray(cw, w);
+        if (attributes == null) {
+            w.putShort(0);
+        } else {
+            w.putShort(attributes.size());
+            for (int i = 0, l = attributes.size(); i < l; i++) {
+                attributes.get(i).toByteArray(cw, w);
+            }
         }
 
         int pos = w.wIndex();
@@ -264,7 +277,7 @@ public final class ConstantData implements IClass {
     }
 
     @Override
-    public byte type() {
+    public int type() {
         return Parser.CTYPE_LOD_2;
     }
 
@@ -274,5 +287,23 @@ public final class ConstantData implements IClass {
         } catch (Throwable e) {
             e.printStackTrace();
         }
+    }
+
+    public Method getUpgradedMethod(String name) {
+        return getUpgradedMethod(name, null);
+    }
+
+    public Method getUpgradedMethod(String name, String desc) {
+        List<? extends MoFNode> methods = this.methods;
+        for (int i = 0; i < methods.size(); i++) {
+            MoFNode ms = methods.get(i);
+            if (ms.name().equals(name) && (desc == null || ms.rawDesc().equals(desc))) {
+                if (ms instanceof Method) return (Method) ms;
+                Method m = new Method(this, (MethodSimple) ms);
+                methods.set(i, Helpers.cast(m));
+                return m;
+            }
+        }
+        return null;
     }
 }

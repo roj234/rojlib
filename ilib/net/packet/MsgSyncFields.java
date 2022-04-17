@@ -8,7 +8,9 @@ import ilib.net.IMessageHandler;
 import ilib.net.MessageContext;
 import ilib.tile.FieldSyncer;
 import ilib.tile.OwnerManager;
+import ilib.util.PlayerUtil;
 
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.tileentity.TileEntity;
@@ -18,14 +20,18 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import java.util.concurrent.Callable;
+
 /**
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class MsgSyncFields implements IMessage, IMessageHandler<MsgSyncFields> {
-    int[] fields;
-    BlockPos pos;
-    byte type;
+public class MsgSyncFields implements IMessage, IMessageHandler<MsgSyncFields>, Callable<Void> {
+    private FieldSyncer owner;
+
+    private int[] fields;
+    private BlockPos pos;
+    private byte type;
 
     public MsgSyncFields() {}
 
@@ -45,6 +51,8 @@ public class MsgSyncFields implements IMessage, IMessageHandler<MsgSyncFields> {
         pos = new BlockPos(buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
         if (buf.isReadable()) {
             type = buf.readByte();
+        } else {
+            type = 0;
         }
     }
 
@@ -57,10 +65,10 @@ public class MsgSyncFields implements IMessage, IMessageHandler<MsgSyncFields> {
         buf.writeVarInt(pos.getX())
            .writeVarInt(pos.getY())
            .writeVarInt(pos.getZ());
-        buf.writeByte(type);
+        if (type != 0) buf.writeByte(type);
     }
 
-    static boolean isUsableByPlayer(TileEntity te, EntityPlayerMP player) {
+    static boolean isUsableByPlayer(TileEntity te, EntityPlayer player) {
         BlockPos pos = te.getPos();
         double Max_Distance = 8.0 * 8.0;
 
@@ -72,6 +80,11 @@ public class MsgSyncFields implements IMessage, IMessageHandler<MsgSyncFields> {
     public void onMessage(MsgSyncFields msg, MessageContext ctx) {
         if (ctx.side == Side.SERVER) {
             EntityPlayerMP p = ctx.getServerHandler().player;
+
+            if (!p.world.isBlockLoaded(msg.pos)) {
+                p.connection.disconnect(new TextComponentTranslation("ilib.illegal_packet.0"));
+                return;
+            }
 
             TileEntity t = p.world.getTileEntity(msg.pos);
             if (!(t instanceof Syncable)) {
@@ -93,22 +106,31 @@ public class MsgSyncFields implements IMessage, IMessageHandler<MsgSyncFields> {
                 }
             }
 
-            FieldSyncer fs = ((Syncable) t).getSyncHandler();
-            fs.setFields(msg.fields, FieldSyncer.CLIENT);
+            owner = ((Syncable) t).getSyncHandler();
+            PlayerUtil.getMinecraftServer().callFromMainThread(this);
         } else {
-            onClient(msg);
+            ClientProxy.mc.addScheduledTask(this);
         }
     }
 
     @SideOnly(Side.CLIENT)
-    private void onClient(MsgSyncFields msg) {
-        TileEntity tile = ClientProxy.mc.world.getTileEntity(msg.pos);
+    private void onClient() {
+        TileEntity tile = ClientProxy.mc.world.getTileEntity(pos);
         if (!(tile instanceof Syncable)) {
             ClientProxy.mc.player.sendMessage(new TextComponentTranslation("ilib.illegal_packet.1"));
             return;
         }
 
-        FieldSyncer fs = ((Syncable) tile).getSyncHandler();
-        fs.setFields(msg.fields, msg.type);
+        ((Syncable) tile).getSyncHandler().setFields(fields, type);
+    }
+
+    @Override
+    public Void call() {
+        if (owner == null) {
+            onClient();
+        } else {
+            owner.setFields(fields, type);
+        }
+        return null;
     }
 }

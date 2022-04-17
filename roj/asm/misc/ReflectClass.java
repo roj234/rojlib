@@ -114,7 +114,7 @@ public class ReflectClass implements IClass {
     }
 
     @Override
-    public byte type() {
+    public int type() {
         return Parser.CTYPE_REFLECT;
     }
 

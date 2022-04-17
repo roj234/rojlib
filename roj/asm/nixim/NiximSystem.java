@@ -27,9 +27,13 @@
 package roj.asm.nixim;
 
 import roj.asm.Parser;
+import roj.asm.TransformException;
 import roj.asm.cst.*;
 import roj.asm.tree.*;
-import roj.asm.tree.anno.*;
+import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.anno.AnnValEnum;
+import roj.asm.tree.anno.AnnValString;
+import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.AttrLineNumber.LineNumber;
 import roj.asm.tree.insn.*;
@@ -51,7 +55,6 @@ import roj.util.ByteList.Streamed;
 import roj.util.ByteReader;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
@@ -128,7 +131,7 @@ public class NiximSystem {
         public static void $$$CONTINUE_V() {}
     }
 
-    public ByteList nixim(String className, ByteList in) throws NiximException {
+    public ByteList nixim(String className, ByteList in) throws TransformException {
         NiximData data = registry.remove(className);
         if (data != null) {
             Context ctx = new Context(className, in);
@@ -138,7 +141,7 @@ public class NiximSystem {
         return in;
     }
 
-    public static void nixim(Context ctx, NiximData nx, int flag) throws NiximException {
+    public static void nixim(Context ctx, NiximData nx, int flag) throws TransformException {
         if (debug) zipClass(ctx, "in");
 
         System.out.println("NiximClass " + ctx.getFileName());
@@ -153,12 +156,12 @@ public class NiximSystem {
             }
 
             DescEntry tester = new DescEntry();
-            List<FieldSimple> fields = data.fields;
-            List<MethodSimple> methods = data.methods;
+            List<? extends MoFNode> fields = data.fields;
+            List<? extends MethodNode> methods = data.methods;
             // region 检查 Shadow 兼容性
             if (!nx.shadowChecks.isEmpty()) {
                 for (int i = 0; i < fields.size(); i++) {
-                    FieldSimple fs = fields.get(i);
+                    MoFNode fs = fields.get(i);
                     tester.name = fs.name();
                     tester.desc = fs.rawDesc();
                     DescEntry t = nx.shadowChecks.find(Helpers.cast(tester));
@@ -168,15 +171,15 @@ public class NiximSystem {
                         if ((flag & NO_FIELD_MODIFIER_CHECK) != 0) continue;
                         // noinspection all
                         ShadowCheck sc = (ShadowCheck) t;
-                        if ((sc.flag & ~AccessFlag.PRIVATE) != (fs.accesses & (AccessFlag.STATIC | AccessFlag.FINAL))) {
+                        if ((sc.flag & ~AccessFlag.PRIVATE) != (fs.accessFlag() & (AccessFlag.STATIC | AccessFlag.FINAL))) {
                             // 排除我有final你没有的情况
                             if ((sc.flag & AccessFlag.FINAL) == 0)
-                                throw new NiximException(data.name + '.' + fs.name() + "  Nixim字段 static/final存在与否不匹配");
+                                throw new TransformException(data.name + '.' + fs.name() + "  Nixim字段 static/final存在与否不匹配");
                         }
                     }
                 }
                 for (int i = 0; i < methods.size(); i++) {
-                    MethodSimple fs = methods.get(i);
+                    MethodNode fs = methods.get(i);
                     tester.name = fs.name();
                     tester.desc = fs.rawDesc();
                     DescEntry t = nx.shadowChecks.find(Helpers.cast(tester));
@@ -186,32 +189,26 @@ public class NiximSystem {
                         if ((flag & NO_METHOD_MODIFIER_CHECK) != 0) continue;
                         // noinspection all
                         ShadowCheck sc = (ShadowCheck) t;
-                        if ((sc.flag & ~AccessFlag.FINAL) != (fs.accesses & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
+                        if ((sc.flag & ~AccessFlag.FINAL) != (fs.accessFlag() & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
                             // 排除我没有private你有的情况
                             if ((sc.flag & AccessFlag.PRIVATE) != 0)
-                                throw new NiximException(
+                                throw new TransformException(
                                         data.name + '.' + fs.name() + "  Nixim方法 private/static存在与否不匹配");
                         }
                     }
                 }
                 // region 检查存在性
                 if (!nx.shadowChecks.isEmpty() && (flag & SHADOW_OPTIONAL) == 0) {
-                    throw new NiximException("以下Shadow对象没有在目标找到, 源: " + nx.self + ": " + nx.shadowChecks + ", 目标的方法: " + data.methods + ", 目标的字段: " + data.fields);
+                    throw new TransformException("以下Shadow对象没有在目标找到, 源: " + nx.self + ": " + nx.shadowChecks + ", 目标的方法: " + data.methods + ", 目标的字段: " + data.fields);
                 }
                 // endregion
             }
             // endregion
             // region 创建BSM并更新ID
             if (nx.bsm != null && !nx.bsm.isEmpty()) {
-                AttrBootstrapMethods selfBSM;
-                Attribute attr = data.attrByName("BootstrapMethods");
-                if (attr == null) {
-                    data.attributes.putByName(selfBSM = new AttrBootstrapMethods());
-                } else if (attr instanceof AttrBootstrapMethods) {
-                    selfBSM = (AttrBootstrapMethods) attr;
-                } else {
-                    selfBSM = new AttrBootstrapMethods(Parser.reader(attr), data.cp);
-                    data.attributes.putByName(selfBSM);
+                AttrBootstrapMethods selfBSM = AttrHelper.getBootstrapMethods(data.cp, data);
+                if (selfBSM == null) {
+                    data.attributes().putByName(selfBSM = new AttrBootstrapMethods());
                 }
 
                 for (IntMap.Entry<LambdaInfo> entry : nx.bsm.entrySet()) {
@@ -248,7 +245,7 @@ public class NiximSystem {
                         }
                     }
                     if (!nx.injectMethod.isEmpty() && (flag & INJECT_OPTIONAL) == 0) {
-                        throw new NiximException("以下Inject方法没有在目标找到, 源: " + nx.self + ": " + nx.injectMethod.keySet() + ", 目标的方法: " + data.methods);
+                        throw new TransformException("以下Inject方法没有在目标找到, 源: " + nx.self + ": " + nx.injectMethod.keySet() + ", 目标的方法: " + data.methods);
                     }
                 }
                 // endregion
@@ -267,7 +264,6 @@ public class NiximSystem {
                     int m_id = data.getMethodByName("<clinit>");
                     if (m_id >= 0) {
                         MethodNode msClinit = methods.get(m_id);
-                        // noinspection all
                         if (msClinit instanceof Method) clinit = (Method) msClinit;
                         else methods.set(m_id, Helpers.cast(clinit = new Method(data, (MethodSimple) msClinit)));
                     } else {
@@ -300,7 +296,7 @@ public class NiximSystem {
             try {
                 data.verify();
             } catch (IllegalArgumentException e) {
-                throw new NiximException("验证失败 " + data.name, e);
+                throw new TransformException("验证失败 " + data.name, e);
             }
 
             ctx.set(ctx.get());
@@ -322,9 +318,10 @@ public class NiximSystem {
         }
     }
 
-    private static void doInject(InjectState s, ConstantData data, List<? extends MethodNode> methods, int index) throws NiximException {
+    private static void doInject(InjectState s, ConstantData data, List<? extends MethodNode> methods, int index) throws
+        TransformException {
         if (!methods.get(index).rawDesc().equals(s.method.rawDesc()))
-            throw new NiximException("目标与Nixim方法返回值不匹配 " + methods.get(index));
+            throw new TransformException("目标与Nixim方法返回值不匹配 " + methods.get(index));
         switch (s.at) {
             case "REMOVE":
                 methods.remove(index);
@@ -334,18 +331,22 @@ public class NiximSystem {
                 if (s.method.name.equals("<init>")) {
                     InvokeInsnNode iin = (InvokeInsnNode) s.method.code.instructions.get(s.superCallEnd);
                     if (iin.name.startsWith(SPEC_M_CONSTRUCTOR_THIS)) {
+                        iin.name = "<init>";
+                        if (iin.rawDesc().equals(s.method.rawDesc()))
+                            throw new TransformException("this循环调用自身!");
                         iin.owner = data.name;
                         for (int i = 0; i < methods.size(); i++) {
                             MethodNode mn = methods.get(i);
                             if (mn.rawDesc().equals(iin.rawDesc()))
                                 break st;
                         }
-                        throw new NiximException("覆盖的构造器不存在:S");
+                        throw new TransformException("覆盖的构造器不存在:S");
                     } else {
                         // 无法检查上级构造器是否存在, 但是Object还是可以查一下
                         iin.owner = data.parent;
                         if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.rawDesc()))
-                            throw new NiximException("覆盖的构造器不存在:O");
+                            throw new TransformException("覆盖的构造器中的上级调用不存在(Object parent)\n" +
+                                                             "如果您使用[构造器覆盖],不建议[用构造器]覆盖");
                     }
                     s.method.code.interpretFlags = AttrCode.COMPUTE_FRAMES;
                     s.method.owner = data.name;
@@ -370,7 +371,7 @@ public class NiximSystem {
                         }
                     }
                     if (superBegin == insn.size())
-                        throw new NiximException(data.name + " 存在错误: 无法找到上级/自身初始化的调用");
+                        throw new TransformException(data.name + " 存在错误: 无法找到上级/自身初始化的调用");
                 }
 
                 int pl = computeParamLength(tm, null);
@@ -422,7 +423,7 @@ public class NiximSystem {
                 String ret = ParamHelper.parseReturn(tm.rawDesc()).nativeName();
                 byte base = ret.isEmpty() ? RETURN : NodeHelper.X_LOAD(ret.charAt(0));
                 InsnList targetInsn = s.method.code.instructions;
-                targetInsn.removeRange(0, s.superCallEnd + 1);
+                if (tm.name.equals("<init>")) targetInsn.removeRange(0, s.superCallEnd + 1);
                 byte type;
                 if (base != RETURN) {
                     List<Integer> retVal = s.retVal();
@@ -546,16 +547,20 @@ public class NiximSystem {
     // endregion
     // region 读取
 
-    public void load(@Nonnull final byte[] bytes) throws NiximException {
+    public void load(Object bytes) throws TransformException {
         Context ctx = new Context("", bytes);
 
         System.out.println("NiximRead " + ctx.getData().name);
 
+        loadCtx(ctx);
+    }
+
+    public void loadCtx(Context ctx) throws TransformException {
         NiximData nx = read0(ctx);
         if (nx != null) {
             nx.next = registry.put(nx.dest, nx);
         } else {
-            throw new NiximException("对象没有使用Nixim");
+            throw new TransformException("对象没有使用Nixim");
         }
     }
 
@@ -569,39 +574,40 @@ public class NiximSystem {
 
     /**
      * 读取一个Nixim类
-     * @throws NiximException 出现错误
+     * @throws TransformException 出现错误
      */
     @Nullable
     @SuppressWarnings("fallthrough")
-    public static NiximData read0(Context ctx) throws NiximException {
+    public static NiximData read0(Context ctx) throws TransformException {
         ConstantData data = ctx.getData();
+        data.normalize();
 
         NiximData nx = new NiximData(data.name);
 
         Boolean keepBridge = checkNiximFlag(data, data.attrByName(A_BASE), nx);
         if (keepBridge == null) {
-            throw new NiximException(data.name + " 不是有效的Nixim class （没有找到注解）");
+            throw new TransformException(data.name + " 不是有效的Nixim class （没有找到注解）");
         }
 
-        List<MethodSimple> methods = data.methods;
+        List<MethodSimple> methods = Helpers.cast(data.methods);
         // region 检测特殊方法, 删除桥接方法
         for (int i = methods.size() - 1; i >= 0; i--) {
             MethodSimple method = methods.get(i);
             String name = method.name();
             if (name.startsWith("$$$")) {
                 if (method.attrByName(A_BASE) != null) {
-                    throw new NiximException("特殊方法(" + name + ")不能包含注解");
+                    throw new TransformException("特殊方法(" + name + ")不能包含注解");
                 }
                 if (!name.startsWith(SPEC_M_CONSTRUCTOR)) {
                     if (0 == (method.accesses & AccessFlag.STATIC))
-                        throw new NiximException("特殊方法(" + name + ")必须是static的");
+                        throw new TransformException("特殊方法(" + name + ")必须是static的");
                     if (!method.rawDesc().startsWith("()")) {
-                        throw new NiximException("特殊方法(" + name + ")不能有参数");
+                        throw new TransformException("特殊方法(" + name + ")不能有参数");
                     }
                 } else if (!method.rawDesc().endsWith(")V")) {
-                    throw new NiximException("构造器调用标记(" + name + ")必须为void返回");
+                    throw new TransformException("构造器调用标记(" + name + ")必须为void返回");
                 } else if (0 != (method.accesses & AccessFlag.STATIC))
-                    throw new NiximException("构造器调用标记(" + name + ")不能是static的");
+                    throw new TransformException("构造器调用标记(" + name + ")不能是static的");
             }
             if (!keepBridge && 0 != (method.accesses & AccessFlag.VOLATILE_OR_BRIDGE)) {
                 methods.remove(i);
@@ -617,67 +623,65 @@ public class NiximSystem {
         // region 检测并处理(一半) Copy 注解
         for (int i = methods.size() - 1; i >= 0; i--) {
             MethodSimple method = methods.get(i);
-            Map<String, AnnVal> copy = getAnnotation(data.cp, method, A_COPY);
+            Annotation copy = getAnnotation(data.cp, method, A_COPY);
             if (copy != null) {
                 if (copy.containsKey("staticInitializer") || copy.containsKey("targetIsFinal"))
-                    throw new NiximException("staticInitializer/targetIsFinal属性只能用在字段上！位置: " + data.name + '.' + method.name + " " + method.type.getString());
-                AnnValString newName = (AnnValString) copy.get("newName");
+                    throw new TransformException("staticInitializer/targetIsFinal属性只能用在字段上！位置: " + data.name + '.' + method.name + " " + method.type.getString());
+                String newName = copy.getString("newName");
 
                 RemapEntry entry = new RemapEntry(method);
                 entry.toClass = destClass;
-                entry.toName = newName == null ? null : newName.value;
+                entry.toName = newName;
                 entries.add(entry);
 
-                if (newName != null)
-                    method.name = data.cp.getUtf(newName.value);
+                if (newName != null) method.name = data.cp.getUtf(newName);
                 nx.copyMethod.add(Helpers.cast(method));
 
                 methods.remove(i);
             }
         }
-        List<FieldSimple> fields = data.fields;
+        List<FieldSimple> fields = Helpers.cast(data.fields);
         Map<FieldSimple, MethodSimple> tmpCopyFields = new MyHashMap<>();
         for (int i = fields.size() - 1; i >= 0; i--) {
             FieldSimple field = fields.get(i);
-            Map<String, AnnVal> copy = getAnnotation(data.cp, field, A_COPY);
+            Annotation copy = getAnnotation(data.cp, field, A_COPY);
             if (copy != null) {
                 MethodSimple staticInitializer = null;
 
-                AnnValString val = (AnnValString) copy.get("staticInitializer");
+                String val = copy.getString("staticInitializer");
                 if (val != null) {
-                    int id = data.getMethodByName(val.value);
+                    int id = data.getMethodByName(val);
                     if(id == -1)
-                        throw new NiximException("字段的staticInitializer不存在: 名称 " + val.value + " 位置: " + data.name + '.' + field.name);
+                        throw new TransformException("字段的staticInitializer不存在: 名称 " + val + " 位置: " + data.name + '.' + field.name);
                     staticInitializer = methods.get(id);
                     if (!"()V".equals(staticInitializer.rawDesc()) || (staticInitializer.accesses & AccessFlag.STATIC) == 0)
-                        throw new NiximException("字段的staticInitializer签名/权限不合法: 名称 " + val.value + " 位置: " + data.name + '.' + field.name);
+                        throw new TransformException("字段的staticInitializer签名/权限不合法: 名称 " + val + " 位置: " + data.name + '.' + field.name);
                 }
-                AnnValInt boolFlag = (AnnValInt) copy.get("targetIsFinal");
-                if (boolFlag != null && boolFlag.value == 1)
-                    field.accesses |= AccessFlag.FINAL;
+                int boolFlag = copy.getInt("targetIsFinal", 0);
+                if (boolFlag == 1) field.accesses |= AccessFlag.FINAL;
 
-                AnnValString newName = (AnnValString) copy.get("newName");
+                String newName = copy.getString("newName");
 
                 RemapEntry entry = new RemapEntry(field);
                 entry.toClass = destClass;
-                entry.toName = newName == null ? null : newName.value;
+                entry.toName = newName;
                 entries.add(entry);
 
-                if (newName != null)
-                    field.name = data.cp.getUtf(newName.value);
+                if (newName != null) field.name = data.cp.getUtf(newName);
                 tmpCopyFields.put(field, staticInitializer);
                 fields.remove(i);
             }
         }
         // endregion
 
-        Map<MethodSimple, Map<String, AnnVal>> tmpInjects = new MyHashMap<>();
+        Map<MethodSimple, Annotation> tmpInjects = new MyHashMap<>();
         // region 处理 Inject 注解 (1/3)
         for (int i = methods.size() - 1; i >= 0; i--) {
             MethodSimple method = methods.get(i);
-            Map<String, AnnVal> map = getAnnotation(data.cp, method, A_INJECT);
+            Annotation map = getAnnotation(data.cp, method, A_INJECT);
             if (map != null) {
-                String remapName = ((AnnValString) map.get("value")).value;
+                String remapName = map.getString("value");
+                if (remapName.equals("/")) remapName = method.name();
 
                 RemapEntry entry = new RemapEntry(method);
                 entry.toClass = destClass;
@@ -722,7 +726,9 @@ public class NiximSystem {
         cv.tester2 = null;
         List<MethodSimple> copyMethod1 = Helpers.cast(nx.copyMethod);
         for (MethodSimple entry : copyMethod1) {
-            cv.MyVisit(entry.attrByName("Code").getRawData());
+            // 允许复制抽象方法
+            Attribute code = entry.attrByName("Code");
+            if (code != null) cv.MyVisit(code.getRawData());
         }
         // endregion
         // region 统一在常量模式做映射，降低在操作码模式的工作量
@@ -772,8 +778,7 @@ public class NiximSystem {
         }
         // endregion
 
-        Attribute attr = data.attrByName("BootstrapMethods");
-        AttrBootstrapMethods bsms = attr == null ? null : new AttrBootstrapMethods(Parser.reader(attr), data.cp);
+        AttrBootstrapMethods bsms = AttrHelper.getBootstrapMethods(data.cp, data);
         IntMap<LambdaInfo> lambdaBSM = nx.bsm = bsms == null ? null : new IntMap<>(bsms.methods.size());
         List<Method> copyMethod = nx.copyMethod;
         // region 后处理 Copy 注解
@@ -818,15 +823,20 @@ public class NiximSystem {
                         field.rawDesc()))) {
                         System.out.println("NiximWarn: 在static{}修改了不属于自己的字段 " + fin);
                     }
+                } else if (node.code == INVOKEDYNAMIC) {
+                    InvokeDynInsnNode idn = (InvokeDynInsnNode) node;
+                    processInvokeDyn(idn, data.name, destClass);
+                    AttrBootstrapMethods.BootstrapMethod bsm = bsms.methods.get(idn.tableIdx);
+                    lambdaBSM.computeIfAbsentSp(idn.tableIdx, () -> new LambdaInfo(bsm)).nodes.add(idn);
                 }
             }
         }
         tmpCopyFields.clear();
         // endregion
         // region 处理 Inject 注解 (2/3)
-        for (Map.Entry<MethodSimple, Map<String, AnnVal>> entry : tmpInjects.entrySet()) {
+        for (Map.Entry<MethodSimple, Annotation> entry : tmpInjects.entrySet()) {
             MethodSimple ms = entry.getKey();
-            Map<String, AnnVal> map = entry.getValue();
+            Annotation map = entry.getValue();
 
             Method remap = new Method(data, ms);
 
@@ -861,7 +871,7 @@ public class NiximSystem {
                     break;
                     case INVOKEDYNAMIC:
                         if (bsms == null) {
-                            throw new NiximException("在没有BootstrapMethods的类中找到了InvokeDynamic!");
+                            throw new TransformException("在没有BootstrapMethods的类中找到了InvokeDynamic!");
                         }
                         InvokeDynInsnNode idn = (InvokeDynInsnNode) node;
                         processInvokeDyn(idn, data.name, destClass);
@@ -875,7 +885,7 @@ public class NiximSystem {
             processInject(state, data.parent);
 
             if (state.superCallEnd < 0 && state.name.equals("<init>"))
-                throw new NiximException("没有找到 superCallEnd");
+                throw new TransformException("没有找到 superCallEnd");
 
             nx.injectMethod.put(new DescEntry(remap), state);
         }
@@ -893,14 +903,16 @@ public class NiximSystem {
 
                 if (ref.getClassName().equals(data.name)) {
                     ref.setClazz(new CstClass(destClass));
-                    throw new NiximException("测试异常！没转换lambda的ref");
+                    throw new TransformException("测试异常！没转换lambda的ref");
                 }
                 if (!ref.getClassName().equals(destClass)) {
                     // not self method
                     break;
                 }
 
-                for (MethodSimple method : data.methods) {
+                List<? extends MethodNode> nodes = data.methods;
+                for (int j = 0; j < nodes.size(); j++) {
+                    MethodSimple method = (MethodSimple) nodes.get(j);
                     if (method.name.equals(ref.desc().getName()) && method.type.equals(ref.desc().getType())) {
                         Method lmd = new Method(data, method);
 
@@ -911,7 +923,7 @@ public class NiximSystem {
                     }
                 }
 
-                throw new NiximException("无法找到符合条件的 lambda 方法: " + ref.desc());
+                throw new TransformException("无法找到符合条件的 lambda 方法: " + ref.desc());
             }
         }
         // endregion
@@ -920,7 +932,7 @@ public class NiximSystem {
     }
 
     // 核心之一 (2/4)
-    private static void processInject(InjectState s, String parent) throws NiximException {
+    private static void processInject(InjectState s, String parent) throws TransformException {
         Method method = s.method;
         sw:
         switch (s.at) {
@@ -938,9 +950,10 @@ public class NiximSystem {
                             if (selfInit ? (iin.name.equals("<init>") && (iin.owner.equals(parent))) : iin.name.startsWith(SPEC_M_CONSTRUCTOR)) {
                                 iin.setOpcode(INVOKESPECIAL);
                                 s.superCallEnd = i;
-                                s.method.attributes.removeByName("LocalVariableTable");
-                                s.method.attributes.removeByName("LocalVariableTypeTable");
-                                AttrLineNumber ln = (AttrLineNumber) s.method.attributes.getByName("LineNumberTable");
+                                AttributeList attributes = s.method.attributes();
+                                attributes.removeByName("LocalVariableTable");
+                                attributes.removeByName("LocalVariableTypeTable");
+                                AttrLineNumber ln = (AttrLineNumber) attributes.getByName("LineNumberTable");
                                 if (ln != null) {
                                     st:
                                     for (int j = 0; j < ln.list.size(); j++) {
@@ -957,7 +970,7 @@ public class NiximSystem {
                             }
                         }
                     }
-                    throw new NiximException("替换构造器 " + method.name + ' ' + method.rawDesc() + " 未发现使用 " + SPEC_M_CONSTRUCTOR + " 作为初始化器的标记");
+                    throw new TransformException("替换构造器 " + method.name + ' ' + method.rawDesc() + " 未发现使用 " + SPEC_M_CONSTRUCTOR + " 作为初始化器的标记");
                 }
             break;
             case "HEAD": {
@@ -980,7 +993,7 @@ public class NiximSystem {
                                     code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
                                 entry.v = code;
                             } else if (index < paramLength)
-                                throw new NiximException("无效的assign " + method + "# " + insn.get(i) + " i " + index + " " + assignedLV);
+                                throw new TransformException("无效的assign " + method + "# " + insn.get(i) + " i " + index + " " + assignedLV);
                         }
                     } else if (i > 0 && NodeHelper.isReturn(node.code)) {
                         node = insn.get(i - 1);
@@ -1040,7 +1053,7 @@ public class NiximSystem {
                                     code = (byte) (((code - ILOAD_0) / 4) + ILOAD);
                                 entry.v = code;
                             }/* else if (index < paramLength)
-                                throw new NiximException("无效的assign " + method + "# " + insn.get(i));*/
+                                throw new TransformException("无效的assign " + method + "# " + insn.get(i));*/
                         } else if (i > 0 && code >= ISTORE && code <= ASTORE_3) {
                             node = insn.get(i - 1);
                             if (node.code == INVOKESTATIC) {
@@ -1102,18 +1115,21 @@ public class NiximSystem {
 
     private static void processShadow(Context ctx, boolean b, String targetDef, Set<ShadowCheck> shadowChecks) {
         ConstantData data = ctx.getData();
-        List<? extends SimpleComponent> target = b ? data.fields : data.methods;
+        List<? extends MoFNode> target = b ? data.fields : data.methods;
         for (int j = target.size() - 1; j >= 0; j--) {
-            SimpleComponent obj = target.get(j);
-            Map<String, AnnVal> shadow = getAnnotation(data.cp, obj, A_SHADOW);
+            MoFNode obj = target.get(j);
+            Annotation shadow = getAnnotation(data.cp, obj, A_SHADOW);
             if (shadow != null) {
                 ShadowCheck check = new ShadowCheck(obj);
 
-                AnnValString owner = (AnnValString) shadow.get("owner");
-                check.toClass = owner == null ? targetDef : unifyClassName(owner.value);
-                check.toName = ((AnnValString) shadow.get("value")).value;
+                String owner = shadow.getString("owner");
+                check.toClass = owner == null ? targetDef : unifyClassName(owner);
+                check.toName = shadow.getString("value");
+                if (check.toName.equals("/")) {
+                    check.toName = obj.name();
+                }
 
-                check.flag = (byte) (obj.accesses & (AccessFlag.FINAL | AccessFlag.STATIC | AccessFlag.PRIVATE));
+                check.flag = (byte) (obj.accessFlag() & (AccessFlag.FINAL | AccessFlag.STATIC | AccessFlag.PRIVATE));
                 shadowChecks.add(check);
 
                 target.remove(j);
@@ -1125,11 +1141,11 @@ public class NiximSystem {
         return t.replace('.', '/');
     }
 
-    private static boolean postProcNxMd(String dst, Method m) throws NiximException {
-        if (m.code == null)
-            throw new NiximException("方法不能是抽象的: " + m.owner + '.' + m.name + ' ' + m.rawDesc());
+    private static boolean postProcNxMd(String dst, Method m) throws TransformException {
+        if (m.code == null) return true;
+        //    throw new TransformException("方法不能是抽象的: " + m.owner + '.' + m.name + ' ' + m.rawDesc());
         if (m.name.equals("<init>") && !m.rawDesc().endsWith(")V"))
-            throw new NiximException("构造器映射返回必须是void: " + m.owner + '.' + m.name + ' ' + m.rawDesc());
+            throw new TransformException("构造器映射返回必须是void: " + m.owner + '.' + m.name + ' ' + m.rawDesc());
 
         if (m.rawDesc().contains(m.owner)) {
             List<Type> params = m.parameters();
@@ -1161,60 +1177,40 @@ public class NiximSystem {
     }
 
     private static Boolean checkNiximFlag(ConstantData data, Attribute attr, NiximData nx) {
-        if (attr == null)
-            return null;
-        AttrAnnotation attrAnn = new AttrAnnotation(false, Parser.reader(attr), data.cp);
+        if (attr == null) return null;
 
         boolean keepBridge = false;
-        List<Annotation> anns = attrAnn.annotations;
+        List<Annotation> anns = AttrAnnotation.parse(data.cp, Parser.reader(attr));
         for (int j = 0; j < anns.size(); j++) {
             Annotation ann = anns.get(j);
             if (ann.clazz.equals(A_NIXIM_CLASS_FLAG)) {
-                if (ann.values != null) {
-                    AnnVal av = ann.values.get("value");
-                    nx.dest = unifyClassName(((AnnValString) av).value);
-                    av = ann.values.get("copyItf");
-                    if (av != null) {
-                        if (((AnnValInt) av).value == 1) {
-                            List<CstClass> cstClasses = data.interfaces;
-                            for (int i = 0; i < cstClasses.size(); i++) {
-                                CstClass clz = cstClasses.get(i);
-                                nx.addItfs.add(clz.getValue().getString());
-                            }
-                        }
+                nx.dest = unifyClassName(ann.getString("value"));
+                if (ann.getInt("copyItf", 0) != 0) {
+                    List<CstClass> itf = data.interfaces;
+                    for (int i = 0; i < itf.size(); i++) {
+                        nx.addItfs.add(itf.get(i).getValue().getString());
                     }
-                    AnnValInt avi = (AnnValInt) ann.values.get("checkBridge");
-                    if(avi != null && avi.value == 1)
-                        keepBridge = true;
                 }
+                if(ann.getInt("checkBridge", 0) != 0) keepBridge = true;
             } else if (ann.clazz.equals(A_IMPL_INTERFACE)) {
-                if (ann.values != null) {
-                    List<AnnVal> annVals = ((AnnValArray) ann.values.get("value")).value;
-                    for (int i = 0; i < annVals.size(); i++) {
-                        AnnValClass clazz = (AnnValClass) annVals.get(i);
-                        nx.addItfs.add(clazz.value.owner);
-                    }
+                List<AnnVal> annVals = ann.getArray("value");
+                for (int i = 0; i < annVals.size(); i++) {
+                    nx.addItfs.add(annVals.get(i).asClass().owner);
                 }
             }
         }
         return keepBridge;
     }
 
-    public static Map<String, AnnVal> getAnnotation(ConstantPool pool, SimpleComponent cmp, String aClass) {
-        Attribute obj = cmp.attrByName(A_BASE);
-        if (obj == null)
-            return null;
-        AttrAnnotation attrAnn = obj instanceof AttrAnnotation ? (AttrAnnotation) obj : new AttrAnnotation(A_BASE, Parser.reader(obj), pool);
-        cmp.attributes.putByName(attrAnn);
+    public static Annotation getAnnotation(ConstantPool pool, MoFNode cmp, String aClass) {
+        List<Annotation> anns = AttrHelper.getAnnotations(pool, cmp, false);
+        if (anns == null) return null;
 
-        List<Annotation> anns = attrAnn.annotations;
         for (int i = 0; i < anns.size(); i++) {
             Annotation ann = anns.get(i);
             if (ann.clazz.equals(aClass)) {
-                if (ann.values != null) {
-                    anns.remove(i);
-                    return ann.values;
-                }
+                anns.remove(i);
+                return ann;
             }
         }
         return null;
@@ -1253,19 +1249,18 @@ public class NiximSystem {
             return (List<Integer>) nodeList;
         }
 
-        InjectState(Method method, Map<String, AnnVal> map) throws NiximException {
+        InjectState(Method method, Annotation map) throws TransformException {
             this.method = method;
 
-            AnnValEnum ave = (AnnValEnum) map.get("at");
+            AnnValEnum ave = map.getEnum("at");
             this.at = ave == null ? "OLD_SUPER_INJECT" : ave.value;
-            AnnValInt avi = (AnnValInt) map.get("flags");
-            this.flags = avi == null ? 0 : avi.value;
+            this.flags = map.getInt("flags", 0);
 
-            AnnValString avs = (AnnValString) map.get("occurrence");
+            String avs = map.getString("occurrence");
             try {
-                this.occurrence = avs == null ? null : JSONParser.parse(avs.value, JSONParser.LITERAL_KEY).asList();
+                this.occurrence = avs == null ? null : JSONParser.parse(avs, JSONParser.LITERAL_KEY).asList();
             } catch (ParseException e) {
-                throw new NiximException("无法解析occurrence matcher JSON", e);
+                throw new TransformException("无法解析occurrence matcher JSON", e);
             }
 
             switch (this.at) {
@@ -1280,7 +1275,7 @@ public class NiximSystem {
             }
             this.name = this.at.equals("OLD_SUPER_INJECT") ?
                     method.name + '_' + (System.nanoTime() % 10000) :
-                    ((AnnValString) map.get("value")).value;
+                    map.getString("value");
         }
     }
 
@@ -1345,7 +1340,7 @@ public class NiximSystem {
 
         private void checkAccess(CstRef ref) {
             if (ref.getClassName().equals(data.name) && unaccessible.contains(tester.read(ref))) {
-                Helpers.athrow(new NiximException("无法访问" + data.name + '.' + tester + ": 会出现 IllegalAccessError / NoSuchFieldError"));
+                Helpers.athrow(new TransformException("无法访问" + data.name + '.' + tester + ": 会出现 IllegalAccessError / NoSuchFieldError"));
             }
         }
 

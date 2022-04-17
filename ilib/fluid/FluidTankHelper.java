@@ -38,6 +38,12 @@ import net.minecraftforge.fluids.capability.IFluidHandlerItem;
  * @since 2021/4/21 22:51
  */
 public class FluidTankHelper {
+    public static FluidTank cloneTank(FluidTank tank) {
+        FluidTank newTank = new FluidTank(tank.getCapacity());
+        newTank.setFluid(tank.getFluid());
+        return newTank;
+    }
+
     public static ItemStack fillOrDrainFluid(FluidTank machine, ItemStack item) {
         IFluidHandlerItem handler = item.getCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY, null);
         if (handler == null) {

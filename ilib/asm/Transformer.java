@@ -32,18 +32,20 @@ import roj.asm.Opcodes;
 import roj.asm.cst.*;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.MethodSimple;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.Context;
-import roj.asm.util.InsnList;
-import roj.asm.util.NodeHelper;
+import roj.asm.util.*;
 import roj.collect.IntBiMap;
+import roj.io.IOUtil;
+import roj.text.SimpleLineReader;
 import roj.util.Helpers;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.List;
 
 import static ilib.asm.Loader.logger;
@@ -101,16 +103,181 @@ public class Transformer implements ContextClassTransformer {
                 break;
             case "net.minecraft.block.BlockPistonBase":
             case "net.minecraft.block.BlockRedstoneWire":
-                if (Config.noSoManyBlockPos) fastEnumFacing(ctx);
+                if (Config.noSoManyBlockPos) {
+                    fastEnumFacing(ctx);
+                    return;
+                }
                 break;
+            case "net.minecraft.client.network.NetHandlerPlayClient":
+                if (Config.separateDismount) transformDismountMessage(ctx);
+                break;
+            case "net.minecraft.world.WorldServer":
+                if (Config.myNextTickList) tickMyHashSet(ctx);
+                break;
+            case "net.minecraft.client.renderer.OpenGlHelper":
+                if (Config.oshi886) oshi886(ctx);
+                break;
+            case "net.minecraft.util.EnumFacing":
+                if (Config.replaceEnumFacing) transformEnumFacing(ctx);
+                return;
+            case "net.minecraft.client.renderer.RegionRenderCacheBuilder":
+                if (Config.smallBuf) transformRRCB(ctx);
+                break;
+            case "paulscode.sound.libraries.ChannelLWJGLOpenAL":
+                if (Config.soundRecycle) transformChannel(ctx);
+                break;
+            case "net.minecraft.client.renderer.RenderGlobal":
+                transformRG(ctx);
+                break;
+            case "net.minecraft.client.renderer.GLAllocation":
+                transformGLAlloc(ctx);
+        }
+        if (Config.replaceEnumFacing) fastEnumFacing(ctx);
+        if (Config.tractDirectMem) traceDirectMemory(ctx);
+    }
+
+    private static void transformGLAlloc(Context ctx) {
+        List<? extends MethodNode> cp = ctx.getData().methods;
+        for (int i = 0; i < cp.size(); i++) {
+            MethodNode node = cp.get(i);
+            node.accessFlag(node.accessFlag() & ~AccessFlag.SUPER_OR_SYNC);
+        }
+    }
+
+
+    private static void transformRG(Context ctx) {
+        ConstantPool cp = ctx.getData().cp;
+        List<Constant> cref = cp.getConstants();
+        for (int i = 0; i < cref.size(); i++) {
+            Constant c = cref.get(i);
+            if (c.type() == Constant.INT) {
+                CstInt c1 = (CstInt) c;
+                int v = c1.value;
+                if (v == 69696) {
+                    c1.value = 256;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void traceDirectMemory(Context ctx) {
+        ConstantData data = ctx.getData();
+        List<CstRef> methods = ctx.getMethodConstants();
+        for (int i = 0; i < methods.size(); i++) {
+            CstRef ref = methods.get(i);
+            if (ref.getClassName().equals("org/lwjgl/BufferUtils")) {
+                if (ref.desc().getName().getString().equals("createByteBuffer")) {
+                    ref.setClazz(data.cp.getClazz("ilib/asm/Transformer"));
+                }
+            } else if (ref.getClassName().equals("java/nio/ByteBuffer")) {
+                if (ref.desc().getName().getString().startsWith("allocateDirect")) {
+                    ref.setClazz(data.cp.getClazz("ilib/asm/Transformer"));
+                }
+            }
+        }
+    }
+
+    public static ByteBuffer allocateDirect(int size) {
+        Loader.logger.info("allocateDirect(" + size + ")", new Throwable());
+        return ByteBuffer.allocateDirect(size);
+    }
+
+    public static ByteBuffer createByteBuffer(int size) {
+        Loader.logger.info("createByteBuffer(" + size + ")", new Throwable());
+        return ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder());
+    }
+
+    private static void transformChannel(Context ctx) {
+        ConstantData data = ctx.getData();
+        List<CstClass> clz = ctx.getClassConstants();
+        for (int i = 0; i < clz.size(); i++) {
+            CstClass ref = clz.get(i);
+            if (ref.getValue().getString().equals("org/lwjgl/BufferUtils")) {
+                ref.getValue().setString("ilib/asm/util/MCReplaces");
+            }
+        }
+    }
+
+    private static void transformRRCB(Context ctx) {
+        ConstantPool cp = ctx.getData().cp;
+        List<Constant> cref = cp.getConstants();
+        for (int i = 0; i < cref.size(); i++) {
+            Constant c = cref.get(i);
+            if (c.type() == Constant.INT) {
+                CstInt c1 = (CstInt) c;
+                int v = c1.value;
+                switch (v) {
+                    case 2097152:
+                        c1.value = 131072;
+                        break;
+                    case 131072:
+                    case 262144:
+                        c1.value = 65536;
+                        break;
+                }
+            }
+        }
+    }
+
+    private static void transformEnumFacing(Context ctx) {
+        fastEnumFacing(ctx);
+
+        Method m = ctx.getData().getUpgradedMethod("<clinit>");
+        InsnList insn = m.code.instructions;
+        for (int i = 0; i < insn.size(); i++) {
+            InsnNode node = insn.get(i);
+            if (node.nodeType() == InsnNode.T_INVOKE) {
+                InvokeInsnNode iin = (InvokeInsnNode) node;
+                if (iin.owner.equals("ilib/misc/MCHooks"))
+                iin.owner = "net/minecraft/util/EnumFacing";
+            }
+        }
+    }
+
+    private static void oshi886(Context ctx) {
+        ConstantPool cp = ctx.getData().cp;
+        List<CstClass> cref = ctx.getClassConstants();
+        for (int i = 0; i < cref.size(); i++) {
+            CstClass c = cref.get(i);
+            if (c.getValue().getString().equals("oshi/SystemInfo")) {
+                // 会报NoSuchMethodError, 不过它在一个try-catch里
+                c.getValue().setString("java/lang/Object");
+                break;
+            }
+        }
+    }
+
+    private static void tickMyHashSet(Context ctx) {
+        ConstantPool cp = ctx.getData().cp;
+        List<CstRef> mref = ctx.getMethodConstants();
+        for (int i = 0; i < mref.size(); i++) {
+            CstRef m = mref.get(i);
+            if (m.desc().getName().getString().equals("newHashSet")) {
+                m.setClazz(cp.getClazz("roj/util/Helpers"));
+                m.desc(cp.getDesc("newMyHashSet", "()Lroj/collect/MyHashSet;"));
+                break;
+            }
+        }
+    }
+
+    private static void transformDismountMessage(Context ctx) {
+        List<CstRef> mref = ctx.getMethodConstants();
+        for (int i = 0; i < mref.size(); i++) {
+            CstRef m = mref.get(i);
+            // I18n.format
+            if (m.desc().getName().getString().equals("func_135052_a")) {
+                // 只有一处引用，所以不用data.cp.newXXX
+                m.getClazz().getValue().setString("ilib/misc/MCHooks");
+                m.desc().getName().setString("dismountMessage");
+                break;
+            }
         }
     }
 
     private static void transformLOG4J2(Context ctx) {
         ConstantData data = ctx.getData();
-        int i = data.getMethodByName("lookup");
-        Method mn = new Method(data, data.methods.get(i));
-        data.methods.set(i, Helpers.cast(mn));
+        Method mn = data.getUpgradedMethod("lookup");
 
         InsnList insn = mn.code.instructions;
         insn.clear();
@@ -120,20 +287,18 @@ public class Transformer implements ContextClassTransformer {
 
     private static void transformAnvilSlot(Context ctx) {
         ConstantData data = ctx.getData();
-        int i = data.getMethodByName("func_190901_a");
-        Method mn = new Method(data, data.methods.get(i));
-        data.methods.set(i, Helpers.cast(mn));
+        Method mn = data.getUpgradedMethod("func_190901_a");
 
         InsnList insn = mn.code.instructions;
-        for (i = 0; i < insn.size(); i++) {
+        for (int i = 0; i < insn.size(); i++) {
             InsnNode node = insn.get(i);
             if (node.getOpcode() == Opcodes.INVOKEVIRTUAL) {
                 InvokeInsnNode node1 = (InvokeInsnNode) node;
                 if (node1.name.equals("func_82242_a")) {
                     node1.code = Opcodes.INVOKESTATIC;
-                    node1.owner = "ilib/asm/util/MCHooks";
+                    node1.owner = "ilib/misc/MCHooks";
                     node1.name = "playerAnvilClick";
-                    node1.setParameters("(Lnet/minecraft/entity/player/EntityPlayer;I)V");
+                    node1.rawDesc("(Lnet/minecraft/entity/player/EntityPlayer;I)V");
                     break;
                 }
             }
@@ -142,11 +307,9 @@ public class Transformer implements ContextClassTransformer {
 
     private static void transformPlayerChunkMap(Context ctx) {
         ConstantData data = ctx.getData();
-        int i = data.getMethodByName("func_72693_b");
-        Method mn = new Method(data, data.methods.get(i));
-        data.methods.set(i, Helpers.cast(mn));
+        Method mn = data.getUpgradedMethod("func_72693_b");
 
-        int j = 0;
+        int i, j = 0;
         InsnList insn = mn.code.instructions;
         for (i = 0; i < insn.size(); i++) {
             if (j == 2)
@@ -178,17 +341,15 @@ public class Transformer implements ContextClassTransformer {
 
     private static void changeTPS(Context ctx) {
         ConstantData data = ctx.getData();
-        int i = data.getMethodByName("run");
-        Method mn = new Method(data, data.methods.get(i));
-        data.methods.set(i, Helpers.cast(mn));
+        Method mn = data.getUpgradedMethod("run");
 
         InsnList insn = mn.code.instructions;
-        for (i = 0; i < insn.size(); i++) {
+        for (int i = 0; i < insn.size(); i++) {
             InsnNode node = insn.get(i);
             if (node.getOpcode() == Opcodes.LDC2_W) {
                 LdcInsnNode node1 = (LdcInsnNode) node;
                 if (node1.c.type() == Constant.LONG && ((CstLong) node1.c).value == 50L) {
-                    insn.set(i, new FieldInsnNode(Opcodes.GETSTATIC, "ilib/asm/util/MCHooks.MSpT:J"));
+                    insn.set(i, new FieldInsnNode(Opcodes.GETSTATIC, "ilib/misc/MCHooks.MSpT:J"));
                 }
             }
         }
@@ -207,7 +368,7 @@ public class Transformer implements ContextClassTransformer {
                 if (c.type() == Constant.UTF) {
                     CstUTF cstUTF = (CstUTF) c;
                     if ("Minecraft 1.12.2".equals(cstUTF.getString())) {
-                        cstUTF.setString(Config.title);
+                        cstUTF.setString(Config.title.equals("random") ? randomTitle() : Config.title);
                         found = true;
                         break;
                     }
@@ -225,23 +386,30 @@ public class Transformer implements ContextClassTransformer {
                 break;
             }
         }*/
-        List<CstRef> methodRef = ctx.getMethodConstants();
-        for (int i = 0; i < methodRef.size(); i++) {
-            CstRef ref = methodRef.get(i);
-            if (ref.getClassName().equals("java/lang/System") && ref.desc().getName().getString().equals("gc")) {
-                ref.setClazz(data.cp.getClazz("ilib/asm/util/MCHooks"));
-                ref.desc(data.cp.getDesc("redirectGC", "()V"));
-                logger.debug("redirectGC: done.");
-                break;
+        if (Config.changeWorldSpeed == 3) {
+            List<CstRef> methodRef = ctx.getMethodConstants();
+            for (int i = 0; i < methodRef.size(); i++) {
+                CstRef ref = methodRef.get(i);
+                if (ref.getClassName().equals("java/lang/System") && ref.desc().getName().getString().equals("gc")) {
+                    ref.setClazz(data.cp.getClazz("ilib/misc/MCHooks"));
+                    ref.desc(data.cp.getDesc("empty", "()V"));
+                    logger.debug("redirectGC: done.");
+                    break;
+                }
             }
         }
-        for (int i = 0; i < data.methods.size(); i++) {
-            MethodSimple method = data.methods.get(i);
-            if ("func_71384_a".equals(method.name.getString())) {
-                data.methods.set(i, Helpers.cast(beginLoading(new Method(data, method))));
-                break;
-            }
+    }
+
+    private static String randomTitle() {
+        SimpleLineReader slr;
+        try {
+            slr = new SimpleLineReader(IOUtil.readUTF("assets/minecraft/texts/splashes.txt"));
+            slr.skipLines((int) System.currentTimeMillis() % slr.size() - 1);
+            return "我的世界 1.12.2 —— " + slr.next();
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
+        return "随机标题读取失败 :(";
     }
 
     private static Method beginLoading(Method method) {
@@ -265,14 +433,12 @@ public class Transformer implements ContextClassTransformer {
      */
     private static void onlySteveOnCart(Context ctx) {
         ConstantData data = ctx.getData();
-        int i = data.getMethodByName("func_180460_a");
-        Method mn = new Method(data, data.methods.get(i));
-        data.methods.set(i, Helpers.cast(mn));
+        Method mn = data.getUpgradedMethod("func_180460_a");
 
         InsnList list = mn.code.instructions;
         final IntBiMap<InsnNode> pc = list.getPCMap();
 
-        i = 420;
+        int i = 420;
         while (i < 440) {
             InsnNode node = pc.get(i++);
             if (node != null && node.getOpcode() == Opcodes.INSTANCEOF) {
@@ -296,19 +462,17 @@ public class Transformer implements ContextClassTransformer {
 
         _trans:
         if (Config.replaceEntityList) {
-            int i = data.getMethodByName("<init>");
-            Method mn = new Method(data, data.methods.get(i));
-            data.methods.set(i, Helpers.cast(mn));
+            Method mn = data.getUpgradedMethod("<init>");
 
             InsnList list = mn.code.instructions;
 
-            i = 4;
+            int i = 4;
             do {
                 InsnNode node = list.get(i++);
                 if (node.getOpcode() == Opcodes.INVOKESTATIC) {
                     InvokeInsnNode node1 = (InvokeInsnNode) node;
                     if (node1.name.equals("newHashSet")) {
-                        node1.rawDesc("ilib/asm/util/MCHooks.createEntityList:()Ljava/util/Set;");
+                        node1.fullDesc("roj/collect/WeakHashSet.newWeakHashSet:()Lroj/collect/WeakHashSet;");
                         break _trans;
                     }
                 }
@@ -388,7 +552,7 @@ public class Transformer implements ContextClassTransformer {
 
         // onBlockClicked
         int i = data.getMethodByName("func_180784_a");
-        Method mn = new Method(data, data.methods.get(i));
+        Method mn = new Method(data, (MethodSimple) data.methods.get(i));
         data.methods.set(i, Helpers.cast(mn));
 
         AttrCode code = mn.code;
@@ -420,9 +584,10 @@ public class Transformer implements ContextClassTransformer {
         List<CstRef> methods = ctx.getMethodConstants();
         for (int i = 0; i < methods.size(); i++) {
             CstRef ref = methods.get(i);
-            if (ref.matches("net/minecraft/util/EnumFacing", "values", "[Lnet/minecraft/util/EnumFacing;")) {
-                ref.setClazz(data.cp.getClazz("ilib/asm/util/MCHooks"));
-                ref.desc(data.cp.getDesc("identityFacings", "[Lnet/minecraft/util/EnumFacing;"));
+            if (ref.matches("net/minecraft/util/EnumFacing", "values", "()[Lnet/minecraft/util/EnumFacing;")) {
+                ref.setClazz(data.cp.getClazz("ilib/misc/MCHooks"));
+            } else if (ref.matches("net/minecraft/util/BlockRenderLayer", "values", "()[Lnet/minecraft/util/BlockRenderLayer;")) {
+                ref.setClazz(data.cp.getClazz("ilib/asm/util/MCReplaces"));
             }
         }
     }
@@ -430,9 +595,9 @@ public class Transformer implements ContextClassTransformer {
     private static Method replaceWithEmpty(ConstantData data, String name) {
         int i = data.getMethodByName(name);
 
-        MethodSimple ms = data.methods.get(i);
+        MethodSimple ms = (MethodSimple) data.methods.get(i);
         Method mn = new Method(ms.accesses, data, ms.name.getString(), ms.rawDesc());
-        Object code = ms.attributes.getByName("Code");
+        Object code = ms.attributes().getByName("Code");
         if (code != null) {
             AttrCode c = mn.code = new AttrCode(ms);
             c.localSize = (char) ParamHelper.paramSize(ms.rawDesc());

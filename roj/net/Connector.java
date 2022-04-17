@@ -98,23 +98,26 @@ public abstract class Connector {
      * Close an open connection to the server.
      */
     public void disconnect() throws IOException {
+        Socket server = this.server;
         if (server != null) {
-            if(channel != null) {
+            WrappedSocket c = this.channel;
+            if(c != null) {
                 try {
-                    while (!channel.dataFlush()) ;
-                    while (!channel.shutdown()) ;
+                    while (!c.dataFlush()) ;
+                    while (!c.shutdown()) ;
                 } catch (Throwable ignored) {}
-                channel.close();
+                try {
+                    c.close();
+                } catch (Throwable ignored) {}
                 channel = null;
             }
 
             server.close();
-            server = null;
+            this.server = null;
         }
     }
 
     public WrappedSocket getChannel() throws IOException {
-        connect();
         return channel;
     }
 
@@ -132,5 +135,13 @@ public abstract class Connector {
 
     public int connectTimeout() {
         return connectTimeout;
+    }
+
+    public InetSocketAddress getEndpoint() {
+        return endpoint;
+    }
+
+    public WrappedSocket getAsyncChannel() throws IOException {
+        return channel = factory.wrap(server);
     }
 }

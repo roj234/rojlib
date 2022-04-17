@@ -26,12 +26,15 @@
 
 package ilib.item;
 
-import ilib.ImpLib;
+import ilib.api.client.ICustomModel;
 import ilib.api.registry.BlockPropTyped;
 import ilib.api.registry.Propertied;
-import ilib.util.Hook;
+import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.util.Helpers;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.entity.player.EntityPlayer;
@@ -43,56 +46,97 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 import net.minecraftforge.client.model.ModelLoader;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * 基于MI-Enumeration ({@link Propertied})创建Meta方块
  *
  * @param <T> The MI-Enumeration
  */
-/**
- * @author Roj234
- * @since 2021/6/2 23:56
- */
-public class ItemMetaBlock<T extends Propertied<T>> extends ItemBlockMI {
+public class ItemMetaBlock<T extends Propertied<T>> extends ItemBlockMI implements ICustomModel {
     private final BlockPropTyped<T> prop;
     public final String name;
+    private String propName;
 
-    public ItemMetaBlock(Block block, BlockPropTyped<T> prop, String name, String propName, String texName) {
+    public ItemMetaBlock(Block block, BlockPropTyped<T> prop, String name, String propName) {
         super(block);
         setHasSubtypes(true);
-        setMaxDamage(0);
-        setNoRepair();
-        ImpLib.HOOK.add(Hook.MODEL_REGISTER, () -> registerModel(propName, name));
         this.prop = prop;
+        this.propName = propName;
         this.name = name;
     }
 
-    public ItemMetaBlock(Block block, BlockPropTyped<T> prop, String name, String propName) {
-        this(block, prop, name, propName, name);
+    public ItemMetaBlock(Block block) {
+        this(block, block.getRegistryName().getPath(), true);
     }
 
-    public boolean placeBlockAt(@Nonnull ItemStack stack, @Nonnull EntityPlayer player, @Nonnull World world, @Nonnull BlockPos pos, @Nonnull EnumFacing facing, float f1, float f2, float f3, @Nonnull IBlockState state) {
-        T type = getTypeByStack(stack);
-        if (type == null) {
-            return false;
+    public ItemMetaBlock(Block block, String name) {
+        this(block, name, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    public ItemMetaBlock(Block block, String name, boolean model) {
+        super(block);
+        setHasSubtypes(true);
+
+        CharList tmp = IOUtil.getSharedCharBuf();
+        BlockPropTyped<T> prop = null;
+        Iterator<Map.Entry<IProperty<?>, Comparable<?>>> itr = block.getDefaultState()
+                                                                    .getProperties().entrySet().iterator();
+
+        // this map is sorted immutable map
+        while (true) {
+            Map.Entry<IProperty<?>, Comparable<?>> e = itr.next();
+            IProperty<?> p = e.getKey();
+            tmp.append(p.getName()).append('=');
+            if (p instanceof BlockPropTyped) {
+                if (prop != null) throw new IllegalStateException("Duplicate meta property: " + prop.getName() + " and " + p.getName());
+                prop = (BlockPropTyped<T>) p;
+                tmp.append("{name}");
+            } else {
+                tmp.append(p.getName(Helpers.cast(e.getValue())));
+            }
+            if (!itr.hasNext()) break;
+            tmp.append(',');
         }
+
+        this.prop = prop;
+        this.propName = model ? tmp.toString() : null;
+        this.name = name;
+    }
+
+    public boolean placeBlockAt(ItemStack stack, EntityPlayer player, World world, BlockPos pos, EnumFacing facing, float f1, float f2, float f3, IBlockState state) {
+        T type = getTypeByStack(stack);
+        if (type == null) return false;
 
         state = state.withProperty(prop, type);
 
         return super.placeBlockAt(stack, player, world, pos, facing, f1, f2, f3, state);
     }
 
-    public void registerModel(String propName, String name) {
-        ResourceLocation baseLocation = new ResourceLocation("mi", name);
+    @Override
+    @SideOnly(Side.CLIENT)
+    public void registerModel() {
+        if (propName == null) return;
+
+        ResourceLocation base = getTextureLocation();
+        CharList tmp = IOUtil.getSharedCharBuf();
         for (T type : prop.getAllowedValues()) {
-            if (indexFor(type) < 0)
-                continue;
-            String property = propName.replace("{name}", type.getName());
-            ModelLoader.setCustomModelResourceLocation(this, indexFor(type),
-                    new ModelResourceLocation(baseLocation, property));
+            if (indexFor(type) < 0) continue;
+            String prop = tmp.append(propName).replace("{name}", type.getName()).toString();
+            tmp.clear();
+            ModelLoader.setCustomModelResourceLocation(this, indexFor(type), new ModelResourceLocation(base, prop));
         }
+        propName = null;
+    }
+
+    protected ResourceLocation getTextureLocation() {
+        return getRegistryName();
     }
 
     public int indexFor(T type) {
@@ -108,12 +152,10 @@ public class ItemMetaBlock<T extends Propertied<T>> extends ItemBlockMI {
 
     @Nonnull
     @Override
-    public String getTranslationKey(@Nonnull final ItemStack is) {
+    public String getTranslationKey(final ItemStack is) {
         T type = getTypeByStack(is);
-        if (type == null) {
-            return "mi.invalid";
-        }
-        return "tile.mi." + name + "." + type.getName();
+        if (type == null) return "invalid";
+        return "tile." + getRegistryName().getNamespace() + '.' + name + '.' + type.getName();
     }
 
     public T getTypeByStack(final ItemStack is) {

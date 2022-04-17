@@ -27,7 +27,8 @@ package ilib.asm.fasterforge;
 
 import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
 import org.objectweb.asm.Type;
-import roj.asm.tree.anno.*;
+import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.type.ParamHelper;
 
 import java.util.ArrayList;
@@ -47,39 +48,37 @@ public abstract class TypeHelper {
     public static Object toPrimitive(AnnVal param) {
         switch (param.type()) {
             case AnnVal.FLOAT:
-                return ((AnnValFloat) param).value;
+                return param.asFloat();
             case AnnVal.DOUBLE:
-                return ((AnnValDouble) param).value;
+                return param.asDouble();
             case AnnVal.LONG:
-                return ((AnnValLong) param).value;
+                return param.asLong();
             case AnnVal.INT:
-                return ((AnnValInt) param).value;
+                return param.asInt();
             case AnnVal.STRING:
-                return ((AnnValString) param).value;
+                return param.asString();
             case AnnVal.SHORT:
-                return (short) ((AnnValInt) param).value;
+                return (short) param.asInt();
             case AnnVal.CHAR:
-                return (char) ((AnnValInt) param).value;
+                return (char) param.asInt();
             case AnnVal.BYTE:
-                return (byte) ((AnnValInt) param).value;
+                return (byte) param.asInt();
             case AnnVal.BOOLEAN:
-                return ((AnnValInt) param).value == 1;
+                return param.asInt() == 1;
             case AnnVal.ENUM:
-                AnnValEnum ave = (AnnValEnum) param;
+                AnnValEnum ave = param.asEnum();
                 return new ModAnnotation.EnumHolder(ave.clazz, ave.value);
             case AnnVal.ARRAY:
-                AnnValArray ava = (AnnValArray) param;
-                List<Object> list = new ArrayList<>(ava.value.size());
-                List<AnnVal> value = ava.value;
+                List<AnnVal> value = param.asArray();
+                List<Object> list = new ArrayList<>(value.size());
                 for (int i = 0; i < value.size(); i++) {
                     list.add(toPrimitive(value.get(i)));
                 }
                 return list;
             case AnnVal.CLASS:
-                AnnValClass avc = (AnnValClass) param;
-                return Type.getType(ParamHelper.getField(avc.value));
+                return Type.getType(ParamHelper.getField(param.asClass()));
             case AnnVal.ANNOTATION:
-                return toPrimitive(((AnnValAnnotation) param).value.values);
+                return toPrimitive(param.asAnnotation().values);
         }
         throw new UnsupportedOperationException();
     }

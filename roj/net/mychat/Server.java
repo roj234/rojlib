@@ -29,7 +29,7 @@ import roj.util.Helpers;
 import roj.util.SleepingBeauty;
 
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
+import java.awt.image.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -121,8 +121,7 @@ public class Server extends WebSockets implements Router, Context {
         T.joinGroup(A);
         T.joinGroup(B);
 
-        r(S);
-        r(A); r(B); r(T);
+        r(S); r(A); r(B); r(T);
 
         Server man = new Server();
         HttpServer server = new HttpServer(new InetSocketAddress(InetAddress.getLoopbackAddress(), 1999), 233, man);
@@ -425,14 +424,6 @@ public class Server extends WebSockets implements Router, Context {
                 rs = dao.setUserData(u);
                 return rs.error == null ? new StringResponse("{\"ok\":1}") : jsonErr(rs.error);
             case "code":
-//                req.handler().setAsyncProcess(100);
-//                POOL.pushTask(new AbstractExecutionTask() {
-//                    @Override
-//                    public void run() throws Throwable {
-//                        req.handler().setAsyncProcessDone();
-//                    }
-//                });
-                // bit1: login
                 return new StringResponse("{\"ok\":1,\"code\":\"" + token(null, 1, 300000) + "\"}");
             case "login":
                 Map<String, String> posts = req.payloadFields();
@@ -684,7 +675,7 @@ public class Server extends WebSockets implements Router, Context {
         return uc.encodeBase64(sm3.digest());
     }
 
-    static MyHashMap<String, Object> initLocal() {
+    private static MyHashMap<String, Object> initLocal() {
         MyHashMap<String, Object> L = RequestHandler.LocalShared.get().ctx;
         if (!L.containsKey("LST")) {
             L.put("SM3", new SM3());
@@ -800,6 +791,7 @@ public class Server extends WebSockets implements Router, Context {
         protected void requestClearHistory(int id, int timeout) {
             AbstractUser u = userMap.get(id);
             if (!(u instanceof User)) return;
+
             ChatDAO.Result r = dao.delHistory(owner.id, id);
             if (r.error != null) {
                 sendAlert("无法清除历史纪录: " + r.error);
@@ -810,6 +802,7 @@ public class Server extends WebSockets implements Router, Context {
         protected void requestColdHistory(int id) {
             AbstractUser u = userMap.get(id);
             if (!(u instanceof User)) return;
+
             System.out.println("请求冷却历史纪录 " + id);
         }
     }

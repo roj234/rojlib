@@ -25,7 +25,7 @@
  */
 package ilib.asm.nixim;
 
-import ilib.asm.util.MCHooks;
+import ilib.misc.MCHooks;
 import ilib.util.PlayerUtil;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;

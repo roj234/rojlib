@@ -35,7 +35,6 @@ import roj.util.Idx;
 
 import net.minecraft.item.ItemStack;
 
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PrimitiveIterator;
@@ -63,9 +62,8 @@ public abstract class AbstractItemRecipe extends BaseRecipe implements IRecipe {
         return true;
     }
 
-    @Nonnull
     @Override
-    public List<ItemStack> operateInput(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> input) {
+    public List<ItemStack> operateInput(IFluidProvider fp, List<ItemStack> input) {
         return isShaped() ? operateItemsShaped(this, input) : operateItemsShapeless(this, input);
     }
 
@@ -139,9 +137,8 @@ public abstract class AbstractItemRecipe extends BaseRecipe implements IRecipe {
         return keepInputIds == null || !keepInputIds.contains(index);
     }
 
-    // 包括位置
     @Override
-    public boolean matches(@Nonnull IFluidProvider fluidProvider, @Nonnull List<ItemStack> list) {
+    public boolean matches(IFluidProvider fp, List<ItemStack> list) {
         return isShaped() ? matchesShaped(this, list) : matchesShapeless(this, list);
     }
 

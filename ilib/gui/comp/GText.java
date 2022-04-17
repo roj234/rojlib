@@ -52,7 +52,7 @@ public class GText extends Component {
         this.color = color == null ? COLOR_DEFAULT : color;
     }
 
-    public static GText alignCenterY(IGui parent, int y, String text, @Nullable Color color) {
+    public static GText alignCenterX(IGui parent, int y, String text, @Nullable Color color) {
         GText c = new GText(parent, 0, y, text, color);
         c.xPos = (parent.getWidth() - c.getWidth()) / 2;
         return c;
@@ -63,10 +63,7 @@ public class GText extends Component {
      *******************************************************************************************************************/
 
     @Override
-    public void render(int mouseX, int mouseY) {}
-
-    @Override
-    public void renderOverlay(int mouseX, int mouseY) {
+    public void render(int mouseX, int mouseY) {
         int w = getWidth();
 
         int x = xPos;
@@ -82,6 +79,9 @@ public class GText extends Component {
 
         mc.fontRenderer.drawString(text, x, yPos, color.getRGB());
     }
+
+    @Override
+    public void render2(int mouseX, int mouseY) {}
 
     /*******************************************************************************************************************
      * Accessors/Mutators                                                                                              *

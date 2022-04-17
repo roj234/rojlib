@@ -28,13 +28,15 @@ package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.Clazz;
-import roj.asm.tree.Method;
+import roj.asm.tree.IClass;
+import roj.asm.tree.MoFNode;
 import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
 import roj.asm.util.ConstantPool;
 import roj.asm.util.InsnList;
 import roj.util.ByteList;
+
+import java.util.List;
 
 /**
  * invokevirtual invokespecial invokestatic
@@ -49,29 +51,29 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
 
     public InvokeInsnNode(byte code, String descriptor) {
         super(code);
-        rawDesc(descriptor);
+        fullDesc(descriptor);
     }
 
     public InvokeInsnNode(byte code, String owner, String name, String types) {
         super(code);
         this.owner = owner;
         this.name = name;
-        this.rawParam = types;
+        this.rawDesc = types;
     }
 
     public InvokeInsnNode(byte code, CstRef ref) {
         super(code);
         this.owner = ref.getClassName();
         this.name = ref.desc().getName().getString();
-        this.rawParam = ref.desc().getType().getString();
+        this.rawDesc = ref.desc().getType().getString();
     }
 
-    public InvokeInsnNode(byte code, Clazz clazz, int index) {
+    public InvokeInsnNode(byte code, IClass clazz, int index) {
         super(code);
-        Method method = clazz.methods.get(index);
-        this.owner = clazz.name;
-        this.name = method.name;
-        this.rawParam = method.rawDesc();
+        MoFNode mn = clazz.methods().get(index);
+        this.owner = clazz.name();
+        this.name = mn.name();
+        this.rawDesc = mn.rawDesc();
     }
 
     @Override
@@ -122,12 +124,7 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
     }
 
     public void toByteArray(ConstantPool cw, ByteList w) {
-        if (params != null) {
-            params.add(returnType);
-            rawParam = ParamHelper.getMethod(params);
-            params.remove(params.size() - 1);
-        }
-        w.put(code).putShort(cw.getMethodRefId(owner, name, rawParam));
+        w.put(code).putShort(cw.getMethodRefId(owner, name, rawDesc()));
     }
 
     @Override
@@ -136,7 +133,7 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
     }
 
     @Override
-    public final void rawDesc(String desc) {
+    public final void fullDesc(String desc) {
         int cIdx = desc.indexOf(".");
 
         this.owner = desc.substring(0, cIdx);
@@ -148,23 +145,26 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
         }
         this.name = name;
 
-        this.rawParam = desc.substring(nIdx + 1);
+        this.rawDesc = desc.substring(nIdx + 1);
         if (params != null) {
             params.clear();
-            ParamHelper.parseMethod(rawParam, params);
+            ParamHelper.parseMethod(rawDesc, params);
             returnType = params.remove(params.size() - 1);
         }
     }
 
     public final String toString() {
-        initPar();
-        StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(returnType).append(' ').append(owner.substring(owner.lastIndexOf('/') + 1)).append('.').append(name).append('(');
+        StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(returnType()).append(' ').append(owner.substring(owner.lastIndexOf('/') + 1)).append('.').append(name).append('(');
+
+        List<Type> params = parameters();
         if (!params.isEmpty()) {
-            for (int i = 0; i < params.size(); i++) {
-                Type par = params.get(i);
-                sb.append(par).append(", ");
+            int i = 0;
+            while (true) {
+                Type par = params.get(i++);
+                sb.append(par);
+                if (i == params.size()) break;
+                sb.append(", ");
             }
-            sb.delete(sb.length() - 2, sb.length());
         }
         return sb.append(')').toString();
     }

@@ -29,6 +29,8 @@ package roj.asm.tree;
 import roj.asm.Parser;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.Attribute;
+import roj.asm.type.ParamHelper;
+import roj.asm.type.Type;
 
 /**
  * {@link roj.asm.tree.ConstantData}中的简单字段, 不解析{@link Attribute}
@@ -36,7 +38,7 @@ import roj.asm.tree.attr.Attribute;
  * @author Roj234
  * @since 2021/5/29 17:16
  */
-public final class FieldSimple extends SimpleComponent {
+public final class FieldSimple extends SimpleComponent implements FieldNode {
     public FieldSimple(int accesses, CstUTF name, CstUTF typeName) {
         super(accesses, name, typeName);
     }
@@ -44,5 +46,10 @@ public final class FieldSimple extends SimpleComponent {
     @Override
     public int type() {
         return Parser.FTYPE_SIMPLE;
+    }
+
+    @Override
+    public Type fieldType() {
+        return ParamHelper.parseField(rawDesc());
     }
 }

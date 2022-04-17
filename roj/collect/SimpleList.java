@@ -58,7 +58,8 @@ public class SimpleList<E> implements List<E>, RandomAccess {
     @SafeVarargs
     @SuppressWarnings("varargs")
     public SimpleList(@Nonnull E... es) {
-        this.list = Arrays.copyOf(es, es.length);
+        list = new Object[es.length];
+        System.arraycopy(es, 0, list, 0, es.length);
         size = es.length;
         length = es.length;
     }

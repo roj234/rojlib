@@ -33,4 +33,7 @@ package ilib.command.parser;
  * @since  2021/1/9 14:38
  */
 public @interface CommandHandler {
+    String value();
+    String[] aliases() default {};
+    int permission() default 4;
 }

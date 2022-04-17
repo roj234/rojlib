@@ -23,14 +23,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-/**
- * This file is a part of more items mod (MI)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: EnumInputOutputMode.java
- */
 package ilib.util;
 
 import java.awt.*;
@@ -41,12 +33,7 @@ public enum EnumIO {
     OUTPUT(0x96FF6600),
     //OUTPUT_A(0), OUTPUT_B(0), OUTPUT_C(0),
     ALL(0x96009600),
-    @Deprecated
     DISABLED(0x96b4b4b4);
-
-    public static final int TYPE_ITEM = 0;
-    public static final int TYPE_ENERGY = 1;
-    public static final int TYPE_FLUID = 2;
 
     public static final EnumIO[] VALUES = values();
 
@@ -54,19 +41,6 @@ public enum EnumIO {
 
     EnumIO(int c) {
         color = new Color(c, true);
-    }
-
-    @Deprecated
-    public enum Tube implements net.minecraft.util.IStringSerializable {
-        normal, none;
-
-        public static Tube byIOMode(EnumIO mode) {
-            return mode == DISABLED ? none : normal;
-        }
-
-        public String getName() {
-            return name();
-        }
     }
 
     public boolean canOutput() {

@@ -26,26 +26,25 @@
 
 package ilib.command;
 
+import roj.collect.MyHashSet;
+
 import net.minecraft.command.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
-import net.minecraftforge.common.DimensionManager;
-import roj.collect.MyHashSet;
 
-import javax.annotation.Nonnull;
+import net.minecraftforge.common.DimensionManager;
+
 import java.util.Set;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/22 14:44
  */
 public final class CommandListenerIL extends CommandHandler implements ICommandListener {
-    private final CommandHandler serverCmd;
-    protected final MinecraftServer server;
+    public final CommandHandler serverCmd;
+    public final MinecraftServer server;
 
     public final ICommandSender NULL_SENDER = new ICommandSender() {
         @Override
@@ -54,11 +53,10 @@ public final class CommandListenerIL extends CommandHandler implements ICommandL
         }
 
         @Override
-        public boolean canUseCommand(int permissionLvl, @Nonnull String cmd) {
+        public boolean canUseCommand(int permissionLvl, String cmd) {
             return true;
         }
 
-        @Nonnull
         @Override
         public World getEntityWorld() {
             return DimensionManager.getWorld(0);
@@ -71,8 +69,8 @@ public final class CommandListenerIL extends CommandHandler implements ICommandL
 
     private static final Set<String> forbiddenCommands = new MyHashSet<>(32);
 
-    public CommandListenerIL() {
-        server = DimensionManager.getWorld(0).getMinecraftServer();
+    public CommandListenerIL(MinecraftServer server) {
+        this.server = server;
         serverCmd = (CommandHandler) server.commandManager;
         CommandBase.setCommandListener(this);
         MasterCommand.setCommandListener(this);
@@ -101,14 +99,13 @@ public final class CommandListenerIL extends CommandHandler implements ICommandL
         return serverCmd.executeCommand(sender, rawCommand);
     }
 
-    @Nonnull
     @Override
     protected MinecraftServer getServer() {
         return this.server;
     }
 
     @Override
-    public void notifyListener(ICommandSender iCommandSender, ICommand iCommand, int i, String s, Object... objects) {
-        ((ICommandListener)serverCmd).notifyListener(iCommandSender, iCommand, i, s, objects);
+    public void notifyListener(ICommandSender sender, ICommand cmd, int i, String s, Object... objects) {
+        ((ICommandListener)serverCmd).notifyListener(sender, cmd, i, s, objects);
     }
 }

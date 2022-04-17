@@ -42,7 +42,7 @@ import java.util.*;
 public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry<V>> {
     private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
-    protected static class Entry<V> extends WeakReference<Object> implements MapLikeEntry<Entry<V>> {
+    public static class Entry<V> extends WeakReference<Object> implements MapLikeEntry<Entry<V>>, Map.Entry<Object, V> {
         public Entry(ReferenceQueue<Object> queue, Object referent) {
             super(referent, queue);
         }
@@ -54,6 +54,23 @@ public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry
         @Override
         public Entry<V> nextEntry() {
             return next;
+        }
+
+        @Override
+        public Object getKey() {
+            return get();
+        }
+
+        @Override
+        public V getValue() {
+            return v;
+        }
+
+        @Override
+        public V setValue(V value) {
+            V v1 = v;
+            v = value;
+            return v1;
         }
     }
 
@@ -162,7 +179,9 @@ public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry
         }
 
         if (result == null) {
-            (entries[index] = new Entry<>(queue, key)).hash = hash;
+            Entry<Object> entry = new Entry<>(queue, key);
+            entry.v = val;
+            (entries[index] = entry).hash = hash;
             size++;
             return null;
         }
@@ -178,7 +197,9 @@ public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry
             result = result.next;
         }
 
-        (result.next = new Entry<>(queue, key)).hash = hash;
+        Entry<V> entry = new Entry<>(queue, key);
+        entry.v = val;
+        (result.next = entry).hash = hash;
         size++;
         return null;
     }
@@ -295,6 +316,7 @@ public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry
         return sb.append('}').toString();
     }
 
+    @SuppressWarnings("unchecked")
     public void removeClearedEntry() {
         Entry<?> entry;
         while ((entry = (Entry<?>) queue.poll()) != null) {
@@ -307,6 +329,7 @@ public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry
                 curr = curr.next;
             }
 
+            onEntryRemoved((V) entry.v);
             if (prev == null) {
                 entries[indexFor(entry.hash)] = null;
             } else {
@@ -316,16 +339,24 @@ public class WeakMyHashMap<K,V> implements Map<K,V>, MapLike<WeakMyHashMap.Entry
         }
     }
 
+    protected void onEntryRemoved(V v) {}
+
+    @SuppressWarnings("unchecked")
     @Override
     public void clear() {
         size = 0;
-        while (queue.poll() != null) ;
+        Entry<?> entry;
+        while ((entry = (Entry<?>) queue.poll()) != null) {
+            onEntryRemoved((V) entry.v);
+        }
 
         this.hasNull = null;
         if (this.entries != null)
             Arrays.fill(entries, null);
 
-        while (queue.poll() != null) ;
+        while ((entry = (Entry<?>) queue.poll()) != null) {
+            onEntryRemoved((V) entry.v);
+        }
     }
 
     @Deprecated

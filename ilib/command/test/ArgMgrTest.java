@@ -26,27 +26,31 @@
 package ilib.command.test;
 
 import ilib.command.parser.Argument;
-import ilib.command.parser.ArgumentManager;
+import ilib.command.parser.ArgumentHandler;
+import net.minecraft.command.CommandException;
+import roj.math.MutableInt;
 
 import java.util.Collections;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since  2021/1/9 14:41
  */
 @Argument
-public class ArgMgrTest implements ArgumentManager<ArgMgrTest.Test> {
+public class ArgMgrTest implements ArgumentHandler<ArgMgrTest.Test> {
     @Override
-    public Iterable<String> complete(String partial) {
+    public Iterable<String> complete(String[] array, int index) {
         return Collections.singleton("TEST");
     }
 
     @Override
-    public Test locate(String name) {
-        return name.equals("TEST") ? new Test() : null;
+    public Test transform(String[] array, MutableInt index) throws CommandException {
+        return array[index.getAndIncrement()].equals("TEST") ? new Test() : null;
+    }
+
+    @Override
+    public Class<Test> getArgumentClass() {
+        return Test.class;
     }
 
     public static class Test {

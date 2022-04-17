@@ -28,6 +28,7 @@ package roj.opengl.render;
 
 import org.lwjgl.opengl.GL11;
 import roj.math.MathUtils;
+import roj.math.Vec3i;
 import roj.math.Vector;
 import roj.opengl.util.Util;
 import roj.opengl.util.VboUtil;
@@ -81,9 +82,12 @@ public class ArenaRenderer {
             GL11.glTranslatef(0, 0, lz);
             lz = -lz;
         }
-        lx += 1;
-        ly += 1;
-        lz += 1;
+
+        if (pos1 instanceof Vec3i) {
+            lx += 1;
+            ly += 1;
+            lz += 1;
+        }
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);

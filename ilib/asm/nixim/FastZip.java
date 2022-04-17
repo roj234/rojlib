@@ -1,12 +1,12 @@
 package ilib.asm.nixim;
 
 import ilib.Config;
+import ilib.asm.Loader;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
-import roj.util.EmptyArrays;
-
 import net.minecraft.network.PacketBuffer;
+import roj.util.EmptyArrays;
 
 import java.util.zip.Deflater;
 
@@ -28,7 +28,7 @@ public class FastZip extends MessageToByteEncoder<ByteBuf> {
 
     protected void encode(ChannelHandlerContext ctx, ByteBuf in, ByteBuf out) throws Exception {
         PacketBuffer pb = new PacketBuffer(out);
-        System.out.println("threshold=" + threshold + " count=" + in.readableBytes());
+        Loader.logger.info("threshold=" + threshold + " count=" + in.readableBytes());
         if (in.readableBytes() < threshold) {
             pb.writeVarInt(0).writeBytes(in);
         } else {
@@ -57,7 +57,7 @@ public class FastZip extends MessageToByteEncoder<ByteBuf> {
                             pb.writeBytes(out1, 0, cnt);
                         } while (cnt > 0);
 
-                        if (Config.resetCompressor) deflater.reset();
+                        deflater.reset();
                         return;
                     }
                 }
@@ -77,7 +77,7 @@ public class FastZip extends MessageToByteEncoder<ByteBuf> {
                 cnt = deflater.deflate(out1, 0, out1.length, Deflater.SYNC_FLUSH);
                 pb.writeBytes(out1, 0, cnt);
             } while (cnt > 0);
-            if (Config.resetCompressor) deflater.reset();
+            deflater.reset();
         }
 
     }

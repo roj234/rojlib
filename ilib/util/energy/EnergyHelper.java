@@ -27,8 +27,8 @@
 package ilib.util.energy;
 
 import ilib.api.energy.MEItem;
+import ilib.api.energy.MEItem.EnergyType;
 import ilib.api.energy.METile;
-import ilib.api.mark.MInIntractable;
 import ilib.capabilities.Capabilities;
 import ilib.util.ItemNBT;
 import roj.collect.SimpleList;
@@ -63,20 +63,9 @@ public class EnergyHelper {
             throw new UnsupportedOperationException();
         }
 
-        public MEItem setMaxME(int i) {
-            return this;
-        }
-
-        public MEItem setReceiveSpeed(int i) {
-            return this;
-        }
-
-        public MEItem setExtractSpeed(int i) {
-            return this;
-        }
-
-        public MEItem setVolRequired(int volRequired) {
-            return this;
+        @Override
+        public EnergyType getEnergyType() {
+            return EnergyType.TUBE;
         }
 
         public int currentME() {
@@ -128,7 +117,7 @@ public class EnergyHelper {
                     TextUtil.scaledNumber(getEnergyStored(stack)) +
                     " / " +
                     TextUtil.scaledNumber(cap.maxME()) + " ME");
-        } else if (ItemNBT.getDataMap(stack).hasKey("Power")) {
+        } else if (ItemNBT.getRootTag(stack).hasKey("Power")) {
             list.add(I18n.format("tooltip.mi.energy") +
                     TextUtil.scaledNumber(ItemNBT.getInt(stack, "Power")) +
                     " / " +
@@ -165,7 +154,7 @@ public class EnergyHelper {
 
         MEItem cap;
         for (int i = 0; i < LAST; i++) {
-            ItemStack stack = player.inventory.getStackInSlot(i);
+            ItemStack stack = player.inventory.getStackInSlot1(i);
             if ((cap = stack.getCapability(Capabilities.MENERGY, null)) != null) {
                 if (cap.canExtract() && cap.currentME() > 0)
                     return cap;
@@ -185,11 +174,7 @@ public class EnergyHelper {
 
         InventoryPlayer inv = player.inventory;
         for (int i = 0; i < LAST; i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (stack.getItem() instanceof MInIntractable) {
-                inv.setInventorySlotContents(i, ItemStack.EMPTY);
-                continue;
-            }
+            ItemStack stack = inv.getStackInSlot1(i);
             if ((capr = stack.getCapability(Capabilities.MENERGY, null)) != null) {
                 if (i < searchBatterySlot && battery == null && capr.canExtract())
                     battery = capr;
@@ -213,14 +198,7 @@ public class EnergyHelper {
     }
 
     public static boolean isBattery(MEItem cap) {
-        int me = cap.currentME();
-        if (me != 0) return false;
-        cap.setME(1);
-        if (cap.canExtract()) {
-            cap.setME(0);
-            return !cap.canExtract();
-        }
-        return false;
+        return cap.getEnergyType() == EnergyType.STORAGE;
     }
 
     public static int safeTransfer(MEItem from, MEItem to, int count) {

@@ -13,14 +13,14 @@ import java.util.List;
  */
 public class GPopup extends GGroup {
     public static final int CLOSE_BTN = 999;
-    public static final Color DEFAULT_BACKGROUND = new Color(0xD3888888, true);
+    public static final Color DEFAULT_BACKGROUND = new Color(0x888888);
 
     public GPopup(IGui parent, String title, String content, List<String> buttons, int markBegin) {
         super(parent, 0, 0, 200, 160);
         listener = null;
 
         ComponentListener lst = (ComponentListener) parent;
-        components.add(new GColoredQuad(this, 0, 0, 0, 0, DEFAULT_BACKGROUND));
+        components.add(new GColoredQuad(this, 0, 0, 0, 0, DEFAULT_BACKGROUND).setZIndex(0));
         components.add(new GText(this, 4, 4, title, Color.WHITE));
         components.add(new GTextLong(this, 4, 16, -8, -48, content, 100).setListener(lst));
         components.add(new GButtonNP(this, -4, 4, 12, 12, "X").setMark(CLOSE_BTN).setListener(lst));
@@ -38,6 +38,8 @@ public class GPopup extends GGroup {
 
     @Override
     public void onInit() {
+        superInit();
+
         int w = this.width;
         int h = this.height;
 
@@ -58,12 +60,15 @@ public class GPopup extends GGroup {
         SimpleComponent close = (SimpleComponent) components.get(3);
         close.xPos = w - 16;
 
+        for (int i = 0; i < components.size(); i++) {
+            components.get(i).onInit();
+        }
+
         if (components.size() > 4) {
             PositionProxy pp = (PositionProxy) components.get(4).getListener();
             pp.reposition(this);
         }
 
-        super.onInit();
     }
 
     public void setBackgroundColor(Color c) {

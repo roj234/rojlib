@@ -93,7 +93,7 @@ public abstract class Game {
 
         fps = 40;
         vertexBuilder = new VertexBuilder(262144);
-        textRenderer = new TextRenderer(new FontTex("黑体-20"), TextRenderer.COLOR_CODE, vertexBuilder);
+        textRenderer = new TextRenderer(new FontTex("Arial-18"), TextRenderer.COLOR_CODE, vertexBuilder);
         init();
     }
 
@@ -303,14 +303,13 @@ public abstract class Game {
 
         GL11.glMatrixMode(GL_PROJECTION);
         GL11.glLoadIdentity();
-        GL11.glOrtho(0, width, height, 0, 1000, 3000);
+        GL11.glOrtho(0, width, height, 0, 0, 1000);
 
         GL11.glMatrixMode(GL_MODELVIEW);
         GL11.glLoadIdentity();
-        GL11.glTranslatef(0, 42, -2000);
-        GL11.glRotatef(180, 1, 0, 0);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor3f(1,1,1);
 
         textRenderer.scale = 2f;
 
@@ -374,20 +373,20 @@ public abstract class Game {
     protected void renderSky() {}
 
     protected void renderUI() {
-        textRenderer.renderStringWithShadow("FPS: " + TextUtil.toFixed(1000 / avgFrameTime, 1) + '/' + fps, 4, 0);
-        textRenderer.renderStringWithShadow("XYZ " + TextUtil.toFixed(x, 3) + ' ' + TextUtil.toFixed(y, 3) + ' ' + TextUtil.toFixed(z, 3), 4, -24);
+        textRenderer.renderStringWithShadow("FPS: " + TextUtil.toFixed(1000 / avgFrameTime, 1) + '/' + fps, 4, 2);
+        textRenderer.renderStringWithShadow("XYZ " + TextUtil.toFixed(x, 3) + ' ' + TextUtil.toFixed(y, 3) + ' ' + TextUtil.toFixed(z, 3), 4, 24);
         if(!glErrors.isEmpty()) {
-            textRenderer.renderStringWithShadow("OpenGL Errors: ", 4, -48);
-            int off = -64;
+            textRenderer.renderStringWithShadow("OpenGL Errors: ", 4, 48);
+            int off = 68;
             for (int i = glErrors.size() - 1; i >= 0; i--) {
                 textRenderer.renderStringWithShadow(glErrors.get(i), 4, off);
-                off -= 16;
+                off += 18;
             }
-            if(glErrorTimer++ == 60 || glErrors.size() > 50)
+            if(glErrorTimer++ == 600 || glErrors.size() > 50)
                 glErrors.remove(0);
         } else {
             glErrorTimer = 0;
-            textRenderer.renderStringWithShadow("Powered by Roj234", 4, -48);
+            textRenderer.renderStringWithShadow("Powered by Roj234", 4, 48);
         }
     }
 
