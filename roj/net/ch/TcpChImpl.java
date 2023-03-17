@@ -1,0 +1,195 @@
+package roj.net.ch;
+
+import roj.io.NIOUtil;
+import roj.io.buf.BufferPool;
+import roj.reflect.DirectAccessor;
+import roj.reflect.ReflectionUtils;
+import roj.util.DynByteBuf;
+
+import java.io.FileDescriptor;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
+
+import static roj.util.ByteList.EMPTY;
+
+/**
+ * @author Roj233
+ * @since 2022/5/18 0:00
+ */
+final class TcpChImpl extends MyChannel {
+	private static volatile H TcpUtil;
+	private interface H {
+		default boolean isInputOpen(SocketChannel sc) {
+			return !isInputClosed(sc);
+		}
+		boolean isInputClosed(SocketChannel sc);
+		default boolean isOutputOpen(SocketChannel sc) {
+			return !isOutputClosed(sc);
+		}
+		boolean isOutputClosed(SocketChannel sc);
+	}
+
+	private SocketChannel sc;
+	private final FileDescriptor fd;
+
+	int buffer;
+
+	TcpChImpl(int buffer) throws IOException {
+		this(SocketChannel.open(), buffer);
+		ch.configureBlocking(false);
+		state = 0;
+	}
+	TcpChImpl(SocketChannel server, int buffer) {
+		ch = sc = server;
+		rb = EMPTY;
+		this.buffer = buffer;
+		state = CONNECTED;
+
+		if (TcpUtil == null) {
+			synchronized (TcpChImpl.class) {
+				if (TcpUtil == null) {
+					String[] fields;
+					if (ReflectionUtils.JAVA_VERSION < 11) {
+						fields = new String[] {"isInputOpen", "isOutputOpen"};
+					} else {
+						fields = new String[] {"isInputClosed", "isOutputClosed"};
+					}
+					TcpUtil = DirectAccessor.builder(H.class).access(server.getClass(), fields, fields, null).build();
+				}
+			}
+		}
+
+		this.fd = NIOUtil.tcpFD(server);
+	}
+
+	@Override
+	public boolean isInputOpen() {
+		return state < CLOSED && TcpUtil.isInputOpen(sc);
+	}
+
+	@Override
+	public boolean isOutputOpen() {
+		return state < CLOSED && TcpUtil.isOutputOpen(sc);
+	}
+
+	@Override
+	public SocketAddress remoteAddress() {
+		try {
+			return sc.getRemoteAddress();
+		} catch (IOException e) {
+			return null;
+		}
+	}
+
+	@Override
+	public void closeGracefully() throws IOException {
+		sc.shutdownOutput();
+	}
+
+	@Override
+	protected boolean connect0(InetSocketAddress na) throws IOException {
+		return sc.connect(na);
+	}
+
+	@Override
+	protected SocketAddress finishConnect0() throws IOException {
+		return sc.finishConnect() ? sc.getRemoteAddress() : null;
+	}
+
+	@Override
+	protected void disconnect0() throws IOException {
+		sc.close();
+		ch = sc = SocketChannel.open();
+		rb.clear();
+	}
+
+	public void flush() throws IOException {
+		if (pending.isEmpty() || state >= CLOSED) return;
+
+		BufferPool bp = alloc();
+		lock.lock();
+		try {
+			do {
+				DynByteBuf buf = (DynByteBuf) pending.peekFirst();
+				if (buf == null) break;
+
+				write0(buf);
+
+				if (buf.isReadable()) break;
+
+				pending.pollFirst();
+				bp.reserve(buf);
+			} while (true);
+
+			if (pending.isEmpty()) {
+				flag &= ~PAUSE_FOR_FLUSH;
+				key.interestOps(SelectionKey.OP_READ);
+				fireWriteDone();
+			}
+		} finally {
+			lock.unlock();
+		}
+	}
+
+	@Override
+	protected void read() throws IOException {
+		DynByteBuf buf = rb;
+		while (ch.isOpen()) {
+			if (!buf.isWritable()) {
+				if (buf == EMPTY) rb = buf = alloc().buffer(true, buffer);
+				else rb = buf = alloc().expand(buf, buf.capacity());
+			}
+
+			ByteBuffer nioBuffer = syncNioRead(buf);
+			int r = sc.read(nioBuffer);
+			buf.wIndex(nioBuffer.position());
+
+			if (r < 0) {
+				onInputClosed();
+			} else if (r == 0) {
+				break;
+			} else {
+				try {
+					fireChannelRead(buf);
+				} finally {
+					buf.compact();
+				}
+			}
+		}
+	}
+
+	protected void write(Object o) throws IOException {
+		BufferPool bp = alloc();
+
+		DynByteBuf buf = (DynByteBuf) o;
+		if (!buf.isDirect()) buf = bp.buffer(true, buf.readableBytes()).put(buf);
+
+		try {
+			write0(buf);
+
+			if (buf.isReadable()) {
+				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+
+				Object o1 = pending.ringAddLast(bp.buffer(true, buf.readableBytes()).put(buf));
+				if (o1 != null) throw new IOException("上层发送缓冲区过载");
+			} else {
+				fireWriteDone();
+			}
+		} finally {
+			if (o != buf) bp.reserve(buf);
+
+			buf = (DynByteBuf) o;
+			buf.rIndex = buf.wIndex();
+		}
+	}
+
+	private void write0(DynByteBuf buf) throws IOException {
+		ByteBuffer nioBuffer = syncNioWrite(buf);
+		int w = sc.write(nioBuffer);
+		buf.rIndex = nioBuffer.position();
+	}
+}
